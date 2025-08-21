@@ -40,9 +40,10 @@ describe('TapStack Unit Tests', () => {
         expect(stack.vpcs[region]).toBeDefined();
         const vpc = stack.vpcs[region];
         
-        // Use pulumi.all to resolve the Output value
-        const cidrBlock = await pulumi.all([vpc.cidrBlock]).apply(([cidr]) => cidr);
-        expect(cidrBlock).resolves.toBe('10.0.0.0/16');
+        // Use pulumi.all to resolve the Output value and test directly
+        await pulumi.all([vpc.cidrBlock]).apply(([cidr]) => {
+          expect(cidr).toBe('10.0.0.0/16');
+        });
       }
     });
   });
@@ -53,9 +54,10 @@ describe('TapStack Unit Tests', () => {
         const sg = stack.securityGroups[region];
         expect(sg).toBeDefined();
         
-        // Use pulumi.all for Output resolution
-        const ingress = await pulumi.all([sg.ingress]).apply(([rules]) => rules);
-        expect(ingress).resolves.toHaveLength(2);
+        // Use pulumi.all for Output resolution and test directly
+        await pulumi.all([sg.ingress]).apply(([rules]) => {
+          expect(rules).toHaveLength(2);
+        });
         
         // Test rules using resolved values
         await pulumi.all([sg.ingress]).apply(([rules]) => {
@@ -101,7 +103,7 @@ describe('TapStack Unit Tests', () => {
       await pulumi.all([iamRole.assumeRolePolicy]).apply(([policyString]) => {
         const policy = JSON.parse(policyString);
         expect(policy.Statement[0].Principal.Service).toBe('apigateway.amazonaws.com');
-        expect(policy.Statement.Action).toBe('sts:AssumeRole');
+        expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
       });
     });
   });
@@ -165,7 +167,7 @@ describe('TapStack Unit Tests', () => {
       const subnets = stack.subnets['us-east-1'];
       expect(subnets).toHaveLength(2);
       
-      await pulumi.all([subnets[0].availabilityZone, subnets[11].availabilityZone]).apply(([az1, az2]) => {
+      await pulumi.all([subnets[0].availabilityZone, subnets[1].availabilityZone]).apply(([az1, az2]) => {
         expect(az1).toBe('us-east-1a');
         expect(az2).toBe('us-east-1b');
       });
@@ -174,7 +176,7 @@ describe('TapStack Unit Tests', () => {
     it('should have different CIDR blocks for each subnet', async () => {
       const subnets = stack.subnets['us-east-1'];
       
-      await pulumi.all([subnets[0].cidrBlock, subnets[11].cidrBlock]).apply(([cidr1, cidr2]) => {
+      await pulumi.all([subnets[0].cidrBlock, subnets[1].cidrBlock]).apply(([cidr1, cidr2]) => {
         expect(cidr1).toBe('10.0.1.0/24');
         expect(cidr2).toBe('10.0.2.0/24');
       });

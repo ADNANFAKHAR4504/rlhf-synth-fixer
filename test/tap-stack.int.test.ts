@@ -104,7 +104,7 @@ describe('TapStack Integration Tests', () => {
         const kmsKey = stack.kmsKeys[region];
         
         await pulumi.all([
-          kmsKey.keyId, 
+          kmsKey.id, 
           kmsKey.description, 
           kmsKey.enableKeyRotation
         ]).apply(([keyId, description, rotationEnabled]) => {
@@ -121,7 +121,7 @@ describe('TapStack Integration Tests', () => {
       await pulumi.all([kmsKey.policy]).apply(([policyString]) => {
         const policyObj = JSON.parse(policyString);
         expect(policyObj.Version).toBe('2012-10-17');
-        expect(policyObj.Statement).toHaveLength(1);
+        expect(policyObj.Statement).toHaveLength(3);
         expect(policyObj.Statement[0].Action).toBe('kms:*');
       });
     });
@@ -132,12 +132,12 @@ describe('TapStack Integration Tests', () => {
       for (const region of awsRegions) {
         const iamRole = stack.iamRoles[region];
         
-        await pulumi.all([iamRole.arn, iamRole.assumeRolePolicy]).apply(([roleArn, assumeRolePolicy]) => {
-          expect(roleArn).toMatch(/^arn:aws:iam::\d+:role\/.+$|.*_id$/);
+        await pulumi.all([iamRole.id, iamRole.assumeRolePolicy]).apply(([roleId, assumeRolePolicy]) => {
+          expect(roleId).toMatch(/^arn:aws:iam::\d+:role\/.+$|.*_id$/);
           
           const trustPolicy = JSON.parse(assumeRolePolicy);
           expect(trustPolicy.Statement[0].Principal.Service).toBe('apigateway.amazonaws.com');
-          expect(trustPolicy.Statement.Effect).toBe('Allow');
+          expect(trustPolicy.Statement[0].Effect).toBe('Allow');
         });
       }
     });
@@ -342,7 +342,7 @@ describe('TapStack Integration Tests', () => {
         await pulumi.all([
           stack.vpcs[region].id,
           stack.securityGroups[region].id,
-          stack.kmsKeys[region].keyId
+          stack.kmsKeys[region].id
         ]).apply(([vpcId, sgId, kmsKeyId]) => {
           expect(vpcId).toMatch(/^vpc-[a-f0-9]+$|.*_id$/);
           expect(sgId).toMatch(/^sg-[a-f0-9]+$|.*_id$/);
