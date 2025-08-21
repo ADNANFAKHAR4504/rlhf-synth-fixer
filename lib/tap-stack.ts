@@ -166,11 +166,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Set default values
     this.environmentSuffix = args?.environmentSuffix || 'prod';
-    this.regions = args?.regions || ['us-east-1', 'us-west-1'];
+    this.regions = args?.regions || ['us-west-1', 'us-east-1'];
     this.tags = args?.tags || {
       Environment: this.environmentSuffix,
       Project: 'IaC-AWS-Model-Breaking',
-      Application: 'nova-secure-app',
+      Application: 'secure-app',
       ManagedBy: 'Pulumi',
     };
 
@@ -209,7 +209,7 @@ export class TapStack extends pulumi.ComponentResource {
       const availabilityZones = getAvailabilityZones(region);
 
       console.log(
-        `🌍 Setting up AWS provider for region: ${region} ${isPrimary ? '(PRIMARY)' : ''}`
+        ` Setting up AWS provider for region: ${region} ${isPrimary ? '(PRIMARY)' : ''}`
       );
 
       // Create regional AWS provider
@@ -352,19 +352,15 @@ export class TapStack extends pulumi.ComponentResource {
       console.log(` Creating Certificates Infrastructure for ${region}...`);
 
       // Create SSL certificate without validation (for demo purposes)
-      const certificate = createAcmCertificate(
-        `${name}-cert-${region}`,
-        {
-          domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-          subjectAlternativeNames: [
-            `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-          ],
-          validationMethod: 'DNS',
-          skipValidation: true, // Skip validation for demo domain
-          tags: this.tags,
-        },
-        { provider: this.providers[region] }
-      );
+      const certificate = createAcmCertificate(`${name}-cert-${region}`, {
+        domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+        subjectAlternativeNames: [
+          `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+        ],
+        validationMethod: 'DNS',
+        skipValidation: true, // Skip validation for demo domain
+        tags: this.tags,
+      });
 
       this.regionalCertificates[region] = { certificate };
 
