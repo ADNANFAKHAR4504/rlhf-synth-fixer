@@ -45,8 +45,6 @@ export interface RdsInstanceArgs {
   deletionProtection?: boolean;
   skipFinalSnapshot?: boolean;
   finalSnapshotIdentifier?: string;
-  performanceInsightsEnabled?: boolean;
-  performanceInsightsKmsKeyId?: pulumi.Input<string>;
   enabledCloudwatchLogsExports?: string[];
   monitoringInterval?: number;
   monitoringRoleArn?: pulumi.Input<string>;
@@ -220,8 +218,6 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         finalSnapshotIdentifier:
           args.finalSnapshotIdentifier ||
           `${args.name}-final-snapshot-${Date.now()}`,
-        performanceInsightsKmsKeyId:
-          args.performanceInsightsKmsKeyId || args.kmsKeyId,
         enabledCloudwatchLogsExports: args.enabledCloudwatchLogsExports,
         monitoringInterval: args.monitoringInterval || 0,
         monitoringRoleArn: args.monitoringRoleArn,
@@ -345,8 +341,6 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         autoMinorVersionUpgrade: true,
         deletionProtection: true,
         skipFinalSnapshot: false,
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: args.kmsKeyId,
         enabledCloudwatchLogsExports:
           engine === 'mysql'
             ? ['error', 'general', 'slowquery']
