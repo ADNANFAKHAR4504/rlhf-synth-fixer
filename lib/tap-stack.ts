@@ -209,7 +209,7 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     console.log(
-      `🚀 Starting TapStack deployment across ${this.regions.length} regions: ${this.regions.join(', ')}`
+      ` Starting TapStack deployment across ${this.regions.length} regions: ${this.regions.join(', ')}`
     );
 
     //  ENHANCED: Validate regions and AZs upfront
@@ -250,7 +250,7 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     //  ENHANCED: Sequential deployment with explicit dependencies
-    let previousRegionResources: any = null;
+    let previousProvider: aws.Provider | undefined = undefined;
 
     for (
       let regionIndex = 0;
@@ -268,23 +268,26 @@ export class TapStack extends pulumi.ComponentResource {
       console.log(`    AZs: ${availabilityZones.join(', ')}`);
       console.log(`    CIDR: ${cidrBlock}`);
 
-      //  ENHANCED: Create regional AWS provider with explicit config
+      //  FIXED: Create regional AWS provider with proper dependency handling
       console.log(`   🔧 Creating AWS provider for ${region}...`);
+      const providerOpts: pulumi.ResourceOptions = {
+        parent: this,
+      };
+
+      if (previousProvider) {
+        providerOpts.dependsOn = [previousProvider];
+      }
+
       this.providers[region] = new aws.Provider(
         `${name}-provider-${region}`,
         {
           region: region as aws.Region,
           profile: process.env.AWS_PROFILE, // Support for AWS profiles
         },
-        {
-          parent: this,
-          dependsOn: previousRegionResources
-            ? [previousRegionResources]
-            : undefined,
-        }
+        providerOpts
       );
 
-      console.log(`   🔐 Creating Security Infrastructure for ${region}...`);
+      console.log(`    Creating Security Infrastructure for ${region}...`);
 
       //  Create KMS keys with regional provider
       const appKms = createApplicationKmsKey(
@@ -323,7 +326,7 @@ export class TapStack extends pulumi.ComponentResource {
         s3Kms: s3Kms,
       };
 
-      console.log(`   🌐 Creating Networking Infrastructure for ${region}...`);
+      console.log(`    Creating Networking Infrastructure for ${region}...`);
 
       //  ENHANCED: Create VPC with unique CIDR per region
       const vpc = createVpc(
@@ -378,7 +381,7 @@ export class TapStack extends pulumi.ComponentResource {
         }
       );
 
-      console.log(`   🚪 Creating Internet Gateway for ${region}...`);
+      console.log(`    Creating Internet Gateway for ${region}...`);
 
       //  Create Internet Gateway with regional provider
       const igw = createInternetGateway(
@@ -395,7 +398,7 @@ export class TapStack extends pulumi.ComponentResource {
         }
       );
 
-      console.log(`   🌉 Creating NAT Gateways for ${region}...`);
+      console.log(`    Creating NAT Gateways for ${region}...`);
 
       //  Create NAT Gateways with regional provider - FIXED dependency
       const natGateways = createMultiAzNatGateway(
@@ -498,9 +501,7 @@ export class TapStack extends pulumi.ComponentResource {
         dbSg,
       };
 
-      console.log(
-        `   🔒 Creating Certificates Infrastructure for ${region}...`
-      );
+      console.log(`    Creating Certificates Infrastructure for ${region}...`);
 
       //  Create SSL certificate with regional provider
       const certificate = createAcmCertificate(
@@ -519,7 +520,7 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.regionalCertificates[region] = { certificate };
 
-      console.log(`   🔐 Creating Secrets Infrastructure for ${region}...`);
+      console.log(`    Creating Secrets Infrastructure for ${region}...`);
 
       //  Create secrets and parameters with regional provider
       const dbCredentials = createDatabaseCredentials(
@@ -570,7 +571,7 @@ export class TapStack extends pulumi.ComponentResource {
         appParams,
       };
 
-      console.log(`   🪣 Creating Storage Infrastructure for ${region}...`);
+      console.log(`    Creating Storage Infrastructure for ${region}...`);
 
       //  Create S3 buckets with regional provider and unique naming
       const configBucket = createSecureS3Bucket(
@@ -631,7 +632,7 @@ export class TapStack extends pulumi.ComponentResource {
         database,
       };
 
-      console.log(`   💻 Creating Compute Infrastructure for ${region}...`);
+      console.log(`    Creating Compute Infrastructure for ${region}...`);
 
       //  Create target group with regional provider
       const targetGroup = createApplicationTargetGroup(
@@ -744,8 +745,8 @@ export class TapStack extends pulumi.ComponentResource {
         awsConfig,
       };
 
-      //  Set previous region resources for sequential deployment
-      previousRegionResources = this.regionalNetworks[region];
+      //  Set previous provider for sequential deployment
+      previousProvider = this.providers[region];
 
       console.log(`    Region ${region} infrastructure complete!`);
     }
@@ -774,10 +775,10 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     console.log(
-      `\n🎉 TapStack deployment complete across ${this.regions.length} regions: ${this.regions.join(', ')}`
+      `\n TapStack deployment complete across ${this.regions.length} regions: ${this.regions.join(', ')}`
     );
     console.log(
-      `🏗️  Total resources deployed: ${this.regions.length * 15}+ resources across all regions`
+      `  Total resources deployed: ${this.regions.length * 15}+ resources across all regions`
     );
   }
 }
