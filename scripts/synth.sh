@@ -37,8 +37,10 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # Ensure Go module dependencies (e.g., cdktf core) are downloaded before synth
   echo "Ensuring Go module deps are available (go mod tidy)"
   export GOPROXY=${GOPROXY:-direct}
-  export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
-  export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
+  # Bypass checksum DB and proxy for provider and CDKTF core modules
+  export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+  export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+  export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
   # Pre-fetch CDKTF core and its jsii subpackage used by .gen code
   go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
   go get github.com/hashicorp/terraform-cdk-go/cdktf/jsii@v0.21.0

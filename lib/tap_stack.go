@@ -64,12 +64,12 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		},
 	})
 
-	// Versioning (use escape hatch)
-	ver := s3ver.NewS3BucketVersioningA(stack, str("ImageBucketVersioning"), &s3ver.S3BucketVersioningAConfig{
+	// Versioning (set required VersioningConfiguration)
+	_ = s3ver.NewS3BucketVersioningA(stack, str("ImageBucketVersioning"), &s3ver.S3BucketVersioningAConfig{
 		Bucket: bucket.Id(),
-	})
-	ver.AddOverride(str("versioning_configuration"), map[string]interface{}{
-		"status": "Enabled",
+		VersioningConfiguration: &s3ver.S3BucketVersioningVersioningConfiguration{
+			Status: jsii.String("Enabled"),
+		},
 	})
 
 	// Block public access
@@ -81,18 +81,22 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		RestrictPublicBuckets: jsii.Bool(true),
 	})
 
-	// SSE (use escape hatch)
-	enc := s3enc.NewS3BucketServerSideEncryptionConfigurationA(stack, str("ImageBucketEncryption"), &s3enc.S3BucketServerSideEncryptionConfigurationAConfig{
-		Bucket: bucket.Id(),
-	})
-	enc.AddOverride(str("rule"), []map[string]interface{}{
-		{
-			"apply_server_side_encryption_by_default": map[string]interface{}{
-				"sse_algorithm": "AES256",
+	// SSE (set required Rule via generated types)
+	_ = s3enc.NewS3BucketServerSideEncryptionConfigurationA(
+		stack,
+		str("ImageBucketEncryption"),
+		&s3enc.S3BucketServerSideEncryptionConfigurationAConfig{
+			Bucket: bucket.Id(),
+			Rule: &[]*s3enc.S3BucketServerSideEncryptionConfigurationRuleA{
+				{
+					ApplyServerSideEncryptionByDefault: &s3enc.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+						SseAlgorithm: jsii.String("AES256"),
+					},
+					BucketKeyEnabled: jsii.Bool(true),
+				},
 			},
-			"bucket_key_enabled": true,
 		},
-	})
+	)
 
 	// Log group
 	lg := logs.NewCloudwatchLogGroup(stack, str("LambdaLogGroup"), &logs.CloudwatchLogGroupConfig{
