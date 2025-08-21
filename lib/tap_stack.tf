@@ -6,6 +6,7 @@
 variable "aws_region" {
   description = "AWS region to deploy resources (used by existing provider.tf)."
   type        = string
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -17,6 +18,7 @@ variable "project_name" {
 variable "allowed_cidrs" {
   description = "List of CIDR ranges allowed to access web-tier on ports 80/443."
   type        = list(string)
+  default     = []
 }
 
 variable "environment" {

@@ -27,7 +27,7 @@ describe('Terraform integration tests (static) for tap_stack.tf', () => {
     expect(providerContent).toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  test('required variables exist; certain variables intentionally have defaults; some have none', () => {
+  test('required variables exist; certain variables intentionally have defaults', () => {
     const mustExist = [
       'aws_region',
       'project_name',
@@ -46,14 +46,6 @@ describe('Terraform integration tests (static) for tap_stack.tf', () => {
     for (const v of mustExist) {
       expect(content).toMatch(new RegExp(`variable\\s+"${v}"\\s*{`));
     }
-
-    // allowed_cidrs should have no default
-    const allowedBlock = getBlock(
-      /variable\s+"allowed_cidrs"\s*{[\s\S]*?}/,
-      content
-    );
-    expect(allowedBlock).toBeTruthy();
-    expect(allowedBlock as string).not.toMatch(/\bdefault\b/);
 
     // project_name, environment likely have defaults
     expect(
