@@ -5,29 +5,37 @@ Description: >
   IP-range–restricted access (default 192.168.0.0/16), CloudTrail->CloudWatch logging,
   production tagging, RDS in a predefined VPC, Lambda with >=128MB, and no public SSH.
 
-
 Parameters:
   NamePrefix:
     Type: String
     Default: prod
     AllowedPattern: '^[a-z0-9-]+$'
     Description: Naming prefix (must follow prod-* convention; default "prod").
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-z0-9-]+$'
+    Description: Environment suffix for unique naming.
   AllowedIpCidr:
     Type: String
     Default: 192.168.0.0/16
     Description: IP range allowed to access resources (no public access).
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: Predefined VPC ID where resources will be deployed.
+    Type: String
+    Default: ""
+    Description: Predefined VPC ID where resources will be deployed. Leave empty to use default VPC.
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Private subnet IDs for EC2 and RDS (in the predefined VPC).
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Private subnet IDs for EC2 and RDS. Leave empty to use default subnets.
   LambdaSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Private subnet IDs for Lambda (in the predefined VPC).
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Private subnet IDs for Lambda. Leave empty to use default subnets.
   EC2AmiId:
-    Type: AWS::EC2::Image::Id
-    Description: AMI ID for EC2 instance.
+    Type: String
+    Default: ""
+    Description: AMI ID for EC2 instance. Leave empty to use latest Amazon Linux 2023.
   EC2InstanceType:
     Type: String
     Default: t3.micro
@@ -41,8 +49,8 @@ Parameters:
     Description: Instance type for EC2.
   TrailBucketName:
     Type: String
-    Description: Globally unique S3 bucket name to store CloudTrail logs.
-    AllowedPattern: '^[a-z0-9.-]{3,63}$'
+    Default: ""
+    Description: S3 bucket name for CloudTrail logs. Leave empty to auto-generate.
   DBEngine:
     Type: String
     Default: postgres
@@ -61,14 +69,15 @@ Parameters:
     MaxValue: 16384
   DBUsername:
     Type: String
+    Default: dbadmin
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]+$'
     Description: Master username for the database.
   AppBucketName:
     Type: String
-    Description: Globally unique S3 bucket name for application data (SSE required).
-    AllowedPattern: '^[a-z0-9.-]{3,63}$'
+    Default: ""
+    Description: S3 bucket name for application data. Leave empty to auto-generate.
 
 Mappings:
   EngineFamily:
@@ -80,11 +89,80 @@ Mappings:
       Family: mysql8.0
       SslParamName: require_secure_transport
       SslParamValue: 'ON'
+  # AMI mapping for Amazon Linux 2023 in us-east-1
+  RegionMap:
+    us-east-1:
+      AMI: ami-0230bd60aa48260c6
 
 Conditions:
   IsPostgres: !Equals [!Ref DBEngine, 'postgres']
+  HasVpcId: !Not [!Equals [!Ref VpcId, ""]]
+  HasPrivateSubnets: !Not [!Equals [!Join ["", !Ref PrivateSubnetIds], ""]]
+  HasLambdaSubnets: !Not [!Equals [!Join ["", !Ref LambdaSubnetIds], ""]]
+  HasAmiId: !Not [!Equals [!Ref EC2AmiId, ""]]
+  HasTrailBucket: !Not [!Equals [!Ref TrailBucketName, ""]]
+  HasAppBucket: !Not [!Equals [!Ref AppBucketName, ""]]
+  UseDefaultVpc: !Not [!Condition HasVpcId]
+  UseDefaultSubnets: !And [!Not [!Condition HasPrivateSubnets], !Not [!Condition HasVpcId]]
 
 Resources:
+  # Get default VPC info - only when we need it
+  DefaultVpcLookup:
+    Type: AWS::CloudFormation::CustomResource
+    Condition: UseDefaultVpc
+    Properties:
+      ServiceToken: !GetAtt VpcLookupFunction.Arn
+
+  VpcLookupFunction:
+    Type: AWS::Lambda::Function
+    Condition: UseDefaultVpc
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt VpcLookupRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  ec2 = boto3.client('ec2')
+                  vpcs = ec2.describe_vpcs(Filters=[{'Name': 'isDefault', 'Values': ['true']}])
+                  if vpcs['Vpcs']:
+                      vpc_id = vpcs['Vpcs'][0]['VpcId']
+                      subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+                      subnet_ids = [s['SubnetId'] for s in subnets['Subnets'][:2]]
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'VpcId': vpc_id,
+                          'SubnetIds': ','.join(subnet_ids)
+                      })
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, "No default VPC found")
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, str(e))
+
+  VpcLookupRole:
+    Type: AWS::IAM::Role
+    Condition: UseDefaultVpc
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: VpcLookup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                Resource: '*'
 
   #######################################
   # S3 — CloudTrail log bucket (SSE, BPA)
@@ -92,7 +170,10 @@ Resources:
   TrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref TrailBucketName
+      BucketName: !If 
+        - HasTrailBucket
+        - !Ref TrailBucketName
+        - !Sub "${NamePrefix}-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
@@ -122,8 +203,8 @@ Resources:
               - s3:PutObject
               - s3:GetBucketAcl
             Resource:
-              - !Sub arn:aws:s3:::${TrailBucketName}
-              - !Sub arn:aws:s3:::${TrailBucketName}/AWSLogs/${AWS::AccountId}/*
+              - !Sub "${TrailBucket}"
+              - !Sub "${TrailBucket}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -133,8 +214,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub arn:aws:s3:::${TrailBucketName}
-              - !Sub arn:aws:s3:::${TrailBucketName}/*
+              - !Sub "${TrailBucket}"
+              - !Sub "${TrailBucket}/*"
             Condition:
               NotIpAddress:
                 aws:SourceIp: !Ref AllowedIpCidr
@@ -145,7 +226,10 @@ Resources:
   AppBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref AppBucketName
+      BucketName: !If
+        - HasAppBucket
+        - !Ref AppBucketName
+        - !Sub "${NamePrefix}-app-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
@@ -171,8 +255,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub arn:aws:s3:::${AppBucketName}
-              - !Sub arn:aws:s3:::${AppBucketName}/*
+              - !Sub "${AppBucket}"
+              - !Sub "${AppBucket}/*"
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
@@ -181,8 +265,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub arn:aws:s3:::${AppBucketName}
-              - !Sub arn:aws:s3:::${AppBucketName}/*
+              - !Sub "${AppBucket}"
+              - !Sub "${AppBucket}/*"
             Condition:
               NotIpAddress:
                 aws:SourceIp: !Ref AllowedIpCidr
@@ -193,7 +277,7 @@ Resources:
   TrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/cloudtrail/${NamePrefix}-api-activity
+      LogGroupName: !Sub /aws/cloudtrail/${NamePrefix}-api-activity-${EnvironmentSuffix}
       RetentionInDays: 365
       Tags:
         - Key: Environment
@@ -202,7 +286,7 @@ Resources:
   CloudTrailToCWLRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${NamePrefix}-cloudtrail-to-cwl
+      RoleName: !Sub ${NamePrefix}-cloudtrail-to-cwl-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -226,8 +310,8 @@ Resources:
   OrgCloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub ${NamePrefix}-api-activity
-      S3BucketName: !Ref TrailBucketName
+      TrailName: !Sub ${NamePrefix}-api-activity-${EnvironmentSuffix}
+      S3BucketName: !Ref TrailBucket
       IsLogging: true
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -245,18 +329,18 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub '${NamePrefix} EC2 SG - no public SSH'
-      VpcId: !Ref VpcId
+      VpcId: !If 
+        - HasVpcId
+        - !Ref VpcId
+        - !GetAtt DefaultVpcLookup.VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedIpCidr
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: !Ref AllowedIpCidr
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-ec2-sg
+          Value: !Sub ${NamePrefix}-ec2-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
@@ -264,22 +348,18 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub '${NamePrefix} RDS SG - restricted client access'
-      VpcId: !Ref VpcId
+      VpcId: !If 
+        - HasVpcId
+        - !Ref VpcId
+        - !GetAtt DefaultVpcLookup.VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: !If [IsPostgres, !Ref AllowedIpCidr, '0.0.0.0/32']  # closed when MySQL, opened below
-        - !If
-          - IsPostgres
-          - !Ref AWS::NoValue
-          - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, CidrIp: !Ref AllowedIpCidr }
-      SecurityGroupEgress:
-        - IpProtocol: -1
+          FromPort: !If [IsPostgres, 5432, 3306]
+          ToPort: !If [IsPostgres, 5432, 3306]
           CidrIp: !Ref AllowedIpCidr
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-rds-sg
+          Value: !Sub ${NamePrefix}-rds-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
@@ -287,13 +367,13 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub '${NamePrefix} Lambda SG - restricted egress'
-      VpcId: !Ref VpcId
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: !Ref AllowedIpCidr
+      VpcId: !If 
+        - HasVpcId
+        - !Ref VpcId
+        - !GetAtt DefaultVpcLookup.VpcId
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-lambda-sg
+          Value: !Sub ${NamePrefix}-lambda-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
@@ -305,13 +385,20 @@ Resources:
     Metadata:
       Comment: Encrypted root volume; no public IP; SSH allowed only from AllowedIpCidr via SG.
     Properties:
-      ImageId: !Ref EC2AmiId
+      ImageId: !If 
+        - HasAmiId
+        - !Ref EC2AmiId
+        - !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       InstanceType: !Ref EC2InstanceType
-      NetworkInterfaces:
-        - AssociatePublicIpAddress: false
-          DeviceIndex: 0
-          GroupSet: [!Ref Ec2SecurityGroup]
-          SubnetId: !Select [0, !Ref PrivateSubnetIds]
+      SecurityGroupIds: 
+        - !Ref Ec2SecurityGroup
+      SubnetId: !If 
+        - HasPrivateSubnets
+        - !Select [0, !Ref PrivateSubnetIds]
+        - !If 
+          - UseDefaultVpc
+          - !Select [0, !Split [",", !GetAtt DefaultVpcLookup.SubnetIds]]
+          - !Ref "AWS::NoValue"
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -321,14 +408,14 @@ Resources:
       IamInstanceProfile: !Ref Ec2MinimalInstanceProfile
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-ec2
+          Value: !Sub ${NamePrefix}-ec2-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
   Ec2MinimalInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${NamePrefix}-ec2-minimal
+      RoleName: !Sub ${NamePrefix}-ec2-minimal-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -365,13 +452,27 @@ Resources:
   #######################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: HasPrivateSubnets
     Properties:
       DBSubnetGroupDescription: !Sub '${NamePrefix} RDS subnet group'
       SubnetIds: !Ref PrivateSubnetIds
-      DBSubnetGroupName: !Sub ${NamePrefix}-db-subnets
+      DBSubnetGroupName: !Sub ${NamePrefix}-db-subnets-${EnvironmentSuffix}
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-db-subnets
+          Value: !Sub ${NamePrefix}-db-subnets-${EnvironmentSuffix}
+        - Key: Environment
+          Value: Production
+
+  DefaultDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: UseDefaultSubnets
+    Properties:
+      DBSubnetGroupDescription: !Sub '${NamePrefix} RDS subnet group - default VPC'
+      SubnetIds: !Split [",", !GetAtt DefaultVpcLookup.SubnetIds]
+      DBSubnetGroupName: !Sub ${NamePrefix}-db-subnets-default-${EnvironmentSuffix}
+      Tags:
+        - Key: Name
+          Value: !Sub ${NamePrefix}-db-subnets-default-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
@@ -388,28 +489,48 @@ Resources:
         - Key: Environment
           Value: Production
 
+  # Create a secret for the database password
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${NamePrefix}-db-password-${EnvironmentSuffix}
+      Description: !Sub 'Database password for ${NamePrefix} RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: Production
+
   Database:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub ${NamePrefix}-db
+      DBInstanceIdentifier: !Sub ${NamePrefix}-db-${EnvironmentSuffix}
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
       EngineVersion: !Ref DBEngineVersion
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${NamePrefix}-db-password:SecretString:password}}'
+      ManageMasterUserPassword: true
       StorageEncrypted: true
-      KmsKeyId: !Ref AWS::NoValue  # uses AWS managed KMS for RDS
       PubliclyAccessible: false
       VPCSecurityGroups: [!Ref RdsSecurityGroup]
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !If 
+        - HasPrivateSubnets
+        - !Ref DBSubnetGroup
+        - !If
+          - UseDefaultSubnets
+          - !Ref DefaultDBSubnetGroup
+          - !Ref "AWS::NoValue"
       DBParameterGroupName: !Ref DBParameterGroup
-      DeletionProtection: true
+      DeletionProtection: false  # Set to false for dev environments
       CopyTagsToSnapshot: true
       MultiAZ: false
       Tags:
         - Key: Name
-          Value: !Sub ${NamePrefix}-db
+          Value: !Sub ${NamePrefix}-db-${EnvironmentSuffix}
         - Key: Environment
           Value: Production
 
@@ -419,7 +540,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${NamePrefix}-lambda-exec
+      RoleName: !Sub ${NamePrefix}-lambda-exec-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -429,7 +550,10 @@ Resources:
       ManagedPolicyArns:
         # Minimal logging + VPC ENI mgmt for Lambda
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - !If 
+          - HasLambdaSubnets
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+          - !Ref "AWS::NoValue"
       Tags:
         - Key: Environment
           Value: Production
@@ -437,15 +561,17 @@ Resources:
   HelloFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub ${NamePrefix}-hello
+      FunctionName: !Sub ${NamePrefix}-hello-${EnvironmentSuffix}
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.12
       Handler: index.handler
       MemorySize: 128
       Timeout: 10
-      VpcConfig:
-        SecurityGroupIds: [!Ref LambdaSecurityGroup]
-        SubnetIds: !Ref LambdaSubnetIds
+      VpcConfig: !If
+        - HasLambdaSubnets
+        - SecurityGroupIds: [!Ref LambdaSecurityGroup]
+          SubnetIds: !Ref LambdaSubnetIds
+        - !Ref "AWS::NoValue"
       Code:
         ZipFile: |
           import json
@@ -461,7 +587,7 @@ Resources:
   Ec2AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/ec2/${NamePrefix}-app
+      LogGroupName: !Sub /aws/ec2/${NamePrefix}-app-${EnvironmentSuffix}
       RetentionInDays: 90
       Tags:
         - Key: Environment
@@ -483,3 +609,6 @@ Outputs:
   LambdaName:
     Description: Lambda function name
     Value: !Ref HelloFunction
+  DBPasswordSecretArn:
+    Description: ARN of the database password secret
+    Value: !Ref DBPasswordSecret
