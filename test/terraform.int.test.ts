@@ -1,4 +1,4 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
@@ -21,6 +21,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
       throw new Error('flat-outputs.json not found. Please ensure infrastructure is deployed.');
     }
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    
+    // Parse subnet ID arrays from JSON strings
+    if (typeof outputs.public_subnet_ids === 'string') {
+      outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
+    }
+    if (typeof outputs.private_subnet_ids === 'string') {
+      outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
+    }
+    if (typeof outputs.database_subnet_ids === 'string') {
+      outputs.database_subnet_ids = JSON.parse(outputs.database_subnet_ids);
+    }
   });
 
   describe('VPC and Networking', () => {
@@ -37,8 +48,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(vpc.State).toBe('available');
       
       // Check DNS settings
-      expect((vpc as any).EnableDnsHostnames).toBe(true);
-      expect((vpc as any).EnableDnsSupport).toBe(true);
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
+      });
+      
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
       
       // Check tags
       const tags = vpc.Tags || [];
