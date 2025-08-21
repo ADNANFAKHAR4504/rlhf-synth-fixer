@@ -61,8 +61,7 @@ describe('Terraform High Availability Web App Stack', () => {
     expect(tfConfig).toMatch(/output\s+"vpc_id"[\s\S]*value\s*=\s*aws_vpc\.main\.id/);
     expect(tfConfig).toMatch(/output\s+"public_subnet_ids"[\s\S]*value\s*=\s*\[aws_subnet\.public_1\.id,\s*aws_subnet\.public_2\.id\]/);
     expect(tfConfig).toMatch(/output\s+"private_subnet_ids"[\s\S]*value\s*=\s*\[aws_subnet\.private_1\.id,\s*aws_subnet\.private_2\.id\]/);
-    expect(tfConfig).toMatch(/output\s+"availability_zones"[\s\S]*value\s*=\s*\[data\.aws_availability_zones\.available\.names\[0\],\s*data\.aws_availability_zones\.available\.names\[1\]\]/);
-    expect(tfConfig).toMatch(/output\s+"elb_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.elb\.id/);
+    expect(tfConfig).toMatch(/output\s+"availability_zones"[\s\S]*value\s*=\s*\[local\.azs\[0\],\s*local\.azs\[1\]\]/);    expect(tfConfig).toMatch(/output\s+"elb_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.elb\.id/);
     expect(tfConfig).toMatch(/output\s+"web_servers_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.web_servers\.id/);
     expect(tfConfig).toMatch(/output\s+"load_balancer_dns_name"[\s\S]*value\s*=\s*aws_lb\.main\.dns_name/);
     expect(tfConfig).toMatch(/output\s+"load_balancer_zone_id"[\s\S]*value\s*=\s*aws_lb\.main\.zone_id/);
