@@ -1,3 +1,4 @@
+```
 I need a production-ready CDKTF solution in TypeScript that deploys a multi-tier web application on AWS.
 
 The project should be cleanly structured into exactly two files (lib/modules.ts and lib/tap-stack.ts).
@@ -37,3 +38,5 @@ It should only have:
 SSM access (so we can connect via AWS Systems Manager instead of SSH keys).
 
 Minimal required permissions for networking or S3 if needed.
+
+```
