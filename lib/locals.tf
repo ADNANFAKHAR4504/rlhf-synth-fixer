@@ -1,8 +1,8 @@
 # Centralized local variables and environment detection
 
 locals {
-  # Environment detection - treat default workspace as staging
-  env = terraform.workspace == "production" ? "production" : "staging"
+  # Environment detection from workspace prefix (myapp-staging, myapp-production)
+  env = replace(terraform.workspace, "myapp-", "")
   
   # Common tags for all resources
   common_tags = {
