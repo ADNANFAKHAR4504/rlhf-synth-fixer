@@ -1,25 +1,23 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// Supports flat (flat-outputs.json, cfn-outputs.json) and structured (all-outputs.json) Terraform output formats
-const flatPath = path.join(__dirname, "../flat-outputs.json");
-const cfnPath = path.join(__dirname, "../cfn-outputs.json");
-const allPath = path.join(__dirname, "../all-outputs.json");
+// Senior recommendation: use cfn-outputs/all-outputs.json as the primary path for structured outputs
+const allOutputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+
+// Optionally support legacy flat outputs for backward compatibility
+const flatPath = path.resolve(process.cwd(), 'cfn-outputs.json');
 
 let deploymentOutputs: any = {};
-let outputFormat: 'flat' | 'all' = 'flat';
+let outputFormat: 'flat' | 'all' = 'all';
 
-if (fs.existsSync(flatPath)) {
+if (fs.existsSync(allOutputsPath)) {
+  deploymentOutputs = JSON.parse(fs.readFileSync(allOutputsPath, "utf8"));
+  outputFormat = 'all';
+} else if (fs.existsSync(flatPath)) {
   deploymentOutputs = JSON.parse(fs.readFileSync(flatPath, "utf8"));
   outputFormat = 'flat';
-} else if (fs.existsSync(cfnPath)) {
-  deploymentOutputs = JSON.parse(fs.readFileSync(cfnPath, "utf8"));
-  outputFormat = 'flat';
-} else if (fs.existsSync(allPath)) {
-  deploymentOutputs = JSON.parse(fs.readFileSync(allPath, "utf8"));
-  outputFormat = 'all';
 } else {
-  throw new Error("No Terraform outputs file found (flat-outputs.json, cfn-outputs.json, or all-outputs.json).");
+  throw new Error("No Terraform outputs file found at cfn-outputs/all-outputs.json or cfn-outputs.json.");
 }
 
 function getOutput(key: string): any {
@@ -58,10 +56,18 @@ describe("Terraform High Availability Web App E2E Deployment Outputs", () => {
     expect(getOutput("web_servers_security_group_id")).toMatch(/^sg-[a-z0-9]+$/);
     expect(getOutput("sns_topic_arn")).toMatch(/^arn:aws:sns:us-east-1:/);
 
-    JSON.parse(getOutput("public_subnet_ids")).forEach((id: string) => {
+    // Arrays may be JSON strings (flat) or arrays (structured)
+    const publicSubnets = typeof getOutput("public_subnet_ids") === "string"
+      ? JSON.parse(getOutput("public_subnet_ids"))
+      : getOutput("public_subnet_ids");
+    publicSubnets.forEach((id: string) => {
       expect(id).toMatch(/^subnet-[a-z0-9]+$/);
     });
-    JSON.parse(getOutput("private_subnet_ids")).forEach((id: string) => {
+
+    const privateSubnets = typeof getOutput("private_subnet_ids") === "string"
+      ? JSON.parse(getOutput("private_subnet_ids"))
+      : getOutput("private_subnet_ids");
+    privateSubnets.forEach((id: string) => {
       expect(id).toMatch(/^subnet-[a-z0-9]+$/);
     });
   });
@@ -70,9 +76,10 @@ describe("Terraform High Availability Web App E2E Deployment Outputs", () => {
     expect(getOutput("autoscaling_group_name")).toContain("-dev");
     expect(getOutput("load_balancer_dns_name")).toMatch(/\.us-east-1\.elb\.amazonaws\.com$/);
 
-    expect(JSON.parse(getOutput("availability_zones"))).toEqual(
-      expect.arrayContaining(["us-east-1a", "us-east-1b"])
-    );
+    const azs = typeof getOutput("availability_zones") === "string"
+      ? JSON.parse(getOutput("availability_zones"))
+      : getOutput("availability_zones");
+    expect(azs).toEqual(expect.arrayContaining(["us-east-1a", "us-east-1b"]));
   });
 
   it("should expose a reachable DNS for the load balancer", () => {
