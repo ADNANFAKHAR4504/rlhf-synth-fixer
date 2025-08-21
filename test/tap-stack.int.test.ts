@@ -1,8 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// Supports both flat (flat-outputs.json) and structured (all-outputs.json) Terraform output formats
+// Supports flat (flat-outputs.json, cfn-outputs.json) and structured (all-outputs.json) Terraform output formats
 const flatPath = path.join(__dirname, "../flat-outputs.json");
+const cfnPath = path.join(__dirname, "../cfn-outputs.json");
 const allPath = path.join(__dirname, "../all-outputs.json");
 
 let deploymentOutputs: any = {};
@@ -11,11 +12,14 @@ let outputFormat: 'flat' | 'all' = 'flat';
 if (fs.existsSync(flatPath)) {
   deploymentOutputs = JSON.parse(fs.readFileSync(flatPath, "utf8"));
   outputFormat = 'flat';
+} else if (fs.existsSync(cfnPath)) {
+  deploymentOutputs = JSON.parse(fs.readFileSync(cfnPath, "utf8"));
+  outputFormat = 'flat';
 } else if (fs.existsSync(allPath)) {
   deploymentOutputs = JSON.parse(fs.readFileSync(allPath, "utf8"));
   outputFormat = 'all';
 } else {
-  throw new Error("No Terraform outputs file found (flat-outputs.json or all-outputs.json).");
+  throw new Error("No Terraform outputs file found (flat-outputs.json, cfn-outputs.json, or all-outputs.json).");
 }
 
 function getOutput(key: string): any {
