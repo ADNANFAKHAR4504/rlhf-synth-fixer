@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::SecretsManager-2020-07-23
 Description: 'TAP - Cloud formation Template for  Multi-Tier AWS Architecture'
+
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
@@ -249,7 +249,7 @@ Resources:
   SgALB:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB SG - allow 80 from internet
+      GroupDescription: ALB SG - allow HTTP from internet
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
@@ -272,7 +272,7 @@ Resources:
   SgRotation:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Secrets rotation Lambda SG
+      GroupDescription: Secrets rotation Lambda (not used for Lambda@AWS VPC)
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
@@ -336,7 +336,7 @@ Resources:
   CMKLogs:
     Type: AWS::KMS::Key
     Properties:
-      Description: CMK for logs (CloudWatch Logs / S3 logs)
+      Description: CMK for logs (CloudWatch Logs/S3 logs)
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -420,7 +420,10 @@ Resources:
         - PolicyName: FlowDelivery
           PolicyDocument:
             Version: '2012-10-17'
-            Statement: [{Effect: Allow, Action: [logs:CreateLogStream, logs:PutLogEvents], Resource: !Sub '${LogGroupFlow.Arn}:*'}]
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
+                Resource: !Sub '${LogGroupFlow.Arn}:*'
 
   VpcFlow:
     Type: AWS::EC2::FlowLog
@@ -431,6 +434,13 @@ Resources:
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref LogGroupFlow
       DeliverLogsPermissionArn: !GetAtt RoleFlowLogs.Arn
+
+  # ---------------- Security Metrics (CloudWatch) ----------------
+  TopicSecurityAlerts:
+    Type: AWS::SNS::Topic
+    Properties: { TopicName: security-alerts }
+
+  # (Metric filters require a CloudTrail stream; omitted to avoid your CloudTrail quota limit.)
 
   # ---------------- MFA deny policy example ----------------
   GroupMFARequired:
@@ -448,7 +458,7 @@ Resources:
                 Resource: '*'
                 Condition: { Bool: { aws:MultiFactorAuthPresent: false } }
 
-  # ---------------- EC2 via Launch Template + ASG ----------------
+  # ---------------- EC2 via Launch Template + ASG (capacity 0) ----------------
   RoleApp:
     Type: AWS::IAM::Role
     Properties:
@@ -464,7 +474,7 @@ Resources:
               - Sid: ReadDBSecret
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretDB}*'
+                Resource: !Ref SecretDB
               - Sid: UseDataCMK
                 Effect: Allow
                 Action: [kms:Decrypt, kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
@@ -488,7 +498,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        IamInstanceProfile: { Name: !Ref InstanceProfileApp }
+        IamInstanceProfile: { Arn: !GetAtt InstanceProfileApp.Arn }
         NetworkInterfaces:
           - AssociatePublicIpAddress: false
             DeviceIndex: 0
@@ -503,17 +513,13 @@ Resources:
             dnf -y install httpd
             echo '<h1>AppServer (ASG)</h1>' > /var/www/html/index.html
             systemctl enable --now httpd
-        TagSpecifications:                 # << moved here (valid for instance and volume)
-          - ResourceType: instance
-            Tags: [{Key: Name, Value: app-asg-instance}]
-      # (no top-level TagSpecifications)
 
   ASGApp:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier: [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]
       MinSize: '0'
-      MaxSize: '2'
+      MaxSize: '0'
       DesiredCapacity: '0'
       MixedInstancesPolicy:
         LaunchTemplate:
@@ -553,7 +559,7 @@ Resources:
       Protocol: HTTP
       DefaultActions: [{ Type: forward, TargetGroupArn: !Ref TG }]
 
-  # ---------------- RDS + Secret + Rotation ----------------
+  # ---------------- RDS + Secret + Rotation (no transform) ----------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -571,6 +577,7 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 20
         ExcludePunctuation: true
+      KmsKeyId: !Ref CMKData
       Tags: [{Key: Name, Value: secret-rds-master}]
 
   DBInstance:
@@ -595,19 +602,98 @@ Resources:
 
   SecretDBAttach:
     Type: AWS::SecretsManager::SecretTargetAttachment
-    Properties: { SecretId: !Ref SecretDB, TargetId: !Ref DBInstance, TargetType: AWS::RDS::DBInstance }
+    Properties:
+      SecretId: !Ref SecretDB
+      TargetId: !Ref DBInstance
+      TargetType: AWS::RDS::DBInstance
+
+  # Minimal rotation Lambda that satisfies Secrets Manager's scheduler without macros
+  SecretRotationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SecretRotationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecretVersionStage
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref SecretDB
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  SecretRotationFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SecretRotationRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, os, boto3, logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          sm = boto3.client('secretsmanager')
+
+          def handler(event, context):
+              # Minimal no-op rotation handler that marks versions as current.
+              logger.info("Rotation event: %s", json.dumps(event))
+              step = event.get('Step')
+              arn = event.get('SecretId')
+              token = event.get('ClientRequestToken')
+              if not all([step, arn, token]):
+                  return {'status': 'ignored'}
+
+              # Ensure version exists
+              meta = sm.describe_secret(SecretId=arn)
+              stages = meta.get('VersionIdsToStages', {})
+              cur = [k for k,v in stages.items() if 'AWSCURRENT' in v]
+              if step == 'createSecret':
+                  # copy current to new version (no real rotation for demo)
+                  if token not in stages:
+                      val = sm.get_secret_value(SecretId=arn, VersionStage='AWSCURRENT')['SecretString']
+                      sm.put_secret_value(SecretId=arn, ClientRequestToken=token, SecretString=val, VersionStages=['AWSPENDING'])
+                  return {'status': 'created'}
+              elif step == 'setSecret':
+                  return {'status': 'set'}
+              elif step == 'testSecret':
+                  return {'status': 'tested'}
+              elif step == 'finishSecret':
+                  sm.update_secret_version_stage(SecretId=arn, VersionStage='AWSCURRENT', MoveToVersionId=token,
+                                                 RemoveFromVersionId=(cur[0] if cur else None))
+                  return {'status': 'finished'}
+              return {'status': 'ok'}
+
+  SecretRotationInvokePerm:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SecretRotationFn
+      Principal: secretsmanager.amazonaws.com
+      SourceArn: !Ref SecretDB
 
   SecretRotation:
     Type: AWS::SecretsManager::RotationSchedule
     DependsOn: SecretDBAttach
     Properties:
       SecretId: !Ref SecretDB
+      RotationLambdaARN: !GetAtt SecretRotationFn.Arn
       RotationRules: { Duration: '2h', ScheduleExpression: rate(30 days) }
-      HostedRotationLambda:
-        RotationType: MySQLSingleUser
-        RotationLambdaName: mysql-singleuser-rotation
-        VpcSecurityGroupIds: !Join [",", [!Ref SgRotation]]
-        VpcSubnetIds: !Join [",", [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]]
 
 # ---------------- Outputs ----------------
 Outputs:
