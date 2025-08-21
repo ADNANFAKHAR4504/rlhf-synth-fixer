@@ -24,6 +24,7 @@ import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 // Interface updated to remove dependencies on existing infrastructure
 export interface EnvironmentConfig {
@@ -285,7 +286,7 @@ export class TapStack extends TerraformStack {
         `S3ReplicationConfig${constructIdSuffix}`,
         {
           provider: primaryProvider,
-          dependsOn: [replicaVersioning], // FIX: Explicitly depend on replica versioning
+          dependsOn: [replicaVersioning],
           role: s3ReplicationRole.arn,
           bucket: primaryBucket.id,
           rule: [
@@ -293,7 +294,6 @@ export class TapStack extends TerraformStack {
               id: 'primary-to-replica',
               status: 'Enabled',
               destination: { bucket: replicaBucket.arn },
-              // FIX: Removed incompatible DeleteMarkerReplication setting
             },
           ],
         }
@@ -340,12 +340,52 @@ export class TapStack extends TerraformStack {
         tags: config.tags,
       });
 
+      // FIX: Get AWS Account ID to build the KMS Key Policy
+      const callerIdentity = new DataAwsCallerIdentity(
+        this,
+        `CallerIdentity${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+        }
+      );
+
+      // FIX: Define a KMS Key Policy to allow CloudWatch Logs access
+      const kmsKeyPolicy = JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: { AWS: `arn:aws:iam::${callerIdentity.accountId}:root` },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs to use the key',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${config.awsRegion}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      });
+
       const kmsKey = new KmsKey(this, `KmsKey${constructIdSuffix}`, {
         provider: primaryProvider,
         description: `KMS key for ${config.envName} in ${config.awsRegion}`,
         enableKeyRotation: true,
+        policy: kmsKeyPolicy, // FIX: Attach the policy to the key
         tags: config.tags,
       });
+
       const snsTopic = new SnsTopic(this, `SnsTopic${constructIdSuffix}`, {
         provider: primaryProvider,
         name: `ecs-notifications${resourceNameSuffix}`,
@@ -361,7 +401,7 @@ export class TapStack extends TerraformStack {
           name: `/ecs/webapp${resourceNameSuffix}`,
           retentionInDays: 30,
           kmsKeyId: kmsKey.id,
-          dependsOn: [kmsKey], // FIX: Explicitly depend on the KMS key
+          dependsOn: [kmsKey],
           tags: config.tags,
         }
       );
