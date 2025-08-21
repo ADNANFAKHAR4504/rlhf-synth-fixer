@@ -961,6 +961,7 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
+            "DependsOn": "DBSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "webapp-database-${EnvironmentSuffix}-${AWS::AccountId}"
