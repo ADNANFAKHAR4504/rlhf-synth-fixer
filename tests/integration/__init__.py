@@ -1,1 +1,0 @@
-"""Integration test package for CloudFormation deployed infrastructure."""

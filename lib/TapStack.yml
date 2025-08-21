@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure and compliant infrastructure with VPC, EC2, RDS, S3, Lambda, and comprehensive security controls including latest AWS features'
+Description: 'Secure and compliant infrastructure with VPC, EC2, RDS, S3, Lambda, and comprehensive security controls including AWS Secrets Manager for database credentials'
 
 Parameters:
   Environment:
@@ -15,7 +15,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: 'Environment suffix for resource naming to avoid conflicts'
-    Default: ""
+    Default: ''
 
   TrustedCIDR:
     Type: String
@@ -31,23 +31,32 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Database administrator password'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    Default: 'Admin12345'
-
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: 'ami-036d2cdf95d86d256'  # Amazon Linux 2023 AMI
+      AMI: 'ami-036d2cdf95d86d256' # Amazon Linux 2023 AMI
     us-east-1:
-      AMI: 'ami-0453ec754f44f9a4a'  # Amazon Linux 2023 AMI
+      AMI: 'ami-0453ec754f44f9a4a' # Amazon Linux 2023 AMI
 
 Resources:
+  # Secrets Manager Secret for RDS Password
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-credentials${EnvironmentSuffix}'
+      Description: 'RDS MySQL database credentials'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   # VPC Configuration
   VPC:
     Type: AWS::EC2::VPC
@@ -287,6 +296,11 @@ Resources:
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
           Description: 'MySQL access from EC2 instances'
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: 'MySQL access from Lambda functions'
       Tags:
         - Key: Name
           Value: !Sub 'rds-security-group${EnvironmentSuffix}'
@@ -340,8 +354,17 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${SecureS3Bucket}/*'
-                  - !Ref SecureS3Bucket
+                  - !Sub '${SecureS3Bucket.Arn}/*'
+                  - !GetAtt SecureS3Bucket.Arn
+        - PolicyName: SecretsManagerReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -379,6 +402,15 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+        - PolicyName: SecretsManagerReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -499,16 +531,18 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # RDS Instance with Multi-AZ and Encryption
+  # RDS Instance with Multi-AZ and Encryption using Secrets Manager
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database${EnvironmentSuffix}'
-      DBInstanceClass: 'db.t3.micro'
+      DBInstanceClass: 'db.m5.large'
       Engine: 'mysql'
       EngineVersion: '8.0.39'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref DBSecret
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -517,6 +551,8 @@ Resources:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
+      DeletionProtection: true
+      EnablePerformanceInsights: true
       Tags:
         - Key: Name
           Value: !Sub 'secure-database${EnvironmentSuffix}'
@@ -524,6 +560,14 @@ Resources:
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
+
+  # Secret Attachment to RDS Instance
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref RDSInstance
+      TargetType: AWS::RDS::DBInstance
 
   # EC2 Launch Template with IMDSv2
   EC2LaunchTemplate:
@@ -542,13 +586,42 @@ Resources:
           HttpPutResponseHopLimit: 2
           HttpEndpoint: enabled
         UserData:
-          Fn::Base64: |
+          Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent amazon-ssm-agent
+
+            # Install AWS CLI v2
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            ./aws/install
+
+            # Install MySQL client
+            yum install -y mysql
+
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
-            
+
+            # Create script to retrieve DB credentials from Secrets Manager
+            cat > /opt/get-db-credentials.sh << 'EOF'
+            #!/bin/bash
+            SECRET_ARN="${DBSecret}"
+            SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --region ${AWS::Region} --query SecretString --output text)
+            DB_USERNAME=$(echo $SECRET_JSON | jq -r .username)
+            DB_PASSWORD=$(echo $SECRET_JSON | jq -r .password)
+            DB_ENDPOINT="${RDSInstance.Endpoint.Address}"
+
+            echo "Database connection details:"
+            echo "Username: $DB_USERNAME"
+            echo "Endpoint: $DB_ENDPOINT"
+            echo "Password is securely stored in Secrets Manager"
+            EOF
+
+            chmod +x /opt/get-db-credentials.sh
+
+            # Install jq for JSON parsing
+            yum install -y jq
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             {
@@ -599,7 +672,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Lambda Function
+  # Lambda Function with Secrets Manager integration
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -614,28 +687,55 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          DB_SECRET_ARN: !Ref DBSecret
+          REGION: !Ref AWS::Region
       Code:
-        ZipFile: |
+        ZipFile: !Sub |
           import json
           import boto3
           import logging
-          
+          import os
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           def lambda_handler(event, context):
               logger.info('Lambda function invoked successfully')
               
-              # Example of secure operation within VPC
               try:
-                  s3_client = boto3.client('s3')
-                  # Perform secure operations here
+                  # Get database credentials from Secrets Manager
+                  secret_arn = os.environ['DB_SECRET_ARN']
+                  region = os.environ['REGION']
+                  
+                  # Create a Secrets Manager client
+                  secrets_client = boto3.client('secretsmanager', region_name=region)
+                  
+                  # Retrieve the secret
+                  response = secrets_client.get_secret_value(SecretId=secret_arn)
+                  secret = json.loads(response['SecretString'])
+                  
+                  db_username = secret['username']
+                  db_password = secret['password']
+                  
+                  logger.info(f'Successfully retrieved credentials for user: {db_username}')
+                  
+                  # Here you would typically connect to your database
+                  # import pymysql
+                  # connection = pymysql.connect(
+                  #     host='${RDSInstance.Endpoint.Address}',
+                  #     user=db_username,
+                  #     password=db_password,
+                  #     database='your_database'
+                  # )
                   
                   return {
                       'statusCode': 200,
                       'body': json.dumps({
-                          'message': 'Hello from secure Lambda!',
-                          'environment': 'vpc-isolated'
+                          'message': 'Hello from secure Lambda with Secrets Manager!',
+                          'environment': 'vpc-isolated',
+                          'credentials_retrieved': True
                       })
                   }
               except Exception as e:
@@ -686,7 +786,7 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       IsLogging: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${AWS::StackName}${EnvironmentSuffix}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       Tags:
         - Key: Environment
@@ -781,6 +881,36 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
+  # Secrets Manager VPC Endpoint for secure access
+  SecretsManagerVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+        - !Ref EC2SecurityGroup
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Resource: !Ref DBSecret
+      Tags:
+        - Key: Name
+          Value: !Sub 'secretsmanager-vpc-endpoint${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   # AWS Systems Manager VPC Endpoint for EC2 management
   SSMVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -819,7 +949,7 @@ Resources:
           - Object Created
           - Object Deleted
       Targets:
-        - Arn: !Sub '${CloudTrailLogGroup.Arn}'
+        - Arn: !GetAtt CloudTrailLogGroup.Arn
           Id: 'CloudWatchLogsTarget'
 
 Outputs:
@@ -883,6 +1013,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Port${EnvironmentSuffix}'
 
+  DBSecretArn:
+    Description: 'Database Secret ARN in Secrets Manager'
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-Secret-ARN${EnvironmentSuffix}'
+
   S3BucketName:
     Description: 'S3 Bucket Name'
     Value: !Ref SecureS3Bucket
@@ -930,3 +1066,9 @@ Outputs:
     Value: !Ref InternetGateway
     Export:
       Name: !Sub '${AWS::StackName}-IGW-ID${EnvironmentSuffix}'
+
+  SecretsManagerVPCEndpointId:
+    Description: 'Secrets Manager VPC Endpoint ID'
+    Value: !Ref SecretsManagerVPCEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsManager-VPC-Endpoint-ID${EnvironmentSuffix}'
