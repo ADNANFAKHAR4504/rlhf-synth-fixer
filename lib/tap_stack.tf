@@ -395,7 +395,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 variable "create_cloudtrail" {
   description = "Whether to create CloudTrail (set to false if you already have max trails)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 resource "aws_cloudtrail" "main" {
@@ -619,7 +619,7 @@ resource "aws_vpc_endpoint" "api_gateway_use1" {
 variable "create_config" {
   description = "Whether to create AWS Config resources (set to false if you already have Config enabled)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 # Only create Config in one region to avoid limits
@@ -767,7 +767,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 variable "create_guardduty" {
   description = "Whether to create GuardDuty detectors (set to false if detectors already exist)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 resource "aws_guardduty_detector" "main_usw2" {
@@ -888,29 +888,35 @@ resource "aws_iam_policy" "mfa_enforcement" {
   tags = merge(local.common_tags, { Name = "${local.naming_prefix}-mfa-enforcement" })
 }
 
-# Output important resource information
-output "kms_key_ids" {
-  description = "KMS Key IDs for each region"
-  value = {
-    usw2 = aws_kms_key.main_usw2.key_id
-    use1 = aws_kms_key.main_use1.key_id
-  }
+# Output important resource information - flattened for integration tests
+output "kms_key_ids_usw2" {
+  description = "KMS Key ID for us-west-2"
+  value = aws_kms_key.main_usw2.key_id
 }
 
-output "vpc_ids" {
-  description = "VPC IDs for each region"
-  value = {
-    usw2 = aws_vpc.main_usw2.id
-    use1 = aws_vpc.main_use1.id
-  }
+output "kms_key_ids_use1" {
+  description = "KMS Key ID for us-east-1"
+  value = aws_kms_key.main_use1.key_id
 }
 
-output "guardduty_detector_ids" {
-  description = "GuardDuty detector IDs for each region (when enabled)"
-  value = {
-    usw2 = var.create_guardduty ? aws_guardduty_detector.main_usw2[0].id : "not_created"
-    use1 = var.create_guardduty ? aws_guardduty_detector.main_use1[0].id : "not_created"
-  }
+output "vpc_ids_usw2" {
+  description = "VPC ID for us-west-2"
+  value = aws_vpc.main_usw2.id
+}
+
+output "vpc_ids_use1" {
+  description = "VPC ID for us-east-1"
+  value = aws_vpc.main_use1.id
+}
+
+output "guardduty_detector_ids_usw2" {
+  description = "GuardDuty detector ID for us-west-2"
+  value = var.create_guardduty ? aws_guardduty_detector.main_usw2[0].id : "not_created"
+}
+
+output "guardduty_detector_ids_use1" {
+  description = "GuardDuty detector ID for us-east-1"
+  value = var.create_guardduty ? aws_guardduty_detector.main_use1[0].id : "not_created"
 }
 
 output "cloudtrail_arn" {
