@@ -10,9 +10,9 @@ Parameters:
     Description: Environment name (dev, staging, or prod; lowercase, max 12 chars for bucket name compliance)
   ProjectName:
     Type: String
-    Default: TapStack
-    AllowedPattern: '^[A-Z][a-zA-Z0-9-]*$'
-    Description: Project name (must start with uppercase letter)
+    Default: tapstack
+    AllowedPattern: '^[a-z][a-z0-9-]*$'
+    Description: Project name (must start with lowercase letter; valid for S3 buckets)
   Owner:
     Type: String
     Default: team
@@ -33,10 +33,10 @@ Mappings:
   RegionMap:
     us-east-1:
       DestinationRegion: us-east-2
-      DestinationBucket: TapStack-staging-databucket-123456789012
+      DestinationBucket: tapstack-staging-databucket-123456789012
     us-east-2:
       DestinationRegion: us-west-2
-      DestinationBucket: TapStack-prod-databucket-123456789012
+      DestinationBucket: tapstack-prod-databucket-123456789012
     us-west-2:
       DestinationRegion: ''
       DestinationBucket: ''
@@ -372,7 +372,7 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - W1031 # Bucket name is valid, false positive due to dynamic AWS::AccountId
+            - W1031
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
       VersioningConfiguration:
@@ -452,8 +452,8 @@ Resources:
                   - s3:GetBucket*
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::TapStack-${Environment}-databucket-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::TapStack-${Environment}-databucket-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ReplicateObject
