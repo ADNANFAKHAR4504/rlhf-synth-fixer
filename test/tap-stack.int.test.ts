@@ -14,7 +14,7 @@ if (fs.existsSync(outputsPath)) {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients for different regions
-const primaryRegion = 'us-east-1';
+const primaryRegion = 'us-east-2';
 const secondaryRegion = 'eu-west-1';
 
 const s3Primary = new AWS.S3({ region: primaryRegion });
@@ -58,7 +58,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
           })
           .promise();
 
-        expect(bucketLocation.LocationConstraint).toBeNull(); // us-east-1 returns null
+        expect(bucketLocation.LocationConstraint).toBe('us-east-2');
 
         // Check versioning
         const versioning = await s3Primary

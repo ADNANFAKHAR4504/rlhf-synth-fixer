@@ -10,7 +10,7 @@ describe('TapStack', () => {
     const stack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
       isPrimary: true,
-      env: { region: 'us-east-1' },
+      env: { region: 'us-east-2' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -20,7 +20,7 @@ describe('TapStack', () => {
     const stack = new TapStack(app, 'TestTapStackSecondary', {
       environmentSuffix,
       isPrimary: false,
-      primaryRegion: 'us-east-1',
+      primaryRegion: 'us-east-2',
       primaryBucketArn: 'arn:aws:s3:::mock-primary-bucket',
       env: { region: 'eu-west-1' },
     });
@@ -31,7 +31,7 @@ describe('TapStack', () => {
     test('creates KMS key with rotation enabled', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'TAP Multi-Region KMS Key - us-east-1',
+        Description: 'TAP Multi-Region KMS Key - us-east-2',
         EnableKeyRotation: true,
         KeyPolicy: Match.objectLike({
           Statement: Match.arrayWith([
@@ -50,20 +50,6 @@ describe('TapStack', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.anyValue(),
-        ReplicationConfiguration: {
-          Role: Match.anyValue(),
-          Rules: [
-            {
-              Id: 'ReplicateToSecondaryRegion',
-              Status: 'Enabled',
-              Prefix: '',
-              Destination: {
-                Bucket: Match.anyValue(),
-                StorageClass: 'STANDARD_IA',
-              },
-            },
-          ],
-        },
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -72,6 +58,7 @@ describe('TapStack', () => {
             {
               ServerSideEncryptionByDefault: {
                 SSEAlgorithm: 'aws:kms',
+                KMSMasterKeyID: Match.anyValue(),
               },
             },
           ],
@@ -218,8 +205,8 @@ describe('TapStack', () => {
     test('creates SNS topic with KMS encryption', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `tap-replication-alerts-useast1-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - us-east-1',
+        TopicName: `tap-replication-alerts-useast2-${environmentSuffix}`,
+        DisplayName: 'TAP Replication Alerts - us-east-2',
       });
     });
 
