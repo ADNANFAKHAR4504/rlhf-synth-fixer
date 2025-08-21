@@ -23,7 +23,6 @@ cat > /var/www/html/index.html << EOF
     <div class="container">
         <h1>Welcome to Multi-Region Web Application</h1>
         <div class="info">
-            <p>You are being served from the <span class="region">${region_name}</span> region</p>
             <p>Instance ID: <span id="instance-id">$(hostname -f)</span></p>
         </div>
         <p>This application demonstrates AWS multi-region deployment with automatic failover.</p>
