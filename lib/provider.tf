@@ -19,4 +19,3 @@ provider "aws" {
   region = var.aws_region
   profile = lookup(local.aws_profile, local.env)
 }
-

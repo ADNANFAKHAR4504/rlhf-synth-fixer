@@ -40,3 +40,24 @@ module "compute_module" {
     module.security_module
   ]
 }
+
+
+
+output "lb_domain_name" {
+  value = module.compute_module.lb_domain_name
+}
+
+output "s3_policy_arn" {
+  description = "ARN of the S3 limited access policy"
+  value       = module.security_module.s3_policy_arn
+}
+
+output "kms_policy_arn" {
+  description = "ARN of the KMS limited access policy"
+  value       = module.security_module.kms_policy_arn
+}
+
+output "uniform_security_group_id" {
+  description = "ID of the uniform security group for EC2 instances"
+  value       = module.security_module.uniform_security_group_id
+}
