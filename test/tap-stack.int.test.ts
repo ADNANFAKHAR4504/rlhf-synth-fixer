@@ -605,8 +605,8 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     });
 
     test('should validate resource naming follows conventions', () => {
-      // Validate S3 bucket follows naming convention
-      expect(outputs.S3BucketName).toMatch(/^secure-cloudtrail-logs-\d+-us-east-1$/);
+      // Validate S3 bucket follows naming convention (with environment suffix)
+      expect(outputs.S3BucketName).toMatch(/^secure-cloudtrail-logs-.+-\d+-us-east-1$/);
       
       // Validate CloudTrail name
       expect(outputs.CloudTrailArn).toContain('SecureCloudTrail');

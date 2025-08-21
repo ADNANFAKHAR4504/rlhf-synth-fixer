@@ -76,7 +76,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for CloudTrail logs - encrypted with KMS
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailLogsBucket', {
-      bucketName: `secure-cloudtrail-logs-${this.account}-${this.region}`,
+      bucketName: `secure-cloudtrail-logs-${suffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -90,7 +90,8 @@ export class TapStack extends cdk.Stack {
           noncurrentVersionExpiration: cdk.Duration.days(30),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // CloudTrail bucket policy for proper permissions
