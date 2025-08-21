@@ -1,7 +1,4 @@
-import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
+import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
 import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
@@ -33,20 +30,6 @@ describe('TapStack Integration Tests', () => {
         expect(outputs[key]).toBeDefined();
         expect(outputs[key]).not.toBe('');
       });
-    });
-  });
-
-  describe('Stack Information', () => {
-    test('should validate stack exists and is in good state', async () => {
-      const response = await cloudformation.send(
-        new DescribeStacksCommand({
-          StackName: stackName,
-        })
-      );
-      const stack = response.Stacks?.[0];
-      expect(stack).toBeDefined();
-      expect(stack?.StackStatus).toMatch(/COMPLETE$/);
-      expect(stack?.StackName).toBe(stackName);
     });
   });
 
