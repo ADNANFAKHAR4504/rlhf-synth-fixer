@@ -27,12 +27,31 @@ if [ "$LANGUAGE" = "py" ]; then
   pipenv run test-py-integration
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
+  # For CDKTF Go projects, generate local provider bindings if missing
+  if [ "$PLATFORM" = "cdktf" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+    # Ensure CDKTF core deps are present to satisfy .gen imports
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    go clean -modcache || true
+    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+    go mod tidy
+  fi
   if [ -d "lib" ]; then
-    # Ensure Go sees tests even if they live under root tests/
+    # Ensure tests compile in same package as stack code
     if [ -d "tests/integration" ]; then
-      echo "📦 Copying tests/integration into lib/ for Go module scope"
-      mkdir -p lib/tests
-      cp -r tests/integration lib/tests/ || true
+      echo "📦 Copying integration *_test.go files into lib/ for package alignment"
+      cp tests/integration/*_test.go lib/ || true
     fi
     cd lib
     go test ./... -v -tags "integration"

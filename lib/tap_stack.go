@@ -1,6 +1,9 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -141,11 +144,9 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		PolicyArn: pol.Arn(),
 	})
 
-	// Lambda code written to temp zip
-	code := minimalLambdaCode()
+	// Lambda code packaged into a real ZIP (required by AWS Lambda)
 	tmpDir := os.TempDir()
-	zipPath := filepath.Join(tmpDir, "lambda_function.zip")
-	_ = os.WriteFile(zipPath, []byte(code.zipBytes), 0600)
+	zipPath, zipHash := buildLambdaZip(tmpDir)
 
 	fn := lambda.NewLambdaFunction(stack, str("ImageThumbnailProcessor"), &lambda.LambdaFunctionConfig{
 		FunctionName:                 str("image-thumbnail-processor"),
@@ -153,7 +154,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		Handler:                      str("lambda_function.lambda_handler"),
 		Role:                         role.Arn(),
 		Filename:                     str(zipPath),
-		SourceCodeHash:               str(base64.StdEncoding.EncodeToString([]byte(code.zipBytes))),
+		SourceCodeHash:               str(zipHash),
 		Timeout:                      jsii.Number(30),
 		MemorySize:                   jsii.Number(256),
 		ReservedConcurrentExecutions: jsii.Number(10),
@@ -201,8 +202,19 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	cdktf.NewTerraformOutput(stack, str("lambda_function_arn"), &cdktf.TerraformOutputConfig{Value: fn.Arn()})
 }
 
-type embeddedZip struct{ zipBytes string }
+// buildLambdaZip creates a minimal valid zip containing lambda_function.py and returns its path and base64 SHA-256 hash
+func buildLambdaZip(dir string) (string, string) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, _ := zw.Create("lambda_function.py")
+	py := "def lambda_handler(event, context):\n    return {'statusCode': 200, 'body': 'ok'}\n"
+	_, _ = f.Write([]byte(py))
+	_ = zw.Close()
 
-func minimalLambdaCode() embeddedZip {
-	return embeddedZip{zipBytes: "PK\x03\x04MINIMAL"}
+	zipPath := filepath.Join(dir, "lambda_function.zip")
+	_ = os.WriteFile(zipPath, buf.Bytes(), 0600)
+
+	sum := sha256.Sum256(buf.Bytes())
+	zipHash := base64.StdEncoding.EncodeToString(sum[:])
+	return zipPath, zipHash
 }
