@@ -62,37 +62,37 @@ locals {
   # Environment-specific configurations
   env_config = {
     dev = {
-      instance_type        = "t3.micro"
+      instance_type       = "t3.micro"
       min_size            = 1
       max_size            = 2
       desired_capacity    = 1
       backup_retention    = 7
       monitoring_enabled  = false
-      multi_az           = false
+      multi_az            = false
       deletion_protection = false
-      log_retention_days = 7
+      log_retention_days  = 7
     }
     staging = {
-      instance_type        = "t3.small"
+      instance_type       = "t3.small"
       min_size            = 1
       max_size            = 3
       desired_capacity    = 2
       backup_retention    = 14
       monitoring_enabled  = true
-      multi_az           = true
+      multi_az            = true
       deletion_protection = false
-      log_retention_days = 14
+      log_retention_days  = 14
     }
     production = {
-      instance_type        = "t3.medium"
+      instance_type       = "t3.medium"
       min_size            = 2
       max_size            = 10
       desired_capacity    = 3
       backup_retention    = 30
       monitoring_enabled  = true
-      multi_az           = true
+      multi_az            = true
       deletion_protection = true
-      log_retention_days = 30
+      log_retention_days  = 30
     }
   }
 
@@ -114,11 +114,11 @@ locals {
 
   # Regional configurations
   regions = var.enable_multi_region ? ["us-east-1", "us-west-2", "eu-central-1"] : [var.aws_region]
-  
+
   # Provider mapping
   provider_map = {
-    "us-east-1"   = "use1"
-    "us-west-2"   = "usw2"
+    "us-east-1"    = "use1"
+    "us-west-2"    = "usw2"
     "eu-central-1" = "euc1"
   }
 }
@@ -176,7 +176,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -273,7 +273,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_eip" "nat" {
   count = local.current_config.multi_az ? min(length(aws_subnet.public), 2) : 1
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -543,8 +543,8 @@ resource "aws_iam_role_policy" "config_s3_policy" {
         Resource = aws_s3_bucket.config.arn
       },
       {
-        Effect = "Allow"
-        Action = "s3:PutObject"
+        Effect   = "Allow"
+        Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
@@ -553,8 +553,8 @@ resource "aws_iam_role_policy" "config_s3_policy" {
         }
       },
       {
-        Effect = "Allow"
-        Action = "s3:GetObject"
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
       }
     ]
@@ -648,6 +648,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
   rule {
     id     = "transition_to_ia"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = 30
@@ -761,10 +763,10 @@ resource "aws_launch_template" "web" {
 }
 
 resource "aws_autoscaling_group" "web" {
-  name                = "${local.name_prefix}-web-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.web.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-web-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.web.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = local.current_config.min_size
@@ -878,7 +880,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = 100
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   engine         = "mysql"
   engine_version = "8.0"
@@ -892,20 +894,20 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = local.current_config.backup_retention
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az               = local.current_config.multi_az
-  publicly_accessible    = false
-  deletion_protection    = local.current_config.deletion_protection
-  skip_final_snapshot    = var.environment != "production"
+  multi_az                  = local.current_config.multi_az
+  publicly_accessible       = false
+  deletion_protection       = local.current_config.deletion_protection
+  skip_final_snapshot       = var.environment != "production"
   final_snapshot_identifier = var.environment == "production" ? "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   performance_insights_enabled = local.current_config.monitoring_enabled
-  monitoring_interval         = local.current_config.monitoring_enabled ? 60 : 0
-  monitoring_role_arn         = local.current_config.monitoring_enabled ? aws_iam_role.rds_monitoring[0].arn : null
+  monitoring_interval          = local.current_config.monitoring_enabled ? 60 : 0
+  monitoring_role_arn          = local.current_config.monitoring_enabled ? aws_iam_role.rds_monitoring[0].arn : null
 
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database"
@@ -976,14 +978,9 @@ resource "aws_config_configuration_recorder" "main" {
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
-    recording_mode {
-      recording_frequency = "CONTINUOUS"
-    }
   }
 
   depends_on = [aws_config_delivery_channel.main]
-
-  tags = local.common_tags
 }
 
 resource "aws_config_delivery_channel" "main" {
@@ -1057,16 +1054,16 @@ resource "aws_instance" "bastion" {
   count                  = var.key_name != "" ? 1 : 0
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = "t3.micro"
-  key_name              = var.key_name
+  key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
-  subnet_id             = aws_subnet.public[0].id
-  iam_instance_profile  = aws_iam_instance_profile.ec2_profile.name
+  subnet_id              = aws_subnet.public[0].id
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   root_block_device {
     volume_type           = "gp3"
     volume_size           = 8
     encrypted             = true
-    kms_key_id           = aws_kms_key.main.arn
+    kms_key_id            = aws_kms_key.main.arn
     delete_on_termination = true
   }
 
