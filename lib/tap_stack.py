@@ -257,7 +257,7 @@ class TapStack(Stack):
       generate_secret_string=secretsmanager.SecretStringGenerator(
         secret_string_template=json.dumps({"username": "admin"}),
         generate_string_key="password",
-        exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
+        exclude_characters="\"'@/\\",
         password_length=32
       )
     )
