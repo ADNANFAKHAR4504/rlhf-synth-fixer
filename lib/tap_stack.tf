@@ -334,9 +334,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_assets" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
     }
-    bucket_key_enabled = false
+    bucket_key_enabled = true
   }
 }
 

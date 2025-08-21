@@ -99,9 +99,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('S3 Bucket Configuration', () => {
-    test('should create S3 bucket with AES256 encryption', () => {
+    test('should create S3 bucket with KMS encryption', () => {
       expect(tapStackContent).toContain('resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_assets"');
-      expect(tapStackContent).toContain('sse_algorithm = "AES256"');
+      expect(tapStackContent).toContain('sse_algorithm     = "aws:kms"');
+      expect(tapStackContent).toContain('kms_master_key_id = aws_kms_key.main.arn');
     });
 
     test('should block public access to S3 bucket', () => {

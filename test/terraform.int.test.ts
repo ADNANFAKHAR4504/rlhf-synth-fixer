@@ -219,7 +219,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       await expect(s3Client.send(command)).resolves.toBeDefined();
     });
 
-    test('should have AES256 encryption enabled on S3 bucket', async () => {
+    test('should have KMS encryption enabled on S3 bucket', async () => {
       const command = new GetBucketEncryptionCommand({
         Bucket: outputs.s3_bucket_name
       });
@@ -227,8 +227,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
       
       expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
       const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-      expect(rule.BucketKeyEnabled).toBe(false);
+      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(outputs.kms_key_arn);
+      expect(rule.BucketKeyEnabled).toBe(true);
     });
 
     test('should have versioning enabled on S3 bucket', async () => {
@@ -506,14 +507,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('End-to-End Security Validation', () => {
     test('should have all encryption features enabled', async () => {
-      // Since we changed to AES256, we just verify the encryption is enabled
-      // Check S3 encryption (AES256, not KMS)
+      // Check S3 encryption (KMS as required by security policy)
       const s3Command = new GetBucketEncryptionCommand({
         Bucket: outputs.s3_bucket_name
       });
       const s3Response = await s3Client.send(s3Command);
       expect(s3Response.ServerSideEncryptionConfiguration?.Rules![0]
-        .ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+        .ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(s3Response.ServerSideEncryptionConfiguration?.Rules![0]
+        .ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(outputs.kms_key_arn);
       
       // Check CloudWatch Logs encryption (still uses KMS)
       const keyId = outputs.kms_key_arn.split('/').pop();
