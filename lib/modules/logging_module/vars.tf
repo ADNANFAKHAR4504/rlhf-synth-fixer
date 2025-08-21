@@ -27,3 +27,15 @@ variable "tags" {
   description = "Common tags to apply to resources"
   type        = map(string)
 }
+
+variable "create_log_groups" {
+  description = "Whether to create CloudWatch Log Groups if they don't exist"
+  type        = bool
+  default     = true
+}
+
+variable "log_group_retention_days" {
+  description = "Retention in days for created CloudWatch Log Groups"
+  type        = number
+  default     = 90
+}
