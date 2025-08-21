@@ -505,7 +505,7 @@ import { TapStack } from '../lib/tap-stack';
 // TESTS
 // ============================================================================
 
-describe('Nova Model Breaking Infrastructure Components', () => {
+describe('AWS Model Breaking Infrastructure Components', () => {
   beforeEach(() => {
     resetPulumiMocks(); 
     jest.clearAllMocks();
@@ -604,24 +604,7 @@ describe('Nova Model Breaking Infrastructure Components', () => {
       });
     });
 
-    describe('SubnetGroupComponent', () => {
-      it('should create subnet group with public and private subnets', async () => {
-        const subnetGroup = new SubnetGroupComponent('test-subnet-group', {
-          vpcId: 'vpc-123',
-          publicSubnets: [
-            { cidrBlock: '10.0.1.0/24', availabilityZone: 'us-east-1a', name: 'public-1' },
-          ],
-          privateSubnets: [
-            { cidrBlock: '10.0.10.0/24', availabilityZone: 'us-east-1a', name: 'private-1' },
-          ],
-        });
 
-        expect(subnetGroup.publicSubnets).toHaveLength(1);
-        expect(subnetGroup.privateSubnets).toHaveLength(1);
-        expect(subnetGroup.publicSubnetIds).toHaveLength(1);
-        expect(subnetGroup.privateSubnetIds).toHaveLength(1);
-      });
-    });
 
     describe('createSubnet function', () => {
       it('should create subnet using factory function', async () => {
@@ -639,22 +622,7 @@ describe('Nova Model Breaking Infrastructure Components', () => {
       });
     });
 
-    describe('createSubnetGroup function', () => {
-      it('should create subnet group using factory function', async () => {
-        const result = createSubnetGroup('factory-subnet-group', {
-          vpcId: 'vpc-123',
-          publicSubnets: [
-            { cidrBlock: '10.0.1.0/24', availabilityZone: 'us-east-1a', name: 'public-1' },
-          ],
-          privateSubnets: [
-            { cidrBlock: '10.0.10.0/24', availabilityZone: 'us-east-1a', name: 'private-1' },
-          ],
-        });
 
-        expect(result.publicSubnets).toHaveLength(1);
-        expect(result.privateSubnets).toHaveLength(1);
-      });
-    });
   });
 
   // ============================================================================

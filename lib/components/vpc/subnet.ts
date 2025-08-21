@@ -4,7 +4,7 @@ import * as aws from '@pulumi/aws';
 export interface SubnetArgs {
   vpcId: pulumi.Input<string>;
   cidrBlock: string;
-  availabilityZone: string;
+  availabilityZone: pulumi.Input<string>; // CHANGED: Allow Input<string> for dynamic AZs
   mapPublicIpOnLaunch?: boolean;
   isPublic: boolean;
   tags?: Record<string, string>;
@@ -17,18 +17,23 @@ export interface SubnetResult {
   availabilityZone: pulumi.Output<string>;
 }
 
+// UPDATED: Support both static and dynamic subnet configurations
 export interface SubnetGroupArgs {
   vpcId: pulumi.Input<string>;
-  publicSubnets: Array<{
-    cidrBlock: string;
-    availabilityZone: string;
-    name: string;
-  }>;
-  privateSubnets: Array<{
-    cidrBlock: string;
-    availabilityZone: string;
-    name: string;
-  }>;
+  publicSubnets: pulumi.Input<
+    Array<{
+      cidrBlock: string;
+      availabilityZone: pulumi.Input<string>; // CHANGED: Support dynamic AZs
+      name: string;
+    }>
+  >;
+  privateSubnets: pulumi.Input<
+    Array<{
+      cidrBlock: string;
+      availabilityZone: pulumi.Input<string>; // CHANGED: Support dynamic AZs
+      name: string;
+    }>
+  >;
   tags?: Record<string, string>;
 }
 
@@ -65,11 +70,11 @@ export class SubnetComponent extends pulumi.ComponentResource {
       {
         vpcId: args.vpcId,
         cidrBlock: args.cidrBlock,
-        availabilityZone: args.availabilityZone,
+        availabilityZone: args.availabilityZone, // Now supports dynamic Input<string>
         mapPublicIpOnLaunch: args.mapPublicIpOnLaunch ?? args.isPublic,
         tags: defaultTags,
       },
-      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
+      { parent: this, provider: opts?.provider }
     );
 
     this.subnetId = this.subnet.id;
@@ -83,6 +88,7 @@ export class SubnetComponent extends pulumi.ComponentResource {
   }
 }
 
+// NEW: Enhanced SubnetGroupComponent to handle dynamic configurations
 export class SubnetGroupComponent extends pulumi.ComponentResource {
   public readonly publicSubnets: SubnetResult[];
   public readonly privateSubnets: SubnetResult[];
@@ -96,52 +102,69 @@ export class SubnetGroupComponent extends pulumi.ComponentResource {
   ) {
     super('aws:vpc:SubnetGroupComponent', name, {}, opts);
 
-    this.publicSubnets = args.publicSubnets.map((subnetConfig, index) => {
-      const subnetComponent = new SubnetComponent(
-        `${name}-public-${index}`,
-        {
-          vpcId: args.vpcId,
-          cidrBlock: subnetConfig.cidrBlock,
-          availabilityZone: subnetConfig.availabilityZone,
-          isPublic: true,
-          mapPublicIpOnLaunch: true,
-          name: subnetConfig.name,
-          tags: args.tags,
-        },
-        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
-      );
+    // FIXED: Handle dynamic subnet configurations properly
+    this.publicSubnets = [];
+    this.privateSubnets = [];
+    this.publicSubnetIds = [];
+    this.privateSubnetIds = [];
 
-      return {
-        subnet: subnetComponent.subnet,
-        subnetId: subnetComponent.subnetId,
-        availabilityZone: subnetComponent.availabilityZone,
-      };
+    // Handle dynamic public subnets
+    const publicSubnetsInput = pulumi.output(args.publicSubnets);
+    publicSubnetsInput.apply(publicSubnets => {
+      publicSubnets.forEach((subnetConfig, index) => {
+        const subnetComponent = new SubnetComponent(
+          `${name}-public-${index}`,
+          {
+            vpcId: args.vpcId,
+            cidrBlock: subnetConfig.cidrBlock,
+            availabilityZone: subnetConfig.availabilityZone,
+            isPublic: true,
+            mapPublicIpOnLaunch: true,
+            name: subnetConfig.name,
+            tags: args.tags,
+          },
+          { parent: this, provider: opts?.provider }
+        );
+
+        this.publicSubnets.push({
+          subnet: subnetComponent.subnet,
+          subnetId: subnetComponent.subnetId,
+          availabilityZone: subnetComponent.availabilityZone,
+        });
+
+        this.publicSubnetIds.push(subnetComponent.subnetId);
+      });
+      return publicSubnets;
     });
 
-    this.privateSubnets = args.privateSubnets.map((subnetConfig, index) => {
-      const subnetComponent = new SubnetComponent(
-        `${name}-private-${index}`,
-        {
-          vpcId: args.vpcId,
-          cidrBlock: subnetConfig.cidrBlock,
-          availabilityZone: subnetConfig.availabilityZone,
-          isPublic: false,
-          mapPublicIpOnLaunch: false,
-          name: subnetConfig.name,
-          tags: args.tags,
-        },
-        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
-      );
+    // Handle dynamic private subnets
+    const privateSubnetsInput = pulumi.output(args.privateSubnets);
+    privateSubnetsInput.apply(privateSubnets => {
+      privateSubnets.forEach((subnetConfig, index) => {
+        const subnetComponent = new SubnetComponent(
+          `${name}-private-${index}`,
+          {
+            vpcId: args.vpcId,
+            cidrBlock: subnetConfig.cidrBlock,
+            availabilityZone: subnetConfig.availabilityZone,
+            isPublic: false,
+            mapPublicIpOnLaunch: false,
+            name: subnetConfig.name,
+            tags: args.tags,
+          },
+          { parent: this, provider: opts?.provider }
+        );
 
-      return {
-        subnet: subnetComponent.subnet,
-        subnetId: subnetComponent.subnetId,
-        availabilityZone: subnetComponent.availabilityZone,
-      };
+        this.privateSubnets.push({
+          subnet: subnetComponent.subnet,
+          subnetId: subnetComponent.subnetId,
+          availabilityZone: subnetComponent.availabilityZone,
+        });
+
+        this.privateSubnetIds.push(subnetComponent.subnetId);
+      });
+      return privateSubnets;
     });
-
-    this.publicSubnetIds = this.publicSubnets.map(subnet => subnet.subnetId);
-    this.privateSubnetIds = this.privateSubnets.map(subnet => subnet.subnetId);
 
     this.registerOutputs({
       publicSubnets: this.publicSubnets,
@@ -155,9 +178,9 @@ export class SubnetGroupComponent extends pulumi.ComponentResource {
 export function createSubnet(
   name: string,
   args: SubnetArgs,
-  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+  opts?: pulumi.ComponentResourceOptions
 ): SubnetResult {
-  const subnetComponent = new SubnetComponent(name, args, opts); // ← FIXED: Pass opts through
+  const subnetComponent = new SubnetComponent(name, args, opts);
   return {
     subnet: subnetComponent.subnet,
     subnetId: subnetComponent.subnetId,
@@ -168,9 +191,9 @@ export function createSubnet(
 export function createSubnetGroup(
   name: string,
   args: SubnetGroupArgs,
-  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+  opts?: pulumi.ComponentResourceOptions
 ): SubnetGroupResult {
-  const subnetGroupComponent = new SubnetGroupComponent(name, args, opts); // ← FIXED: Pass opts through
+  const subnetGroupComponent = new SubnetGroupComponent(name, args, opts);
   return {
     publicSubnets: subnetGroupComponent.publicSubnets,
     privateSubnets: subnetGroupComponent.privateSubnets,
