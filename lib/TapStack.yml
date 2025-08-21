@@ -670,7 +670,6 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -678,10 +677,76 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
+  # IAM Role for Config Start Lambda
+  ConfigStartRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigStartPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:StartConfigurationRecorder
+                  - config:DescribeConfigurationRecorders
+                Resource: '*'
+
+  # Lambda Function to Start Config Recorder
+  ConfigStartFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ConfigStart-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ConfigStartRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  config_client = boto3.client('config')
+                  recorder_name = event['ResourceProperties']['RecorderName']
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # Start the configuration recorder
+                      config_client.start_configuration_recorder(
+                          ConfigurationRecorderName=recorder_name
+                      )
+                      print(f"Started configuration recorder: {recorder_name}")
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  # Custom Resource to Start Config Recorder
+  StartConfigRecorder:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - ConfigDeliveryChannel
+      - ConfigurationRecorder
+    Properties:
+      ServiceToken: !GetAtt ConfigStartFunction.Arn
+      RecorderName: !Sub 'config-recorder-${EnvironmentSuffix}'
+
   # Config Rules for Compliance
   S3BucketSSLRequestsOnlyRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: StartConfigRecorder
     Properties:
       ConfigRuleName: !Sub 's3-bucket-ssl-requests-only-${EnvironmentSuffix}'
       Description: 'Checks whether S3 buckets have policies that require requests to use SSL'
@@ -691,7 +756,7 @@ Resources:
 
   RDSStorageEncryptedRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+    DependsOn: StartConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'rds-storage-encrypted-${EnvironmentSuffix}'
       Description: 'Checks whether storage encryption is enabled for RDS instances'

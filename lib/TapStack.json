@@ -1068,7 +1068,6 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
-            "DependsOn": "ConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
@@ -1085,9 +1084,85 @@
                 }
             }
         },
+        "ConfigStartRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigStartPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:StartConfigurationRecorder",
+                                        "config:DescribeConfigurationRecorders"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigStartFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "ConfigStart-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ConfigStartRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport cfnresponse\n\ndef handler(event, context):\n    try:\n        config_client = boto3.client('config')\n        recorder_name = event['ResourceProperties']['RecorderName']\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            # Start the configuration recorder\n            config_client.start_configuration_recorder(\n                ConfigurationRecorderName=recorder_name\n            )\n            print(f\"Started configuration recorder: {recorder_name}\")\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {e}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+                }
+            }
+        },
+        "StartConfigRecorder": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "DependsOn": [
+                "ConfigDeliveryChannel",
+                "ConfigurationRecorder"
+            ],
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "ConfigStartFunction",
+                        "Arn"
+                    ]
+                },
+                "RecorderName": {
+                    "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
+                }
+            }
+        },
         "S3BucketSSLRequestsOnlyRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
+            "DependsOn": "StartConfigRecorder",
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "s3-bucket-ssl-requests-only-${EnvironmentSuffix}"
@@ -1101,7 +1176,7 @@
         },
         "RDSStorageEncryptedRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorder",
+            "DependsOn": "StartConfigRecorder",
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"
