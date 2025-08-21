@@ -9,7 +9,7 @@
   "subtask": "Network Infrastructure Design",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Security Configuration",
     "Access Control",
     "Resource Scaling"
@@ -17,7 +17,7 @@
   "training_quality": 9,
   "aws_services": [
     "VPC",
-    "EC2", 
+    "EC2",
     "IAM",
     "CloudWatch Logs",
     "Security Groups",
@@ -25,5 +25,11 @@
     "VPC Flow Logs",
     "NAT Gateway",
     "Internet Gateway"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
