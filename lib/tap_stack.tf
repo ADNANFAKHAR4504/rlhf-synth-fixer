@@ -25,6 +25,32 @@ resource "aws_vpc" "main" {
   }
 }
 
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name        = "secure-igw-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+output "internet_gateway_id" {
+  value = aws_internet_gateway.main.id
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name        = "secure-public-rt-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_route" "igw_route" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
+
 resource "aws_s3_bucket" "secure_prod" {
   bucket = local.bucket_name_full                                   # <--- uses suffix
   tags   = merge(var.bucket_tags, {
@@ -498,6 +524,20 @@ output "autoscaling_group_name" {
   value = aws_autoscaling_group.secure_prod_asg.name
 }
 
+resource "aws_route_table_association" "public1" {
+  subnet_id      = aws_subnet.public1.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public2" {
+  subnet_id      = aws_subnet.public2.id
+  route_table_id = aws_route_table.public.id
+}
+
+output "public_route_table_id" {
+  value = aws_route_table.public.id
+}
+
 ########################
 # Application Load Balancer (ALB)
 ########################
@@ -729,3 +769,25 @@ resource "aws_acm_certificate" "alb_cert" {
 output "alb_certificate_arn" {
   value = aws_acm_certificate.alb_cert.arn
 }
+
+# Replace with your actual Route53 zone ID!
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for ACM certificate DNS validation"
+  type        = string
+}
+
+resource "aws_route53_record" "alb_cert_validation" {
+  name    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_name
+  type    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_type
+  zone_id = var.route53_zone_id
+  records = [aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_value]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "alb_cert_validation" {
+  certificate_arn         = aws_acm_certificate.alb_cert.arn
+  validation_record_fqdns = [aws_route53_record.alb_cert_validation.fqdn]
+}
+
+# In your ALB listener block, use:
+certificate_arn   = aws_acm_certificate_validation.alb_cert_validation.certificate_arn

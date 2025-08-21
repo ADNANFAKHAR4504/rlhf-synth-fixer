@@ -71,6 +71,32 @@ resource "aws_vpc" "main" {
   }
 }
 
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name        = "secure-igw-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+output "internet_gateway_id" {
+  value = aws_internet_gateway.main.id
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name        = "secure-public-rt-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_route" "igw_route" {
+  route_table_id         = aws_route_table.public.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+}
+
 resource "aws_s3_bucket" "secure_prod" {
   bucket = local.bucket_name_full                                   # <--- uses suffix
   tags   = merge(var.bucket_tags, {
@@ -444,6 +470,7 @@ output "vpc_cidr_block" {
   value = aws_vpc.main.cidr_block
 }
 
+
 ########################
 # EXISTING RESOURCES ...
 # (All your previous resources remain unchanged)
@@ -504,18 +531,16 @@ resource "aws_autoscaling_group" "secure_prod_asg" {
     id      = aws_launch_template.secure_prod_lt.id
     version = "$Latest"
   }
-  tags = [
-    {
-      key                 = "Name"
-      value               = "secure-prod-asg-${local.env_suffix}"
-      propagate_at_launch = true
-    },
-    {
-      key                 = "Environment"
-      value               = local.env_suffix
-      propagate_at_launch = true
-    }
-  ]
+  tag {
+    key                 = "Name"
+    value               = "secure-prod-asg-${local.env_suffix}"
+    propagate_at_launch = true
+  }
+  tag {
+    key                 = "Environment"
+    value               = local.env_suffix
+    propagate_at_launch = true
+  }
 }
 
 # Example public subnets (add these if not present)
@@ -543,6 +568,20 @@ resource "aws_subnet" "public2" {
 
 output "autoscaling_group_name" {
   value = aws_autoscaling_group.secure_prod_asg.name
+}
+
+resource "aws_route_table_association" "public1" {
+  subnet_id      = aws_subnet.public1.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public2" {
+  subnet_id      = aws_subnet.public2.id
+  route_table_id = aws_route_table.public.id
+}
+
+output "public_route_table_id" {
+  value = aws_route_table.public.id
 }
 
 ########################
@@ -612,8 +651,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.alb_certificate_arn # Provide this in variables
-
+  certificate_arn   = aws_acm_certificate.alb_cert.arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secure_prod_tg.arn
@@ -622,7 +660,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
 
 resource "aws_autoscaling_attachment" "asg_attach" {
   autoscaling_group_name = aws_autoscaling_group.secure_prod_asg.name
-  alb_target_group_arn   = aws_lb_target_group.secure_prod_tg.arn
+  lb_target_group_arn   = aws_lb_target_group.secure_prod_tg.arn
 }
 
 output "alb_target_group_arn" {
@@ -774,23 +812,31 @@ resource "aws_acm_certificate" "alb_cert" {
   }
 }
 
-# For ALB listener
-resource "aws_lb_listener" "secure_prod_listener" {
-  load_balancer_arn = aws_lb.secure_prod_alb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate.alb_cert.arn # <-- uses newly created cert!
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.secure_prod_tg.arn
-  }
-}
-
 output "alb_certificate_arn" {
   value = aws_acm_certificate.alb_cert.arn
 }
+
+# Replace with your actual Route53 zone ID!
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for ACM certificate DNS validation"
+  type        = string
+}
+
+resource "aws_route53_record" "alb_cert_validation" {
+  name    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_name
+  type    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_type
+  zone_id = var.route53_zone_id
+  records = [aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_value]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "alb_cert_validation" {
+  certificate_arn         = aws_acm_certificate.alb_cert.arn
+  validation_record_fqdns = [aws_route53_record.alb_cert_validation.fqdn]
+}
+
+# In your ALB listener block, use:
+certificate_arn   = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
 ```
 
 ---
