@@ -9,7 +9,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization", 
+    "IaC Optimization",
     "Security Configuration",
     "Access Control",
     "Performance Optimization",
@@ -22,7 +22,7 @@
     "AWS Organizations",
     "AWS IAM",
     "AWS KMS",
-    "AWS S3", 
+    "AWS S3",
     "AWS SNS",
     "AWS SQS",
     "AWS Lambda",
@@ -35,5 +35,11 @@
     "AWS CodePipeline",
     "AWS CodeBuild",
     "AWS CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
