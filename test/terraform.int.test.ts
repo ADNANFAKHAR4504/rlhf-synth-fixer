@@ -108,6 +108,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('load balancer outputs are valid', () => {
+      // Debug: log available outputs
+      console.log('Available outputs:', Object.keys(outputs));
+      console.log('Load balancer outputs:', {
+        dns_name: outputs.load_balancer_dns_name,
+        dns: outputs.load_balancer_dns,
+        arn: outputs.load_balancer_arn
+      });
+      
       // Handle both possible field names from live deployment
       const dnsName = outputs.load_balancer_dns_name || outputs.load_balancer_dns;
       expect(dnsName).toBeDefined();
@@ -140,6 +148,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('auto scaling group output is valid', () => {
+      // Debug: log auto scaling group outputs
+      console.log('Auto scaling group outputs:', {
+        arn: outputs.autoscaling_group_arn,
+        name: outputs.autoscaling_group_name
+      });
+      
       // Handle both possible field names from live deployment
       const asgIdentifier = outputs.autoscaling_group_arn || outputs.autoscaling_group_name;
       expect(asgIdentifier).toBeDefined();
@@ -156,6 +170,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('Config recorder output is valid', () => {
       expect(outputs.config_recorder_name).toBeDefined();
+      // Handle case where Config deployment is disabled
+      if (outputs.config_recorder_name !== "Config deployment disabled") {
+        expect(outputs.config_recorder_name).toMatch(/^.*-config-recorder$/);
+      }
       expect(typeof outputs.config_recorder_name).toBe('string');
       expect(outputs.config_recorder_name.length).toBeGreaterThan(0);
     });

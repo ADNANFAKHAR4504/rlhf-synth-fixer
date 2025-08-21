@@ -1252,7 +1252,7 @@ output "autoscaling_group_arn" {
 
 output "config_recorder_name" {
   description = "Name of the Config recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = local.deploy_config ? aws_config_configuration_recorder.main[0].name : "Config deployment disabled"
 }
 
 output "secret_manager_secret_arn" {
