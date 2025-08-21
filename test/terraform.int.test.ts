@@ -1,5 +1,27 @@
 import { expect } from '@jest/globals';
-import { CloudWatch, CloudWatchLogs, CloudTrail, EC2, KMS, RDS, S3 } from 'aws-sdk';
+import AWS, {
+  CloudTrail,
+  CloudWatch,
+  CloudWatchLogs,
+  EC2,
+  KMS,
+  RDS,
+  S3,
+} from 'aws-sdk';
+
+// Global AWS configuration
+if (!process.env.AWS_REGION) {
+  process.env.AWS_REGION = 'us-west-2';
+}
+
+// Configure AWS SDK globally
+AWS.config.update({
+  region: process.env.AWS_REGION,
+  maxRetries: 3,
+});
+
+// Increase timeout for integration tests
+jest.setTimeout(60000);
 
 // AWS SDK clients
 const kms = new KMS();
@@ -8,7 +30,7 @@ const rds = new RDS();
 const cw = new CloudWatch();
 const logs = new CloudWatchLogs();
 const ec2 = new EC2();
-const cloudtrail = new CloudTrail(); // ✅ Fixed: CloudTrail client
+const cloudtrail = new CloudTrail();
 
 // Test configuration - update these values based on your Terraform outputs
 const TEST_CONFIG = {
@@ -79,6 +101,30 @@ async function getSecurityGroupIds(): Promise<{ ec2: string; rds: string }> {
   }
 }
 
+// Global test setup
+beforeAll(async () => {
+  console.log(
+    `🧪 Running integration tests in region: ${process.env.AWS_REGION}`
+  );
+
+  // Verify AWS credentials are available
+  try {
+    const sts = new AWS.STS();
+    const identity = await sts.getCallerIdentity().promise();
+    console.log(`✅ AWS credentials verified for account: ${identity.Account}`);
+  } catch (error) {
+    console.warn('⚠️  AWS credentials not configured. Tests will fail.');
+    console.warn(
+      '   Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION'
+    );
+  }
+});
+
+// Global test teardown
+afterAll(async () => {
+  console.log('🧹 Integration tests completed');
+});
+
 describe('Infrastructure Integration Tests', () => {
   let bucketNames: { appData: string; accessLogs: string };
   let securityGroupIds: { ec2: string; rds: string };
@@ -97,8 +143,13 @@ describe('Infrastructure Integration Tests', () => {
         .promise();
 
       expect(result.KeyMetadata?.KeyState).toBe('Enabled');
-      // ✅ Fixed: KeyRotationEnabled is top-level, not in KeyMetadata
-      expect(result.KeyRotationEnabled).toBe(true);
+      // Check key rotation status separately
+      const rotationResult = await kms
+        .getKeyRotationStatus({
+          KeyId: TEST_CONFIG.kmsAlias,
+        })
+        .promise();
+      expect(rotationResult.KeyRotationEnabled).toBe(true);
     });
 
     test('KMS can encrypt and decrypt', async () => {
@@ -245,13 +296,17 @@ describe('Infrastructure Integration Tests', () => {
       );
 
       expect(unauthorizedFilter).toBeDefined();
-      expect(unauthorizedFilter?.filterPattern).toContain('UnauthorizedOperation');
+      expect(unauthorizedFilter?.filterPattern).toContain(
+        'UnauthorizedOperation'
+      );
       expect(unauthorizedFilter?.filterPattern).toContain('AccessDenied');
     });
 
     test('CloudTrail log group has proper retention', async () => {
       const logGroups = await logs
-        .describeLogGroups({ logGroupNamePrefix: TEST_CONFIG.cloudWatchLogGroup })
+        .describeLogGroups({
+          logGroupNamePrefix: TEST_CONFIG.cloudWatchLogGroup,
+        })
         .promise();
 
       const cloudTrailLogGroup = logGroups.logGroups?.find(
@@ -267,7 +322,7 @@ describe('Infrastructure Integration Tests', () => {
     test('VPC Flow Logs are enabled', async () => {
       const { FlowLogs } = await ec2
         .describeFlowLogs({
-          Filters: [
+          Filter: [
             { Name: 'resource-id', Values: [TEST_CONFIG.vpcId] },
             { Name: 'deliver-log-status', Values: ['SUCCESS'] },
           ],
@@ -281,7 +336,9 @@ describe('Infrastructure Integration Tests', () => {
 
     test('VPC Flow Logs have proper format', async () => {
       const { FlowLogs } = await ec2
-        .describeFlowLogs({ Filters: [{ Name: 'resource-id', Values: [TEST_CONFIG.vpcId] }] })
+        .describeFlowLogs({
+          Filter: [{ Name: 'resource-id', Values: [TEST_CONFIG.vpcId] }],
+        })
         .promise();
 
       const flowLog = FlowLogs![0];
@@ -369,12 +426,18 @@ describe('Infrastructure Integration Tests', () => {
   describe('SSM Patch Manager Tests', () => {
     test('EC2 instances have SSM IAM role attached', async () => {
       // ✅ Fixed: Use IAM, not EC2
-      const associations = await ec2.describeIamInstanceProfileAssociations().promise();
-      expect(associations.IamInstanceProfileAssociations?.length).toBeGreaterThan(0);
+      const associations = await ec2
+        .describeIamInstanceProfileAssociations()
+        .promise();
+      expect(
+        associations.IamInstanceProfileAssociations?.length
+      ).toBeGreaterThan(0);
 
       // Optionally check role name
       const profile = associations.IamInstanceProfileAssociations![0];
-      expect(profile.IamInstanceProfile?.Arn).toContain('AmazonSSMRoleForInstancesQuickSetup');
+      expect(profile.IamInstanceProfile?.Arn).toContain(
+        'AmazonSSMRoleForInstancesQuickSetup'
+      );
     });
   });
 });
