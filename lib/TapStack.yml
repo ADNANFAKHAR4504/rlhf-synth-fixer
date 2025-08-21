@@ -31,12 +31,10 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: 'ami-036d2cdf95d86d256' # Amazon Linux 2023 AMI
-    us-east-1:
-      AMI: 'ami-0453ec754f44f9a4a' # Amazon Linux 2023 AMI
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: 'Latest Amazon Linux 2023 AMI ID from Parameter Store'
 
 Resources:
   # Secrets Manager Secret for RDS Password
@@ -569,13 +567,13 @@ Resources:
       TargetId: !Ref RDSInstance
       TargetType: AWS::RDS::DBInstance
 
-  # EC2 Launch Template with IMDSv2
+  # EC2 Launch Template with IMDSv2 and Parameter Store AMI
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-launch-template${EnvironmentSuffix}'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: 't3.micro'
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -931,7 +929,46 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # AWS EventBridge for S3 notifications (Latest AWS feature)
+  # Additional SSM VPC Endpoints for complete functionality
+  SSMMessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'ssmmessages-vpc-endpoint${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  EC2MessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'ec2messages-vpc-endpoint${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # AWS EventBridge for S3 notifications
   S3EventRule:
     Type: AWS::Events::Rule
     Properties:
@@ -1072,3 +1109,9 @@ Outputs:
     Value: !Ref SecretsManagerVPCEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-SecretsManager-VPC-Endpoint-ID${EnvironmentSuffix}'
+
+  LatestAmiId:
+    Description: 'Latest AMI ID used for EC2 instances'
+    Value: !Ref LatestAmiId
+    Export:
+      Name: !Sub '${AWS::StackName}-Latest-AMI-ID${EnvironmentSuffix}'
