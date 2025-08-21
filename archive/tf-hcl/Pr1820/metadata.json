@@ -11,7 +11,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "Security Configuration",
     "Resource Scaling"
@@ -21,7 +21,7 @@
     "VPC",
     "EC2",
     "RDS",
-    "NAT Gateway", 
+    "NAT Gateway",
     "Internet Gateway",
     "Security Groups",
     "Auto Scaling Group",
@@ -51,5 +51,11 @@
       "Environment": "Production",
       "Owner": "DevOpsTeam"
     }
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
