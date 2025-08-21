@@ -447,7 +447,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-bucket${EnvironmentSuffix}'
+      BucketName: !Sub 'secure-bucket${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -472,7 +472,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'cloudtrail${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
