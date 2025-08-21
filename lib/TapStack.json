@@ -231,7 +231,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "${TapStackApi}/*/*"
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapStackApi}/*/*"
                 }
             }
         },

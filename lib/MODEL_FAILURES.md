@@ -152,6 +152,16 @@
 - **DependsOn ApiGatewayAccount** - ensures API Gateway account configuration is complete
 - **Proper dependency chain** - WAF association waits for complete API Gateway setup
 
+### 14. Lambda Permission ARN Pattern Issues
+
+**Problem**: Lambda invoke permission had incorrect SourceArn pattern causing validation failures.
+
+**Solution**: Fixed Lambda permission SourceArn format:
+
+- **Incorrect**: `${TapStackApi}/*/*` (missing region and account)
+- **Correct**: `arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapStackApi}/*/*`
+- **Proper ARN format** - includes all required AWS resource identifiers
+
 ## Quality Assurance Improvements
 
 ### Test Coverage Enhancement

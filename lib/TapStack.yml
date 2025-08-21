@@ -190,7 +190,7 @@ Resources:
       FunctionName: !Ref TapStackFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${TapStackApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TapStackApi}/*/*'
 
   # API Gateway Rest API
   TapStackApi:
