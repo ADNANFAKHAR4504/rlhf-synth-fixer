@@ -8,11 +8,11 @@ app = cdk.App()
 # Get environment suffix for stack naming
 environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
 
-# Deploy the stack to us-west-2 region  
+# Deploy the stack to us-east-1 region  
 TapStack(
     app, f"TapStack{environment_suffix}",
     env=cdk.Environment(
-        region="us-west-2"
+        region="us-east-1"
     ),
     description="Secure, high-availability web application infrastructure"
 )
