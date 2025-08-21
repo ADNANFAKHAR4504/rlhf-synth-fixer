@@ -6,17 +6,32 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 // Import existing component functions
-import { createEc2InstanceRole, createRdsRole, createAlbRole } from './components/security/iam';
-import { createApplicationKmsKey, createDatabaseKmsKey, createS3KmsKey } from './components/security/kms';
+import {
+  createEc2InstanceRole,
+  createRdsRole,
+  createAlbRole,
+} from './components/security/iam';
+import {
+  createApplicationKmsKey,
+  createDatabaseKmsKey,
+  createS3KmsKey,
+} from './components/security/kms';
 import { createVpc } from './components/vpc/vpc';
 import { createSubnetGroup } from './components/vpc/subnet';
 import { createInternetGateway } from './components/vpc/internetGateway';
 import { createMultiAzNatGateway } from './components/vpc/natGateway';
 import { createRouteTables } from './components/vpc/routeTable';
-import { createWebSecurityGroup, createDatabaseSecurityGroup, createApplicationSecurityGroup } from './components/security/securityGroup';
+import {
+  createWebSecurityGroup,
+  createDatabaseSecurityGroup,
+  createApplicationSecurityGroup,
+} from './components/security/securityGroup';
 import { createHttpsAlb } from './components/compute/alb';
 import { createApplicationTargetGroup } from './components/compute/targetGroup';
-import { createLaunchTemplate, createAutoScalingGroup } from './components/compute/ec2';
+import {
+  createLaunchTemplate,
+  createAutoScalingGroup,
+} from './components/compute/ec2';
 import { createSecureS3Bucket } from './components/storage/s3';
 import { createSecureRdsInstance } from './components/storage/rds';
 import { createApplicationLogGroups } from './components/monitoring/cloudWatch';
@@ -31,20 +46,115 @@ export interface TapStackArgs {
   tags?: Record<string, string>;
 }
 
+// Define proper interfaces for infrastructure components
+interface IdentityInfrastructure {
+  ec2Role: aws.iam.Role;
+  ec2RoleArn: pulumi.Output<string>;
+  ec2InstanceProfile: aws.iam.InstanceProfile;
+  ec2InstanceProfileArn: pulumi.Output<string>;
+  rdsRole: aws.iam.Role;
+  rdsRoleArn: pulumi.Output<string>;
+  albRole: aws.iam.Role;
+  albRoleArn: pulumi.Output<string>;
+}
+
+interface RegionalSecurityInfrastructure {
+  applicationKms: ReturnType<typeof createApplicationKmsKey>;
+  databaseKms: ReturnType<typeof createDatabaseKmsKey>;
+  s3Kms: ReturnType<typeof createS3KmsKey>;
+}
+
+interface RegionalNetworkInfrastructure {
+  vpc: ReturnType<typeof createVpc>;
+  subnets: ReturnType<typeof createSubnetGroup>;
+  igw: ReturnType<typeof createInternetGateway>;
+  natGateways: ReturnType<typeof createMultiAzNatGateway>;
+  routeTables: ReturnType<typeof createRouteTables>;
+  albSg: ReturnType<typeof createWebSecurityGroup>;
+  appSg: ReturnType<typeof createApplicationSecurityGroup>;
+  dbSg: ReturnType<typeof createDatabaseSecurityGroup>;
+}
+
+interface RegionalCertificateInfrastructure {
+  certificate: ReturnType<typeof createAcmCertificate>;
+}
+
+interface RegionalSecretsInfrastructure {
+  dbCredentials: ReturnType<typeof createDatabaseCredentials>;
+  appParams: ReturnType<typeof createApplicationParameters>;
+}
+
+interface RegionalStorageInfrastructure {
+  configBucket: ReturnType<typeof createSecureS3Bucket>;
+  dataBucket: ReturnType<typeof createSecureS3Bucket>;
+  database: ReturnType<typeof createSecureRdsInstance>;
+}
+
+interface RegionalComputeInfrastructure {
+  targetGroup: ReturnType<typeof createApplicationTargetGroup>;
+  alb: ReturnType<typeof createHttpsAlb>;
+  launchTemplate: ReturnType<typeof createLaunchTemplate>;
+  asg: ReturnType<typeof createAutoScalingGroup>;
+}
+
+interface RegionalMonitoringInfrastructure {
+  logGroups: ReturnType<typeof createApplicationLogGroups>;
+  awsConfig: ReturnType<typeof createAwsConfig>;
+}
+
+// Helper function to get availability zones for a region
+function getAvailabilityZones(region: string): string[] {
+  const regionAzMap: Record<string, string[]> = {
+    'us-east-1': ['us-east-1a', 'us-east-1b'],
+    'us-east-2': ['us-east-2a', 'us-east-2b'],
+    'us-west-1': ['us-west-1a', 'us-west-1c'], // Note: us-west-1b doesn't exist
+    'us-west-2': ['us-west-2a', 'us-west-2b'],
+    'eu-west-1': ['eu-west-1a', 'eu-west-1b'],
+    'eu-west-2': ['eu-west-2a', 'eu-west-2b'],
+    'eu-central-1': ['eu-central-1a', 'eu-central-1b'],
+    'ap-southeast-1': ['ap-southeast-1a', 'ap-southeast-1b'],
+    'ap-southeast-2': ['ap-southeast-2a', 'ap-southeast-2b'],
+    'ap-northeast-1': ['ap-northeast-1a', 'ap-northeast-1c'],
+  };
+
+  return regionAzMap[region] || [`${region}a`, `${region}b`];
+}
+
 export class TapStack extends pulumi.ComponentResource {
   public readonly environmentSuffix: string;
   public readonly regions: string[];
   public readonly tags: Record<string, string>;
 
-  // Infrastructure components
-  public readonly identity: any;
-  public readonly regionalSecurity: Record<string, any> = {};
-  public readonly regionalNetworks: Record<string, any> = {};
-  public readonly regionalCompute: Record<string, any> = {};
-  public readonly regionalStorage: Record<string, any> = {};
-  public readonly regionalMonitoring: Record<string, any> = {};
-  public readonly regionalSecrets: Record<string, any> = {};
-  public readonly regionalCertificates: Record<string, any> = {};
+  // Infrastructure components with proper typing
+  public readonly identity: IdentityInfrastructure;
+  public readonly regionalSecurity: Record<
+    string,
+    RegionalSecurityInfrastructure
+  > = {};
+  public readonly regionalNetworks: Record<
+    string,
+    RegionalNetworkInfrastructure
+  > = {};
+  public readonly regionalCompute: Record<
+    string,
+    RegionalComputeInfrastructure
+  > = {};
+  public readonly regionalStorage: Record<
+    string,
+    RegionalStorageInfrastructure
+  > = {};
+  public readonly regionalMonitoring: Record<
+    string,
+    RegionalMonitoringInfrastructure
+  > = {};
+  public readonly regionalSecrets: Record<
+    string,
+    RegionalSecretsInfrastructure
+  > = {};
+  public readonly regionalCertificates: Record<
+    string,
+    RegionalCertificateInfrastructure
+  > = {};
   public readonly providers: Record<string, aws.Provider> = {};
 
   constructor(
@@ -96,12 +206,13 @@ export class TapStack extends pulumi.ComponentResource {
     // Create regional infrastructure for each region
     for (const region of this.regions) {
       const isPrimary = region === this.regions[0]; // First region is primary
+      const availabilityZones = getAvailabilityZones(region);
 
       console.log(
         `🌍 Setting up AWS provider for region: ${region} ${isPrimary ? '(PRIMARY)' : ''}`
       );
 
-      // Create regional AWS provider with explicit typing
+      // Create regional AWS provider
       this.providers[region] = new aws.Provider(
         `${name}-provider-${region}`,
         {
@@ -146,29 +257,30 @@ export class TapStack extends pulumi.ComponentResource {
         tags: this.tags,
       });
 
+      // Use dynamic availability zones based on the actual region
       const subnets = createSubnetGroup(`${name}-subnets-${region}`, {
         vpcId: vpc.vpcId,
         publicSubnets: [
           {
             cidrBlock: '10.0.1.0/24',
-            availabilityZone: `${region}a`,
+            availabilityZone: availabilityZones[0],
             name: `${name}-public-1-${region}`,
           },
           {
             cidrBlock: '10.0.2.0/24',
-            availabilityZone: `${region}b`,
+            availabilityZone: availabilityZones[1],
             name: `${name}-public-2-${region}`,
           },
         ],
         privateSubnets: [
           {
             cidrBlock: '10.0.10.0/24',
-            availabilityZone: `${region}a`,
+            availabilityZone: availabilityZones[0],
             name: `${name}-private-1-${region}`,
           },
           {
             cidrBlock: '10.0.20.0/24',
-            availabilityZone: `${region}b`,
+            availabilityZone: availabilityZones[1],
             name: `${name}-private-2-${region}`,
           },
         ],
@@ -239,48 +351,61 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(` Creating Certificates Infrastructure for ${region}...`);
 
-      // Create SSL certificate
-      const certificate = createAcmCertificate(`${name}-cert-${region}`, {
-        domainName: `${this.environmentSuffix}.example.com`,
-        subjectAlternativeNames: [`*.${this.environmentSuffix}.example.com`],
-        validationMethod: 'DNS',
-        tags: this.tags,
-      });
+      // Create SSL certificate without validation (for demo purposes)
+      const certificate = createAcmCertificate(
+        `${name}-cert-${region}`,
+        {
+          domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+          subjectAlternativeNames: [
+            `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+          ],
+          validationMethod: 'DNS',
+          skipValidation: true, // Skip validation for demo domain
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      );
 
       this.regionalCertificates[region] = { certificate };
 
       console.log(` Creating Secrets Infrastructure for ${region}...`);
 
       // Create secrets and parameters
-      const dbCredentials = createDatabaseCredentials(`${name}-db-creds-${region}`, {
-        name: `${name}-${region}`,
-        username: 'admin',
-        password: pulumi.output('temp-password-to-be-rotated'),
-        host: 'placeholder-host',
-        port: '3306',
-        dbname: 'appdb',
-        engine: 'mysql',
-        kmsKeyId: dbKms.keyArn,
-        tags: this.tags,
-      });
+      const dbCredentials = createDatabaseCredentials(
+        `${name}-db-creds-${region}`,
+        {
+          name: `${name}-${region}`,
+          username: 'admin',
+          password: pulumi.output('temp-password-to-be-rotated'),
+          host: 'placeholder-host',
+          port: '3306',
+          dbname: 'appdb',
+          engine: 'mysql',
+          kmsKeyId: dbKms.keyArn,
+          tags: this.tags,
+        }
+      );
 
-      const appParams = createApplicationParameters(`${name}-app-params-${region}`, {
-        name: `${name}-${region}`,
-        parameters: {
-          'app-env': {
-            value: this.environmentSuffix,
-            type: 'String',
-            description: 'Application environment',
+      const appParams = createApplicationParameters(
+        `${name}-app-params-${region}`,
+        {
+          name: `${name}-${region}`,
+          parameters: {
+            'app-env': {
+              value: this.environmentSuffix,
+              type: 'String',
+              description: 'Application environment',
+            },
+            'app-version': {
+              value: '1.0.0',
+              type: 'String',
+              description: 'Application version',
+            },
           },
-          'app-version': {
-            value: '1.0.0',
-            type: 'String',
-            description: 'Application version',
-          },
-        },
-        kmsKeyId: appKms.keyArn,
-        tags: this.tags,
-      });
+          kmsKeyId: appKms.keyArn,
+          tags: this.tags,
+        }
+      );
 
       this.regionalSecrets[region] = {
         dbCredentials,
@@ -290,14 +415,17 @@ export class TapStack extends pulumi.ComponentResource {
       console.log(` Creating Storage Infrastructure for ${region}...`);
 
       // Create S3 buckets
-      const configBucket = createSecureS3Bucket(`${name}-config-bucket-${region}`, {
-        name: `${name}-config-${region}`,
-        bucketName: `${name}-config-${region}-${Date.now()}`,
-        kmsKeyId: s3Kms.keyArn,
-        enableVersioning: true,
-        enableLifecycle: true,
-        tags: this.tags,
-      });
+      const configBucket = createSecureS3Bucket(
+        `${name}-config-bucket-${region}`,
+        {
+          name: `${name}-config-${region}`,
+          bucketName: `${name}-config-${region}-${Date.now()}`,
+          kmsKeyId: s3Kms.keyArn,
+          enableVersioning: true,
+          enableLifecycle: true,
+          tags: this.tags,
+        }
+      );
 
       const dataBucket = createSecureS3Bucket(`${name}-data-bucket-${region}`, {
         name: `${name}-data-${region}`,
@@ -330,7 +458,7 @@ export class TapStack extends pulumi.ComponentResource {
         database,
       };
 
-      console.log(`🖥️ Creating Compute Infrastructure for ${region}...`);
+      console.log(` Creating Compute Infrastructure for ${region}...`);
 
       // Create target group
       const targetGroup = createApplicationTargetGroup(`${name}-tg-${region}`, {
@@ -426,7 +554,8 @@ export class TapStack extends pulumi.ComponentResource {
       regions: this.regions,
       identityEc2RoleArn: this.identity.ec2RoleArn,
       primaryRegionVpcId: this.regionalNetworks[this.regions[0]]?.vpc.vpcId,
-      primaryRegionAlbDnsName: this.regionalCompute[this.regions[0]]?.alb.dnsName,
+      primaryRegionAlbDnsName:
+        this.regionalCompute[this.regions[0]]?.alb.dnsName,
     });
 
     console.log(

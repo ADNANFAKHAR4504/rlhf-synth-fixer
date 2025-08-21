@@ -1,423 +1,510 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
 export interface S3BucketArgs {
-    bucketName?: string;
-    acl?: string;
-    forceDestroy?: boolean;
-    tags?: Record<string, string>;
-    versioning?: {
-        enabled: boolean;
-        mfaDelete?: boolean;
+  bucketName?: string;
+  acl?: string;
+  forceDestroy?: boolean;
+  tags?: Record<string, string>;
+  versioning?: {
+    enabled: boolean;
+    mfaDelete?: boolean;
+  };
+  serverSideEncryption?: {
+    algorithm: string;
+    kmsKeyId?: pulumi.Input<string>;
+    bucketKeyEnabled?: boolean;
+  };
+  publicAccessBlock?: {
+    blockPublicAcls?: boolean;
+    blockPublicPolicy?: boolean;
+    ignorePublicAcls?: boolean;
+    restrictPublicBuckets?: boolean;
+  };
+  lifecycleRules?: Array<{
+    id: string;
+    status: 'Enabled' | 'Disabled';
+    filter?: {
+      prefix?: string;
+      tags?: Record<string, string>;
     };
-    serverSideEncryption?: {
-        algorithm: string;
-        kmsKeyId?: pulumi.Input<string>;
-        bucketKeyEnabled?: boolean;
+    expiration?: {
+      days?: number;
+      expiredObjectDeleteMarker?: boolean;
     };
-    publicAccessBlock?: {
-        blockPublicAcls?: boolean;
-        blockPublicPolicy?: boolean;
-        ignorePublicAcls?: boolean;
-        restrictPublicBuckets?: boolean;
+    noncurrentVersionExpiration?: {
+      noncurrentDays?: number;
     };
-    lifecycleRules?: Array<{
-        id: string;
-        status: "Enabled" | "Disabled";
-        filter?: {
-            prefix?: string;
-            tags?: Record<string, string>;
-        };
-        expiration?: {
-            days?: number;
-            expiredObjectDeleteMarker?: boolean;
-        };
-        noncurrentVersionExpiration?: {
-            noncurrentDays?: number;
-        };
-        transitions?: Array<{
-            days: number;
-            storageClass: string;
-        }>;
+    transitions?: Array<{
+      days: number;
+      storageClass: string;
     }>;
-    corsRules?: Array<{
-        allowedHeaders?: string[];
-        allowedMethods: string[];
-        allowedOrigins: string[];
-        exposeHeaders?: string[];
-        maxAgeSeconds?: number;
-    }>;
+  }>;
+  corsRules?: Array<{
+    allowedHeaders?: string[];
+    allowedMethods: string[];
+    allowedOrigins: string[];
+    exposeHeaders?: string[];
+    maxAgeSeconds?: number;
+  }>;
 }
 
 export interface S3BucketResult {
-    bucket: aws.s3.Bucket;
-    bucketId: pulumi.Output<string>;
-    bucketArn: pulumi.Output<string>;
-    bucketDomainName: pulumi.Output<string>;
-    versioning?: aws.s3.BucketVersioningV2;
-    serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
-    publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
-    lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
-    corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
-    bucketPolicy?: aws.s3.BucketPolicy;
+  bucket: aws.s3.Bucket;
+  bucketId: pulumi.Output<string>;
+  bucketArn: pulumi.Output<string>;
+  bucketDomainName: pulumi.Output<string>;
+  versioning?: aws.s3.BucketVersioningV2;
+  serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
+  publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
+  lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
+  corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
+  bucketPolicy?: aws.s3.BucketPolicy;
 }
 
 export interface S3BucketPolicyArgs {
-    bucket: pulumi.Input<string>;
-    policy: pulumi.Input<string>;
+  bucket: pulumi.Input<string>;
+  policy: pulumi.Input<string>;
 }
 
 export interface SecureS3BucketArgs {
-    name: string;
-    bucketName?: string;
-    kmsKeyId?: pulumi.Input<string>;
-    enableVersioning?: boolean;
-    enableLifecycle?: boolean;
+  name: string;
+  bucketName?: string;
+  kmsKeyId?: pulumi.Input<string>;
+  enableVersioning?: boolean;
+  enableLifecycle?: boolean;
+  tags?: Record<string, string>;
+  allowedPrincipals?: string[];
+  allowedActions?: string[];
+}
+
+// Define interface for lifecycle rule configuration
+interface LifecycleRuleConfig {
+  id: string;
+  status: string;
+  filter?: {
+    prefix?: string;
     tags?: Record<string, string>;
-    allowedPrincipals?: string[];
-    allowedActions?: string[];
+  };
+  expiration?: {
+    days?: number;
+    expiredObjectDeleteMarker?: boolean;
+  };
+  noncurrentVersionExpiration?: {
+    noncurrentDays: number;
+  };
+  transitions?: Array<{
+    days: number;
+    storageClass: string;
+  }>;
 }
 
 export class S3BucketComponent extends pulumi.ComponentResource {
-    public readonly bucket: aws.s3.Bucket;
-    public readonly bucketId: pulumi.Output<string>;
-    public readonly bucketArn: pulumi.Output<string>;
-    public readonly bucketDomainName: pulumi.Output<string>;
-    public readonly versioning?: aws.s3.BucketVersioningV2;
-    public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
-    public readonly publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
-    public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
-    public readonly corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
-    public readonly bucketPolicy?: aws.s3.BucketPolicy;
+  public readonly bucket: aws.s3.Bucket;
+  public readonly bucketId: pulumi.Output<string>;
+  public readonly bucketArn: pulumi.Output<string>;
+  public readonly bucketDomainName: pulumi.Output<string>;
+  public readonly versioning?: aws.s3.BucketVersioningV2;
+  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
+  public readonly publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
+  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
+  public readonly corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
+  public readonly bucketPolicy?: aws.s3.BucketPolicy;
 
-    constructor(name: string, args: S3BucketArgs, opts?: pulumi.ComponentResourceOptions) {
-        super("aws:s3:S3BucketComponent", name, {}, opts);
+  constructor(
+    name: string,
+    args: S3BucketArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('aws:s3:S3BucketComponent', name, {}, opts);
 
-        const defaultTags = {
-            Name: args.bucketName || name,
-            Environment: pulumi.getStack(),
-            ManagedBy: "Pulumi",
-            Project: "AWS-Nova-Model-Breaking",
-            ...args.tags,
-        };
+    const defaultTags = {
+      Name: args.bucketName || name,
+      Environment: pulumi.getStack(),
+      ManagedBy: 'Pulumi',
+      Project: 'AWS-Nova-Model-Breaking',
+      ...args.tags,
+    };
 
-        // Create S3 bucket
-        this.bucket = new aws.s3.Bucket(`${name}-bucket`, {
-            bucket: args.bucketName,
-            acl: args.acl || "private",
-            forceDestroy: args.forceDestroy ?? false,
-            tags: defaultTags,
-        }, { parent: this });
+    // Create S3 bucket
+    this.bucket = new aws.s3.Bucket(
+      `${name}-bucket`,
+      {
+        bucket: args.bucketName,
+        acl: args.acl || 'private',
+        forceDestroy: args.forceDestroy ?? false,
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-        this.bucketId = this.bucket.id;
-        this.bucketArn = this.bucket.arn;
-        this.bucketDomainName = this.bucket.bucketDomainName;
+    this.bucketId = this.bucket.id;
+    this.bucketArn = this.bucket.arn;
+    this.bucketDomainName = this.bucket.bucketDomainName;
 
-        // Configure versioning if specified
-        if (args.versioning) {
-            this.versioning = new aws.s3.BucketVersioningV2(`${name}-versioning`, {
-                bucket: this.bucket.id,
-                versioningConfiguration: {
-                    status: args.versioning.enabled ? "Enabled" : "Suspended",
-                    mfaDelete: args.versioning.mfaDelete ? "Enabled" : "Disabled",
-                },
-            }, { parent: this });
-        }
-
-        // Configure server-side encryption if specified
-        if (args.serverSideEncryption) {
-            this.serverSideEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(`${name}-encryption`, {
-                bucket: this.bucket.id,
-                // Fixed: Use correct property structure for server-side encryption
-                rules: [{
-                    applyServerSideEncryptionByDefault: {
-                        sseAlgorithm: args.serverSideEncryption.algorithm,
-                        kmsMasterKeyId: args.serverSideEncryption.kmsKeyId,
-                    },
-                    bucketKeyEnabled: args.serverSideEncryption.bucketKeyEnabled ?? true,
-                }],
-            }, { parent: this });
-        }
-
-        // Configure public access block (defaults to blocking all public access)
-        const publicAccessBlockConfig = args.publicAccessBlock || {
-            blockPublicAcls: true,
-            blockPublicPolicy: true,
-            ignorePublicAcls: true,
-            restrictPublicBuckets: true,
-        };
-
-        this.publicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${name}-public-access-block`, {
-            bucket: this.bucket.id,
-            blockPublicAcls: publicAccessBlockConfig.blockPublicAcls ?? true,
-            blockPublicPolicy: publicAccessBlockConfig.blockPublicPolicy ?? true,
-            ignorePublicAcls: publicAccessBlockConfig.ignorePublicAcls ?? true,
-            restrictPublicBuckets: publicAccessBlockConfig.restrictPublicBuckets ?? true,
-        }, { parent: this });
-
-        // Configure lifecycle rules if specified
-        if (args.lifecycleRules && args.lifecycleRules.length > 0) {
-            this.lifecycleConfiguration = new aws.s3.BucketLifecycleConfigurationV2(`${name}-lifecycle`, {
-                bucket: this.bucket.id,
-                // Fixed: Filter out undefined values and ensure proper typing
-                rules: args.lifecycleRules.map(rule => {
-                    const lifecycleRule: any = {
-                        id: rule.id,
-                        status: rule.status,
-                    };
-
-                    if (rule.filter) {
-                        lifecycleRule.filter = {
-                            prefix: rule.filter.prefix,
-                            tags: rule.filter.tags,
-                        };
-                    }
-
-                    if (rule.expiration) {
-                        lifecycleRule.expiration = {
-                            days: rule.expiration.days,
-                            expiredObjectDeleteMarker: rule.expiration.expiredObjectDeleteMarker,
-                        };
-                    }
-
-                    if (rule.noncurrentVersionExpiration && rule.noncurrentVersionExpiration.noncurrentDays !== undefined) {
-                        lifecycleRule.noncurrentVersionExpiration = {
-                            noncurrentDays: rule.noncurrentVersionExpiration.noncurrentDays,
-                        };
-                    }
-
-                    if (rule.transitions) {
-                        lifecycleRule.transitions = rule.transitions.map(transition => ({
-                            days: transition.days,
-                            storageClass: transition.storageClass,
-                        }));
-                    }
-
-                    return lifecycleRule;
-                }),
-            }, { parent: this });
-        }
-
-        // Configure CORS if specified
-        if (args.corsRules && args.corsRules.length > 0) {
-            this.corsConfiguration = new aws.s3.BucketCorsConfigurationV2(`${name}-cors`, {
-                bucket: this.bucket.id,
-                corsRules: args.corsRules,
-            }, { parent: this });
-        }
-
-        this.registerOutputs({
-            bucket: this.bucket,
-            bucketId: this.bucketId,
-            bucketArn: this.bucketArn,
-            bucketDomainName: this.bucketDomainName,
-            versioning: this.versioning,
-            serverSideEncryption: this.serverSideEncryption,
-            publicAccessBlock: this.publicAccessBlock,
-            lifecycleConfiguration: this.lifecycleConfiguration,
-            corsConfiguration: this.corsConfiguration,
-        });
+    // Configure versioning if specified
+    if (args.versioning) {
+      this.versioning = new aws.s3.BucketVersioningV2(
+        `${name}-versioning`,
+        {
+          bucket: this.bucket.id,
+          versioningConfiguration: {
+            status: args.versioning.enabled ? 'Enabled' : 'Suspended',
+            mfaDelete: args.versioning.mfaDelete ? 'Enabled' : 'Disabled',
+          },
+        },
+        { parent: this }
+      );
     }
+
+    // Configure server-side encryption if specified
+    if (args.serverSideEncryption) {
+      this.serverSideEncryption =
+        new aws.s3.BucketServerSideEncryptionConfigurationV2(
+          `${name}-encryption`,
+          {
+            bucket: this.bucket.id,
+            // Fixed: Use correct property structure for server-side encryption
+            rules: [
+              {
+                applyServerSideEncryptionByDefault: {
+                  sseAlgorithm: args.serverSideEncryption.algorithm,
+                  kmsMasterKeyId: args.serverSideEncryption.kmsKeyId,
+                },
+                bucketKeyEnabled:
+                  args.serverSideEncryption.bucketKeyEnabled ?? true,
+              },
+            ],
+          },
+          { parent: this }
+        );
+    }
+
+    // Configure public access block (defaults to blocking all public access)
+    const publicAccessBlockConfig = args.publicAccessBlock || {
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    };
+
+    this.publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
+      `${name}-public-access-block`,
+      {
+        bucket: this.bucket.id,
+        blockPublicAcls: publicAccessBlockConfig.blockPublicAcls ?? true,
+        blockPublicPolicy: publicAccessBlockConfig.blockPublicPolicy ?? true,
+        ignorePublicAcls: publicAccessBlockConfig.ignorePublicAcls ?? true,
+        restrictPublicBuckets:
+          publicAccessBlockConfig.restrictPublicBuckets ?? true,
+      },
+      { parent: this }
+    );
+
+    // Configure lifecycle rules if specified
+    if (args.lifecycleRules && args.lifecycleRules.length > 0) {
+      this.lifecycleConfiguration = new aws.s3.BucketLifecycleConfigurationV2(
+        `${name}-lifecycle`,
+        {
+          bucket: this.bucket.id,
+          // Fixed: Use proper typing instead of any
+          rules: args.lifecycleRules.map(rule => {
+            const lifecycleRule: LifecycleRuleConfig = {
+              id: rule.id,
+              status: rule.status,
+            };
+
+            if (rule.filter) {
+              lifecycleRule.filter = {
+                prefix: rule.filter.prefix,
+                tags: rule.filter.tags,
+              };
+            }
+
+            if (rule.expiration) {
+              lifecycleRule.expiration = {
+                days: rule.expiration.days,
+                expiredObjectDeleteMarker:
+                  rule.expiration.expiredObjectDeleteMarker,
+              };
+            }
+
+            if (
+              rule.noncurrentVersionExpiration &&
+              rule.noncurrentVersionExpiration.noncurrentDays !== undefined
+            ) {
+              lifecycleRule.noncurrentVersionExpiration = {
+                noncurrentDays: rule.noncurrentVersionExpiration.noncurrentDays,
+              };
+            }
+
+            if (rule.transitions) {
+              lifecycleRule.transitions = rule.transitions.map(transition => ({
+                days: transition.days,
+                storageClass: transition.storageClass,
+              }));
+            }
+
+            return lifecycleRule;
+          }),
+        },
+        { parent: this }
+      );
+    }
+
+    // Configure CORS if specified
+    if (args.corsRules && args.corsRules.length > 0) {
+      this.corsConfiguration = new aws.s3.BucketCorsConfigurationV2(
+        `${name}-cors`,
+        {
+          bucket: this.bucket.id,
+          corsRules: args.corsRules,
+        },
+        { parent: this }
+      );
+    }
+
+    this.registerOutputs({
+      bucket: this.bucket,
+      bucketId: this.bucketId,
+      bucketArn: this.bucketArn,
+      bucketDomainName: this.bucketDomainName,
+      versioning: this.versioning,
+      serverSideEncryption: this.serverSideEncryption,
+      publicAccessBlock: this.publicAccessBlock,
+      lifecycleConfiguration: this.lifecycleConfiguration,
+      corsConfiguration: this.corsConfiguration,
+    });
+  }
 }
 
 export class S3BucketPolicyComponent extends pulumi.ComponentResource {
-    public readonly bucketPolicy: aws.s3.BucketPolicy;
+  public readonly bucketPolicy: aws.s3.BucketPolicy;
 
-    constructor(name: string, args: S3BucketPolicyArgs, opts?: pulumi.ComponentResourceOptions) {
-        super("aws:s3:S3BucketPolicyComponent", name, {}, opts);
+  constructor(
+    name: string,
+    args: S3BucketPolicyArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('aws:s3:S3BucketPolicyComponent', name, {}, opts);
 
-        this.bucketPolicy = new aws.s3.BucketPolicy(`${name}-policy`, {
-            bucket: args.bucket,
-            policy: args.policy,
-        }, { parent: this });
+    this.bucketPolicy = new aws.s3.BucketPolicy(
+      `${name}-policy`,
+      {
+        bucket: args.bucket,
+        policy: args.policy,
+      },
+      { parent: this }
+    );
 
-        this.registerOutputs({
-            bucketPolicy: this.bucketPolicy,
-        });
-    }
+    this.registerOutputs({
+      bucketPolicy: this.bucketPolicy,
+    });
+  }
 }
 
 export class SecureS3BucketComponent extends pulumi.ComponentResource {
-    public readonly bucket: aws.s3.Bucket;
-    public readonly bucketId: pulumi.Output<string>;
-    public readonly bucketArn: pulumi.Output<string>;
-    public readonly bucketDomainName: pulumi.Output<string>;
-    public readonly versioning?: aws.s3.BucketVersioningV2;
-    public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
-    public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
-    public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
-    public readonly bucketPolicy?: aws.s3.BucketPolicy;
+  public readonly bucket: aws.s3.Bucket;
+  public readonly bucketId: pulumi.Output<string>;
+  public readonly bucketArn: pulumi.Output<string>;
+  public readonly bucketDomainName: pulumi.Output<string>;
+  public readonly versioning?: aws.s3.BucketVersioningV2;
+  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfigurationV2;
+  public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
+  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfigurationV2;
+  public readonly bucketPolicy?: aws.s3.BucketPolicy;
 
-    constructor(name: string, args: SecureS3BucketArgs, opts?: pulumi.ComponentResourceOptions) {
-        super("aws:s3:SecureS3BucketComponent", name, {}, opts);
+  constructor(
+    name: string,
+    args: SecureS3BucketArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('aws:s3:SecureS3BucketComponent', name, {}, opts);
 
-        // Default secure lifecycle rules - ensure all values are defined
-        const defaultLifecycleRules = args.enableLifecycle ? [
-            {
-                id: "transition-to-ia",
-                status: "Enabled" as const,
-                transitions: [
-                    {
-                        days: 30,
-                        storageClass: "STANDARD_IA",
-                    },
-                    {
-                        days: 90,
-                        storageClass: "GLACIER",
-                    },
-                ],
+    // Default secure lifecycle rules - ensure all values are defined
+    const defaultLifecycleRules = args.enableLifecycle
+      ? [
+          {
+            id: 'transition-to-ia',
+            status: 'Enabled' as const,
+            transitions: [
+              {
+                days: 30,
+                storageClass: 'STANDARD_IA',
+              },
+              {
+                days: 90,
+                storageClass: 'GLACIER',
+              },
+            ],
+          },
+          {
+            id: 'delete-old-versions',
+            status: 'Enabled' as const,
+            noncurrentVersionExpiration: {
+              noncurrentDays: 90, // Always defined, no undefined values
             },
-            {
-                id: "delete-old-versions",
-                status: "Enabled" as const,
-                noncurrentVersionExpiration: {
-                    noncurrentDays: 90, // Always defined, no undefined values
+          },
+          {
+            id: 'cleanup-incomplete-uploads',
+            status: 'Enabled' as const,
+            expiration: {
+              expiredObjectDeleteMarker: true,
+            },
+          },
+        ]
+      : undefined;
+
+    // Create secure S3 bucket
+    const s3BucketComponent = new S3BucketComponent(
+      name,
+      {
+        bucketName: args.bucketName,
+        acl: 'private',
+        forceDestroy: false,
+        tags: args.tags,
+        versioning: {
+          enabled: args.enableVersioning ?? true,
+          mfaDelete: false,
+        },
+        serverSideEncryption: {
+          algorithm: 'aws:kms',
+          kmsKeyId: args.kmsKeyId,
+          bucketKeyEnabled: true,
+        },
+        publicAccessBlock: {
+          blockPublicAcls: true,
+          blockPublicPolicy: true,
+          ignorePublicAcls: true,
+          restrictPublicBuckets: true,
+        },
+        lifecycleRules: defaultLifecycleRules,
+      },
+      { parent: this }
+    );
+
+    this.bucket = s3BucketComponent.bucket;
+    this.bucketId = s3BucketComponent.bucketId;
+    this.bucketArn = s3BucketComponent.bucketArn;
+    this.bucketDomainName = s3BucketComponent.bucketDomainName;
+    this.versioning = s3BucketComponent.versioning;
+    this.serverSideEncryption = s3BucketComponent.serverSideEncryption;
+    this.publicAccessBlock = s3BucketComponent.publicAccessBlock!;
+    this.lifecycleConfiguration = s3BucketComponent.lifecycleConfiguration;
+
+    // Create secure bucket policy
+    if (args.allowedPrincipals && args.allowedActions) {
+      const bucketPolicy = pulumi
+        .all([this.bucketArn, pulumi.output(aws.getCallerIdentity())])
+        .apply(([bucketArn, _identity]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'DenyInsecureConnections',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:*',
+                Resource: [bucketArn, `${bucketArn}/*`],
+                Condition: {
+                  Bool: {
+                    'aws:SecureTransport': 'false',
+                  },
                 },
-            },
-            {
-                id: "cleanup-incomplete-uploads",
-                status: "Enabled" as const,
-                expiration: {
-                    expiredObjectDeleteMarker: true,
+              },
+              {
+                Sid: 'AllowSpecificPrincipals',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: args.allowedPrincipals,
                 },
-            },
-        ] : undefined;
+                Action: args.allowedActions,
+                Resource: [bucketArn, `${bucketArn}/*`],
+              },
+              {
+                Sid: 'DenyUnencryptedUploads',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringNotEquals: {
+                    's3:x-amz-server-side-encryption': 'aws:kms',
+                  },
+                },
+              },
+            ],
+          })
+        );
 
-        // Create secure S3 bucket
-        const s3BucketComponent = new S3BucketComponent(name, {
-            bucketName: args.bucketName,
-            acl: "private",
-            forceDestroy: false,
-            tags: args.tags,
-            versioning: {
-                enabled: args.enableVersioning ?? true,
-                mfaDelete: false,
-            },
-            serverSideEncryption: {
-                algorithm: "aws:kms",
-                kmsKeyId: args.kmsKeyId,
-                bucketKeyEnabled: true,
-            },
-            publicAccessBlock: {
-                blockPublicAcls: true,
-                blockPublicPolicy: true,
-                ignorePublicAcls: true,
-                restrictPublicBuckets: true,
-            },
-            lifecycleRules: defaultLifecycleRules,
-        }, { parent: this });
+      const bucketPolicyComponent = new S3BucketPolicyComponent(
+        `${name}-policy`,
+        {
+          bucket: this.bucketId,
+          policy: bucketPolicy,
+        },
+        { parent: this }
+      );
 
-        this.bucket = s3BucketComponent.bucket;
-        this.bucketId = s3BucketComponent.bucketId;
-        this.bucketArn = s3BucketComponent.bucketArn;
-        this.bucketDomainName = s3BucketComponent.bucketDomainName;
-        this.versioning = s3BucketComponent.versioning;
-        this.serverSideEncryption = s3BucketComponent.serverSideEncryption;
-        this.publicAccessBlock = s3BucketComponent.publicAccessBlock!;
-        this.lifecycleConfiguration = s3BucketComponent.lifecycleConfiguration;
-
-        // Create secure bucket policy
-        if (args.allowedPrincipals && args.allowedActions) {
-            const bucketPolicy = pulumi.all([this.bucketArn, pulumi.output(aws.getCallerIdentity())]).apply(([bucketArn, identity]) => JSON.stringify({
-                Version: "2012-10-17",
-                Statement: [
-                    {
-                        Sid: "DenyInsecureConnections",
-                        Effect: "Deny",
-                        Principal: "*",
-                        Action: "s3:*",
-                        Resource: [
-                            bucketArn,
-                            `${bucketArn}/*`,
-                        ],
-                        Condition: {
-                            Bool: {
-                                "aws:SecureTransport": "false",
-                            },
-                        },
-                    },
-                    {
-                        Sid: "AllowSpecificPrincipals",
-                        Effect: "Allow",
-                        Principal: {
-                            AWS: args.allowedPrincipals,
-                        },
-                        Action: args.allowedActions,
-                        Resource: [
-                            bucketArn,
-                            `${bucketArn}/*`,
-                        ],
-                    },
-                    {
-                        Sid: "DenyUnencryptedUploads",
-                        Effect: "Deny",
-                        Principal: "*",
-                        Action: "s3:PutObject",
-                        Resource: `${bucketArn}/*`,
-                        Condition: {
-                            StringNotEquals: {
-                                "s3:x-amz-server-side-encryption": "aws:kms",
-                            },
-                        },
-                    },
-                ],
-            }));
-
-            const bucketPolicyComponent = new S3BucketPolicyComponent(`${name}-policy`, {
-                bucket: this.bucketId,
-                policy: bucketPolicy,
-            }, { parent: this });
-
-            this.bucketPolicy = bucketPolicyComponent.bucketPolicy;
-        }
-
-        this.registerOutputs({
-            bucket: this.bucket,
-            bucketId: this.bucketId,
-            bucketArn: this.bucketArn,
-            bucketDomainName: this.bucketDomainName,
-            versioning: this.versioning,
-            serverSideEncryption: this.serverSideEncryption,
-            publicAccessBlock: this.publicAccessBlock,
-            lifecycleConfiguration: this.lifecycleConfiguration,
-            bucketPolicy: this.bucketPolicy,
-        });
+      this.bucketPolicy = bucketPolicyComponent.bucketPolicy;
     }
+
+    this.registerOutputs({
+      bucket: this.bucket,
+      bucketId: this.bucketId,
+      bucketArn: this.bucketArn,
+      bucketDomainName: this.bucketDomainName,
+      versioning: this.versioning,
+      serverSideEncryption: this.serverSideEncryption,
+      publicAccessBlock: this.publicAccessBlock,
+      lifecycleConfiguration: this.lifecycleConfiguration,
+      bucketPolicy: this.bucketPolicy,
+    });
+  }
 }
 
-export function createS3Bucket(name: string, args: S3BucketArgs): S3BucketResult {
-    const s3BucketComponent = new S3BucketComponent(name, args);
-    return {
-        bucket: s3BucketComponent.bucket,
-        bucketId: s3BucketComponent.bucketId,
-        bucketArn: s3BucketComponent.bucketArn,
-        bucketDomainName: s3BucketComponent.bucketDomainName,
-        versioning: s3BucketComponent.versioning,
-        serverSideEncryption: s3BucketComponent.serverSideEncryption,
-        publicAccessBlock: s3BucketComponent.publicAccessBlock,
-        lifecycleConfiguration: s3BucketComponent.lifecycleConfiguration,
-        corsConfiguration: s3BucketComponent.corsConfiguration,
-        bucketPolicy: s3BucketComponent.bucketPolicy,
-    };
+export function createS3Bucket(
+  name: string,
+  args: S3BucketArgs
+): S3BucketResult {
+  const s3BucketComponent = new S3BucketComponent(name, args);
+  return {
+    bucket: s3BucketComponent.bucket,
+    bucketId: s3BucketComponent.bucketId,
+    bucketArn: s3BucketComponent.bucketArn,
+    bucketDomainName: s3BucketComponent.bucketDomainName,
+    versioning: s3BucketComponent.versioning,
+    serverSideEncryption: s3BucketComponent.serverSideEncryption,
+    publicAccessBlock: s3BucketComponent.publicAccessBlock,
+    lifecycleConfiguration: s3BucketComponent.lifecycleConfiguration,
+    corsConfiguration: s3BucketComponent.corsConfiguration,
+    bucketPolicy: s3BucketComponent.bucketPolicy,
+  };
 }
 
-export function createS3BucketPolicy(name: string, args: S3BucketPolicyArgs): aws.s3.BucketPolicy {
-    const bucketPolicyComponent = new S3BucketPolicyComponent(name, args);
-    return bucketPolicyComponent.bucketPolicy;
+export function createS3BucketPolicy(
+  name: string,
+  args: S3BucketPolicyArgs
+): aws.s3.BucketPolicy {
+  const bucketPolicyComponent = new S3BucketPolicyComponent(name, args);
+  return bucketPolicyComponent.bucketPolicy;
 }
 
-export function createSecureS3Bucket(name: string, args: SecureS3BucketArgs): S3BucketResult {
-    const secureS3BucketComponent = new SecureS3BucketComponent(name, args);
-    return {
-        bucket: secureS3BucketComponent.bucket,
-        bucketId: secureS3BucketComponent.bucketId,
-        bucketArn: secureS3BucketComponent.bucketArn,
-        bucketDomainName: secureS3BucketComponent.bucketDomainName,
-        versioning: secureS3BucketComponent.versioning,
-        serverSideEncryption: secureS3BucketComponent.serverSideEncryption,
-        publicAccessBlock: secureS3BucketComponent.publicAccessBlock,
-        lifecycleConfiguration: secureS3BucketComponent.lifecycleConfiguration,
-        corsConfiguration: undefined,
-        bucketPolicy: secureS3BucketComponent.bucketPolicy,
-    };
+export function createSecureS3Bucket(
+  name: string,
+  args: SecureS3BucketArgs
+): S3BucketResult {
+  const secureS3BucketComponent = new SecureS3BucketComponent(name, args);
+  return {
+    bucket: secureS3BucketComponent.bucket,
+    bucketId: secureS3BucketComponent.bucketId,
+    bucketArn: secureS3BucketComponent.bucketArn,
+    bucketDomainName: secureS3BucketComponent.bucketDomainName,
+    versioning: secureS3BucketComponent.versioning,
+    serverSideEncryption: secureS3BucketComponent.serverSideEncryption,
+    publicAccessBlock: secureS3BucketComponent.publicAccessBlock,
+    lifecycleConfiguration: secureS3BucketComponent.lifecycleConfiguration,
+    corsConfiguration: undefined,
+    bucketPolicy: secureS3BucketComponent.bucketPolicy,
+  };
 }

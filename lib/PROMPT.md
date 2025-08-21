@@ -1,15 +1,13 @@
 # AWS Pulumi TypeScript Security Infrastructure Requirements
 
 ## Project Information
-- **Project Name**: IaC - AWS Nova Model Breaking
-- **Difficulty**: Hard
+- **Project Name**: IaC - AWS Model Breaking
+- **Difficulty**: expert
 - **Technology Stack**: Pulumi with TypeScript
 - **Environment**: Multi-account AWS environment with production and development workloads spanning multiple regions (us-east-1 and eu-west-1)
-- **Date**: 2025-08-20 20:04:21 UTC
-- **Requester**: hackwithjoshua
 
 ## Environment Description
-You are tasked with designing a secure, scalable AWS infrastructure using Pulumi and TypeScript that adheres to fundamental security best practices in a multi-account AWS environment. This task involves configuring security features across various AWS services to ensure compliance and enhance security posture using Pulumi's infrastructure-as-code approach.
+Create a secure, scalable AWS infrastructure using Pulumi and TypeScript that adheres to fundamental security best practices in a multi-account AWS environment. This task involves configuring security features across various AWS services to ensure compliance and enhance security posture using Pulumi's infrastructure-as-code approach.
 
 The AWS environment handles multiple accounts with production and development workloads. The infrastructure spans across multiple regions including us-east-1 and eu-west-1, with VPCs implemented for network isolation and security.
 

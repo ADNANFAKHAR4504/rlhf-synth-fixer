@@ -1,58 +1,73 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
 export interface InternetGatewayArgs {
-    vpcId: pulumi.Input<string>;
-    tags?: Record<string, string>;
-    name: string;
+  vpcId: pulumi.Input<string>;
+  tags?: Record<string, string>;
+  name: string;
 }
 
 export interface InternetGatewayResult {
-    internetGateway: aws.ec2.InternetGateway;
-    internetGatewayId: pulumi.Output<string>;
-    vpcAttachment: aws.ec2.InternetGatewayAttachment;
+  internetGateway: aws.ec2.InternetGateway;
+  internetGatewayId: pulumi.Output<string>;
+  vpcAttachment: aws.ec2.InternetGatewayAttachment;
 }
 
 export class InternetGatewayComponent extends pulumi.ComponentResource {
-    public readonly internetGateway: aws.ec2.InternetGateway;
-    public readonly internetGatewayId: pulumi.Output<string>;
-    public readonly vpcAttachment: aws.ec2.InternetGatewayAttachment;
+  public readonly internetGateway: aws.ec2.InternetGateway;
+  public readonly internetGatewayId: pulumi.Output<string>;
+  public readonly vpcAttachment: aws.ec2.InternetGatewayAttachment;
 
-    constructor(name: string, args: InternetGatewayArgs, opts?: pulumi.ComponentResourceOptions) {
-        super("aws:vpc:InternetGatewayComponent", name, {}, opts);
+  constructor(
+    name: string,
+    args: InternetGatewayArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('aws:vpc:InternetGatewayComponent', name, {}, opts);
 
-        const defaultTags = {
-            Name: args.name,
-            Environment: pulumi.getStack(),
-            ManagedBy: "Pulumi",
-            Project: "AWS-Nova-Model-Breaking",
-            ...args.tags,
-        };
+    const defaultTags = {
+      Name: args.name,
+      Environment: pulumi.getStack(),
+      ManagedBy: 'Pulumi',
+      Project: 'AWS-Nova-Model-Breaking',
+      ...args.tags,
+    };
 
-        this.internetGateway = new aws.ec2.InternetGateway(`${name}-igw`, {
-            tags: defaultTags,
-        }, { parent: this });
+    this.internetGateway = new aws.ec2.InternetGateway(
+      `${name}-igw`,
+      {
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-        this.vpcAttachment = new aws.ec2.InternetGatewayAttachment(`${name}-igw-attachment`, {
-            vpcId: args.vpcId,
-            internetGatewayId: this.internetGateway.id,
-        }, { parent: this });
+    this.vpcAttachment = new aws.ec2.InternetGatewayAttachment(
+      `${name}-igw-attachment`,
+      {
+        vpcId: args.vpcId,
+        internetGatewayId: this.internetGateway.id,
+      },
+      { parent: this }
+    );
 
-        this.internetGatewayId = this.internetGateway.id;
+    this.internetGatewayId = this.internetGateway.id;
 
-        this.registerOutputs({
-            internetGateway: this.internetGateway,
-            internetGatewayId: this.internetGatewayId,
-            vpcAttachment: this.vpcAttachment,
-        });
-    }
+    this.registerOutputs({
+      internetGateway: this.internetGateway,
+      internetGatewayId: this.internetGatewayId,
+      vpcAttachment: this.vpcAttachment,
+    });
+  }
 }
 
-export function createInternetGateway(name: string, args: InternetGatewayArgs): InternetGatewayResult {
-    const igwComponent = new InternetGatewayComponent(name, args);
-    return {
-        internetGateway: igwComponent.internetGateway,
-        internetGatewayId: igwComponent.internetGatewayId,
-        vpcAttachment: igwComponent.vpcAttachment,
-    };
+export function createInternetGateway(
+  name: string,
+  args: InternetGatewayArgs
+): InternetGatewayResult {
+  const igwComponent = new InternetGatewayComponent(name, args);
+  return {
+    internetGateway: igwComponent.internetGateway,
+    internetGatewayId: igwComponent.internetGatewayId,
+    vpcAttachment: igwComponent.vpcAttachment,
+  };
 }
