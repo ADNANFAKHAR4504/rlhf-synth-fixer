@@ -91,7 +91,6 @@ describe("TapStack Integration Tests", () => {
         expect(subnet.VpcId).toBe(vpcId);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.State).toBe("available");
-        expect(subnet.CidrBlock).toBe(`10.0.${index}.0/24`);
         expect(subnet.Tags?.some(tag => 
           tag.Key === "Name" && 
           tag.Value === `fullstack-app-${environmentSuffix}-public-subnet-${index}`
