@@ -24,9 +24,12 @@ export class TapStack extends cdk.Stack {
     const allowedSshCidr = props.allowedSshCidr || '10.0.0.0/8';
     const allowedDbCidr = props.allowedDbCidr || '10.0.0.0/16';
 
+    // Generate unique resource names using stack ID to prevent conflicts
+    const stackId = this.stackId.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+
     // VPC Configuration
     const vpc = new ec2.Vpc(this, `corp-${projectName}-vpc`, {
-      vpcName: `corp-${projectName}-vpc${environmentSuffix}`,
+      vpcName: `corp-${projectName}-vpc-${stackId}${environmentSuffix}`,
       maxAzs: 2,
       cidr: '10.0.0.0/16',
       natGateways: 1,
@@ -55,7 +58,7 @@ export class TapStack extends cdk.Stack {
       `corp-${projectName}-ec2-sg`,
       {
         vpc,
-        securityGroupName: `corp-${projectName}-ec2-sg${environmentSuffix}`,
+        securityGroupName: `corp-${projectName}-ec2-sg-${stackId}${environmentSuffix}`,
         description: 'Security group for EC2 instances',
         allowAllOutbound: true,
       }
@@ -72,7 +75,7 @@ export class TapStack extends cdk.Stack {
       `corp-${projectName}-rds-sg`,
       {
         vpc,
-        securityGroupName: `corp-${projectName}-rds-sg${environmentSuffix}`,
+        securityGroupName: `corp-${projectName}-rds-sg-${stackId}${environmentSuffix}`,
         description: 'Security group for RDS instance',
         allowAllOutbound: false,
       }
@@ -95,22 +98,26 @@ export class TapStack extends cdk.Stack {
       `corp-${projectName}-lambda-sg`,
       {
         vpc,
-        securityGroupName: `corp-${projectName}-lambda-sg${environmentSuffix}`,
+        securityGroupName: `corp-${projectName}-lambda-sg-${stackId}${environmentSuffix}`,
         description: 'Security group for Lambda functions',
         allowAllOutbound: true,
       }
     );
 
-    // IAM Roles
-    const ec2Role = new iam.Role(this, `corp-${projectName}-ec2-role`, {
-      roleName: `corp-${projectName}-ec2-role${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
-      ],
-    });
+    // IAM Roles with unique logical IDs to prevent conflicts
+    const ec2Role = new iam.Role(
+      this,
+      `corp-${projectName}-ec2-role-${stackId}`,
+      {
+        roleName: `corp-${projectName}-ec2-role-${stackId}${environmentSuffix}`,
+        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'AmazonSSMManagedInstanceCore'
+          ),
+        ],
+      }
+    );
 
     // Add custom policy for EC2 to access S3 and Secrets Manager
     ec2Role.addToPolicy(
@@ -142,15 +149,19 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    const lambdaRole = new iam.Role(this, `corp-${projectName}-lambda-role`, {
-      roleName: `corp-${projectName}-lambda-role${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaVPCAccessExecutionRole'
-        ),
-      ],
-    });
+    const lambdaRole = new iam.Role(
+      this,
+      `corp-${projectName}-lambda-role-${stackId}`,
+      {
+        roleName: `corp-${projectName}-lambda-role-${stackId}${environmentSuffix}`,
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaVPCAccessExecutionRole'
+          ),
+        ],
+      }
+    );
 
     lambdaRole.addToPolicy(
       new iam.PolicyStatement({
@@ -182,9 +193,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // MFA Enforcement Policy - Created but not attached to maintain requirement
-    // In production, this would be attached to user groups or roles that need console access
-    new iam.ManagedPolicy(this, `corp-${projectName}-mfa-policy`, {
-      managedPolicyName: `corp-${projectName}-mfa-policy${environmentSuffix}`,
+    // Using unique logical ID to prevent conflicts
+    new iam.ManagedPolicy(this, `corp-${projectName}-mfa-policy-${stackId}`, {
+      managedPolicyName: `corp-${projectName}-mfa-policy-${stackId}${environmentSuffix}`,
       description: 'Enforce MFA for console access',
       statements: [
         new iam.PolicyStatement({
@@ -206,9 +217,9 @@ export class TapStack extends cdk.Stack {
     // Secrets Manager for database credentials
     const dbSecret = new secretsmanager.Secret(
       this,
-      `corp-${projectName}-db-secret`,
+      `corp-${projectName}-db-secret-${stackId}`,
       {
-        secretName: `corp-${projectName}-db-credentials${environmentSuffix}`,
+        secretName: `corp-${projectName}-db-credentials-${stackId}${environmentSuffix}`,
         description: 'Database credentials for RDS instance',
         generateSecretString: {
           secretStringTemplate: JSON.stringify({ username: 'admin' }),
@@ -223,11 +234,11 @@ export class TapStack extends cdk.Stack {
     // RDS Subnet Group
     const dbSubnetGroup = new rds.SubnetGroup(
       this,
-      `corp-${projectName}-db-subnet-group`,
+      `corp-${projectName}-db-subnet-group-${stackId}`,
       {
         description: 'Subnet group for RDS instance',
         vpc,
-        subnetGroupName: `corp-${projectName}-db-subnet-group${environmentSuffix}`,
+        subnetGroupName: `corp-${projectName}-db-subnet-group-${stackId}${environmentSuffix}`,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
@@ -235,67 +246,91 @@ export class TapStack extends cdk.Stack {
     );
 
     // RDS Instance
-    const database = new rds.DatabaseInstance(this, `corp-${projectName}-rds`, {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      securityGroups: [rdsSecurityGroup],
-      subnetGroup: dbSubnetGroup,
-      credentials: rds.Credentials.fromSecret(dbSecret),
-      databaseName: `corp${projectName}db${environmentSuffix}`,
-      storageEncrypted: true,
-      multiAz: false,
-      allocatedStorage: 20,
-      deleteAutomatedBackups: true,
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const database = new rds.DatabaseInstance(
+      this,
+      `corp-${projectName}-rds-${stackId}`,
+      {
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        vpc,
+        securityGroups: [rdsSecurityGroup],
+        subnetGroup: dbSubnetGroup,
+        credentials: rds.Credentials.fromSecret(dbSecret),
+        databaseName:
+          `corp${projectName}db${stackId}${environmentSuffix.replace(/-/g, '')}`.substring(
+            0,
+            64
+          ), // MySQL DB name max 64 chars
+        storageEncrypted: true,
+        multiAz: false,
+        allocatedStorage: 20,
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // EC2 Instance
-    const ec2Instance = new ec2.Instance(this, `corp-${projectName}-ec2`, {
-      instanceName: `corp-${projectName}-ec2${environmentSuffix}`,
-      vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      userData: ec2.UserData.forLinux(),
-    });
+    const ec2Instance = new ec2.Instance(
+      this,
+      `corp-${projectName}-ec2-${stackId}`,
+      {
+        instanceName: `corp-${projectName}-ec2-${stackId}${environmentSuffix}`,
+        vpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: ec2SecurityGroup,
+        role: ec2Role,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        userData: ec2.UserData.forLinux(),
+      }
+    );
 
     // S3 Buckets
-    const dataBucket = new s3.Bucket(this, `corp-${projectName}-data-bucket`, {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    const dataBucket = new s3.Bucket(
+      this,
+      `corp-${projectName}-data-bucket-${stackId}`,
+      {
+        bucketName:
+          `corp-${projectName}-data-bucket-${stackId}${environmentSuffix}`.toLowerCase(),
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        versioned: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      }
+    );
 
-    const logsBucket = new s3.Bucket(this, `corp-${projectName}-logs-bucket`, {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
+    const logsBucket = new s3.Bucket(
+      this,
+      `corp-${projectName}-logs-bucket-${stackId}`,
+      {
+        bucketName:
+          `corp-${projectName}-logs-bucket-${stackId}${environmentSuffix}`.toLowerCase(),
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        versioned: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      }
+    );
 
     // CloudWatch Log Group for Lambda
     const lambdaLogGroup = new logs.LogGroup(
       this,
-      `corp-${projectName}-lambda-logs`,
+      `corp-${projectName}-lambda-logs-${stackId}`,
       {
-        logGroupName: `/aws/lambda/corp-${projectName}-function${environmentSuffix}`,
+        logGroupName: `/aws/lambda/corp-${projectName}-function-${stackId}${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
@@ -304,9 +339,9 @@ export class TapStack extends cdk.Stack {
     // Lambda Function
     const lambdaFunction = new lambda.Function(
       this,
-      `corp-${projectName}-lambda`,
+      `corp-${projectName}-lambda-${stackId}`,
       {
-        functionName: `corp-${projectName}-function${environmentSuffix}`,
+        functionName: `corp-${projectName}-function-${stackId}${environmentSuffix}`,
         runtime: lambda.Runtime.PYTHON_3_9,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`
@@ -382,6 +417,16 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: logsBucket.bucketName,
       description: 'Logs S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'EC2RoleName', {
+      value: ec2Role.roleName,
+      description: 'EC2 IAM Role Name',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecretName', {
+      value: dbSecret.secretName,
+      description: 'Database Secrets Manager Secret Name',
     });
   }
 }
