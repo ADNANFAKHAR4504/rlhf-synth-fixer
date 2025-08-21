@@ -8,7 +8,6 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-          - DatabasePassword
           - KeyPairName
       - Label:
           default: 'Network Configuration'
@@ -24,15 +23,6 @@ Parameters:
     Type: String
     Default: 'synthtrainr911'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
-  DatabasePassword:
-    Type: String
-    Description: 'Password for the RDS MySQL database'
-    MinLength: 8
-    MaxLength: 41
-    NoEcho: true
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
