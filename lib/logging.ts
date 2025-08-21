@@ -281,7 +281,7 @@ export class LoggingStack extends pulumi.ComponentResource {
             dataResources: [
               {
                 type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/*'],
+                values: [logBucket.arn.apply(arn => `${arn}/*`)],
               },
             ],
           },
