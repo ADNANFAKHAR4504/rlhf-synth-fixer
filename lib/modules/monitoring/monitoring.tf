@@ -23,8 +23,13 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # CloudWatch log group for EC2 instances
-data "aws_cloudwatch_log_group" "ec2_logs" {
+resource "aws_cloudwatch_log_group" "ec2_logs" {
   name = "/aws/ec2/${local.name_prefix}"
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-ec2-log-group"
+    Type = "monitoring"
+  })
 }
 
 # CloudWatch alarm for high CPU utilization on EC2 instances

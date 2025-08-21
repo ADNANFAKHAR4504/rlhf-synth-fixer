@@ -24,6 +24,13 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
+# Random string to ensure resource name uniqueness
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -336,7 +343,7 @@ resource "aws_kms_key" "ebs_key" {
 #######################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.name_prefix}-alb-${random_string.suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [module.security.alb_sg_id]
@@ -358,7 +365,7 @@ resource "aws_lb" "main" {
 
 # Target group for EC2 instances
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg"
+  name     = "${local.name_prefix}-app-tg-${random_string.suffix.result}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -400,7 +407,7 @@ resource "aws_lb_listener" "app" {
 
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  name = "${local.name_prefix}-ec2-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -443,7 +450,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
-  name = "${local.name_prefix}-lambda-role"
+  name = "${local.name_prefix}-lambda-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -600,7 +607,7 @@ resource "aws_autoscaling_group" "app" {
 
 # DB subnet group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
+  name       = "${local.name_prefix}-db-subnet-group-${random_string.suffix.result}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
