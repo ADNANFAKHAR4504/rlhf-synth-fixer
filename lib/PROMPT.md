@@ -1,42 +1,31 @@
-# Task: Serverless Infrastructure CloudFormation YAML
+# Build a Serverless API with CloudFormation
 
-## Problem Statement
-You are tasked with setting up a highly resilient serverless application using AWS CloudFormation. This application will consist of an API Gateway linked to an AWS Lambda function, which will interact with a DynamoDB table. Your infrastructure setup should address the following requirements:
+I need help building a serverless web API that can handle variable traffic loads. The main components should be an API Gateway that connects to a Lambda function, with a DynamoDB table for data storage.
 
-1. The Lambda function must use a supported AWS Lambda runtime and manage its dependencies correctly.
-2. Set up a RESTful API using API Gateway that supports multiple HTTP methods and adheres to REST principles. Enable CORS to allow cross-origin requests.
-3. The API should securely pass sensitive information to the Lambda function using environment variables.
-4. Configure a DynamoDB table with on-demand billing mode to handle unpredictable workloads efficiently without capacity planning.
-5. Implement IAM roles and policies granting the Lambda function the minimum necessary permissions to interact with the DynamoDB table.
-6. Set up CloudWatch logging to monitor and troubleshoot the Lambda function execution for operational insights.
-7. Define stage variables in API Gateway to differentiate between deployment stages (e.g., development, production).
-8. Ensure that the deployment is resilient to the failure of a single AZ by designing with cross-availability zone redundancy.
-9. Utilize an S3 bucket for storing the API Gateway access logs for security analysis and auditing purposes.
-10. Implement Lambda versioning and aliases to safely promote changes from development to production.
-11. Use AWS SAM to simplify CloudFormation template development for serverless applications.
-12. Integrate with AWS X-Ray to trace and analyze requests as they travel through the API Gateway and Lambda functions.
+Here's what I'm trying to accomplish:
 
-## Environment
-The infrastructure should be deployed in the us-west-2 region, following the naming convention 'projectName-environment-resourceType', where 'projectName' and 'environment' are customizable.
+I want to create a REST API that can handle multiple types of requests (GET, POST, PUT, DELETE). The Lambda function needs to be able to read from and write to a DynamoDB table. Since I don't know how much traffic this will get, I'd prefer using DynamoDB's on-demand billing so I don't have to guess at capacity.
 
-## Expected Output
-Create a YAML CloudFormation template named 'serverless-infrastructure.yml' that defines the described architecture. The included configurations should pass all constraints and requirements outlined.
+For security, I need the Lambda to get sensitive config through environment variables rather than hardcoding anything. The function should only have the minimum permissions it needs to work with DynamoDB.
 
-## Constraints
-1. Ensure the Lambda function uses a runtime compatible with AWS Lambda (e.g., Node.js, Python).
-2. The API Gateway must be configured with a RESTful API and support CORS.
-3. Utilize AWS Lambda environment variables for sensitive information instead of hardcoding them.
-4. The DynamoDB table must have read and write capacity set to on-demand.
-5. Include IAM roles and policies necessary for the Lambda function to access DynamoDB securely.
-6. Configure CloudWatch Logs to capture logs from the Lambda function executions.
-7. Define API Gateway stage variables for different deployment stages (e.g., dev, prod).
-8. Ensure the architecture is resilient to the failure of any single AZ (Across Availability Zone design).
-9. Specify an S3 bucket to store API Gateway access logs.
-10. Implement Lambda Versioning and Aliases for safe updates.
-11. Use AWS SAM (Serverless Application Model) for deployment with CloudFormation.
-12. Integrate with AWS X-Ray for tracing requests across the API Gateway and Lambda functions.
+I'd like to set up proper logging through CloudWatch so I can troubleshoot issues when they come up. Also, I want to use API Gateway stage variables so I can easily switch between dev and production configurations.
 
-## Platform and Language
-- Platform: CloudFormation (using AWS SAM)
-- Language: YAML
-- Deployment Region: us-west-2
+The API needs to support CORS since I'll be calling it from a web browser. For reliability, I want the setup to work even if one availability zone has problems.
+
+I'd like to store API Gateway access logs in an S3 bucket for auditing. And I want to use Lambda versioning so I can safely roll out updates without breaking production.
+
+Since this is a serverless application, I think AWS SAM would make the CloudFormation template easier to write and maintain. I'd also like X-Ray tracing enabled so I can see how requests flow through the system and identify any performance bottlenecks.
+
+This should all be deployed to us-west-2, and I prefer using a naming pattern like projectName-environment-resourceType to keep things organized.
+
+Could you create a CloudFormation YAML template called 'serverless-infrastructure.yml' that sets up this architecture? I'm specifically looking for:
+- Lambda function (Node.js or Python runtime)
+- API Gateway REST API with CORS support
+- DynamoDB table with on-demand capacity
+- Proper IAM roles and policies
+- CloudWatch logging
+- API Gateway stage variables
+- S3 bucket for access logs
+- Lambda versioning and aliases
+- X-Ray integration
+- Everything configured using AWS SAM
