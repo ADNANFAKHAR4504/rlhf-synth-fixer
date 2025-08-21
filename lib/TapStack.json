@@ -15,23 +15,6 @@
             "Type": "AWS::EC2::KeyPair::KeyName",
             "Description": "Name of an existing EC2 KeyPair to enable SSH access",
             "Default": "my-key-pair"
-        },
-        "DBUsername": {
-            "Type": "String",
-            "Description": "Database administrator username",
-            "Default": "admin",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "Description": "Database administrator password",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9!@#$%^&*]*",
-            "Default": "MySecurePassword123"
         }
     },
     "Mappings": {
@@ -63,6 +46,43 @@
         }
     },
     "Resources": {
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "Description": "Database credentials for WebApp",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "WebApp-DB-Secret-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "WebApp"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
         "WebAppVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -930,10 +950,10 @@
                 "StorageType": "gp3",
                 "DBName": "webapp",
                 "MasterUsername": {
-                    "Ref": "DBUsername"
+                    "Fn::Sub": "{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {

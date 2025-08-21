@@ -16,22 +16,7 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access
     Default: my-key-pair
 
-  DBUsername:
-    Type: String
-    Description: Database administrator username
-    Default: admin
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBPassword:
-    Type: String
-    Description: Database administrator password
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*]*'
-    Default: MySecurePassword123
 
 Mappings:
   RegionAMIMap:
@@ -53,6 +38,27 @@ Mappings:
       AMI: ami-05b37ce701f85f26a
 
 Resources:
+  # Database Secret
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}'
+      Description: 'Database credentials for WebApp'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'WebApp-DB-Secret-${EnvironmentSuffix}'
+        - Key: Project
+          Value: WebApp
+        - Key: Environment
+          Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
   # VPC and Networking
   WebAppVPC:
     Type: AWS::EC2::VPC
@@ -543,8 +549,8 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp3
       DBName: webapp
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup

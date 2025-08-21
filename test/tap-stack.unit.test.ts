@@ -31,8 +31,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
+      // DBUsername and DBPassword removed in favor of Secrets Manager
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -50,8 +49,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.MaxLength).toBe(20);
     });
 
-    test('DBPassword parameter should have NoEcho for security', () => {
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
+    test('should have Secrets Manager secret for database credentials', () => {
+      expect(template.Resources.DBSecret).toBeDefined();
+      expect(template.Resources.DBSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(template.Resources.DBSecret.Properties.GenerateSecretString).toBeDefined();
     });
   });
 
