@@ -1449,6 +1449,40 @@
                 }
             }
         },
+        "LoadBalancerArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-alb-arn"
+                }
+            }
+        },
+        "WebServerInstanceId": {
+            "Description": "Web Server Instance ID",
+            "Value": {
+                "Ref": "WebServerInstance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-web-server"
+                }
+            }
+        },
+        "CloudTrailBucketName": {
+            "Description": "CloudTrail S3 Bucket Name",
+            "Condition": "CreateCloudTrail",
+            "Value": {
+                "Ref": "CloudTrailBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-cloudtrail-bucket"
+                }
+            }
+        },
         "ComplianceStatus": {
             "Description": "Compliance constraints satisfied",
             "Value": "✓ S3 server-side encryption enabled\n✓ IAM least privilege roles implemented\n✓ CloudFront access logging enabled\n✓ RDS in private subnets only\n✓ CloudWatch CPU alarms configured\n✓ MFA enforcement policy created\n✓ Security groups restrict to SSH/HTTP only\n✓ GuardDuty enabled\n✓ Lambda timeout explicitly set\n✓ CloudTrail logging to encrypted S3\n✓ WAF attached to ALB\n✓ RDS deletion protection enabled\n✓ EBS volumes encrypted\n✓ RDS automated backups enabled\n✓ Multi-AZ VPC subnets configured\n"

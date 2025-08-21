@@ -788,6 +788,25 @@ Outputs:
     Value: !Ref GuardDutyDetector
     Export:
       Name: !Sub '${ProjectName}-${Environment}-guardduty-id'
+  
+  LoadBalancerArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-alb-arn'
+      
+  WebServerInstanceId:
+    Description: Web Server Instance ID
+    Value: !Ref WebServerInstance
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-web-server'
+      
+  CloudTrailBucketName:
+    Description: CloudTrail S3 Bucket Name
+    Condition: CreateCloudTrail
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-cloudtrail-bucket'
 
   ComplianceStatus:
     Description: Compliance constraints satisfied
