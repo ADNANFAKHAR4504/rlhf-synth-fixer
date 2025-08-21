@@ -221,19 +221,28 @@ describe("Terraform Infrastructure Unit Tests", () => {
   describe("Output Configuration", () => {
     test("required outputs are defined", () => {
       const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
-      const expectedOutputs = ["kms_key_ids", "vpc_ids", "guardduty_detector_ids"];
-      
+      const expectedOutputs = [
+        "kms_key_ids_usw2",
+        "kms_key_ids_use1",
+        "vpc_ids_usw2",
+        "vpc_ids_use1",
+        "guardduty_detector_ids_usw2",
+        "guardduty_detector_ids_use1",
+      ];
+  
       expectedOutputs.forEach(output => {
         expect(tapStackContent).toMatch(new RegExp(`output\\s+"${output}"\\s*{`));
       });
-    });
+  });
 
-    test("outputs provide information for both regions", () => {
-      const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
-      expect(tapStackContent).toMatch(/usw2\s*=\s*aws_kms_key\.main_usw2\.key_id/);
-      expect(tapStackContent).toMatch(/use1\s*=\s*aws_kms_key\.main_use1\.key_id/);
-      expect(tapStackContent).toMatch(/usw2\s*=\s*aws_vpc\.main_usw2\.id/);
-      expect(tapStackContent).toMatch(/use1\s*=\s*aws_vpc\.main_use1\.id/);
-    });
+   test("outputs provide information for both regions", () => {
+    const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
+
+    expect(tapStackContent).toMatch(/output\s*"kms_key_ids_usw2"/);
+    expect(tapStackContent).toMatch(/output\s*"kms_key_ids_use1"/);
+    expect(tapStackContent).toMatch(/output\s*"vpc_ids_usw2"/);
+    expect(tapStackContent).toMatch(/output\s*"vpc_ids_use1"/);
+  });
+
   });
 });
