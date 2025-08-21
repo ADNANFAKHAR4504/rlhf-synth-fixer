@@ -16,14 +16,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
   
-  DBPassword:
-    Type: String
-    Description: Database administrator password
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must contain only alphanumeric characters with minimum 8 characters
+
   
   DBInstanceClass:
     Type: String
@@ -228,6 +221,25 @@ Resources:
         - Key: Environment
           Value: Production
 
+  # Secrets Manager Secret for Database Password
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-database-secret'
+      Description: Database credentials for production environment
+      GenerateSecretString:
+        SecretStringTemplate: !Sub |
+          {
+            "username": "${DBUsername}"
+          }
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Environment
+          Value: Production
+
   # KMS Key for RDS Encryption
   RDSKMSKey:
     Type: AWS::KMS::Key
@@ -280,18 +292,19 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: production-mysql-db
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
       DBName: productiondb
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -299,8 +312,6 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: true
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       Tags:
