@@ -355,12 +355,22 @@ export class SecureInfrastructure extends Construct {
               'ec2:DetachNetworkInterface',
             ],
             Resource: '*',
-            // Condition to limit to our VPC only
+            // More appropriate conditions for VPC Lambda functions
             Condition: {
               StringEquals: {
-                'ec2:vpc': this.vpc.arn,
+                'ec2:SubnetID': this.privateSubnets.map(subnet => subnet.id),
               },
             },
+          },
+          {
+            // Additional EC2 permissions needed for VPC Lambda
+            Effect: 'Allow',
+            Action: [
+              'ec2:DescribeSubnets',
+              'ec2:DescribeSecurityGroups',
+              'ec2:DescribeVpcs',
+            ],
+            Resource: '*',
           },
           {
             // S3 permissions - only for our specific bucket
