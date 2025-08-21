@@ -217,7 +217,7 @@ export class RdsModule extends Construct {
     super(scope, id);
 
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
-      name: `${props.namePrefix}db-subnet-group`,
+      name: `${props.namePrefix.toLowerCase()}db-subnet-group`,
       subnetIds: props.subnetIds,
       tags: {
         Name: `${props.namePrefix}db-subnet-group`,
