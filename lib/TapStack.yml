@@ -188,8 +188,6 @@ Resources:
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
@@ -198,7 +196,7 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP from ALB only, egress to DB
+      GroupDescription: Allow HTTP from ALB only, egress to anywhere
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -206,10 +204,8 @@ Resources:
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          DestinationSecurityGroupId: !Ref RDSSecurityGroup
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
           Value: Production
@@ -226,8 +222,6 @@ Resources:
           SourceSecurityGroupId: !Ref EC2SecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
-          FromPort: 0
-          ToPort: 0
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
@@ -330,7 +324,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
