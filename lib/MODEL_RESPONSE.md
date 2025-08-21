@@ -1,5 +1,3 @@
-I'll create a complete TypeScript AWS CDK application that meets all your security requirements. Here's the structured implementation:
-
 ## Project Structure
 
 ```
@@ -18,6 +16,7 @@ tap-cdk-app/
 ## 1. Package Configuration
 
 **package.json**
+
 ```json
 {
   "name": "tap-cdk-app",
@@ -48,14 +47,13 @@ tap-cdk-app/
 ```
 
 **tsconfig.json**
+
 ```json
 {
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": [
-      "es2020"
-    ],
+    "lib": ["es2020"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -70,25 +68,19 @@ tap-cdk-app/
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "typeRoots": [
-      "./node_modules/@types"
-    ]
+    "typeRoots": ["./node_modules/@types"]
   },
-  "exclude": [
-    "node_modules",
-    "cdk.out"
-  ]
+  "exclude": ["node_modules", "cdk.out"]
 }
 ```
 
 **cdk.json**
+
 ```json
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": [
-      "**"
-    ],
+    "include": ["**"],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -116,6 +108,7 @@ tap-cdk-app/
 ## 2. Entry Point
 
 **bin/tap.ts**
+
 ```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -136,6 +129,7 @@ new TapStack(app, 'TapStack', {
 ## 3. Main Stack Implementation
 
 **lib/tapstack.ts**
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -150,7 +144,7 @@ export class TapStack extends cdk.Stack {
 
     // Common tags for all resources
     const commonTags = {
-      Environment: 'Production'
+      Environment: 'Production',
     };
 
     // Create KMS key for encryption
@@ -182,7 +176,7 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        }
+        },
       ],
     });
 
@@ -255,58 +249,73 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Minimal IAM role for EC2 instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
     // Add minimal permissions for SSM Parameter Store access
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ssm:GetParameter',
-        'ssm:GetParameters',
-        'ssm:GetParametersByPath'
-      ],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/tap/*`
-      ]
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ssm:GetParameter',
+          'ssm:GetParameters',
+          'ssm:GetParametersByPath',
+        ],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/tap/*`,
+        ],
+      })
+    );
 
     // Add CloudWatch logs permissions for monitoring
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-        'logs:DescribeLogStreams'
-      ],
-      resources: [
-        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/tap*`
-      ]
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'logs:DescribeLogStreams',
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/tap*`,
+        ],
+      })
+    );
 
     cdk.Tags.of(ec2Role).add('Environment', commonTags.Environment);
 
     // Instance Profile for EC2
-    const instanceProfile = new iam.InstanceProfile(this, 'Ec2InstanceProfile', {
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'Ec2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     // Launch Template for EC2 instances
     const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
       userData: ec2.UserData.forLinux(),
-      blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(20, {
-          encrypted: true,
-          kmsKey: kmsKey,
-        }),
-      }],
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(20, {
+            encrypted: true,
+            kmsKey: kmsKey,
+          }),
+        },
+      ],
     });
 
     cdk.Tags.of(launchTemplate).add('Environment', commonTags.Environment);
@@ -317,21 +326,26 @@ export class TapStack extends cdk.Stack {
 
     for (let i = 0; i < privateSubnets.length; i++) {
       const instance = new ec2.Instance(this, `TapInstance${i + 1}`, {
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
         machineImage: ec2.MachineImage.latestAmazonLinux2023(),
         vpc,
         vpcSubnets: {
-          subnets: [privateSubnets[i]]
+          subnets: [privateSubnets[i]],
         },
         securityGroup: ec2SecurityGroup,
         role: ec2Role,
-        blockDevices: [{
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            encrypted: true,
-            kmsKey: kmsKey,
-          }),
-        }],
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(20, {
+              encrypted: true,
+              kmsKey: kmsKey,
+            }),
+          },
+        ],
         userData: ec2.UserData.forLinux(),
       });
 
@@ -358,9 +372,9 @@ export class TapStack extends cdk.Stack {
       }),
       description: 'Parameter group for TAP PostgreSQL database',
       parameters: {
-        'log_statement': 'all',
-        'log_min_duration_statement': '1000',
-        'shared_preload_libraries': 'pg_stat_statements',
+        log_statement: 'all',
+        log_min_duration_statement: '1000',
+        shared_preload_libraries: 'pg_stat_statements',
       },
     });
 
@@ -371,52 +385,59 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_3,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
-      
+
       // High Availability Configuration
       multiAz: true,
-      
+
       // Storage Configuration with Encryption
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       storageType: rds.StorageType.GP2,
       storageEncrypted: true,
       storageEncryptionKey: kmsKey,
-      
+
       // Security Configuration
       databaseName: 'tapdb',
       credentials: rds.Credentials.fromGeneratedSecret('tapdbadmin', {
         description: 'TAP Database Administrator',
         encryptionKey: kmsKey,
       }),
-      
+
       // Backup Configuration
       backupRetention: cdk.Duration.days(7),
       deleteAutomatedBackups: false,
       deletionProtection: true, // Enable for production
-      
+
       // Monitoring
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
       performanceInsightEncryptionKey: kmsKey,
-      
+
       // Parameter Group
       parameterGroup: parameterGroup,
-      
+
       // Maintenance
       autoMinorVersionUpgrade: true,
       allowMajorVersionUpgrade: false,
-      
+
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT, // Use RETAIN for production
     });
 
     cdk.Tags.of(database).add('Environment', commonTags.Environment);
 
     // Allow EC2 security group to access RDS
-    database.connections.allowFrom(ec2SecurityGroup, ec2.Port.tcp(5432), 'EC2 to RDS access');
+    database.connections.allowFrom(
+      ec2SecurityGroup,
+      ec2.Port.tcp(5432),
+      'EC2 to RDS access'
+    );
 
     // Outputs
     new cdk.CfnOutput(this, 'VpcId', {
@@ -448,6 +469,7 @@ export class TapStack extends cdk.Stack {
 ## 4. Unit Tests
 
 **test/tapstack.test.ts**
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
@@ -461,7 +483,7 @@ describe('TapStack', () => {
   beforeEach(() => {
     app = new cdk.App();
     stack = new TapStack.TapStack(app, 'TestTapStack', {
-      env: { region: 'us-east-1' }
+      env: { region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
   });
@@ -482,15 +504,15 @@ describe('TapStack', () => {
           IpProtocol: 'tcp',
           FromPort: 80,
           ToPort: 80,
-          CidrIp: '0.0.0.0/0'
+          CidrIp: '0.0.0.0/0',
         }),
         Match.objectLike({
           IpProtocol: 'tcp',
           FromPort: 443,
           ToPort: 443,
-          CidrIp: '0.0.0.0/0'
-        })
-      ])
+          CidrIp: '0.0.0.0/0',
+        }),
+      ]),
     });
   });
 
@@ -498,7 +520,7 @@ describe('TapStack', () => {
     template.hasResourceProperties('AWS::RDS::DBInstance', {
       StorageEncrypted: true,
       MultiAZ: true,
-      Engine: 'postgres'
+      Engine: 'postgres',
     });
   });
 
@@ -507,16 +529,16 @@ describe('TapStack', () => {
       BlockDeviceMappings: Match.arrayWith([
         Match.objectLike({
           Ebs: Match.objectLike({
-            Encrypted: true
-          })
-        })
-      ])
+            Encrypted: true,
+          }),
+        }),
+      ]),
     });
   });
 
   test('KMS key is created with key rotation enabled', () => {
     template.hasResourceProperties('AWS::KMS::Key', {
-      EnableKeyRotation: true
+      EnableKeyRotation: true,
     });
   });
 
@@ -527,11 +549,11 @@ describe('TapStack', () => {
           Match.objectLike({
             Effect: 'Allow',
             Principal: {
-              Service: 'ec2.amazonaws.com'
-            }
-          })
-        ])
-      }
+              Service: 'ec2.amazonaws.com',
+            },
+          }),
+        ]),
+      },
     });
   });
 
@@ -539,14 +561,14 @@ describe('TapStack', () => {
     // Check that resources have the Environment tag
     const resources = template.findResources('AWS::EC2::VPC');
     expect(Object.keys(resources).length).toBeGreaterThan(0);
-    
+
     const resources2 = template.findResources('AWS::RDS::DBInstance');
     expect(Object.keys(resources2).length).toBeGreaterThan(0);
   });
 
   test('RDS is in private subnets only', () => {
     template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-      DBSubnetGroupDescription: 'Subnet group for TAP RDS database'
+      DBSubnetGroupDescription: 'Subnet group for TAP RDS database',
     });
   });
 
@@ -555,7 +577,7 @@ describe('TapStack', () => {
       BackupRetentionPeriod: 7,
       MonitoringInterval: 60,
       PerformanceInsightsEnabled: true,
-      DeletionProtection: true
+      DeletionProtection: true,
     });
   });
 });
@@ -564,41 +586,47 @@ describe('TapStack', () => {
 ## 5. Jest Configuration
 
 **jest.config.js**
+
 ```javascript
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest'
-  }
+    '^.+\\.tsx?$': 'ts-jest',
+  },
 };
 ```
 
 ## Key Security Features Implemented
 
 ### 1. **Network Security**
+
 - VPC with isolated database subnets
 - Security groups with minimal required ports (80, 443)
 - No direct internet access to database tier
 
 ### 2. **Encryption**
+
 - KMS key with automatic rotation
 - RDS storage encryption
 - EBS volume encryption
 - Encrypted database credentials using AWS Secrets Manager
 
 ### 3. **IAM Least Privilege**
+
 - EC2 role with minimal SSM and CloudWatch permissions
 - No broad permissions granted
 - Specific resource ARN restrictions
 
 ### 4. **High Availability**
+
 - Multi-AZ RDS deployment
 - EC2 instances across multiple availability zones
 - NAT gateways in each AZ
 
 ### 5. **Monitoring & Backup**
+
 - RDS Performance Insights enabled
 - 7-day backup retention
 - CloudWatch integration
@@ -607,16 +635,19 @@ module.exports = {
 ## Deployment Instructions
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Build the project:**
+
    ```bash
    npm run build
    ```
 
 3. **Run tests:**
+
    ```bash
    npm test
    ```
