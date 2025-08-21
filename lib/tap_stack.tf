@@ -41,21 +41,22 @@ locals {
     Project     = "TapStack"
     Owner       = "terraform"
   }
-  primary_region   = var.aws_region
-  secondary_region = var.bucket_region
+  primary_region     = var.aws_region
+  secondary_region   = var.bucket_region
+  environment_suffix = var.environment != "staging" ? "-${var.environment}" : ""
 }
 
 ########################
 # KMS Keys
 ########################
 resource "aws_kms_key" "main" {
-  description             = "KMS key for TapStack-${var.environment}-${local.primary_region}"
+  description             = "KMS key for TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   deletion_window_in_days = 7
   tags                    = local.common_tags
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/tapstack-${var.environment}-${local.primary_region}"
+  name          = "alias/tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -93,7 +94,7 @@ resource "aws_vpc_peering_connection" "main" {
   peer_region = local.secondary_region
   auto_accept = false
   tags = merge(local.common_tags, {
-    Name = "TapStack-${var.environment}-peering"
+    Name = "TapStack${local.environment_suffix}-${var.environment}-peering"
   })
 }
 
@@ -102,7 +103,7 @@ resource "aws_vpc_peering_connection_accepter" "main" {
   vpc_peering_connection_id = aws_vpc_peering_connection.main.id
   auto_accept               = true
   tags = merge(local.common_tags, {
-    Name = "TapStack-${var.environment}-peering-accepter"
+    Name = "TapStack${local.environment_suffix}-${var.environment}-peering-accepter"
   })
 }
 
@@ -110,7 +111,7 @@ resource "aws_vpc_peering_connection_accepter" "main" {
 # Security Groups
 ########################
 resource "aws_security_group" "alb" {
-  name_prefix = "TapStack-${var.environment}-${local.primary_region}-alb-"
+  name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-alb-"
   vpc_id      = data.aws_vpc.primary.id
   tags        = local.common_tags
 
@@ -138,7 +139,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "alb_secondary" {
   provider    = aws.secondary
-  name_prefix = "TapStack-${var.environment}-${local.secondary_region}-alb-"
+  name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}-alb-"
   vpc_id      = data.aws_vpc.secondary.id
   tags        = local.common_tags
 
@@ -165,7 +166,7 @@ resource "aws_security_group" "alb_secondary" {
 }
 
 resource "aws_security_group" "app" {
-  name_prefix = "TapStack-${var.environment}-${local.primary_region}-app-"
+  name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-app-"
   vpc_id      = data.aws_vpc.primary.id
   tags        = local.common_tags
 
@@ -186,7 +187,7 @@ resource "aws_security_group" "app" {
 
 resource "aws_security_group" "app_secondary" {
   provider    = aws.secondary
-  name_prefix = "TapStack-${var.environment}-${local.secondary_region}-app-"
+  name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}-app-"
   vpc_id      = data.aws_vpc.secondary.id
   tags        = local.common_tags
 
@@ -213,7 +214,7 @@ resource "random_id" "bucket_suffix" {
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "tapstack-${var.environment}-${local.primary_region}-logs-${random_id.bucket_suffix.hex}"
+  bucket = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}-logs-${random_id.bucket_suffix.hex}"
   tags   = local.common_tags
 }
 
@@ -247,7 +248,7 @@ resource "aws_s3_bucket_versioning" "logs" {
 # IAM Roles
 ########################
 resource "aws_iam_role" "ec2_role" {
-  name = "TapStack-${var.environment}-${local.primary_region}-ec2-role"
+  name = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-ec2-role"
   tags = local.common_tags
 
   assume_role_policy = jsonencode({
@@ -265,7 +266,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "TapStack-${var.environment}-${local.primary_region}-ec2-policy"
+  name = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-ec2-policy"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -290,7 +291,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "TapStack-${var.environment}-${local.primary_region}-ec2-profile"
+  name = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -319,7 +320,7 @@ data "aws_ami" "amazon_linux_secondary" {
 }
 
 resource "aws_launch_template" "app" {
-  name_prefix   = "TapStack-${var.environment}-${local.primary_region}-"
+  name_prefix   = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.environment == "production" ? "t3.medium" : "t3.micro"
 
@@ -335,21 +336,21 @@ resource "aws_launch_template" "app" {
     yum install -y httpd
     systemctl start httpd
     systemctl enable httpd
-    echo "<h1>TapStack ${var.environment} - ${local.primary_region}</h1>" > /var/www/html/index.html
+    echo "<h1>TapStack${local.environment_suffix} ${var.environment} - ${local.primary_region}</h1>" > /var/www/html/index.html
   EOF
   )
 
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "TapStack-${var.environment}-${local.primary_region}"
+      Name = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
     })
   }
 }
 
 resource "aws_launch_template" "app_secondary" {
   provider      = aws.secondary
-  name_prefix   = "TapStack-${var.environment}-${local.secondary_region}-"
+  name_prefix   = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}-"
   image_id      = data.aws_ami.amazon_linux_secondary.id
   instance_type = var.environment == "production" ? "t3.medium" : "t3.micro"
 
@@ -361,14 +362,14 @@ resource "aws_launch_template" "app_secondary" {
     yum install -y httpd
     systemctl start httpd
     systemctl enable httpd
-    echo "<h1>TapStack ${var.environment} - ${local.secondary_region}</h1>" > /var/www/html/index.html
+    echo "<h1>TapStack${local.environment_suffix} ${var.environment} - ${local.secondary_region}</h1>" > /var/www/html/index.html
   EOF
   )
 
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "TapStack-${var.environment}-${local.secondary_region}"
+      Name = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
     })
   }
 }
@@ -377,7 +378,7 @@ resource "aws_launch_template" "app_secondary" {
 # Application Load Balancers
 ########################
 resource "aws_lb" "main" {
-  name               = "TapStack-${var.environment}-${local.primary_region}"
+  name               = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -396,7 +397,7 @@ resource "aws_lb" "main" {
 
 resource "aws_lb" "secondary" {
   provider           = aws.secondary
-  name               = "TapStack-${var.environment}-${local.secondary_region}"
+  name               = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
@@ -408,7 +409,7 @@ resource "aws_lb" "secondary" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "TapStack-${var.environment}-${local.primary_region}"
+  name     = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.primary.id
@@ -430,7 +431,7 @@ resource "aws_lb_target_group" "main" {
 
 resource "aws_lb_target_group" "secondary" {
   provider = aws.secondary
-  name     = "TapStack-${var.environment}-${local.secondary_region}"
+  name     = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.secondary.id
@@ -477,7 +478,7 @@ resource "aws_lb_listener" "secondary" {
 # Auto Scaling Groups
 ########################
 resource "aws_autoscaling_group" "main" {
-  name                = "TapStack-${var.environment}-${local.primary_region}"
+  name                = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   vpc_zone_identifier = data.aws_subnets.primary.ids
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
@@ -493,7 +494,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "TapStack-${var.environment}-${local.primary_region}"
+    value               = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
     propagate_at_launch = true
   }
 
@@ -509,7 +510,7 @@ resource "aws_autoscaling_group" "main" {
 
 resource "aws_autoscaling_group" "secondary" {
   provider            = aws.secondary
-  name                = "TapStack-${var.environment}-${local.secondary_region}"
+  name                = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   vpc_zone_identifier = data.aws_subnets.secondary.ids
   target_group_arns   = [aws_lb_target_group.secondary.arn]
   health_check_type   = "ELB"
@@ -525,7 +526,7 @@ resource "aws_autoscaling_group" "secondary" {
 
   tag {
     key                 = "Name"
-    value               = "TapStack-${var.environment}-${local.secondary_region}"
+    value               = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
     propagate_at_launch = true
   }
 
@@ -542,14 +543,31 @@ resource "aws_autoscaling_group" "secondary" {
 ########################
 # RDS Database
 ########################
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "db_password" {
+  name                    = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}-db-password"
+  description             = "Database password for TapStack"
+  recovery_window_in_days = 7
+  tags                    = local.common_tags
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
+
 resource "aws_db_subnet_group" "main" {
-  name       = "tapstack-${var.environment}-${local.primary_region}"
+  name       = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   subnet_ids = data.aws_subnets.primary.ids
   tags       = local.common_tags
 }
 
 resource "aws_security_group" "rds" {
-  name_prefix = "TapStack-${var.environment}-${local.primary_region}-rds-"
+  name_prefix = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}-rds-"
   vpc_id      = data.aws_vpc.primary.id
   tags        = local.common_tags
 
@@ -569,7 +587,7 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier     = "tapstack-${var.environment}-${local.primary_region}"
+  identifier     = "tapstack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.environment == "production" ? "db.t3.small" : "db.t3.micro"
@@ -582,7 +600,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "tapstack"
   username = "admin"
-  password = "changeme123!"
+  password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -600,7 +618,7 @@ resource "aws_db_instance" "main" {
 
 resource "aws_db_instance" "replica" {
   provider           = aws.secondary
-  identifier         = "tapstack-${var.environment}-${local.secondary_region}-replica"
+  identifier         = "tapstack${local.environment_suffix}-${var.environment}-${local.secondary_region}-replica"
   replicate_source_db = aws_db_instance.main.identifier
 
   instance_class = var.environment == "production" ? "db.t3.small" : "db.t3.micro"
@@ -616,7 +634,7 @@ resource "aws_db_instance" "replica" {
 # DynamoDB Tables
 ########################
 resource "aws_dynamodb_table" "main" {
-  name           = "TapStack-${var.environment}-${local.primary_region}"
+  name           = "TapStack${local.environment_suffix}-${var.environment}-${local.primary_region}"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "id"
 
@@ -639,7 +657,7 @@ resource "aws_dynamodb_table" "main" {
 
 resource "aws_dynamodb_table" "secondary" {
   provider       = aws.secondary
-  name           = "TapStack-${var.environment}-${local.secondary_region}"
+  name           = "TapStack${local.environment_suffix}-${var.environment}-${local.secondary_region}"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "id"
 
