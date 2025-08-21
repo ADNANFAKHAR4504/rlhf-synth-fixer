@@ -25,7 +25,6 @@ import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
@@ -369,30 +368,25 @@ export class SecureModules extends Construct {
       name: `${appName}-Lambda-SG`,
       description: 'Security group for Lambda function',
       vpcId: this.vpc.id,
+      egress: [
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'HTTPS outbound for AWS API calls',
+        },
+        {
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          cidrBlocks: [vpcCidr],
+          description: 'MySQL outbound to RDS',
+        },
+      ],
       tags: {
         Name: `${appName}-Lambda-SG`,
       },
-    });
-
-    // Lambda security group rules
-    new SecurityGroupRule(this, 'lambda-sg-egress-https', {
-      type: 'egress',
-      fromPort: 443,
-      toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-      securityGroupId: lambdaSecurityGroup.id,
-      description: 'HTTPS outbound for AWS API calls',
-    });
-
-    new SecurityGroupRule(this, 'lambda-sg-egress-mysql', {
-      type: 'egress',
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: 'tcp',
-      cidrBlocks: [vpcCidr],
-      securityGroupId: lambdaSecurityGroup.id,
-      description: 'MySQL outbound to RDS',
     });
 
     // Security Group for RDS
@@ -400,20 +394,18 @@ export class SecureModules extends Construct {
       name: `${appName}-RDS-SG`,
       description: 'Security group for RDS instance',
       vpcId: this.vpc.id,
+      ingress: [
+        {
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          securityGroups: [lambdaSecurityGroup.id],
+          description: 'MySQL access from Lambda',
+        },
+      ],
       tags: {
         Name: `${appName}-RDS-SG`,
       },
-    });
-
-    // RDS security group rule
-    new SecurityGroupRule(this, 'rds-sg-ingress', {
-      type: 'ingress',
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: 'tcp',
-      sourceSecurityGroupId: lambdaSecurityGroup.id,
-      securityGroupId: rdsSecurityGroup.id,
-      description: 'MySQL access from Lambda',
     });
 
     // DB Subnet Group
@@ -430,8 +422,7 @@ export class SecureModules extends Construct {
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${appName}-Function`,
       role: this.lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'nodejs18.x',
+      runtime: 'python3.9',
       s3Bucket: 'corp-image-uploads',
       s3Key: 'lambda-deployment.zip',
       timeout: 30,
