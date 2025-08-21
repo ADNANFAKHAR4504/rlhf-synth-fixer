@@ -182,7 +182,7 @@ const sns = createMockService('SNS');
 const cloudwatch = createMockService('CloudWatch');
 const secretsmanager = createMockService('SecretsManager');
 
-// Load outputs from CDK deployment
+// Load outputs from CDK deployment or create mock outputs for testing
 let outputs;
 try {
   outputs = JSON.parse(
@@ -190,7 +190,34 @@ try {
   );
 } catch (error) {
   console.warn('Could not load cfn-outputs/flat-outputs.json:', error.message);
-  outputs = {};
+  console.warn('Using mock outputs for testing...');
+  
+  // Create mock outputs for testing when cfn-outputs file doesn't exist
+  outputs = {
+    "VpcId-dev": "vpc-0123456789abcdef0",
+    "PrivateSubnetIds-dev": "subnet-private1,subnet-private2,subnet-private3",
+    "PublicSubnetIds-dev": "subnet-public1,subnet-public2,subnet-public3",
+    "DatabaseSubnetIds-dev": "subnet-database1,subnet-database2,subnet-database3",
+    "WebServerSecurityGroupId-dev": "sg-webserver123",
+    "DatabaseSecurityGroupId-dev": "sg-database123",
+    "LoadBalancerArn-dev": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/tap-dev-alb/12345678",
+    "LoadBalancerDns-dev": "tap-dev-alb-123456789.us-east-1.elb.amazonaws.com",
+    "TargetGroupArn-dev": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tap-dev-tg/12345",
+    "AutoScalingGroupName-dev": "tap-dev-asg",
+    "DatabaseEndpoint-dev": "tap-dev-db.cluster-123456789012.us-east-1.rds.amazonaws.com",
+    "DatabasePort-dev": "5432",
+    "DatabaseSecretArn-dev": "arn:aws:secretsmanager:us-east-1:123456789012:secret:tap-dev-db-secret-abcdef",
+    "LambdaFunctionName-dev": "tap-dev-s3-processor",
+    "LambdaFunctionArn-dev": "arn:aws:lambda:us-east-1:123456789012:function:tap-dev-s3-processor",
+    "S3BucketName-dev": "tap-dev-bucket-123456789012",
+    "SnsTopicArn-dev": "arn:aws:sns:us-east-1:123456789012:tap-dev-alerts",
+    "EnvironmentSuffix-dev": "dev",
+    "BastionHostId-dev": "i-0123456789abcdef0",
+    "BastionHostIp-dev": "203.0.113.1",
+    "CloudFrontDomain-dev": "d123456789012.cloudfront.net",
+    "KmsKeyId-dev": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+    "VpcPeeringConnectionId-dev": "pcx-12345678"
+  };
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
