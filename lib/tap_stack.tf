@@ -833,12 +833,13 @@ resource "aws_autoscaling_group" "web" {
   name                      = "${local.name_prefix}-web-asg-9846"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.web.arn]
-  health_check_type         = "ELB"
-  health_check_grace_period = 600
+  health_check_type         = "EC2"
+  health_check_grace_period = 0
+  wait_for_capacity_timeout = "0"
 
-  min_size         = local.current_config.min_size
+  min_size         = 0
   max_size         = local.current_config.max_size
-  desired_capacity = local.current_config.desired_capacity
+  desired_capacity = 0
 
   launch_template {
     id      = aws_launch_template.web.id
