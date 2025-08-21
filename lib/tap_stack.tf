@@ -875,7 +875,7 @@ resource "aws_route53_health_check" "prod_health_check" {
   request_interval                = 30
   cloudwatch_alarm_region         = "us-west-2"
   cloudwatch_alarm_name           = "prod-health-check-alarm"
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(local.common_tags, {
     Name = "prod-health-check"
