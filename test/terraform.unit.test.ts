@@ -64,9 +64,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(content).toMatch(/module\s+"iam_role"/);
     });
 
-    test('tap_stack.tf has provider configuration', () => {
-      const stackPath = path.join(LIB_DIR, 'tap_stack.tf');
-      const content = fs.readFileSync(stackPath, 'utf8');
+    test('provider.tf has provider configuration', () => {
+      const providerPath = path.join(LIB_DIR, 'provider.tf');
+      const content = fs.readFileSync(providerPath, 'utf8');
 
       expect(content).toMatch(
         /provider\s+"aws"\s*{[\s\S]*alias\s*=\s*"staging"/

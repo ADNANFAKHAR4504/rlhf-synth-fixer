@@ -65,68 +65,33 @@ output "bucket_tags" {
   value = aws_s3_bucket.this.tags
 }
 */
-# main.tf
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
-  }
 
-  backend "remote" {
-    organization = "<REPLACE_WITH_TFC_ORG>"
-    workspaces {
-      prefix = "myapp-"
-    }
-  }
-}
-
-provider "aws" {
-  alias  = "staging"
-  region = var.staging_region
-  default_tags {
-    tags = {
-      environment = "staging"
-      project     = "IaC - AWS Nova Model Breaking"
-    }
-  }
-}
-
-provider "aws" {
-  alias  = "production"
-  region = var.production_region
-  default_tags {
-    tags = {
-      environment = "production"
-      project     = "IaC - AWS Nova Model Breaking"
-    }
-  }
-}
 
 locals {
   env = replace(terraform.workspace, "myapp-", "")
 }
 
 module "storage" {
-  source   = "./modules/storage"
-  providers = { aws = local.env == "staging" ? aws.staging : aws.production }
+  source = "./modules/storage"
+  providers = {
+    aws = aws.staging
+  }
   environment = local.env
 }
 
 module "network" {
-  source   = "./modules/network"
-  providers = { aws = local.env == "staging" ? aws.staging : aws.production }
+  source = "./modules/network"
+  providers = {
+    aws = aws.staging
+  }
   environment = local.env
 }
 
 module "iam_role" {
-  source   = "./modules/iam_role"
-  providers = { aws = local.env == "staging" ? aws.staging : aws.production }
+  source = "./modules/iam_role"
+  providers = {
+    aws = aws.staging
+  }
   environment = local.env
-  bucket_arn  = module.storage.bucket_arn
+  bucket_arn = module.storage.bucket_arn
 }
