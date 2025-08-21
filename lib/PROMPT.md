@@ -4,7 +4,7 @@ This prompt outlines the requirements for generating a highly available, fault-t
 
 ## Requirements
 
-- **Multi-AZ Deployment:** Deploy EC2 instances across at least two Availability Zones in the `us-west-2` region for load balancing and fault tolerance.
+- **Multi-AZ Deployment:** Deploy EC2 instances across at least two Availability Zones in the `us-east-1` region for load balancing and fault tolerance.
 - **Auto Scaling:** Manage EC2 instances using an Auto Scaling Group, maintaining a minimum of two running instances at all times.
 - **Load Balancer:** Implement an Elastic Load Balancer (ELB) to distribute incoming HTTP/HTTPS traffic to the EC2 instances.
 - **Rapid Recovery:** Ensure the infrastructure can automatically recover from EC2 instance failures within 120 seconds.
@@ -14,7 +14,7 @@ This prompt outlines the requirements for generating a highly available, fault-t
 
 ## Environment
 
-Design an AWS environment in the `us-west-2` region using Terraform HCL, with the following features:
+Design an AWS environment in the `us-east-2` region using Terraform HCL, with the following features:
 
 1. **VPC Setup:** A VPC spanning two Availability Zones, each with its own public and private subnet.
 2. **Auto Scaling Group:** An Auto Scaling Group managing EC2 instances, configured for high availability and rapid failure recovery.

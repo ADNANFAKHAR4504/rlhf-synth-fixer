@@ -2,7 +2,7 @@
 
 ### Summary
 
-This Terraform configuration provisions a highly available, fault-tolerant web application infrastructure in AWS us-west-2, fulfilling all specified requirements:
+This Terraform configuration provisions a highly available, fault-tolerant web application infrastructure in AWS us-east-1, fulfilling all specified requirements:
 
 **Key Features:**
 - Multi-AZ VPC with public and private subnets
@@ -34,7 +34,7 @@ terraform {
 }
 
 provider "aws" {
-	region = "us-west-2"
+	region = "us-east-1"
 }
 
 variable "key_pair_name" {
@@ -56,7 +56,7 @@ data "aws_availability_zones" "available" {
 	state = "available"
 	filter {
 		name   = "region-name"
-		values = ["us-west-2"]
+		values = ["us-east-1"]
 	}
 }
 

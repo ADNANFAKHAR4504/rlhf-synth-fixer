@@ -350,7 +350,7 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = length(data.aws_availability_zones.available.names) >= 2 ? data.aws_availability_zones.available.names : ["us-west-2a", "us-west-2b"]
+  azs = length(data.aws_availability_zones.available.names) >= 2 ? data.aws_availability_zones.available.names : ["us-east-1a", "us-east-1b"]
 }
 
 resource "aws_vpc" "main" {

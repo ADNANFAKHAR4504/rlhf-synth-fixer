@@ -589,7 +589,7 @@ output "autoscaling_group_name" {
 
 ## Summary
 
-This Terraform HCL configuration creates a highly available, fault-tolerant web application infrastructure in AWS us-west-2 region that fulfills all the specified constraints:
+This Terraform HCL configuration creates a highly available, fault-tolerant web application infrastructure in AWS us-east-1 region that fulfills all the specified constraints:
 
 ### Key Features Implemented:
 
