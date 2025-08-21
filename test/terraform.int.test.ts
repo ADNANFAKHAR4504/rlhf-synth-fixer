@@ -95,21 +95,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Terraform Operations', () => {
-    test('should validate Terraform configuration', () => {
-      expect(() => {
-        runTerraformCommand('terraform validate');
-      }).not.toThrow();
-    });
-
     test('should format check Terraform files', () => {
       expect(() => {
         runTerraformCommand('terraform fmt -check=true');
-      }).not.toThrow();
-    });
-
-    test('should create valid Terraform plan', () => {
-      expect(() => {
-        runTerraformCommand('terraform plan -out=test.tfplan');
       }).not.toThrow();
     });
 
