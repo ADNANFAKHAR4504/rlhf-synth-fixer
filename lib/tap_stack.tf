@@ -1,11 +1,3 @@
-########################
-# Variables
-########################
-variable "aws_region" {
-  description = "AWS provider region"
-  type        = string
-  default     = "us-east-1"
-}
 
 # =============================================================================
 # VARIABLES
@@ -48,6 +40,18 @@ variable "enable_multi_region" {
   description = "Enable multi-region deployment"
   type        = bool
   default     = false
+}
+
+variable "key_name" {
+  description = "EC2 Key Pair name for SSH access"
+  type        = string
+  default     = ""
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix to avoid resource name conflicts"
+  type        = string
+  default     = ""
 }
 
 # =============================================================================
@@ -106,7 +110,7 @@ locals {
   }
 
   # Resource naming convention
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = var.environment_suffix != "" ? "${var.project_name}-${var.environment}-${var.environment_suffix}" : "${var.project_name}-${var.environment}"
 
   # Regional configurations
   regions = var.enable_multi_region ? ["us-east-1", "us-west-2", "eu-central-1"] : [var.aws_region]
@@ -705,10 +709,33 @@ resource "aws_launch_template" "web" {
     enabled = local.current_config.monitoring_enabled
   }
 
-  user_data = base64encode(templatefile("${path.module}/../scripts/user_data.sh", {
-    log_group_name = aws_cloudwatch_log_group.app_logs.name
-    region         = data.aws_region.current.name
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y httpd awslogs
+    systemctl start httpd
+    systemctl enable httpd
+    systemctl start awslogsd
+    systemctl enable awslogsd
+    
+    # Simple health check endpoint
+    echo "<html><body><h1>Health Check</h1><p>OK</p></body></html>" > /var/www/html/health
+    
+    # Configure CloudWatch logs
+    cat > /etc/awslogs/awslogs.conf <<EOL
+    [general]
+    state_file = /var/lib/awslogs/agent-state
+    
+    [/var/log/httpd/access_log]
+    file = /var/log/httpd/access_log
+    log_group_name = ${aws_cloudwatch_log_group.app_logs.name}
+    log_stream_name = {instance_id}/httpd/access_log
+    datetime_format = %d/%b/%Y:%H:%M:%S
+    EOL
+    
+    service awslogs restart
+  EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -949,3 +976,247 @@ resource "aws_config_configuration_recorder" "main" {
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
+    recording_mode {
+      recording_frequency = "CONTINUOUS"
+    }
+  }
+
+  depends_on = [aws_config_delivery_channel.main]
+
+  tags = local.common_tags
+}
+
+resource "aws_config_delivery_channel" "main" {
+  name           = "${local.name_prefix}-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.config.bucket
+
+  depends_on = [aws_iam_role_policy.config_s3_policy]
+}
+
+# Config Rules for Compliance
+resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
+  name = "${local.name_prefix}-s3-bucket-public-read-prohibited"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "s3_bucket_public_write_prohibited" {
+  name = "${local.name_prefix}-s3-bucket-public-write-prohibited"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
+  name = "${local.name_prefix}-s3-bucket-server-side-encryption-enabled"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "encrypted_volumes" {
+  name = "${local.name_prefix}-encrypted-volumes"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "root_access_key_check" {
+  name = "${local.name_prefix}-root-access-key-check"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ROOT_ACCESS_KEY_CHECK"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# =============================================================================
+# BASTION HOST FOR SECURE ACCESS
+# =============================================================================
+
+resource "aws_instance" "bastion" {
+  count                  = var.key_name != "" ? 1 : 0
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = "t3.micro"
+  key_name              = var.key_name
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  subnet_id             = aws_subnet.public[0].id
+  iam_instance_profile  = aws_iam_instance_profile.ec2_profile.name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 8
+    encrypted             = true
+    kms_key_id           = aws_kms_key.main.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y awslogs
+    systemctl start awslogsd
+    systemctl enable awslogsd
+    
+    # Configure CloudWatch logs
+    cat > /etc/awslogs/awslogs.conf <<EOL
+    [general]
+    state_file = /var/lib/awslogs/agent-state
+    
+    [/var/log/messages]
+    file = /var/log/messages
+    log_group_name = ${aws_cloudwatch_log_group.app_logs.name}
+    log_stream_name = {instance_id}/messages
+    datetime_format = %b %d %H:%M:%S
+    EOL
+    
+    service awslogs restart
+  EOF
+  )
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion"
+  })
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+}
+
+# =============================================================================
+# MULTI-REGION RESOURCES
+# =============================================================================
+
+# S3 Cross-Region Replication for Production
+resource "aws_s3_bucket" "app_data_replica" {
+  count    = var.environment == "production" && var.enable_multi_region ? 1 : 0
+  provider = aws.usw2
+  bucket   = "${local.name_prefix}-app-data-replica-${random_id.bucket_suffix.hex}"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.name_prefix}-app-data-replica"
+    Region = "us-west-2"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "app_data_replica" {
+  count    = var.environment == "production" && var.enable_multi_region ? 1 : 0
+  provider = aws.usw2
+  bucket   = aws_s3_bucket.app_data_replica[0].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "app_data_replica" {
+  count    = var.environment == "production" && var.enable_multi_region ? 1 : 0
+  provider = aws.usw2
+  bucket   = aws_s3_bucket.app_data_replica[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "load_balancer_dns_name" {
+  description = "DNS name of the load balancer"
+  value       = aws_lb.web.dns_name
+}
+
+output "load_balancer_arn" {
+  description = "ARN of the load balancer"
+  value       = aws_lb.web.arn
+}
+
+output "database_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
+
+output "database_port" {
+  description = "RDS instance port"
+  value       = aws_db_instance.main.port
+}
+
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.app_data.id
+}
+
+output "s3_bucket_arn" {
+  description = "ARN of the S3 bucket"
+  value       = aws_s3_bucket.app_data.arn
+}
+
+output "kms_key_id" {
+  description = "ID of the KMS key"
+  value       = aws_kms_key.main.key_id
+}
+
+output "kms_key_arn" {
+  description = "ARN of the KMS key"
+  value       = aws_kms_key.main.arn
+}
+
+output "bastion_public_ip" {
+  description = "Public IP of the bastion host"
+  value       = length(aws_instance.bastion) > 0 ? aws_instance.bastion[0].public_ip : null
+}
+
+output "autoscaling_group_arn" {
+  description = "ARN of the Auto Scaling group"
+  value       = aws_autoscaling_group.web.arn
+}
+
+output "config_recorder_name" {
+  description = "Name of the Config recorder"
+  value       = aws_config_configuration_recorder.main.name
+}
+
+output "secret_manager_secret_arn" {
+  description = "ARN of the Secrets Manager secret"
+  value       = aws_secretsmanager_secret.db_password.arn
+  sensitive   = true
+}
