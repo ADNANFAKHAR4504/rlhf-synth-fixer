@@ -88,6 +88,29 @@ export interface HttpsAlbResult {
   zoneId: pulumi.Output<string>;
 }
 
+// NEW: HTTP-only ALB interfaces
+export interface HttpAlbArgs {
+  name: string;
+  subnetIds: pulumi.Input<string>[];
+  securityGroupIds: pulumi.Input<string>[];
+  targetGroupArn?: pulumi.Input<string>;
+  tags?: Record<string, string>;
+  accessLogs?: {
+    bucket: pulumi.Input<string>;
+    prefix?: string;
+    enabled?: boolean;
+  };
+}
+
+export interface HttpAlbResult {
+  loadBalancer: aws.lb.LoadBalancer;
+  httpListener: aws.lb.Listener;
+  loadBalancerId: pulumi.Output<string>;
+  loadBalancerArn: pulumi.Output<string>;
+  dnsName: pulumi.Output<string>;
+  zoneId: pulumi.Output<string>;
+}
+
 export class AlbComponent extends pulumi.ComponentResource {
   public readonly loadBalancer: aws.lb.LoadBalancer;
   public readonly loadBalancerId: pulumi.Output<string>;
@@ -320,6 +343,88 @@ export class HttpsAlbComponent extends pulumi.ComponentResource {
   }
 }
 
+// NEW: HTTP-only ALB Component
+export class HttpAlbComponent extends pulumi.ComponentResource {
+  public readonly loadBalancer: aws.lb.LoadBalancer;
+  public readonly httpListener: aws.lb.Listener;
+  public readonly loadBalancerId: pulumi.Output<string>;
+  public readonly loadBalancerArn: pulumi.Output<string>;
+  public readonly dnsName: pulumi.Output<string>;
+  public readonly zoneId: pulumi.Output<string>;
+
+  constructor(
+    name: string,
+    args: HttpAlbArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('aws:lb:HttpAlbComponent', name, {}, opts);
+
+    // Create ALB
+    const albComponent = new AlbComponent(
+      name,
+      {
+        name: args.name,
+        loadBalancerType: 'application',
+        internal: false,
+        subnetIds: args.subnetIds,
+        securityGroupIds: args.securityGroupIds,
+        enableDeletionProtection: true,
+        enableHttp2: true,
+        accessLogs: args.accessLogs,
+        tags: args.tags,
+      },
+      { parent: this, provider: opts?.provider }
+    );
+
+    this.loadBalancer = albComponent.loadBalancer;
+    this.loadBalancerId = albComponent.loadBalancerId;
+    this.loadBalancerArn = albComponent.loadBalancerArn;
+    this.dnsName = albComponent.dnsName;
+    this.zoneId = albComponent.zoneId;
+
+    // Create HTTP listener only
+    const httpListenerComponent = new AlbListenerComponent(
+      `${name}-http`,
+      {
+        name: `${args.name}-http`,
+        loadBalancerArn: this.loadBalancerArn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: args.targetGroupArn
+          ? [
+              {
+                type: 'forward',
+                targetGroupArn: args.targetGroupArn,
+              },
+            ]
+          : [
+              {
+                type: 'fixed-response',
+                fixedResponse: {
+                  contentType: 'text/plain',
+                  messageBody: 'Service Available via HTTP',
+                  statusCode: '200',
+                },
+              },
+            ],
+        tags: args.tags,
+      },
+      { parent: this, provider: opts?.provider }
+    );
+
+    this.httpListener = httpListenerComponent.listener;
+
+    this.registerOutputs({
+      loadBalancer: this.loadBalancer,
+      httpListener: this.httpListener,
+      loadBalancerId: this.loadBalancerId,
+      loadBalancerArn: this.loadBalancerArn,
+      dnsName: this.dnsName,
+      zoneId: this.zoneId,
+    });
+  }
+}
+
 export function createAlb(name: string, args: AlbArgs): AlbResult {
   const albComponent = new AlbComponent(name, args);
   return {
@@ -356,5 +461,22 @@ export function createHttpsAlb(
     loadBalancerArn: httpsAlbComponent.loadBalancerArn,
     dnsName: httpsAlbComponent.dnsName,
     zoneId: httpsAlbComponent.zoneId,
+  };
+}
+
+// NEW: HTTP-only ALB function
+export function createHttpAlb(
+  name: string,
+  args: HttpAlbArgs,
+  opts?: pulumi.ComponentResourceOptions
+): HttpAlbResult {
+  const httpAlbComponent = new HttpAlbComponent(name, args, opts);
+  return {
+    loadBalancer: httpAlbComponent.loadBalancer,
+    httpListener: httpAlbComponent.httpListener,
+    loadBalancerId: httpAlbComponent.loadBalancerId,
+    loadBalancerArn: httpAlbComponent.loadBalancerArn,
+    dnsName: httpAlbComponent.dnsName,
+    zoneId: httpAlbComponent.zoneId,
   };
 }

@@ -91,12 +91,6 @@ export const primaryRegionApplicationSecurityGroupId =
 export const primaryRegionDatabaseSecurityGroupId =
   stack.regionalNetworks[primaryRegion]?.dbSg.securityGroupId;
 
-// Certificates Infrastructure - Primary Region
-export const primaryRegionCertificateArn =
-  stack.regionalCertificates[primaryRegion]?.certificate.certificateArn;
-export const primaryRegionCertificateDomain =
-  stack.regionalCertificates[primaryRegion]?.certificate.domainName;
-
 // Secrets Infrastructure - Primary Region
 export const primaryRegionDatabaseCredentialsArn =
   stack.regionalSecrets[primaryRegion]?.dbCredentials.secretArn;
@@ -184,10 +178,6 @@ export const secondaryRegionDatabaseSecurityGroupId =
   stack.regionalNetworks[secondaryRegion]?.dbSg.securityGroupId;
 
 // Certificates Infrastructure - Secondary Region
-export const secondaryRegionCertificateArn =
-  stack.regionalCertificates[secondaryRegion]?.certificate.certificateArn;
-export const secondaryRegionCertificateDomain =
-  stack.regionalCertificates[secondaryRegion]?.certificate.domainName;
 
 // Secrets Infrastructure - Secondary Region
 export const secondaryRegionDatabaseCredentialsArn =

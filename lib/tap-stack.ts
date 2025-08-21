@@ -27,7 +27,7 @@ import {
   createDatabaseSecurityGroup,
   createApplicationSecurityGroup,
 } from './components/security/securityGroup';
-import { createHttpsAlb } from './components/compute/alb';
+import { createHttpAlb } from './components/compute/alb'; // CHANGED: From createHttpsAlb to createHttpAlb
 import { createApplicationTargetGroup } from './components/compute/targetGroup';
 import {
   createLaunchTemplate,
@@ -39,7 +39,6 @@ import { createApplicationLogGroups } from './components/monitoring/cloudWatch';
 import { createAwsConfig } from './components/monitoring/config';
 import { createDatabaseCredentials } from './components/secrets/secretsManager';
 import { createApplicationParameters } from './components/secrets/parameterStore';
-import { createAcmCertificate } from './components/certificate/acm';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -76,9 +75,10 @@ interface RegionalNetworkInfrastructure {
   dbSg: ReturnType<typeof createDatabaseSecurityGroup>;
 }
 
-interface RegionalCertificateInfrastructure {
-  certificate: ReturnType<typeof createAcmCertificate>;
-}
+// REMOVED: Certificate infrastructure interface since we're not using HTTPS
+// interface RegionalCertificateInfrastructure {
+//   certificate: ReturnType<typeof createAcmCertificate>;
+// }
 
 interface RegionalSecretsInfrastructure {
   dbCredentials: ReturnType<typeof createDatabaseCredentials>;
@@ -93,7 +93,7 @@ interface RegionalStorageInfrastructure {
 
 interface RegionalComputeInfrastructure {
   targetGroup: ReturnType<typeof createApplicationTargetGroup>;
-  alb: ReturnType<typeof createHttpsAlb>;
+  alb: ReturnType<typeof createHttpAlb>; // CHANGED: From createHttpsAlb to createHttpAlb
   launchTemplate: ReturnType<typeof createLaunchTemplate>;
   asg: ReturnType<typeof createAutoScalingGroup>;
 }
@@ -180,10 +180,11 @@ export class TapStack extends pulumi.ComponentResource {
     string,
     RegionalSecretsInfrastructure
   > = {};
-  public readonly regionalCertificates: Record<
-    string,
-    RegionalCertificateInfrastructure
-  > = {};
+  // REMOVED: Certificate infrastructure since we're not using HTTPS
+  // public readonly regionalCertificates: Record<
+  //   string,
+  //   RegionalCertificateInfrastructure
+  // > = {};
   public readonly providers: Record<string, aws.Provider> = {};
 
   constructor(
@@ -490,24 +491,10 @@ export class TapStack extends pulumi.ComponentResource {
         dbSg,
       };
 
-      console.log(`    Creating Certificates Infrastructure for ${region}...`);
-
-      // Create SSL certificate with regional provider
-      const certificate = createAcmCertificate(
-        `${name}-cert-${region}`,
-        {
-          domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-          subjectAlternativeNames: [
-            `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-          ],
-          validationMethod: 'DNS',
-          skipValidation: true,
-          tags: this.tags,
-        },
-        { provider: this.providers[region], parent: this }
-      );
-
-      this.regionalCertificates[region] = { certificate };
+      // REMOVED: Certificate creation section since we're not using HTTPS
+      // console.log(`    Creating Certificates Infrastructure for ${region}...`);
+      // const certificate = createAcmCertificate(...);
+      // this.regionalCertificates[region] = { certificate };
 
       console.log(`    Creating Secrets Infrastructure for ${region}...`);
 
@@ -635,14 +622,13 @@ export class TapStack extends pulumi.ComponentResource {
         { provider: this.providers[region], parent: this }
       );
 
-      // Create ALB with regional provider
-      const alb = createHttpsAlb(
+      // CHANGED: Create HTTP-only ALB (no certificate required)
+      const alb = createHttpAlb(
         `${name}-alb-${region}`,
         {
           name: `${name}-alb-${region}`,
           subnetIds: subnets.publicSubnetIds,
           securityGroupIds: [albSg.securityGroupId],
-          certificateArn: certificate.certificateArn,
           targetGroupArn: targetGroup.targetGroupArn,
           tags: this.tags,
         },
@@ -748,7 +734,7 @@ export class TapStack extends pulumi.ComponentResource {
       regionalAlbDnsNames: Object.fromEntries(
         this.regions.map(region => [
           region,
-          this.regionalCompute[region]?.alb.dnsName,
+          this.regionalCompute[this.regions[0]]?.alb.dnsName,
         ])
       ),
     });

@@ -224,7 +224,7 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         performanceInsightsKmsKeyId:
           args.performanceInsightsKmsKeyId || args.kmsKeyId,
         enabledCloudwatchLogsExports: args.enabledCloudwatchLogsExports,
-        monitoringInterval: args.monitoringInterval || 60,
+        monitoringInterval: args.monitoringInterval || 0, // Changed from 60 to 0
         monitoringRoleArn: args.monitoringRoleArn,
         tags: defaultTags,
       },
@@ -352,7 +352,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
           engine === 'mysql'
             ? ['error', 'general', 'slowquery']
             : ['postgresql'],
-        monitoringInterval: 60,
+        monitoringInterval: 0, // Changed from 60 to 0
         tags: args.tags,
       },
       { parent: this, provider: opts?.provider }
