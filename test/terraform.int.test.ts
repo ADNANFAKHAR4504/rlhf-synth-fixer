@@ -46,14 +46,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
             outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
           } catch (e) {
             // If it's not valid JSON, split by comma
-            outputs.public_subnet_ids = outputs.public_subnet_ids.split(',').map(id => id.trim());
+            outputs.public_subnet_ids = outputs.public_subnet_ids.split(',').map((id: string) => id.trim());
           }
         }
         if (typeof outputs.private_subnet_ids === 'string') {
           try {
             outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
           } catch (e) {
-            outputs.private_subnet_ids = outputs.private_subnet_ids.split(',').map(id => id.trim());
+            outputs.private_subnet_ids = outputs.private_subnet_ids.split(',').map((id: string) => id.trim());
           }
         }
         
