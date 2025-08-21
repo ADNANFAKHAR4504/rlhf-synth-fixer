@@ -1,6 +1,6 @@
 ## Building Our Web App on AWS
 
-Alright, we need to get a web application infrastructure set up on AWS using a CloudFormation template. This will go into the **`us-west-2` region**, using a VPC with a `10.0.0.0/16` network range. We're thinking `t2.micro` instances, and everything needs to be in Availability Zones 'a' and 'b'.
+we need to get a web application infrastructure set up on AWS using a CloudFormation template. This will go into the **`us-west-2` region**, using a VPC with a `10.0.0.0/16` network range. We're thinking `t2.micro` instances, and everything needs to be in Availability Zones 'a' and 'b'.
 
 Here's what the template needs to do:
 
