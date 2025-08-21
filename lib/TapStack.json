@@ -42,7 +42,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentType}-rds-password"
+                    "Fn::Sub": "${EnvironmentType}-${EnvironmentSuffix}-rds-password"
                 },
                 "Description": "RDS Master password",
                 "GenerateSecretString": {

@@ -31,7 +31,7 @@ Resources:
   RDSPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentType}-rds-password'
+      Name: !Sub '${EnvironmentType}-${EnvironmentSuffix}-rds-password'
       Description: 'RDS Master password'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
