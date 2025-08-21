@@ -354,13 +354,7 @@ export class SecureInfrastructure extends Construct {
               'ec2:AttachNetworkInterface',
               'ec2:DetachNetworkInterface',
             ],
-            Resource: '*',
-            // More appropriate conditions for VPC Lambda functions
-            Condition: {
-              StringEquals: {
-                'ec2:SubnetID': this.privateSubnets.map(subnet => subnet.id),
-              },
-            },
+            Resource: '*', // These actions require * resource
           },
           {
             // Additional EC2 permissions needed for VPC Lambda
