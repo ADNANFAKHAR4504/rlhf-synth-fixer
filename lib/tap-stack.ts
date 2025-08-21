@@ -131,7 +131,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.securityGroups[region] = sg;
 
-      // KMS Key with CloudWatch Logs support
+      // FIXED: KMS Key with CloudTrail permissions
       const kmsKey = new aws.kms.Key(`${prefix}-kms`, {
         description: `KMS Customer Managed Key for ${region}`,
         enableKeyRotation: true,
@@ -166,6 +166,26 @@ export class TapStack extends pulumi.ComponentResource {
               Condition: {
                 ArnEquals: {
                   'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${id.accountId}:log-group:/aws/apigateway/${prefix}`
+                }
+              }
+            },
+            {
+              Sid: 'Allow CloudTrail to encrypt logs',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com'
+              },
+              Action: [
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:ReEncrypt*',
+                'kms:Decrypt'
+              ],
+              Resource: '*',
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${region}:${id.accountId}:trail/${prefix}-cloudtrail`
                 }
               }
             }
@@ -284,7 +304,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      // FIXED: S3 Bucket Policy for CloudTrail
+      // FIXED: Comprehensive S3 Bucket Policy for CloudTrail with all required permissions
       new aws.s3.BucketPolicy(`${prefix}-cloudtrail-bucket-policy`, {
         bucket: s3Bucket.id,
         policy: pulumi.all([s3Bucket.bucket, aws.getCallerIdentityOutput()]).apply(([bucketName, identity]) => JSON.stringify({
@@ -332,6 +352,21 @@ export class TapStack extends pulumi.ComponentResource {
                   'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`
                 }
               }
+            },
+            {
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [
+                `arn:aws:s3:::${bucketName}`,
+                `arn:aws:s3:::${bucketName}/*`
+              ],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false'
+                }
+              }
             }
           ]
         }))
@@ -370,7 +405,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: 'Production',
           Name: `${prefix}-cloudtrail`,
         },
-      }, { provider });
+      }, { provider, dependsOn: [kmsKey, s3Bucket] });
 
       // Password Policy (only once per account, us-east-1)
       if (region === 'us-east-1') {
