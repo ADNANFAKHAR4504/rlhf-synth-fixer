@@ -37,6 +37,31 @@
 - **Impact**: Tight coupling to existing infrastructure and reduced flexibility
 - **Root Cause**: Over-parameterization for resources that should be created fresh
 
+### 8. **IAM Policy Configuration Errors**
+- **Issue**: Used non-existent AWS managed policies like `AWSBackupServiceRolePolicyForS3Restore`
+- **Impact**: Deployment fails with `Policy does not exist or is not attachable`
+- **Root Cause**: Referenced policies that don't exist in AWS IAM
+
+### 9. **RDS Engine Version Issues**
+- **Issue**: Used PostgreSQL version `14.9` which is not available in target region
+- **Impact**: Deployment fails with `Cannot find version 14.9 for postgres`
+- **Root Cause**: Assumed version availability without checking regional support
+
+### 10. **CloudWatch Log Group KMS Issues**
+- **Issue**: Attempted to use KMS key with CloudWatch Log Group without proper permissions
+- **Impact**: Deployment fails with `KMS key does not exist or is not allowed`
+- **Root Cause**: Incorrect KMS key configuration for CloudWatch Logs
+
+### 11. **Backup Vault Access Policy Issues**
+- **Issue**: Explicit access policy on Backup Vault caused "out of service scope" errors
+- **Impact**: Deployment fails with `Policy statement action out of service scope`
+- **Root Cause**: Over-specification of backup vault access policies
+
+### 12. **Integration Test Misalignment**
+- **Issue**: Integration tests expected different configurations than actual implementation
+- **Impact**: Tests fail even when infrastructure is correctly deployed
+- **Root Cause**: Tests not updated to match actual resource configurations
+
 ## Lessons Learned
 
 ### What Went Wrong
@@ -45,6 +70,9 @@
 3. **Permission Assumptions**: Assumed access to existing AWS resources without verification
 4. **Over-Engineering**: Created complex region mapping when simple VPC creation would suffice
 5. **Type Safety Issues**: Failed to properly validate TypeScript interfaces
+6. **Policy Assumptions**: Referenced non-existent AWS managed policies
+7. **Version Assumptions**: Assumed RDS engine versions without regional verification
+8. **Test Misalignment**: Created tests that didn't match actual implementation
 
 ### Best Practices Violated
 1. **Always test compilation** before providing code
@@ -52,6 +80,9 @@
 3. **Create new resources** rather than importing existing ones when possible
 4. **Keep interfaces simple** and avoid unnecessary dependencies
 5. **Validate TypeScript types** before implementation
+6. **Verify AWS service availability** before referencing them
+7. **Check regional service support** before assuming availability
+8. **Align tests with implementation** to ensure accuracy
 
 ### Recommendations for Future Responses
 1. **Test the code** before providing it to users
@@ -59,3 +90,6 @@
 3. **Prefer resource creation** over resource import for better portability
 4. **Simplify interfaces** and reduce coupling
 5. **Focus on working solutions** rather than complex configurations
+6. **Verify AWS service availability** in target regions
+7. **Use custom policies** instead of assuming managed policy existence
+8. **Create tests that match implementation** for accurate validation

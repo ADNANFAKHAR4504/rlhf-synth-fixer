@@ -187,7 +187,7 @@ export class TapStack extends cdk.Stack {
     // RDS Database Instance
     const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_14_9,
+        version: rds.PostgresEngineVersion.VER_14_15,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -235,7 +235,6 @@ export class TapStack extends cdk.Stack {
     const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
       logGroupName: `/aws/ecs/${projectName}-${environment}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: encryptionKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -318,36 +317,99 @@ export class TapStack extends cdk.Stack {
     const backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
       backupVaultName: `${projectName}-${environment}-backup-vault`,
       encryptionKey: encryptionKey,
-      accessPolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['backup:*'],
-            resources: ['*'],
-          }),
-        ],
-      }),
     });
 
     // Backup Role
     const backupRole = new iam.Role(this, 'BackupRole', {
       assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSBackupServiceRolePolicyForBackup'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSBackupServiceRolePolicyForRestores'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSBackupServiceRolePolicyForS3Backup'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSBackupServiceRolePolicyForS3Restore'
-        ),
-      ],
+      managedPolicies: [],
     });
+
+    // Add essential backup permissions (simplified to avoid service scope issues)
+    backupRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'backup:StartBackupJob',
+          'backup:StopBackupJob',
+          'backup:StartRestoreJob',
+          'backup:StopRestoreJob',
+          'backup:DescribeBackupJob',
+          'backup:DescribeRestoreJob',
+          'backup:ListBackupJobs',
+          'backup:ListRestoreJobs',
+          'backup:ListBackupVaults',
+          'backup:ListBackupPlans',
+          'backup:ListBackupSelections',
+          'backup:ListRecoveryPointsByBackupVault',
+          'backup:ListRecoveryPointsByResource',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // S3 permissions for backup and restore
+    backupRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:GetObjectVersion',
+          's3:PutObject',
+          's3:DeleteObject',
+          's3:ListBucket',
+          's3:GetBucketLocation',
+          's3:GetBucketVersioning',
+          's3:GetBucketEncryption',
+          's3:PutBucketEncryption',
+        ],
+        resources: [
+          dataBucket.bucketArn,
+          `${dataBucket.bucketArn}/*`,
+          replicationBucket.bucketArn,
+          `${replicationBucket.bucketArn}/*`,
+        ],
+      })
+    );
+
+    // RDS permissions for backup
+    backupRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'rds:DescribeDBInstances',
+          'rds:DescribeDBSnapshots',
+          'rds:CreateDBSnapshot',
+          'rds:DeleteDBSnapshot',
+          'rds:CopyDBSnapshot',
+          'rds:ModifyDBSnapshotAttribute',
+          'rds:DescribeDBSnapshotAttributes',
+          'rds:RestoreDBInstanceFromDBSnapshot',
+          'rds:RestoreDBInstanceToPointInTime',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // KMS permissions for encryption
+    backupRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'kms:Decrypt',
+          'kms:DescribeKey',
+          'kms:Encrypt',
+          'kms:GenerateDataKey',
+          'kms:GenerateDataKeyWithoutPlaintext',
+          'kms:ReEncryptFrom',
+          'kms:ReEncryptTo',
+          'kms:CreateGrant',
+          'kms:ListGrants',
+          'kms:RetireGrant',
+        ],
+        resources: [encryptionKey.keyArn],
+      })
+    );
 
     // Backup Plan
     const backupPlan = new backup.BackupPlan(this, 'MigrationBackupPlan', {

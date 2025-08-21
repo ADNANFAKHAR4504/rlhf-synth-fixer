@@ -199,7 +199,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBInstanceClass: 'db.t3.medium',
         Engine: 'postgres',
-        EngineVersion: '14.9',
+        EngineVersion: '14.15',
         AllocatedStorage: '100',
         MaxAllocatedStorage: 1000,
         StorageEncrypted: true,
