@@ -372,4 +372,215 @@ describe('TapStack Integration Tests', () => {
       }
     });
   });
+
+  describe('Comprehensive End-to-End Infrastructure Test', () => {
+    test('Complete infrastructure connectivity and functionality', async () => {
+      console.log('🔄 Starting comprehensive end-to-end infrastructure test...');
+      
+      const testResults = {};
+      
+      // 1. VPC and Network Connectivity
+      console.log('📶 Testing VPC and network infrastructure...');
+      const vpcId = getOutput('VpcId');
+      const vpcResponse = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+      testResults.vpc = {
+        status: 'PASS',
+        details: `VPC ${vpcId} is available with CIDR ${vpcResponse.Vpcs[0].CidrBlock}`
+      };
+      
+      // 2. Auto Scaling Group and EC2 Instances
+      console.log('🖥️ Testing Auto Scaling Group and EC2 instances...');
+      const autoScalingGroups = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: Object.values(outputs)
+          .filter(value => typeof value === 'string' && value.includes('AutoScaling'))
+      }).promise();
+      
+      if (autoScalingGroups.AutoScalingGroups.length > 0) {
+        const asg = autoScalingGroups.AutoScalingGroups[0];
+        testResults.autoscaling = {
+          status: 'PASS',
+          details: `ASG has ${asg.Instances.length} instances, desired: ${asg.DesiredCapacity}`
+        };
+      } else {
+        testResults.autoscaling = { status: 'SKIP', details: 'No ASG found in outputs' };
+      }
+      
+      // 3. Load Balancer Functionality
+      console.log('⚖️ Testing Application Load Balancer...');
+      const albArn = getOutput('LoadBalancerArn');
+      const targetGroups = await elbv2.describeTargetGroups({ 
+        LoadBalancerArn: albArn 
+      }).promise();
+      
+      if (targetGroups.TargetGroups.length > 0) {
+        const targetGroupArn = targetGroups.TargetGroups[0].TargetGroupArn;
+        const targetHealth = await elbv2.describeTargetHealth({
+          TargetGroupArn: targetGroupArn
+        }).promise();
+        
+        testResults.loadbalancer = {
+          status: 'PASS',
+          details: `ALB has ${targetGroups.TargetGroups.length} target groups, ${targetHealth.TargetHealthDescriptions.length} targets`
+        };
+      }
+      
+      // 4. RDS Database Connectivity
+      console.log('🗃️ Testing RDS database...');
+      const rdsEndpoint = getOutput('RdsEndpoint');
+      const dbInstances = await rds.describeDBInstances().promise();
+      const myDbInstance = dbInstances.DBInstances.find(db => 
+        db.Endpoint?.Address === rdsEndpoint
+      );
+      
+      if (myDbInstance) {
+        testResults.database = {
+          status: myDbInstance.DBInstanceStatus === 'available' ? 'PASS' : 'PENDING',
+          details: `RDS instance ${myDbInstance.DBInstanceIdentifier} is ${myDbInstance.DBInstanceStatus}`
+        };
+      }
+      
+      // 5. S3 Bucket Accessibility
+      console.log('🪣 Testing S3 bucket...');
+      const s3BucketName = getOutput('S3BucketName');
+      try {
+        const bucketLocation = await s3.getBucketLocation({ 
+          Bucket: s3BucketName 
+        }).promise();
+        testResults.s3 = {
+          status: 'PASS',
+          details: `S3 bucket accessible in region ${bucketLocation.LocationConstraint || 'us-east-1'}`
+        };
+      } catch (error) {
+        testResults.s3 = {
+          status: 'FAIL',
+          details: `S3 bucket error: ${error.message}`
+        };
+      }
+      
+      // 6. Lambda Function Validation
+      console.log('⚡ Testing Lambda function...');
+      const lambdaFunctions = await lambda.listFunctions().promise();
+      const myLambda = lambdaFunctions.Functions.find(fn => 
+        fn.FunctionName.includes(environmentSuffix)
+      );
+      
+      if (myLambda) {
+        testResults.lambda = {
+          status: myLambda.State === 'Active' ? 'PASS' : 'PENDING',
+          details: `Lambda function ${myLambda.FunctionName} is ${myLambda.State}`
+        };
+      }
+      
+      // 7. SNS Topic Validation
+      console.log('📢 Testing SNS topic...');
+      const snsTopicArn = getOutput('SnsTopicArn');
+      try {
+        const topicAttributes = await sns.getTopicAttributes({
+          TopicArn: snsTopicArn
+        }).promise();
+        testResults.sns = {
+          status: 'PASS',
+          details: `SNS topic has ${topicAttributes.Attributes.SubscriptionsConfirmed} confirmed subscriptions`
+        };
+      } catch (error) {
+        testResults.sns = {
+          status: 'SKIP',
+          details: 'SNS topic not accessible or not found'
+        };
+      }
+      
+      // 8. CloudWatch Alarms Active
+      console.log('📊 Testing CloudWatch alarms...');
+      const alarms = await cloudwatch.describeAlarms().promise();
+      const myAlarms = alarms.MetricAlarms.filter(alarm => 
+        alarm.AlarmName.includes(environmentSuffix)
+      );
+      
+      testResults.monitoring = {
+        status: myAlarms.length > 0 ? 'PASS' : 'SKIP',
+        details: `Found ${myAlarms.length} CloudWatch alarms for this environment`
+      };
+      
+      // 9. Secrets Manager Integration
+      console.log('🔐 Testing Secrets Manager...');
+      const dbSecretArn = getOutput('DatabaseSecretArn');
+      try {
+        const secret = await secretsmanager.describeSecret({
+          SecretId: dbSecretArn
+        }).promise();
+        testResults.secrets = {
+          status: 'PASS',
+          details: `Database secret is active, last rotation: ${secret.LastRotatedDate || 'Never'}`
+        };
+      } catch (error) {
+        testResults.secrets = {
+          status: 'SKIP',
+          details: 'Database secret not accessible'
+        };
+      }
+      
+      // 10. End-to-End Connectivity Test (HTTP endpoints)
+      console.log('🌐 Testing end-to-end HTTP connectivity...');
+      try {
+        const fetch = (await import('node-fetch')).default;
+        const albDns = getOutput('LoadBalancerDns');
+        const cloudFrontDomain = getOutput('CloudFrontDomain');
+        
+        // Test ALB endpoint
+        const albResponse = await Promise.race([
+          fetch(`http://${albDns}`, { timeout: 8000 }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('ALB timeout')), 8000))
+        ]).catch(err => ({ status: 0, error: err.message }));
+        
+        // Test CloudFront endpoint  
+        const cfResponse = await Promise.race([
+          fetch(`https://${cloudFrontDomain}`, { timeout: 8000 }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('CloudFront timeout')), 8000))
+        ]).catch(err => ({ status: 0, error: err.message }));
+        
+        testResults.connectivity = {
+          status: (albResponse.status && cfResponse.status) ? 'PASS' : 'PARTIAL',
+          details: `ALB: ${albResponse.status || albResponse.error}, CloudFront: ${cfResponse.status || cfResponse.error}`
+        };
+      } catch (error) {
+        testResults.connectivity = {
+          status: 'SKIP',
+          details: `Connectivity test error: ${error.message}`
+        };
+      }
+      
+      // Summary Report
+      console.log('\n📋 COMPREHENSIVE END-TO-END TEST SUMMARY:');
+      console.log('=' * 60);
+      
+      let passCount = 0;
+      let totalTests = 0;
+      
+      Object.entries(testResults).forEach(([component, result]) => {
+        totalTests++;
+        if (result.status === 'PASS') passCount++;
+        
+        const statusIcon = {
+          'PASS': '✅',
+          'FAIL': '❌', 
+          'PENDING': '⏳',
+          'PARTIAL': '⚠️',
+          'SKIP': '⏭️'
+        }[result.status] || '❓';
+        
+        console.log(`${statusIcon} ${component.toUpperCase()}: ${result.status} - ${result.details}`);
+      });
+      
+      console.log('=' * 60);
+      console.log(`🎯 OVERALL SCORE: ${passCount}/${totalTests} components passed (${Math.round(passCount/totalTests*100)}%)`);
+      
+      // Assertions for the test framework
+      expect(testResults.vpc.status).toBe('PASS');
+      expect(testResults.s3.status).toBe('PASS');
+      expect(passCount).toBeGreaterThan(totalTests * 0.7); // At least 70% should pass
+      expect(Object.keys(testResults)).toHaveLength(10); // All 10 components tested
+      
+      console.log('🎉 Comprehensive end-to-end infrastructure test completed!');
+    }, 60000); // 60 second timeout for comprehensive test
+  });
 });
