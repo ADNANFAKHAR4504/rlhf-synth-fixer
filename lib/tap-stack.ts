@@ -76,6 +76,7 @@ export class TapStack extends TerraformStack {
 
       environment: 'production',
       projectName: 'secure-tap',
+      awsRegion: awsRegion,
     };
 
     // Create the secure infrastructure

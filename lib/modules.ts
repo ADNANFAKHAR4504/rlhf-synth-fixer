@@ -20,7 +20,6 @@ import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
-
 export interface SecureInfraConfig {
   vpcCidr: string;
   publicSubnetCidrs: string[];
@@ -28,6 +27,7 @@ export interface SecureInfraConfig {
   availabilityZones: string[];
   environment: string;
   projectName: string;
+  awsRegion: string;
 }
 
 export class SecureInfrastructure extends Construct {
@@ -125,15 +125,12 @@ export class SecureInfrastructure extends Construct {
     // KMS key for encryption at rest - separate key for better security isolation
     this.kmsKey = new KmsKey(this, 'encryption-key', {
       description: `${config.projectName} ${config.environment} encryption key`,
-      // Key rotation every year for enhanced security
       enableKeyRotation: true,
-      // Deletion window allows for recovery if key is accidentally deleted
       deletionWindowInDays: 30,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
-            // Root account has full access to manage the key
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
@@ -143,14 +140,33 @@ export class SecureInfrastructure extends Construct {
             Resource: '*',
           },
           {
-            // Allow AWS services to use the key for encryption
+            // Specific policy for CloudWatch Logs
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${config.awsRegion}.amazonaws.com`, // Use actual region
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${config.awsRegion}:${callerIdentity.accountId}:log-group:/aws/lambda/${config.projectName}-${config.environment}-function`,
+              },
+            },
+          },
+          {
             Sid: 'Allow AWS Services',
             Effect: 'Allow',
             Principal: {
               Service: [
                 's3.amazonaws.com',
                 'lambda.amazonaws.com',
-                'logs.amazonaws.com',
                 'rds.amazonaws.com',
               ],
             },
