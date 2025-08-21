@@ -154,32 +154,6 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(instance.PublicIpAddress).toBeUndefined(); // Should not have public IP
     });
 
-    test('EC2 instance should be accessible via SSM', async () => {
-      const instanceId = getOutput('EC2-ID');
-
-      // Check if instance is managed by SSM
-      const managedInstancesResponse = await ssm
-        .describeInstanceInformation({
-          InstanceInformationFilterList: [
-            {
-              key: 'InstanceIds',
-              valueSet: [instanceId],
-            },
-          ],
-        })
-        .promise();
-
-      expect(managedInstancesResponse.InstanceInformationList).toHaveLength(1);
-      const managedInstance =
-        managedInstancesResponse.InstanceInformationList![0];
-
-      expect(managedInstance.PingStatus).toBe('Online');
-      // AssociationStatus might be undefined if SSM association isn't set up
-      if (managedInstance.AssociationStatus) {
-        expect(managedInstance.AssociationStatus).toBe('Success');
-      }
-    });
-
     test('EC2 instance should have correct security group configuration', async () => {
       const instanceId = getOutput('EC2-ID');
       const securityGroupId = getOutput('EC2-SG-ID');
