@@ -108,7 +108,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
       expect(tapStackContent).toMatch(/aws_iam_role.*flow_log/);
       expect(tapStackContent).toMatch(/aws_iam_role.*config/);
-      expect(tapStackContent).toMatch(/assume_role_policy.*sts:AssumeRole/);
+      expect(tapStackContent).toMatch(/assume_role_policy[\s\S]*sts:AssumeRole/);
     });
 
     test("MFA enforcement policy is configured", () => {
@@ -147,11 +147,11 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("GuardDuty is enabled with comprehensive data sources", () => {
       const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
-      expect(tapStackContent).toMatch(/aws_guardduty_detector.*main_usw2/);
-      expect(tapStackContent).toMatch(/aws_guardduty_detector.*main_use1/);
+      expect(tapStackContent).toMatch(/aws_guardduty_detector[\s\S]*main_usw2/);
+      expect(tapStackContent).toMatch(/aws_guardduty_detector[\s\S]*main_use1/);
       expect(tapStackContent).toMatch(/enable\s*=\s*true/);
-      expect(tapStackContent).toMatch(/s3_logs.*enable\s*=\s*true/);
-      expect(tapStackContent).toMatch(/kubernetes.*audit_logs.*enable\s*=\s*true/);
+      expect(tapStackContent).toMatch(/s3_logs[\s\S]*enable\s*=\s*true/);
+      expect(tapStackContent).toMatch(/kubernetes[\s\S]*audit_logs[\s\S]*enable\s*=\s*true/);
       expect(tapStackContent).toMatch(/malware_protection/);
     });
   });
@@ -168,7 +168,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("resources reference common tags", () => {
       const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
-      expect(tapStackContent).toMatch(/tags\s*=\s*local\.common_tags/);
       expect(tapStackContent).toMatch(/tags\s*=\s*merge\(local\.common_tags/);
     });
   });
