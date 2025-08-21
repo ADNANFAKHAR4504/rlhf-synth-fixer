@@ -1,128 +1,64 @@
-# IaC – AWS Nova Model Breaking  
-### Prompting Guide for Pulumi + TypeScript Infrastructure Generation
+# Pulumi TapStack Infrastructure Requirements
 
-This document provides a reusable meta-prompt for building production-grade, secure AWS infrastructure using Pulumi with TypeScript.  
-It is designed to help engineers or AI assistants generate infrastructure code that meets strict security, compliance, and connectivity requirements, while ensuring output is clean, testable, and focused only on the files we care about.
+I want to build a **secure multi-region Pulumi stack** in **TypeScript** with the following:
 
----
+## General
+- Should use `@pulumi/aws` and `@pulumi/pulumi`.
+- Define a `TapStack` class extending `pulumi.ComponentResource`.
+- Accept `tags` as input for resource tagging.
+- Deploy across **3 regions**: `us-east-1`, `us-west-2`, `eu-central-1`.
+- All resources should include tags with `Environment: Production` and a `Name`.
 
-## Goal
-We want to translate high-level infrastructure requirements into working Pulumi code with TypeScript.  
-The output should include:
-- The stack implementation (`lib/tap-stack.ts`)
-- Unit tests (`test/tap-stack.unit.test.ts`)
-- Integration tests (`test/tap-stack.int.test.ts`)
+## Networking
+- Create a **VPC** in each region with CIDR `10.0.0.0/16`.
+- Enable DNS support and hostnames.
+- Create **2 private subnets** per region (`10.0.1.0/24` and `10.0.2.0/24`).
+- Attach an **Internet Gateway** to each VPC.
+- Configure a **Route Table** with a default route `0.0.0.0/0` pointing to the IGW.
+- Associate subnets with the Route Table.
 
-Nothing else should be returned — no extra prose, no scaffolding, just those three files.
+## Security
+- Create a **Security Group** per region with:
+  - Ingress: 
+    - TCP 443 from within VPC CIDR (`10.0.0.0/16`).
+    - TCP 22 only from admin subnet (`10.0.0.0/24`).
+  - Egress: allow all outbound traffic.
+- Create a **KMS Key** with rotation enabled, deletion window 30 days.
+  - Must allow IAM root of the account.
+  - Must allow **CloudWatch Logs** service to use it.
+  - (No CloudTrail-specific permissions, since CloudTrail is excluded.)
+- Create a **KMS Alias** for the key.
 
----
+## API Gateway
+- Create an **IAM Role** for API Gateway with least privilege.
+- Attach the policy `AmazonAPIGatewayPushToCloudWatchLogs`.
+- Create a **VPC Endpoint** for API Gateway (`execute-api`) restricted to the Security Group and Subnets.
+- Create a **Private API Gateway** restricted to the VPC Endpoint.
 
-## Design Priorities
-1. Multi-region support → cover `us-east-1`, `us-west-2`, and `eu-central-1`.
-2. Security first  
-   - KMS Customer Managed Keys for encryption  
-   - IAM least privilege roles and policies  
-   - VPC with private/public subnets, restricted Security Groups  
-   - API Gateway locked to a given VPC Endpoint  
-   - Enforce IAM credential rotation  
-   - Automatic remediation using AWS Config + SSM Automation
-3. Tagging → everything must include `Environment: Production`.
-4. Monitoring and Logging  
-   - CloudTrail (management + data events)  
-   - VPC Flow Logs  
-   - API Gateway and ALB access logs  
-   - CloudWatch alarms with SNS notifications  
+## Monitoring
+- Create a **CloudWatch Log Group** for API Gateway:
+  - Name: `/aws/apigateway/<prefix>`
+  - Retention: 90 days
+  - Encrypted with the KMS Key.
 
----
+## Storage
+- Create an **S3 Bucket** in each region:
+  - Name format: `<prefix>-secure-bucket`
+  - Force destroy enabled
+  - Server-side encryption with KMS key
+  - Block all public access
+  - Add a bucket policy to enforce **secure transport only (HTTPS)**.
 
-## Focus on Connectivity
-Infrastructure should be wired together correctly:
-- API Gateway → VPC Endpoint restriction  
-- ALB → TargetGroup → ASG/Lambda  
-- S3 → KMS → CloudTrail and access logs  
-- VPC Flow Logs → CloudWatch log groups (encrypted with KMS)  
-- Route53 → ALB  
-- CloudWatch Alarms → SNS topics  
+## IAM Policy
+- In `us-east-1` only, configure an **Account Password Policy** with:
+  - Min length: 14
+  - Require symbols, numbers, uppercase, lowercase
+  - Prevent reuse of last 5 passwords
+  - Max password age: 90 days
+  - Hard expiry enabled
 
-All relationships must be explicit and validated in outputs and tests.
+## Outputs
+- Export all created resources in `registerOutputs`.
 
----
-
-## Testing Requirements
-- Unit tests:  
-  - Check tags, encryption, IAM least privilege, Security Group rules, and resource policies.  
-  - Ensure logging resources exist.  
-- Integration tests:  
-  - Deploy minimal stack.  
-  - Assert resources are connected (for example, Flow Logs → Log Group, API Gateway policy → VPC Endpoint).  
-
----
-
-## How to Use
-When you are ready to generate infrastructure:
-1. Copy the requirements section (below) and replace values with your project details.  
-2. Paste it into the User Message block of the prompt.  
-3. The model will respond with only three files in fenced code blocks.
-
----
-
-## Example User Message
-
-```yaml
-projectName: "IaC - AWS Nova Model Breaking"
-
-regions:
-  - us-east-1
-  - us-west-2
-  - eu-central-1
-
-network:
-  vpc:
-    cidr: "10.0.0.0/16"
-    publicSubnets: ["10.0.0.0/20","10.0.16.0/20"]
-    privateSubnets: ["10.0.32.0/20","10.0.48.0/20"]
-  allowedIngressCidrs: ["203.0.113.0/24"]
-
-security:
-  enforceIamLeastPrivilege: true
-  enforceCredentialRotation: true
-  useKmsCustomerManagedKeys: true
-  restrictApiGatewayToVpceId: "vpce-0123456789abcdef0"
-  enableConfigAndRemediation: true
-  requireAllResourcesTaggedProduction: true
-
-loggingMonitoring:
-  enableCloudTrail: true
-  enableVpcFlowLogs: true
-  enableApiGwAccessLogs: true
-  enableAlbAccessLogs: true
-  cwAlarms:
-    - name: "UnauthorizedAPICalls"
-      metric: "AWS/CloudTrail:UnauthorizedApiCalls"
-      threshold: 1
-      period: 300
-      snsEmail: "secops@example.com"
-
-data:
-  s3Buckets:
-    - name: "nova-prod-artifacts"
-      blockPublicAccess: true
-      accessLogging: true
-  rds:
-    create: false
-  secretsManager:
-    kms: "auto"
-
-testing:
-  runMode: "ci"
-
-constraints:
-  - "Multi-region deployment must be ensured across us-east-1, us-west-2, eu-central-1."
-  - "All resources must be tagged with 'Environment: Production'."
-  - "IAM roles must have least privilege."
-  - "Use KMS CMKs for all data encryption."
-  - "Implement secure VPC, Subnets, and SGs; limit access to allowedIngressCidrs."
-  - "Enable logging/monitoring across services."
-  - "API Gateway only via the specified VPC Endpoint."
-  - "Enforce IAM credential rotation policies."
-  - "Implement automatic remediation for non-compliant configs."
+## Explicitly Excluded
+- **No CloudTrail** resources (Trail, S3 bucket policy for CloudTrail, or KMS permissions for CloudTrail).
