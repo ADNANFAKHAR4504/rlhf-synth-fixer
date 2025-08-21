@@ -2,29 +2,6 @@
 
 I'll create a comprehensive, production-grade CDKTF infrastructure that meets all your requirements. This solution will be modular, secure, and scalable.
 
-## Project Structure
-
-```
-aws-scalable-web-app/
-├── src/
-│   ├── main.ts
-│   ├── constructs/
-│   │   ├── networking.ts
-│   │   ├── compute.ts
-│   │   ├── database.ts
-│   │   ├── storage.ts
-│   │   ├── security.ts
-│   │   ├── cdn.ts
-│   │   └── monitoring.ts
-│   └── config/
-│       └── variables.ts
-├── cdktf.json
-├── package.json
-├── tsconfig.json
-├── .gitignore
-└── README.md
-```
-
 ## Configuration Files
 
 ### `package.json`
@@ -288,10 +265,14 @@ export class NetworkingConstruct extends Construct {
 
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `public-rt-association-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rt-association-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
     });
 
     // Private Route Table (shared for cost optimization)
@@ -311,10 +292,14 @@ export class NetworkingConstruct extends Construct {
 
     // Associate private subnets with private route table
     this.privateSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `private-rt-association-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rt-association-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
 
     // Database Route Table
@@ -327,18 +312,26 @@ export class NetworkingConstruct extends Construct {
     });
 
     this.dbSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `db-rt-association-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: dbRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `db-rt-association-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: dbRouteTable.id,
+        }
+      );
     });
 
     // VPC Flow Logs
-    const flowLogGroup = new cloudwatchLogGroup.CloudwatchLogGroup(this, 'vpc-flow-log-group', {
-      name: `/aws/vpc/flowlogs/${config.projectName}`,
-      retentionInDays: 30,
-      tags: config.tags,
-    });
+    const flowLogGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'vpc-flow-log-group',
+      {
+        name: `/aws/vpc/flowlogs/${config.projectName}`,
+        retentionInDays: 30,
+        tags: config.tags,
+      }
+    );
 
     const flowLogRole = new iamRole.IamRole(this, 'vpc-flow-log-role', {
       name: `${config.projectName}-vpc-flow-log-role`,
@@ -400,42 +393,172 @@ export class NetworkingConstruct extends Construct {
 ## Key Corrections from MODEL_RESPONSE
 
 ### 1. Provider Configuration
+
 - **Fixed**: AWS provider version to `6.4.0` instead of `~> 5.0`
 - **Fixed**: Import paths to use proper CDKTF module structure
 
 ### 2. Cost Optimizations
+
 - **Fixed**: Single NAT Gateway instead of per-AZ (reduces costs by ~$90/month)
 - **Fixed**: Instance types to `t3.micro` for development/testing
 - **Fixed**: Shared private route table instead of per-AZ
 
-### 3. Network Configuration  
+### 3. Network Configuration
+
 - **Fixed**: Private subnet CIDRs from `10.0.11.0/24` to `10.0.4.0/24` to avoid overlap
 - **Fixed**: Database subnet CIDRs from `10.0.21.0/24` to `10.0.7.0/24`
 
 ### 4. Security Improvements
+
 - **Fixed**: WAF configuration to use WAFv2 instead of deprecated WAF Classic
 - **Fixed**: Regional WAF scope for ALB integration
 - **Fixed**: Proper security group rules with source security group references
 
 ### 5. Storage Configuration
+
 - **Fixed**: S3 bucket naming with proper timestamp for uniqueness
 - **Fixed**: Lifecycle configuration with correct transition rules structure
 - **Fixed**: ELB service account integration for access logs
 
 ### 6. Database Configuration
+
 - **Fixed**: Complete RDS configuration with parameter group
 - **Fixed**: Proper PostgreSQL version selection and family
 - **Fixed**: Multi-AZ disabled for cost optimization in development
 
 ### 7. Compute Optimizations
+
 - **Fixed**: Launch Template instead of Launch Configuration
 - **Fixed**: Health check timeout increased to 10 seconds
 - **Fixed**: Health check grace period increased to 600 seconds
 - **Fixed**: Auto Scaling Group desired capacity set to 1 for initial deployment
 
 ### 8. Monitoring Enhancements
+
 - **Fixed**: CloudWatch Dashboard metric field types (strings vs integers)
 - **Fixed**: Comprehensive alarm configuration for all components
 - **Fixed**: Budget alerts with percentage-based thresholds
 
-This corrected implementation provides a production-ready, cost-optimized infrastructure that successfully deploys without the issues present in the original MODEL_RESPONSE.
+### `src/main.ts`
+
+```typescript
+import { App } from 'cdktf';
+import { TapStack } from './tap-stack';
+
+const app = new App();
+
+new TapStack(app, 'TapStack', {
+  environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
+  stateBucket: process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states',
+  stateBucketRegion: process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1',
+  awsRegion: process.env.AWS_REGION || 'us-east-1',
+});
+
+app.synth();
+```
+
+### `src/tap-stack.ts`
+
+```typescript
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+
+import { config } from './config/variables';
+import { NetworkingConstruct } from './constructs/networking';
+import { SecurityConstruct } from './constructs/security';
+import { StorageConstruct } from './constructs/storage';
+import { DatabaseConstruct } from './constructs/database';
+import { ComputeConstruct } from './constructs/compute';
+import { CdnConstruct } from './constructs/cdn';
+import { MonitoringConstruct } from './constructs/monitoring';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+}
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Configure AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
+
+    // Configure S3 Backend with state locking
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+
+    const appConfig = {
+      ...config,
+      environment: environmentSuffix,
+      region: awsRegion,
+    };
+
+    const networking = new NetworkingConstruct(this, 'networking', {
+      config: appConfig,
+    });
+
+    const security = new SecurityConstruct(this, 'security', {
+      config: appConfig,
+      vpcId: networking.vpc.id,
+    });
+
+    const storage = new StorageConstruct(this, 'storage', {
+      config: appConfig,
+    });
+
+    const database = new DatabaseConstruct(this, 'database', {
+      config: appConfig,
+      dbSubnetIds: networking.dbSubnets.map(subnet => subnet.id),
+      securityGroupIds: [security.rdsSecurityGroup.id],
+    });
+
+    const compute = new ComputeConstruct(this, 'compute', {
+      config: appConfig,
+      vpcId: networking.vpc.id,
+      publicSubnetIds: networking.publicSubnets.map(subnet => subnet.id),
+      privateSubnetIds: networking.privateSubnets.map(subnet => subnet.id),
+      albSecurityGroupId: security.albSecurityGroup.id,
+      ec2SecurityGroupId: security.ec2SecurityGroup.id,
+      instanceProfileName: security.ec2InstanceProfile.name,
+      webAclArn: security.webAcl.arn,
+      accessLogsBucket: storage.accessLogsBucket.bucket,
+    });
+
+    const cdn = new CdnConstruct(this, 'cdn', {
+      config: appConfig,
+      albDnsName: compute.applicationLoadBalancer.dnsName,
+      webAclArn: security.webAcl.arn,
+      logsBucket: storage.logsBucket.bucket,
+    });
+
+    new MonitoringConstruct(this, 'monitoring', {
+      config: appConfig,
+      albArn: compute.applicationLoadBalancer.arn,
+      asgName: compute.autoScalingGroup.name,
+      rdsInstanceId: database.dbInstance.identifier,
+      cloudfrontDistributionId: cdn.distribution.id,
+    });
+  }
+}
+```
