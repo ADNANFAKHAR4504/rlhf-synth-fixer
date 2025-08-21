@@ -23,12 +23,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('workspace-based environment detection works', () => {
-      const stackPath = path.join(LIB_DIR, 'tap_stack.tf');
-      const content = fs.readFileSync(stackPath, 'utf8');
+      const localsPath = path.join(LIB_DIR, 'locals.tf');
+      const content = fs.readFileSync(localsPath, 'utf8');
 
       // Check for local environment variable from workspace
       expect(content).toMatch(
-        /env\s*=\s*replace\(terraform\.workspace,\s*"myapp-",\s*""\)/
+        /env\s*=\s*terraform\.workspace\s*==\s*"production"\s*\?\s*"production"\s*:\s*"staging"/
       );
     });
   });
@@ -99,8 +99,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       // Check outputs reference correct modules
       expect(content).toMatch(/module\.storage_staging\[0\]\.bucket_name/);
       expect(content).toMatch(/module\.storage_production\[0\]\.bucket_name/);
-      expect(content).toMatch(/module\.network_staging\[0\]\.security_group_id/);
-      expect(content).toMatch(/module\.network_production\[0\]\.security_group_id/);
+      expect(content).toMatch(
+        /module\.network_staging\[0\]\.security_group_id/
+      );
+      expect(content).toMatch(
+        /module\.network_production\[0\]\.security_group_id/
+      );
       expect(content).toMatch(/module\.iam_role_staging\[0\]\.role_arn/);
       expect(content).toMatch(/module\.iam_role_production\[0\]\.role_arn/);
     });
@@ -110,8 +114,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const content = fs.readFileSync(outputsPath, 'utf8');
 
       // Check each output has staging and production entries
-      expect(content).toMatch(/staging\s*=\s*local\.env\s*==\s*"staging"\s*\?\s*module\.storage_staging\[0\]\.bucket_name\s*:\s*null/);
-      expect(content).toMatch(/production\s*=\s*local\.env\s*==\s*"production"\s*\?\s*module\.storage_production\[0\]\.bucket_name\s*:\s*null/);
+      expect(content).toMatch(
+        /staging\s*=\s*local\.env\s*==\s*"staging"\s*\?\s*module\.storage_staging\[0\]\.bucket_name\s*:\s*null/
+      );
+      expect(content).toMatch(
+        /production\s*=\s*local\.env\s*==\s*"production"\s*\?\s*module\.storage_production\[0\]\.bucket_name\s*:\s*null/
+      );
     });
   });
 

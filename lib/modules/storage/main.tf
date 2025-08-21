@@ -8,6 +8,7 @@ resource "random_id" "bucket_suffix" {
 
 resource "aws_s3_bucket" "main" {
   bucket = "${var.bucket_name_prefix}-${var.environment}-${random_id.bucket_suffix.hex}"
+  force_destroy = var.bucket_force_destroy
 
   tags = merge({
     Name        = "${var.bucket_name_prefix}-${var.environment}-bucket"

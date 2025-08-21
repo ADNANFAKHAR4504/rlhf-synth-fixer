@@ -1,7 +1,4 @@
-# Main Terraform configuration
-locals {
-  env = replace(terraform.workspace, "myapp-", "")
-}
+# Main Terraform configuration - uses centralized locals from locals.tf
 
 # Staging environment modules
 module "storage_staging" {

@@ -27,3 +27,9 @@ variable "bucket_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "bucket_force_destroy" {
+  description = "Whether to force destroy the bucket even if it contains objects"
+  type        = bool
+  default     = false
+}
