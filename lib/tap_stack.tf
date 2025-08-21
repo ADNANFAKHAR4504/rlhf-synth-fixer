@@ -54,6 +54,24 @@ data "aws_subnets" "default" {
   }
 }
 
+# Get public subnets for ALB (must be in different AZs)
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -285,7 +303,7 @@ resource "aws_lb" "app" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = data.aws_subnets.default.ids
+  subnets            = slice(data.aws_subnets.public.ids, 0, 2)
 
   enable_deletion_protection = false
 
@@ -341,7 +359,7 @@ resource "aws_autoscaling_group" "app" {
   max_size                  = 4
   min_size                  = 1
   target_group_arns         = [aws_lb_target_group.app.arn]
-  vpc_zone_identifier       = data.aws_subnets.default.ids
+  vpc_zone_identifier       = slice(data.aws_subnets.public.ids, 0, 2)
   health_check_grace_period = 300
   health_check_type         = "ELB"
 
@@ -462,7 +480,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 ########################
 resource "aws_db_subnet_group" "app" {
   name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
-  subnet_ids = data.aws_subnets.default.ids
+  subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
 
   tags = {
     Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
@@ -523,6 +541,11 @@ resource "aws_cloudwatch_log_group" "app" {
 ########################
 # Outputs
 ########################
+output "aws_region" {
+  description = "AWS region used for the infrastructure"
+  value       = var.aws_region
+}
+
 output "alb_dns_name" {
   description = "DNS name of the load balancer"
   value       = aws_lb.app.dns_name

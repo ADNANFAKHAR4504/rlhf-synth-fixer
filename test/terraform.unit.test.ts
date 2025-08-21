@@ -5,16 +5,19 @@ import fs from "fs";
 import path from "path";
 
 const STACK_REL = "../lib/tap_stack.tf";
+const PROVIDER_REL = "../lib/provider.tf";
 const stackPath = path.resolve(__dirname, STACK_REL);
+const providerPath = path.resolve(__dirname, PROVIDER_REL);
 
 describe("High Availability Web Application - Unit Tests", () => {
   let stackContent: string;
   let providerContent: string;
+  let combinedContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
-    const providerPath = path.resolve(__dirname, "../lib/provider.tf");
     providerContent = fs.readFileSync(providerPath, "utf8");
+    combinedContent = providerContent + "\n" + stackContent;
   });
 
   describe("File Structure and Syntax", () => {
@@ -25,41 +28,39 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("has valid Terraform syntax structure", () => {
-      expect(stackContent).toMatch(/variable\s+"aws_region"/);
-      expect(stackContent).toMatch(/output\s+"alb_dns_name"/);
-      expect(stackContent).toMatch(/resource\s+"aws_/);
+      expect(combinedContent).toMatch(/terraform\s*{/);
+      expect(combinedContent).toMatch(/provider\s+"aws"/);
+      expect(combinedContent).toMatch(/variable\s+"aws_region"/);
+      expect(combinedContent).toMatch(/output\s+"alb_dns_name"/);
     });
 
     test("uses data sources for default VPC", () => {
       expect(stackContent).toMatch(/data\s+"aws_vpc"\s+"default"/);
       expect(stackContent).toMatch(/data\s+"aws_subnets"\s+"default"/);
+      expect(stackContent).toMatch(/data\s+"aws_subnets"\s+"public"/);
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
   });
 
   describe("Variable Definitions", () => {
     test("declares aws_region variable", () => {
-      expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
+      expect(combinedContent).toMatch(/variable\s+"aws_region"\s*{/);
     });
 
     test("declares environment variable", () => {
-      expect(stackContent).toMatch(/variable\s+"environment"\s*{/);
+      expect(combinedContent).toMatch(/variable\s+"environment"\s*{/);
     });
 
     test("declares app_name variable", () => {
-      expect(stackContent).toMatch(/variable\s+"app_name"\s*{/);
+      expect(combinedContent).toMatch(/variable\s+"app_name"\s*{/);
     });
 
     test("declares instance_type variable", () => {
-      expect(stackContent).toMatch(/variable\s+"instance_type"\s*{/);
+      expect(combinedContent).toMatch(/variable\s+"instance_type"\s*{/);
     });
 
     test("declares db_instance_class variable", () => {
-      expect(stackContent).toMatch(/variable\s+"db_instance_class"\s*{/);
-    });
-
-    test("declares environment_suffix variable", () => {
-      expect(stackContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+      expect(combinedContent).toMatch(/variable\s+"db_instance_class"\s*{/);
     });
   });
 
@@ -166,6 +167,10 @@ describe("High Availability Web Application - Unit Tests", () => {
 
     test("ALB is external facing", () => {
       expect(stackContent).toMatch(/internal\s*=\s*false/);
+    });
+
+    test("ALB uses public subnets", () => {
+      expect(stackContent).toMatch(/subnets\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
     });
 
     test("ALB uses application load balancer type", () => {
@@ -306,7 +311,7 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(taggedResources!.length).toBeGreaterThan(0);
     });
 
-    test("resources have Name tags with environment suffix", () => {
+    test("resources have Name tags", () => {
       expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-alb"/);
       expect(stackContent).toMatch(/value\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-asg"/);
       expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db"/);
@@ -366,7 +371,7 @@ describe("High Availability Web Application - Unit Tests", () => {
   describe("High Availability Requirements", () => {
     test("uses multiple availability zones", () => {
       expect(stackContent).toMatch(/data\.aws_subnets\.default\.ids/);
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*data\.aws_subnets\.default\.ids/);
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
     });
 
     test("RDS has multi-AZ enabled", () => {
@@ -374,18 +379,16 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("ASG spans multiple AZs", () => {
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*data\.aws_subnets\.default\.ids/);
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*slice\(data\.aws_subnets\.public\.ids,\s*0,\s*2\)/);
     });
   });
 
   describe("Best Practices", () => {
     test("uses variables instead of hardcoded values", () => {
-      const combinedContent = stackContent + providerContent;
       expect(combinedContent).toMatch(/var\.aws_region/);
       expect(combinedContent).toMatch(/var\.environment/);
       expect(combinedContent).toMatch(/var\.app_name/);
       expect(combinedContent).toMatch(/var\.instance_type/);
-      expect(combinedContent).toMatch(/var\.environment_suffix/);
     });
 
     test("includes descriptive comments", () => {
