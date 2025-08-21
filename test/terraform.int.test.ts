@@ -5,7 +5,9 @@
 import fs from 'fs';
 import path from 'path';
 
-const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+// For Terraform platform, the outputs are in a different format
+const flatOutputsPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+const allOutputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 
 // Mock outputs for testing when CI/CD outputs are not available
 const mockOutputs = {
@@ -32,11 +34,39 @@ let region: string;
 describe('Terraform Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     // Try to load actual outputs, fall back to mock outputs
+    // For Terraform, first try flat-outputs.json (created by get-outputs.sh), then all-outputs.json
     try {
-      if (fs.existsSync(outputsPath)) {
-        const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+      if (fs.existsSync(flatOutputsPath)) {
+        const outputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
         outputs = JSON.parse(outputsContent);
-        console.log('Using actual deployment outputs');
+        
+        // Handle arrays that might be JSON strings (common in Terraform flat outputs)
+        if (typeof outputs.public_subnet_ids === 'string') {
+          try {
+            outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
+          } catch (e) {
+            // If it's not valid JSON, split by comma
+            outputs.public_subnet_ids = outputs.public_subnet_ids.split(',').map(id => id.trim());
+          }
+        }
+        if (typeof outputs.private_subnet_ids === 'string') {
+          try {
+            outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
+          } catch (e) {
+            outputs.private_subnet_ids = outputs.private_subnet_ids.split(',').map(id => id.trim());
+          }
+        }
+        
+        console.log('Using actual Terraform flat deployment outputs');
+      } else if (fs.existsSync(allOutputsPath)) {
+        const outputsContent = fs.readFileSync(allOutputsPath, 'utf8');
+        const parsedOutputs = JSON.parse(outputsContent);
+        // Convert Terraform structured outputs to flat format
+        outputs = {};
+        Object.keys(parsedOutputs).forEach(key => {
+          outputs[key] = parsedOutputs[key].value;
+        });
+        console.log('Using actual Terraform structured deployment outputs (converted to flat format)');
       } else {
         outputs = mockOutputs;
         console.log('Using mock outputs for testing');
