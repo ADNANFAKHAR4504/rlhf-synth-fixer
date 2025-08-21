@@ -1,5 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+Description: >
+  Secure multi-tier AWS architecture (us-east-2): VPC, ALB (HTTP for deployability without ACM),
+  private EC2 via ASG, private RDS (MySQL), KMS CMKs, S3 (SSE-KMS), CloudTrail, VPC Flow Logs,
+  Secrets Manager w/ rotation, strict SG/NACLs, MFA deny policy example. No parameters required.
 
 Parameters:
   LatestAmiId:
@@ -15,6 +18,7 @@ Mappings:
       CostCenter: CC-001
 
 Resources:
+  # ---------------- VPC & Subnets ----------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -88,6 +92,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags: [{Key: Name, Value: private-db-az2}]
 
+  # ---------------- NAT & Routes ----------------
   NatEipAz1:
     Type: AWS::EC2::EIP
     Properties: { Domain: vpc, Tags: [{Key: Name, Value: nat-eip-az1}] }
@@ -162,19 +167,23 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties: { RouteTableId: !Ref RtDb, SubnetId: !Ref PrivateDbSubnetAz2 }
 
-  # NACLs (strict)
+  # ---------------- NACLs (strict) ----------------
   NaclPublic:
     Type: AWS::EC2::NetworkAcl
     Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-public}] }
+
   NaclAssocPub1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PublicSubnetAz1, NetworkAclId: !Ref NaclPublic }
+
   NaclAssocPub2:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PublicSubnetAz2, NetworkAclId: !Ref NaclPublic }
-  NaclPublicIn443:
+
+  NaclPublicIn80:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclPublic, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 0.0.0.0/0, PortRange: {From: 80, To: 80} }
+
   NaclPublicOutEphemeral:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclPublic, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 1024, To: 65535} }
@@ -182,24 +191,31 @@ Resources:
   NaclApp:
     Type: AWS::EC2::NetworkAcl
     Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-app}] }
+
   NaclAssocApp1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PrivateAppSubnetAz1, NetworkAclId: !Ref NaclApp }
+
   NaclAssocApp2:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PrivateAppSubnetAz2, NetworkAclId: !Ref NaclApp }
+
   NaclAppIn80FromPublic1:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.0.0/20, PortRange: {From: 80, To: 80} }
+
   NaclAppIn80FromPublic2:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 101, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.16.0/20, PortRange: {From: 80, To: 80} }
+
   NaclAppIn22FromAdmin:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 110, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 203.0.113.0/24, PortRange: {From: 22, To: 22} }
+
   NaclAppOut80:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 200, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 80, To: 80} }
+
   NaclAppOut443:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclApp, RuleNumber: 201, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 0.0.0.0/0, PortRange: {From: 443, To: 443} }
@@ -207,30 +223,36 @@ Resources:
   NaclDb:
     Type: AWS::EC2::NetworkAcl
     Properties: { VpcId: !Ref VPC, Tags: [{Key: Name, Value: nacl-db}] }
+
   NaclAssocDb1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PrivateDbSubnetAz1, NetworkAclId: !Ref NaclDb }
+
   NaclAssocDb2:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties: { SubnetId: !Ref PrivateDbSubnetAz2, NetworkAclId: !Ref NaclDb }
+
   NaclDbIn3306FromApp1:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 100, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.32.0/20, PortRange: {From: 3306, To: 3306} }
+
   NaclDbIn3306FromApp2:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 101, Protocol: 6, RuleAction: allow, Egress: false, CidrBlock: 10.0.48.0/20, PortRange: {From: 3306, To: 3306} }
+
   NaclDbOutEphemeralToApp1:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 200, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 10.0.32.0/20, PortRange: {From: 1024, To: 65535} }
+
   NaclDbOutEphemeralToApp2:
     Type: AWS::EC2::NetworkAclEntry
     Properties: { NetworkAclId: !Ref NaclDb, RuleNumber: 201, Protocol: 6, RuleAction: allow, Egress: true, CidrBlock: 10.0.48.0/20, PortRange: {From: 1024, To: 65535} }
 
-  # SGs
+  # ---------------- Security Groups ----------------
   SgALB:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB SG - allow 443 from internet
+      GroupDescription: ALB SG - allow 80 from internet
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
@@ -283,6 +305,7 @@ Resources:
         - {IpProtocol: -1, CidrIp: 0.0.0.0/0}
       Tags: [{Key: Name, Value: sg-endpoint-sm}]
 
+  # ---------------- VPC Endpoint ----------------
   VPCEndpointSecretsManager:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -294,7 +317,7 @@ Resources:
       SecurityGroupIds: [!Ref SgEndpointSM]
       Tags: [{Key: Name, Value: vpce-secretsmanager}]
 
-  # KMS CMKs
+  # ---------------- KMS CMKs ----------------
   CMKData:
     Type: AWS::KMS::Key
     Properties:
@@ -345,7 +368,7 @@ Resources:
     Type: AWS::KMS::Alias
     Properties: { AliasName: alias/secure/logs, TargetKeyId: !Ref CMKLogs }
 
-  # S3 buckets (SSE-KMS + TLS-only)
+  # ---------------- S3 (SSE-KMS + TLS-only) ----------------
   S3Data:
     Type: AWS::S3::Bucket
     Properties:
@@ -405,7 +428,7 @@ Resources:
             Action: s3:GetBucketAcl
             Resource: !Sub '${S3Logs.Arn}'
 
-  # CloudTrail & Flow Logs
+  # ---------------- CloudTrail & VPC Flow Logs ----------------
   LogGroupTrail:
     Type: AWS::Logs::LogGroup
     Properties: { LogGroupName: /secure/cloudtrail, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
@@ -461,7 +484,7 @@ Resources:
       LogGroupName: !Ref LogGroupFlow
       DeliverLogsPermissionArn: !GetAtt RoleFlowLogs.Arn
 
-  # Security metrics & alarms
+  # ---------------- Security Metrics & Alarms ----------------
   MetricUnauthorized:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -506,7 +529,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       AlarmActions: [!Ref TopicSecurityAlerts]
 
-  # MFA policy example
+  # ---------------- MFA deny policy example ----------------
   GroupMFARequired:
     Type: AWS::IAM::Group
     Properties:
@@ -522,7 +545,7 @@ Resources:
                 Resource: '*'
                 Condition: { Bool: { aws:MultiFactorAuthPresent: false } }
 
-  # EC2 via Launch Template + ASG (attach TG properly)
+  # ---------------- EC2 via Launch Template + ASG ----------------
   RoleApp:
     Type: AWS::IAM::Role
     Properties:
@@ -538,11 +561,11 @@ Resources:
               - Sid: ReadDBSecret
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                Resource: !Ref SecretDB
+                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretDB}*'        # FIX: use ARN
               - Sid: UseDataCMK
                 Effect: Allow
                 Action: [kms:Decrypt, kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
-                Resource: !Ref CMKData
+                Resource: !GetAtt CMKData.Arn          # FIX: use ARN
               - Sid: S3DataAccess
                 Effect: Allow
                 Action: [s3:ListBucket]
@@ -562,7 +585,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        IamInstanceProfile: { Arn: !GetAtt InstanceProfileApp.Arn }
+        IamInstanceProfile: { Name: !Ref InstanceProfileApp }
         NetworkInterfaces:
           - AssociatePublicIpAddress: false
             DeviceIndex: 0
@@ -599,7 +622,7 @@ Resources:
           Value: app-asg
           PropagateAtLaunch: true
 
-  # ALB + Listener + TG (ASG registers via TargetGroupARNs)
+  # ---------------- ALB (HTTP for deployability) ----------------
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -607,8 +630,6 @@ Resources:
       Subnets: [!Ref PublicSubnetAz1, !Ref PublicSubnetAz2]
       SecurityGroups: [!Ref SgALB]
       Tags: [{Key: Name, Value: alb-secure}]
-
- 
 
   TG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -626,12 +647,9 @@ Resources:
       LoadBalancerArn: !Ref ALB
       Port: 80
       Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TG
+      DefaultActions: [{ Type: forward, TargetGroupArn: !Ref TG }]
 
-
-  # RDS + Secret + Rotation
+  # ---------------- RDS + Secret + Rotation ----------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -687,9 +705,10 @@ Resources:
         VpcSecurityGroupIds: !Join [",", [!Ref SgRotation]]
         VpcSubnetIds: !Join [",", [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]]
 
+# ---------------- Outputs ----------------
 Outputs:
   VpcId: { Value: !Ref VPC, Description: VPC Id }
-  ALBDNS: { Value: !GetAtt ALB.DNSName, Description: ALB public DNS (HTTPS) }
+  ALBDNS: { Value: !GetAtt ALB.DNSName, Description: ALB public DNS (HTTP) }
   RDSEndpoint: { Value: !GetAtt DBInstance.Endpoint.Address, Description: RDS endpoint (private) }
   DataBucketName: { Value: !Ref S3Data, Description: S3 data bucket (SSE-KMS) }
   LogsBucketName: { Value: !Ref S3Logs, Description: S3 logs bucket (SSE-KMS) }
