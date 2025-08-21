@@ -183,56 +183,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
-# IAM Role for Pipeline with Route53 and ACM Permissions
-resource "aws_iam_role" "pipeline_role" {
-  name = "secure-pipeline-role-${local.env_suffix}"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "github-actions.amazonaws.com"  # Adjust if your pipeline uses a different service
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
-}
-
-resource "aws_iam_policy" "pipeline_route53_acm_policy" {
-  name        = "secure-pipeline-route53-acm-policy-${local.env_suffix}"
-  description = "Allow pipeline to manage Route53 and ACM"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "route53:CreateHostedZone",
-          "route53:ChangeResourceRecordSets",
-          "route53:ListHostedZones",
-          "acm:RequestCertificate",
-          "acm:DescribeCertificate",
-          "acm:AddTagsToCertificate"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
-}
-
-resource "aws_iam_role_policy_attachment" "pipeline_route53_acm_attachment" {
-  role       = aws_iam_role.pipeline_role.name
-  policy_arn = aws_iam_policy.pipeline_route53_acm_policy.arn
-}
-
-output "pipeline_role_name" {
-  value = aws_iam_role.pipeline_role.name
-}
-
 output "ec2_role_name" {
   value = aws_iam_role.ec2_role.name
 }
@@ -302,8 +252,8 @@ resource "aws_network_acl" "secure_prod" {
     rule_no    = 100
     action     = "allow"
     cidr_block = "0.0.0.0/0"
-    from_port  = 443
-    to_port    = 443
+    from_port  = 80
+    to_port    = 80
   }
   ingress {
     protocol   = "tcp"
@@ -585,10 +535,10 @@ resource "aws_lb" "secure_prod_alb" {
 resource "aws_security_group" "alb_sg" {
   name        = "secure-prod-alb-sg-${local.env_suffix}"
   vpc_id      = aws_vpc.main.id
-  description = "Allow 443 inbound for ALB"
+  description = "Allow 80 inbound for ALB"
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -631,10 +581,8 @@ resource "aws_lb_target_group" "secure_prod_tg" {
 
 resource "aws_lb_listener" "secure_prod_listener" {
   load_balancer_arn = aws_lb.secure_prod_alb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:acm:us-west-2:718240086340:certificate/60502ec4-a6a3-458f-871d-ffb20382c38b"
+  port              = 80
+  protocol          = "HTTP"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secure_prod_tg.arn
