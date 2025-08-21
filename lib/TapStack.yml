@@ -6,18 +6,18 @@ Parameters:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    
+
   CorporateIPRange:
     Type: String
     Default: '10.0.0.0/8'
     Description: 'Corporate IP range for VPC endpoint access (CIDR notation)'
-    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}'
 
   NotificationEmail:
     Type: String
     Description: 'Email address for security alerts'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    Default: 'example@example.com'
 
 Resources:
   # =============================================================================
@@ -66,7 +66,7 @@ Resources:
       TargetKeyId: !Ref EnterpriseKMSKey
 
   # =============================================================================
-  # IAM Roles and Policies (Least Privilege)
+  # IAM Roles and Policies (Least Privilege) - FIXED ARNs
   # =============================================================================
   SecureDataAccessRole:
     Type: AWS::IAM::Role
@@ -101,8 +101,8 @@ Resources:
               - 's3:DeleteObject'
               - 's3:ListBucket'
             Resource:
-              - !Sub '${SecureDataBucket}/*'
-              - !Ref SecureDataBucket
+              - !Sub '${SecureDataBucket.Arn}/*'
+              - !GetAtt SecureDataBucket.Arn
             Condition:
               StringEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -117,7 +117,7 @@ Resources:
           - Sid: DenyUnencryptedObjectUploads
             Effect: Deny
             Action: 's3:PutObject'
-            Resource: !Sub '${SecureDataBucket}/*'
+            Resource: !Sub '${SecureDataBucket.Arn}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -150,7 +150,7 @@ Resources:
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
 
   # =============================================================================
-  # S3 Buckets (Private by Default)
+  # S3 Buckets (Private by Default) - FIXED ARNs
   # =============================================================================
   SecureDataBucket:
     Type: AWS::S3::Bucket
@@ -185,8 +185,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureDataBucket}/*'
-              - !Ref SecureDataBucket
+              - !GetAtt SecureDataBucket.Arn
+              - !Sub '${SecureDataBucket.Arn}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -194,7 +194,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${SecureDataBucket}/*'
+            Resource: !Sub '${SecureDataBucket.Arn}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -251,13 +251,13 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
-            Resource: !Ref CloudTrailBucket
+            Resource: !GetAtt CloudTrailBucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailBucket}/*'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -361,7 +361,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
 
   # =============================================================================
-  # CloudTrail Configuration
+  # CloudTrail Configuration - FIXED ARNS
   # =============================================================================
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
@@ -382,7 +382,7 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref EnterpriseKMSKey
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
+      CloudWatchLogsLogGroupArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/enterprise-audit-${EnvironmentSuffix}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       EventSelectors:
         - ReadWriteType: All
@@ -390,7 +390,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${SecureDataBucket}/*'
+                - !Sub '${SecureDataBucket.Arn}/*'
 
   # =============================================================================
   # CloudWatch Monitoring and Alarms
