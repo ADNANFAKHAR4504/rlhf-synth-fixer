@@ -20,6 +20,48 @@ if [ "$PLATFORM" = "cdk" ]; then
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
   npm run cdktf:get
+  # Preflight: verify local provider bindings exist under .gen
+  ensure_gen() {
+    if [ ! -d ".gen" ]; then
+      echo "❌ .gen not found; generating..."
+      npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/providers/aws" ]; then
+      echo "❌ .gen/providers/aws missing after cdktf get"
+      echo "Contents of .gen:"; ls -la .gen || true
+      exit 1
+    fi
+  }
+  # Optional: assert specific subpackages exist (edit list to match imports/replace)
+  assert_gen_subdirs() {
+    missing=0
+    for d in \
+      cloudwatchloggroup \
+      iampolicy \
+      iamrole \
+      iamrolepolicyattachment \
+      lambdafunction \
+      lambdapermission \
+      provider \
+      s3bucket \
+      s3bucketnotification \
+      s3bucketpublicaccessblock \
+      s3bucketserversideencryptionconfiguration \
+      s3bucketversioning; do
+      if [ ! -d ".gen/providers/aws/$d" ]; then
+        echo "❌ Missing: .gen/providers/aws/$d"
+        echo "  Candidates:"
+        find .gen/providers/aws -maxdepth 1 -type d -iname "*$d*" -print || true
+        missing=1
+      fi
+    done
+    if [ "$missing" -ne 0 ]; then
+      echo "❌ One or more expected provider subdirs are missing. Adjust imports or go.mod replace to match actual .gen names."
+      exit 1
+    fi
+  }
+  ensure_gen
+  assert_gen_subdirs
   # Ensure Go module dependencies (e.g., cdktf core) are downloaded before synth
   echo "Ensuring Go module deps are available (go mod tidy)"
   export GOPROXY=${GOPROXY:-direct}
