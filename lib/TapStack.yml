@@ -104,21 +104,7 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-east-1:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    us-east-2:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    us-west-1:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     us-west-2:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    eu-west-1:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    eu-central-1:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    ap-southeast-1:
-      AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    ap-northeast-1:
       AMI: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Conditions:
