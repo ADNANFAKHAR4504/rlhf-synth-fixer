@@ -166,7 +166,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Set default values
     this.environmentSuffix = args?.environmentSuffix || 'prod';
-    this.regions = args?.regions || ['us-east-1', 'eu-west-1'];
+    this.regions = args?.regions || ['us-east-1', 'us-west-1'];
     this.tags = args?.tags || {
       Environment: this.environmentSuffix,
       Project: 'IaC-AWS-Model-Breaking',
