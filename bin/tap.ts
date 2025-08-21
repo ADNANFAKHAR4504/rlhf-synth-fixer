@@ -76,10 +76,11 @@ export const primaryRegionVpcId =
   stack.regionalNetworks[primaryRegion]?.vpc.vpcId;
 export const primaryRegionVpcCidr =
   stack.regionalNetworks[primaryRegion]?.vpc.cidrBlock;
+// FIXED: Remove the .subnets reference since subnet IDs are now directly on regionalNetworks
 export const primaryRegionPublicSubnetIds =
-  stack.regionalNetworks[primaryRegion]?.subnets.publicSubnetIds;
+  stack.regionalNetworks[primaryRegion]?.publicSubnetIds;
 export const primaryRegionPrivateSubnetIds =
-  stack.regionalNetworks[primaryRegion]?.subnets.privateSubnetIds;
+  stack.regionalNetworks[primaryRegion]?.privateSubnetIds;
 export const primaryRegionInternetGatewayId =
   stack.regionalNetworks[primaryRegion]?.igw.internetGatewayId;
 export const primaryRegionNatGatewayIds =
@@ -162,10 +163,11 @@ export const secondaryRegionVpcId =
   stack.regionalNetworks[secondaryRegion]?.vpc.vpcId;
 export const secondaryRegionVpcCidr =
   stack.regionalNetworks[secondaryRegion]?.vpc.cidrBlock;
+// FIXED: Remove the .subnets reference since subnet IDs are now directly on regionalNetworks
 export const secondaryRegionPublicSubnetIds =
-  stack.regionalNetworks[secondaryRegion]?.subnets.publicSubnetIds;
+  stack.regionalNetworks[secondaryRegion]?.publicSubnetIds;
 export const secondaryRegionPrivateSubnetIds =
-  stack.regionalNetworks[secondaryRegion]?.subnets.privateSubnetIds;
+  stack.regionalNetworks[secondaryRegion]?.privateSubnetIds;
 export const secondaryRegionInternetGatewayId =
   stack.regionalNetworks[secondaryRegion]?.igw.internetGatewayId;
 export const secondaryRegionNatGatewayIds =
@@ -281,8 +283,9 @@ export const infrastructureSummary = pulumi.output({
   secondaryRegion: secondaryRegion,
 });
 
-export const primaryApplicationUrl = pulumi.interpolate`https://${primaryRegionAlbDnsName}`;
-export const secondaryApplicationUrl = pulumi.interpolate`https://${secondaryRegionAlbDnsName}`;
+// FIXED: Changed from https to http since we're using HTTP-only ALB now
+export const primaryApplicationUrl = pulumi.interpolate`http://${primaryRegionAlbDnsName}`;
+export const secondaryApplicationUrl = pulumi.interpolate`http://${secondaryRegionAlbDnsName}`;
 
 export const primaryDatabaseConnectionString = pulumi.interpolate`mysql://admin@${primaryRegionDatabaseEndpoint}:${primaryRegionDatabasePort}/appdb`;
 export const secondaryDatabaseConnectionString = pulumi.interpolate`mysql://admin@${secondaryRegionDatabaseEndpoint}:${secondaryRegionDatabasePort}/appdb`;

@@ -18,7 +18,7 @@ import {
   createS3KmsKey,
 } from './components/security/kms';
 import { createVpc } from './components/vpc/vpc';
-import { createSubnetGroup } from './components/vpc/subnet';
+import { createSubnet } from './components/vpc/subnet'; // CHANGED: Import createSubnet instead of createSubnetGroup
 import { createInternetGateway } from './components/vpc/internetGateway';
 import { createMultiAzNatGateway } from './components/vpc/natGateway';
 import { createRouteTables } from './components/vpc/routeTable';
@@ -64,9 +64,13 @@ interface RegionalSecurityInfrastructure {
   s3Kms: ReturnType<typeof createS3KmsKey>;
 }
 
+// FIXED: Updated subnet structure
 interface RegionalNetworkInfrastructure {
   vpc: ReturnType<typeof createVpc>;
-  subnets: ReturnType<typeof createSubnetGroup>;
+  publicSubnets: ReturnType<typeof createSubnet>[];
+  privateSubnets: ReturnType<typeof createSubnet>[];
+  publicSubnetIds: pulumi.Output<string>[];
+  privateSubnetIds: pulumi.Output<string>[];
   igw: ReturnType<typeof createInternetGateway>;
   natGateways: ReturnType<typeof createMultiAzNatGateway>;
   routeTables: ReturnType<typeof createRouteTables>;
@@ -74,11 +78,6 @@ interface RegionalNetworkInfrastructure {
   appSg: ReturnType<typeof createApplicationSecurityGroup>;
   dbSg: ReturnType<typeof createDatabaseSecurityGroup>;
 }
-
-// REMOVED: Certificate infrastructure interface since we're not using HTTPS
-// interface RegionalCertificateInfrastructure {
-//   certificate: ReturnType<typeof createAcmCertificate>;
-// }
 
 interface RegionalSecretsInfrastructure {
   dbCredentials: ReturnType<typeof createDatabaseCredentials>;
@@ -180,11 +179,6 @@ export class TapStack extends pulumi.ComponentResource {
     string,
     RegionalSecretsInfrastructure
   > = {};
-  // REMOVED: Certificate infrastructure since we're not using HTTPS
-  // public readonly regionalCertificates: Record<
-  //   string,
-  //   RegionalCertificateInfrastructure
-  // > = {};
   public readonly providers: Record<string, aws.Provider> = {};
 
   constructor(
@@ -339,35 +333,22 @@ export class TapStack extends pulumi.ComponentResource {
         }
       );
 
-      // FIXED: Create subnets with static AZs that work
-      const subnets = createSubnetGroup(
-        `${name}-subnets-${region}`,
+      // FIXED: Create subnets individually instead of using the broken SubnetGroupComponent
+      const publicSubnets: ReturnType<typeof createSubnet>[] = [];
+      const privateSubnets: ReturnType<typeof createSubnet>[] = [];
+      const publicSubnetIds: pulumi.Output<string>[] = [];
+      const privateSubnetIds: pulumi.Output<string>[] = [];
+
+      // Create public subnets
+      const publicSubnet0 = createSubnet(
+        `${name}-subnets-${region}-public-0`,
         {
           vpcId: vpc.vpcId,
-          publicSubnets: [
-            {
-              cidrBlock: `${10 + regionIndex}.0.1.0/24`,
-              availabilityZone: availabilityZones[0], // us-west-1a
-              name: `${name}-public-0-${region}`,
-            },
-            {
-              cidrBlock: `${10 + regionIndex}.0.2.0/24`,
-              availabilityZone: availabilityZones[1], // us-west-1c
-              name: `${name}-public-1-${region}`,
-            },
-          ],
-          privateSubnets: [
-            {
-              cidrBlock: `${10 + regionIndex}.0.10.0/24`,
-              availabilityZone: availabilityZones[0], // us-west-1a
-              name: `${name}-private-0-${region}`,
-            },
-            {
-              cidrBlock: `${10 + regionIndex}.0.20.0/24`,
-              availabilityZone: availabilityZones[1], // us-west-1c
-              name: `${name}-private-1-${region}`,
-            },
-          ],
+          cidrBlock: `${10 + regionIndex}.0.1.0/24`,
+          availabilityZone: availabilityZones[0], // us-west-1a
+          isPublic: true,
+          mapPublicIpOnLaunch: true,
+          name: `${name}-public-0-${region}`,
           tags: this.tags,
         },
         {
@@ -376,6 +357,67 @@ export class TapStack extends pulumi.ComponentResource {
           dependsOn: [vpc.vpc],
         }
       );
+
+      const publicSubnet1 = createSubnet(
+        `${name}-subnets-${region}-public-1`,
+        {
+          vpcId: vpc.vpcId,
+          cidrBlock: `${10 + regionIndex}.0.2.0/24`,
+          availabilityZone: availabilityZones[1], // us-west-1c
+          isPublic: true,
+          mapPublicIpOnLaunch: true,
+          name: `${name}-public-1-${region}`,
+          tags: this.tags,
+        },
+        {
+          provider: this.providers[region],
+          parent: this,
+          dependsOn: [vpc.vpc],
+        }
+      );
+
+      publicSubnets.push(publicSubnet0, publicSubnet1);
+      publicSubnetIds.push(publicSubnet0.subnetId, publicSubnet1.subnetId);
+
+      // Create private subnets
+      const privateSubnet0 = createSubnet(
+        `${name}-subnets-${region}-private-0`,
+        {
+          vpcId: vpc.vpcId,
+          cidrBlock: `${10 + regionIndex}.0.10.0/24`,
+          availabilityZone: availabilityZones[0], // us-west-1a
+          isPublic: false,
+          mapPublicIpOnLaunch: false,
+          name: `${name}-private-0-${region}`,
+          tags: this.tags,
+        },
+        {
+          provider: this.providers[region],
+          parent: this,
+          dependsOn: [vpc.vpc],
+        }
+      );
+
+      const privateSubnet1 = createSubnet(
+        `${name}-subnets-${region}-private-1`,
+        {
+          vpcId: vpc.vpcId,
+          cidrBlock: `${10 + regionIndex}.0.20.0/24`,
+          availabilityZone: availabilityZones[1], // us-west-1c
+          isPublic: false,
+          mapPublicIpOnLaunch: false,
+          name: `${name}-private-1-${region}`,
+          tags: this.tags,
+        },
+        {
+          provider: this.providers[region],
+          parent: this,
+          dependsOn: [vpc.vpc],
+        }
+      );
+
+      privateSubnets.push(privateSubnet0, privateSubnet1);
+      privateSubnetIds.push(privateSubnet0.subnetId, privateSubnet1.subnetId);
 
       console.log(`    Creating Internet Gateway for ${region}...`);
 
@@ -400,7 +442,7 @@ export class TapStack extends pulumi.ComponentResource {
       const natGateways = createMultiAzNatGateway(
         `${name}-nat-${region}`,
         {
-          publicSubnetIds: subnets.publicSubnetIds,
+          publicSubnetIds: publicSubnetIds,
           name: `${name}-nat-${region}`,
           tags: this.tags,
         },
@@ -418,14 +460,14 @@ export class TapStack extends pulumi.ComponentResource {
         {
           vpcId: vpc.vpcId,
           internetGatewayId: igw.internetGatewayId,
-          publicSubnetIds: subnets.publicSubnetIds,
+          publicSubnetIds: publicSubnetIds,
           name: `${name}-public-${region}`,
           tags: this.tags,
         },
         {
           vpcId: vpc.vpcId,
           natGatewayIds: natGateways.natGatewayIds,
-          privateSubnetIds: subnets.privateSubnetIds,
+          privateSubnetIds: privateSubnetIds,
           name: `${name}-private-${region}`,
           tags: this.tags,
         },
@@ -482,7 +524,10 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.regionalNetworks[region] = {
         vpc,
-        subnets,
+        publicSubnets,
+        privateSubnets,
+        publicSubnetIds,
+        privateSubnetIds,
         igw,
         natGateways,
         routeTables,
@@ -490,11 +535,6 @@ export class TapStack extends pulumi.ComponentResource {
         appSg,
         dbSg,
       };
-
-      // REMOVED: Certificate creation section since we're not using HTTPS
-      // console.log(`    Creating Certificates Infrastructure for ${region}...`);
-      // const certificate = createAcmCertificate(...);
-      // this.regionalCertificates[region] = { certificate };
 
       console.log(`    Creating Secrets Infrastructure for ${region}...`);
 
@@ -582,7 +622,7 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(`     Creating Database for ${region}...`);
 
-      // FIXED: Create RDS database with AWS-managed password (no passwordSecretArn)
+      // FIXED: Now privateSubnetIds is properly typed as pulumi.Output<string>[]
       const database = createSecureRdsInstance(
         `${name}-db-${region}`,
         {
@@ -592,7 +632,7 @@ export class TapStack extends pulumi.ComponentResource {
           allocatedStorage: 20,
           dbName: 'appdb',
           username: 'admin',
-          subnetIds: subnets.privateSubnetIds,
+          subnetIds: privateSubnetIds, // Now this is correctly typed
           securityGroupIds: [dbSg.securityGroupId],
           kmsKeyId: dbKms.keyArn,
           backupRetentionPeriod: 7,
@@ -627,7 +667,7 @@ export class TapStack extends pulumi.ComponentResource {
         `${name}-alb-${region}`,
         {
           name: `${name}-alb-${region}`,
-          subnetIds: subnets.publicSubnetIds,
+          subnetIds: publicSubnetIds,
           securityGroupIds: [albSg.securityGroupId],
           targetGroupArn: targetGroup.targetGroupArn,
           tags: this.tags,
@@ -670,7 +710,7 @@ export class TapStack extends pulumi.ComponentResource {
           minSize: 2,
           maxSize: 10,
           desiredCapacity: 2,
-          subnetIds: subnets.privateSubnetIds,
+          subnetIds: privateSubnetIds,
           targetGroupArns: [targetGroup.targetGroupArn],
           launchTemplate: {
             id: launchTemplate.launchTemplateId,
