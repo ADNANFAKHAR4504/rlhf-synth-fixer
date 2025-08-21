@@ -1,13 +1,31 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const outputsPath = path.join(__dirname, "../cfn-outputs.json");
-const deploymentOutputs = fs.existsSync(outputsPath) ? JSON.parse(fs.readFileSync(outputsPath, "utf8")) : {};
+// Supports both flat (flat-outputs.json) and structured (all-outputs.json) Terraform output formats
+const flatPath = path.join(__dirname, "../flat-outputs.json");
+const allPath = path.join(__dirname, "../all-outputs.json");
+
+let deploymentOutputs: any = {};
+let outputFormat: 'flat' | 'all' = 'flat';
+
+if (fs.existsSync(flatPath)) {
+  deploymentOutputs = JSON.parse(fs.readFileSync(flatPath, "utf8"));
+  outputFormat = 'flat';
+} else if (fs.existsSync(allPath)) {
+  deploymentOutputs = JSON.parse(fs.readFileSync(allPath, "utf8"));
+  outputFormat = 'all';
+} else {
+  throw new Error("No Terraform outputs file found (flat-outputs.json or all-outputs.json).");
+}
 
 function getOutput(key: string): any {
-  // Handles both flat and structured outputs
   if (!deploymentOutputs[key]) return undefined;
-  return deploymentOutputs[key].value !== undefined ? deploymentOutputs[key].value : deploymentOutputs[key];
+  if (outputFormat === 'flat') {
+    return deploymentOutputs[key];
+  } else if (outputFormat === 'all') {
+    return deploymentOutputs[key].value !== undefined ? deploymentOutputs[key].value : deploymentOutputs[key];
+  }
+  return undefined;
 }
 
 describe("Terraform High Availability Web App E2E Deployment Outputs", () => {
