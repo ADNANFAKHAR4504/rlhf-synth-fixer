@@ -11,6 +11,5 @@ db_username = "dbadmin"
 db_password = "your-secure-password"
 
 instance_type = "t3.micro"
-key_pair_name = "your-key-pair-name"
 
 notification_email = "your-email@example.com"

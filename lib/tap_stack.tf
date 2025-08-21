@@ -17,6 +17,13 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_partition" "current" {}
+
+data "aws_caller_identity" "current" {}
 
 #######################
 # Modules
@@ -84,7 +91,7 @@ resource "aws_subnet" "public" {
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = module.data.availability_zones[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -100,7 +107,7 @@ resource "aws_subnet" "private" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = module.data.availability_zones[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
@@ -115,7 +122,7 @@ resource "aws_subnet" "database" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
-  availability_zone = module.data.availability_zones[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database-subnet-${count.index + 1}"
@@ -234,7 +241,7 @@ resource "aws_kms_key" "rds_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -282,7 +289,7 @@ resource "aws_kms_key" "s3_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -468,7 +475,6 @@ resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-app-"
   image_id      = module.data.amazon_linux_ami_id
   instance_type = var.instance_type
-  key_name      = var.key_pair_name
 
   vpc_security_group_ids = [module.security.ec2_sg_id]
 
