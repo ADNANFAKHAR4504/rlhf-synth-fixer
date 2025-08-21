@@ -98,17 +98,10 @@ if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
     exit 1
   fi
 
-  # Initialize a Go module inside lib/ if missing and tidy dependencies
-  if [ -d "lib" ]; then
-    echo "📦 Initializing Go module in lib/ (if needed)"
-    cd lib
-    if [ ! -f go.mod ]; then
-      echo "Creating go.mod in lib/"
-      go mod init "github.com/${GITHUB_REPOSITORY:-local}/lib" || true
-    fi
-    echo "Tidying Go modules in lib/"
-    go mod tidy || true
-    cd ..
+  # Enforce single-module layout: use root go.mod only. Remove stray lib/go.mod if present.
+  if [ -f "lib/go.mod" ] || [ -f "lib/go.sum" ]; then
+    echo "⚠️ Found lib/go.mod or lib/go.sum. Removing to avoid multi-module conflicts."
+    rm -f lib/go.mod lib/go.sum || true
   fi
 fi
 
