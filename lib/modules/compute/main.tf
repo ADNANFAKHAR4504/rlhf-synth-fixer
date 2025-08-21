@@ -39,7 +39,7 @@ resource "aws_launch_template" "main" {
 resource "aws_autoscaling_group" "main" {
   name                      = "${var.environment}-asg-${var.region}"
   vpc_zone_identifier       = var.subnet_ids
-  target_group_arns         = var.target_group_arns
+  target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
 

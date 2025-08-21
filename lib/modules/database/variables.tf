@@ -27,7 +27,7 @@ variable "is_primary" {
 variable "source_db_identifier" {
   description = "Source database identifier for read replica"
   type        = string
-  default     = ""
+  default     = null
 }
 
 variable "db_instance_class" {

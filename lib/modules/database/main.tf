@@ -48,7 +48,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.environment}-postgres-${var.region}"
 
   engine         = "postgres"
-  engine_version = "15.14"
+  engine_version = "15.4"
   instance_class = var.db_instance_class
 
   allocated_storage     = var.allocated_storage
@@ -79,7 +79,7 @@ resource "aws_db_instance" "main" {
 }
 
 resource "aws_db_instance" "read_replica" {
-  count = var.is_primary ? 0 : (var.source_db_identifier != null ? 1 : 0)
+  count = var.is_primary ? 0 : (var.source_db_identifier != null && var.source_db_identifier != "" ? 1 : 0)
 
   identifier = "${var.environment}-postgres-replica-${var.region}"
 

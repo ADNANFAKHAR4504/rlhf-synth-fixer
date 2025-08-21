@@ -58,7 +58,7 @@ variable "desired_capacity" {
 }
 
 variable "target_group_arns" {
-  description = "Target group ARNs"
+  description = "Target group ARNs (deprecated - using internal target group)"
   type        = list(string)
   default     = []
 }

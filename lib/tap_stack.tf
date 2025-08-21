@@ -165,7 +165,7 @@ module "database_eu_west_1" {
   is_primary                 = false
   private_subnet_ids         = module.vpc_eu_west_1.private_subnet_ids
   database_security_group_id = module.vpc_eu_west_1.database_security_group_id
-  source_db_identifier       = null
+  source_db_identifier       = module.database_us_east_1.database_identifier
 }
 
 module "logging_eu_west_1" {
@@ -233,7 +233,7 @@ module "database_ap_southeast_1" {
   is_primary                 = false
   private_subnet_ids         = module.vpc_ap_southeast_1.private_subnet_ids
   database_security_group_id = module.vpc_ap_southeast_1.database_security_group_id
-  source_db_identifier       = null
+  source_db_identifier       = module.database_us_east_1.database_identifier
 }
 
 module "logging_ap_southeast_1" {
