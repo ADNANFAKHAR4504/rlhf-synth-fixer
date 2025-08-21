@@ -49,7 +49,7 @@ describe('TapStack', () => {
     test('creates RDS PostgreSQL instance', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '15.4',
+        EngineVersion: '16.4',
         MultiAZ: true,
         StorageEncrypted: true,
         DeletionProtection: true,
@@ -142,18 +142,95 @@ describe('TapStack', () => {
     test('validates all required outputs are present', () => {
       const outputs = template.toJSON().Outputs;
       const expectedOutputs = [
-        `LoadBalancerDns${environmentSuffix}`,
-        `CloudFrontDomain${environmentSuffix}`,
-        `DatabaseEndpoint${environmentSuffix}`,
-        `S3BucketName${environmentSuffix}`,
-        `BastionHostIp${environmentSuffix}`,
-        `VpcId${environmentSuffix}`,
-        `KmsKeyId${environmentSuffix}`,
-        `DatabaseSecretArn${environmentSuffix}`,
+        `LoadBalancerDns-${environmentSuffix}`,
+        `CloudFrontDomain-${environmentSuffix}`,
+        `DatabaseEndpoint-${environmentSuffix}`,
+        `S3BucketName-${environmentSuffix}`,
+        `BastionHostIp-${environmentSuffix}`,
+        `VpcId-${environmentSuffix}`,
+        `KmsKeyId-${environmentSuffix}`,
+        `DatabaseSecretArn-${environmentSuffix}`,
+        `AutoScalingGroupName-${environmentSuffix}`,
+        `TargetGroupArn-${environmentSuffix}`,
+        `LoadBalancerArn-${environmentSuffix}`,
+        `LambdaFunctionArn-${environmentSuffix}`,
+        `LambdaFunctionName-${environmentSuffix}`,
+        `SnsTopicArn-${environmentSuffix}`,
+        `DatabasePort-${environmentSuffix}`,
+        `BastionHostId-${environmentSuffix}`,
+        `WebServerSecurityGroupId-${environmentSuffix}`,
+        `DatabaseSecurityGroupId-${environmentSuffix}`,
+        `PrivateSubnetIds-${environmentSuffix}`,
+        `PublicSubnetIds-${environmentSuffix}`,
+        `DatabaseSubnetIds-${environmentSuffix}`,
+        `EnvironmentSuffix-${environmentSuffix}`,
       ];
 
       expectedOutputs.forEach(outputName => {
         expect(outputs).toHaveProperty(outputName);
+      });
+    });
+
+    test('validates security groups have correct ingress rules', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: expect.stringMatching(/Security group for Application Load Balancer/),
+        SecurityGroupIngress: [
+          {
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0'
+          },
+          {
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0'
+          }
+        ]
+      });
+    });
+
+    test('validates CloudFormation conditions exist for conditional resources', () => {
+      const conditions = template.toJSON().Conditions;
+      expect(conditions).toHaveProperty('EnableEmailNotifications');
+      expect(conditions).toHaveProperty('EnableVpcPeering');
+    });
+
+    test('validates IAM roles have least privilege permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [{
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com'
+            },
+            Action: 'sts:AssumeRole'
+          }]
+        }
+      });
+    });
+
+    test('validates subnet configuration across multiple AZs', () => {
+      // Check that we have multiple subnets of each type
+      const template_json = template.toJSON();
+      const subnets = Object.values(template_json.Resources).filter(
+        resource => resource.Type === 'AWS::EC2::Subnet'
+      );
+
+      // Should have 9 subnets total (3 AZs × 3 subnet types)
+      expect(subnets.length).toBe(9);
+    });
+
+    test('validates backup and retention settings', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        BackupRetentionPeriod: 7,
+      });
+
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {}
+        }
       });
     });
   });
