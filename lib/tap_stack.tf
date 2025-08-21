@@ -75,7 +75,7 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-resource "aws_s3_bucket_policy" "cloudtrail" {
+resource "aws_s3_bucket_policy" "cloudtrail_1" {
   bucket = aws_s3_bucket.this.id
 
   policy = jsonencode({
