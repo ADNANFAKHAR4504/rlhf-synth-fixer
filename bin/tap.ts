@@ -6,8 +6,7 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Context or defaults (no deploy params needed)
-const environmentSuffix =
-  app.node.tryGetContext('environmentSuffix') || 'dev';
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 
 // Exactly two regions as requested
 const primaryRegion: string =
