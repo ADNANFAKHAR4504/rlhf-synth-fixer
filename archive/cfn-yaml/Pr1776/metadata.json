@@ -33,5 +33,11 @@
     "AWS::IAM::Role",
     "AWS::IAM::InstanceProfile",
     "AWS::CloudWatch::Alarm"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
