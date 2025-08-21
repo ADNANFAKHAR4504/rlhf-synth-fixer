@@ -14,12 +14,9 @@ terraform {
     }
   }
 
-  # Backend configuration - Terraform Cloud with workspace prefix
-  backend "remote" {
-    organization = "TuringGpt"
-    workspaces {
-      prefix = "iac-test-automations-"
-    }
+  # Backend configuration - S3 for bootstrap compatibility
+  backend "s3" {
+    # Backend configuration will be provided via command line arguments
   }
 }
 

@@ -39,9 +39,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const content = fs.readFileSync(stackPath, 'utf8');
 
       // Check all modules are declared
-      expect(content).toMatch(/module\s+"storage"\s*{/);
-      expect(content).toMatch(/module\s+"network"\s*{/);
-      expect(content).toMatch(/module\s+"iam_role"\s*{/);
+      expect(content).toMatch(/module\s+"storage_staging"\s*{/);
+      expect(content).toMatch(/module\s+"storage_production"\s*{/);
+      expect(content).toMatch(/module\s+"network_staging"\s*{/);
+      expect(content).toMatch(/module\s+"network_production"\s*{/);
+      expect(content).toMatch(/module\s+"iam_role_staging"\s*{/);
+      expect(content).toMatch(/module\s+"iam_role_production"\s*{/);
 
       // Check all modules use correct source paths
       expect(content).toMatch(/source\s*=\s*"\.\/modules\/storage"/);
@@ -55,7 +58,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       // IAM role module depends on storage module output
       expect(content).toMatch(
-        /module\s+"iam_role"\s*{[\s\S]*bucket_arn\s*=\s*module\.storage\.bucket_arn/
+        /module\s+"iam_role_staging"\s*{[\s\S]*bucket_arn\s*=\s*module\.storage_staging\[0\]\.bucket_arn/
+      );
+      expect(content).toMatch(
+        /module\s+"iam_role_production"\s*{[\s\S]*bucket_arn\s*=\s*module\.storage_production\[0\]\.bucket_arn/
       );
     });
 
@@ -65,13 +71,22 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       // Check each module gets environment variable - use a more flexible regex
       expect(content).toMatch(
-        /module\s+"storage"\s*{[\s\S]*?environment\s*=\s*local\.env/
+        /module\s+"storage_staging"\s*{[\s\S]*?environment\s*=\s*"staging"/
       );
       expect(content).toMatch(
-        /module\s+"network"\s*{[\s\S]*?environment\s*=\s*local\.env/
+        /module\s+"storage_production"\s*{[\s\S]*?environment\s*=\s*"production"/
       );
       expect(content).toMatch(
-        /module\s+"iam_role"\s*{[\s\S]*?environment\s*=\s*local\.env/
+        /module\s+"network_staging"\s*{[\s\S]*?environment\s*=\s*"staging"/
+      );
+      expect(content).toMatch(
+        /module\s+"network_production"\s*{[\s\S]*?environment\s*=\s*"production"/
+      );
+      expect(content).toMatch(
+        /module\s+"iam_role_staging"\s*{[\s\S]*?environment\s*=\s*"staging"/
+      );
+      expect(content).toMatch(
+        /module\s+"iam_role_production"\s*{[\s\S]*?environment\s*=\s*"production"/
       );
     });
   });
@@ -82,9 +97,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const content = fs.readFileSync(outputsPath, 'utf8');
 
       // Check outputs reference correct modules
-      expect(content).toMatch(/module\.storage\.bucket_name/);
-      expect(content).toMatch(/module\.network\.security_group_id/);
-      expect(content).toMatch(/module\.iam_role\.role_arn/);
+      expect(content).toMatch(/module\.storage_staging\[0\]\.bucket_name/);
+      expect(content).toMatch(/module\.storage_production\[0\]\.bucket_name/);
+      expect(content).toMatch(/module\.network_staging\[0\]\.security_group_id/);
+      expect(content).toMatch(/module\.network_production\[0\]\.security_group_id/);
+      expect(content).toMatch(/module\.iam_role_staging\[0\]\.role_arn/);
+      expect(content).toMatch(/module\.iam_role_production\[0\]\.role_arn/);
     });
 
     test('outputs provide both staging and production values', () => {
@@ -92,8 +110,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const content = fs.readFileSync(outputsPath, 'utf8');
 
       // Check each output has staging and production entries
-      expect(content).toMatch(/staging\s*=\s*module\./);
-      expect(content).toMatch(/production\s*=\s*module\./);
+      expect(content).toMatch(/staging\s*=\s*local\.env\s*==\s*"staging"\s*\?\s*module\.storage_staging\[0\]\.bucket_name\s*:\s*null/);
+      expect(content).toMatch(/production\s*=\s*local\.env\s*==\s*"production"\s*\?\s*module\.storage_production\[0\]\.bucket_name\s*:\s*null/);
     });
   });
 

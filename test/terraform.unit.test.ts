@@ -59,9 +59,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const stackPath = path.join(LIB_DIR, 'tap_stack.tf');
       const content = fs.readFileSync(stackPath, 'utf8');
 
-      expect(content).toMatch(/module\s+"storage"/);
-      expect(content).toMatch(/module\s+"network"/);
-      expect(content).toMatch(/module\s+"iam_role"/);
+      expect(content).toMatch(/module\s+"storage_staging"/);
+      expect(content).toMatch(/module\s+"storage_production"/);
+      expect(content).toMatch(/module\s+"network_staging"/);
+      expect(content).toMatch(/module\s+"network_production"/);
+      expect(content).toMatch(/module\s+"iam_role_staging"/);
+      expect(content).toMatch(/module\s+"iam_role_production"/);
     });
 
     test('provider.tf has provider configuration', () => {
@@ -99,14 +102,20 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const stackPath = path.join(LIB_DIR, 'tap_stack.tf');
       const content = fs.readFileSync(stackPath, 'utf8');
 
-      expect(content).toMatch(/bucket_arn\s*=\s*module\.storage\.bucket_arn/);
+      expect(content).toMatch(
+        /bucket_arn\s*=\s*module\.storage_staging\[0\]\.bucket_arn/
+      );
+      expect(content).toMatch(
+        /bucket_arn\s*=\s*module\.storage_production\[0\]\.bucket_arn/
+      );
     });
 
     test('modules use environment variable', () => {
       const stackPath = path.join(LIB_DIR, 'tap_stack.tf');
       const content = fs.readFileSync(stackPath, 'utf8');
 
-      expect(content).toMatch(/environment\s*=\s*local\.env/);
+      expect(content).toMatch(/environment\s*=\s*"staging"/);
+      expect(content).toMatch(/environment\s*=\s*"production"/);
     });
   });
 });
