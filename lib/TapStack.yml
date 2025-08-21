@@ -746,7 +746,7 @@ Resources:
       Name: !Sub '${ProjectName}-${Environment}-config-delivery'
       S3BucketName: !Ref S3WebAssetsBucket
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFourHours
+        DeliveryFrequency: TwentyFour_Hours
   # ========================================
 
   KMSKey:
