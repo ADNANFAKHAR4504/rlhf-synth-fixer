@@ -1,58 +1,32 @@
 # Terraform Infrastructure Project
 
-## Project Overview
+This project implements a multi-environment AWS infrastructure using Terraform with a modular architecture. The infrastructure includes S3 buckets, IAM roles, VPC, and security groups across staging and production environments.
 
-The Terraform Infrastructure project is a comprehensive Infrastructure as Code (IaC) solution built with Terraform HCL. It provides automated deployment of AWS infrastructure components including S3 buckets, IAM roles, VPC, and Security Groups across multiple environments with a modular architecture and complete parameterization.
+## Project Structure
 
-### Key Features
-
-- Multi-Environment Support (Staging & Production)
-- Modular Architecture with reusable components
-- Complete Parameterization (No hardcoded values)
-- Comprehensive Testing (23/23 tests passing)
-- Modern Terraform Practices (Current syntax & best practices)
-- Production Ready with robust error handling
-
-## Code Structure
+The project is organized into a modular structure with separate components for different AWS services:
 
 ```
 iac-test-automations/
-├── lib/                          # Core infrastructure library
-│   ├── provider.tf              # AWS provider configuration
-│   ├── variables.tf             # Variable definitions
-│   ├── outputs.tf               # Output definitions
-│   ├── tap_stack.tf             # Main Terraform configuration
-│   └── modules/                 # Reusable modules
-│       ├── storage/             # S3 bucket module
-│       │   ├── main.tf
-│       │   ├── variables.tf
-│       │   └── versions.tf
-│       ├── network/             # VPC and Security Group module
-│       │   ├── main.tf
-│       │   ├── variables.tf
-│       │   └── versions.tf
-│       └── iam_role/            # IAM role module
-│           ├── main.tf
-│           ├── variables.tf
-│           └── versions.tf
-├── test/                        # Test suite
-│   ├── terraform.unit.test.ts   # Unit tests
-│   └── terraform.int.test.ts    # Integration tests
-├── scripts/                     # Build and deployment scripts
-│   ├── bootstrap.sh
-│   ├── deploy.sh
-│   ├── unit-tests.sh
-│   └── integration-tests.sh
-├── templates/                   # Infrastructure templates
-├── actions/                     # GitHub Actions
-└── package.json                 # Project configuration
+├── lib/
+│   ├── provider.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── tap_stack.tf
+│   └── modules/
+│       ├── storage/
+│       ├── network/
+│       └── iam_role/
+├── test/
+├── scripts/
+└── templates/
 ```
 
-## Core Components
+## Infrastructure Components
 
-### 1. Provider Configuration (`lib/provider.tf`)
+### Provider Configuration
 
-The provider configuration sets up AWS providers for multiple environments and regions.
+The provider configuration manages AWS providers for different environments:
 
 ```hcl
 # provider.tf
@@ -110,9 +84,9 @@ provider "random" {
 }
 ```
 
-### 2. Variable Definitions (`lib/variables.tf`)
+### Variable Definitions
 
-Comprehensive variable definitions for environment-specific configuration.
+Variables are defined for environment-specific configuration:
 
 ```hcl
 # variables.tf
@@ -148,9 +122,9 @@ variable "environment_names" {
 }
 ```
 
-### 3. Output Definitions (`lib/outputs.tf`)
+### Output Definitions
 
-Outputs for accessing deployed resource information.
+Outputs provide access to deployed resource information:
 
 ```hcl
 # outputs.tf
@@ -176,9 +150,9 @@ output "iam_role_arns" {
 }
 ```
 
-### 4. Main Configuration (`lib/tap_stack.tf`)
+### Main Configuration
 
-The main Terraform configuration that orchestrates all modules.
+The main configuration orchestrates all modules:
 
 ```hcl
 # Main Terraform configuration
@@ -212,9 +186,9 @@ module "iam_role" {
 }
 ```
 
-### 5. Storage Module (`lib/modules/storage/`)
+## Storage Module
 
-#### Main Configuration (`main.tf`)
+The storage module creates S3 buckets with versioning and encryption:
 
 ```hcl
 # modules/storage/main.tf
@@ -260,7 +234,7 @@ output "bucket_arn" {
 }
 ```
 
-#### Variables (`variables.tf`)
+Storage module variables:
 
 ```hcl
 # modules/storage/variables.tf
@@ -294,7 +268,7 @@ variable "bucket_tags" {
 }
 ```
 
-#### Versions (`versions.tf`)
+Storage module provider requirements:
 
 ```hcl
 terraform {
@@ -311,9 +285,9 @@ terraform {
 }
 ```
 
-### 6. Network Module (`lib/modules/network/`)
+## Network Module
 
-#### Main Configuration (`main.tf`)
+The network module creates VPC and security groups:
 
 ```hcl
 # modules/network/main.tf
@@ -357,7 +331,7 @@ output "security_group_id" {
 }
 ```
 
-#### Variables (`variables.tf`)
+Network module variables:
 
 ```hcl
 # modules/network/variables.tf
@@ -397,7 +371,7 @@ variable "security_group_tags" {
 }
 ```
 
-#### Versions (`versions.tf`)
+Network module provider requirements:
 
 ```hcl
 terraform {
@@ -410,9 +384,9 @@ terraform {
 }
 ```
 
-### 7. IAM Role Module (`lib/modules/iam_role/`)
+## IAM Role Module
 
-#### Main Configuration (`main.tf`)
+The IAM role module creates roles with S3 access policies:
 
 ```hcl
 # modules/iam_role/main.tf
@@ -454,7 +428,7 @@ output "role_arn" {
 }
 ```
 
-#### Variables (`variables.tf`)
+IAM role module variables:
 
 ```hcl
 # modules/iam_role/variables.tf
@@ -499,7 +473,7 @@ variable "role_tags" {
 }
 ```
 
-#### Versions (`versions.tf`)
+IAM role module provider requirements:
 
 ```hcl
 terraform {
@@ -516,7 +490,7 @@ terraform {
 
 ### Environment Variables
 
-The project supports various environment variables for configuration:
+Set these environment variables for configuration:
 
 ```bash
 # AWS Configuration
@@ -528,15 +502,11 @@ export AWS_DEFAULT_REGION=us-east-1
 export TF_VAR_staging_region=ap-south-1
 export TF_VAR_production_region=us-east-1
 export TF_VAR_project_name="My Infrastructure Project"
-
-# S3 Backend Configuration
-export TF_VAR_terraform_state_bucket=my-terraform-state-bucket
-export TF_VAR_terraform_state_key=terraform.tfstate
 ```
 
-### Terraform Configuration
+### Backend Configuration
 
-#### Backend Configuration
+The S3 backend configuration:
 
 ```hcl
 terraform {
@@ -549,360 +519,148 @@ terraform {
 }
 ```
 
-#### Provider Configuration
+## Usage
 
-```hcl
-provider "aws" {
-  region = "us-east-1"
-
-  default_tags {
-    tags = {
-      Environment = "production"
-      Project     = "IaC Infrastructure"
-      ManagedBy   = "Terraform"
-    }
-  }
-}
-```
-
-## How to Run
-
-### 1. Prerequisites
+### Prerequisites
 
 - Terraform >= 1.4.0
 - AWS CLI configured
-- Node.js (for testing)
-- Docker (optional, for containerized deployment)
+- Node.js for testing
 
-### 2. Installation
+### Installation
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd iac-test-automations
-
-# Install dependencies
 npm install
-
-# Install Terraform
-curl -fsSL https://releases.hashicorp.com/terraform/1.4.0/terraform_1.4.0_linux_amd64.zip -o terraform.zip
-unzip terraform.zip
-sudo mv terraform /usr/local/bin/
 ```
 
-### 3. Testing
+### Testing
 
 ```bash
-# Run unit tests
 ./scripts/unit-tests.sh
-
-# Run integration tests
 ./scripts/integration-tests.sh
-
-# Run all tests
 npm test
 ```
 
-### 4. Deployment
+### Deployment
 
-#### Option 1: Standard Deployment
+Standard deployment:
 
 ```bash
-# Bootstrap infrastructure
 ./scripts/bootstrap.sh
-
-# Deploy infrastructure
 ./scripts/deploy.sh
 ```
 
-#### Option 2: Manual Deployment
+Manual deployment:
 
 ```bash
-# Initialize Terraform
-cd lib
-terraform init
-
-# Plan deployment
-terraform plan -out=tfplan
-
-# Apply deployment
-terraform apply tfplan
-```
-
-#### Option 3: Environment-Specific Deployment
-
-```bash
-# Set environment variables
-export TF_VAR_environment=staging
-export TF_VAR_aws_region=ap-south-1
-
-# Deploy to staging
-./scripts/deploy.sh
-
-# Deploy to production
-export TF_VAR_environment=production
-export TF_VAR_aws_region=us-east-1
-./scripts/deploy.sh
-```
-
-## Deployment Commands
-
-### Quick Start Commands
-
-```bash
-# 1. Bootstrap the infrastructure
-./scripts/bootstrap.sh
-
-# 2. Run unit tests
-./scripts/unit-tests.sh
-
-# 3. Run integration tests
-./scripts/integration-tests.sh
-
-# 4. Deploy infrastructure
-./scripts/deploy.sh
-```
-
-### Advanced Deployment Commands
-
-#### Standard Deployment
-
-```bash
-# Set environment variables
-export AWS_DEFAULT_REGION=us-east-1
-export TF_VAR_project_name="My Infrastructure Project"
-
-# Initialize and deploy
 cd lib
 terraform init
 terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-#### Multi-Environment Deployment
+Environment-specific deployment:
 
 ```bash
-# Deploy to staging
 export TF_VAR_environment=staging
 export TF_VAR_aws_region=ap-south-1
-terraform apply -var-file=staging.tfvars
-
-# Deploy to production
-export TF_VAR_environment=production
-export TF_VAR_aws_region=us-east-1
-terraform apply -var-file=production.tfvars
-```
-
-### Configuration Commands
-
-```bash
-# Set Terraform variables
-terraform init -backend-config="bucket=my-terraform-state-bucket" \
-               -backend-config="key=terraform.tfstate" \
-               -backend-config="region=us-east-1"
-
-# View current configuration
-terraform show
-
-# Export configuration
-terraform output -json
-```
-
-### Testing Commands
-
-```bash
-# Run all tests
-npm test
-
-# Run unit tests only
-./scripts/unit-tests.sh
-
-# Run integration tests only
-./scripts/integration-tests.sh
-
-# Run tests with coverage
-npm test -- --coverage
-```
-
-### Debugging Commands
-
-```bash
-# Enable verbose logging
-export TF_LOG=DEBUG
-
-# Preview changes
-terraform plan -detailed-exitcode
-
-# Validate configuration
-terraform validate
-
-# Format code
-terraform fmt
-
-# Check resource status
-terraform state list
-
-# View outputs
-terraform output
-
-# Destroy resources (use with caution)
-terraform destroy
-```
-
-### CI/CD Commands
-
-```bash
-# GitHub Actions workflow commands
-# These are typically run automatically by CI/CD
-
-# Install dependencies
-npm install
-
-# Run linting
-npm run lint
-
-# Run type checking
-npm run type-check
-
-# Run security checks
-npm run security-check
-
-# Build and test
-./scripts/build.sh
-./scripts/test.sh
 ./scripts/deploy.sh
 ```
 
 ## Features
 
-### Multi-Environment Support
+The infrastructure provides:
 
-- Staging and production environments
-- Environment-specific provider configurations
-- Separate resource naming and tagging
-
-### Modular Architecture
-
-- Reusable modules for storage, network, and IAM
-- Clean separation of concerns
-- Easy to extend and maintain
-
-### Resource Management
-
+- Multi-environment support for staging and production
+- Modular architecture with reusable components
+- Complete parameterization without hardcoded values
 - S3 buckets with versioning and encryption
 - VPC with security groups
 - IAM roles with least privilege access
-- Complete parameterization with no hardcoded values
-
-### Error Handling
-
-- Graceful handling of VPC creation
-- Duplicate tag resolution
-- Comprehensive error messages
-
-### Configuration Management
-
-- Environment variable support
-- Terraform variable files
-- Backend state management
-
-### Testing
-
-- Comprehensive unit test suite
-- Integration tests
-- Code coverage reporting
-- Test automation
-
-### CI/CD Integration
-
-- GitHub Actions workflows
-- Automated testing
-- Deployment automation
-- Environment management
+- Comprehensive testing with 23/23 tests passing
 
 ## Architecture
 
+The infrastructure is organized into separate environments:
+
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Staging       │    │   Production     │    │   Shared        │
-│   Environment   │    │   Environment    │    │   Resources     │
-│                 │    │                 │    │                 │
-│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│ │ S3 Bucket   │ │    │ │ S3 Bucket   │ │    │ │ IAM Roles   │ │
-│ │ VPC         │ │    │ │ VPC         │ │    │ │             │ │
-│ │ Security    │ │    │ │ Security    │ │    │ └─────────────┘ │
-│ │ Group       │ │    │ │ Group       │ │    │                 │
-│ └─────────────┘ │    │ └─────────────┘ │    └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐
+│   Staging       │    │   Production     │
+│   Environment   │    │   Environment    │
+│                 │    │                 │
+│ ┌─────────────┐ │    │ ┌─────────────┐ │
+│ │ S3 Bucket   │ │    │ │ S3 Bucket   │ │
+│ │ VPC         │ │    │ │ VPC         │ │
+│ │ Security    │ │    │ │ Security    │ │
+│ │ Group       │ │    │ │ Group       │ │
+│ └─────────────┘ │    │ └─────────────┘ │
 └─────────────────┘    └─────────────────┘
 ```
 
 ## Best Practices
 
-### 1. Resource Naming
+### Resource Naming
 
-- Consistent naming convention across environments
-- Environment-specific prefixes
-- Unique identifiers to avoid conflicts
+- Use consistent naming conventions across environments
+- Include environment-specific prefixes
+- Ensure unique identifiers to avoid conflicts
 
-### 2. Security
+### Security
 
-- Least privilege IAM policies
-- S3 bucket encryption
-- Security groups with restricted access
-- VPC isolation
+- Implement least privilege IAM policies
+- Enable S3 bucket encryption
+- Configure security groups with restricted access
+- Use VPC isolation
 
-### 3. Monitoring
+### Monitoring
 
-- Resource tagging for cost tracking
-- Environment-specific resource separation
-- Audit trail through Terraform state
+- Apply resource tagging for cost tracking
+- Separate resources by environment
+- Maintain audit trails through Terraform state
 
-### 4. Error Handling
+### Error Handling
 
-- Graceful degradation when resources fail
-- Comprehensive error messages
-- State management best practices
+- Implement graceful degradation for resource failures
+- Provide comprehensive error messages
+- Follow state management best practices
 
-### 5. Testing
+### Testing
 
-- Unit tests for all modules
-- Integration tests for deployment
-- Code coverage requirements
+- Write unit tests for all modules
+- Create integration tests for deployment
+- Maintain code coverage requirements
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **VPC Creation Error**
+1. VPC Creation Error
 
    ```bash
-   # Solution: Ensure VPC CIDR doesn't conflict
+   # Ensure VPC CIDR doesn't conflict
    # Update VPC CIDR in network module variables
    ```
 
-2. **Duplicate Tag Keys Error**
+2. Duplicate Tag Keys Error
 
    ```bash
-   # Solution: Remove duplicate tags from resources
+   # Remove duplicate tags from resources
    # Let provider handle default tagging
    ```
 
-3. **S3 Bucket Name Conflict**
+3. S3 Bucket Name Conflict
    ```bash
-   # Solution: Use random suffix for bucket names
+   # Use random suffix for bucket names
    # Ensure unique naming across environments
    ```
 
 ### Debugging
 
 ```bash
-# Enable verbose logging
 export TF_LOG=DEBUG
-
-# Run with detailed output
 terraform plan -detailed-exitcode
-
-# Check resource status
 terraform state list
 ```
 
@@ -917,11 +675,9 @@ terraform state list
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
----
-
-## Commands to run this stack:
+## Deployment Commands
 
 ```bash
 # Set Terraform configuration
