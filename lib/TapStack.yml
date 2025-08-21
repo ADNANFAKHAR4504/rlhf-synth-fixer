@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::SecretsManager-2020-07-23
 Description: 'TAP - Cloud formation Template for  Multi-Tier AWS Architecture'
 Parameters:
   LatestAmiId:
@@ -511,9 +512,9 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier: [!Ref PrivateAppSubnetAz1, !Ref PrivateAppSubnetAz2]
-      MinSize: '1'
+      MinSize: '0'
       MaxSize: '2'
-      DesiredCapacity: '2'
+      DesiredCapacity: '0'
       MixedInstancesPolicy:
         LaunchTemplate:
           LaunchTemplateSpecification:
@@ -581,7 +582,7 @@ Resources:
       AllocatedStorage: 20
       StorageEncrypted: true
       KmsKeyId: !Ref CMKData
-      MultiAZ: true
+      MultiAZ: false
       PubliclyAccessible: false
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref SgDb]
