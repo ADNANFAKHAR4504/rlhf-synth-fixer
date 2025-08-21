@@ -28,17 +28,21 @@ const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
 });
 
 // Secondary region stack (eu-west-1)
-const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`, {
-  stackName: `TapStackSecondary${environmentSuffix}`,
-  environmentSuffix: environmentSuffix,
-  isPrimary: false,
-  primaryRegion: 'us-east-1',
-  primaryBucketArn: primaryStack.primaryBucketArn,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'eu-west-1',
-  },
-});
+const secondaryStack = new TapStack(
+  app,
+  `TapStackSecondary${environmentSuffix}`,
+  {
+    stackName: `TapStackSecondary${environmentSuffix}`,
+    environmentSuffix: environmentSuffix,
+    isPrimary: false,
+    primaryRegion: 'us-east-1',
+    primaryBucketArn: primaryStack.primaryBucketArn,
+    env: {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'eu-west-1',
+    },
+  }
+);
 
 // Add cross-stack dependency
 secondaryStack.addDependency(primaryStack);

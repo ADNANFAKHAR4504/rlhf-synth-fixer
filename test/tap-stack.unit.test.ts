@@ -10,7 +10,7 @@ describe('TapStack', () => {
     const stack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
       isPrimary: true,
-      env: { region: 'us-east-1' }
+      env: { region: 'us-east-1' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -22,7 +22,7 @@ describe('TapStack', () => {
       isPrimary: false,
       primaryRegion: 'us-east-1',
       primaryBucketArn: 'arn:aws:s3:::mock-primary-bucket',
-      env: { region: 'eu-west-1' }
+      env: { region: 'eu-west-1' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -39,10 +39,10 @@ describe('TapStack', () => {
               Effect: 'Allow',
               Principal: { AWS: Match.anyValue() },
               Action: 'kms:*',
-              Resource: '*'
-            })
-          ])
-        })
+              Resource: '*',
+            }),
+          ]),
+        }),
       });
     });
 
@@ -59,29 +59,29 @@ describe('TapStack', () => {
               Prefix: '',
               Destination: {
                 Bucket: Match.anyValue(),
-                StorageClass: 'STANDARD_IA'
-              }
-            }
-          ]
+                StorageClass: 'STANDARD_IA',
+              },
+            },
+          ],
         },
         VersioningConfiguration: {
-          Status: 'Enabled'
+          Status: 'Enabled',
         },
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms'
-              }
-            }
-          ]
+                SSEAlgorithm: 'aws:kms',
+              },
+            },
+          ],
         },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
@@ -95,12 +95,12 @@ describe('TapStack', () => {
               Action: 's3:*',
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'false'
-                }
-              }
-            })
-          ])
-        }
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            }),
+          ]),
+        },
       });
     });
 
@@ -113,10 +113,10 @@ describe('TapStack', () => {
             {
               Effect: 'Allow',
               Principal: { Service: 's3.amazonaws.com' },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        }
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
 
@@ -125,11 +125,11 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::CloudFront::Distribution', {
         DistributionConfig: {
           DefaultCacheBehavior: {
-            ViewerProtocolPolicy: 'redirect-to-https'
+            ViewerProtocolPolicy: 'redirect-to-https',
           },
           PriceClass: 'PriceClass_100',
-          Enabled: true
-        }
+          Enabled: true,
+        },
       });
     });
 
@@ -138,12 +138,12 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.0.0.0/16',
         EnableDnsHostnames: true,
-        EnableDnsSupport: true
+        EnableDnsSupport: true,
       });
 
       // Check for public subnets
       template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 AZs * 3 subnet types
-      
+
       // Check for NAT Gateway
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
@@ -158,14 +158,14 @@ describe('TapStack', () => {
         StorageEncrypted: true,
         BackupRetentionPeriod: 7,
         DeletionProtection: false,
-        DBName: 'tapdb'
+        DBName: 'tapdb',
       });
     });
 
     test('creates RDS subnet group in isolated subnets', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: 'Subnet group for TAP RDS instance'
+        DBSubnetGroupDescription: 'Subnet group for TAP RDS instance',
       });
     });
 
@@ -174,14 +174,14 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '1',
         MaxSize: '3',
-        DesiredCapacity: '1'
+        DesiredCapacity: '1',
       });
     });
 
     test('creates EC2 security group with HTTP/HTTPS access', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP EC2 instances'
+        GroupDescription: 'Security group for TAP EC2 instances',
       });
     });
 
@@ -193,10 +193,10 @@ describe('TapStack', () => {
             {
               Effect: 'Allow',
               Principal: { Service: 's3.amazonaws.com' },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        }
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
 
@@ -208,10 +208,10 @@ describe('TapStack', () => {
             {
               Effect: 'Allow',
               Principal: { Service: 'ec2.amazonaws.com' },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        }
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
       });
     });
 
@@ -219,7 +219,7 @@ describe('TapStack', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: `tap-replication-alerts-useast1-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - us-east-1'
+        DisplayName: 'TAP Replication Alerts - us-east-1',
       });
     });
 
@@ -231,16 +231,16 @@ describe('TapStack', () => {
         Timeout: 300,
         Environment: {
           Variables: {
-            SNS_TOPIC_ARN: Match.anyValue()
-          }
-        }
+            SNS_TOPIC_ARN: Match.anyValue(),
+          },
+        },
       });
     });
 
     test('creates CloudWatch log group for Lambda', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 7
+        RetentionInDays: 7,
       });
     });
 
@@ -261,8 +261,8 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.anyValue(),
         VersioningConfiguration: {
-          Status: 'Enabled'
-        }
+          Status: 'Enabled',
+        },
       });
 
       // Check that main bucket exists without replication
@@ -270,8 +270,8 @@ describe('TapStack', () => {
       const buckets = Object.values(templateJson.Resources).filter(
         (resource: any) => resource.Type === 'AWS::S3::Bucket'
       );
-      const mainBucket = buckets.find((bucket: any) => 
-        !bucket.Properties?.ReplicationConfiguration
+      const mainBucket = buckets.find(
+        (bucket: any) => !bucket.Properties?.ReplicationConfiguration
       );
       expect(mainBucket).toBeDefined();
     });
@@ -286,14 +286,14 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         SourceDBInstanceIdentifier: Match.anyValue(),
         DBInstanceClass: 'db.t3.micro',
-        StorageEncrypted: true
+        StorageEncrypted: true,
       });
     });
 
     test('creates VPC in secondary region', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16'
+        CidrBlock: '10.0.0.0/16',
       });
     });
 
@@ -301,7 +301,7 @@ describe('TapStack', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '1',
-        MaxSize: '3'
+        MaxSize: '3',
       });
     });
 
@@ -309,7 +309,7 @@ describe('TapStack', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: `tap-replication-alerts-euwest1-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - eu-west-1'
+        DisplayName: 'TAP Replication Alerts - eu-west-1',
       });
     });
 
@@ -324,17 +324,17 @@ describe('TapStack', () => {
   describe('Security and Compliance', () => {
     test('all IAM policies follow least privilege principle', () => {
       const { template } = createPrimaryStack();
-      
+
       // Check that no policies use wildcards inappropriately
       template.allResourcesProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.not({
               Resource: '*',
-              Action: '*'
-            })
-          ])
-        }
+              Action: '*',
+            }),
+          ]),
+        },
       });
     });
 
@@ -348,11 +348,11 @@ describe('TapStack', () => {
             ServerSideEncryptionConfiguration: [
               {
                 ServerSideEncryptionByDefault: {
-                  SSEAlgorithm: Match.anyValue()
-                }
-              }
-            ]
-          }
+                  SSEAlgorithm: Match.anyValue(),
+                },
+              },
+            ],
+          },
         });
       });
     });
@@ -362,19 +362,22 @@ describe('TapStack', () => {
       const { template: secondaryTemplate } = createSecondaryStack();
       [primaryTemplate, secondaryTemplate].forEach(template => {
         const templateJson = template.toJSON();
-        Object.entries(templateJson.Resources).forEach(([resourceId, resource]: [string, any]) => {
-          // Skip resources that are allowed to have Retain policy
-          if (resource.DeletionPolicy === 'Retain') {
-            const isAllowedRetain = resourceId.includes('Logging') || 
-                                  resourceId.includes('CloudFront') ||
-                                  resourceId.includes('LogRetention') ||
-                                  resourceId.includes('CustomResource') ||
-                                  resource.Type?.includes('Custom::');
-            if (!isAllowedRetain) {
-              expect(resource.DeletionPolicy).not.toBe('Retain');
+        Object.entries(templateJson.Resources).forEach(
+          ([resourceId, resource]: [string, any]) => {
+            // Skip resources that are allowed to have Retain policy
+            if (resource.DeletionPolicy === 'Retain') {
+              const isAllowedRetain =
+                resourceId.includes('Logging') ||
+                resourceId.includes('CloudFront') ||
+                resourceId.includes('LogRetention') ||
+                resourceId.includes('CustomResource') ||
+                resource.Type?.includes('Custom::');
+              if (!isAllowedRetain) {
+                expect(resource.DeletionPolicy).not.toBe('Retain');
+              }
             }
           }
-        });
+        );
       });
     });
   });
@@ -383,12 +386,12 @@ describe('TapStack', () => {
     test('handles missing environment suffix gracefully', () => {
       const app = new cdk.App();
       const testStack = new TapStack(app, 'TestStackNoSuffix', {
-        isPrimary: true
+        isPrimary: true,
       });
       const template = Template.fromStack(testStack);
-      
+
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue() // Should default to 'dev'
+        BucketName: Match.anyValue(), // Should default to 'dev'
       });
     });
 
@@ -396,12 +399,12 @@ describe('TapStack', () => {
       const app = new cdk.App();
       const customStack = new TapStack(app, 'TestStackCustom', {
         environmentSuffix: 'prod',
-        isPrimary: true
+        isPrimary: true,
       });
       const template = Template.fromStack(customStack);
-      
+
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue()
+        BucketName: Match.anyValue(),
       });
     });
   });
@@ -412,9 +415,9 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
-            SNS_TOPIC_ARN: Match.anyValue()
-          }
-        }
+            SNS_TOPIC_ARN: Match.anyValue(),
+          },
+        },
       });
     });
 
@@ -422,12 +425,12 @@ describe('TapStack', () => {
       const { template } = createPrimaryStack();
       // Check that RDS security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP RDS instance'
+        GroupDescription: 'Security group for TAP RDS instance',
       });
-      
+
       // Check that EC2 security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP EC2 instances'
+        GroupDescription: 'Security group for TAP EC2 instances',
       });
     });
   });

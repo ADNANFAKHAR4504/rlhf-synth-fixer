@@ -12,7 +12,14 @@ The solution implements a robust multi-region architecture with:
 - SNS topics for replication alerts and monitoring
 - Lambda functions for consistency and workflow automation
 - KMS encryption at rest across all resources
-- Least-privilege IAM policies for security compliance
+## Design Decisions
+- **Cyclic dependency resolution**: Created replication IAM role first, then added policies after bucket creation to avoid circular references
+- **Test isolation**: Used fresh CDK apps per unit test to prevent synthesis conflicts and cross-stack references
+- **Integration test strategy**: Designed to run post-deployment in CI/CD pipeline to validate actual AWS resources
+- **Resource cleanup**: Applied RemovalPolicy.DESTROY for CI/CD compatibility while allowing AWS managed resources to retain
+- **Flexible test assertions**: Used `Match.anyValue()` for dynamic resource properties like ARNs and auto-generated names
+- **Deprecated API handling**: Using `S3Origin` and `logRetention` with warnings; planned for future CDK upgrades
+- **Least-privilege IAM**: Specific permissions without wildcards for security compliance
 
 ## Code Implementation
 
@@ -122,43 +129,51 @@ export class TapStack extends cdk.Stack {
 
     // Cross-region replication (only for primary region)
     if (isPrimary) {
+      // Create replication role first to avoid cyclic dependency
       const replicationRole = new iam.Role(this, 'ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-        inlinePolicies: {
-          ReplicationPolicy: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObjectVersionForReplication',
-                  's3:GetObjectVersionAcl',
-                  's3:GetObjectVersionTagging',
-                ],
-                resources: [`${bucket.bucketArn}/*`],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['s3:ListBucket'],
-                resources: [bucket.bucketArn],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:ReplicateObject',
-                  's3:ReplicateDelete',
-                  's3:ReplicateTags',
-                ],
-                resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                resources: [kmsKey.keyArn],
-              }),
-            ],
-          }),
-        },
       });
+
+      // Add policies after bucket creation to avoid cyclic dependency
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [`${bucket.bucketArn}/*`],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['s3:ListBucket'],
+          resources: [bucket.bucketArn],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:ReplicateObject',
+            's3:ReplicateDelete',
+            's3:ReplicateTags',
+          ],
+          resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+          resources: [kmsKey.keyArn],
+        })
+      );
 
       // Add replication configuration via CfnBucket
       const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
@@ -325,7 +340,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Auto Scaling Group
-    const asg = new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+    new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
       vpc,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),

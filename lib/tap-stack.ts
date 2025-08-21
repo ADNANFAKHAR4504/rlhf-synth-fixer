@@ -122,7 +122,8 @@ export class TapStack extends cdk.Stack {
       distribution = new cloudfront.Distribution(this, 'TapDistribution', {
         defaultBehavior: {
           origin: new origins.S3Origin(bucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
@@ -176,7 +177,10 @@ export class TapStack extends cdk.Stack {
         engine: rds.DatabaseInstanceEngine.postgres({
           version: rds.PostgresEngineVersion.VER_15_4,
         }),
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
         vpc,
         subnetGroup: dbSubnetGroup,
         securityGroups: [dbSecurityGroup],
@@ -196,13 +200,21 @@ export class TapStack extends cdk.Stack {
     } else {
       // Read replica in secondary region
       new rds.DatabaseInstanceReadReplica(this, 'TapDatabaseReplica', {
-        sourceDatabaseInstance: rds.DatabaseInstance.fromDatabaseInstanceAttributes(this, 'SourceDb', {
-          instanceIdentifier: `tapstackprimary${environmentSuffix}-tapdatabase`,
-          instanceEndpointAddress: 'placeholder',
-          port: 5432,
-          securityGroups: [],
-        }),
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        sourceDatabaseInstance:
+          rds.DatabaseInstance.fromDatabaseInstanceAttributes(
+            this,
+            'SourceDb',
+            {
+              instanceIdentifier: `tapstackprimary${environmentSuffix}-tapdatabase`,
+              instanceEndpointAddress: 'placeholder',
+              port: 5432,
+              securityGroups: [],
+            }
+          ),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
         vpc,
         subnetGroup: dbSubnetGroup,
         securityGroups: [dbSecurityGroup],
@@ -214,10 +226,14 @@ export class TapStack extends cdk.Stack {
     }
 
     // EC2 Security Group for Auto Scaling Group
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'TapEc2SecurityGroup', {
-      vpc,
-      description: 'Security group for TAP EC2 instances',
-    });
+    const ec2SecurityGroup = new ec2.SecurityGroup(
+      this,
+      'TapEc2SecurityGroup',
+      {
+        vpc,
+        description: 'Security group for TAP EC2 instances',
+      }
+    );
 
     ec2SecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
@@ -242,7 +258,9 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'TapEc2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -263,9 +281,12 @@ export class TapStack extends cdk.Stack {
     });
 
     // Auto Scaling Group
-    const asg = new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
+    new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
       vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       role: ec2Role,
       securityGroup: ec2SecurityGroup,
@@ -285,10 +306,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // Lambda function for replication monitoring
-    const replicationLambda = new lambda.Function(this, 'TapReplicationMonitor', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const replicationLambda = new lambda.Function(
+      this,
+      'TapReplicationMonitor',
+      {
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 import os
@@ -316,12 +340,13 @@ def handler(event, context):
     
     return {'statusCode': 200, 'body': json.dumps('Success')}
       `),
-      environment: {
-        SNS_TOPIC_ARN: snsTopic.topicArn,
-      },
-      timeout: cdk.Duration.minutes(5),
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+        environment: {
+          SNS_TOPIC_ARN: snsTopic.topicArn,
+        },
+        timeout: cdk.Duration.minutes(5),
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
 
     // Grant Lambda permission to publish to SNS
     snsTopic.grantPublish(replicationLambda);
