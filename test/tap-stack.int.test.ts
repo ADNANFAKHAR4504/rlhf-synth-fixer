@@ -21,22 +21,21 @@ const ec2Instance2Id = process.env.EC2_INSTANCE_2_ID;
 const ec2SecurityGroupId = process.env.EC2_SECURITY_GROUP_ID;
 const rdsSecurityGroupId = process.env.RDS_SECURITY_GROUP_ID;
 
-describe('TAP Infrastructure Integration Tests - Live Resources', () => {
-  // Skip tests if required environment variables are not set
-  const requiredEnvVars = [
-    vpcId,
-    databaseEndpoint,
-    kmsKeyId,
-    ec2Instance1Id,
-    ec2Instance2Id,
-    ec2SecurityGroupId,
-    rdsSecurityGroupId,
-  ];
+// Check if we have all required environment variables
+const hasAllEnvVars = [
+  vpcId,
+  databaseEndpoint,
+  kmsKeyId,
+  ec2Instance1Id,
+  ec2Instance2Id,
+  ec2SecurityGroupId,
+  rdsSecurityGroupId,
+].every(v => v);
 
-  if (requiredEnvVars.some(v => !v)) {
-    console.warn(
-      'Skipping integration tests - required environment variables not set'
-    );
+describe('TAP Infrastructure Integration Tests - Live Resources', () => {
+  // Skip all tests if required environment variables are not set
+  if (!hasAllEnvVars) {
+    test.skip('Skipping all tests - required environment variables not set', () => {});
     return;
   }
 
@@ -66,6 +65,7 @@ describe('TAP Infrastructure Integration Tests - Live Resources', () => {
     });
   });
 
+  // ... rest of your test cases remain the same
   describe('Security Groups Validation', () => {
     test('EC2 Security Group allows HTTP/HTTPS inbound', async () => {
       const response = await ec2
