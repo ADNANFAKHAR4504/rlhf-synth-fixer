@@ -139,7 +139,7 @@ export class TapStack extends TerraformStack {
     const route53Module = new Route53Module(this, 'route53', {
       namePrefix,
       tags: projectTags,
-      domainName: 'myapp.example.com',
+      domainName: 'myapp-demo.local',
       albDnsName: albModule.loadBalancer.dnsName,
       albZoneId: albModule.loadBalancer.zoneId,
     });
