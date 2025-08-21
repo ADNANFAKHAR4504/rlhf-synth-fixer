@@ -11,6 +11,8 @@ import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeVolumesCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
@@ -108,9 +110,6 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
       // Use DescribeVpcAttributeCommand to check DNS attributes
-      const { DescribeVpcAttributeCommand } = await import(
-        '@aws-sdk/client-ec2'
-      );
       const dnsHostnamesAttr = await ec2Client.send(
         new DescribeVpcAttributeCommand({
           VpcId: vpc.VpcId,
@@ -168,7 +167,6 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(blockDevices.length).toBeGreaterThan(0);
 
       // Check EBS volume encryption using DescribeVolumesCommand
-      const { DescribeVolumesCommand } = await import('@aws-sdk/client-ec2');
       const volumeIds = blockDevices
         .map(device => device.Ebs?.VolumeId)
         .filter((id): id is string => typeof id === 'string');
