@@ -499,8 +499,9 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-profile"
-  role = aws_iam_role.ec2_role.name
+  count = local.deploy_iam_profile ? 1 : 0
+  name  = "${local.name_prefix}-ec2-profile"
+  role  = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
 }
@@ -679,7 +680,34 @@ resource "aws_s3_bucket_policy" "app_data" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ALBAccessLogs"
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.app_data.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "s3:GetBucketAcl"
+        ]
+        Resource = aws_s3_bucket.app_data.arn
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
@@ -693,6 +721,17 @@ resource "aws_s3_bucket_policy" "app_data" {
             "s3:x-amz-acl" = "bucket-owner-full-control"
           }
         }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
+        }
+        Action = [
+          "s3:GetBucketAcl"
+        ]
+        Resource = aws_s3_bucket.app_data.arn
       }
     ]
   })
@@ -724,7 +763,7 @@ resource "aws_launch_template" "web" {
   vpc_security_group_ids = [aws_security_group.web.id]
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
+    name = local.deploy_iam_profile ? aws_iam_instance_profile.ec2_profile[0].name : "${local.name_prefix}-ec2-profile"
   }
 
   block_device_mappings {
@@ -847,6 +886,8 @@ resource "aws_lb" "web" {
     prefix  = "alb-logs"
     enabled = true
   }
+
+  depends_on = [aws_s3_bucket_policy.app_data]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-web-alb"
@@ -1002,9 +1043,10 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # AWS CONFIG RULES FOR COMPLIANCE
 # =============================================================================
 
-# Flag to control Config deployment - set to false if Config delivery channel already exists
+# Flags to control deployment - set to false if resources already exist
 locals {
   deploy_config = false  # Set to false if Config delivery channel already exists in the region
+  deploy_iam_profile = true  # Set to false if IAM instance profile already exists
 }
 
 resource "aws_config_configuration_recorder" "main" {
@@ -1100,7 +1142,7 @@ resource "aws_instance" "bastion" {
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
   subnet_id              = aws_subnet.public[0].id
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  iam_instance_profile   = local.deploy_iam_profile ? aws_iam_instance_profile.ec2_profile[0].name : "${local.name_prefix}-ec2-profile"
 
   root_block_device {
     volume_type           = "gp3"
