@@ -1,3 +1,24 @@
+# Ideal Response
+
+The assistant should output **only** a valid `tap_stack.yml` CloudFormation template, with no extra commentary, meeting all requirements:
+
+- Full VPC setup across two AZs in `us-west-2`.
+- 2 public and 2 private subnets, correctly routed via IGW/NAT.
+- One NAT Gateway per AZ for high availability.
+- Internet-facing ALB in public subnets forwarding HTTP to private EC2s.
+- EC2 Auto Scaling Group with Launch Template, default `t2.micro`.
+- Bastion host in public subnet, SSH restricted to parameterized CIDR.
+- Security groups with least privilege rules (ALB → App, Bastion → SSH).
+- IAM role/profile for EC2 limited to reading one SSM SecureString parameter.
+- Example SecureString parameter creation if `CreateAppSecret=true`.
+- Parameters for all configurable values (KeyName, VpcCidr, SSHCidr, InstanceType, ASG sizes, AMI source).
+- Outputs for VPC, subnets, bastion IP, ALB DNS, ASG name, roles, and security groups.
+- All resources tagged with `Environment: Production`.
+- No secrets hardcoded; dynamic reference to SSM SecureString for app secret.
+
+The YAML must be syntactically correct and production deployable.
+
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "TapStack VPC with subnets, routing, security groups, and bastion host"
 
@@ -193,5 +214,5 @@ Outputs:
   PrivateSubnetIds:
     Description: Private Subnets
     Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
-
+```
 
