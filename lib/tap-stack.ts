@@ -151,7 +151,7 @@ export class TapStack extends cdk.Stack {
       this,
       'WebServerASG',
       {
-        autoScalingGroupName: `${environmentSuffix}-webapp-asg-${environmentSuffix}`,
+        autoScalingGroupName: `webapp-asg-${environmentSuffix}`,
         vpc,
         launchTemplate,
         minCapacity: environmentSuffix === 'Production' ? 2 : 1,
