@@ -96,20 +96,23 @@ export class Ec2InstanceComponent extends pulumi.ComponentResource {
     const amiId =
       args.amiId ||
       aws.ec2
-        .getAmi({
-          mostRecent: true,
-          owners: ['amazon'],
-          filters: [
-            {
-              name: 'name',
-              values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-            },
-            {
-              name: 'virtualization-type',
-              values: ['hvm'],
-            },
-          ],
-        })
+        .getAmi(
+          {
+            mostRecent: true,
+            owners: ['amazon'],
+            filters: [
+              {
+                name: 'name',
+                values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+              },
+              {
+                name: 'virtualization-type',
+                values: ['hvm'],
+              },
+            ],
+          },
+          { provider: opts?.provider }
+        )
         .then(ami => ami.id);
 
     // Default user data for security hardening
@@ -182,7 +185,7 @@ yum update -y --security
             },
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.instanceId = this.instance.id;
@@ -222,20 +225,23 @@ export class LaunchTemplateComponent extends pulumi.ComponentResource {
     const amiId =
       args.amiId ||
       aws.ec2
-        .getAmi({
-          mostRecent: true,
-          owners: ['amazon'],
-          filters: [
-            {
-              name: 'name',
-              values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-            },
-            {
-              name: 'virtualization-type',
-              values: ['hvm'],
-            },
-          ],
-        })
+        .getAmi(
+          {
+            mostRecent: true,
+            owners: ['amazon'],
+            filters: [
+              {
+                name: 'name',
+                values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+              },
+              {
+                name: 'virtualization-type',
+                values: ['hvm'],
+              },
+            ],
+          },
+          { provider: opts?.provider }
+        )
         .then(ami => ami.id);
 
     // Default user data for security hardening
@@ -334,7 +340,7 @@ yum update -y --security
         ],
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.launchTemplateId = this.launchTemplate.id;
@@ -410,7 +416,7 @@ export class AutoScalingGroupComponent extends pulumi.ComponentResource {
         },
         tags: asgTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.autoScalingGroupName = this.autoScalingGroup.name;
@@ -426,9 +432,10 @@ export class AutoScalingGroupComponent extends pulumi.ComponentResource {
 
 export function createEc2Instance(
   name: string,
-  args: Ec2InstanceArgs
+  args: Ec2InstanceArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): Ec2InstanceResult {
-  const ec2Component = new Ec2InstanceComponent(name, args);
+  const ec2Component = new Ec2InstanceComponent(name, args, opts);
   return {
     instance: ec2Component.instance,
     instanceId: ec2Component.instanceId,
@@ -437,8 +444,12 @@ export function createEc2Instance(
   };
 }
 
-export function createLaunchTemplate(name: string, args: LaunchTemplateArgs) {
-  const launchTemplateComponent = new LaunchTemplateComponent(name, args);
+export function createLaunchTemplate(
+  name: string,
+  args: LaunchTemplateArgs,
+  opts?: pulumi.ComponentResourceOptions
+) {
+  const launchTemplateComponent = new LaunchTemplateComponent(name, args, opts);
   return {
     launchTemplate: launchTemplateComponent.launchTemplate,
     launchTemplateId: launchTemplateComponent.launchTemplateId,
@@ -448,9 +459,10 @@ export function createLaunchTemplate(name: string, args: LaunchTemplateArgs) {
 
 export function createAutoScalingGroup(
   name: string,
-  args: AutoScalingGroupArgs
+  args: AutoScalingGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ) {
-  const asgComponent = new AutoScalingGroupComponent(name, args);
+  const asgComponent = new AutoScalingGroupComponent(name, args, opts);
   return {
     autoScalingGroup: asgComponent.autoScalingGroup,
     autoScalingGroupName: asgComponent.autoScalingGroupName,

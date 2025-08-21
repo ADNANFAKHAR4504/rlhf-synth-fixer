@@ -54,11 +54,11 @@ export interface S3BucketResult {
   bucketId: pulumi.Output<string>;
   bucketArn: pulumi.Output<string>;
   bucketDomainName: pulumi.Output<string>;
-  versioning?: aws.s3.BucketVersioning; // ← FIXED: Removed V2
-  serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration; // ← FIXED: Removed V2
+  versioning?: aws.s3.BucketVersioning;
+  serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration;
   publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
-  lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration; // ← FIXED: Removed V2
-  corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
+  lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration;
+  corsConfiguration?: aws.s3.BucketCorsConfiguration; // ← FIXED: Removed V2
   bucketPolicy?: aws.s3.BucketPolicy;
 }
 
@@ -104,11 +104,11 @@ export class S3BucketComponent extends pulumi.ComponentResource {
   public readonly bucketId: pulumi.Output<string>;
   public readonly bucketArn: pulumi.Output<string>;
   public readonly bucketDomainName: pulumi.Output<string>;
-  public readonly versioning?: aws.s3.BucketVersioning; // ← FIXED: Removed V2
-  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration; // ← FIXED: Removed V2
+  public readonly versioning?: aws.s3.BucketVersioning;
+  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration;
   public readonly publicAccessBlock?: aws.s3.BucketPublicAccessBlock;
-  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration; // ← FIXED: Removed V2
-  public readonly corsConfiguration?: aws.s3.BucketCorsConfigurationV2;
+  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration;
+  public readonly corsConfiguration?: aws.s3.BucketCorsConfiguration; // ← FIXED: Removed V2
   public readonly bucketPolicy?: aws.s3.BucketPolicy;
 
   constructor(
@@ -126,25 +126,37 @@ export class S3BucketComponent extends pulumi.ComponentResource {
       ...args.tags,
     };
 
-    // Create S3 bucket
+    //  Create S3 bucket without deprecated ACL
     this.bucket = new aws.s3.Bucket(
       `${name}-bucket`,
       {
         bucket: args.bucketName,
-        acl: args.acl || 'private',
+        // Removed ACL - will use aws.s3.BucketAcl resource instead
         forceDestroy: args.forceDestroy ?? false,
         tags: defaultTags,
       },
-      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+      { parent: this, provider: opts?.provider }
     );
+
+    //  Create separate ACL
+    if (args.acl && args.acl !== 'private') {
+      new aws.s3.BucketAcl(
+        `${name}-acl`,
+        {
+          bucket: this.bucket.id,
+          acl: args.acl,
+        },
+        { parent: this, provider: opts?.provider }
+      );
+    }
 
     this.bucketId = this.bucket.id;
     this.bucketArn = this.bucket.arn;
     this.bucketDomainName = this.bucket.bucketDomainName;
 
-    // ✅ FIXED: Configure versioning with non-deprecated resource
+    // Configure versioning
     if (args.versioning) {
-      this.versioning = new aws.s3.BucketVersioning( // ← FIXED: Removed V2
+      this.versioning = new aws.s3.BucketVersioning(
         `${name}-versioning`,
         {
           bucket: this.bucket.id,
@@ -153,14 +165,14 @@ export class S3BucketComponent extends pulumi.ComponentResource {
             mfaDelete: args.versioning.mfaDelete ? 'Enabled' : 'Disabled',
           },
         },
-        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+        { parent: this, provider: opts?.provider }
       );
     }
 
-    // ✅ FIXED: Configure server-side encryption with non-deprecated resource
+    // Configure server-side encryption if specified
     if (args.serverSideEncryption) {
       this.serverSideEncryption =
-        new aws.s3.BucketServerSideEncryptionConfiguration( // ← FIXED: Removed V2
+        new aws.s3.BucketServerSideEncryptionConfiguration(
           `${name}-encryption`,
           {
             bucket: this.bucket.id,
@@ -175,7 +187,7 @@ export class S3BucketComponent extends pulumi.ComponentResource {
               },
             ],
           },
-          { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+          { parent: this, provider: opts?.provider }
         );
     }
 
@@ -197,12 +209,12 @@ export class S3BucketComponent extends pulumi.ComponentResource {
         restrictPublicBuckets:
           publicAccessBlockConfig.restrictPublicBuckets ?? true,
       },
-      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+      { parent: this, provider: opts?.provider }
     );
 
-    // ✅ FIXED: Configure lifecycle rules with non-deprecated resource
+    // Configure lifecycle rules if specified
     if (args.lifecycleRules && args.lifecycleRules.length > 0) {
-      this.lifecycleConfiguration = new aws.s3.BucketLifecycleConfiguration( // ← FIXED: Removed V2
+      this.lifecycleConfiguration = new aws.s3.BucketLifecycleConfiguration(
         `${name}-lifecycle`,
         {
           bucket: this.bucket.id,
@@ -246,19 +258,19 @@ export class S3BucketComponent extends pulumi.ComponentResource {
             return lifecycleRule;
           }),
         },
-        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+        { parent: this, provider: opts?.provider }
       );
     }
 
-    // Configure CORS if specified
+    //  Configure CORS with non-deprecated resource
     if (args.corsRules && args.corsRules.length > 0) {
-      this.corsConfiguration = new aws.s3.BucketCorsConfigurationV2(
+      this.corsConfiguration = new aws.s3.BucketCorsConfiguration( // ← FIXED: Removed V2
         `${name}-cors`,
         {
           bucket: this.bucket.id,
           corsRules: args.corsRules,
         },
-        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+        { parent: this, provider: opts?.provider }
       );
     }
 
@@ -292,7 +304,7 @@ export class S3BucketPolicyComponent extends pulumi.ComponentResource {
         bucket: args.bucket,
         policy: args.policy,
       },
-      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+      { parent: this, provider: opts?.provider }
     );
 
     this.registerOutputs({
@@ -306,10 +318,10 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
   public readonly bucketId: pulumi.Output<string>;
   public readonly bucketArn: pulumi.Output<string>;
   public readonly bucketDomainName: pulumi.Output<string>;
-  public readonly versioning?: aws.s3.BucketVersioning; // ← FIXED: Removed V2
-  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration; // ← FIXED: Removed V2
+  public readonly versioning?: aws.s3.BucketVersioning;
+  public readonly serverSideEncryption?: aws.s3.BucketServerSideEncryptionConfiguration;
   public readonly publicAccessBlock: aws.s3.BucketPublicAccessBlock;
-  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration; // ← FIXED: Removed V2
+  public readonly lifecycleConfiguration?: aws.s3.BucketLifecycleConfiguration;
   public readonly bucketPolicy?: aws.s3.BucketPolicy;
 
   constructor(
@@ -340,7 +352,7 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
             id: 'delete-old-versions',
             status: 'Enabled' as const,
             noncurrentVersionExpiration: {
-              noncurrentDays: 90, // Always defined, no undefined values
+              noncurrentDays: 90,
             },
           },
           {
@@ -358,7 +370,7 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
       name,
       {
         bucketName: args.bucketName,
-        acl: 'private',
+        // Removed ACL parameter - defaults to private
         forceDestroy: false,
         tags: args.tags,
         versioning: {
@@ -378,7 +390,7 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
         },
         lifecycleRules: defaultLifecycleRules,
       },
-      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+      { parent: this, provider: opts?.provider }
     );
 
     this.bucket = s3BucketComponent.bucket;
@@ -441,7 +453,7 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
           bucket: this.bucketId,
           policy: bucketPolicy,
         },
-        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
+        { parent: this, provider: opts?.provider }
       );
 
       this.bucketPolicy = bucketPolicyComponent.bucketPolicy;
@@ -464,9 +476,9 @@ export class SecureS3BucketComponent extends pulumi.ComponentResource {
 export function createS3Bucket(
   name: string,
   args: S3BucketArgs,
-  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+  opts?: pulumi.ComponentResourceOptions
 ): S3BucketResult {
-  const s3BucketComponent = new S3BucketComponent(name, args, opts); // ← FIXED: Pass opts through
+  const s3BucketComponent = new S3BucketComponent(name, args, opts);
   return {
     bucket: s3BucketComponent.bucket,
     bucketId: s3BucketComponent.bucketId,
@@ -484,18 +496,18 @@ export function createS3Bucket(
 export function createS3BucketPolicy(
   name: string,
   args: S3BucketPolicyArgs,
-  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+  opts?: pulumi.ComponentResourceOptions
 ): aws.s3.BucketPolicy {
-  const bucketPolicyComponent = new S3BucketPolicyComponent(name, args, opts); // ← FIXED: Pass opts through
+  const bucketPolicyComponent = new S3BucketPolicyComponent(name, args, opts);
   return bucketPolicyComponent.bucketPolicy;
 }
 
 export function createSecureS3Bucket(
   name: string,
   args: SecureS3BucketArgs,
-  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+  opts?: pulumi.ComponentResourceOptions
 ): S3BucketResult {
-  const secureS3BucketComponent = new SecureS3BucketComponent(name, args, opts); // ← FIXED: Pass opts through
+  const secureS3BucketComponent = new SecureS3BucketComponent(name, args, opts);
   return {
     bucket: secureS3BucketComponent.bucket,
     bucketId: secureS3BucketComponent.bucketId,

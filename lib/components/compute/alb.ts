@@ -125,7 +125,7 @@ export class AlbComponent extends pulumi.ComponentResource {
         accessLogs: args.accessLogs,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.loadBalancerId = this.loadBalancer.id;
@@ -198,7 +198,7 @@ export class AlbListenerComponent extends pulumi.ComponentResource {
         defaultActions: defaultActions,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.listenerArn = this.listener.arn;
@@ -240,7 +240,7 @@ export class HttpsAlbComponent extends pulumi.ComponentResource {
         accessLogs: args.accessLogs,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.loadBalancer = albComponent.loadBalancer;
@@ -278,7 +278,7 @@ export class HttpsAlbComponent extends pulumi.ComponentResource {
             ],
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.httpsListener = httpsListenerComponent.listener;
@@ -303,7 +303,7 @@ export class HttpsAlbComponent extends pulumi.ComponentResource {
         ],
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.httpListener = httpListenerComponent.listener;
@@ -344,9 +344,10 @@ export function createAlbListener(
 
 export function createHttpsAlb(
   name: string,
-  args: HttpsAlbArgs
+  args: HttpsAlbArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): HttpsAlbResult {
-  const httpsAlbComponent = new HttpsAlbComponent(name, args);
+  const httpsAlbComponent = new HttpsAlbComponent(name, args, opts);
   return {
     loadBalancer: httpsAlbComponent.loadBalancer,
     httpsListener: httpsAlbComponent.httpsListener,

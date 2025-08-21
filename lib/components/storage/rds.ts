@@ -110,7 +110,7 @@ export class RdsSubnetGroupComponent extends pulumi.ComponentResource {
         description: args.description || `DB subnet group for ${args.name}`,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.subnetGroupName = this.subnetGroup.name;
@@ -150,7 +150,7 @@ export class RdsParameterGroupComponent extends pulumi.ComponentResource {
         parameters: args.parameters,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.parameterGroupName = this.parameterGroup.name;
@@ -228,7 +228,7 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         monitoringRoleArn: args.monitoringRoleArn,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.instanceId = this.instance.id;
@@ -278,7 +278,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         description: `Secure DB subnet group for ${args.name}`,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.subnetGroup = subnetGroupComponent.subnetGroup;
@@ -309,7 +309,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         parameters: secureParameters,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.parameterGroup = parameterGroupComponent.parameterGroup;
@@ -351,7 +351,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         monitoringInterval: 60,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.instance = rdsComponent.instance;
@@ -374,8 +374,12 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
   }
 }
 
-export function createRdsSubnetGroup(name: string, args: RdsSubnetGroupArgs) {
-  const subnetGroupComponent = new RdsSubnetGroupComponent(name, args);
+export function createRdsSubnetGroup(
+  name: string,
+  args: RdsSubnetGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
+) {
+  const subnetGroupComponent = new RdsSubnetGroupComponent(name, args, opts);
   return {
     subnetGroup: subnetGroupComponent.subnetGroup,
     subnetGroupName: subnetGroupComponent.subnetGroupName,
@@ -384,9 +388,14 @@ export function createRdsSubnetGroup(name: string, args: RdsSubnetGroupArgs) {
 
 export function createRdsParameterGroup(
   name: string,
-  args: RdsParameterGroupArgs
+  args: RdsParameterGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ) {
-  const parameterGroupComponent = new RdsParameterGroupComponent(name, args);
+  const parameterGroupComponent = new RdsParameterGroupComponent(
+    name,
+    args,
+    opts
+  );
   return {
     parameterGroup: parameterGroupComponent.parameterGroup,
     parameterGroupName: parameterGroupComponent.parameterGroupName,
@@ -395,9 +404,10 @@ export function createRdsParameterGroup(
 
 export function createRdsInstance(
   name: string,
-  args: RdsInstanceArgs
+  args: RdsInstanceArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): RdsInstanceResult {
-  const rdsComponent = new RdsInstanceComponent(name, args);
+  const rdsComponent = new RdsInstanceComponent(name, args, opts);
   return {
     instance: rdsComponent.instance,
     instanceId: rdsComponent.instanceId,
@@ -412,9 +422,10 @@ export function createRdsInstance(
 
 export function createSecureRdsInstance(
   name: string,
-  args: SecureRdsInstanceArgs
+  args: SecureRdsInstanceArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): RdsInstanceResult {
-  const secureRdsComponent = new SecureRdsInstanceComponent(name, args);
+  const secureRdsComponent = new SecureRdsInstanceComponent(name, args, opts);
   return {
     instance: secureRdsComponent.instance,
     instanceId: secureRdsComponent.instanceId,

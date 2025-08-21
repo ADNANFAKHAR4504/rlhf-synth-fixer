@@ -92,7 +92,7 @@ export class TargetGroupComponent extends pulumi.ComponentResource {
         stickiness: args.stickiness,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.targetGroupArn = this.targetGroup.arn;
@@ -124,7 +124,7 @@ export class TargetGroupAttachmentComponent extends pulumi.ComponentResource {
         port: args.port,
         availabilityZone: args.availabilityZone,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.registerOutputs({
@@ -171,7 +171,7 @@ export class ApplicationTargetGroupComponent extends pulumi.ComponentResource {
         },
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.targetGroup = targetGroupComponent.targetGroup;
@@ -217,7 +217,7 @@ export class NetworkTargetGroupComponent extends pulumi.ComponentResource {
         },
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.targetGroup = targetGroupComponent.targetGroup;
@@ -234,9 +234,10 @@ export class NetworkTargetGroupComponent extends pulumi.ComponentResource {
 
 export function createTargetGroup(
   name: string,
-  args: TargetGroupArgs
+  args: TargetGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): TargetGroupResult {
-  const targetGroupComponent = new TargetGroupComponent(name, args);
+  const targetGroupComponent = new TargetGroupComponent(name, args, opts);
   return {
     targetGroup: targetGroupComponent.targetGroup,
     targetGroupArn: targetGroupComponent.targetGroupArn,
@@ -246,19 +247,26 @@ export function createTargetGroup(
 
 export function createTargetGroupAttachment(
   name: string,
-  args: TargetGroupAttachmentArgs
+  args: TargetGroupAttachmentArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): aws.lb.TargetGroupAttachment {
-  const attachmentComponent = new TargetGroupAttachmentComponent(name, args);
+  const attachmentComponent = new TargetGroupAttachmentComponent(
+    name,
+    args,
+    opts
+  );
   return attachmentComponent.attachment;
 }
 
 export function createApplicationTargetGroup(
   name: string,
-  args: ApplicationTargetGroupArgs
+  args: ApplicationTargetGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): TargetGroupResult {
   const appTargetGroupComponent = new ApplicationTargetGroupComponent(
     name,
-    args
+    args,
+    opts
   );
   return {
     targetGroup: appTargetGroupComponent.targetGroup,
@@ -269,11 +277,13 @@ export function createApplicationTargetGroup(
 
 export function createNetworkTargetGroup(
   name: string,
-  args: NetworkTargetGroupArgs
+  args: NetworkTargetGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): TargetGroupResult {
   const networkTargetGroupComponent = new NetworkTargetGroupComponent(
     name,
-    args
+    args,
+    opts
   );
   return {
     targetGroup: networkTargetGroupComponent.targetGroup,
