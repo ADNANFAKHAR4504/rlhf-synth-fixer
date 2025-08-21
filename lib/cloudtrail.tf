@@ -59,6 +59,66 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
   })
 }
 
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.this.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.this.arn,
+          "${aws_s3_bucket.this.arn}/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_kms_key_policy" "cloudtrail_s3" {
+  provider = aws.primary
+  key_id   = aws_kms_key.s3.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to use KMS key"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = aws_kms_key.s3.arn
+      }
+    ]
+  })
+}
+
 resource "aws_cloudtrail" "main" {
   provider                      = aws.primary
   name                          = "${var.name_prefix}-${var.environment}-cloudtrail"
@@ -68,13 +128,14 @@ resource "aws_cloudtrail" "main" {
   enable_log_file_validation    = true
   cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs.arn
+  kms_key_id                    = aws_kms_key.s3.arn
   tags = {
     Name        = "${var.name_prefix}-${var.environment}-cloudtrail"
     Environment = var.environment
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
-  depends_on = [aws_cloudwatch_log_group.cloudtrail]
+  depends_on = [aws_cloudwatch_log_group.cloudtrail, aws_s3_bucket_policy.cloudtrail]
 }
 
 output "cloudtrail_arn" {
