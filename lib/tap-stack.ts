@@ -400,7 +400,7 @@ export class TapStack extends TerraformStack {
           provider: primaryProvider,
           name: `/ecs/webapp${resourceNameSuffix}`,
           retentionInDays: 30,
-          kmsKeyId: kmsKey.id,
+          kmsKeyId: kmsKey.arn,
           dependsOn: [kmsKey],
           tags: config.tags,
         }
