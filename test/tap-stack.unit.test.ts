@@ -10,7 +10,7 @@ describe('TapStack', () => {
     const stack = new TapStack(app, 'TestTapStackPrimary', {
       environmentSuffix,
       isPrimary: true,
-      env: { region: 'us-east-2' },
+      env: { region: 'us-east-1' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -20,7 +20,7 @@ describe('TapStack', () => {
     const stack = new TapStack(app, 'TestTapStackSecondary', {
       environmentSuffix,
       isPrimary: false,
-      primaryRegion: 'us-east-2',
+      primaryRegion: 'us-east-1',
       primaryBucketArn: 'arn:aws:s3:::mock-primary-bucket',
       env: { region: 'eu-west-1' },
     });
@@ -31,7 +31,7 @@ describe('TapStack', () => {
     test('creates KMS key with rotation enabled', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'TAP Multi-Region KMS Key - us-east-2',
+        Description: 'TAP Multi-Region KMS Key - us-east-1',
         EnableKeyRotation: true,
         KeyPolicy: Match.objectLike({
           Statement: Match.arrayWith([
@@ -205,8 +205,8 @@ describe('TapStack', () => {
     test('creates SNS topic with KMS encryption', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `tap-replication-alerts-useast2-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - us-east-2',
+        TopicName: `tap-replication-alerts-useast1-${environmentSuffix}`,
+        DisplayName: 'TAP Replication Alerts - us-east-1',
       });
     });
 

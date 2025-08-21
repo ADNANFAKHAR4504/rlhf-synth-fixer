@@ -16,14 +16,14 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 Tags.of(app).add('Project', 'tap-multi-region');
 
-// Primary region stack (us-east-2)
+// Primary region stack (us-east-1)
 const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
   stackName: `TapStackPrimary${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
   isPrimary: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2',
+    region: 'us-east-1',
   },
 });
 
@@ -35,7 +35,7 @@ const secondaryStack = new TapStack(
     stackName: `TapStackSecondary${environmentSuffix}`,
     environmentSuffix: environmentSuffix,
     isPrimary: false,
-    primaryRegion: 'us-east-2',
+    primaryRegion: 'us-east-1',
     primaryBucketArn: primaryStack.primaryBucketArn,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,

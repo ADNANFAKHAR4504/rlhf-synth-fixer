@@ -1,6 +1,6 @@
 # TAP Multi-Region Infrastructure - Ideal Response
 
-This document contains the perfect Infrastructure as Code solution for a multi-region AWS setup with failover capabilities between us-east-2 and eu-west-1.
+This document contains the perfect Infrastructure as Code solution for a multi-region AWS setup with failover capabilities between us-east-1 and eu-west-1.
 
 ## Architecture Overview
 
@@ -44,14 +44,14 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 Tags.of(app).add('Project', 'tap-multi-region');
 
-// Primary region stack (us-east-2)
+// Primary region stack (us-east-1)
 const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
   stackName: `TapStackPrimary${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
   isPrimary: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2',
+    region: 'us-east-1',
   },
 });
 
@@ -60,7 +60,7 @@ const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`
   stackName: `TapStackSecondary${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
   isPrimary: false,
-  primaryRegion: 'us-east-2',
+  primaryRegion: 'us-east-1',
   primaryBucketArn: primaryStack.primaryBucketArn,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -447,7 +447,7 @@ def handler(event, context):
 ## Key Features Implemented
 
 ### Multi-Region Architecture
-- **Primary Region (us-east-2)**: Full infrastructure with RDS Multi-AZ, CloudFront distribution, and S3 replication source
+- **Primary Region (us-east-1)**: Full infrastructure with RDS Multi-AZ, CloudFront distribution, and S3 replication source
 - **Secondary Region (eu-west-1)**: Failover infrastructure with RDS read replica and S3 replication destination
 - **Cross-stack dependencies**: Ensures proper deployment order
 
