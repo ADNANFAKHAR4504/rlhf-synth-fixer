@@ -1,12 +1,16 @@
 # tap_stack.tf
-# Production-ready AWS infrastructure for zero-downtime Fargate deployments
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.5.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
     }
   }
 }
@@ -60,6 +64,12 @@ variable "db_allocated_storage" {
   default     = 50
 }
 
+variable "db_port" {
+  description = "Database port"
+  type        = number
+  default     = 5432
+}
+
 variable "container_image" {
   description = "ECR image URI"
   type        = string
@@ -90,6 +100,12 @@ variable "alb_idle_timeout" {
   default     = 60
 }
 
+variable "test_listener_port" {
+  description = "ALB test listener port for CodeDeploy canary/blue-green"
+  type        = number
+  default     = 9000
+}
+
 # Locals
 locals {
   common_tags = {
@@ -97,13 +113,17 @@ locals {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-  
-  name_prefix = "${var.project_name}-${var.environment}"
-  
+
+  resource_prefix = substr("${var.project_name}-${var.environment}", 0, 20)
+  name_prefix     = "${var.project_name}-${var.environment}"
+
   availability_zones = [
     "${var.aws_region}a",
     "${var.aws_region}b"
   ]
+
+  db_name     = "appdb"
+  db_username = "dbadmin"
 }
 
 # Data sources
@@ -120,17 +140,12 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc" })
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-igw"
-  })
+  tags   = merge(local.common_tags, { Name = "${local.name_prefix}-igw" })
 }
 
 resource "aws_subnet" "public" {
@@ -161,13 +176,10 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  count = length(local.availability_zones)
-
+  count  = length(local.availability_zones)
   domain = "vpc"
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-nat-eip-${count.index + 1}" })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -178,9 +190,7 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-nat-${count.index + 1}"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-nat-${count.index + 1}" })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -193,9 +203,7 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-rt"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-public-rt" })
 }
 
 resource "aws_route_table" "private" {
@@ -208,21 +216,17 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-private-rt-${count.index + 1}" })
 }
 
 resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
+  count          = length(aws_subnet.public)
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
+  count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
@@ -253,9 +257,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb-sg"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-alb-sg" })
 }
 
 resource "aws_security_group" "ecs" {
@@ -276,9 +278,7 @@ resource "aws_security_group" "ecs" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ecs-sg"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-ecs-sg" })
 }
 
 resource "aws_security_group" "rds" {
@@ -286,21 +286,33 @@ resource "aws_security_group" "rds" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 5432
-    to_port         = 5432
+    from_port       = var.db_port
+    to_port         = var.db_port
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs.id]
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-sg"
-  })
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds-sg" })
 }
 
+# ----------------------------
 # module: secrets
+# ----------------------------
+resource "random_password" "db" {
+  length  = 20
+  special = true
+}
+
 resource "aws_secretsmanager_secret" "db_password" {
   name                    = "${local.name_prefix}-db-password"
-  description             = "Database password"
+  description             = "Database master user password"
   recovery_window_in_days = 7
 
   tags = local.common_tags
@@ -308,9 +320,7 @@ resource "aws_secretsmanager_secret" "db_password" {
 
 resource "aws_secretsmanager_secret_version" "db_password" {
   secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = jsonencode({
-    password = "changeme123!"
-  })
+  secret_string = jsonencode({ password = random_password.db.result })
 }
 
 resource "aws_secretsmanager_secret" "app_config" {
@@ -324,12 +334,13 @@ resource "aws_secretsmanager_secret" "app_config" {
 resource "aws_secretsmanager_secret_version" "app_config" {
   secret_id = aws_secretsmanager_secret.app_config.id
   secret_string = jsonencode({
-    api_key     = "example-api-key"
     environment = var.environment
   })
 }
 
+# ----------------------------
 # module: rds
+# ----------------------------
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
@@ -345,27 +356,28 @@ resource "aws_db_instance" "main" {
   engine         = var.db_engine
   engine_version = var.db_engine_version
   instance_class = var.db_instance_class
+  port           = var.db_port
 
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = var.db_allocated_storage * 2
   storage_type          = "gp3"
   storage_encrypted     = true
 
-  db_name  = "appdb"
-  username = "dbadmin"
-  password = "changeme123!"
+  db_name  = local.db_name
+  username = local.db_username
+  password = random_password.db.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az               = true
-  publicly_accessible    = false
-  deletion_protection    = true
-  skip_final_snapshot    = false
+  multi_az                  = true
+  publicly_accessible       = false
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-db-final-snapshot"
 
   tags = merge(local.common_tags, {
@@ -373,16 +385,18 @@ resource "aws_db_instance" "main" {
   })
 }
 
+# ----------------------------
 # module: iam
+# ----------------------------
 resource "aws_iam_role" "ecs_execution_role" {
   name = "${local.name_prefix}-ecs-execution-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }
@@ -402,11 +416,11 @@ resource "aws_iam_role" "ecs_task_role" {
   name = "${local.name_prefix}-ecs-task-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }
@@ -422,13 +436,13 @@ resource "aws_iam_role_policy" "ecs_task_secrets_policy" {
   role = aws_iam_role.ecs_task_role.id
 
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow"
+        Effect = "Allow",
         Action = [
           "secretsmanager:GetSecretValue"
-        ]
+        ],
         Resource = [
           aws_secretsmanager_secret.db_password.arn,
           aws_secretsmanager_secret.app_config.arn
@@ -442,11 +456,11 @@ resource "aws_iam_role" "codedeploy_role" {
   name = "${local.name_prefix}-codedeploy-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
         Principal = {
           Service = "codedeploy.amazonaws.com"
         }
@@ -462,7 +476,9 @@ resource "aws_iam_role_policy_attachment" "codedeploy_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
+# ----------------------------
 # module: ecs
+# ----------------------------
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = 7
@@ -488,55 +504,47 @@ resource "aws_ecs_task_definition" "app" {
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-  task_role_arn           = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
-      name  = "app"
-      image = var.container_image
+      name  = "app",
+      image = var.container_image,
       portMappings = [
         {
-          containerPort = var.container_port
+          containerPort = var.container_port,
           protocol      = "tcp"
         }
-      ]
+      ],
       logConfiguration = {
-        logDriver = "awslogs"
+        logDriver = "awslogs",
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = var.aws_region
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name,
+          awslogs-region        = var.aws_region,
           awslogs-stream-prefix = "ecs"
         }
-      }
+      },
       secrets = [
         {
-          name      = "DB_PASSWORD"
+          name      = "DB_PASSWORD",
           valueFrom = aws_secretsmanager_secret.db_password.arn
         },
         {
-          name      = "APP_CONFIG"
+          name      = "APP_CONFIG",
           valueFrom = aws_secretsmanager_secret.app_config.arn
         }
-      ]
+      ],
       environment = [
-        {
-          name  = "DB_HOST"
-          value = aws_db_instance.main.endpoint
-        },
-        {
-          name  = "DB_NAME"
-          value = aws_db_instance.main.db_name
-        },
-        {
-          name  = "DB_USER"
-          value = aws_db_instance.main.username
-        }
-      ]
+        { name = "DB_HOST", value = aws_db_instance.main.address },
+        { name = "DB_NAME", value = local.db_name },
+        { name = "DB_USER", value = local.db_username },
+        { name = "DB_PORT", value = tostring(var.db_port) }
+      ],
       healthCheck = {
-        command = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
-        interval = 30
-        timeout = 5
-        retries = 3
+        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"],
+        interval    = 30,
+        timeout     = 5,
+        retries     = 3,
         startPeriod = 60
       }
     }
@@ -545,9 +553,11 @@ resource "aws_ecs_task_definition" "app" {
   tags = local.common_tags
 }
 
+# ----------------------------
 # module: alb
+# ----------------------------
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.resource_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -560,7 +570,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "blue" {
-  name        = "${local.name_prefix}-tg-blue"
+  name        = "${local.resource_prefix}-tg-blue"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -578,13 +588,11 @@ resource "aws_lb_target_group" "blue" {
     protocol            = "HTTP"
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-tg-blue"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-tg-blue" })
 }
 
 resource "aws_lb_target_group" "green" {
-  name        = "${local.name_prefix}-tg-green"
+  name        = "${local.resource_prefix}-tg-green"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -602,22 +610,31 @@ resource "aws_lb_target_group" "green" {
     protocol            = "HTTP"
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-tg-green"
-  })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-tg-green" })
 }
 
-resource "aws_lb_listener" "main" {
+# Production listener (port 80)
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.blue.arn
   }
+}
 
-  tags = local.common_tags
+# Test listener for blue/green (port var.test_listener_port)
+resource "aws_lb_listener" "test" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = var.test_listener_port
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.blue.arn
+  }
 }
 
 resource "aws_ecs_service" "app" {
@@ -643,20 +660,20 @@ resource "aws_ecs_service" "app" {
     type = "CODE_DEPLOY"
   }
 
-  depends_on = [aws_lb_listener.main]
+  depends_on = [aws_lb_listener.http]
 
   tags = local.common_tags
 }
 
+# ----------------------------
 # module: autoscaling
+# ----------------------------
 resource "aws_appautoscaling_target" "ecs_target" {
   max_capacity       = 10
   min_capacity       = 1
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
-
-  tags = local.common_tags
 }
 
 resource "aws_appautoscaling_policy" "ecs_cpu_policy" {
@@ -689,7 +706,9 @@ resource "aws_appautoscaling_policy" "ecs_memory_policy" {
   }
 }
 
-# module: codedeploy
+# ----------------------------
+# module: codedeploy (ECS Blue/Green)
+# ----------------------------
 resource "aws_codedeploy_app" "app" {
   compute_platform = "ECS"
   name             = "${local.name_prefix}-codedeploy-app"
@@ -701,7 +720,7 @@ resource "aws_codedeploy_deployment_group" "app" {
   app_name               = aws_codedeploy_app.app.name
   deployment_group_name  = "${local.name_prefix}-deployment-group"
   service_role_arn       = aws_iam_role.codedeploy_role.arn
-  deployment_config_name = "CodeDeployDefault.ECSAllAtOnceBlueGreen"
+  deployment_config_name = "CodeDeployDefault.ECSAllAtOnce"
 
   auto_rollback_configuration {
     enabled = true
@@ -710,16 +729,12 @@ resource "aws_codedeploy_deployment_group" "app" {
 
   blue_green_deployment_config {
     terminate_blue_instances_on_deployment_success {
-      action                         = "TERMINATE"
+      action                           = "TERMINATE"
       termination_wait_time_in_minutes = 5
     }
 
     deployment_ready_option {
       action_on_timeout = "CONTINUE_DEPLOYMENT"
-    }
-
-    green_fleet_provisioning_option {
-      action = "COPY_AUTO_SCALING_GROUP"
     }
   }
 
@@ -734,26 +749,38 @@ resource "aws_codedeploy_deployment_group" "app" {
   }
 
   load_balancer_info {
-    target_group_info {
-      name = aws_lb_target_group.blue.name
+    target_group_pair_info {
+      target_group {
+        name = aws_lb_target_group.blue.name
+      }
+      target_group {
+        name = aws_lb_target_group.green.name
+      }
+      prod_traffic_route {
+        listener_arns = [aws_lb_listener.http.arn]
+      }
+      test_traffic_route {
+        listener_arns = [aws_lb_listener.test.arn]
+      }
     }
   }
 
   tags = local.common_tags
 }
 
-# module: monitoring
+# ----------------------------
+# module: monitoring (CloudWatch)
+# ----------------------------
 resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   alarm_name          = "${local.name_prefix}-alb-5xx-errors"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "HTTPCode_ELB_5XX_Count"
   namespace           = "AWS/ApplicationELB"
-  period              = "300"
+  period              = 300
   statistic           = "Sum"
-  threshold           = "10"
+  threshold           = 10
   alarm_description   = "This metric monitors ALB 5XX errors"
-  alarm_actions       = []
 
   dimensions = {
     LoadBalancer = aws_lb.main.arn_suffix
@@ -765,14 +792,13 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
   alarm_name          = "${local.name_prefix}-ecs-cpu-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "CPUUtilization"
   namespace           = "AWS/ECS"
-  period              = "300"
+  period              = 300
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = 80
   alarm_description   = "This metric monitors ECS CPU utilization"
-  alarm_actions       = []
 
   dimensions = {
     ServiceName = aws_ecs_service.app.name
@@ -785,14 +811,13 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
 resource "aws_cloudwatch_metric_alarm" "ecs_memory_high" {
   alarm_name          = "${local.name_prefix}-ecs-memory-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "MemoryUtilization"
   namespace           = "AWS/ECS"
-  period              = "300"
+  period              = 300
   statistic           = "Average"
-  threshold           = "85"
+  threshold           = 85
   alarm_description   = "This metric monitors ECS memory utilization"
-  alarm_actions       = []
 
   dimensions = {
     ServiceName = aws_ecs_service.app.name
@@ -805,14 +830,13 @@ resource "aws_cloudwatch_metric_alarm" "ecs_memory_high" {
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   alarm_name          = "${local.name_prefix}-rds-cpu-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "CPUUtilization"
   namespace           = "AWS/RDS"
-  period              = "300"
+  period              = 300
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = 80
   alarm_description   = "This metric monitors RDS CPU utilization"
-  alarm_actions       = []
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
@@ -824,14 +848,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
 resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
   alarm_name          = "${local.name_prefix}-rds-free-storage-low"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "FreeStorageSpace"
   namespace           = "AWS/RDS"
-  period              = "300"
+  period              = 300
   statistic           = "Average"
-  threshold           = "2000000000" # 2GB in bytes
+  threshold           = 2000000000
   alarm_description   = "This metric monitors RDS free storage space"
-  alarm_actions       = []
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
@@ -840,7 +863,9 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
   tags = local.common_tags
 }
 
+# ----------------------------
 # Outputs
+# ----------------------------
 output "vpc_id" {
   description = "VPC ID"
   value       = aws_vpc.main.id
@@ -859,11 +884,6 @@ output "private_subnet_ids" {
 output "alb_dns_name" {
   description = "ALB DNS name"
   value       = aws_lb.main.dns_name
-}
-
-output "alb_zone_id" {
-  description = "ALB zone ID"
-  value       = aws_lb.main.zone_id
 }
 
 output "ecs_cluster_name" {
@@ -893,7 +913,7 @@ output "codedeploy_deployment_group_name" {
 
 output "rds_endpoint" {
   description = "RDS endpoint"
-  value       = aws_db_instance.main.endpoint
+  value       = aws_db_instance.main.address
 }
 
 output "cloudwatch_log_group_name" {

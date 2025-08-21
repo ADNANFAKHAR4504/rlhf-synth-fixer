@@ -1,59 +1,103 @@
-# Model Failures
+### Compile issues detected in `lib/MODEL_RESPONSE.md`
 
-The submitted single-file CDKTF solution is close, but it violates several prompt constraints and contains issues that will fail at plan/apply time.
+Below are problems that will cause `terraform validate` (or provider schema validation) to fail. Each item includes a citation to the offending code.
 
-1. Missing Terraform Cloud remote backend
+- **Incorrect argument names on `aws_db_instance`**: use `preferred_backup_window` and `preferred_maintenance_window`.
 
-- Prompt requires Terraform Cloud for remote state and collaboration.
-- Code imports `RemoteBackend`/`NamedRemoteWorkspace` but never configures a backend instance.
-- Impact: `cdktf deploy` uses the default local backend instead of TFC, violating the requirement and breaking team workflows.
+```361:366:lib/MODEL_RESPONSE.md
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
-2. Plaintext secrets embedded in code
+  multi_az               = true
+```
 
-- Secrets are written directly in `SecretsmanagerSecretVersion.secret_string`:
-  - Hardcoded DB password and JWT secret.
-- Impact: Violates “no plaintext secrets in code”; also leaks secrets in VCS and state files.
+- Replace with:
+  - `preferred_backup_window`
+  - `preferred_maintenance_window`
 
-3. Invalid ECS task secret references
+- **Numeric fields provided as strings**: several arguments require numbers but are quoted.
 
-- Container `secrets[].valueFrom` uses wildcard account and JSON key suffixes that won’t resolve:
-  - Example: `arn:aws:secretsmanager:us-east-1:*:secret:production/database/credentials:password::`.
-- Impact: Service fails to start; ECS cannot fetch secret values. Use concrete ARNs or names from resources created in this stack, with correct `:json_key::` only if the secret value is JSON.
+```610:621:lib/MODEL_RESPONSE.md
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
 
-4. RDS enhanced monitoring role ARN is invalid
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.blue.arn
+  }
 
-- Code sets `monitoring_role_arn="arn:aws:iam::aws:role/rds-monitoring-role"`.
-- Impact: This is not a valid role in the target account. Either create an IAM role with the proper trust policy and attach the AWS managed policy, or omit enhanced monitoring.
+  tags = local.common_tags
+}
+```
 
-5. Outputs are insufficient for validation
+- `port` must be a number: `port = 80`.
 
-- Only exports VPC ID. For verification and integration testing, you should also output ALB DNS name, target group ARN, ECS cluster/service names, RDS identifier/endpoint, and SNS topic ARN.
+```745:756:lib/MODEL_RESPONSE.md
+resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
+  alarm_name          = "${local.name_prefix}-alb-5xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors ALB 5XX errors"
+  alarm_actions       = []
+```
 
-6. Secret materialization approach conflicts with “no plaintext in code”
+- `evaluation_periods`, `period`, and `threshold` must be numbers (unquoted). The same issue appears in the following alarms:
+  - `aws_cloudwatch_metric_alarm.ecs_cpu_high` (lines 766–775)
+  - `aws_cloudwatch_metric_alarm.ecs_memory_high` (lines 786–795)
+  - `aws_cloudwatch_metric_alarm.rds_cpu_high` (lines 806–815)
+  - `aws_cloudwatch_metric_alarm.rds_free_storage_low` (lines 825–835)
 
-- Even if Secrets Manager is used, embedding values in code contradicts the prompt. Values must come from secure variables (e.g., Terraform Cloud sensitive workspace variables) or existing secrets.
+- **Unsupported `tags` on `aws_lb_listener`** (with provider constraint `~> 5.0`, listeners typically do not accept `tags`). Remove the `tags` argument from the listener.
 
-7. Minor best-practice gaps
+```610:621:lib/MODEL_RESPONSE.md
+  ...
+  tags = local.common_tags
+}
+```
 
-- Hardcoded email in SNS subscription; should be parameterized.
-- Hardcoded CIDR blocks and AZs without parameters; acceptable for demo but reduces reusability.
+- (Optional to verify against your exact provider version) **`tags` on `aws_appautoscaling_target` may not be supported**. If validation fails, remove the `tags` argument.
 
-8. Incorrect ALB CloudWatch alarm dimensions
+```651:660:lib/MODEL_RESPONSE.md
+resource "aws_appautoscaling_target" "ecs_target" {
+  max_capacity       = 10
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.app.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
 
-- The `TargetGroup` dimension must be the full target group resource ID (`targetgroup/<name>/<hash>`), and `LoadBalancer` must be `app/<name>/<hash>`. The current implementation derives only partial segments from ARNs.
-- Impact: Alarm never evaluates correctly and won’t trigger on unhealthy targets.
+  tags = local.common_tags
+}
+```
 
-9. RDS credentials/endpoint not wired to ECS when using managed password
+---
 
-- With `manage_master_user_password=True`, RDS stores the password in Secrets Manager and the endpoint is determined at runtime. The ECS task references a separate, hardcoded secret, so the application will not receive the actual credentials/host.
-- Impact: Runtime connection failures despite successful provisioning.
+### Not compile-time, but will fail to work as intended (apply/runtime)
 
-Suggested remediations
+These items usually pass `terraform validate` but are incorrect for ECS Blue/Green and will fail at apply time or during deployment:
 
-- Configure `RemoteBackend` with `organization` and `NamedRemoteWorkspace`, driven by env vars (e.g., `TF_CLOUD_ORG`, `TF_WORKSPACE`).
-- Replace plaintext secrets with `TerraformVariable` (sensitive=True) and write to Secrets Manager at apply time, or reference pre-existing secrets via data sources.
-- Reference ECS secrets via the actual secret ARN(s) created in this stack (no account wildcard) and correct `valueFrom` format.
-- Remove or properly create the RDS monitoring role; otherwise omit those fields.
-- Add richer `TerraformOutput`s for key resources.
-- For ALB alarms, compute CloudWatch dimensions using the full resource IDs obtained from the ALB/TG ARNs (parse to `app/<name>/<hash>` and `targetgroup/<name>/<hash>`), or use provider attributes exposing these directly.
-- If using `manage_master_user_password`, reference the generated secret for DB credentials from the RDS instance in ECS (via Secrets Manager/outputs), or consistently manage a single Secrets Manager secret used by both RDS initialization and ECS tasks.
+- **CodeDeploy ECS Blue/Green requires a target group pair and listener routes.** The deployment group only specifies a single `target_group_info` and no `target_group_pair_info` with prod/test listeners.
+
+```700:741:lib/MODEL_RESPONSE.md
+resource "aws_codedeploy_deployment_group" "app" {
+  ...
+  load_balancer_info {
+    target_group_info {
+      name = aws_lb_target_group.blue.name
+    }
+  }
+  ...
+}
+```
+
+- For ECS, use `load_balancer_info { target_group_pair_info { target_group { ... } target_group { ... } prod_traffic_route { listener_arns = [...] } test_traffic_route { listener_arns = [...] } } }`.
+
+- **Invalid deployment config name for ECS**:
+  - `deployment_config_name = "CodeDeployDefault.ECSAllAtOnceBlueGreen"` is not a valid managed config. Use one of the supported ECS configs, e.g. `CodeDeployDefault.ECSAllAtOnce`, `CodeDeployDefault.ECSCanary10Percent5Minutes`, or `CodeDeployDefault.ECSLinear10PercentEvery1Minute`.
