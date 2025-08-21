@@ -1,29 +1,28 @@
 # modules/iam_role/main.tf
 resource "aws_iam_role" "main" {
-  name_prefix = "myapp-${var.environment}-role-"
+  name_prefix = "${var.role_name_prefix}-${var.environment}-role-"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action = "sts:AssumeRole"
       Effect = "Allow"
       Principal = {
-        Service = "ec2.amazonaws.com"
+        Service = var.assume_role_services[0]
       }
     }]
   })
+  
+  tags = merge({
+    Environment = var.environment
+  }, var.role_tags)
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name_prefix = "myapp-${var.environment}-policy-"
+  name_prefix = "${var.policy_name_prefix}-${var.environment}-policy-"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = [
-        "s3:ListBucket",
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ]
+      Action = var.s3_permissions
       Effect   = "Allow"
       Resource = [var.bucket_arn, "${var.bucket_arn}/*"]
     }]

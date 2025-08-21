@@ -120,12 +120,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       // Check both staging and production providers have default tags
       expect(content).toMatch(
-        /default_tags\s*{[\s\S]*environment\s*=\s*"staging"/
+        /default_tags\s*{[\s\S]*environment\s*=\s*var\.environment_names\.staging/
       );
       expect(content).toMatch(
-        /default_tags\s*{[\s\S]*environment\s*=\s*"production"/
+        /default_tags\s*{[\s\S]*environment\s*=\s*var\.environment_names\.production/
       );
-      expect(content).toMatch(/project\s*=\s*"IaC - AWS Nova Model Breaking"/);
+      expect(content).toMatch(/project\s*=\s*var\.project_name/);
     });
   });
 });

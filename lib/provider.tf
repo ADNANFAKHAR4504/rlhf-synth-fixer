@@ -29,8 +29,8 @@ provider "aws" {
   region = var.staging_region
   default_tags {
     tags = {
-      environment = "staging"
-      project     = "IaC - AWS Nova Model Breaking"
+      environment = var.environment_names.staging
+      project     = var.project_name
     }
   }
 }
@@ -41,8 +41,8 @@ provider "aws" {
   region = var.production_region
   default_tags {
     tags = {
-      environment = "production"
-      project     = "IaC - AWS Nova Model Breaking"
+      environment = var.environment_names.production
+      project     = var.project_name
     }
   }
 }

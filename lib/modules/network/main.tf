@@ -1,30 +1,25 @@
 # modules/network/main.tf
 resource "aws_security_group" "main" {
-  name_prefix = "myapp-${var.environment}-sg-"
-  vpc_id      = data.aws_vpc.default.id
+  name_prefix = "${var.security_group_name_prefix}-${var.environment}-sg-"
 
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = var.ingress_port
+    to_port     = var.ingress_port
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.ingress_cidr_blocks
   }
 
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.egress_cidr_blocks
   }
 
-  tags = {
-    Name        = "myapp-${var.environment}-sg"
+  tags = merge({
+    Name        = "${var.security_group_name_prefix}-${var.environment}-sg"
     Environment = var.environment
-  }
-}
-
-data "aws_vpc" "default" {
-  default = true
+  }, var.security_group_tags)
 }
 
 output "security_group_id" {

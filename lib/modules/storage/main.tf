@@ -3,16 +3,16 @@ resource "random_id" "bucket_suffix" {
   keepers = {
     environment = var.environment
   }
-  byte_length = 4
+  byte_length = var.bucket_byte_length
 }
 
 resource "aws_s3_bucket" "main" {
-  bucket = "myapp-${var.environment}-${random_id.bucket_suffix.hex}"
+  bucket = "${var.bucket_name_prefix}-${var.environment}-${random_id.bucket_suffix.hex}"
 
-  tags = {
-    Name        = "myapp-${var.environment}-bucket"
+  tags = merge({
+    Name        = "${var.bucket_name_prefix}-${var.environment}-bucket"
     Environment = var.environment
-  }
+  }, var.bucket_tags)
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
@@ -20,7 +20,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm = var.encryption_algorithm
     }
   }
 }
