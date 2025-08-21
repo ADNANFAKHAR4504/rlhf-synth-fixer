@@ -234,7 +234,7 @@ export class RdsModule extends Construct {
     );
 
     this.instance = new DbInstance(this, 'instance', {
-      identifier: `${props.namePrefix}database`,
+      identifier: `${props.namePrefix.toLowerCase()}database`,
       engine: 'mysql',
       engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
