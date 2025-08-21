@@ -40,7 +40,7 @@ export class LoggingStack extends pulumi.ComponentResource {
     const logBucket = new aws.s3.Bucket(
       `${args.environment}-logs-bucket`,
       {
-        bucket: `${args.environment}-infrastructure-logs-${Date.now()}`,
+        bucket: `${args.environment}-infrastructure-logs`,
         tags: {
           ...commonTags,
           Name: `${args.environment}-Infrastructure-Logs`,
