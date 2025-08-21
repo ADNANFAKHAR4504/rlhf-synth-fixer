@@ -767,4 +767,15 @@ resource "aws_iam_policy" "mfa_enforcement" {
         Sid      = "AllowIndividualUserToManageTheirOwnMFA",
         Effect   = "Allow",
         Action   = ["iam:CreateVirtualMFADevice", "iam:DeleteVirtualMFADevice", "iam:EnableMFADevice", "iam:ListMFADevices", "iam:ResyncMFADevice"],
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:{m
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:mfa/$${aws:username}"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
+  user       = aws_iam_user.admin_user.name
+  policy_arn = aws_iam_policy.mfa_enforcement.arn
+}
