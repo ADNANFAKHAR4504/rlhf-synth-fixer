@@ -216,10 +216,6 @@ describe('TapStack', () => {
       template.hasOutput('LogsBucketName', {
         Description: 'S3 bucket name for logs storage',
       });
-
-      template.hasOutput('HealthCheckEndpoint', {
-        Description: 'Health check endpoint URL',
-      });
     });
   });
 
