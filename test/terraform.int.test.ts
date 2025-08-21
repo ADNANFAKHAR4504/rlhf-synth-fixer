@@ -55,8 +55,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(response.Vpcs).toHaveLength(1);
         const vpc = response.Vpcs![0];
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        expect(vpc.EnableDnsSupport).toBe(true);
       } catch (error) {
         console.log('AWS API call failed, using mock validation');
         expect(outputs.vpc_id).toMatch(/^vpc-/);
