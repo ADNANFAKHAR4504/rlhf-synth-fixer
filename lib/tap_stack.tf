@@ -358,10 +358,10 @@ resource "aws_lb" "main" {
 
 # Target group for EC2 instances
 resource "aws_lb_target_group" "app" {
-  name_prefix = "${local.name_prefix}-app-tg-"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  name     = "${local.name_prefix}-app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
 
   health_check {
     path                = "/health"
