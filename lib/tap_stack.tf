@@ -2,6 +2,25 @@
 # Main infrastructure resources with comprehensive security controls
 # Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
 
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
 # Local values for consistent tagging and naming
 locals {
   common_tags = {
@@ -14,6 +33,40 @@ locals {
   }
 
   name_prefix = "${var.project_name}-${var.environment}"
+}
+
+#######################
+# Modules
+#######################
+
+module "data" {
+  source = "./modules/data"
+
+  project_name           = var.project_name
+  environment            = var.environment
+  app_data_s3_bucket_arn = aws_s3_bucket.app_data.arn
+  s3_kms_key_arn         = aws_kms_key.s3_key.arn
+  region                 = var.region
+}
+
+module "security" {
+  source = "./modules/security"
+
+  project_name        = var.project_name
+  environment         = var.environment
+  vpc_id              = aws_vpc.main.id
+  allowed_cidr_blocks = var.allowed_cidr_blocks
+  common_tags         = local.common_tags
+}
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  notification_email = var.notification_email
+  asg_name           = aws_autoscaling_group.app.name
+  common_tags        = local.common_tags
 }
 
 #######################
@@ -307,7 +360,7 @@ resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
+  security_groups    = [module.security.alb_sg_id]
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
@@ -373,7 +426,7 @@ resource "aws_lb_listener" "app" {
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name               = "${local.name_prefix}-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+  assume_role_policy = module.data.ec2_assume_role_policy
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-role"
@@ -385,14 +438,14 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_role_policy" "ec2_s3_policy" {
   name   = "${local.name_prefix}-ec2-s3-policy"
   role   = aws_iam_role.ec2_role.id
-  policy = data.aws_iam_policy_document.ec2_s3_access.json
+  policy = module.data.ec2_s3_access_policy
 }
 
 # IAM policy for CloudWatch logs
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name   = "${local.name_prefix}-ec2-cloudwatch-policy"
   role   = aws_iam_role.ec2_role.id
-  policy = data.aws_iam_policy_document.cloudwatch_logs_policy.json
+  policy = module.data.cloudwatch_logs_policy
 }
 
 # IAM instance profile for EC2
@@ -409,7 +462,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
   name               = "${local.name_prefix}-lambda-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+  assume_role_policy = module.data.lambda_assume_role_policy
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-lambda-role"
@@ -430,11 +483,11 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
 # Launch template for EC2 instances with security hardening
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-app-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = module.data.amazon_linux_ami_id
   instance_type = var.instance_type
   key_name      = var.key_pair_name
 
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  vpc_security_group_ids = [module.security.ec2_sg_id]
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -452,7 +505,7 @@ resource "aws_launch_template" "app" {
 
   # User data script with CloudWatch logging
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    log_group_name = aws_cloudwatch_log_group.ec2_logs.name
+    log_group_name = module.monitoring.ec2_log_group_name
     region         = var.region
   }))
 
@@ -543,7 +596,7 @@ resource "aws_db_instance" "main" {
   username = var.db_username
   password = var.db_password
 
-  vpc_security_group_ids = [aws_security_group.rds.id]
+  vpc_security_group_ids = [module.security.rds_sg_id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = var.backup_retention_period

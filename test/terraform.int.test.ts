@@ -2,15 +2,12 @@ import { describe, expect, test } from '@jest/globals';
 import { execSync } from 'child_process';
 import path from 'path';
 
-const TERRAFORM_DIR = path.resolve(
-  __dirname,
-  '../../terraform-aws-secure-infrastructure'
-);
+const LIB_DIR = path.resolve(__dirname, '../lib');
 
 describe('Terraform Configuration Integration Tests', () => {
   test('should initialize Terraform successfully', () => {
     const command = 'terraform init';
-    const options = { cwd: TERRAFORM_DIR, stdio: 'pipe' as const };
+    const options = { cwd: LIB_DIR, stdio: 'pipe' as const };
     let output: Buffer | string = '';
     try {
       output = execSync(command, options);
@@ -27,7 +24,7 @@ describe('Terraform Configuration Integration Tests', () => {
 
   test('should validate Terraform configuration successfully', () => {
     const command = 'terraform validate';
-    const options = { cwd: TERRAFORM_DIR, stdio: 'pipe' as const };
+    const options = { cwd: LIB_DIR, stdio: 'pipe' as const };
     let output: Buffer | string = '';
     try {
       output = execSync(command, options);
@@ -42,7 +39,7 @@ describe('Terraform Configuration Integration Tests', () => {
 
   test('should create a Terraform plan successfully', () => {
     const command = 'terraform plan -out=tfplan';
-    const options = { cwd: TERRAFORM_DIR, stdio: 'pipe' as const };
+    const options = { cwd: LIB_DIR, stdio: 'pipe' as const };
     let output: Buffer | string = '';
     try {
       output = execSync(command, options);

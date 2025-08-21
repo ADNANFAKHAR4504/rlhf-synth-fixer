@@ -121,17 +121,3 @@ variable "enable_deletion_protection" {
   type        = bool
   default     = true
 }
-
-# Local values for consistent tagging and naming
-locals {
-  common_tags = {
-    Project     = var.project_name
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-    Owner       = "ngwakoleslieelijah"
-    CreatedDate = "2025-08-15"
-    ProblemID   = "security_configuration_as_code_Terraform_HCL_h7js29a0kdr1"
-  }
-
-  name_prefix = "${var.project_name}-${var.environment}"
-}
