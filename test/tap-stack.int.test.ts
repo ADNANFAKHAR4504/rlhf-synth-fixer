@@ -62,13 +62,13 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('Application bucket should have encryption enabled', async () => {
       const bucketName = outputs[`${projectName}-${environmentSuffix}-app-bucket`];
       const enc = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(enc.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(enc.ServerSideEncryptionConfiguration?.Rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
     });
 
     test('CloudTrail bucket should block public access', async () => {
       const bucketName = outputs[`${projectName}-${environmentSuffix}-cloudtrail-${process.env.AWS_ACCOUNT_ID}`];
       const policy = await s3.getBucketPolicyStatus({ Bucket: bucketName }).promise();
-      expect(policy.PolicyStatus.IsPublic).toBe(false);
+      expect(policy.PolicyStatus?.IsPublic).toBe(false);
     });
   });
 
@@ -106,7 +106,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       const result = await cloudfront.getDistributionConfig({
         Id: cfDomain
       }).promise();
-      expect(result.DistributionConfig.Enabled).toBe(true);
+      expect(result.DistributionConfig?.Enabled).toBe(true);
 
       const response = await makeHttpRequest(`https://${cfDomain}`);
       expect(response.statusCode).toBe(200);
