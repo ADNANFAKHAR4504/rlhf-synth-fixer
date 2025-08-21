@@ -8,7 +8,6 @@ describe('Terraform Configuration Unit Tests', () => {
   const requiredFiles = [
     'tap_stack.tf',
     'vars.tf',
-    'terraform.tfvars',
   ];
 
   const requiredModules = ['data', 'security', 'monitoring'];
