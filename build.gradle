@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'application'
     id 'checkstyle'
+    id 'jacoco'
 }
 
 
@@ -95,6 +96,20 @@ test {
     useJUnitPlatform()
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
+    
+    // Show test results in console
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showCauses true
+        showExceptions true
+        showStackTraces true
+    }
+    
+    // Always run tests, never use cache
+    outputs.upToDateWhen { false }
+    
+    finalizedBy jacocoTestReport
 }
 
 // Integration test task
@@ -105,6 +120,18 @@ tasks.register('integrationTest', Test) {
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     useJUnitPlatform()
+    
+    // Show test results in console
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        exceptionFormat "full"
+        showCauses true
+        showExceptions true
+        showStackTraces true
+    }
+    
+    // Always run tests, never use cache
+    outputs.upToDateWhen { false }
     
     shouldRunAfter test
 }
@@ -118,5 +145,91 @@ checkstyle {
 }
 
 
-// Make check depend on integration tests
-check.dependsOn integrationTest
+// JaCoCo configuration
+jacoco {
+    toolVersion = "0.8.8"
+}
+
+jacocoTestReport {
+    dependsOn test, integrationTest
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    executionData fileTree(project.buildDir.absolutePath).include("jacoco/*.exec")
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                // Exclude main method from coverage (hard to test)
+                '**/Main.class'
+            ])
+        }))
+    }
+    
+    finalizedBy jacocoTestCoverageVerification
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.50
+            }
+        }
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.50
+            }
+        }
+    }
+}
+
+// Custom task to show coverage summary
+tasks.register('showCoverage') {
+    dependsOn jacocoTestReport
+    doLast {
+        def reportFile = file("$buildDir/reports/jacoco/test/html/index.html")
+        def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
+        
+        if (xmlReportFile.exists()) {
+            // Parse XML to get coverage percentage
+            def xml = new XmlParser().parse(xmlReportFile)
+            def counter = xml.counter.find { it.@type == 'LINE' }
+            if (counter) {
+                def covered = counter.@covered.toInteger()
+                def missed = counter.@missed.toInteger()
+                def total = covered + missed
+                def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+                
+                println "\n📊 Code Coverage Summary:"
+                println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+            }
+        }
+        
+        if (reportFile.exists()) {
+            println "📄 Detailed HTML Report: file://${reportFile.absolutePath}"
+        }
+    }
+}
+
+// Custom task to run all tests with detailed output
+tasks.register('testAll') {
+    dependsOn test, integrationTest, showCoverage
+    group = 'verification'
+    description = 'Runs all tests and displays coverage summary'
+    
+    doFirst {
+        println "\n🚀 Running all tests with coverage analysis..."
+    }
+}
+
+// Make check depend on integration tests and coverage
+check.dependsOn integrationTest, jacocoTestCoverageVerification

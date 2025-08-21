@@ -262,9 +262,6 @@ On Windows:
 # Build the Java project
 ./gradlew build
 
-# Run Pulumi program (after building)
-pulumi up
-
 # Clean build artifacts
 ./gradlew clean
 
@@ -276,17 +273,17 @@ pulumi up
 
 **Unit Tests:**
 ```bash
-# Run all unit tests
+# Run all unit tests (shows pass/fail results)
 ./gradlew test
 
-# Run unit tests with detailed output
-./gradlew test --info
+# Run unit tests with coverage report and summary
+./gradlew test showCoverage
 
 # Run specific test class
 ./gradlew test --tests "app.MainTest"
 
-# Run unit tests and generate reports
-./gradlew test jacocoTestReport
+# Force clean run (ignore cache)
+./gradlew clean test showCoverage
 ```
 
 **Integration Tests:**
@@ -294,11 +291,14 @@ pulumi up
 # Run integration tests
 ./gradlew integrationTest
 
-# Run all tests (unit + integration)
-./gradlew check
+# Run ALL tests with detailed results and coverage
+./gradlew testAll
 
-# Run tests in parallel for faster execution
-./gradlew test integrationTest --parallel
+# Run all tests (unit + integration) with coverage verification
+./gradlew check showCoverage
+
+# View coverage report only (after running tests)
+./gradlew showCoverage
 ```
 
 **Test Reports:**
