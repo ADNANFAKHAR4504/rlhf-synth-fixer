@@ -1,3 +1,4 @@
+import json
 from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
@@ -17,7 +18,7 @@ from aws_cdk import (
     CfnOutput
 )
 from constructs import Construct
-import json
+
 
 class TapStack(Stack):
 
@@ -26,34 +27,34 @@ class TapStack(Stack):
 
         # Project naming convention
         self.project_name = "tap-webapp"
-        
+
         # Create VPC and networking components
         self.create_networking()
-        
+
         # Create security groups
         self.create_security_groups()
-        
+
         # Create IAM roles
         self.create_iam_roles()
-        
+
         # Create storage resources
         self.create_storage()
-        
+
         # Create database resources
         self.create_database()
-        
+
         # Create compute resources
         self.create_compute()
-        
+
         # Create monitoring and security
         self.create_monitoring_security()
-        
+
         # Create CloudFront and WAF
         self.create_cloudfront_waf()
 
     def create_networking(self):
         """Create VPC with public and private subnets across two AZs"""
-        
+
         # Create VPC
         self.vpc = ec2.Vpc(
             self, f"{self.project_name}-vpc",
@@ -83,7 +84,7 @@ class TapStack(Stack):
 
     def create_security_groups(self):
         """Create security groups with least privilege access"""
-        
+
         # ALB Security Group
         self.alb_sg = ec2.SecurityGroup(
             self, f"{self.project_name}-alb-sg",
@@ -92,7 +93,7 @@ class TapStack(Stack):
             description="Security group for Application Load Balancer",
             allow_all_outbound=False
         )
-        
+
         # Allow HTTP and HTTPS inbound
         self.alb_sg.add_ingress_rule(
             ec2.Peer.any_ipv4(),
@@ -104,7 +105,7 @@ class TapStack(Stack):
             ec2.Port.tcp(443),
             "Allow HTTPS traffic"
         )
-        
+
         # EC2 Security Group
         self.ec2_sg = ec2.SecurityGroup(
             self, f"{self.project_name}-ec2-sg",
@@ -113,14 +114,14 @@ class TapStack(Stack):
             description="Security group for EC2 instances",
             allow_all_outbound=True
         )
-        
+
         # Allow traffic from ALB
         self.ec2_sg.add_ingress_rule(
             self.alb_sg,
             ec2.Port.tcp(80),
             "Allow HTTP from ALB"
         )
-        
+
         # RDS Security Group
         self.rds_sg = ec2.SecurityGroup(
             self, f"{self.project_name}-rds-sg",
@@ -129,7 +130,7 @@ class TapStack(Stack):
             description="Security group for RDS database",
             allow_all_outbound=False
         )
-        
+
         # Allow MySQL/Aurora access from EC2
         self.rds_sg.add_ingress_rule(
             self.ec2_sg,
@@ -139,17 +140,19 @@ class TapStack(Stack):
 
     def create_iam_roles(self):
         """Create IAM roles with least privilege permissions"""
-        
+
         # EC2 Instance Role
         self.ec2_role = iam.Role(
             self, f"{self.project_name}-ec2-role",
             role_name=f"{self.project_name}-ec2-role",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchAgentServerPolicy"
+                )
             ]
         )
-        
+
         # Add custom policy for S3 and DynamoDB access
         self.ec2_role.add_to_policy(
             iam.PolicyStatement(
@@ -162,7 +165,7 @@ class TapStack(Stack):
                 resources=[f"arn:aws:s3:::{self.project_name}-*/*"]
             )
         )
-        
+
         self.ec2_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -174,23 +177,28 @@ class TapStack(Stack):
                     "dynamodb:Query",
                     "dynamodb:Scan"
                 ],
-                resources=[f"arn:aws:dynamodb:{self.region}:{self.account}:table/{self.project_name}-*"]
+                resources=[
+                    f"arn:aws:dynamodb:{self.region}:{self.account}:"
+                    f"table/{self.project_name}-*"
+                ]
             )
         )
-        
+
         # Config Service Role
         self.config_role = iam.Role(
             self, f"{self.project_name}-config-role",
             role_name=f"{self.project_name}-config-role",
             assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/ConfigRole")
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/ConfigRole"
+                )
             ]
         )
 
     def create_storage(self):
         """Create S3 buckets and DynamoDB tables"""
-        
+
         # S3 Bucket for application data
         self.app_bucket = s3.Bucket(
             self, f"{self.project_name}-app-bucket",
@@ -201,7 +209,7 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True
         )
-        
+
         # S3 Bucket for logs
         self.logs_bucket = s3.Bucket(
             self, f"{self.project_name}-logs-bucket",
@@ -211,7 +219,7 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True
         )
-        
+
         # DynamoDB Table for application data
         self.dynamodb_table = dynamodb.Table(
             self, f"{self.project_name}-dynamodb-table",
@@ -228,7 +236,7 @@ class TapStack(Stack):
 
     def create_database(self):
         """Create RDS database in private subnets with Secrets Manager"""
-        
+
         # Create database credentials in Secrets Manager
         self.db_secret = secretsmanager.Secret(
             self, f"{self.project_name}-db-secret",
@@ -241,7 +249,7 @@ class TapStack(Stack):
                 password_length=32
             )
         )
-        
+
         # Create DB subnet group
         self.db_subnet_group = rds.SubnetGroup(
             self, f"{self.project_name}-db-subnet-group",
@@ -252,7 +260,7 @@ class TapStack(Stack):
                 subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             )
         )
-        
+
         # Create RDS instance
         self.database = rds.DatabaseInstance(
             self, f"{self.project_name}-database",
@@ -276,8 +284,8 @@ class TapStack(Stack):
         )
 
     def create_compute(self):
-        """Create EC2 instances with Auto Scaling and Load Balancer"""
-        
+        """Create EC2 instances in Auto Scaling Group with ALB"""
+
         # Create Launch Template
         self.launch_template = ec2.LaunchTemplate(
             self, f"{self.project_name}-launch-template",
@@ -286,25 +294,22 @@ class TapStack(Stack):
                 ec2.InstanceClass.BURSTABLE3,
                 ec2.InstanceSize.MICRO
             ),
-            machine_image=ec2.AmazonLinuxImage(
-                generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
-            ),
+            machine_image=ec2.MachineImage.latest_amazon_linux2(),
             security_group=self.ec2_sg,
             role=self.ec2_role,
-            user_data=ec2.UserData.for_linux()
+            user_data=ec2.UserData.custom(
+                "#!/bin/bash\n"
+                "yum update -y\n"
+                "yum install -y httpd\n"
+                "systemctl start httpd\n"
+                "systemctl enable httpd\n"
+                "echo '<h1>Tap Web Application</h1>' > /var/www/html/index.html\n"
+                "echo '<p>Instance ID: ' $(curl -s "
+                "http://169.254.169.254/latest/meta-data/instance-id) "
+                "'</p>' >> /var/www/html/index.html"
+            )
         )
-        
-        # Add user data script
-        self.launch_template.add_user_data(
-            "#!/bin/bash",
-            "yum update -y",
-            "yum install -y httpd",
-            "systemctl start httpd",
-            "systemctl enable httpd",
-            "echo '<h1>Tap Web Application</h1>' > /var/www/html/index.html",
-            "echo '<p>Instance ID: ' $(curl -s http://169.254.169.254/latest/meta-data/instance-id) '</p>' >> /var/www/html/index.html"
-        )
-        
+
         # Create Auto Scaling Group
         self.asg = autoscaling.AutoScalingGroup(
             self, f"{self.project_name}-asg",
@@ -321,7 +326,7 @@ class TapStack(Stack):
                 grace=Duration.minutes(5)
             )
         )
-        
+
         # Create Application Load Balancer
         self.alb = elbv2.ApplicationLoadBalancer(
             self, f"{self.project_name}-alb",
@@ -333,7 +338,7 @@ class TapStack(Stack):
             security_group=self.alb_sg,
             internet_facing=True
         )
-        
+
         # Create Target Group
         self.target_group = elbv2.ApplicationTargetGroup(
             self, f"{self.project_name}-target-group",
@@ -352,10 +357,10 @@ class TapStack(Stack):
                 unhealthy_threshold_count=3
             )
         )
-        
+
         # Add ASG to target group
         self.asg.attach_to_application_target_group(self.target_group)
-        
+
         # Create ALB Listener
         self.alb.add_listener(
             f"{self.project_name}-listener",
@@ -366,7 +371,7 @@ class TapStack(Stack):
 
     def create_monitoring_security(self):
         """Create AWS Config for monitoring configuration changes"""
-        
+
         # Create S3 bucket for Config
         self.config_bucket = s3.Bucket(
             self, f"{self.project_name}-config-bucket",
@@ -376,7 +381,7 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True
         )
-        
+
         # Grant Config service permissions to the bucket
         self.config_bucket.add_to_resource_policy(
             iam.PolicyStatement(
@@ -386,7 +391,7 @@ class TapStack(Stack):
                 resources=[self.config_bucket.bucket_arn]
             )
         )
-        
+
         self.config_bucket.add_to_resource_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -400,28 +405,18 @@ class TapStack(Stack):
                 }
             )
         )
-        
-        # Create Config Configuration Recorder
-        self.config_recorder = config.CfnConfigurationRecorder(
-            self, f"{self.project_name}-config-recorder",
-            name=f"{self.project_name}-config-recorder",
-            role_arn=self.config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True
-            )
-        )
-        
+
         # Create Config Delivery Channel
         self.config_delivery_channel = config.CfnDeliveryChannel(
             self, f"{self.project_name}-config-delivery-channel",
-            name=f"{self.project_name}-config-delivery-channel",
+            name=f"{self.project_name}-config-delivery-"
+            "channel",
             s3_bucket_name=self.config_bucket.bucket_name
         )
 
     def create_cloudfront_waf(self):
         """Create CloudFront distribution with WAF protection"""
-        
+
         # Create WAF Web ACL
         self.web_acl = wafv2.CfnWebACL(
             self, f"{self.project_name}-web-acl",
@@ -474,7 +469,7 @@ class TapStack(Stack):
                 metric_name=f"{self.project_name}-web-acl-metric"
             )
         )
-        
+
         # Create CloudFront Distribution
         self.cloudfront_distribution = cloudfront.Distribution(
             self, f"{self.project_name}-cloudfront",
@@ -491,20 +486,20 @@ class TapStack(Stack):
             web_acl_id=self.web_acl.attr_arn,
             comment=f"{self.project_name} CloudFront Distribution"
         )
-        
+
         # Output important values
         CfnOutput(
             self, "LoadBalancerDNS",
             value=self.alb.load_balancer_dns_name,
             description="DNS name of the Application Load Balancer"
         )
-        
+
         CfnOutput(
             self, "CloudFrontDomainName",
             value=self.cloudfront_distribution.distribution_domain_name,
             description="Domain name of the CloudFront distribution"
         )
-        
+
         CfnOutput(
             self, "DatabaseEndpoint",
             value=self.database.instance_endpoint.hostname,

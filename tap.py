@@ -5,7 +5,8 @@ from lib.tap_stack import TapStack
 app = cdk.App()
 
 # Deploy the stack to us-west-2 region
-TapStack(app, "tap-infrastructure-stack",
+TapStack(
+    app, "tap-infrastructure-stack",
     env=cdk.Environment(
         region="us-west-2"
     ),
