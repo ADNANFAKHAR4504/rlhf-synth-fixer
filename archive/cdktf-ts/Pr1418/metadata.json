@@ -1,0 +1,29 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291788",
+  "team": "1",
+  "startedAt": "2025-08-16T12:32:52.372Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Database Management"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "DynamoDB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

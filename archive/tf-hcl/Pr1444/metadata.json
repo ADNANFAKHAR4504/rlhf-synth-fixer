@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291811",
+  "team": "1",
+  "startedAt": "2025-08-16T16:37:02.626Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
+}

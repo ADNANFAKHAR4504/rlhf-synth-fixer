@@ -34,28 +34,23 @@ async function copyTemplate(templateName: string): Promise<void> {
   const rootDir = path.join(__dirname, '..');
 
   try {
-    // Check if template exists
     if (!(await fs.pathExists(templatePath))) {
       console.error(`Template '${templateName}' not found`);
       return;
     }
 
-    // Get all items in the template directory
     const items = await fs.readdir(templatePath);
 
     for (const item of items) {
       const sourcePath = path.join(templatePath, item);
       const destPath = path.join(rootDir, item);
 
-      // Check if it's a directory
       const stat = await fs.stat(sourcePath);
 
       if (stat.isDirectory()) {
-        // Copy directory recursively
         await fs.copy(sourcePath, destPath, { overwrite: true });
         console.log(`✓ Copied ${item}/ to root`);
       } else {
-        // Copy file
         await fs.copy(sourcePath, destPath, { overwrite: true });
         console.log(`✓ Copied ${item} to root`);
       }
@@ -73,6 +68,7 @@ function getLanguageChoices(platform: string) {
   if (platform === 'cdk') {
     return [
       { name: 'TypeScript', value: 'ts' },
+      { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
     ];
   }
@@ -87,8 +83,12 @@ function getLanguageChoices(platform: string) {
   if (platform === 'pulumi') {
     return [
       { name: 'TypeScript', value: 'ts' },
-      { name: 'Python', value: 'py' }, // Pulumi Python
+      { name: 'JavaScript', value: 'js' },
+      { name: 'Python', value: 'py' },
     ];
+  }
+  if (platform === 'tf') {
+    return [{ name: 'Terraform', value: 'hcl' }];
   }
 
   return [
@@ -111,13 +111,13 @@ async function main(): Promise<void> {
   if (command === 'rlhf-task') {
     console.log('🔧 TAP Template Selector\n');
 
-    // Collect task metadata
     const platform = await select({
       message: 'Select the platform:',
       choices: [
         { name: 'CDK', value: 'cdk' },
         { name: 'CDK Terraform', value: 'cdktf' },
         { name: 'CloudFormation', value: 'cfn' },
+        { name: 'Terraform', value: 'tf' },
         { name: 'Pulumi', value: 'pulumi' },
       ],
     });
@@ -167,10 +167,7 @@ async function main(): Promise<void> {
       ],
     });
 
-    // Generate template folder name
     const templateName = `${platform}-${language}`;
-
-    // Check if template exists
     const templatesDir = path.join(__dirname, '..', 'templates');
     const templatePath = path.join(templatesDir, templateName);
 
@@ -181,7 +178,6 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    // Create metadata object
     const metadata: TaskMetadata = {
       platform,
       language,
@@ -192,7 +188,6 @@ async function main(): Promise<void> {
       startedAt: new Date().toISOString(),
     };
 
-    // Show summary and confirm
     console.log('\n📋 Task Summary:');
     console.log(`Platform: ${platform}`);
     console.log(`Language: ${language}`);
@@ -222,5 +217,4 @@ async function main(): Promise<void> {
   }
 }
 
-// Run the CLI
 main().catch(console.error);

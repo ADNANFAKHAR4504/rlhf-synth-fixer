@@ -1,0 +1,1217 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure AWS Infrastructure Configuration with S3, CloudFront, WAF, GuardDuty, VPC, and RDS security best practices",
+    "Parameters": {
+        "AllowedIPRanges": {
+            "Type": "CommaDelimitedList",
+            "Default": "203.0.113.0/24,198.51.100.0/24",
+            "Description": "Comma-delimited list of allowed IP ranges for IAM policy restrictions"
+        },
+        "SuspiciousIPRanges": {
+            "Type": "CommaDelimitedList",
+            "Default": "192.0.2.0/24,203.0.113.100/32",
+            "Description": "Comma-delimited list of suspicious IP ranges to block via Network ACL"
+        },
+        "LoggingBucketName": {
+            "Type": "String",
+            "Default": "secure-access-logs-bucket",
+            "Description": "Name for the S3 bucket that will store server access logs"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "secure-infrastructure",
+            "Description": "Project name for resource tagging"
+        },
+        "Owner": {
+            "Type": "String",
+            "Default": "security-team",
+            "Description": "Owner for resource tagging"
+        }
+    },
+    "Resources": {
+        "S3EncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for S3 bucket encryption",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3EncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ProjectName}-s3-encryption-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3EncryptionKey"
+                }
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${LoggingBucketName}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3BucketTwo": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-secure-bucket-two-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "S3EncryptionKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": "access-logs-bucket-two/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontOriginAccessControl": {
+            "Type": "AWS::CloudFront::OriginAccessControl",
+            "Properties": {
+                "OriginAccessControlConfig": {
+                    "Name": {
+                        "Fn::Sub": "${ProjectName}-oac"
+                    },
+                    "OriginAccessControlOriginType": "s3",
+                    "SigningBehavior": "always",
+                    "SigningProtocol": "sigv4"
+                }
+            }
+        },
+        "WebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-cloudfront-waf"
+                },
+                "Scope": "CLOUDFRONT",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                        "Priority": 2,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "KnownBadInputsMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesSQLiRuleSet",
+                        "Priority": 3,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesSQLiRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "SQLiRuleSetMetric"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${ProjectName}WebACL"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "Id": "S3Origin",
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "SecureS3Bucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": ""
+                            },
+                            "OriginAccessControlId": {
+                                "Ref": "CloudFrontOriginAccessControl"
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD"
+                        ],
+                        "Compress": true,
+                        "ForwardedValues": {
+                            "QueryString": false,
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        }
+                    },
+                    "Enabled": true,
+                    "HttpVersion": "http2",
+                    "PriceClass": "PriceClass_100",
+                    "WebACLId": {
+                        "Fn::GetAtt": [
+                            "WebACL",
+                            "Arn"
+                        ]
+                    },
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontServicePrincipal",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "IPRestrictedPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "${ProjectName}-ip-restricted-policy"
+                },
+                "Description": "Policy that restricts access based on IP address",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyFromNonAllowedIPs",
+                            "Effect": "Deny",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureS3Bucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureS3BucketTwo.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureS3BucketTwo",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "IpAddressIfExists": {
+                                    "aws:SourceIp": {
+                                        "Ref": "AllowedIPRanges"
+                                    }
+                                },
+                                "Bool": {
+                                    "aws:ViaAWSService": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "GuardDutyDetector": {
+            "Type": "AWS::GuardDuty::Detector",
+            "Properties": {
+                "Enable": true,
+                "FindingPublishingFrequency": "FIFTEEN_MINUTES",
+                "DataSources": {
+                    "S3Logs": {
+                        "Enable": true
+                    },
+                    "MalwareProtection": {
+                        "ScanEc2InstanceWithFindings": {
+                            "EbsVolumes": true
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-secure-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureNetworkAcl": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-secure-nacl"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NetworkAclEntryDenySuspicious1": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                },
+                "RuleNumber": 100,
+                "Protocol": -1,
+                "RuleAction": "deny",
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "SuspiciousIPRanges"
+                        }
+                    ]
+                }
+            }
+        },
+        "NetworkAclEntryDenySuspicious2": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                },
+                "RuleNumber": 101,
+                "Protocol": -1,
+                "RuleAction": "deny",
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Ref": "SuspiciousIPRanges"
+                        }
+                    ]
+                }
+            }
+        },
+        "NetworkAclEntryAllowAll": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                },
+                "RuleNumber": 200,
+                "Protocol": -1,
+                "RuleAction": "allow",
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "NetworkAclAssociation1": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                }
+            }
+        },
+        "NetworkAclAssociation2": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "NetworkAclId": {
+                    "Ref": "SecureNetworkAcl"
+                }
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${ProjectName}-db-subnet-group"
+                },
+                "DBSubnetGroupDescription": "Subnet group for secure RDS instances",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-rds-sg"
+                },
+                "GroupDescription": "Security group for RDS instances",
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": "10.0.0.0/16",
+                        "Description": "MySQL access from VPC"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-rds-security-group"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for RDS encryption",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureRDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-secure-db"
+                },
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.4.6",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "RDSEncryptionKey"
+                },
+                "MasterUsername": "admin",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "PubliclyAccessible": false,
+                "BackupRetentionPeriod": 7,
+                "MultiAZ": false,
+                "DeletionProtection": true,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSEnhancedMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-db-secret"
+                },
+                "Description": "RDS Master Password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSEnhancedMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-rds-monitoring-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the secure S3 bucket",
+            "Value": {
+                "Ref": "SecureS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecureS3Bucket"
+                }
+            }
+        },
+        "S3BucketTwoName": {
+            "Description": "Name of the second secure S3 bucket",
+            "Value": {
+                "Ref": "SecureS3BucketTwo"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecureS3BucketTwo"
+                }
+            }
+        },
+        "LoggingBucketName": {
+            "Description": "Name of the logging S3 bucket",
+            "Value": {
+                "Ref": "LoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoggingBucket"
+                }
+            }
+        },
+        "CloudFrontDistributionId": {
+            "Description": "CloudFront Distribution ID",
+            "Value": {
+                "Ref": "CloudFrontDistribution"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudFrontDistribution"
+                }
+            }
+        },
+        "CloudFrontDomainName": {
+            "Description": "CloudFront Distribution Domain Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudFrontDistribution",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudFrontDomainName"
+                }
+            }
+        },
+        "WebACLId": {
+            "Description": "WAF Web ACL ID",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebACL",
+                    "Id"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebACL"
+                }
+            }
+        },
+        "GuardDutyDetectorId": {
+            "Description": "GuardDuty Detector ID",
+            "Value": {
+                "Ref": "GuardDutyDetector"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GuardDutyDetector"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "SecureVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC"
+                }
+            }
+        },
+        "RDSInstanceId": {
+            "Description": "RDS Instance Identifier",
+            "Value": {
+                "Ref": "SecureRDSInstance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDSInstance"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Instance Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecureRDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+                }
+            }
+        }
+    }
+}

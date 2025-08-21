@@ -1,4 +1,9 @@
-```
+# AWS CloudFormation Template - Ideal Response
+
+## Description
+This CloudFormation template creates a secure, compliant, and production-ready AWS infrastructure with best practices for security including VPC with public subnet, encrypted S3 bucket with versioning, EC2 instance with encrypted EBS volume, KMS keys for encryption, IAM roles with proper policies, CloudWatch logging with encryption, Secrets Manager for sensitive data, SSM parameters, and comprehensive security groups. All sensitive data is parameterized or uses AWS Secrets Manager avoiding hardcoded values.
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   A secure, compliant, and production-ready AWS infrastructure using CloudFormation.
