@@ -203,7 +203,7 @@ class TapStack(Stack):
       assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
       managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name(
-          "service-role/ConfigRole"
+          "service-role/AWS_ConfigRole"
         )
       ]
     )
