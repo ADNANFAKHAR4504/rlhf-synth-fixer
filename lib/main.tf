@@ -518,7 +518,7 @@ resource "aws_api_gateway_stage" "prod" {
 # RDS (optional) - encrypted, in default VPC, secured by SG
 ########################################
 resource "aws_db_subnet_group" "default" {
-  name       = "${var.project}-db-subnet-group-${local.suffix_hex}"
+  name       = "${lower(var.project)}-db-subnet-group-${local.suffix_hex}"
   subnet_ids = slice(data.aws_subnets.default_vpc.ids, 0, 2)
   tags       = local.common_tags
   lifecycle {
