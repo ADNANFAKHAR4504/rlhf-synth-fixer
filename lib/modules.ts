@@ -27,6 +27,10 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 
 export interface BaseModuleProps {
   namePrefix: string;
@@ -181,18 +185,89 @@ export interface S3ModuleProps extends BaseModuleProps {
 
 export class S3Module extends Construct {
   public readonly bucket: s3Bucket.S3Bucket;
+  public readonly accessLogsBucket: s3Bucket.S3Bucket;
 
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
 
+    // Create access logs bucket first
+    this.accessLogsBucket = new s3Bucket.S3Bucket(this, 'access-logs-bucket', {
+      bucket: `${props.bucketName}-access-logs`,
+      tags: {
+        ...props.tags,
+        Purpose: 'AccessLogs',
+      },
+    });
+
+    // Block public access for access logs bucket
+    new S3BucketPublicAccessBlock(
+      this,
+      'access-logs-bucket-public-access-block',
+      {
+        bucket: this.accessLogsBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      }
+    );
+
+    // Main application bucket
     this.bucket = new s3Bucket.S3Bucket(this, 'bucket', {
       bucket: props.bucketName,
-      versioning: {
-        enabled: true,
-      },
       tags: props.tags,
     });
 
+    // Enable versioning
+    new S3BucketVersioningA(this, 'bucket-versioning', {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+    });
+
+    // Configure server-side encryption
+    new S3BucketServerSideEncryptionConfigurationA(this, 'bucket-encryption', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
+
+    // Configure lifecycle policy
+    new S3BucketLifecycleConfiguration(this, 'bucket-lifecycle', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          id: 'transition_to_ia',
+          status: 'Enabled',
+          transition: [
+            {
+              days: 30,
+              storageClass: 'STANDARD_IA',
+            },
+            {
+              days: 90,
+              storageClass: 'GLACIER',
+            },
+          ],
+        },
+      ],
+    });
+
+    // Configure access logging
+    new S3BucketLoggingA(this, 'bucket-logging', {
+      bucket: this.bucket.id,
+      targetBucket: this.accessLogsBucket.id,
+      targetPrefix: 'access-logs/',
+    });
+
+    // Block public access for main bucket
     new S3BucketPublicAccessBlock(this, 'main-bucket-public-access-block', {
       bucket: this.bucket.id,
       blockPublicAcls: true,
@@ -464,7 +539,9 @@ export class IamModule extends Construct {
   public readonly ec2Role: iamRole.IamRole;
   public readonly instanceProfile: iamInstanceProfile.IamInstanceProfile;
 
-  constructor(scope: Construct, id: string, props: IamModuleProps) {
+  constructor(scope: Construct, id: string, props: IamModuleProps & { 
+    secretArn?: string 
+  }) {
     super(scope, id);
 
     this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
@@ -495,6 +572,23 @@ export class IamModule extends Construct {
             ],
           }),
         },
+        // Add Secrets Manager permissions if secret ARN is provided
+        ...(props.secretArn ? [{
+          name: 'SecretsManagerAccess',
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'secretsmanager:GetSecretValue',
+                  'secretsmanager:DescribeSecret',
+                ],
+                Resource: props.secretArn,
+              },
+            ],
+          }),
+        }] : []),
       ],
       tags: {
         Name: `${props.namePrefix}ec2-role`,
