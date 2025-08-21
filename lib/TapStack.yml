@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Secure multi-tier AWS architecture (us-east-2): VPC, ALB (HTTP for deployability without ACM),
-  private EC2 via ASG, private RDS (MySQL), KMS CMKs, S3 (SSE-KMS), CloudTrail, VPC Flow Logs,
-  Secrets Manager w/ rotation, strict SG/NACLs, MFA deny policy example. No parameters required.
+Description: 'TAP - Cloud formation Template for  Multi-Tier AWS Architecture'
 
 Parameters:
   LatestAmiId:
@@ -339,7 +336,7 @@ Resources:
   CMKLogs:
     Type: AWS::KMS::Key
     Properties:
-      Description: CMK for logs (CloudTrail/CloudWatch Logs/S3 logs)
+      Description: CMK for logs (CloudWatch Logs / S3 logs)
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -349,15 +346,6 @@ Resources:
             Principal: {AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'}
             Action: 'kms:*'
             Resource: '*'
-          - Sid: AllowCloudTrailUse
-            Effect: Allow
-            Principal: {Service: cloudtrail.amazonaws.com}
-            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
-            Resource: '*'
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
-                kms:ViaService: !Sub 'cloudtrail.${AWS::Region}.amazonaws.com'
           - Sid: AllowLogsService
             Effect: Allow
             Principal: {Service: !Sub 'logs.${AWS::Region}.amazonaws.com'}
@@ -416,48 +404,8 @@ Resources:
             Action: 's3:*'
             Resource: [!Sub '${S3Logs.Arn}', !Sub '${S3Logs.Arn}/*']
             Condition: { Bool: { aws:SecureTransport: false } }
-          - Sid: AllowCloudTrailWrite
-            Effect: Allow
-            Principal: {Service: cloudtrail.amazonaws.com}
-            Action: s3:PutObject
-            Resource: !Sub '${S3Logs.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition: { StringEquals: { s3:x-amz-acl: bucket-owner-full-control } }
-          - Sid: AllowCloudTrailGetAcl
-            Effect: Allow
-            Principal: {Service: cloudtrail.amazonaws.com}
-            Action: s3:GetBucketAcl
-            Resource: !Sub '${S3Logs.Arn}'
 
-  # ---------------- CloudTrail & VPC Flow Logs ----------------
-  LogGroupTrail:
-    Type: AWS::Logs::LogGroup
-    Properties: { LogGroupName: /secure/cloudtrail, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
-
-  RoleTrailToLogs:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: cloudtrail.amazonaws.com}, Action: sts:AssumeRole}]
-      Policies:
-        - PolicyName: PutLogs
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement: [{Effect: Allow, Action: [logs:CreateLogStream, logs:PutLogEvents], Resource: !Sub '${LogGroupTrail.Arn}:*'}]
-
-  Trail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: secure-trail
-      S3BucketName: !Ref S3Logs
-      CloudWatchLogsLogGroupArn: !GetAtt LogGroupTrail.Arn
-      CloudWatchLogsRoleArn: !GetAtt RoleTrailToLogs.Arn
-      KMSKeyId: !Ref CMKLogs
-      EnableLogFileValidation: true
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      IsLogging: true
-
+  # ---------------- CloudWatch Logs (for VPC Flow Logs) ----------------
   LogGroupFlow:
     Type: AWS::Logs::LogGroup
     Properties: { LogGroupName: /secure/vpc/flow, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
@@ -483,51 +431,6 @@ Resources:
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref LogGroupFlow
       DeliverLogsPermissionArn: !GetAtt RoleFlowLogs.Arn
-
-  # ---------------- Security Metrics & Alarms ----------------
-  MetricUnauthorized:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref LogGroupTrail
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
-      MetricTransformations: [{MetricName: UnauthorizedAPICalls, MetricNamespace: Security, MetricValue: '1'}]
-
-  MetricConsoleNoMFA:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref LogGroupTrail
-      FilterPattern: '{ ($.eventName = "ConsoleLogin") && ($.additionalEventData.MFAUsed != "Yes") && ($.errorMessage = "Success") }'
-      MetricTransformations: [{MetricName: ConsoleLoginWithoutMFA, MetricNamespace: Security, MetricValue: '1'}]
-
-  TopicSecurityAlerts:
-    Type: AWS::SNS::Topic
-    Properties: { TopicName: security-alerts }
-
-  AlarmUnauthorized:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Unauthorized API calls detected
-      Namespace: Security
-      MetricName: UnauthorizedAPICalls
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions: [!Ref TopicSecurityAlerts]
-
-  AlarmConsoleNoMFA:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Console login without MFA
-      Namespace: Security
-      MetricName: ConsoleLoginWithoutMFA
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions: [!Ref TopicSecurityAlerts]
 
   # ---------------- MFA deny policy example ----------------
   GroupMFARequired:
@@ -561,11 +464,12 @@ Resources:
               - Sid: ReadDBSecret
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretDB}*'        # FIX: use ARN
+                # Use wildcard ARN to satisfy both lint and deploy (secret name has random suffix in ARN)
+                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretDB}*'
               - Sid: UseDataCMK
                 Effect: Allow
                 Action: [kms:Decrypt, kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
-                Resource: !GetAtt CMKData.Arn          # FIX: use ARN
+                Resource: !GetAtt CMKData.Arn
               - Sid: S3DataAccess
                 Effect: Allow
                 Action: [s3:ListBucket]
