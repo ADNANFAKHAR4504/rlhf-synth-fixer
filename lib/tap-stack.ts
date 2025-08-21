@@ -6,7 +6,6 @@ import { Construct } from 'constructs';
 
 // Environment-specific configuration interface
 export interface EnvironmentConfig {
-  environment: string;
   vpcCidr: string;
   instanceType: ec2.InstanceType;
   dbInstanceClass: ec2.InstanceType;
@@ -37,32 +36,31 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     const { config } = props;
-    const envPrefix = config.environment.toLowerCase();
 
     // Apply consistent tags to all resources in this stack
-    cdk.Tags.of(this).add('Environment', config.environment);
+    cdk.Tags.of(this).add('Environment', environmentSuffix);
     cdk.Tags.of(this).add('Project', 'WebApplication');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
     // VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'VPC', {
-      vpcName: `${envPrefix}-webapp-vpc-${environmentSuffix}`,
+      vpcName: `${environmentSuffix}-webapp-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr(config.vpcCidr),
       maxAzs: 2,
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: `${envPrefix}-public`,
+          name: `${environmentSuffix}-public`,
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: `${envPrefix}-private`,
+          name: `${environmentSuffix}-private`,
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 28,
-          name: `${envPrefix}-isolated`,
+          name: `${environmentSuffix}-isolated`,
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
@@ -70,9 +68,9 @@ export class TapStack extends cdk.Stack {
 
     // Security Group for Web Servers
     const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
-      securityGroupName: `${envPrefix}-web-sg-${environmentSuffix}`,
+      securityGroupName: `${environmentSuffix}-web-sg-${environmentSuffix}`,
       vpc,
-      description: `Security group for ${config.environment} web servers`,
+      description: `Security group for ${environmentSuffix} web servers`,
       allowAllOutbound: true,
     });
 
@@ -99,9 +97,9 @@ export class TapStack extends cdk.Stack {
       this,
       'DatabaseSecurityGroup',
       {
-        securityGroupName: `${envPrefix}-db-sg`,
+        securityGroupName: `${environmentSuffix}-db-sg`,
         vpc,
-        description: `Security group for ${config.environment} database`,
+        description: `Security group for ${environmentSuffix} database`,
         allowAllOutbound: false,
       }
     );
@@ -114,7 +112,7 @@ export class TapStack extends cdk.Stack {
 
     // Create Key Pair for EC2 instances
     const keyPair = new ec2.KeyPair(this, 'KeyPair', {
-      keyPairName: `${envPrefix}-keypair-${environmentSuffix}`,
+      keyPairName: `${environmentSuffix}-keypair-${environmentSuffix}`,
     });
 
     // AMI Selection - use custom AMI if specified, otherwise use Amazon Linux 2
@@ -129,7 +127,7 @@ export class TapStack extends cdk.Stack {
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      `echo "<h1>Welcome to ${config.environment} Environment</h1>" > /var/www/html/index.html`,
+      `echo "<h1>Welcome to ${environmentSuffix} Environment</h1>" > /var/www/html/index.html`,
       'echo "<p>Server is running successfully!</p>" >> /var/www/html/index.html'
     );
 
@@ -138,7 +136,7 @@ export class TapStack extends cdk.Stack {
       this,
       'WebServerLaunchTemplate',
       {
-        launchTemplateName: `${envPrefix}-webapp-template-${environmentSuffix}`,
+        launchTemplateName: `${environmentSuffix}-webapp-template-${environmentSuffix}`,
         instanceType: config.instanceType,
         machineImage,
         securityGroup: webSecurityGroup,
@@ -153,12 +151,12 @@ export class TapStack extends cdk.Stack {
       this,
       'WebServerASG',
       {
-        autoScalingGroupName: `${envPrefix}-webapp-asg-${environmentSuffix}`,
+        autoScalingGroupName: `${environmentSuffix}-webapp-asg-${environmentSuffix}`,
         vpc,
         launchTemplate,
-        minCapacity: config.environment === 'Production' ? 2 : 1,
-        maxCapacity: config.environment === 'Production' ? 6 : 3,
-        desiredCapacity: config.environment === 'Production' ? 2 : 1,
+        minCapacity: environmentSuffix === 'Production' ? 2 : 1,
+        maxCapacity: environmentSuffix === 'Production' ? 6 : 3,
+        desiredCapacity: environmentSuffix === 'Production' ? 2 : 1,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
@@ -170,7 +168,7 @@ export class TapStack extends cdk.Stack {
       this,
       'WebAppALB',
       {
-        loadBalancerName: `${envPrefix}-alb-${environmentSuffix}`,
+        loadBalancerName: `${environmentSuffix}-alb-${environmentSuffix}`,
         vpc,
         internetFacing: true,
         securityGroup: webSecurityGroup,
@@ -183,7 +181,7 @@ export class TapStack extends cdk.Stack {
     });
 
     listener.addTargets('WebAppTargets', {
-      targetGroupName: `${envPrefix}-targets-${environmentSuffix}`,
+      targetGroupName: `${environmentSuffix}-targets-${environmentSuffix}`,
       port: 80,
       targets: [autoScalingGroup],
       healthCheck: {
@@ -194,8 +192,8 @@ export class TapStack extends cdk.Stack {
 
     // RDS Subnet Group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      subnetGroupName: `${envPrefix}-db-subnet-${environmentSuffix}`,
-      description: `Database subnet group for ${config.environment}`,
+      subnetGroupName: `${environmentSuffix}-db-subnet-${environmentSuffix}`,
+      description: `Database subnet group for ${environmentSuffix}`,
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
@@ -204,7 +202,7 @@ export class TapStack extends cdk.Stack {
 
     // RDS Database Instance
     const database = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `${envPrefix}-db-${environmentSuffix}`,
+      instanceIdentifier: `${environmentSuffix}-db-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
@@ -216,14 +214,14 @@ export class TapStack extends cdk.Stack {
       securityGroups: [dbSecurityGroup],
       databaseName: 'webappdb',
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `${envPrefix}-db-creds-${environmentSuffix}`,
+        secretName: `${environmentSuffix}-db-creds-${environmentSuffix}`,
       }),
       backupRetention:
-        config.environment === 'Production'
+        environmentSuffix === 'Production'
           ? cdk.Duration.days(7)
           : cdk.Duration.days(1),
-      deleteAutomatedBackups: config.environment !== 'Production',
-      deletionProtection: config.environment === 'Production',
+      deleteAutomatedBackups: environmentSuffix !== 'Production',
+      deletionProtection: environmentSuffix === 'Production',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -239,7 +237,7 @@ export class TapStack extends cdk.Stack {
           id: 'DeleteIncompleteMultipartUploads',
           abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
         },
-        ...(config.environment !== 'Production'
+        ...(environmentSuffix !== 'Production'
           ? [
               {
                 id: 'DeleteOldVersions',
@@ -262,7 +260,7 @@ export class TapStack extends cdk.Stack {
         {
           id: 'DeleteOldLogs',
           expiration: cdk.Duration.days(
-            config.environment === 'Production' ? 90 : 30
+            environmentSuffix === 'Production' ? 90 : 30
           ),
         },
       ],
@@ -271,9 +269,9 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch Log Group
     const logGroup = new cdk.aws_logs.LogGroup(this, 'WebAppLogGroup', {
-      logGroupName: `/aws/webapp/${envPrefix}`,
+      logGroupName: `/aws/webapp/${environmentSuffix}`,
       retention:
-        config.environment === 'Production'
+        environmentSuffix === 'Production'
           ? cdk.aws_logs.RetentionDays.ONE_MONTH
           : cdk.aws_logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -282,37 +280,37 @@ export class TapStack extends cdk.Stack {
     // Output important information
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: `Load Balancer DNS for ${config.environment}`,
+      description: `Load Balancer DNS for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
-      description: `Database endpoint for ${config.environment}`,
+      description: `Database endpoint for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AssetsBucketName', {
       value: assetsBucket.bucketName,
-      description: `Assets bucket name for ${config.environment}`,
+      description: `Assets bucket name for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: logsBucket.bucketName,
-      description: `Logs bucket name for ${config.environment}`,
+      description: `Logs bucket name for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
-      description: `VPC ID for ${config.environment}`,
+      description: `VPC ID for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'KeyPairName', {
       value: keyPair.keyPairName,
-      description: `Key pair name for ${config.environment}`,
+      description: `Key pair name for ${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'LogGroupName', {
       value: logGroup.logGroupName,
-      description: `CloudWatch log group name for ${config.environment}`,
+      description: `CloudWatch log group name for ${environmentSuffix}`,
     });
   }
 

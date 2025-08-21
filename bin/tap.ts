@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Tags } from 'aws-cdk-lib';
-import { TapStack, EnvironmentConfig } from '../lib/tap-stack';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { EnvironmentConfig, TapStack } from '../lib/tap-stack';
 
 // Environment configurations
 const environmentConfigs: Record<string, EnvironmentConfig> = {
-  development: {
-    environment: 'Development',
+  dev: {
     vpcCidr: '10.0.0.0/16',
     instanceType: ec2.InstanceType.of(
       ec2.InstanceClass.T3,
@@ -21,7 +20,6 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     bucketVersioning: false,
   },
   staging: {
-    environment: 'Staging',
     vpcCidr: '10.1.0.0/16',
     instanceType: ec2.InstanceType.of(
       ec2.InstanceClass.T3,
@@ -35,7 +33,6 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     bucketVersioning: true,
   },
   production: {
-    environment: 'Production',
     vpcCidr: '10.2.0.0/16',
     instanceType: ec2.InstanceType.of(
       ec2.InstanceClass.T3,
@@ -59,13 +56,11 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Get environment name from context or default to development
-const envName = app.node.tryGetContext('environment') || 'development';
-const config = environmentConfigs[envName];
+const config = environmentConfigs[environmentSuffix];
 
 if (!config) {
   throw new Error(
-    `Unknown environment: ${envName}. Available environments: ${Object.keys(environmentConfigs).join(', ')}`
+    `Unknown environment: ${environmentSuffix}. Available environments: ${Object.keys(environmentConfigs).join(', ')}`
   );
 }
 
