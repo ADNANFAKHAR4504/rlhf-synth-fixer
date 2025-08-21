@@ -1,39 +1,39 @@
-# CDKTF Multi-Tier Web Application – Production-Ready Solution  
+I need a production-ready CDKTF solution in TypeScript that deploys a multi-tier web application on AWS.
 
-Generate a complete, production-ready CDKTF solution in TypeScript to deploy a multi-tier web application on AWS.  
+The project should be cleanly structured into exactly two files (lib/modules.ts and lib/tap-stack.ts).
+The code must:
 
-The entire solution must be organized into   exactly two files   as specified below.  
-The code must be:  
-- Fully functional  
-- Well-commented  
-- Deployable using only the `cdktf` CLI  
+Work out of the box (fully functional).
 
----
+Be clear and well-commented.
 
-## Key Requirements  
+Deploy using only the cdktf CLI.
 
-### 1. Centralized Security Management  
-- All Security Groups and traffic rules must be defined in `tap-stack.ts`.  
-- This ensures a   single, clear view of the application's network security posture.  
-- Modules should accept security group IDs as input properties, rather than creating their own in isolation.  
+What I’m Looking For
+ Centralized Security Management
 
----
+All Security Groups and their rules should be defined in tap-stack.ts.
 
-### 2. Remote State Management  
-- Configure a secure, remote S3 backend for storing the Terraform state file.  
+This way, the entire network security posture is visible in one place.
 
----
+Each module should accept security group IDs as inputs, not create them internally.
 
-### 3. Secrets Management  
--  The database password must be securely retrieved from AWS Secrets Manager.  
--  Never hardcode passwords or credentials.
+ Remote State Management
 
----
+Use a secure S3 backend to store the Terraform state file.
 
-### 4. Least Privilege Access  
-- The IAM role for the EC2 instance should follow the principle of least privilege  .  
-- Grant only the permissions required:  
-  - Access to AWS Systems Manager (SSM) for session management.  
-  - Required network and S3 permissions (if applicable).  
+ Secrets Management
 
----
+The database password should come from AWS Secrets Manager, not be hardcoded in the code.
+
+No credentials or passwords should ever appear directly in the source.
+
+ Least Privilege Access
+
+The EC2 instance IAM role should follow least privilege principles.
+
+It should only have:
+
+SSM access (so we can connect via AWS Systems Manager instead of SSH keys).
+
+Minimal required permissions for networking or S3 if needed.
