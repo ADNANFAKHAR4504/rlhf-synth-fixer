@@ -17,5 +17,5 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
-  profile = lookup(local.aws_profile, local.env)
+  # profile = lookup(local.aws_profile, local.env)
 }
