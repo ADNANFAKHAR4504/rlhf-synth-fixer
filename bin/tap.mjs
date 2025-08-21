@@ -11,6 +11,9 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Optional SSH key name (can be set via context or environment variable)
+const sshKeyName = app.node.tryGetContext('sshKeyName') || process.env.SSH_KEY_NAME || null;
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
@@ -19,6 +22,7 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  sshKeyName: sshKeyName, // Optional SSH key for EC2 access
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
