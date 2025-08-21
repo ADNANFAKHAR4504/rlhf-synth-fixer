@@ -14,18 +14,13 @@ terraform {
     }
   }
 
-  # Backend configuration - supports both S3 and Terraform Cloud
-  # For S3: backend "s3" {}
-  # For Terraform Cloud: backend "remote" {}
-  backend "s3" {}
-  
-  # Alternative Terraform Cloud backend configuration:
-  # backend "remote" {
-  #   organization = "your-organization"
-  #   workspaces {
-  #     prefix = "iac-test-automations-"
-  #   }
-  # }
+  # Backend configuration - Terraform Cloud with workspace prefix
+  backend "remote" {
+    organization = "TuringGpt"
+    workspaces {
+      prefix = "iac-test-automations-"
+    }
+  }
 }
 
 # Primary AWS provider for general resources

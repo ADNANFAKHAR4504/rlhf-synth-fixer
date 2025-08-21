@@ -45,18 +45,13 @@ terraform {
     }
   }
 
-  # Backend configuration - supports both S3 and Terraform Cloud
-  # For S3: backend "s3" {}
-  # For Terraform Cloud: backend "remote" {}
-  backend "s3" {}
-
-  # Alternative Terraform Cloud backend configuration:
-  # backend "remote" {
-  #   organization = "your-organization"
-  #   workspaces {
-  #     prefix = "iac-test-automations-"
-  #   }
-  # }
+    # Backend configuration - Terraform Cloud with workspace prefix
+  backend "remote" {
+    organization = "TuringGpt"
+    workspaces {
+      prefix = "iac-test-automations-"
+    }
+  }
 }
 
 # Primary AWS provider for general resources
@@ -134,48 +129,48 @@ variable "environment_names" {
 
 ### Output Definitions
 
-Outputs provide access to deployed resource information for both environments:
+Outputs provide access to deployed resource information for both environments with proper module references:
 
 ```hcl
 # outputs.tf
 output "bucket_names" {
   value = {
-    staging    = module.storage.bucket_name
-    production = module.storage.bucket_name
+    staging    = local.env == "staging" ? module.storage_staging[0].bucket_name : null
+    production = local.env == "production" ? module.storage_production[0].bucket_name : null
   }
 }
 
 output "security_group_ids" {
   value = {
-    staging    = module.network.security_group_id
-    production = module.network.security_group_id
+    staging    = local.env == "staging" ? module.network_staging[0].security_group_id : null
+    production = local.env == "production" ? module.network_production[0].security_group_id : null
   }
 }
 
 output "iam_role_arns" {
   value = {
-    staging    = module.iam_role.role_arn
-    production = module.iam_role.role_arn
+    staging    = local.env == "staging" ? module.iam_role_staging[0].role_arn : null
+    production = local.env == "production" ? module.iam_role_production[0].role_arn : null
   }
 }
 
 # Environment-specific outputs for current deployment
 output "current_bucket_name" {
-  value = module.storage.bucket_name
+  value = local.env == "staging" ? module.storage_staging[0].bucket_name : module.storage_production[0].bucket_name
 }
 
 output "current_security_group_id" {
-  value = module.network.security_group_id
+  value = local.env == "staging" ? module.network_staging[0].security_group_id : module.network_production[0].security_group_id
 }
 
 output "current_iam_role_arn" {
-  value = module.iam_role.role_arn
+  value = local.env == "staging" ? module.iam_role_staging[0].role_arn : module.iam_role_production[0].role_arn
 }
 ```
 
 ### Main Configuration
 
-The main configuration orchestrates all modules:
+The main configuration orchestrates all modules with environment-specific instances:
 
 ```hcl
 # Main Terraform configuration
@@ -183,29 +178,62 @@ locals {
   env = replace(terraform.workspace, "myapp-", "")
 }
 
-module "storage" {
+# Staging environment modules
+module "storage_staging" {
+  count  = local.env == "staging" ? 1 : 0
   source = "./modules/storage"
   providers = {
     aws = aws.staging
   }
-  environment = local.env
+  environment = "staging"
 }
 
-module "network" {
+module "network_staging" {
+  count  = local.env == "staging" ? 1 : 0
   source = "./modules/network"
   providers = {
     aws = aws.staging
   }
-  environment = local.env
+  environment = "staging"
 }
 
-module "iam_role" {
+module "iam_role_staging" {
+  count  = local.env == "staging" ? 1 : 0
   source = "./modules/iam_role"
   providers = {
     aws = aws.staging
   }
-  environment = local.env
-  bucket_arn = module.storage.bucket_arn
+  environment = "staging"
+  bucket_arn = module.storage_staging[0].bucket_arn
+}
+
+# Production environment modules
+module "storage_production" {
+  count  = local.env == "production" ? 1 : 0
+  source = "./modules/storage"
+  providers = {
+    aws = aws.production
+  }
+  environment = "production"
+}
+
+module "network_production" {
+  count  = local.env == "production" ? 1 : 0
+  source = "./modules/network"
+  providers = {
+    aws = aws.production
+  }
+  environment = "production"
+}
+
+module "iam_role_production" {
+  count  = local.env == "production" ? 1 : 0
+  source = "./modules/iam_role"
+  providers = {
+    aws = aws.production
+  }
+  environment = "production"
+  bucket_arn = module.storage_production[0].bucket_arn
 }
 ```
 
@@ -529,15 +557,15 @@ export TF_VAR_project_name="My Infrastructure Project"
 
 ### Backend Configuration
 
-The S3 backend configuration:
+The Terraform Cloud backend configuration:
 
 ```hcl
 terraform {
-  backend "s3" {
-    bucket = "iac-rlhf-tf-states"
-    key    = "prs/pr1830/terraform.tfstate"
-    region = "us-east-1"
-    encrypt = true
+  backend "remote" {
+    organization = "TuringGpt"
+    workspaces {
+      prefix = "iac-test-automations-"
+    }
   }
 }
 ```
