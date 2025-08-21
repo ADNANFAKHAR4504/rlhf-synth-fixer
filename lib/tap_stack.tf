@@ -22,6 +22,12 @@ variable "app_name" {
   default     = "webapp"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
 variable "instance_type" {
   description = "EC2 instance type for application servers"
   type        = string
@@ -56,7 +62,7 @@ data "aws_availability_zones" "available" {
 # Security Groups
 ########################
 resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = data.aws_vpc.default.id
 
@@ -85,14 +91,14 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name        = "${var.app_name}-alb-sg"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-alb-sg"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
 
 resource "aws_security_group" "ec2" {
-  name        = "${var.app_name}-ec2-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-ec2-sg"
   description = "Security group for EC2 instances"
   vpc_id      = data.aws_vpc.default.id
 
@@ -113,14 +119,14 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "${var.app_name}-ec2-sg"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-ec2-sg"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.app_name}-rds-sg"
+  name        = "${var.app_name}-${var.environment_suffix}-rds-sg"
   description = "Security group for RDS database"
   vpc_id      = data.aws_vpc.default.id
 
@@ -133,8 +139,8 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "${var.app_name}-rds-sg"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-rds-sg"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
@@ -143,7 +149,7 @@ resource "aws_security_group" "rds" {
 # IAM Roles and Policies
 ########################
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.app_name}-ec2-role"
+  name = "${var.app_name}-${var.environment_suffix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -159,19 +165,19 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = {
-    Name        = "${var.app_name}-ec2-role"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-ec2-role"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.app_name}-ec2-profile"
+  name = "${var.app_name}-${var.environment_suffix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
 resource "aws_iam_role_policy" "cloudwatch_policy" {
-  name = "${var.app_name}-cloudwatch-policy"
+  name = "${var.app_name}-${var.environment_suffix}-cloudwatch-policy"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -197,7 +203,7 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
 # Launch Template
 ########################
 resource "aws_launch_template" "app" {
-  name_prefix   = "${var.app_name}-template"
+  name_prefix   = "${var.app_name}-${var.environment_suffix}-template-"
   image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1
   instance_type = var.instance_type
 
@@ -258,15 +264,15 @@ resource "aws_launch_template" "app" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name        = "${var.app_name}-instance"
-      Environment = var.environment
+      Name        = "${var.app_name}-${var.environment_suffix}-instance"
+      Environment = "Production"
       ManagedBy   = "terraform"
     }
   }
 
   tags = {
-    Name        = "${var.app_name}-launch-template"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-launch-template"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
@@ -275,7 +281,7 @@ resource "aws_launch_template" "app" {
 # Application Load Balancer
 ########################
 resource "aws_lb" "app" {
-  name               = "${var.app_name}-alb"
+  name               = "${var.app_name}-${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -284,14 +290,14 @@ resource "aws_lb" "app" {
   enable_deletion_protection = false
 
   tags = {
-    Name        = "${var.app_name}-alb"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-alb"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "${var.app_name}-tg"
+  name     = "${var.app_name}-${var.environment_suffix}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
@@ -309,8 +315,8 @@ resource "aws_lb_target_group" "app" {
   }
 
   tags = {
-    Name        = "${var.app_name}-target-group"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-target-group"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
@@ -330,7 +336,7 @@ resource "aws_lb_listener" "app" {
 # Auto Scaling Group
 ########################
 resource "aws_autoscaling_group" "app" {
-  name                      = "${var.app_name}-asg"
+  name                      = "${var.app_name}-${var.environment_suffix}-asg"
   desired_capacity          = 2
   max_size                  = 4
   min_size                  = 1
@@ -346,13 +352,13 @@ resource "aws_autoscaling_group" "app" {
 
   tag {
     key                 = "Name"
-    value               = "${var.app_name}-asg"
+    value               = "${var.app_name}-${var.environment_suffix}-asg"
     propagate_at_launch = true
   }
 
   tag {
     key                 = "Environment"
-    value               = var.environment
+    value               = "Production"
     propagate_at_launch = true
   }
 
@@ -367,7 +373,7 @@ resource "aws_autoscaling_group" "app" {
 # Auto Scaling Policies
 ########################
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.app_name}-scale-up"
+  name                   = "${var.app_name}-${var.environment_suffix}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -375,7 +381,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.app_name}-scale-down"
+  name                   = "${var.app_name}-${var.environment_suffix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -386,7 +392,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 # CloudWatch Alarms
 ########################
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${var.app_name}-cpu-high"
+  alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -403,7 +409,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "${var.app_name}-cpu-low"
+  alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-low"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -420,7 +426,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
-  alarm_name          = "${var.app_name}-memory-high"
+  alarm_name          = "${var.app_name}-${var.environment_suffix}-memory-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "MemoryUtilization"
@@ -436,7 +442,7 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
-  alarm_name          = "${var.app_name}-alb-5xx"
+  alarm_name          = "${var.app_name}-${var.environment_suffix}-alb-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "HTTPCode_ELB_5XX_Count"
@@ -455,18 +461,18 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 # RDS Database
 ########################
 resource "aws_db_subnet_group" "app" {
-  name       = "${var.app_name}-db-subnet-group"
+  name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
   subnet_ids = data.aws_subnets.default.ids
 
   tags = {
-    Name        = "${var.app_name}-db-subnet-group"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
 
 resource "aws_db_instance" "app" {
-  identifier = "${var.app_name}-db"
+  identifier = "${var.app_name}-${var.environment_suffix}-db"
 
   engine         = "mysql"
   engine_version = "8.0"
@@ -494,8 +500,8 @@ resource "aws_db_instance" "app" {
   skip_final_snapshot = true
 
   tags = {
-    Name        = "${var.app_name}-db"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-db"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }
@@ -504,12 +510,12 @@ resource "aws_db_instance" "app" {
 # CloudWatch Logs
 ########################
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/aws/ec2/${var.app_name}"
+  name              = "/aws/ec2/${var.app_name}-${var.environment_suffix}"
   retention_in_days = 7
 
   tags = {
-    Name        = "${var.app_name}-log-group"
-    Environment = var.environment
+    Name        = "${var.app_name}-${var.environment_suffix}-log-group"
+    Environment = "Production"
     ManagedBy   = "terraform"
   }
 }

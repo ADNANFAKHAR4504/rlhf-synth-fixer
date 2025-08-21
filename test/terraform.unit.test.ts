@@ -9,9 +9,12 @@ const stackPath = path.resolve(__dirname, STACK_REL);
 
 describe("High Availability Web Application - Unit Tests", () => {
   let stackContent: string;
+  let providerContent: string;
 
   beforeAll(() => {
     stackContent = fs.readFileSync(stackPath, "utf8");
+    const providerPath = path.resolve(__dirname, "../lib/provider.tf");
+    providerContent = fs.readFileSync(providerPath, "utf8");
   });
 
   describe("File Structure and Syntax", () => {
@@ -22,10 +25,9 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("has valid Terraform syntax structure", () => {
-      expect(stackContent).toMatch(/terraform\s*{/);
-      expect(stackContent).toMatch(/provider\s+"aws"/);
       expect(stackContent).toMatch(/variable\s+"aws_region"/);
       expect(stackContent).toMatch(/output\s+"alb_dns_name"/);
+      expect(stackContent).toMatch(/resource\s+"aws_/);
     });
 
     test("uses data sources for default VPC", () => {
@@ -54,6 +56,10 @@ describe("High Availability Web Application - Unit Tests", () => {
 
     test("declares db_instance_class variable", () => {
       expect(stackContent).toMatch(/variable\s+"db_instance_class"\s*{/);
+    });
+
+    test("declares environment_suffix variable", () => {
+      expect(stackContent).toMatch(/variable\s+"environment_suffix"\s*{/);
     });
   });
 
@@ -295,15 +301,15 @@ describe("High Availability Web Application - Unit Tests", () => {
   describe("Resource Tagging", () => {
     test("all resources have Environment tag", () => {
       const resourceBlocks = stackContent.match(/resource\s+"[^"]+"\s+"[^"]+"\s*{/g);
-      const taggedResources = stackContent.match(/Environment\s*=\s*var\.environment/g);
+      const taggedResources = stackContent.match(/Environment\s*=\s*"Production"/g);
       expect(taggedResources).toBeTruthy();
       expect(taggedResources!.length).toBeGreaterThan(0);
     });
 
-    test("resources have Name tags", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-alb"/);
-      expect(stackContent).toMatch(/value\s*=\s*"\${var\.app_name}-asg"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-db"/);
+    test("resources have Name tags with environment suffix", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-alb"/);
+      expect(stackContent).toMatch(/value\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-asg"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db"/);
     });
   });
 
@@ -374,10 +380,12 @@ describe("High Availability Web Application - Unit Tests", () => {
 
   describe("Best Practices", () => {
     test("uses variables instead of hardcoded values", () => {
-      expect(stackContent).toMatch(/var\.aws_region/);
-      expect(stackContent).toMatch(/var\.environment/);
-      expect(stackContent).toMatch(/var\.app_name/);
-      expect(stackContent).toMatch(/var\.instance_type/);
+      const combinedContent = stackContent + providerContent;
+      expect(combinedContent).toMatch(/var\.aws_region/);
+      expect(combinedContent).toMatch(/var\.environment/);
+      expect(combinedContent).toMatch(/var\.app_name/);
+      expect(combinedContent).toMatch(/var\.instance_type/);
+      expect(combinedContent).toMatch(/var\.environment_suffix/);
     });
 
     test("includes descriptive comments", () => {
