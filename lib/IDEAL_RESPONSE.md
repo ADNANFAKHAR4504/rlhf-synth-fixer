@@ -121,10 +121,9 @@ echo "Instance initialized for ${config.name}" > /var/log/init.log
     });
   }
 }
-
 ```
-
 ## File 2: lib/tap-stack.ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -228,5 +227,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
 ```
