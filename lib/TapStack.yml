@@ -214,10 +214,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS:
-                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-                # Cross-account trust for multi-account support
-                - 'arn:aws:iam::123456789012:root' # Replace with target account ID(s)
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
             Condition:
               Bool:
@@ -1029,4 +1026,3 @@ Outputs:
     Value: !Ref Database2Instance
     Export:
       Name: !Sub '${AWS::StackName}-Database2InstanceId'
-
