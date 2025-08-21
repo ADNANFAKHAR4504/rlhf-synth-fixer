@@ -19,6 +19,18 @@ variable "environment_suffix" {
   default     = ""
 }
 
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail resources (set to false if trail limits exceeded)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_rds_replica" {
+  description = "Enable RDS read replica in us-west-2"
+  type        = bool
+  default     = true
+}
+
 variable "project_name" {
   description = "Project name for resource tagging"
   type        = string
@@ -1057,6 +1069,8 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
 }
 
 resource "aws_cloudtrail" "main" {
+  count = var.enable_cloudtrail ? 1 : 0
+  
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 
   name           = "${local.resource_prefix}-cloudtrail"
@@ -1406,7 +1420,7 @@ resource "aws_network_acl_association" "public" {
 # Additional outputs for new resources
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : null
 }
 
 output "waf_web_acl_arn" {
@@ -1663,11 +1677,14 @@ resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
 # RDS Read Replica in us-west-2
 resource "aws_db_instance" "main_replica" {
   provider = aws.west
+  count = var.enable_rds_replica ? 1 : 0
 
   identifier = "${local.resource_prefix}-database-replica"
 
-  # Read replica configuration
+  # Read replica configuration  
   replicate_source_db = aws_db_instance.main.identifier
+  
+  depends_on = [aws_db_instance.main]
 
   instance_class = "db.t3.micro"
 
@@ -1715,6 +1732,7 @@ resource "aws_kms_alias" "rds_encryption_west" {
 # CloudTrail in us-west-2
 resource "aws_cloudtrail" "west" {
   provider = aws.west
+  count = var.enable_cloudtrail ? 1 : 0
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs_replica]
 
@@ -1764,6 +1782,7 @@ resource "aws_sns_topic" "alerts_west" {
 # CloudWatch Alarms for RDS Replica in us-west-2
 resource "aws_cloudwatch_metric_alarm" "rds_replica_cpu" {
   provider = aws.west
+  count = var.enable_rds_replica ? 1 : 0
 
   alarm_name          = "${local.resource_prefix}-rds-replica-high-cpu"
   comparison_operator = "GreaterThanThreshold"
@@ -1777,7 +1796,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_replica_cpu" {
   alarm_actions       = [aws_sns_topic.alerts_west.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main_replica.id
+    DBInstanceIdentifier = aws_db_instance.main_replica[0].id
   }
 
   tags = merge(local.common_tags, {
@@ -1787,6 +1806,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_replica_cpu" {
 
 resource "aws_cloudwatch_metric_alarm" "rds_replica_lag" {
   provider = aws.west
+  count = var.enable_rds_replica ? 1 : 0
 
   alarm_name          = "${local.resource_prefix}-rds-replica-lag"
   comparison_operator = "GreaterThanThreshold"
@@ -1800,7 +1820,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_replica_lag" {
   alarm_actions       = [aws_sns_topic.alerts_west.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main_replica.id
+    DBInstanceIdentifier = aws_db_instance.main_replica[0].id
   }
 
   tags = merge(local.common_tags, {
@@ -1821,13 +1841,13 @@ output "cloudtrail_replica_bucket_name" {
 
 output "rds_replica_endpoint" {
   description = "RDS read replica endpoint in us-west-2"
-  value       = aws_db_instance.main_replica.endpoint
+  value       = var.enable_rds_replica ? aws_db_instance.main_replica[0].endpoint : null
   sensitive   = true
 }
 
 output "cloudtrail_west_arn" {
   description = "ARN of the CloudTrail in us-west-2"
-  value       = aws_cloudtrail.west.arn
+  value       = var.enable_cloudtrail ? aws_cloudtrail.west[0].arn : null
 }
 
 output "sns_topic_west_arn" {

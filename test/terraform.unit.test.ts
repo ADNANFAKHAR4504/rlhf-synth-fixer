@@ -382,7 +382,7 @@ describe("Terraform Infrastructure Configuration", () => {
     describe("Enhanced Outputs", () => {
       test("declares CloudTrail ARN output", () => {
         expect(stackContent).toMatch(/output\s+"cloudtrail_arn"/);
-        expect(stackContent).toMatch(/value\s*=\s*aws_cloudtrail\.main\.arn/);
+        expect(stackContent).toMatch(/value\s*=\s*var\.enable_cloudtrail.*aws_cloudtrail\.main/);
       });
 
       test("declares WAF Web ACL ARN output", () => {
@@ -510,7 +510,7 @@ describe("Terraform Infrastructure Configuration", () => {
 
       test("declares RDS replica endpoint output", () => {
         expect(stackContent).toMatch(/output\s+"rds_replica_endpoint"/);
-        expect(stackContent).toMatch(/value\s*=\s*aws_db_instance\.main_replica\.endpoint/);
+        expect(stackContent).toMatch(/value\s*=\s*var\.enable_rds_replica.*aws_db_instance\.main_replica/);
         expect(stackContent).toMatch(/sensitive\s*=\s*true/);
       });
 
