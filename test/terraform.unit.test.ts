@@ -290,13 +290,15 @@ describe('Terraform Configuration Unit Tests', () => {
         'lambda-policy', 
         'lambda-sg',
         'rds-sg',
-        'api',
-        'db-subnet-group'
+        'api'
       ];
 
       resourcesWithSuffix.forEach(resource => {
         expect(terraformContent).toContain(`${resource}-\${local.suffix_hex}`);
       });
+      
+      // DB subnet group has different pattern to ensure it starts with letter
+      expect(terraformContent).toContain('db-subnet-group-${lower(var.project)}-${local.suffix_hex}');
     });
 
     test('should apply common tags to all taggable resources', () => {
