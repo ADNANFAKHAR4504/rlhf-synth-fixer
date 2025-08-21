@@ -66,18 +66,22 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AWSCloudTrailAclCheck"
         Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
-        Action = [
-          "s3:GetBucketAcl",
-          "s3:PutObject"
-        ]
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.this.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.this.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
@@ -135,7 +139,7 @@ resource "aws_cloudtrail" "main" {
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
-  depends_on = [aws_cloudwatch_log_group.cloudtrail, aws_s3_bucket_policy.cloudtrail]
+  depends_on = [aws_cloudwatch_log_group.cloudtrail, aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_server_side_encryption_configuration.this]
 }
 
 output "cloudtrail_arn" {
