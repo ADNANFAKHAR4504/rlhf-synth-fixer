@@ -2,6 +2,15 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Web Application Infrastructure with CI/CD Pipeline, Load Balancer, RDS, and Monitoring'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    Default: dev
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: Must contain only alphanumeric characters
+    MinLength: 1
+    MaxLength: 20
+
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Name of an existing EC2 KeyPair to enable SSH access
@@ -21,8 +30,27 @@ Parameters:
     NoEcho: true
     MinLength: 8
     MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
+    AllowedPattern: '[a-zA-Z0-9!@#$%^&*]*'
     Default: MySecurePassword123
+
+Mappings:
+  RegionAMIMap:
+    us-east-1:
+      AMI: ami-0166fe664262f664c  # Amazon Linux 2023 AMI
+    us-east-2:
+      AMI: ami-036841078a4b68e14
+    us-west-1:
+      AMI: ami-0b990d3cfca306617
+    us-west-2:
+      AMI: ami-0a70b9d193ae8a799
+    eu-west-1:
+      AMI: ami-0f3d58a6c7dc4bc7a
+    eu-central-1:
+      AMI: ami-0c0d3776ef525d5dd
+    ap-southeast-1:
+      AMI: ami-0d14db4b43e108d12
+    ap-northeast-1:
+      AMI: ami-05b37ce701f85f26a
 
 Resources:
   # VPC and Networking
@@ -34,11 +62,13 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: WebApp-VPC
+          Value: !Sub 'WebApp-VPC-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # Internet Gateway
   InternetGateway:
@@ -46,11 +76,13 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: WebApp-IGW
+          Value: !Sub 'WebApp-IGW-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -58,36 +90,44 @@ Resources:
       VpcId: !Ref WebAppVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets
+  # Public Subnets - Using dynamic AZ selection for region flexibility
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-A
+          Value: !Sub 'WebApp-Public-Subnet-A-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-B
+          Value: !Sub 'WebApp-Public-Subnet-B-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # Private Subnets for RDS
   PrivateSubnetA:
@@ -95,41 +135,51 @@ Resources:
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
       Tags:
         - Key: Name
-          Value: WebApp-Private-Subnet-A
+          Value: !Sub 'WebApp-Private-Subnet-A-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   PrivateSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref WebAppVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
       Tags:
         - Key: Name
-          Value: WebApp-Private-Subnet-B
+          Value: !Sub 'WebApp-Private-Subnet-B-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
-  # Route Table for Public Subnets
+  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref WebAppVPC
       Tags:
         - Key: Name
-          Value: WebApp-Public-RT
+          Value: !Sub 'WebApp-Public-RT-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -151,59 +201,85 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
-  # Security Groups
-  WebServerSecurityGroup:
+  # Security Groups with Least Privilege
+  ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for web servers
+      GroupDescription: !Sub 'Security group for ALB - ${EnvironmentSuffix}'
       VpcId: !Ref WebAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: Allow HTTP traffic from internet
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.0.0.0/16
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS traffic from internet
       Tags:
         - Key: Name
-          Value: WebApp-WebServer-SG
+          Value: !Sub 'WebApp-ALB-SG-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security group for web servers - ${EnvironmentSuffix}'
+      VpcId: !Ref WebAppVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow traffic from ALB
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow HTTPS traffic from ALB
+      Tags:
+        - Key: Name
+          Value: !Sub 'WebApp-WebServer-SG-${EnvironmentSuffix}'
+        - Key: Project
+          Value: WebApp
+        - Key: Environment
+          Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for RDS database
+      GroupDescription: !Sub 'Security group for RDS database - ${EnvironmentSuffix}'
       VpcId: !Ref WebAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: Allow MySQL traffic from web servers
       Tags:
         - Key: Name
-          Value: WebApp-Database-SG
+          Value: !Sub 'WebApp-Database-SG-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
-  # IAM Role for EC2 instances
+  # IAM Roles with Least Privilege
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: WebApp-EC2-Role
+      RoleName: !Sub 'WebApp-EC2-Role-${EnvironmentSuffix}-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -222,27 +298,27 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                  - s3:DeleteObject
                   - s3:ListBucket
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::webapp-${EnvironmentSuffix}-*'
+                  - !Sub 'arn:aws:s3:::webapp-${EnvironmentSuffix}-*/*'
               - Effect: Allow
                 Action:
                   - rds:DescribeDBInstances
-                  - rds:DescribeDBClusters
-                Resource: '*'
+                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:webapp-database-${EnvironmentSuffix}*'
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                  - logs:DescribeLogStreams
-                  - logs:DescribeLogGroups
-                Resource: '*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/webapp/${EnvironmentSuffix}/*'
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -253,22 +329,25 @@ Resources:
   # CloudWatch Log Group
   WebAppLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Properties:
-      LogGroupName: /webapp/application
+      LogGroupName: !Sub '/webapp/${EnvironmentSuffix}/application'
       RetentionInDays: 14
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
-  # Launch Template for Auto Scaling
+  # Launch Template with Region-Specific AMI
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: WebApp-LaunchTemplate
+      LaunchTemplateName: !Sub 'WebApp-LaunchTemplate-${EnvironmentSuffix}-${AWS::AccountId}'
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI (update as needed)
+        ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AMI]
         InstanceType: t2.micro
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -296,12 +375,12 @@ Resources:
                     "collect_list": [
                       {
                         "file_path": "/var/log/httpd/access_log",
-                        "log_group_name": "/webapp/application",
+                        "log_group_name": "/webapp/${EnvironmentSuffix}/application",
                         "log_stream_name": "{instance_id}/httpd/access_log"
                       },
                       {
                         "file_path": "/var/log/httpd/error_log",
-                        "log_group_name": "/webapp/application",
+                        "log_group_name": "/webapp/${EnvironmentSuffix}/application",
                         "log_stream_name": "{instance_id}/httpd/error_log"
                       }
                     ]
@@ -315,22 +394,27 @@ Resources:
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
             # Create a simple web page
-            echo "<h1>Web Application Server</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" > /var/www/html/index.html
+            echo "<h1>Web Application Server - ${EnvironmentSuffix}</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Region: ${AWS::Region}</p>" > /var/www/html/index.html
         TagSpecifications:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: WebApp-Server
+                Value: !Sub 'WebApp-Server-${EnvironmentSuffix}'
               - Key: Project
                 Value: WebApp
               - Key: Environment
                 Value: Production
+              - Key: EnvironmentSuffix
+                Value: !Ref EnvironmentSuffix
 
-  # Auto Scaling Group
+  # Auto Scaling Group for High Availability
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - PublicSubnetARouteTableAssociation
+      - PublicSubnetBRouteTableAssociation
     Properties:
-      AutoScalingGroupName: WebApp-ASG
+      AutoScalingGroupName: !Sub 'WebApp-ASG-${EnvironmentSuffix}-${AWS::AccountId}'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -346,7 +430,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: WebApp-ASG-Instance
+          Value: !Sub 'WebApp-ASG-Instance-${EnvironmentSuffix}'
           PropagateAtLaunch: true
         - Key: Project
           Value: WebApp
@@ -354,30 +438,36 @@ Resources:
         - Key: Environment
           Value: Production
           PropagateAtLaunch: true
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: AttachGateway
     Properties:
-      Name: WebApp-ALB
+      Name: !Sub 'tap-${EnvironmentSuffix}-alb'
       Scheme: internet-facing
       Type: application
       Subnets:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
       SecurityGroups:
-        - !Ref WebServerSecurityGroup
+        - !Ref ALBSecurityGroup
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # Target Group
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WebApp-TG
+      Name: !Sub 'tap-${EnvironmentSuffix}-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref WebAppVPC
@@ -387,11 +477,16 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      TargetType: instance
+      Matcher:
+        HttpCode: 200
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # Listener
   Listener:
@@ -404,25 +499,27 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # Elastic IP for main instance (attached to first instance in ASG)
+  # Elastic IP
   ElasticIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: WebApp-EIP
+          Value: !Sub 'WebApp-EIP-${EnvironmentSuffix}'
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # DB Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: webapp-db-subnet-group
-      DBSubnetGroupDescription: Subnet group for WebApp RDS
+      DBSubnetGroupName: !Sub 'webapp-db-subnet-group-${EnvironmentSuffix}-${AWS::AccountId}'
+      DBSubnetGroupDescription: !Sub 'Subnet group for WebApp RDS - ${EnvironmentSuffix}'
       SubnetIds:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
@@ -431,17 +528,20 @@ Resources:
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
-  # RDS Instance
+  # RDS Instance with Encryption and Automated Backups
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     Properties:
-      DBInstanceIdentifier: webapp-database
+      DBInstanceIdentifier: !Sub 'webapp-database-${EnvironmentSuffix}-${AWS::AccountId}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.39'
       AllocatedStorage: 20
-      StorageType: gp2
+      StorageType: gp3
       DBName: webapp
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
@@ -449,38 +549,84 @@ Resources:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: false
       PubliclyAccessible: false
       StorageEncrypted: true
+      EnablePerformanceInsights: false
       DeletionProtection: false
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
-  # S3 Bucket for CI/CD artifacts
+  # S3 Bucket for CI/CD Artifacts with Encryption
   ArtifactsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'webapp-cicd-artifacts-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tap-${EnvironmentSuffix}-artifacts-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+
+  # S3 Bucket for Logs
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'tap-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Project
+          Value: WebApp
+        - Key: Environment
+          Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # CodeBuild Service Role
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: WebApp-CodeBuild-Role
+      RoleName: !Sub 'WebApp-CodeBuild-Role-${EnvironmentSuffix}-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -498,24 +644,34 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: '*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
                   - s3:PutObject
-                Resource: !Sub '${ArtifactsBucket}/*'
+                Resource: 
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+                  - !Sub '${LogsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !GetAtt LogsBucket.Arn
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # CodePipeline Service Role
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: WebApp-CodePipeline-Role
+      RoleName: !Sub 'WebApp-CodePipeline-Role-${EnvironmentSuffix}-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -535,37 +691,39 @@ Resources:
                   - s3:PutObject
                   - s3:GetBucketVersioning
                 Resource:
-                  - !Sub '${ArtifactsBucket}'
-                  - !Sub '${ArtifactsBucket}/*'
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ArtifactsBucket.Arn
               - Effect: Allow
                 Action:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - autoscaling:*
-                  - ec2:*
-                  - elasticloadbalancing:*
-                Resource: '*'
+                Resource:
+                  - !GetAtt BuildProject.Arn
+                  - !GetAtt TestProject.Arn
       Tags:
         - Key: Project
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # CodeBuild Projects
   BuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: WebApp-Build
+      Name: !Sub 'WebApp-Build-${EnvironmentSuffix}-${AWS::AccountId}'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -590,18 +748,20 @@ Resources:
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   TestProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: WebApp-Test
+      Name: !Sub 'WebApp-Test-${EnvironmentSuffix}-${AWS::AccountId}'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -622,12 +782,14 @@ Resources:
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
   # CodePipeline
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: WebApp-Pipeline
+      Name: !Sub 'WebApp-Pipeline-${EnvironmentSuffix}-${AWS::AccountId}'
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
@@ -692,6 +854,8 @@ Resources:
           Value: WebApp
         - Key: Environment
           Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
 
 Outputs:
   VPCId:
@@ -718,8 +882,38 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EIP'
 
-  ArtifactsBucketName:
+  S3BucketName:
     Description: S3 Bucket for CI/CD Artifacts
     Value: !Ref ArtifactsBucket
     Export:
       Name: !Sub '${AWS::StackName}-Artifacts-Bucket'
+
+  LogsBucketName:
+    Description: S3 Bucket for Logs
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-Logs-Bucket'
+
+  PipelineName:
+    Description: Name of the CI/CD Pipeline
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-Pipeline-Name'
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  Region:
+    Description: AWS Region
+    Value: !Ref 'AWS::Region'
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
