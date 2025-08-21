@@ -473,7 +473,7 @@
                 "FunctionName": {
                     "Fn::Sub": "S3Cleanup-${EnvironmentSuffix}"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.12",
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -1056,7 +1056,6 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
-            "DependsOn": "ConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
@@ -1075,6 +1074,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-delivery-${EnvironmentSuffix}"

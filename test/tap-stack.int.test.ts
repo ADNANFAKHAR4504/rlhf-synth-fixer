@@ -1,59 +1,60 @@
-import fs from 'fs';
-import path from 'path';
-import { 
-  EC2Client, 
-  DescribeVpcsCommand, 
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInstancesCommand,
-  DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand,
-  DescribeVpcAttributeCommand
-} from '@aws-sdk/client-ec2';
-import { 
-  S3Client, 
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  ListObjectsV2Command
-} from '@aws-sdk/client-s3';
-import { 
-  RDSClient, 
-  DescribeDBInstancesCommand 
-} from '@aws-sdk/client-rds';
-import { 
-  CloudTrailClient, 
+import {
+  CloudTrailClient,
+  DescribeTrailsCommand,
   GetTrailStatusCommand,
-  DescribeTrailsCommand 
 } from '@aws-sdk/client-cloudtrail';
-import { 
-  CloudWatchLogsClient, 
-  DescribeLogGroupsCommand 
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { 
-  ConfigServiceClient, 
+import {
+  ConfigServiceClient,
+  DescribeConfigRulesCommand,
   DescribeConfigurationRecordersCommand,
-  DescribeConfigRulesCommand 
 } from '@aws-sdk/client-config-service';
 import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-  GetSecretValueCommand
-} from '@aws-sdk/client-secrets-manager';
+  DescribeFlowLogsCommand,
+  DescribeInstancesCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
+  GetInstanceProfileCommand,
   GetRoleCommand,
-  GetInstanceProfileCommand
+  IAMClient,
 } from '@aws-sdk/client-iam';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
+import path from 'path';
 
 // Configuration - These are coming from cfn-outputs after deployment
 let outputs: any = {};
 try {
   outputs = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '../cfn-outputs/flat-outputs.json'), 'utf8')
+    fs.readFileSync(
+      path.join(__dirname, '../cfn-outputs/flat-outputs.json'),
+      'utf8'
+    )
   );
 } catch (error) {
-  console.warn('Warning: cfn-outputs/flat-outputs.json not found. Tests will use mock values.');
+  console.warn(
+    'Warning: cfn-outputs/flat-outputs.json not found. Tests will use mock values.'
+  );
   // Mock outputs for local testing
   outputs = {
     VPCId: 'vpc-mock',
@@ -61,13 +62,13 @@ try {
     PrivateSubnetId: 'subnet-private-mock',
     S3BucketName: 'secure-bucket-mock',
     RDSEndpoint: 'mock-db.region.rds.amazonaws.com',
-    WebServerInstanceId: 'i-mock'
+    WebServerInstanceId: 'i-mock',
   };
 }
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-west-1';
 
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region });
@@ -88,26 +89,26 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.VPCId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      
+
       // Check DNS settings
       const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
         VpcId: outputs.VPCId,
-        Attribute: 'enableDnsHostnames'
+        Attribute: 'enableDnsHostnames',
       });
       const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
       expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
-      
+
       const dnsSupportCommand = new DescribeVpcAttributeCommand({
         VpcId: outputs.VPCId,
-        Attribute: 'enableDnsSupport'
+        Attribute: 'enableDnsSupport',
       });
       const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
       expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
@@ -120,10 +121,10 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnetId]
+        SubnetIds: [outputs.PublicSubnetId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets).toHaveLength(1);
       const subnet = response.Subnets![0];
       expect(subnet.CidrBlock).toBe('10.0.1.0/24');
@@ -132,16 +133,19 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     });
 
     test('Private subnet should exist and be configured correctly', async () => {
-      if (!outputs.PrivateSubnetId || outputs.PrivateSubnetId.includes('mock')) {
+      if (
+        !outputs.PrivateSubnetId ||
+        outputs.PrivateSubnetId.includes('mock')
+      ) {
         console.log('Skipping test - no real subnet ID available');
         return;
       }
 
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PrivateSubnetId]
+        SubnetIds: [outputs.PrivateSubnetId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets).toHaveLength(1);
       const subnet = response.Subnets![0];
       expect(subnet.CidrBlock).toBe('10.0.2.0/24');
@@ -159,19 +163,19 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         Filter: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.VPCId],
           },
           {
             Name: 'state',
-            Values: ['available']
-          }
-        ]
+            Values: ['available'],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.NatGateways).toBeDefined();
       expect(response.NatGateways!.length).toBeGreaterThan(0);
-      
+
       const natGateway = response.NatGateways![0];
       expect(natGateway.State).toBe('available');
       expect(natGateway.VpcId).toBe(outputs.VPCId);
@@ -187,15 +191,15 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         Filter: [
           {
             Name: 'resource-id',
-            Values: [outputs.VPCId]
-          }
-        ]
+            Values: [outputs.VPCId],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.FlowLogs).toBeDefined();
       expect(response.FlowLogs!.length).toBeGreaterThan(0);
-      
+
       const flowLog = response.FlowLogs![0];
       expect(flowLog.FlowLogStatus).toBe('ACTIVE');
       expect(flowLog.TrafficType).toBe('ALL');
@@ -214,27 +218,27 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.VPCId],
           },
           {
             Name: 'tag:Name',
-            Values: [`web-sg-${environmentSuffix}`]
-          }
-        ]
+            Values: [`web-sg-${environmentSuffix}`],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      
+
       const sg = response.SecurityGroups![0];
       const ingressRules = sg.IpPermissions || [];
-      
+
       // Check for HTTPS rule
       const httpsRule = ingressRules.find(r => r.FromPort === 443);
       expect(httpsRule).toBeDefined();
       expect(httpsRule!.ToPort).toBe(443);
-      
+
       // Check for HTTP rule
       const httpRule = ingressRules.find(r => r.FromPort === 80);
       expect(httpRule).toBeDefined();
@@ -251,27 +255,27 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.VPCId],
           },
           {
             Name: 'tag:Name',
-            Values: [`db-sg-${environmentSuffix}`]
-          }
-        ]
+            Values: [`db-sg-${environmentSuffix}`],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      
+
       const sg = response.SecurityGroups![0];
       const ingressRules = sg.IpPermissions || [];
-      
+
       // Should only have MySQL port open
       expect(ingressRules).toHaveLength(1);
       expect(ingressRules[0].FromPort).toBe(3306);
       expect(ingressRules[0].ToPort).toBe(3306);
-      
+
       // Should only accept traffic from web security group
       expect(ingressRules[0].UserIdGroupPairs).toBeDefined();
       expect(ingressRules[0].UserIdGroupPairs!.length).toBeGreaterThan(0);
@@ -286,9 +290,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new GetBucketVersioningCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.S3BucketName,
       });
-      
+
       try {
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
@@ -308,16 +312,20 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new GetBucketEncryptionCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.S3BucketName,
       });
-      
+
       try {
         const response = await s3Client.send(command);
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(response.ServerSideEncryptionConfiguration!.Rules).toHaveLength(1);
-        
+        expect(response.ServerSideEncryptionConfiguration!.Rules).toHaveLength(
+          1
+        );
+
         const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
-        expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+        expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe(
+          'AES256'
+        );
       } catch (error: any) {
         if (error.name === 'NoSuchBucket') {
           console.log('Bucket does not exist yet');
@@ -334,13 +342,13 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new GetPublicAccessBlockCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.S3BucketName,
       });
-      
+
       try {
         const response = await s3Client.send(command);
         const config = response.PublicAccessBlockConfiguration!;
-        
+
         expect(config.BlockPublicAcls).toBe(true);
         expect(config.BlockPublicPolicy).toBe(true);
         expect(config.IgnorePublicAcls).toBe(true);
@@ -363,20 +371,20 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
 
       const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: `secure-db-${environmentSuffix}`
+        DBInstanceIdentifier: `secure-db-${environmentSuffix}`,
       });
-      
+
       try {
         const response = await rdsClient.send(command);
         expect(response.DBInstances).toHaveLength(1);
-        
+
         const dbInstance = response.DBInstances![0];
         expect(dbInstance.StorageEncrypted).toBe(true);
         expect(dbInstance.BackupRetentionPeriod).toBe(7);
         expect(dbInstance.DeletionProtection).toBe(false);
         expect(dbInstance.PubliclyAccessible).toBe(false);
         expect(dbInstance.Engine).toBe('mysql');
-        
+
         // Check CloudWatch logs exports
         expect(dbInstance.EnabledCloudwatchLogsExports).toContain('error');
         expect(dbInstance.EnabledCloudwatchLogsExports).toContain('general');
@@ -392,23 +400,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
     test('RDS password should be stored in Secrets Manager', async () => {
       const secretName = `rds-password-${environmentSuffix}`;
-      
+
       const command = new DescribeSecretCommand({
-        SecretId: secretName
+        SecretId: secretName,
       });
-      
+
       try {
         const response = await secretsClient.send(command);
         expect(response.Name).toBe(secretName);
         expect(response.Description).toBe('RDS Master Password');
-        
+
         // Verify secret can be retrieved (but don't log it)
         const getCommand = new GetSecretValueCommand({
-          SecretId: secretName
+          SecretId: secretName,
         });
         const secretValue = await secretsClient.send(getCommand);
         expect(secretValue.SecretString).toBeDefined();
-        
+
         const secret = JSON.parse(secretValue.SecretString!);
         expect(secret.username).toBe('admin');
         expect(secret.password).toBeDefined();
@@ -426,19 +434,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
   describe('IAM Roles and Instance Profiles', () => {
     test('EC2 IAM role should exist with correct policies', async () => {
       const roleName = `EC2-SecureRole-${environmentSuffix}`;
-      
+
       const command = new GetRoleCommand({
-        RoleName: roleName
+        RoleName: roleName,
       });
-      
+
       try {
         const response = await iamClient.send(command);
         expect(response.Role).toBeDefined();
         expect(response.Role!.RoleName).toBe(roleName);
-        
+
         // Check assume role policy
-        const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role!.AssumeRolePolicyDocument!));
-        expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+        const assumeRolePolicy = JSON.parse(
+          decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
+        );
+        expect(assumeRolePolicy.Statement[0].Principal.Service).toBe(
+          'ec2.amazonaws.com'
+        );
       } catch (error: any) {
         if (error.name === 'NoSuchEntity') {
           console.log('IAM role does not exist yet');
@@ -450,11 +462,11 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
     test('EC2 instance profile should exist', async () => {
       const profileName = `TapStackpr1739-EC2InstanceProfile`;
-      
+
       const command = new GetInstanceProfileCommand({
-        InstanceProfileName: profileName
+        InstanceProfileName: profileName,
       });
-      
+
       try {
         const response = await iamClient.send(command);
         expect(response.InstanceProfile).toBeDefined();
@@ -472,23 +484,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
   describe('CloudTrail', () => {
     test('CloudTrail should be enabled and logging', async () => {
       const trailName = `secure-trail-${environmentSuffix}`;
-      
+
       const describeCommand = new DescribeTrailsCommand({
-        trailNameList: [trailName]
+        trailNameList: [trailName],
       });
-      
+
       try {
         const describeResponse = await cloudTrailClient.send(describeCommand);
         expect(describeResponse.trailList).toHaveLength(1);
-        
+
         const trail = describeResponse.trailList![0];
         expect(trail.IsMultiRegionTrail).toBe(true);
         expect(trail.LogFileValidationEnabled).toBe(true);
         expect(trail.IncludeGlobalServiceEvents).toBe(true);
-        
+
         // Check if trail is logging
         const statusCommand = new GetTrailStatusCommand({
-          Name: trailName
+          Name: trailName,
         });
         const statusResponse = await cloudTrailClient.send(statusCommand);
         expect(statusResponse.IsLogging).toBe(true);
@@ -507,21 +519,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       const expectedLogGroups = [
         `/aws/s3/secure-bucket-${environmentSuffix}`,
         `/aws/vpc/flowlogs-${environmentSuffix}`,
-        `/aws/cloudtrail/secure-trail-${environmentSuffix}`
+        `/aws/cloudtrail/secure-trail-${environmentSuffix}`,
       ];
-      
+
       for (const logGroupName of expectedLogGroups) {
         const command = new DescribeLogGroupsCommand({
-          logGroupNamePrefix: logGroupName
+          logGroupNamePrefix: logGroupName,
         });
-        
+
         try {
           const response = await cloudWatchLogsClient.send(command);
-          const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
-          
+          const logGroup = response.logGroups?.find(
+            lg => lg.logGroupName === logGroupName
+          );
+
           if (logGroup) {
             expect(logGroup.logGroupName).toBe(logGroupName);
-            
+
             // Check retention settings
             if (logGroupName.includes('cloudtrail')) {
               expect(logGroup.retentionInDays).toBe(90);
@@ -541,15 +555,15 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
   describe('AWS Config', () => {
     test('Config recorder should be configured and running', async () => {
       const recorderName = `config-recorder-${environmentSuffix}`;
-      
+
       const command = new DescribeConfigurationRecordersCommand({
-        ConfigurationRecorderNames: [recorderName]
+        ConfigurationRecorderNames: [recorderName],
       });
-      
+
       try {
         const response = await configClient.send(command);
         expect(response.ConfigurationRecorders).toHaveLength(1);
-        
+
         const recorder = response.ConfigurationRecorders![0];
         expect(recorder.name).toBe(recorderName);
         expect(recorder.recordingGroup?.allSupported).toBe(true);
@@ -566,19 +580,19 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     test('Config rules should be present', async () => {
       const expectedRules = [
         `s3-bucket-ssl-requests-only-${environmentSuffix}`,
-        `rds-storage-encrypted-${environmentSuffix}`
+        `rds-storage-encrypted-${environmentSuffix}`,
       ];
-      
+
       const command = new DescribeConfigRulesCommand({
-        ConfigRuleNames: expectedRules
+        ConfigRuleNames: expectedRules,
       });
-      
+
       try {
         const response = await configClient.send(command);
-        
+
         if (response.ConfigRules && response.ConfigRules.length > 0) {
           expect(response.ConfigRules.length).toBe(expectedRules.length);
-          
+
           response.ConfigRules.forEach(rule => {
             expect(expectedRules).toContain(rule.ConfigRuleName);
             expect(rule.Source?.Owner).toBe('AWS');
@@ -598,25 +612,28 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
   describe('EC2 Instance', () => {
     test('Web server instance should be running', async () => {
-      if (!outputs.WebServerInstanceId || outputs.WebServerInstanceId === 'i-mock') {
+      if (
+        !outputs.WebServerInstanceId ||
+        outputs.WebServerInstanceId === 'i-mock'
+      ) {
         console.log('Skipping test - no real instance ID available');
         return;
       }
 
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.WebServerInstanceId]
+        InstanceIds: [outputs.WebServerInstanceId],
       });
-      
+
       try {
         const response = await ec2Client.send(command);
         expect(response.Reservations).toHaveLength(1);
         expect(response.Reservations![0].Instances).toHaveLength(1);
-        
+
         const instance = response.Reservations![0].Instances![0];
         expect(instance.State?.Name).toBe('running');
         expect(instance.InstanceType).toBe('t3.micro');
         expect(instance.IamInstanceProfile).toBeDefined();
-        
+
         // Check if instance is in the correct subnet
         expect(instance.SubnetId).toBe(outputs.PublicSubnetId);
       } catch (error) {
@@ -636,20 +653,20 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       // 1. VPC exists
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.VPCId).not.toContain('mock');
-      
+
       // 2. Subnets exist in the VPC
       expect(outputs.PublicSubnetId).toBeDefined();
       expect(outputs.PrivateSubnetId).toBeDefined();
-      
+
       // 3. S3 bucket exists
       expect(outputs.S3BucketName).toBeDefined();
-      
+
       // 4. RDS endpoint exists
       expect(outputs.RDSEndpoint).toBeDefined();
-      
+
       // 5. EC2 instance exists
       expect(outputs.WebServerInstanceId).toBeDefined();
-      
+
       // Verify the infrastructure is accessible and working
       console.log('Infrastructure validation complete:');
       console.log(`- VPC: ${outputs.VPCId}`);

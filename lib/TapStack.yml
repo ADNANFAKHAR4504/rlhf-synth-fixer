@@ -273,7 +273,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'S3Cleanup-${EnvironmentSuffix}'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt S3CleanupRole.Arn
       Timeout: 300
@@ -663,7 +663,6 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -673,6 +672,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigurationRecorder
     Properties:
       Name: !Sub 'config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
