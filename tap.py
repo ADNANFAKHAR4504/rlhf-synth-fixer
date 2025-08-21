@@ -10,7 +10,7 @@ environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
 
 # Deploy the stack to us-east-1 region  
 TapStack(
-    app, f"TapStack{environment_suffix}",
+    app, f"TapStack{environment_suffix}-new",
     env=cdk.Environment(
         region="us-east-1"
     ),
