@@ -80,8 +80,8 @@ describe("Terraform Infrastructure Structure", () => {
       expect(content).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"/);
     });
 
-    test("variables.tf exists and defines required variables", () => {
-      const varsPath = path.join(libPath, "variables.tf");
+    test("tap_stack.tf exists and defines required variables", () => {
+      const varsPath = path.join(libPath, "tap_stack.tf");
       expect(fileExists(varsPath)).toBe(true);
       
       const content = fs.readFileSync(varsPath, "utf8");
@@ -95,8 +95,8 @@ describe("Terraform Infrastructure Structure", () => {
       expect(content).toMatch(/variable\s+"trusted_ip_range"/);
     });
 
-    test("outputs.tf exists and exports infrastructure values", () => {
-      const outputsPath = path.join(libPath, "outputs.tf");
+    test("tap_stack.tf exists and exports infrastructure values", () => {
+      const outputsPath = path.join(libPath, "tap_stack.tf");
       expect(fileExists(outputsPath)).toBe(true);
       
       const content = fs.readFileSync(outputsPath, "utf8");
@@ -142,7 +142,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("networking resources expose required values in outputs", () => {
-      const outputsPath = path.join(libPath, "outputs.tf");
+      const outputsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(outputsPath, "utf8");
       
       // Check outputs reference direct resources not modules
@@ -188,7 +188,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("security group outputs expose security group IDs", () => {
-      const outputsPath = path.join(libPath, "outputs.tf");
+      const outputsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(outputsPath, "utf8");
       
       // Check outputs reference direct resources
@@ -238,7 +238,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("storage outputs expose bucket information", () => {
-      const outputsPath = path.join(libPath, "outputs.tf");
+      const outputsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(outputsPath, "utf8");
       
       // Check bucket outputs reference direct resources
@@ -278,7 +278,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("IAM outputs expose role information", () => {
-      const outputsPath = path.join(libPath, "outputs.tf");
+      const outputsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(outputsPath, "utf8");
       
       // Check role outputs reference direct resources
@@ -374,7 +374,7 @@ describe("Terraform Infrastructure Structure", () => {
 
   describe("Configuration Validation", () => {
     test("AWS region is set to us-west-2 as per requirements", () => {
-      const varsPath = path.join(libPath, "variables.tf");
+      const varsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(varsPath, "utf8");
       
       // Check default region
@@ -382,7 +382,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("VPC CIDR is properly configured", () => {
-      const varsPath = path.join(libPath, "variables.tf");
+      const varsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(varsPath, "utf8");
       
       // Check VPC CIDR variable exists with proper default
@@ -391,7 +391,7 @@ describe("Terraform Infrastructure Structure", () => {
     });
 
     test("subnet CIDRs are within VPC CIDR range", () => {
-      const varsPath = path.join(libPath, "variables.tf");
+      const varsPath = path.join(libPath, "tap_stack.tf");
       const content = fs.readFileSync(varsPath, "utf8");
       
       // Check that subnet CIDRs start with 10.0
