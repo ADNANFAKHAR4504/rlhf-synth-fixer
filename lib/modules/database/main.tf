@@ -7,6 +7,11 @@ resource "random_password" "database" {
   lower   = true
   numeric = true
   # Only use alphanumeric characters to ensure AWS RDS compatibility
+
+  # Add lifecycle rule to handle dependency cycles
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Validate password meets AWS RDS requirements
@@ -36,6 +41,9 @@ resource "aws_ssm_parameter" "database_password" {
   lifecycle {
     ignore_changes = [tags, tags_all]
   }
+
+  # Explicitly depend on the random password to break the cycle
+  depends_on = [random_password.database]
 }
 
 resource "aws_db_subnet_group" "main" {

@@ -35,14 +35,14 @@ resource "random_string" "unique_suffix" {
 
 # Generate timestamp for additional uniqueness
 locals {
-  timestamp = formatdate("YYYYMMDD-HHmmss", timestamp())
-
+  timestamp     = formatdate("YYYYMMDD-HHmmss", timestamp())
   environment   = "dev"
   owner         = "platform-team"
   unique_suffix = random_string.unique_suffix.result
-
-  # Enhanced naming with multiple uniqueness factors
   deployment_id = "${local.environment}-${local.timestamp}-${local.unique_suffix}"
+
+  # Simplified naming for resources that cause dependency cycles
+  simple_suffix = "${local.environment}-${local.timestamp}"
 
   common_tags = {
     Environment  = local.environment
@@ -53,34 +53,19 @@ locals {
     DeploymentId = local.deployment_id
     DeployedAt   = local.timestamp
   }
+  naming = {
+    short    = { pattern = "${local.environment}-${local.unique_suffix}" }
+    standard = { pattern = "${local.environment}-${local.timestamp}-${local.unique_suffix}" }
+    regional = { pattern = "${local.environment}-${local.unique_suffix}" }
+    full     = { pattern = "${local.deployment_id}" }
+    # Simple naming for resources that cause cycles
+    simple = { pattern = "${local.simple_suffix}" }
+  }
 
   regions = {
     us_east_1      = { name = "us-east-1", cidr = "10.0.0.0/16" }
     eu_west_1      = { name = "eu-west-1", cidr = "10.1.0.0/16" }
     ap_southeast_1 = { name = "ap-southeast-1", cidr = "10.2.0.0/16" }
-  }
-
-  # Enhanced naming functions for different resource types
-  naming = {
-    # For resources that need short names (e.g., ALB, Target Groups)
-    short = {
-      pattern = "${local.environment}-${local.unique_suffix}"
-    }
-
-    # For resources that can have longer names
-    standard = {
-      pattern = "${local.environment}-${local.timestamp}-${local.unique_suffix}"
-    }
-
-    # For resources that need region-specific naming
-    regional = {
-      pattern = "${local.environment}-${local.unique_suffix}"
-    }
-
-    # For resources that need full deployment context
-    full = {
-      pattern = "${local.deployment_id}"
-    }
   }
 }
 
