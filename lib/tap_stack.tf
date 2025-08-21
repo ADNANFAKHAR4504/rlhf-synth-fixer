@@ -727,6 +727,7 @@ resource "aws_config_configuration_recorder" "prod_config_recorder" {
 resource "aws_config_delivery_channel" "prod_config_delivery_channel" {
   name           = "prod-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.prod_config_bucket.bucket
+  s3_key_prefix  = "config"
 }
 
 # S3 Bucket for AWS Config
@@ -759,10 +760,36 @@ resource "aws_iam_role" "prod_config_role" {
   tags = local.common_tags
 }
 
-# IAM Role Policy Attachment for AWS Config
-resource "aws_iam_role_policy_attachment" "prod_config_policy" {
-  role       = aws_iam_role.prod_config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+# IAM Policy for AWS Config
+resource "aws_iam_role_policy" "prod_config_policy" {
+  name = "prod-config-policy"
+  role = aws_iam_role.prod_config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.prod_config_bucket.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.prod_config_bucket.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # IAM Role for Lambda
