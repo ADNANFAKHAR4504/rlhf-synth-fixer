@@ -558,42 +558,42 @@ Resources:
         RequireEachIncludedType: true
 
   # RDS Database
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub '${Project}-database'
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: 8.0.40
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
-      AllocatedStorage: 20
-      StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref SecurityKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      MultiAZ: true
-      PubliclyAccessible: false
-      DeletionProtection: false
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      Tags:
-        - Key: Name
-          Value: !Sub '${Project}-database'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
+#  DatabaseInstance:
+#    Type: AWS::RDS::DBInstance
+#    DeletionPolicy: Snapshot
+#    UpdateReplacePolicy: Snapshot
+#    Properties:
+#      DBInstanceIdentifier: !Sub '${Project}-database'
+#      DBInstanceClass: db.t3.micro
+#      Engine: mysql
+#      EngineVersion: 8.0.40
+#      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+#      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+#      AllocatedStorage: 20
+#      StorageType: gp2
+#      StorageEncrypted: true
+#      KmsKeyId: !Ref SecurityKMSKey
+#      VPCSecurityGroups:
+#        - !Ref DatabaseSecurityGroup
+#      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+#      MultiAZ: true
+#      PubliclyAccessible: false
+#      DeletionProtection: false
+#      EnableCloudwatchLogsExports:
+#        - error
+#        - general
+#      MonitoringInterval: 60
+#      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+#      BackupRetentionPeriod: 7
+#      PreferredBackupWindow: '03:00-04:00'
+#      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+#      Tags:
+#        - Key: Name
+#          Value: !Sub '${Project}-database'
+#        - Key: Environment
+#          Value: !Ref Environment
+#        - Key: Project
+#          Value: !Ref Project
 
 
   LambdaLogGroup:
