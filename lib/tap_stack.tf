@@ -1096,11 +1096,11 @@ resource "aws_cloudtrail" "main" {
 
 # SSL/TLS Certificate for HTTPS
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.project_name}.example.com"
+  domain_name       = "${var.project_name}-${var.environment_suffix}.meerio.com"
   validation_method = "DNS"
 
   subject_alternative_names = [
-    "*.${var.project_name}.example.com"
+    "*.${var.project_name}-${var.environment_suffix}.meerio.com"
   ]
 
   lifecycle {
