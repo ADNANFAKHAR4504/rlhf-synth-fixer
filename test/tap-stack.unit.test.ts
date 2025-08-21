@@ -41,6 +41,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterGroups[1].Label.default).toBe('Security Configuration');
       expect(parameterGroups[2].Label.default).toBe('Logging Configuration');
     });
+
+    test('should have conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasSecretsManager).toBeDefined();
+      expect(template.Conditions.HasSecretsManager['Fn::Not']).toBeDefined();
+      expect(
+        template.Conditions.HasSecretsManager['Fn::Not'][0]['Fn::Equals']
+      ).toBeDefined();
+    });
   });
 
   describe('Parameters', () => {
@@ -84,12 +93,13 @@ describe('TapStack CloudFormation Template', () => {
     test('SecretsManagerSecretArn parameter should have correct properties', () => {
       const secretParam = template.Parameters.SecretsManagerSecretArn;
       expect(secretParam.Type).toBe('String');
+      expect(secretParam.Default).toBe('');
       expect(secretParam.Description).toBe(
-        'ARN of the Secrets Manager secret containing environment variables'
+        'ARN of the Secrets Manager secret containing environment variables (optional)'
       );
-      expect(secretParam.AllowedPattern).toBe('^arn:aws:secretsmanager:.*$');
+      expect(secretParam.AllowedPattern).toBe('^(arn:aws:secretsmanager:.*|)$');
       expect(secretParam.ConstraintDescription).toBe(
-        'Must be a valid Secrets Manager ARN'
+        'Must be a valid Secrets Manager ARN or empty string'
       );
     });
 
@@ -370,6 +380,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).not.toBeNull();
       expect(template.Description).not.toBeNull();
       expect(template.Parameters).not.toBeNull();
+      expect(template.Conditions).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
@@ -444,15 +455,27 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('Lambda execution role should have Secrets Manager permissions', () => {
+    test('Lambda execution role should have conditional Secrets Manager permissions', () => {
       const role = template.Resources.LambdaExecutionRole;
-      const secretsPolicy = role.Properties.Policies.find(
-        (policy: any) => policy.PolicyName === 'SecretsManagerAccess'
-      );
-      expect(secretsPolicy).toBeDefined();
-      expect(secretsPolicy.PolicyDocument.Statement[0].Action).toContain(
+
+      // The Policies property is now conditional using CloudFormation !If
+      expect(role.Properties.Policies).toBeDefined();
+
+      // Check that it's a CloudFormation !If condition
+      expect(role.Properties.Policies['Fn::If']).toBeDefined();
+      expect(role.Properties.Policies['Fn::If'][0]).toBe('HasSecretsManager');
+
+      // Check the policy structure when condition is true
+      const policiesWhenTrue = role.Properties.Policies['Fn::If'][1];
+      expect(Array.isArray(policiesWhenTrue)).toBe(true);
+      expect(policiesWhenTrue[0].PolicyName).toBe('SecretsManagerAccess');
+      expect(policiesWhenTrue[0].PolicyDocument.Statement[0].Action).toContain(
         'secretsmanager:GetSecretValue'
       );
+
+      // Check that when condition is false, it returns AWS::NoValue
+      const policiesWhenFalse = role.Properties.Policies['Fn::If'][2];
+      expect(policiesWhenFalse).toEqual({ Ref: 'AWS::NoValue' });
     });
 
     test('WAF should be properly associated with API Gateway', () => {
