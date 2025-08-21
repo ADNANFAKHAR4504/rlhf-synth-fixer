@@ -830,7 +830,7 @@ resource "aws_launch_template" "web" {
 }
 
 resource "aws_autoscaling_group" "web" {
-  name                      = "${local.name_prefix}-web-asg"
+  name                      = "${local.name_prefix}-web-asg-9846"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.web.arn]
   health_check_type         = "ELB"
