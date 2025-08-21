@@ -348,8 +348,24 @@ data "aws_lb" "main" {
 }
 
 # Target group for EC2 instances
-data "aws_lb_target_group" "app" {
-  name = "${local.name_prefix}-app-tg"
+resource "aws_lb_target_group" "app" {
+  name     = "${local.name_prefix}-app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    path                = "/health"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-target-group"
+    Type = "load-balancer"
+  })
 }
 
 # ALB Listener
@@ -360,7 +376,7 @@ resource "aws_lb_listener" "app" {
 
   default_action {
     type             = "forward"
-    target_group_arn = data.aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.app.arn
   }
 
   tags = merge(local.common_tags, {
@@ -466,7 +482,7 @@ resource "aws_launch_template" "app" {
 resource "aws_autoscaling_group" "app" {
   name                = "${local.name_prefix}-app-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [data.aws_lb_target_group.app.arn]
+  target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
 
   min_size         = 1
