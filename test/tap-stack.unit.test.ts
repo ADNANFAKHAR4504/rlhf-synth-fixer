@@ -3,11 +3,12 @@ import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
 
-// Mock SecureModules used in TapStack
+// Mock SecureInfrastructure used in TapStack
 jest.mock("../lib/modules", () => ({
-  SecureModules: jest.fn().mockImplementation((_, id, config) => ({
+  SecureInfrastructure: jest.fn().mockImplementation((_, id, config) => ({
     vpc: { 
-      id: `vpc-${id}-12345`
+      id: `vpc-${id}-12345`,
+      cidrBlock: config.vpcCidr
     },
     publicSubnets: [
       { id: `subnet-${id}-public-1` },
@@ -19,34 +20,27 @@ jest.mock("../lib/modules", () => ({
     ],
     kmsKey: { 
       keyId: `${id}-kms-key-id`,
-      arn: `arn:aws:kms:${config.region}:123456789012:key/${id}-kms-key-id`
-    },
-    kmsAlias: {
-      name: `alias/${id}-key`
+      arn: `arn:aws:kms:${config.awsRegion}:123456789012:key/${id}-kms-key-id`
     },
     lambdaRole: {
       arn: `arn:aws:iam::123456789012:role/${id}-lambda-role`,
       name: `${id}-lambda-role`
     },
     s3Bucket: { 
-      id: `${id}-secure-bucket`,
+      bucket: `${id}-secure-bucket`,
       arn: `arn:aws:s3:::${id}-secure-bucket`
     },
-    ebsVolume: {
-      id: `vol-${id}1234567890abcdef0`
+    s3LoggingBucket: {
+      bucket: `${id}-logging-bucket`,
+      arn: `arn:aws:s3:::${id}-logging-bucket`
     },
     lambdaFunction: {
       functionName: `${id}-lambda-function`,
-      arn: `arn:aws:lambda:${config.region}:123456789012:function:${id}-lambda-function`
+      arn: `arn:aws:lambda:${config.awsRegion}:123456789012:function:${id}-lambda-function`
     },
     lambdaLogGroup: {
       name: `/aws/lambda/${id}-lambda-function`,
-      arn: `arn:aws:logs:${config.region}:123456789012:log-group:/aws/lambda/${id}-lambda-function`
-    },
-    rdsInstance: { 
-      endpoint: `${id}-rds.cluster-xyz.${config.region}.rds.amazonaws.com`,
-      id: `${id}-rds-instance`,
-      identifier: `${id}-rds-db`
+      arn: `arn:aws:logs:${config.awsRegion}:123456789012:log-group:/aws/lambda/${id}-lambda-function`
     },
     config,
   }))
@@ -58,10 +52,6 @@ jest.mock("cdktf", () => {
   return {
     ...actual,
     TerraformOutput: jest.fn(),
-    TerraformVariable: jest.fn().mockImplementation((scope, id, config) => ({
-      stringValue: config.default,
-      listValue: config.default,
-    })),
     S3Backend: jest.fn(),
   };
 });
@@ -72,8 +62,8 @@ jest.mock("@cdktf/provider-aws/lib/provider", () => ({
 }));
 
 describe("TapStack Unit Tests", () => {
-  const { SecureModules } = require("../lib/modules");
-  const { TerraformOutput, TerraformVariable, S3Backend } = require("cdktf");
+  const { SecureInfrastructure } = require("../lib/modules");
+  const { TerraformOutput, S3Backend } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
 
   beforeEach(() => {
@@ -89,13 +79,14 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "aws",
       expect.objectContaining({
-        region: "us-east-1", // Default region since AWS_REGION_OVERRIDE is empty
+        region: "us-east-1",
         defaultTags: [
           {
             tags: {
-              Project: "MyApp",
+              Project: "SecureTap",
               ManagedBy: "CDKTF",
-              Environment: "dev",
+              SecurityLevel: "High",
+              DataClassification: "Confidential",
             },
           },
         ],
@@ -119,72 +110,171 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
+  test("should create SecureInfrastructure with correct configuration", () => {
+    const app = new App();
+    new TapStack(app, "TestStackInfra");
+
+    expect(SecureInfrastructure).toHaveBeenCalledTimes(1);
+    expect(SecureInfrastructure).toHaveBeenCalledWith(
+      expect.anything(),
+      "secure-infrastructure",
+      expect.objectContaining({
+        vpcCidr: "10.0.0.0/16",
+        publicSubnetCidrs: ["10.0.1.0/24", "10.0.2.0/24"],
+        privateSubnetCidrs: ["10.0.10.0/24", "10.0.20.0/24"],
+        availabilityZones: ["us-east-1a", "us-east-1b"],
+        environment: "production",
+        projectName: "secure-tap",
+        awsRegion: "us-east-1",
+      })
+    );
+  });
+
   test("should create all required Terraform outputs", () => {
     const app = new App();
     new TapStack(app, "TestStackOutputs");
 
-    // TapStack defines 7 outputs in total
-    expect(TerraformOutput).toHaveBeenCalledTimes(7);
+    // TapStack defines 13 outputs in total
+    expect(TerraformOutput).toHaveBeenCalledTimes(14);
 
-    // Verify network outputs
+    // Verify VPC outputs
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "vpc_id",
+      "vpc-id",
       expect.objectContaining({
-        description: "VPC ID for the secure infrastructure",
+        description: "ID of the secure VPC",
+        sensitive: false,
       })
     );
 
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "public_subnet_ids",
+      "vpc-cidr",
       expect.objectContaining({
-        description: "Public subnet IDs",
+        description: "CIDR block of the secure VPC",
+        sensitive: false,
+      })
+    );
+
+    // Verify subnet outputs
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "private-subnet-ids",
+      expect.objectContaining({
+        description: "IDs of private subnets for secure workloads",
+        sensitive: false,
       })
     );
 
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "private_subnet_ids",
+      "public-subnet-ids",
       expect.objectContaining({
-        description: "Private subnet IDs",
+        description: "IDs of public subnets for load balancers",
+        sensitive: false,
       })
     );
 
-    // Verify security outputs
+    // Verify KMS outputs
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "kms_key_id",
+      "kms-key-id",
       expect.objectContaining({
-        description: "KMS key ID",
+        description: "KMS key ID for encryption",
+        sensitive: false,
       })
     );
 
-    // Verify storage outputs
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "s3_bucket_name",
+      "kms-key-arn",
       expect.objectContaining({
-        description: "S3 bucket name",
+        description: "KMS key ARN for encryption",
+        sensitive: false,
       })
     );
 
-    // Verify compute outputs
+    // Verify S3 outputs
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "lambda_function_name",
+      "main-s3-bucket-name",
       expect.objectContaining({
-        description: "Lambda function name",
+        description: "Name of the main S3 bucket",
+        sensitive: false,
       })
     );
 
-    // Verify database outputs
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "rds_endpoint",
+      "main-s3-bucket-arn",
       expect.objectContaining({
-        description: "RDS endpoint",
-        sensitive: true, // This should be sensitive
+        description: "ARN of the main S3 bucket",
+        sensitive: false,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "logging-s3-bucket-name",
+      expect.objectContaining({
+        description: "Name of the S3 access logging bucket",
+        sensitive: false,
+      })
+    );
+
+    // Verify Lambda outputs
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-function-name",
+      expect.objectContaining({
+        description: "Name of the secure Lambda function",
+        sensitive: false,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-function-arn",
+      expect.objectContaining({
+        description: "ARN of the secure Lambda function",
+        sensitive: false,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-role-arn",
+      expect.objectContaining({
+        description: "ARN of the Lambda execution role",
+        sensitive: false,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-log-group-name",
+      expect.objectContaining({
+        description: "Name of the Lambda CloudWatch log group",
+        sensitive: false,
+      })
+    );
+
+    // Verify security summary output
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "security-summary",
+      expect.objectContaining({
+        description: "Security compliance summary",
+        sensitive: false,
+        value: {
+          encryption_at_rest: "Enabled with customer-managed KMS key",
+          logging_enabled: "S3 access logs and Lambda execution logs",
+          network_isolation: "All resources in private subnets",
+          iam_compliance: "Least privilege policies with resource-specific permissions",
+          public_access: "Blocked on all S3 buckets",
+          key_rotation: "Enabled on KMS key",
+          log_retention: "30 days for Lambda logs",
+        },
       })
     );
   });
@@ -195,23 +285,17 @@ describe("TapStack Unit Tests", () => {
       environmentSuffix: "prod",
       stateBucket: "custom-tf-states",
       stateBucketRegion: "eu-west-1",
-      awsRegion: "us-east-1",
+      awsRegion: "us-west-2",
     };
 
     new TapStack(app, "TestStackCustomProps", customProps);
 
+    // AWS Region Override should still force us-east-1
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       "aws",
       expect.objectContaining({
-        region: "us-east-1", // Custom region since AWS_REGION_OVERRIDE is empty
-        defaultTags: [
-          {
-            tags: expect.objectContaining({
-              Environment: "prod",
-            }),
-          },
-        ],
+        region: "us-east-1", // AWS_REGION_OVERRIDE takes precedence
       })
     );
 
@@ -251,59 +335,105 @@ describe("TapStack Unit Tests", () => {
     const app = new App();
     new TapStack(app, "TestStackReferences");
 
-    const secureModulesInstance = SecureModules.mock.results[0].value;
+    const secureInfraInstance = SecureInfrastructure.mock.results[0].value;
 
-    // Verify that outputs reference the correct SecureModules properties
+    // Verify that outputs reference the correct SecureInfrastructure properties
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "vpc_id",
+      "vpc-id",
       expect.objectContaining({
-        value: secureModulesInstance.vpc.id,
+        value: secureInfraInstance.vpc.id,
       })
     );
 
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "kms_key_id",
+      "vpc-cidr",
       expect.objectContaining({
-        value: secureModulesInstance.kmsKey.keyId,
+        value: secureInfraInstance.vpc.cidrBlock,
       })
     );
 
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "lambda_function_name",
+      "kms-key-id",
       expect.objectContaining({
-        value: secureModulesInstance.lambdaFunction.functionName,
+        value: secureInfraInstance.kmsKey.keyId,
       })
     );
 
     expect(TerraformOutput).toHaveBeenCalledWith(
       expect.anything(),
-      "s3_bucket_name",
+      "kms-key-arn",
       expect.objectContaining({
-        value: secureModulesInstance.s3Bucket.id,
+        value: secureInfraInstance.kmsKey.arn,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "main-s3-bucket-name",
+      expect.objectContaining({
+        value: secureInfraInstance.s3Bucket.bucket,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "main-s3-bucket-arn",
+      expect.objectContaining({
+        value: secureInfraInstance.s3Bucket.arn,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "logging-s3-bucket-name",
+      expect.objectContaining({
+        value: secureInfraInstance.s3LoggingBucket.bucket,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-function-name",
+      expect.objectContaining({
+        value: secureInfraInstance.lambdaFunction.functionName,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-function-arn",
+      expect.objectContaining({
+        value: secureInfraInstance.lambdaFunction.arn,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-role-arn",
+      expect.objectContaining({
+        value: secureInfraInstance.lambdaRole.arn,
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      "lambda-log-group-name",
+      expect.objectContaining({
+        value: secureInfraInstance.lambdaLogGroup.name,
       })
     );
   });
 
-  test("should handle AWS region override correctly when set", () => {
-    // Temporarily modify the AWS_REGION_OVERRIDE for this test
-    const originalCode = require("../lib/tap-stack");
-    
-    // Mock the module with AWS_REGION_OVERRIDE set
-    jest.doMock("../lib/tap-stack", () => {
-      const actual = jest.requireActual("../lib/tap-stack");
-      // We can't easily test the override since it's a const, but we can verify the logic
-      return actual;
-    });
-
+  test("should handle AWS region override correctly", () => {
     const app = new App();
     
-    // Test with custom AWS region in props
-    new TapStack(app, "TestRegionOverride", { awsRegion: "us-east-1" });
+    // Test with custom AWS region in props - should be overridden
+    new TapStack(app, "TestRegionOverride", { awsRegion: "us-west-2" });
 
-    // Should use the awsRegion from props since AWS_REGION_OVERRIDE is empty
+    // Should use us-east-1 due to AWS_REGION_OVERRIDE
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       "aws",
@@ -313,19 +443,32 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should handle default tags correctly", () => {
+  test("should pass correct awsRegion to SecureInfrastructure config", () => {
     const app = new App();
-    const customProps = {
-      defaultTags: {
-        tags: {
-          CustomTag: "CustomValue",
-          Owner: "TestTeam",
-        },
+    new TapStack(app, "TestInfraConfig", { awsRegion: "us-west-2" });
+
+    // SecureInfrastructure should receive us-east-1 due to override
+    expect(SecureInfrastructure).toHaveBeenCalledWith(
+      expect.anything(),
+      "secure-infrastructure",
+      expect.objectContaining({
+        awsRegion: "us-east-1",
+      })
+    );
+  });
+
+  test("should handle custom default tags in props", () => {
+    const app = new App();
+    const customTags = {
+      tags: {
+        CustomTag: "CustomValue",
+        Owner: "TestTeam",
       },
     };
 
-    new TapStack(app, "TestDefaultTags", customProps);
+    new TapStack(app, "TestCustomTags", { defaultTags: customTags });
 
+    // Should still use the hardcoded default tags, not the custom ones
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       "aws",
@@ -333,12 +476,55 @@ describe("TapStack Unit Tests", () => {
         defaultTags: [
           {
             tags: {
-              Project: "MyApp",
+              Project: "SecureTap",
               ManagedBy: "CDKTF",
-              Environment: "dev",
+              SecurityLevel: "High",
+              DataClassification: "Confidential",
             },
           },
         ],
+      })
+    );
+  });
+
+  test("should create infrastructure with production environment", () => {
+    const app = new App();
+    new TapStack(app, "TestProdEnv");
+
+    expect(SecureInfrastructure).toHaveBeenCalledWith(
+      expect.anything(),
+      "secure-infrastructure",
+      expect.objectContaining({
+        environment: "production",
+        projectName: "secure-tap",
+      })
+    );
+  });
+
+  test("should configure multi-AZ deployment", () => {
+    const app = new App();
+    new TapStack(app, "TestMultiAZ");
+
+    expect(SecureInfrastructure).toHaveBeenCalledWith(
+      expect.anything(),
+      "secure-infrastructure",
+      expect.objectContaining({
+        availabilityZones: ["us-east-1a", "us-east-1b"],
+        publicSubnetCidrs: ["10.0.1.0/24", "10.0.2.0/24"],
+        privateSubnetCidrs: ["10.0.10.0/24", "10.0.20.0/24"],
+      })
+    );
+  });
+
+  test("should configure VPC with correct CIDR", () => {
+    const app = new App();
+    new TapStack(app, "TestVPCCIDR");
+
+    expect(SecureInfrastructure).toHaveBeenCalledWith(
+      expect.anything(),
+      "secure-infrastructure",
+      expect.objectContaining({
+        vpcCidr: "10.0.0.0/16",
       })
     );
   });
