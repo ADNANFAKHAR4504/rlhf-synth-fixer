@@ -2,6 +2,12 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS environment for handling sensitive enterprise data with comprehensive security controls'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    
   CorporateIPRange:
     Type: String
     Default: '10.0.0.0/8'
@@ -56,7 +62,7 @@ Resources:
   EnterpriseKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/enterprise-security-key
+      AliasName: !Sub 'alias/enterprise-security-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref EnterpriseKMSKey
 
   # =============================================================================
@@ -149,7 +155,7 @@ Resources:
   SecureDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-enterprise-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'secure-enterprise-data-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -166,11 +172,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
 
   SecureDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -201,7 +202,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-logging-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'secure-logging-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -226,7 +227,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -365,7 +366,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/cloudtrail/enterprise-audit'
+      LogGroupName: !Sub '/aws/cloudtrail/enterprise-audit-${EnvironmentSuffix}'
       RetentionInDays: 365
       KmsKeyId: !GetAtt EnterpriseKMSKey.Arn
 
@@ -373,7 +374,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: EnterpriseSecurityTrail
+      TrailName: !Sub 'EnterpriseSecurityTrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
@@ -390,9 +391,6 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - !Sub '${SecureDataBucket}/*'
-            - Type: 'AWS::KMS::Key'
-              Values:
-                - !GetAtt EnterpriseKMSKey.Arn
 
   # =============================================================================
   # CloudWatch Monitoring and Alarms
@@ -400,14 +398,14 @@ Resources:
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/s3/access-logs'
+      LogGroupName: !Sub '/aws/s3/access-logs-${EnvironmentSuffix}'
       RetentionInDays: 90
       KmsKeyId: !GetAtt EnterpriseKMSKey.Arn
 
   SecurityAlertsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/security/alerts'
+      LogGroupName: !Sub '/aws/security/alerts-${EnvironmentSuffix}'
       RetentionInDays: 365
       KmsKeyId: !GetAtt EnterpriseKMSKey.Arn
 
@@ -415,7 +413,7 @@ Resources:
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: SecurityAlerts
+      TopicName: !Sub 'SecurityAlerts-${EnvironmentSuffix}'
       KmsMasterKeyId: !Ref EnterpriseKMSKey
       Subscription:
         - Protocol: email
