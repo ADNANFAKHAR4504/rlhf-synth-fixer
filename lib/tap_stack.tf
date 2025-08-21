@@ -152,6 +152,9 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+# Get the ELB service account for S3 access logs
+data "aws_elb_service_account" "main" {}
+
 # =============================================================================
 # KMS KEYS FOR ENCRYPTION
 # =============================================================================
@@ -426,7 +429,7 @@ resource "aws_security_group" "database" {
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  name = "${local.name_prefix}-ec2-role-001"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -524,7 +527,7 @@ resource "aws_iam_role" "config_role" {
 
 resource "aws_iam_role_policy_attachment" "config_role_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3_policy" {
@@ -666,6 +669,33 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
       noncurrent_days = local.current_config.backup_retention
     }
   }
+}
+
+# S3 Bucket Policy for ALB Access Logs
+resource "aws_s3_bucket_policy" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ALBAccessLogs"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
+        }
+        Action = [
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.app_data.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # =============================================================================
@@ -972,7 +1002,13 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # AWS CONFIG RULES FOR COMPLIANCE
 # =============================================================================
 
+# Flag to control Config deployment - set to false if Config delivery channel already exists
+locals {
+  deploy_config = false  # Set to false if Config delivery channel already exists in the region
+}
+
 resource "aws_config_configuration_recorder" "main" {
+  count    = local.deploy_config ? 1 : 0
   name     = "${local.name_prefix}-config-recorder"
   role_arn = aws_iam_role.config_role.arn
 
@@ -985,6 +1021,7 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = local.deploy_config ? 1 : 0
   name           = "${local.name_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
@@ -993,7 +1030,8 @@ resource "aws_config_delivery_channel" "main" {
 
 # Config Rules for Compliance
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
-  name = "${local.name_prefix}-s3-bucket-public-read-prohibited"
+  count = local.deploy_config ? 1 : 0
+  name  = "${local.name_prefix}-s3-bucket-public-read-prohibited"
 
   source {
     owner             = "AWS"
@@ -1004,7 +1042,8 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_public_write_prohibited" {
-  name = "${local.name_prefix}-s3-bucket-public-write-prohibited"
+  count = local.deploy_config ? 1 : 0
+  name  = "${local.name_prefix}-s3-bucket-public-write-prohibited"
 
   source {
     owner             = "AWS"
@@ -1015,7 +1054,8 @@ resource "aws_config_config_rule" "s3_bucket_public_write_prohibited" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
-  name = "${local.name_prefix}-s3-bucket-server-side-encryption-enabled"
+  count = local.deploy_config ? 1 : 0
+  name  = "${local.name_prefix}-s3-bucket-server-side-encryption-enabled"
 
   source {
     owner             = "AWS"
@@ -1026,7 +1066,8 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "${local.name_prefix}-encrypted-volumes"
+  count = local.deploy_config ? 1 : 0
+  name  = "${local.name_prefix}-encrypted-volumes"
 
   source {
     owner             = "AWS"
@@ -1037,7 +1078,8 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 }
 
 resource "aws_config_config_rule" "root_access_key_check" {
-  name = "${local.name_prefix}-root-access-key-check"
+  count = local.deploy_config ? 1 : 0
+  name  = "${local.name_prefix}-root-access-key-check"
 
   source {
     owner             = "AWS"
