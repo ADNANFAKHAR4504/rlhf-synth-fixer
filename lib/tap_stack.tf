@@ -48,7 +48,7 @@ locals {
     primary = {
       name = var.aws_region
       cidr = "10.0.0.0/16"
-      azs  = ["us-west-1a", "us-west-1b"]
+      azs  = ["us-west-1a", "us-west-1c"]
     }
     secondary = {
       name = "us-west-2"
