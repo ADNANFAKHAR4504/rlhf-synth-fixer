@@ -61,7 +61,6 @@ resource "aws_s3_bucket" "secure_prod" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_prod_encryption" {
   bucket = aws_s3_bucket.secure_prod.id
-
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -101,71 +100,65 @@ output "bucket_region" {
 }
 
 ########################
-# IAM Roles and Policies for EC2
+# IAM Roles and Policies for EC2 and Pipeline
 ########################
 
 resource "aws_iam_role" "ec2_role" {
   name = "secure-ec2-role-${local.env_suffix}"                      # <--- uses suffix
-
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow",
+        Effect = "Allow"
         Principal = {
           Service = "ec2.amazonaws.com"
-        },
+        }
         Action = "sts:AssumeRole"
       }
     ]
   })
-
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "secure-cloudwatch-logs-policy-${local.env_suffix}" # <--- uses suffix
   description = "Allow EC2 to write logs to CloudWatch"
-
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow",
+        Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
-        ],
+        ]
         Resource = "arn:aws:logs:*:*:*"
       }
     ]
   })
-
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_iam_policy" "s3_access_policy" {
   name        = "secure-s3-access-policy-${local.env_suffix}"       # <--- uses suffix
   description = "Allow EC2 to access S3 buckets"
-
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow",
+        Effect = "Allow"
         Action = [
           "s3:ListBucket",
           "s3:GetObject",
           "s3:PutObject"
-        ],
+        ]
         Resource = [
           "arn:aws:s3:::*"
         ]
       }
     ]
   })
-
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
@@ -187,8 +180,57 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "secure-ec2-profile-${local.env_suffix}"                  # <--- uses suffix
   role = aws_iam_role.ec2_role.name
-
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
+}
+
+# IAM Role for Pipeline with Route53 and ACM Permissions
+resource "aws_iam_role" "pipeline_role" {
+  name = "secure-pipeline-role-${local.env_suffix}"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "github-actions.amazonaws.com"  # Adjust if your pipeline uses a different service
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
+}
+
+resource "aws_iam_policy" "pipeline_route53_acm_policy" {
+  name        = "secure-pipeline-route53-acm-policy-${local.env_suffix}"
+  description = "Allow pipeline to manage Route53 and ACM"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:CreateHostedZone",
+          "route53:ChangeResourceRecordSets",
+          "route53:ListHostedZones",
+          "acm:RequestCertificate",
+          "acm:DescribeCertificate",
+          "acm:AddTagsToCertificate"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
+}
+
+resource "aws_iam_role_policy_attachment" "pipeline_route53_acm_attachment" {
+  role       = aws_iam_role.pipeline_role.name
+  policy_arn = aws_iam_policy.pipeline_route53_acm_policy.arn
+}
+
+output "pipeline_role_name" {
+  value = aws_iam_role.pipeline_role.name
 }
 
 output "ec2_role_name" {
@@ -210,6 +252,7 @@ output "s3_access_policy_name" {
 ########################
 # Variables
 ########################
+
 variable "aws_region" {
   description = "AWS provider region"
   type        = string
@@ -254,7 +297,6 @@ variable "environment_suffix" {
 
 resource "aws_network_acl" "secure_prod" {
   vpc_id = aws_vpc.main.id
-
   ingress {
     protocol   = "tcp"
     rule_no    = 100
@@ -263,7 +305,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 443
     to_port    = 443
   }
-
   ingress {
     protocol   = "tcp"
     rule_no    = 110
@@ -272,7 +313,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 22
     to_port    = 22
   }
-
   ingress {
     protocol   = "-1"
     rule_no    = 120
@@ -281,7 +321,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 0
     to_port    = 0
   }
-
   egress {
     protocol   = "tcp"
     rule_no    = 100
@@ -290,7 +329,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 443
     to_port    = 443
   }
-
   egress {
     protocol   = "tcp"
     rule_no    = 110
@@ -299,7 +337,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 22
     to_port    = 22
   }
-
   egress {
     protocol   = "-1"
     rule_no    = 120
@@ -308,7 +345,6 @@ resource "aws_network_acl" "secure_prod" {
     from_port  = 0
     to_port    = 0
   }
-
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })          # <--- uses suffix
 }
 
@@ -334,8 +370,8 @@ resource "aws_secretsmanager_secret" "rds_password" {
 resource "aws_secretsmanager_secret_version" "rds_password_version" {
   secret_id     = aws_secretsmanager_secret.rds_password.id
   secret_string = jsonencode({
-    username = "admin",
-    password = random_password.rds_password.result,
+    username = "admin"
+    password = random_password.rds_password.result
     port     = 3306
   })
 }
@@ -353,51 +389,51 @@ resource "aws_cloudwatch_dashboard" "secure_prod" {
   dashboard_body = jsonencode({
     widgets = [
       {
-        "type": "metric",
-        "x": 0,
-        "y": 0,
-        "width": 12,
-        "height": 6,
-        "properties": {
-          "metrics": [
+        type    = "metric"
+        x       = 0
+        y       = 0
+        width   = 12
+        height  = 6
+        properties = {
+          metrics = [
             [ "AWS/EC2", "CPUUtilization", "InstanceId", "i-xxxxxxxxxxxxxxxxx" ]
-          ],
-          "period": 300,
-          "stat": "Average",
-          "region": var.aws_region,
-          "title": "EC2 CPU Utilization"
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "EC2 CPU Utilization"
         }
-      },
+      }
       {
-        "type": "metric",
-        "x": 12,
-        "y": 0,
-        "width": 12,
-        "height": 6,
-        "properties": {
-          "metrics": [
+        type    = "metric"
+        x       = 12
+        y       = 0
+        width   = 12
+        height  = 6
+        properties = {
+          metrics = [
             [ "AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "secure-prod-db" ]
-          ],
-          "period": 300,
-          "stat": "Average",
-          "region": var.aws_region,
-          "title": "RDS CPU Utilization"
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "RDS CPU Utilization"
         }
-      },
+      }
       {
-        "type": "metric",
-        "x": 0,
-        "y": 6,
-        "width": 24,
-        "height": 6,
-        "properties": {
-          "metrics": [
+        type    = "metric"
+        x       = 0
+        y       = 6
+        width   = 24
+        height  = 6
+        properties = {
+          metrics = [
             [ "AWS/AutoScaling", "GroupInServiceInstances", "AutoScalingGroupName", "secure-prod-asg" ]
-          ],
-          "period": 300,
-          "stat": "Average",
-          "region": var.aws_region,
-          "title": "Auto Scaling Group In-Service Instances"
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "Auto Scaling Group In-Service Instances"
         }
       }
     ]
@@ -424,12 +460,6 @@ output "vpc_cidr_block" {
   value = aws_vpc.main.cidr_block
 }
 
-
-########################
-# EXISTING RESOURCES ...
-# (All your previous resources remain unchanged)
-########################
-
 # -------------------------------------------------
 # NEW RESOURCES ADDED FOR COMPLIANCE (2025-08-20)
 # -------------------------------------------------
@@ -437,17 +467,15 @@ output "vpc_cidr_block" {
 ########################
 # EC2 Launch Template for ASG
 ########################
+
 resource "aws_launch_template" "secure_prod_lt" {
   name_prefix   = "secure-prod-lt-${local.env_suffix}-"
   image_id      = data.aws_ami.latest_amazon_linux.id
   instance_type = "t3.micro"
-
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
   user_data = base64encode(file("user-data.sh"))
-
   tag_specifications {
     resource_type = "instance"
     tags = {
@@ -475,6 +503,7 @@ output "ec2_launch_template_id" {
 ########################
 # EC2 Auto Scaling Group
 ########################
+
 resource "aws_autoscaling_group" "secure_prod_asg" {
   name                = "secure-prod-asg-${local.env_suffix}"
   min_size            = 3
@@ -497,7 +526,6 @@ resource "aws_autoscaling_group" "secure_prod_asg" {
   }
 }
 
-# Example public subnets (add these if not present)
 resource "aws_subnet" "public1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
@@ -541,6 +569,7 @@ output "public_route_table_id" {
 ########################
 # Application Load Balancer (ALB)
 ########################
+
 resource "aws_lb" "secure_prod_alb" {
   name               = "secure-prod-alb-${local.env_suffix}"
   internal           = false
@@ -756,30 +785,31 @@ output "dynamodb_table_arn" {
   value = aws_dynamodb_table.secure_prod_table.arn
 }
 
-resource "aws_acm_certificate" "alb_cert" {
-  domain_name       = "test-${local.env_suffix}.example.com"
-  validation_method = "DNS"
+########################
+# Route53 Hosted Zone and ACM Certificate
+########################
 
+resource "aws_route53_zone" "secure_prod_zone" {
+  name = "secure-${local.env_suffix}.tap.local"  # Unique domain with env_suffix
   tags = {
-    Name        = "test-cert-${local.env_suffix}"
+    Name        = "secure-prod-zone-${local.env_suffix}"
     Environment = local.env_suffix
   }
 }
 
-output "alb_certificate_arn" {
-  value = aws_acm_certificate.alb_cert.arn
-}
-
-# Replace with your actual Route53 zone ID!
-variable "route53_zone_id" {
-  description = "Route53 hosted zone ID for ACM certificate DNS validation"
-  type        = string
+resource "aws_acm_certificate" "alb_cert" {
+  domain_name       = "secure-${local.env_suffix}.tap.local"
+  validation_method = "DNS"
+  tags = {
+    Name        = "secure-cert-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
 }
 
 resource "aws_route53_record" "alb_cert_validation" {
+  zone_id = aws_route53_zone.secure_prod_zone.zone_id
   name    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_name
   type    = aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_type
-  zone_id = var.route53_zone_id
   records = [aws_acm_certificate.alb_cert.domain_validation_options[0].resource_record_value]
   ttl     = 60
 }
@@ -789,4 +819,10 @@ resource "aws_acm_certificate_validation" "alb_cert_validation" {
   validation_record_fqdns = [aws_route53_record.alb_cert_validation.fqdn]
 }
 
-## Removed stray certificate_arn assignment outside resource block
+output "route53_zone_id" {
+  value = aws_route53_zone.secure_prod_zone.zone_id
+}
+
+output "acm_certificate_arn" {
+  value = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
+}
