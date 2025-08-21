@@ -9,32 +9,30 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	jsii "github.com/aws/jsii-runtime-go"
+	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 )
 
-// synthStack writes the synthesized Terraform JSON to a temp dir and returns its path
+// synthStack synthesizes the stack to a temp outdir and returns the tf json path
 func synthStack(t *testing.T, region string) string {
 	t.Helper()
 
 	// Force a clean output location per test
 	tmpDir := t.TempDir()
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(cwd) })
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("chdir temp: %v", err)
-	}
+	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	// Set AWS region for provider
 	old := os.Getenv("AWS_REGION")
 	t.Cleanup(func() { _ = os.Setenv("AWS_REGION", old) })
 	_ = os.Setenv("AWS_REGION", region)
 
-	app := BuildApp()
-	// This generates cdktf.out/stacks/TapStack/cdk.tf.json under tmpDir
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
+	BuildServerlessImageStack(stack, region)
 	app.Synth()
-	tfPath := filepath.Join(tmpDir, "cdktf.out", "stacks", "TapStack", "cdk.tf.json")
+
+	tfPath := filepath.Join(outdir, "stacks", "TapStack", "cdk.tf.json")
 	if _, err := os.Stat(tfPath); err != nil {
 		t.Fatalf("expected synthesized file at %s: %v", tfPath, err)
 	}
@@ -90,8 +88,18 @@ func Test_Synth_ResourcesPresentAndConfigured(t *testing.T) {
 	if ver == nil {
 		t.Fatalf("aws_s3_bucket_versioning.ImageBucketVersioning missing")
 	}
-	if vc, ok := ver["versioning_configuration"].([]any); !ok || len(vc) == 0 || asMap(vc[0])["status"] != "Enabled" {
-		t.Fatalf("versioning_configuration missing or status != Enabled: %v", ver["versioning_configuration"])
+	vcVal := ver["versioning_configuration"]
+	switch vv := vcVal.(type) {
+	case []any:
+		if len(vv) == 0 || asMap(vv[0])["status"] != "Enabled" {
+			t.Fatalf("versioning_configuration missing or status != Enabled: %v", vcVal)
+		}
+	case map[string]any:
+		if vv["status"] != "Enabled" {
+			t.Fatalf("versioning_configuration status != Enabled: %v", vcVal)
+		}
+	default:
+		t.Fatalf("unexpected versioning_configuration type: %T", vcVal)
 	}
 
 	// Public access block
