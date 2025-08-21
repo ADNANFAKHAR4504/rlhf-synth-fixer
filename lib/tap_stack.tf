@@ -421,7 +421,7 @@ resource "aws_launch_template" "app" {
   vpc_security_group_ids = [module.security.ec2_sg_id]
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
+    name = data.aws_iam_instance_profile.ec2_profile.name
   }
 
   block_device_mappings {
@@ -645,7 +645,7 @@ output "alb_dns_name" {
 
 output "rds_instance_endpoint" {
   description = "Endpoint of the RDS database instance"
-  value       = aws_db_instance.main.endpoint
+  value       = data.aws_db_instance.main.endpoint
   sensitive   = true
 }
 

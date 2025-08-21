@@ -1,108 +1,80 @@
-You are an expert AWS infrastructure engineer specializing in security-focused Infrastructure as Code using Terraform HCL. Your task is to create a complete, production-ready, multi-region AWS infrastructure that implements comprehensive security best practices.
+Hey there! We need your expertise as an AWS infrastructure engineer to help us build a secure and production-ready infrastructure using Terraform. Our main goal is to ensure our setup follows the best security practices.
 
-## Context & Requirements
+**Project Overview:**
 
-**Project Details:**
+- **Our Goal:** Create a secure, multi-region AWS infrastructure.
+- **Tool:** We're using Terraform (HCL).
+- **Environments:** We need this to work for both our production and staging environments.
 
-- Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
-- Author: ngwakoleslieelijah
-- Date: 2025-08-15 16:12:08 UTC
-- Tool: Terraform (HCL)
-- Target: Multi-region AWS deployment (us-east-1, eu-west-1)
-- Environment: Production (vpc-123abc456def) and Staging (vpc-789ghi012jkl)
+**What We Need to Build:**
 
-## Infrastructure Components Required
+We're looking to set up a complete infrastructure with the following components:
 
-Create a secure, interconnected infrastructure including:
+- **Networking:** A solid VPC with public and private subnets across multiple availability zones.
+- **Servers:** EC2 instances for our applications, with their storage encrypted.
+- **Database:** A reliable RDS database (MySQL or PostgreSQL) that's also encrypted.
+- **Storage:** S3 buckets for our data, locked down and secure.
+- **Serverless:** Lambda functions that run within our VPC.
+- **Permissions:** IAM roles and policies that grant only the necessary access.
+- **Encryption:** KMS keys to manage our encryption.
+- **Monitoring:** CloudWatch for logs, alerts, and monitoring.
+- **Firewalls:** Security groups to control network traffic.
 
-1. **VPC & Networking**: Multi-AZ subnets (public/private), NAT gateways, route tables
-2. **EC2 Instances**: Application servers with encrypted EBS volumes
-3. **RDS Database**: Multi-AZ MySQL/PostgreSQL with encryption at rest
-4. **S3 Buckets**: Data storage with encryption and access controls
-5. **Lambda Functions**: Serverless components restricted to VPC
-6. **IAM Roles & Policies**: Least-privilege access controls
-7. **KMS Keys**: Encryption key management with rotation
-8. **CloudWatch**: Monitoring, logging, and alerting
-9. **Security Groups**: Network access controls with specific CIDR restrictions
+**Key Security Rules:**
 
-## Critical Security Requirements (MUST IMPLEMENT)
+We're serious about security, so please make sure to:
 
-### Network Security:
+- **Networking:**
+  - Name security groups clearly.
+  - Restrict access to our EC2 instances to specific IP ranges.
+  - Chain security groups correctly (e.g., ALB talks to EC2, EC2 talks to RDS).
+- **Data Protection:**
+  - Encrypt our RDS database and EBS volumes with our own KMS keys.
+  - Make sure our S3 buckets are private.
+  - Enable key rotation for our KMS keys.
+- **Access Control:**
+  - Follow the principle of least privilege for all IAM roles.
+  - Use key-based SSH access for our EC2 instances (no passwords).
+  - Enforce MFA for all IAM users.
+- **Monitoring:**
+  - Tag all our resources so we know what's what.
+  - Set up CloudWatch alarms for high CPU usage on our EC2 instances.
+  - Use trusted AMIs from official sources.
 
-- All security groups MUST include descriptive names and descriptions for audit purposes
-- EC2 ports MUST only be accessible from specific CIDR blocks (never 0.0.0.0/0 except for ALB HTTP/HTTPS)
-- Implement proper security group chaining (ALB -> EC2 -> RDS)
-- Lambda functions MUST be restricted to VPC unless specifically justified
+**How Everything Should Connect:**
 
-### Data Protection:
+- The Application Load Balancer should be able to send traffic to the EC2 instances.
+- The EC2 instances should be able to connect to the RDS database.
+- The EC2 instances should have access to the necessary S3 buckets.
+- Our Lambda functions should be able to connect to the database.
+- CloudWatch alarms should send notifications to an SNS topic.
 
-- RDS instances MUST have encryption at rest enabled with customer-managed KMS keys
-- S3 buckets MUST NOT be publicly accessible (implement bucket policies and public access blocks)
-- All EBS volumes MUST be encrypted
-- KMS keys MUST have automatic rotation enabled
+**What We Expect from You:**
 
-### Access Control:
+Please provide a complete Terraform configuration, including:
 
-- IAM roles MUST follow principle of least privilege with specific action permissions
-- EC2 instances MUST disable password-based authentication (key-based only)
-- ALL IAM users MUST have MFA enforcement policies
-- User data scripts MUST be logged to CloudWatch for audit purposes
+- `main.tf`: The core infrastructure.
+- `variables.tf`: All the configurable options.
+- `outputs.tf`: The important outputs we'll need.
+- `security.tf`: All the security-related configurations.
+- `monitoring.tf`: The monitoring and alerting setup.
+- `data.tf`: Data sources for things like AMIs and availability zones.
 
-### Compliance & Monitoring:
+**A Few Guidelines:**
 
-- ALL resources MUST be tagged with 'environment' key ('prod' or 'staging')
-- CloudWatch alarms MUST monitor EC2 CPU usage with high usage alerts
-- Use ONLY trusted AMIs (Amazon Linux 2, Ubuntu LTS from official sources)
-- Implement comprehensive CloudTrail logging
+- Use a consistent naming convention for all resources.
+- Tag everything properly.
+- Use data sources for dynamic values.
+- Use customer-managed KMS keys.
+- Create separate security groups for each part of the infrastructure.
 
-## Resource Connectivity Requirements
+**Final Checks:**
 
-**Critical Connections to Implement:**
+Before you're done, please make sure that:
 
-1. **ALB -> EC2**: Security group allowing HTTP/HTTPS from ALB to EC2 instances
-2. **EC2 -> RDS**: Database security group allowing MySQL/PostgreSQL access only from EC2 security group
-3. **EC2 -> S3**: IAM role allowing EC2 to access specific S3 buckets
-4. **Lambda -> RDS**: VPC configuration allowing Lambda to connect to database
-5. **CloudWatch -> SNS**: Alarm notifications for high CPU usage
-6. **KMS -> All Services**: Encryption key access for RDS, EBS, S3, Lambda
+- `terraform validate` and `terraform plan` run without any errors.
+- All the security requirements are met.
+- The configuration can be deployed in both `us-east-1` and `eu-west-1`.
+- The setup works for both production and staging environments.
 
-## Expected Deliverables
-
-Provide a complete Terraform configuration with:
-
-1. **main.tf**: Main infrastructure resources with proper resource dependencies
-2. **variables.tf**: All configurable parameters with descriptions and validation
-3. **outputs.tf**: Essential outputs (VPC IDs, instance IDs, RDS endpoints, S3 bucket names)
-4. **security.tf**: Dedicated security configurations (security groups, IAM policies)
-5. **monitoring.tf**: CloudWatch alarms, dashboards, and SNS topics
-6. **data.tf**: Data sources for AMIs, availability zones, caller identity
-
-## Architecture Patterns to Follow
-
-- Use consistent naming convention: `${var.project_name}-${var.environment}-${resource_type}`
-- Implement proper resource tagging with local values
-- Use data sources for dynamic values (AZs, AMIs, account info)
-- Implement proper depends_on for resource ordering
-- Use customer-managed KMS keys with appropriate key policies
-- Create separate security groups for each tier (ALB, EC2, RDS, Lambda)
-
-## Validation Requirements
-
-The final configuration must:
-
-- Pass `terraform validate` without errors
-- Pass `terraform plan` successfully
-- Include all 13 security constraints listed
-- Be deployable in both us-east-1 and eu-west-1 regions
-- Support both production and staging environments
-- Include proper error handling and validation rules
-
-## Code Quality Standards
-
-- Include comprehensive comments explaining security decisions
-- Use Terraform best practices (proper variable types, validation rules)
-- Implement proper resource lifecycle management
-- Include example terraform.tfvars file
-- Ensure all sensitive values use appropriate sensitivity flags
-
-Create infrastructure code that prioritizes security, follows AWS Well-Architected Framework principles, and implements defense-in-depth security patterns. Focus on creating a production-ready solution that would pass enterprise security audits.
+We're looking for a solution that's secure, well-architected, and ready for production. Thanks for your help!
