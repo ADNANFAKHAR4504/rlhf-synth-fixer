@@ -372,7 +372,7 @@ export class TapStack extends cdk.Stack {
       value: ec2SecurityGroup.securityGroupId,
       description: 'EC2 Security Group ID',
     });
-    
+
     new cdk.CfnOutput(this, 'RdsSecurityGroupId', {
       value: rdsSecurityGroup.securityGroupId,
       description: 'RDS Security Group ID',
