@@ -1,0 +1,1 @@
+"""CloudFormation template library for secure AWS infrastructure."""
