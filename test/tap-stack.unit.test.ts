@@ -291,6 +291,7 @@ describe('Individual Construct Tests', () => {
       instanceProfileName: security.ec2InstanceProfile.name,
       webAclArn: security.webAcl.arn,
       accessLogsBucket: storage.accessLogsBucket.bucket,
+      accessLogsBucketPolicy: storage.accessLogsBucketPolicy,
     });
 
     expect(compute.launchTemplate).toBeDefined();
