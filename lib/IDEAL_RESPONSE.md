@@ -1,8 +1,8 @@
-# Web Application Infrastructure on AWS - Ideal CloudFormation Solution
+# Web Application Infrastructure on AWS
 
 This CloudFormation template creates a comprehensive web application infrastructure on AWS with high availability, security best practices, and CI/CD pipeline integration.
 
-## Complete CloudFormation Template
+## CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -19,26 +19,14 @@ Parameters:
     MaxLength: 20
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Default: my-key-pair
-
-  DBUsername:
     Type: String
-    Description: Database administrator username
-    Default: admin
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Description: Name of an existing EC2 KeyPair to enable SSH access (leave empty to disable SSH)
+    Default: ""
 
-  DBPassword:
-    Type: String
-    Description: Database administrator password
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*]*'
-    Default: MySecurePassword123
+
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Mappings:
   RegionAMIMap:
@@ -60,6 +48,26 @@ Mappings:
       AMI: ami-05b37ce701f85f26a
 
 Resources:
+  # Database Secret
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}'
+      Description: 'Database credentials for WebApp'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'WebApp-DB-Secret-${EnvironmentSuffix}'
+        - Key: Project
+          Value: WebApp
+        - Key: Environment
+          Value: Production
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
   # VPC and Networking
   WebAppVPC:
     Type: AWS::EC2::VPC
@@ -356,7 +364,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AMI]
         InstanceType: t2.micro
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -542,16 +550,17 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
+    DependsOn: DBSecret
     Properties:
       DBInstanceIdentifier: !Sub 'webapp-database-${EnvironmentSuffix}-${AWS::AccountId}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.39'
       AllocatedStorage: 20
       StorageType: gp3
       DBName: webapp
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:webapp-db-secret-${EnvironmentSuffix}-${AWS::AccountId}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -926,58 +935,40 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Region'
 ```
 
-## Key Features and Best Practices
+## Implementation Details
 
-### 1. **Environment Suffix Integration**
-- All resource names include `${EnvironmentSuffix}` parameter to prevent conflicts
-- Additional randomness with `${AWS::AccountId}` for global resources
-- Consistent naming pattern: `ResourceName-${EnvironmentSuffix}-${AWS::AccountId}`
+### Environment Suffix Integration
+All resource names include the EnvironmentSuffix parameter to prevent conflicts. Additional randomness with AWS account ID for global resources. Consistent naming pattern: ResourceName-EnvironmentSuffix-AccountId.
 
-### 2. **Security Improvements**
-- **Encryption everywhere**: RDS storage encryption, S3 bucket encryption (AES256)
-- **Least privilege IAM**: Scoped permissions to specific resources
-- **Network isolation**: Separate security groups for ALB, web servers, and database
-- **No public access**: RDS in private subnets, S3 buckets block public access
-- **Security group layering**: ALB → Web Servers → Database
+### Security Improvements
+Encryption enabled for RDS storage and S3 buckets using AES256. IAM policies scoped to specific resources with least privilege access. Network isolation through separate security groups for ALB, web servers, and database. RDS deployed in private subnets with S3 buckets blocking public access.
 
-### 3. **Multi-Region Support**
-- AMI mappings for all major regions
-- Dynamic AZ selection using `!GetAZs ''`
-- Region-agnostic resource references
+### Multi-Region Support
+AMI mappings included for all major regions. Dynamic AZ selection using GetAZs function. Region-agnostic resource references throughout.
 
-### 4. **High Availability**
-- Auto Scaling Group with 2-4 instances across 2 AZs
-- Application Load Balancer for traffic distribution
-- RDS with automated backups (7-day retention)
+### High Availability
+Auto Scaling Group configured with 2-4 instances across 2 availability zones. Application Load Balancer distributes traffic. RDS configured with automated backups and 7-day retention.
 
-### 5. **Deletion Safety**
-- All resources have `DeletionPolicy: Delete`
-- RDS has `DeletionProtection: false`
-- S3 lifecycle policies for automatic cleanup
+### Resource Management
+All resources configured with DeletionPolicy: Delete. RDS has DeletionProtection disabled. S3 lifecycle policies enable automatic cleanup.
 
-### 6. **Monitoring and Logging**
-- CloudWatch Log Groups with 14-day retention
-- CloudWatch Agent on all EC2 instances
-- S3 bucket for centralized logs with lifecycle policies
+### Monitoring and Logging
+CloudWatch Log Groups with 14-day retention. CloudWatch Agent installed on all EC2 instances. Dedicated S3 bucket for centralized logs with lifecycle policies.
 
-### 7. **CI/CD Pipeline**
-- Complete pipeline: Source → Build → Test → Deploy
-- Separate IAM roles for CodeBuild and CodePipeline
-- Artifact versioning and encryption
+### CI/CD Pipeline
+Complete pipeline includes Source, Build, Test, and Deploy stages. Separate IAM roles for CodeBuild and CodePipeline services. Artifact versioning and encryption enabled.
 
-### 8. **Tagging Strategy**
-- Consistent tags: Project, Environment, EnvironmentSuffix
-- Tags propagated to Auto Scaling instances
-- Export names include stack name for uniqueness
+### Tagging Strategy
+Consistent tags applied: Project, Environment, EnvironmentSuffix. Tags propagated to Auto Scaling instances. Export names include stack name for uniqueness.
 
 ## Deployment Instructions
 
-1. **Validate the template**:
+Validate the template:
 ```bash
 aws cloudformation validate-template --template-body file://TapStack.yml
 ```
 
-2. **Deploy the stack**:
+Deploy the stack:
 ```bash
 aws cloudformation deploy \
   --template-file TapStack.yml \
@@ -985,11 +976,10 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
-    KeyPairName=your-key-pair \
-    DBPassword=YourSecurePassword123
+    KeyPairName=your-key-pair
 ```
 
-3. **Get outputs**:
+Get outputs:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name TapStack${ENVIRONMENT_SUFFIX} \
@@ -997,9 +987,9 @@ aws cloudformation describe-stacks \
   --output json > cfn-outputs/flat-outputs.json
 ```
 
-4. **Destroy the stack**:
+Destroy the stack:
 ```bash
 aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX}
 ```
 
-This solution fully addresses all requirements from the original prompt while implementing security best practices, ensuring deployability across regions, and maintaining resource isolation through environment suffixes.
+This solution addresses all requirements from the original prompt while implementing security best practices, ensuring deployability across regions, and maintaining resource isolation through environment suffixes.
