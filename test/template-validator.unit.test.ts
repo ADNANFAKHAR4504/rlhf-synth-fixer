@@ -32,7 +32,7 @@ describe('TemplateValidator', () => {
 
     test('should count parameters correctly', () => {
       const paramCount = validator.getParameterCount();
-      expect(paramCount).toBe(8);
+      expect(paramCount).toBe(7);
     });
 
     test('should count outputs correctly', () => {

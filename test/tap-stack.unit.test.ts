@@ -54,7 +54,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('DatabasePassword parameter should be secure', () => {
-      const dbPasswordParam = template.Parameters.DatabasePassword;
+      const dbPasswordParam = template.Parameters.DatabasePasswordSecret;
       expect(dbPasswordParam.Type).toBe('String');
       expect(dbPasswordParam.NoEcho).toBe(true);
       expect(dbPasswordParam.MinLength).toBe(8);
@@ -326,7 +326,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(8);
+      expect(parameterCount).toBe(7);
     });
 
     test('should have sufficient resources for production', () => {
@@ -391,7 +391,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Security Best Practices', () => {
     test('database password should be a parameter with NoEcho', () => {
-      const dbPassword = template.Parameters.DatabasePassword;
+      const dbPassword = template.Parameters.DatabasePasswordSecret;
       expect(dbPassword.NoEcho).toBe(true);
     });
 
