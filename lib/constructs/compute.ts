@@ -237,7 +237,7 @@ EOF
         version: '$Latest',
       },
 
-      healthCheckType: 'ELB',
+      healthCheckType: 'EC2',
       healthCheckGracePeriod: 600,
 
       tag: [
