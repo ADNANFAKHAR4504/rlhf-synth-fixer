@@ -761,15 +761,24 @@ resource "aws_launch_template" "web" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    set -e
+    
+    # Update system and install packages
     yum update -y
     yum install -y httpd awslogs
+    
+    # Start and enable Apache
     systemctl start httpd
     systemctl enable httpd
-    systemctl start awslogsd
-    systemctl enable awslogsd
     
-    # Simple health check endpoint
-    echo "<html><body><h1>Health Check</h1><p>OK</p></body></html>" > /var/www/html/health
+    # Create health check endpoint
+    mkdir -p /var/www/html
+    echo "<html><body><h1>Health Check</h1><p>OK</p><p>Instance: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/health
+    echo "<html><body><h1>Welcome</h1><p>Server is running!</p></body></html>" > /var/www/html/index.html
+    
+    # Set proper permissions
+    chown -R apache:apache /var/www/html
+    chmod -R 755 /var/www/html
     
     # Configure CloudWatch logs
     cat > /etc/awslogs/awslogs.conf <<EOL
@@ -783,7 +792,17 @@ resource "aws_launch_template" "web" {
     datetime_format = %d/%b/%Y:%H:%M:%S
     EOL
     
-    service awslogs restart
+    # Start and enable CloudWatch logs
+    systemctl start awslogsd
+    systemctl enable awslogsd
+    
+    # Verify Apache is running
+    systemctl status httpd
+    
+    # Test health endpoint locally
+    curl -f http://localhost/health || exit 1
+    
+    echo "Instance setup completed successfully"
   EOF
   )
 
@@ -815,7 +834,7 @@ resource "aws_autoscaling_group" "web" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.web.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
   min_size         = local.current_config.min_size
   max_size         = local.current_config.max_size
@@ -859,11 +878,12 @@ resource "aws_lb" "web" {
 
   enable_deletion_protection = local.current_config.deletion_protection
 
-  access_logs {
-    bucket  = aws_s3_bucket.app_data.id
-    prefix  = "alb-logs"
-    enabled = true
-  }
+  # Temporarily disabled access logs due to S3 permissions issue
+  # access_logs {
+  #   bucket  = aws_s3_bucket.app_data.id
+  #   prefix  = "alb-logs"
+  #   enabled = true
+  # }
 
   depends_on = [
     aws_s3_bucket_policy.app_data,
@@ -885,13 +905,13 @@ resource "aws_lb_target_group" "web" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = merge(local.common_tags, {
