@@ -447,8 +447,6 @@ Resources:
   S3BucketNotificationConfig:
     Type: Custom::S3BucketNotification
     DependsOn:
-      - ProcessingBucket
-      - ProcessingFunction
       - LambdaInvokePermission
     Properties:
       ServiceToken: !GetAtt S3ConfigurationFunction.Arn
