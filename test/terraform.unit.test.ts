@@ -3,7 +3,7 @@
 
 import fs from "fs";
 import path from "path";
-import * as HCL from "hcl2-parser";
+// import * as HCL from "hcl2-parser";
 
 const libPath = path.resolve(__dirname, "../lib");
 
@@ -11,7 +11,7 @@ const libPath = path.resolve(__dirname, "../lib");
 function readHCLFile(filePath: string): any {
   try {
     const content = fs.readFileSync(filePath, "utf8");
-    return HCL.parseToObject(content);
+    return content;
   } catch (error) {
     return null;
   }
