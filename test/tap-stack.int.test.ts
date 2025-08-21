@@ -1,57 +1,50 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyPolicyCommand,
-} from '@aws-sdk/client-kms';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
   CloudTrailClient,
   DescribeTrailsCommand,
   GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
-  WAFV2Client,
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeKeyCommand,
+  GetKeyPolicyCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
   GetWebACLCommand,
-  ListWebACLsCommand,
+  WAFV2Client
 } from '@aws-sdk/client-wafv2';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Configure AWS clients for both regions
 const primaryRegion = 'ap-south-1';
@@ -86,6 +79,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
       outputs = JSON.parse(outputsContent);
+      console.log("Outputs we got is ", outputs);
     } else {
       console.warn('No outputs file found. Some tests may be skipped.');
     }

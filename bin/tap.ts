@@ -41,58 +41,41 @@ const stack = new TapStack('pulumi-infra', {
 });
 
 // Export important resource information
-export const outputs = {
-  primaryRegion: stack.secureStack.kmsStack.primaryKmsKey.arn.apply(
-    () => 'ap-south-1'
-  ),
-  secondaryRegion: stack.secureStack.kmsStack.secondaryKmsKey.arn.apply(
-    () => 'eu-west-1'
-  ),
+export const
+  primaryRegion = stack.secureStack.kmsStack.primaryKmsKey.arn.apply(() => 'ap-south-1'),
+  secondaryRegion = stack.secureStack.kmsStack.secondaryKmsKey.arn.apply(() => 'eu-west-1'),
 
-  // VPC Information
-  primaryVpcId: stack.secureStack.vpcStack.primaryVpc.id,
-  primaryVpcCidr: stack.secureStack.vpcStack.primaryVpc.cidrBlock,
-  secondaryVpcId: stack.secureStack.vpcStack.secondaryVpc.id,
-  secondaryVpcCidr: stack.secureStack.vpcStack.secondaryVpc.cidrBlock,
+  primaryVpcId = stack.secureStack.vpcStack.primaryVpc.id,
+  primaryVpcCidr = stack.secureStack.vpcStack.primaryVpc.cidrBlock,
+  secondaryVpcId = stack.secureStack.vpcStack.secondaryVpc.id,
+  secondaryVpcCidr = stack.secureStack.vpcStack.secondaryVpc.cidrBlock,
 
-  // KMS Keys
-  primaryKmsKeyId: stack.secureStack.kmsStack.primaryKmsKey.keyId,
-  primaryKmsKeyArn: stack.secureStack.kmsStack.primaryKmsKey.arn,
-  secondaryKmsKeyId: stack.secureStack.kmsStack.secondaryKmsKey.keyId,
-  secondaryKmsKeyArn: stack.secureStack.kmsStack.secondaryKmsKey.arn,
+  primaryKmsKeyId = stack.secureStack.kmsStack.primaryKmsKey.keyId,
+  primaryKmsKeyArn = stack.secureStack.kmsStack.primaryKmsKey.arn,
+  secondaryKmsKeyId = stack.secureStack.kmsStack.secondaryKmsKey.keyId,
+  secondaryKmsKeyArn = stack.secureStack.kmsStack.secondaryKmsKey.arn,
 
-  // RDS Information
-  primaryDbEndpoint: stack.secureStack.rdsStack.primaryRdsInstance.endpoint,
-  primaryDbPort: stack.secureStack.rdsStack.primaryRdsInstance.port,
-  secondaryDbEndpoint:
-    stack.secureStack.rdsStack.secondaryRdsReadReplica.endpoint,
-  secondaryDbPort: stack.secureStack.rdsStack.secondaryRdsReadReplica.port,
+  primaryDbEndpoint = stack.secureStack.rdsStack.primaryRdsInstance.endpoint,
+  primaryDbPort = stack.secureStack.rdsStack.primaryRdsInstance.port,
+  secondaryDbEndpoint = stack.secureStack.rdsStack.secondaryRdsReadReplica.endpoint,
+  secondaryDbPort = stack.secureStack.rdsStack.secondaryRdsReadReplica.port,
 
-  // Load Balancer
-  loadBalancerDnsName:
-    stack.secureStack.loadBalancerStack.applicationLoadBalancer.dnsName,
-  loadBalancerZoneId:
-    stack.secureStack.loadBalancerStack.applicationLoadBalancer.zoneId,
+  loadBalancerDnsName = stack.secureStack.loadBalancerStack.applicationLoadBalancer.dnsName,
+  loadBalancerZoneId = stack.secureStack.loadBalancerStack.applicationLoadBalancer.zoneId,
 
-  // Auto Scaling Group
-  autoScalingGroupName:
-    stack.secureStack.autoScalingStack.autoScalingGroup.name,
-  autoScalingGroupArn: stack.secureStack.autoScalingStack.autoScalingGroup.arn,
+  autoScalingGroupName = stack.secureStack.autoScalingStack.autoScalingGroup.name,
+  autoScalingGroupArn = stack.secureStack.autoScalingStack.autoScalingGroup.arn,
 
-  // Monitoring
-  snsTopicArn: stack.secureStack.monitoringStack.snsTopicArn,
-  snsTopicName: stack.secureStack.monitoringStack.snsTopicName,
+  snsTopicArn = stack.secureStack.monitoringStack.snsTopicArn,
+  snsTopicName = stack.secureStack.monitoringStack.snsTopicName,
 
-  // Logging
-  cloudTrailArn: stack.secureStack.loggingStack.cloudTrailArn,
-  cloudTrailName: stack.secureStack.loggingStack.cloudTrailName,
-  logBucketName: stack.secureStack.loggingStack.logBucketName,
-  flowLogsRoleName: stack.secureStack.loggingStack.flowLogsRoleName,
-  flowLogsPolicyName: stack.secureStack.loggingStack.flowLogsPolicyName,
-  vpcLogGroupName: stack.secureStack.loggingStack.vpcLogGroupName,
+  cloudTrailArn = stack.secureStack.loggingStack.cloudTrailArn,
+  cloudTrailName = stack.secureStack.loggingStack.cloudTrailName,
+  logBucketName = stack.secureStack.loggingStack.logBucketName,
+  flowLogsRoleName = stack.secureStack.loggingStack.flowLogsRoleName,
+  flowLogsPolicyName = stack.secureStack.loggingStack.flowLogsPolicyName,
+  vpcLogGroupName = stack.secureStack.loggingStack.vpcLogGroupName,
 
-  // WAF & Shield
-  webAclArn: stack.secureStack.wafShieldStack.webAclArn,
-  webAclName: stack.secureStack.wafShieldStack.webAclName,
-  webAclId: stack.secureStack.wafShieldStack.webAclId,
-};
+  webAclArn = stack.secureStack.wafShieldStack.webAclArn,
+  webAclName = stack.secureStack.wafShieldStack.webAclName,
+  webAclId = stack.secureStack.wafShieldStack.webAclId;
