@@ -408,7 +408,7 @@ Resources:
   # CloudTrail & Flow Logs
   LogGroupTrail:
     Type: AWS::Logs::LogGroup
-    Properties: { LogGroupName: /secure/cloudtrail, RetentionInDays: 90, KmsKeyId: !Ref CMKLogs }
+    Properties: { LogGroupName: /secure/cloudtrail, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
 
   RoleTrailToLogs:
     Type: AWS::IAM::Role
@@ -437,7 +437,7 @@ Resources:
 
   LogGroupFlow:
     Type: AWS::Logs::LogGroup
-    Properties: { LogGroupName: /secure/vpc/flow, RetentionInDays: 90, KmsKeyId: !Ref CMKLogs }
+    Properties: { LogGroupName: /secure/vpc/flow, RetentionInDays: 90, KmsKeyId: !GetAtt CMKLogs.Arn }
 
   RoleFlowLogs:
     Type: AWS::IAM::Role
