@@ -12,18 +12,22 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
+    Default: 'dev-v2'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
+Mappings:
+  EnvironmentConfig:
+    VersionSuffix:
+      Value: 'v2'
 
 Resources:
   # IAM Role for TAP access (moved before KMS to avoid circular dependency)
   TAPAccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'TAPAccessRole-${EnvironmentSuffix}'
+      RoleName: !Sub 'TAPAccessRole-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -85,7 +89,7 @@ Resources:
   TAPDynamoDBKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/tap-dynamodb-${EnvironmentSuffix}'
+      AliasName: !Sub 'alias/tap-dynamodb-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}'
       TargetKeyId: !Ref TAPDynamoDBKMSKey
 
 
@@ -94,7 +98,7 @@ Resources:
     Type: AWS::S3::Bucket
     DependsOn: TAPS3AccessLogsBucket
     Properties:
-      BucketName: !Sub 'tap-storage-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tap-storage-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -109,7 +113,7 @@ Resources:
         RestrictPublicBuckets: true
       LoggingConfiguration:
         DestinationBucketName: !Ref TAPS3AccessLogsBucket
-        LogFilePrefix: !Sub 'tap-access-logs-${EnvironmentSuffix}/'
+        LogFilePrefix: !Sub 'tap-access-logs-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}/'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -120,7 +124,7 @@ Resources:
   TAPS3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-access-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tap-access-logs-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -181,7 +185,7 @@ Resources:
   TAPS3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/tap-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/s3/tap-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}'
       RetentionInDays: 30
       Tags:
         - Key: Environment
@@ -195,7 +199,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}'
       AttributeDefinitions:
         - AttributeName: 'id'
           AttributeType: 'S'
@@ -222,9 +226,9 @@ Resources:
   TAPDynamoDBCloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub 'tap-dynamodb-${EnvironmentSuffix}-trail'
+      TrailName: !Sub 'tap-dynamodb-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}-trail'
       S3BucketName: !Ref TAPCloudTrailLogsBucket
-      S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}/'
+      S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}/'
       IncludeGlobalServiceEvents: false
       IsMultiRegionTrail: false
       IsLogging: true
@@ -246,7 +250,7 @@ Resources:
   TAPCloudTrailLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'tap-cloudtrail-logs-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -305,7 +309,7 @@ Resources:
   TAPDynamoDBAccessPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: !Sub 'TAPSecureDynamoDBAccess-${EnvironmentSuffix}'
+      PolicyName: !Sub 'TAPSecureDynamoDBAccess-${EnvironmentSuffix}${EnvironmentConfig.VersionSuffix.Value}'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
