@@ -239,7 +239,7 @@ resource "aws_security_group" "prod_rds_sg" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "prod_ec2_role" {
-  name = "prod-ec2-role"
+  name = "prod-ec2-role-${random_id.ec2_role_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -259,7 +259,7 @@ resource "aws_iam_role" "prod_ec2_role" {
 
 # IAM Policy for EC2 instances
 resource "aws_iam_role_policy" "prod_ec2_policy" {
-  name = "prod-ec2-policy"
+  name = "prod-ec2-policy-${random_id.ec2_role_suffix.hex}"
   role = aws_iam_role.prod_ec2_role.id
 
   policy = jsonencode({
@@ -301,7 +301,7 @@ resource "aws_iam_role_policy" "prod_ec2_policy" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "prod_ec2_profile" {
-  name = "prod-ec2-profile"
+  name = "prod-ec2-profile-${random_id.ec2_role_suffix.hex}"
   role = aws_iam_role.prod_ec2_role.name
 
   tags = local.common_tags
@@ -531,8 +531,24 @@ resource "aws_s3_bucket" "prod_s3_bucket" {
   })
 }
 
-# Random ID for bucket naming
+# Random IDs for unique resource naming
 resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
+resource "random_id" "ec2_role_suffix" {
+  byte_length = 8
+}
+
+resource "random_id" "s3_replication_role_suffix" {
+  byte_length = 8
+}
+
+resource "random_id" "config_role_suffix" {
+  byte_length = 8
+}
+
+resource "random_id" "lambda_role_suffix" {
   byte_length = 8
 }
 
@@ -565,7 +581,7 @@ resource "aws_s3_bucket_versioning" "prod_s3_replica_versioning" {
 
 # IAM Role for S3 Replication
 resource "aws_iam_role" "prod_s3_replication_role" {
-  name = "prod-s3-replication-role"
+  name = "prod-s3-replication-role-${random_id.s3_replication_role_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -742,7 +758,7 @@ resource "aws_s3_bucket" "prod_config_bucket" {
 
 # IAM Role for AWS Config
 resource "aws_iam_role" "prod_config_role" {
-  name = "prod-config-role"
+  name = "prod-config-role-${random_id.config_role_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -762,7 +778,7 @@ resource "aws_iam_role" "prod_config_role" {
 
 # IAM Policy for AWS Config
 resource "aws_iam_role_policy" "prod_config_policy" {
-  name = "prod-config-policy"
+  name = "prod-config-policy-${random_id.config_role_suffix.hex}"
   role = aws_iam_role.prod_config_role.id
 
   policy = jsonencode({
@@ -794,7 +810,7 @@ resource "aws_iam_role_policy" "prod_config_policy" {
 
 # IAM Role for Lambda
 resource "aws_iam_role" "prod_lambda_role" {
-  name = "prod-lambda-role"
+  name = "prod-lambda-role-${random_id.lambda_role_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -814,7 +830,7 @@ resource "aws_iam_role" "prod_lambda_role" {
 
 # IAM Policy for Lambda
 resource "aws_iam_role_policy" "prod_lambda_policy" {
-  name = "prod-lambda-policy"
+  name = "prod-lambda-policy-${random_id.lambda_role_suffix.hex}"
   role = aws_iam_role.prod_lambda_role.id
 
   policy = jsonencode({
@@ -898,7 +914,6 @@ resource "aws_route53_health_check" "prod_health_check" {
   request_interval                = 30
   cloudwatch_alarm_region         = var.aws_region
   cloudwatch_alarm_name           = "prod-health-check-alarm"
-  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(local.common_tags, {
     Name = "prod-health-check"
