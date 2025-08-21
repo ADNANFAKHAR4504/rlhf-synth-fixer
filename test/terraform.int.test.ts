@@ -1,5 +1,5 @@
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { DescribeInstancesCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeInstancesCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { GetBucketEncryptionCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
@@ -21,18 +21,18 @@ describe('Terraform Infrastructure Integration Tests', () => {
     if (!fs.existsSync(outputsPath)) {
       console.warn('No deployment outputs found. Using mock data for testing.');
       outputs = {
-        VPCId: 'vpc-mock123456',
-        PublicSubnet1aId: 'subnet-public1a',
-        PublicSubnet1bId: 'subnet-public1b',
-        PrivateSubnet1aId: 'subnet-private1a',
-        PrivateSubnet1bId: 'subnet-private1b',
-        NATGateway1aId: 'nat-1a123456',
-        NATGateway1bId: 'nat-1b123456',
-        S3BucketName: 'production-logs-bucket-test',
-        EC2Instance1aId: 'i-1a123456789',
-        EC2Instance1bId: 'i-1b987654321',
-        IAMRoleArn: 'arn:aws:iam::123456789012:role/ec2-log-access-role',
-        SecurityGroupId: 'sg-appservers123'
+        vpc_id: 'vpc-mock123456',
+        public_subnet_1a_id: 'subnet-public1a',
+        public_subnet_1b_id: 'subnet-public1b',
+        private_subnet_1a_id: 'subnet-private1a',
+        private_subnet_1b_id: 'subnet-private1b',
+        nat_gateway_1a_id: 'nat-1a123456',
+        nat_gateway_1b_id: 'nat-1b123456',
+        s3_bucket_name: 'production-logs-bucket-test',
+        ec2_instance_1a_id: 'i-1a123456789',
+        ec2_instance_1b_id: 'i-1b987654321',
+        iam_role_arn: 'arn:aws:iam::123456789012:role/ec2-log-access-role',
+        security_group_id: 'sg-appservers123'
       };
     } else {
       const outputsContent = fs.readFileSync(outputsPath, 'utf8');
@@ -41,34 +41,34 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('VPC and Networking', () => {
-    // test('VPC exists and is configured correctly', async () => {
-    //   if (!outputs.VPCId || outputs.VPCId.startsWith('vpc-mock')) {
-    //     console.log('Skipping AWS API call - using mock data');
-    //     expect(outputs.VPCId).toBeDefined();
-    //     return;
-    //   }
+    test('VPC exists and is configured correctly', async () => {
+      if (!outputs.vpc_id || outputs.vpc_id.startsWith('vpc-mock')) {
+        console.log('Skipping AWS API call - using mock data');
+        expect(outputs.vpc_id).toBeDefined();
+        return;
+      }
 
-    //   try {
-    //     const command = new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] });
-    //     const response = await ec2Client.send(command);
+      try {
+        const command = new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] });
+        const response = await ec2Client.send(command);
         
-    //     expect(response.Vpcs).toHaveLength(1);
-    //     const vpc = response.Vpcs![0];
-    //     expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-    //     expect(vpc.EnableDnsHostnames).toBe(true);
-    //     expect(vpc.EnableDnsSupport).toBe(true);
-    //   } catch (error) {
-    //     console.log('AWS API call failed, using mock validation');
-    //     expect(outputs.VPCId).toMatch(/^vpc-/);
-    //   }
-    // });
+        expect(response.Vpcs).toHaveLength(1);
+        const vpc = response.Vpcs![0];
+        expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+        expect(vpc.EnableDnsHostnames).toBe(true);
+        expect(vpc.EnableDnsSupport).toBe(true);
+      } catch (error) {
+        console.log('AWS API call failed, using mock validation');
+        expect(outputs.vpc_id).toMatch(/^vpc-/);
+      }
+    });
 
     test('all required subnets exist', async () => {
       const subnetIds = [
-        outputs.PublicSubnet1aId,
-        outputs.PublicSubnet1bId,
-        outputs.PrivateSubnet1aId,
-        outputs.PrivateSubnet1bId
+        outputs.public_subnet_1a_id,
+        outputs.public_subnet_1b_id,
+        outputs.private_subnet_1a_id,
+        outputs.private_subnet_1b_id
       ];
 
       expect(subnetIds.every(id => id && id.length > 0)).toBe(true);
@@ -86,7 +86,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         
         // Verify subnet configurations
         const publicSubnets = response.Subnets!.filter(s => 
-          s.SubnetId === outputs.PublicSubnet1aId || s.SubnetId === outputs.PublicSubnet1bId
+          s.SubnetId === outputs.public_subnet_1a_id || s.SubnetId === outputs.public_subnet_1b_id
         );
         
         publicSubnets.forEach(subnet => {
@@ -101,17 +101,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('NAT Gateways are deployed', async () => {
-      expect(outputs.NATGateway1aId).toBeDefined();
-      expect(outputs.NATGateway1bId).toBeDefined();
+      expect(outputs.nat_gateway_1a_id).toBeDefined();
+      expect(outputs.nat_gateway_1b_id).toBeDefined();
 
-      if (outputs.NATGateway1aId.startsWith('nat-mock')) {
+      if (outputs.nat_gateway_1a_id.startsWith('nat-mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
         const command = new DescribeNatGatewaysCommand({
-          NatGatewayIds: [outputs.NATGateway1aId, outputs.NATGateway1bId]
+          NatGatewayIds: [outputs.nat_gateway_1a_id, outputs.nat_gateway_1b_id]
         });
         const response = await ec2Client.send(command);
         
@@ -121,25 +121,25 @@ describe('Terraform Infrastructure Integration Tests', () => {
         });
       } catch (error) {
         console.log('AWS API call failed, using mock validation');
-        expect(outputs.NATGateway1aId).toMatch(/^nat-/);
-        expect(outputs.NATGateway1bId).toMatch(/^nat-/);
+        expect(outputs.nat_gateway_1a_id).toMatch(/^nat-/);
+        expect(outputs.nat_gateway_1b_id).toMatch(/^nat-/);
       }
     });
   });
 
   describe('EC2 Instances', () => {
     test('EC2 instances are running', async () => {
-      expect(outputs.EC2Instance1aId).toBeDefined();
-      expect(outputs.EC2Instance1bId).toBeDefined();
+      expect(outputs.ec2_instance_1a_id).toBeDefined();
+      expect(outputs.ec2_instance_1b_id).toBeDefined();
 
-      if (outputs.EC2Instance1aId.startsWith('i-mock')) {
+      if (outputs.ec2_instance_1a_id.startsWith('i-mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
         const command = new DescribeInstancesCommand({
-          InstanceIds: [outputs.EC2Instance1aId, outputs.EC2Instance1bId]
+          InstanceIds: [outputs.ec2_instance_1a_id, outputs.ec2_instance_1b_id]
         });
         const response = await ec2Client.send(command);
         
@@ -153,29 +153,29 @@ describe('Terraform Infrastructure Integration Tests', () => {
         });
       } catch (error) {
         console.log('AWS API call failed, using mock validation');
-        expect(outputs.EC2Instance1aId).toMatch(/^i-/);
-        expect(outputs.EC2Instance1bId).toMatch(/^i-/);
+        expect(outputs.ec2_instance_1a_id).toMatch(/^i-/);
+        expect(outputs.ec2_instance_1b_id).toMatch(/^i-/);
       }
     });
 
     test('instances are in private subnets', async () => {
-      if (outputs.EC2Instance1aId.startsWith('i-mock')) {
+      if (outputs.ec2_instance_1a_id.startsWith('i-mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
         const command = new DescribeInstancesCommand({
-          InstanceIds: [outputs.EC2Instance1aId, outputs.EC2Instance1bId]
+          InstanceIds: [outputs.ec2_instance_1a_id, outputs.ec2_instance_1b_id]
         });
         const response = await ec2Client.send(command);
         
         const instances = response.Reservations!.flatMap(r => r.Instances || []);
-        const instance1a = instances.find(i => i.InstanceId === outputs.EC2Instance1aId);
-        const instance1b = instances.find(i => i.InstanceId === outputs.EC2Instance1bId);
+        const instance1a = instances.find(i => i.InstanceId === outputs.ec2_instance_1a_id);
+        const instance1b = instances.find(i => i.InstanceId === outputs.ec2_instance_1b_id);
         
-        expect(instance1a?.SubnetId).toBe(outputs.PrivateSubnet1aId);
-        expect(instance1b?.SubnetId).toBe(outputs.PrivateSubnet1bId);
+        expect(instance1a?.SubnetId).toBe(outputs.private_subnet_1a_id);
+        expect(instance1b?.SubnetId).toBe(outputs.private_subnet_1b_id);
       } catch (error) {
         console.log('AWS API call failed, validation skipped');
       }
@@ -184,16 +184,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('security group exists with correct rules', async () => {
-      expect(outputs.SecurityGroupId).toBeDefined();
+      expect(outputs.security_group_id).toBeDefined();
 
-      if (outputs.SecurityGroupId.startsWith('sg-mock')) {
+      if (outputs.security_group_id.startsWith('sg-mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
         const command = new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.SecurityGroupId]
+          GroupIds: [outputs.security_group_id]
         });
         const response = await ec2Client.send(command);
         
@@ -217,23 +217,23 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(httpsRule).toBeDefined();
       } catch (error) {
         console.log('AWS API call failed, using mock validation');
-        expect(outputs.SecurityGroupId).toMatch(/^sg-/);
+        expect(outputs.security_group_id).toMatch(/^sg-/);
       }
     });
   });
 
   describe('S3 Bucket', () => {
     test('S3 bucket exists and is accessible', async () => {
-      expect(outputs.S3BucketName).toBeDefined();
-      expect(outputs.S3BucketName).toContain('production-logs-bucket');
+      expect(outputs.s3_bucket_name).toBeDefined();
+      expect(outputs.s3_bucket_name).toContain('production-logs-bucket');
 
-      if (outputs.S3BucketName.includes('mock')) {
+      if (outputs.s3_bucket_name.includes('mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
-        const command = new HeadBucketCommand({ Bucket: outputs.S3BucketName });
+        const command = new HeadBucketCommand({ Bucket: outputs.s3_bucket_name });
         await s3Client.send(command);
         // If no error, bucket exists
         expect(true).toBe(true);
@@ -246,13 +246,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('S3 bucket has encryption enabled', async () => {
-      if (outputs.S3BucketName.includes('mock')) {
+      if (outputs.s3_bucket_name.includes('mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
-        const command = new GetBucketEncryptionCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetBucketEncryptionCommand({ Bucket: outputs.s3_bucket_name });
         const response = await s3Client.send(command);
         
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
@@ -268,13 +268,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('S3 bucket has public access blocked', async () => {
-      if (outputs.S3BucketName.includes('mock')) {
+      if (outputs.s3_bucket_name.includes('mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
-        const command = new GetPublicAccessBlockCommand({ Bucket: outputs.S3BucketName });
+        const command = new GetPublicAccessBlockCommand({ Bucket: outputs.s3_bucket_name });
         const response = await s3Client.send(command);
         
         const config = response.PublicAccessBlockConfiguration;
@@ -290,16 +290,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('IAM Configuration', () => {
     test('IAM role exists', async () => {
-      expect(outputs.IAMRoleArn).toBeDefined();
-      expect(outputs.IAMRoleArn).toContain('role/ec2-log-access-role');
+      expect(outputs.iam_role_arn).toBeDefined();
+      expect(outputs.iam_role_arn).toContain('role/ec2-log-access-role');
 
-      if (outputs.IAMRoleArn.includes('mock')) {
+      if (outputs.iam_role_arn.includes('mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
 
       try {
-        const roleName = outputs.IAMRoleArn.split('/').pop();
+        const roleName = outputs.iam_role_arn.split('/').pop();
         const command = new GetRoleCommand({ RoleName: roleName });
         const response = await iamClient.send(command);
         
@@ -314,7 +314,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Alarms', () => {
     test('CPU alarms are configured', async () => {
-      if (!outputs.EC2Instance1aId || outputs.EC2Instance1aId.startsWith('i-mock')) {
+      if (!outputs.ec2_instance_1a_id || outputs.ec2_instance_1a_id.startsWith('i-mock')) {
         console.log('Skipping AWS API call - using mock data');
         return;
       }
@@ -329,7 +329,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const relevantAlarms = alarms.filter(alarm => 
           alarm.Dimensions?.some(d => 
             d.Name === 'InstanceId' && 
-            (d.Value === outputs.EC2Instance1aId || d.Value === outputs.EC2Instance1bId)
+            (d.Value === outputs.ec2_instance_1a_id || d.Value === outputs.ec2_instance_1b_id)
           )
         );
         
@@ -350,26 +350,26 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('private instances can reach internet through NAT', () => {
       // This test validates the configuration exists
       // Actual connectivity would require SSH access to instances
-      expect(outputs.NATGateway1aId).toBeDefined();
-      expect(outputs.NATGateway1bId).toBeDefined();
-      expect(outputs.PrivateSubnet1aId).toBeDefined();
-      expect(outputs.PrivateSubnet1bId).toBeDefined();
+      expect(outputs.nat_gateway_1a_id).toBeDefined();
+      expect(outputs.nat_gateway_1b_id).toBeDefined();
+      expect(outputs.private_subnet_1a_id).toBeDefined();
+      expect(outputs.private_subnet_1b_id).toBeDefined();
     });
 
     test('all required outputs are present', () => {
       const requiredOutputs = [
-        'VPCId',
-        'PublicSubnet1aId',
-        'PublicSubnet1bId',
-        'PrivateSubnet1aId',
-        'PrivateSubnet1bId',
-        'NATGateway1aId',
-        'NATGateway1bId',
-        'S3BucketName',
-        'EC2Instance1aId',
-        'EC2Instance1bId',
-        'IAMRoleArn',
-        'SecurityGroupId'
+        'vpc_id',
+        'public_subnet_1a_id',
+        'public_subnet_1b_id',
+        'private_subnet_1a_id',
+        'private_subnet_1b_id',
+        'nat_gateway_1a_id',
+        'nat_gateway_1b_id',
+        's3_bucket_name',
+        'ec2_instance_1a_id',
+        'ec2_instance_1b_id',
+        'iam_role_arn',
+        'security_group_id'
       ];
 
       requiredOutputs.forEach(output => {
