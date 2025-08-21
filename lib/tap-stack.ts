@@ -339,7 +339,7 @@ export class TapStack extends pulumi.ComponentResource {
 
       new aws.s3.BucketServerSideEncryptionConfiguration(`${prefix}-bucket-encryption`, {
         bucket: s3Bucket.id,
-        rule: [{ 
+        rules: [{ 
           applyServerSideEncryptionByDefault: { 
             sseAlgorithm: 'aws:kms',
             kmsMasterKeyId: kmsKey.arn
