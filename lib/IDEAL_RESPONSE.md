@@ -1,4 +1,4 @@
-## File 1: lib/modules.ts
+## lib/modules.ts
 
 ```typescript
 import { Construct } from 'constructs';
@@ -122,7 +122,9 @@ echo "Instance initialized for ${config.name}" > /var/log/init.log
   }
 }
 ```
-## File 2: lib/tap-stack.ts
+
+## lib/tap-stack.ts
+
 ```typescript
 import {
   AwsProvider,
