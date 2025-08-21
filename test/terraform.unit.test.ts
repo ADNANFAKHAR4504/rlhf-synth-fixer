@@ -316,7 +316,7 @@ describe("Terraform Infrastructure Configuration", () => {
     describe("HTTPS/TLS Configuration", () => {
       test("declares ACM certificate", () => {
         expect(stackContent).toMatch(/resource\s+"aws_acm_certificate"\s+"main"/);
-        expect(stackContent).toMatch(/validation_method\s*=\s*"EMAIL"/);
+        expect(stackContent).toMatch(/validation_method\s*=\s*"DNS"/);
       });
 
       test("has HTTPS ALB listener", () => {

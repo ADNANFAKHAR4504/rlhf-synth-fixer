@@ -1083,7 +1083,7 @@ resource "aws_cloudtrail" "main" {
 # SSL/TLS Certificate for HTTPS
 resource "aws_acm_certificate" "main" {
   domain_name       = "${var.project_name}.example.com"
-  validation_method = "EMAIL"
+  validation_method = "DNS"
 
   subject_alternative_names = [
     "*.${var.project_name}.example.com"
@@ -1505,10 +1505,50 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_logs_replica" {
 resource "aws_s3_bucket_versioning" "cloudtrail_logs_replica" {
   provider = aws.west
   bucket   = aws_s3_bucket.cloudtrail_logs_replica.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail_logs_replica" {
+  provider = aws.west
+  bucket   = aws_s3_bucket.cloudtrail_logs_replica.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail_logs_replica.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${local.resource_prefix}-cloudtrail-west"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail_logs_replica.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${local.resource_prefix}-cloudtrail-west"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # IAM Role for S3 Cross-Region Replication
@@ -1627,7 +1667,7 @@ resource "aws_db_instance" "main_replica" {
   identifier = "${local.resource_prefix}-database-replica"
 
   # Read replica configuration
-  replicate_source_db = "${data.aws_region.current.name}:${aws_db_instance.main.identifier}"
+  replicate_source_db = aws_db_instance.main.identifier
 
   instance_class = "db.t3.micro"
 
@@ -1641,8 +1681,8 @@ resource "aws_db_instance" "main_replica" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   # Destruction settings for testing
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  skip_final_snapshot      = true
+  deletion_protection      = false
   delete_automated_backups = true
 
   tags = merge(local.common_tags, {
@@ -1675,6 +1715,8 @@ resource "aws_kms_alias" "rds_encryption_west" {
 # CloudTrail in us-west-2
 resource "aws_cloudtrail" "west" {
   provider = aws.west
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail_logs_replica]
 
   name           = "${local.resource_prefix}-cloudtrail-west"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs_replica.bucket
