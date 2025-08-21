@@ -271,9 +271,8 @@ resource "aws_kms_key" "rds_key" {
 }
 
 # KMS key alias for RDS
-resource "aws_kms_alias" "rds_key" {
-  name          = "alias/${local.name_prefix}-rds-key"
-  target_key_id = aws_kms_key.rds_key.key_id
+data "aws_kms_alias" "rds_key" {
+  name = "alias/${local.name_prefix}-rds-key"
 }
 
 # KMS key for S3 encryption
@@ -319,9 +318,8 @@ resource "aws_kms_key" "s3_key" {
 }
 
 # KMS key alias for S3
-resource "aws_kms_alias" "s3_key" {
-  name          = "alias/${local.name_prefix}-s3-key"
-  target_key_id = aws_kms_key.s3_key.key_id
+data "aws_kms_alias" "s3_key" {
+  name = "alias/${local.name_prefix}-s3-key"
 }
 
 # KMS key for EBS encryption
@@ -337,59 +335,21 @@ resource "aws_kms_key" "ebs_key" {
 }
 
 # KMS key alias for EBS
-resource "aws_kms_alias" "ebs_key" {
-  name          = "alias/${local.name_prefix}-ebs-key"
-  target_key_id = aws_kms_key.ebs_key.key_id
+data "aws_kms_alias" "ebs_key" {
+  name = "alias/${local.name_prefix}-ebs-key"
 }
 
 #######################
 # Application Load Balancer
 #######################
 
-resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [module.security.alb_sg_id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
-
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.id
-    prefix  = "alb-logs"
-    enabled = true
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb"
-    Type = "load-balancer"
-  })
+data "aws_lb" "main" {
+  name = "${local.name_prefix}-alb"
 }
 
 # Target group for EC2 instances
-resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-target-group"
-    Type = "load-balancer"
-  })
+data "aws_lb_target_group" "app" {
+  name = "${local.name_prefix}-app-tg"
 }
 
 # ALB Listener
@@ -414,14 +374,8 @@ resource "aws_lb_listener" "app" {
 #######################
 
 # IAM role for EC2 instances
-resource "aws_iam_role" "ec2_role" {
-  name               = "${local.name_prefix}-ec2-role"
-  assume_role_policy = module.data.ec2_assume_role_policy
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-role"
-    Type = "iam"
-  })
+data "aws_iam_role" "ec2_role" {
+  name = "${local.name_prefix}-ec2-role"
 }
 
 # IAM policy for EC2 S3 access
@@ -450,14 +404,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # IAM role for Lambda functions
-resource "aws_iam_role" "lambda_role" {
-  name               = "${local.name_prefix}-lambda-role"
-  assume_role_policy = module.data.lambda_assume_role_policy
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-lambda-role"
-    Type = "iam"
-  })
+data "aws_iam_role" "lambda_role" {
+  name = "${local.name_prefix}-lambda-role"
 }
 
 # Attach VPC execution policy to Lambda role
@@ -557,14 +505,8 @@ resource "aws_autoscaling_group" "app" {
 #######################
 
 # DB subnet group
-resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-db-subnet-group"
-    Type = "database"
-  })
+data "aws_db_subnet_group" "main" {
+  name = "${local.name_prefix}-db-subnet-group"
 }
 
 # RDS instance with encryption and Multi-AZ
