@@ -464,7 +464,7 @@ variable "bucket_region" {
 variable "bucket_name" {
   description = "Name of the S3 bucket"
   type        = string
-  default     = "devs3-bucket-${var.environment}"
+  default     = "devs3-bucket-dev"
 }
 
 variable "bucket_tags" {
@@ -472,7 +472,7 @@ variable "bucket_tags" {
   type        = map(string)
   default = {
     Project     = "ExampleProject"
-    Environment = var.environment
+    Environment = "dev"
     ManagedBy   = "terraform"
   }
 }
