@@ -52,42 +52,9 @@ export class TapStack extends cdk.Stack {
 
     // Cross-region replication (only for primary region)
     if (isPrimary) {
+      // Create replication role first without bucket reference
       const replicationRole = new iam.Role(this, 'ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-        inlinePolicies: {
-          ReplicationPolicy: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObjectVersionForReplication',
-                  's3:GetObjectVersionAcl',
-                  's3:GetObjectVersionTagging',
-                ],
-                resources: [`${bucket.bucketArn}/*`],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['s3:ListBucket'],
-                resources: [bucket.bucketArn],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:ReplicateObject',
-                  's3:ReplicateDelete',
-                  's3:ReplicateTags',
-                ],
-                resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                resources: [kmsKey.keyArn],
-              }),
-            ],
-          }),
-        },
       });
 
       // Add replication configuration via CfnBucket
@@ -106,6 +73,47 @@ export class TapStack extends cdk.Stack {
           },
         ],
       };
+
+      // Add policies to replication role after bucket is created
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [`${bucket.bucketArn}/*`],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['s3:ListBucket'],
+          resources: [bucket.bucketArn],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:ReplicateObject',
+            's3:ReplicateDelete',
+            's3:ReplicateTags',
+          ],
+          resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+          resources: [kmsKey.keyArn],
+        })
+      );
     }
 
     // CloudFront Distribution (only in primary region)
