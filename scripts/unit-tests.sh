@@ -29,6 +29,26 @@ elif [ "$LANGUAGE" = "ts" ]; then
   npm run test:unit
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running go unit tests..."
+  # For CDKTF Go projects, generate local provider bindings if missing
+  if [ "$PLATFORM" = "cdktf" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go tests"
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+    # Ensure CDKTF core deps are present to satisfy .gen imports
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    go clean -modcache || true
+    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+    go mod tidy
+  fi
   if [ -d "lib" ]; then
     # Ensure Go sees tests even if they live under root tests/
     if [ -d "tests/unit" ]; then
