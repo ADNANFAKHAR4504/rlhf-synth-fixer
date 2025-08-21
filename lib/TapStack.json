@@ -491,6 +491,10 @@
         },
         "WebACLAssociation": {
             "Type": "AWS::WAFv2::WebACLAssociation",
+            "DependsOn": [
+                "ApiStage",
+                "ApiGatewayAccount"
+            ],
             "Properties": {
                 "ResourceArn": {
                     "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${TapStackApi}/stages/${StageName}"

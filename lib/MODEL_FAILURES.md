@@ -142,6 +142,16 @@
 - **Graceful Lambda handling** of missing or empty Secrets Manager configuration
 - **Backward compatibility** with existing package.json deployment commands
 
+### 13. Resource Dependency Ordering Issues
+
+**Problem**: WAF association was trying to attach to API Gateway stage before it was fully created, causing deployment failures.
+
+**Solution**: Added explicit CloudFormation dependencies:
+
+- **DependsOn ApiStage** - ensures API Gateway stage is fully created first
+- **DependsOn ApiGatewayAccount** - ensures API Gateway account configuration is complete
+- **Proper dependency chain** - WAF association waits for complete API Gateway setup
+
 ## Quality Assurance Improvements
 
 ### Test Coverage Enhancement

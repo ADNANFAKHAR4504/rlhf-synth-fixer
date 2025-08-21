@@ -348,6 +348,9 @@ Resources:
   # WAF Association with API Gateway Stage
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn:
+      - ApiStage
+      - ApiGatewayAccount
     Properties:
       ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${TapStackApi}/stages/${StageName}'
       WebACLArn: !GetAtt WebACL.Arn
