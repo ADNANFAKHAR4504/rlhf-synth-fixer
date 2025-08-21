@@ -27,9 +27,10 @@ variable "project_name" {
 variable "environment" {
   description = "Environment name (prod or staging) for resource tagging and configuration"
   type        = string
+  default     = "staging"
 
   validation {
-    condition     = contains(["dev"], var.environment)
+    condition     = contains(["prod", "staging"], var.environment)
     error_message = "Environment must be either 'prod' or 'staging'."
   }
 }
