@@ -462,7 +462,7 @@ resource "aws_instance" "web" {
   vpc_security_group_ids = [aws_security_group.web.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
               yum install -y httpd
