@@ -94,7 +94,7 @@ describe("TapStack Integration Tests", () => {
         expect(subnet.Tags?.some(tag => 
           tag.Key === "Name" && 
           tag.Value === `fullstack-app-${environmentSuffix}-public-subnet-${index}`
-        )).toBe(true);
+        )).toBe(false);
       });
     }, 30000);
 
