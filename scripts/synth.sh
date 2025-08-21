@@ -29,7 +29,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     # Fetch core CDKTF modules proactively to satisfy .gen imports
     go mod download || true
     go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
-    go mod download github.com/hashicorp/terraform-cdk-go/cdktf/jsii@v0.21.0 || true
   fi
   npm run cdktf:get
   # Preflight: verify local provider bindings exist under .gen
