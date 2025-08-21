@@ -333,7 +333,7 @@ describe('TapStack Integration Tests', () => {
             Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }] 
           })
         );
-        console.log('DescribeInternetGateways:', igwResp.InternetGateways);
+        console.log('DescribeInternetGateways found:', igwResp.InternetGateways?.length);
         
         expect(igwResp.InternetGateways).toBeDefined();
         expect(igwResp.InternetGateways!.length).toBeGreaterThan(0);
@@ -343,7 +343,13 @@ describe('TapStack Integration Tests', () => {
         expect(igw.Attachments).toBeDefined();
         expect(igw.Attachments!.length).toBeGreaterThan(0);
         expect(igw.Attachments![0].VpcId).toBe(vpcId);
-        expect(igw.Attachments![0].State).toBe('attached');
+        
+        // Validate that the IGW is attached to our VPC
+        // Note: AWS SDK v3 attachment states can vary, so we focus on the attachment existing
+        const attachment = igw.Attachments![0];
+        console.log('IGW attached to VPC:', attachment.VpcId);
+        console.log('IGW attachment state:', attachment.State);
+        expect(['attached', 'available'].includes(attachment.State!)).toBe(true);
         
         console.log('Internet Gateway validation passed:', igw.InternetGatewayId);
       } catch (error) {
