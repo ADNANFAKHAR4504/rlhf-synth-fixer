@@ -1,210 +1,349 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+import { expect } from '@jest/globals';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Custom schema for CloudFormation tags
+const CFN_SCHEMA = new yaml.Schema([
+  new yaml.Type('!Ref', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::Ref': data }),
+  }),
+  new yaml.Type('!Equals', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Equals': data }),
+  }),
+  new yaml.Type('!Not', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Not': data }),
+  }),
+  new yaml.Type('!Sub', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!Sub', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!GetAtt', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::GetAtt': data.split('.') }),
+  }),
+  new yaml.Type('!FindInMap', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::FindInMap': data }),
+  }),
+  new yaml.Type('!Cidr', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Cidr': data }),
+  }),
+  new yaml.Type('!Select', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Select': data }),
+  }),
+  new yaml.Type('!Join', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::Join': data }),
+  }),
+  new yaml.Type('!If', {
+    kind: 'sequence',
+    construct: (data) => ({ 'Fn::If': data }),
+  }),
+  new yaml.Type('!GetAZs', {
+    kind: 'scalar',
+    construct: (data) => ({ 'Fn::GetAZs': data }),
+  }),
+]);
 
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack.yml Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const filePath = path.join(__dirname, '../lib/TapStack.yml');
+    expect(fs.existsSync(filePath)).toBe(true); // Ensure file exists
+    const yamlContent = fs.readFileSync(filePath, 'utf8');
+    template = yaml.load(yamlContent, { schema: CFN_SCHEMA }) as any;
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+  // Template Structure
+  test('AWSTemplateFormatVersion is correct', () => {
+    expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
+  test('Description is present and correct', () => {
+    expect(template.Description).toContain('TapStack - Single-environment infrastructure with S3 and VPC');
   });
 
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
-    });
+  // Metadata
+  test('Metadata Interface ParameterGroups are defined correctly', () => {
+    const parameterGroups = template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
+    expect(parameterGroups).toHaveLength(3);
+    expect(parameterGroups[0].Label.default).toBe('Project Configuration');
+    expect(parameterGroups[0].Parameters).toEqual(['ProjectName', 'EnvironmentSuffix', 'Owner']);
+    expect(parameterGroups[1].Label.default).toBe('IAM Configuration');
+    expect(parameterGroups[1].Parameters).toEqual(['TeamPrincipalARN']);
+    expect(parameterGroups[2].Label.default).toBe('Network Configuration');
+    expect(parameterGroups[2].Parameters).toEqual(['CreateNatPerAZ']);
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+  // Parameters
+  test('ProjectName parameter is defined correctly', () => {
+    const param = template.Parameters.ProjectName;
+    expect(param.Type).toBe('String');
+    expect(param.Default).toBe('tapstack');
+    expect(param.Description).toContain('Name of the project');
+    expect(param.AllowedPattern).toBe('^[a-z][a-z0-9-]*$');
+    expect(param.ConstraintDescription).toContain('lowercase alphanumeric characters and hyphens');
+  });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
+  test('EnvironmentSuffix parameter is defined correctly', () => {
+    const param = template.Parameters.EnvironmentSuffix;
+    expect(param.Type).toBe('String');
+    expect(param.Default).toBe('dev');
+    expect(param.Description).toContain('Environment identifier');
+    expect(param.AllowedPattern).toBe('^[a-z0-9-]*$');
+    expect(param.ConstraintDescription).toContain('lowercase alphanumeric characters and hyphens');
+  });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
+  test('Owner parameter is defined correctly', () => {
+    const param = template.Parameters.Owner;
+    expect(param.Type).toBe('String');
+    expect(param.Default).toBe('TapStackCFN');
+    expect(param.Description).toContain('Owner/creator tag value');
+    expect(param.AllowedPattern).toBe('^[a-zA-Z0-9-]*$');
+    expect(param.ConstraintDescription).toContain('alphanumeric characters and hyphens');
+  });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+  test('TeamPrincipalARN parameter is defined correctly', () => {
+    const param = template.Parameters.TeamPrincipalARN;
+    expect(param.Type).toBe('String');
+    expect(param.Default).toBe('');
+    expect(param.Description).toContain('ARN of IAM user/group/role');
+    expect(param.AllowedPattern).toBe('^$|^arn:aws:iam::\\d{12}:(user|group|role)/[a-zA-Z0-9+=,.@_-]+$');
+  });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
+  test('CreateNatPerAZ parameter is defined correctly', () => {
+    const param = template.Parameters.CreateNatPerAZ;
+    expect(param.Type).toBe('String');
+    expect(param.Default).toBe('true');
+    expect(param.Description).toContain('Create one NAT Gateway per AZ');
+    expect(param.AllowedValues).toEqual(['true', 'false']);
+    expect(param.ConstraintDescription).toBe('Must be either true or false.');
+  });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+  // Mappings
+  test('EnvironmentConfig mapping is defined correctly', () => {
+    const mapping = template.Mappings.EnvironmentConfig.VPC.CIDR;
+    expect(mapping).toBe('10.0.0.0/16');
+  });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
+  // Conditions
+  test('CreateNatPerAZ condition is defined correctly', () => {
+    expect(template.Conditions.CreateNatPerAZ).toEqual({ 'Fn::Equals': [{ 'Fn::Ref': 'CreateNatPerAZ' }, 'true'] });
+  });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+  test('CreateSingleNat condition is defined correctly', () => {
+    expect(template.Conditions.CreateSingleNat).toEqual({ 'Fn::Equals': [{ 'Fn::Ref': 'CreateNatPerAZ' }, 'false'] });
+  });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  test('HasTeamPrincipal condition is defined correctly', () => {
+    expect(template.Conditions.HasTeamPrincipal).toEqual({
+      'Fn::Not': [{ 'Fn::Equals': [{ 'Fn::Ref': 'TeamPrincipalARN' }, ''] }],
     });
   });
 
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+  // Resources - InternetGateway
+  test('InternetGateway resource is defined correctly', () => {
+    const resource = template.Resources.InternetGateway;
+    expect(resource.Type).toBe('AWS::EC2::InternetGateway');
+    expect(resource.Properties.Tags).toContainEqual({ Key: 'Name', Value: { 'Fn::Sub': '${ProjectName}-${EnvironmentSuffix}-igw' } });
+    expect(resource.Properties.Tags).toContainEqual({ Key: 'Project', Value: { 'Fn::Ref': 'ProjectName' } });
+    expect(resource.Properties.Tags).toContainEqual({ Key: 'Environment', Value: { 'Fn::Ref': 'EnvironmentSuffix' } });
+    expect(resource.Properties.Tags).toContainEqual({ Key: 'CreatedBy', Value: { 'Fn::Ref': 'Owner' } });
+  });
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
+  // Resources - IGWAttachment
+  test('IGWAttachment resource is defined correctly', () => {
+    const resource = template.Resources.IGWAttachment;
+    expect(resource.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+    expect(resource.Properties.VpcId).toEqual({ 'Fn::Ref': 'VPC' });
+    expect(resource.Properties.InternetGatewayId).toEqual({ 'Fn::Ref': 'InternetGateway' });
+  });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+  // Resources - NatGatewayA
+  test('NatGatewayA resource is defined correctly', () => {
+    const resource = template.Resources.NatGatewayA;
+    expect(resource.Type).toBe('AWS::EC2::NatGateway');
+    expect(resource.Condition).toBe('CreateNatPerAZ');
+    expect(resource.Properties.AllocationId).toEqual({ 'Fn::GetAtt': ['EIPNatA', 'AllocationId'] });
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PublicSubnetA' });
+    expect(resource.Properties.Tags).toContainEqual({
+      Key: 'Name',
+      Value: { 'Fn::Sub': '${ProjectName}-${EnvironmentSuffix}-natgatewaya' },
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+  // Resources - NatGatewayB
+  test('NatGatewayB resource is defined correctly', () => {
+    const resource = template.Resources.NatGatewayB;
+    expect(resource.Type).toBe('AWS::EC2::NatGateway');
+    expect(resource.Condition).toBe('CreateNatPerAZ');
+    expect(resource.Properties.AllocationId).toEqual({ 'Fn::GetAtt': ['EIPNatB', 'AllocationId'] });
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PublicSubnetB' });
+    expect(resource.Properties.Tags).toContainEqual({
+      Key: 'Name',
+      Value: { 'Fn::Sub': '${ProjectName}-${EnvironmentSuffix}-natgatewayb' },
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  // Resources - PublicRoute
+  test('PublicRoute resource is defined correctly', () => {
+    const resource = template.Resources.PublicRoute;
+    expect(resource.Type).toBe('AWS::EC2::Route');
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PublicRouteTable' });
+    expect(resource.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+    expect(resource.Properties.GatewayId).toEqual({ 'Fn::Ref': 'InternetGateway' });
+  });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
+  // Resources - PublicSubnetARouteTableAssociation
+  test('PublicSubnetARouteTableAssociation resource is defined correctly', () => {
+    const resource = template.Resources.PublicSubnetARouteTableAssociation;
+    expect(resource.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PublicSubnetA' });
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PublicRouteTable' });
+  });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+  // Resources - PublicSubnetBRouteTableAssociation
+  test('PublicSubnetBRouteTableAssociation resource is defined correctly', () => {
+    const resource = template.Resources.PublicSubnetBRouteTableAssociation;
+    expect(resource.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PublicSubnetB' });
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PublicRouteTable' });
+  });
+
+  // Resources - PrivateRouteA
+  test('PrivateRouteA resource is defined correctly', () => {
+    const resource = template.Resources.PrivateRouteA;
+    expect(resource.Type).toBe('AWS::EC2::Route');
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PrivateRouteTableA' });
+    expect(resource.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+    expect(resource.Properties.NatGatewayId).toEqual({
+      'Fn::If': ['CreateNatPerAZ', { 'Fn::Ref': 'NatGatewayA' }, { 'Fn::Ref': 'NatGatewaySingle' }],
     });
+  });
+
+  // Resources - PrivateSubnetARouteTableAssociation
+  test('PrivateSubnetARouteTableAssociation resource is defined correctly', () => {
+    const resource = template.Resources.PrivateSubnetARouteTableAssociation;
+    expect(resource.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PrivateSubnetA' });
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PrivateRouteTableA' });
+  });
+
+  // Resources - PrivateRouteB
+  test('PrivateRouteB resource is defined correctly', () => {
+    const resource = template.Resources.PrivateRouteB;
+    expect(resource.Type).toBe('AWS::EC2::Route');
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PrivateRouteTableB' });
+    expect(resource.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+    expect(resource.Properties.NatGatewayId).toEqual({
+      'Fn::If': ['CreateNatPerAZ', { 'Fn::Ref': 'NatGatewayB' }, { 'Fn::Ref': 'NatGatewaySingle' }],
+    });
+  });
+
+  // Resources - PrivateSubnetBRouteTableAssociation
+  test('PrivateSubnetBRouteTableAssociation resource is defined correctly', () => {
+    const resource = template.Resources.PrivateSubnetBRouteTableAssociation;
+    expect(resource.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
+    expect(resource.Properties.SubnetId).toEqual({ 'Fn::Ref': 'PrivateSubnetB' });
+    expect(resource.Properties.RouteTableId).toEqual({ 'Fn::Ref': 'PrivateRouteTableB' });
+  });
+
+  // Resources - EnvironmentRole
+  test('EnvironmentRole resource is defined correctly', () => {
+    const resource = template.Resources.EnvironmentRole;
+    expect(resource.Type).toBe('AWS::IAM::Role');
+    expect(resource.Properties.RoleName).toEqual({ 'Fn::Sub': '${ProjectName}-${EnvironmentSuffix}-role' });
+    expect(resource.Properties.AssumeRolePolicyDocument.Version).toBe('2012-10-17');
+    expect(resource.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
+    expect(resource.Properties.AssumeRolePolicyDocument.Statement[0].Principal.AWS).toEqual({
+      'Fn::If': ['HasTeamPrincipal', { 'Fn::Ref': 'TeamPrincipalARN' }, { 'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root' }],
+    });
+    expect(resource.Properties.AssumeRolePolicyDocument.Statement[0].Action).toBe('sts:AssumeRole');
+    expect(resource.Properties.Policies[0].PolicyName).toBe('S3EnvironmentAccess');
+    expect(resource.Properties.Policies[0].PolicyDocument.Statement[0].Effect).toBe('Allow');
+    expect(resource.Properties.Policies[0].PolicyDocument.Statement[0].Action).toBe('s3:*');
+    expect(resource.Properties.Policies[0].PolicyDocument.Statement[0].Resource).toEqual([
+      { 'Fn::GetAtt': ['DataBucket', 'Arn'] },
+      { 'Fn::Sub': '${DataBucket.Arn}/*' },
+    ]);
+    expect(resource.Properties.Policies[0].PolicyDocument.Statement[0].Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+    expect(resource.Properties.Policies[1].PolicyName).toBe('EC2ReadOnlyAccess');
+    expect(resource.Properties.Policies[1].PolicyDocument.Statement[0].Effect).toBe('Allow');
+    expect(resource.Properties.Policies[1].PolicyDocument.Statement[0].Action).toEqual(['ec2:Describe*', 'ec2:Get*']);
+    expect(resource.Properties.Policies[1].PolicyDocument.Statement[0].Resource).toBe('*');
+    expect(resource.Properties.Policies[1].PolicyDocument.Statement[0].Condition.StringEquals['aws:RequestedRegion']).toBe('us-east-1');
+    expect(resource.Properties.Tags).toContainEqual({ Key: 'Project', Value: { 'Fn::Ref': 'ProjectName' } });
+  });
+
+  // Outputs
+  test('VPCId output is defined correctly', () => {
+    const output = template.Outputs.VPCId;
+    expect(output.Description).toBe('VPC ID');
+    expect(output.Value).toEqual({ 'Fn::Ref': 'VPC' });
+  });
+
+  test('PublicSubnets output is defined correctly', () => {
+    const output = template.Outputs.PublicSubnets;
+    expect(output.Description).toBe('Public Subnet IDs');
+    expect(output.Value).toEqual({
+      'Fn::Join': [',', [{ 'Fn::Ref': 'PublicSubnetA' }, { 'Fn::Ref': 'PublicSubnetB' }]],
+    });
+  });
+
+  test('PrivateSubnets output is defined correctly', () => {
+    const output = template.Outputs.PrivateSubnets;
+    expect(output.Description).toBe('Private Subnet IDs');
+    expect(output.Value).toEqual({
+      'Fn::Join': [',', [{ 'Fn::Ref': 'PrivateSubnetA' }, { 'Fn::Ref': 'PrivateSubnetB' }]],
+    });
+  });
+
+  test('DataBucketName output is defined correctly', () => {
+    const output = template.Outputs.DataBucketName;
+    expect(output.Description).toBe('S3 Bucket Name');
+    expect(output.Value).toEqual({ 'Fn::Ref': 'DataBucket' });
+  });
+
+  test('DataBucketARN output is defined correctly', () => {
+    const output = template.Outputs.DataBucketARN;
+    expect(output.Description).toBe('S3 Bucket ARN');
+    expect(output.Value).toEqual({ 'Fn::GetAtt': ['DataBucket', 'Arn'] });
+  });
+
+  test('EnvironmentRoleARN output is defined correctly', () => {
+    const output = template.Outputs.EnvironmentRoleARN;
+    expect(output.Description).toBe('IAM Role ARN');
+    expect(output.Value).toEqual({ 'Fn::GetAtt': ['EnvironmentRole', 'Arn'] });
+  });
+
+  // Additional Validation Tests
+  test('Parameters have valid defaults', () => {
+    const params = template.Parameters;
+    expect(params.ProjectName.Default).toMatch(/^[a-z][a-z0-9-]*$/);
+    expect(params.EnvironmentSuffix.Default).toMatch(/^[a-z0-9-]*$/);
+    expect(params.Owner.Default).toMatch(/^[a-zA-Z0-9-]*$/);
+    expect(params.CreateNatPerAZ.Default).toMatch(/^(true|false)$/);
+    expect(params.TeamPrincipalARN.Default).toBe('');
+  });
+
+  test('Outputs reference valid resources', () => {
+    const outputs = template.Outputs;
+    expect(outputs.VPCId.Value).toEqual({ 'Fn::Ref': 'VPC' });
+    expect(outputs.PublicSubnets.Value['Fn::Join'][1]).toEqual([{ 'Fn::Ref': 'PublicSubnetA' }, { 'Fn::Ref': 'PublicSubnetB' }]);
+    expect(outputs.PrivateSubnets.Value['Fn::Join'][1]).toEqual([{ 'Fn::Ref': 'PrivateSubnetA' }, { 'Fn::Ref': 'PrivateSubnetB' }]);
+    expect(outputs.DataBucketName.Value).toEqual({ 'Fn::Ref': 'DataBucket' });
+    expect(outputs.DataBucketARN.Value).toEqual({ 'Fn::GetAtt': ['DataBucket', 'Arn'] });
+    expect(outputs.EnvironmentRoleARN.Value).toEqual({ 'Fn::GetAtt': ['EnvironmentRole', 'Arn'] });
   });
 });
