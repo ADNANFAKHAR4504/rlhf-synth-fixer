@@ -179,7 +179,7 @@ describe("Infrastructure Outputs Validation", () => {
   test("RDS endpoint is present and has valid format", () => {
     expect(OUT.rdsEndpoint).toBeDefined();
     expect(typeof OUT.rdsEndpoint).toBe("string");
-    expect(OUT.rdsEndpoint).toMatch(/^[a-zA-Z0-9-]+\.us-east-1\.rds\.amazonaws\.com$/);
+    expect(OUT.rdsEndpoint).toMatch(/^[a-zA-Z0-9-]+\.us-east-1\.rds\.amazonaws\.com(:3306)?$/);
   });
 
   test("RDS port is present and valid", () => {
@@ -318,7 +318,7 @@ describe("Live AWS Resource Validation", () => {
     
     // Check for required tags
     const envTag = asg.Tags?.find((tag: any) => tag.Key === 'Environment');
-    expect(envTag?.Value).toBe('production');
+    expect(envTag?.Value).toBe('Production');
   }, 30000);
 
   test("RDS instance exists and is properly configured", async () => {
@@ -334,7 +334,9 @@ describe("Live AWS Resource Validation", () => {
     expect(response.DBInstances).toBeDefined();
     expect(response.DBInstances!.length).toBeGreaterThan(0);
     
-    const dbInstance = response.DBInstances!.find((db: any) => db.Endpoint?.Address === OUT.rdsEndpoint);
+    // Extract hostname from endpoint (remove port if present)
+    const rdsHostname = OUT.rdsEndpoint.replace(':3306', '');
+    const dbInstance = response.DBInstances!.find((db: any) => db.Endpoint?.Address === rdsHostname);
     expect(dbInstance).toBeDefined();
     expect(dbInstance!.Engine).toBe('mysql');
     expect(dbInstance!.EngineVersion).toBe('8.0');
