@@ -6,7 +6,7 @@
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
-  "started_at": "2025-08-22T00:22:32+05:30",
+  "startedAt": "2025-08-22T00:22:32+05:30",
   "subtask": "Serverless Architecture Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
