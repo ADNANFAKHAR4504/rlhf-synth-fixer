@@ -413,6 +413,8 @@ Resources:
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecurityLogsBucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TrailName: !Sub 'security-trail-${Environment}-${AWS::StackName}'
       S3BucketName: !Ref SecurityLogsBucket

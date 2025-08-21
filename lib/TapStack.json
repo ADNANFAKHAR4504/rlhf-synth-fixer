@@ -756,6 +756,8 @@
         "SecurityCloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
             "DependsOn": "SecurityLogsBucketPolicy",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "security-trail-${Environment}-${AWS::StackName}"
