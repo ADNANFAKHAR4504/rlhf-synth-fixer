@@ -9,7 +9,7 @@
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "us-west-1"
+  default     = "eu-west-1"
 }
 
 variable "allowed_ssh_cidr" {
@@ -48,12 +48,12 @@ locals {
     primary = {
       name = var.aws_region
       cidr = "10.0.0.0/16"
-      azs  = ["us-west-1a", "us-west-1b"]
+      azs  = ["eu-west-1a", "eu-west-1b"]
     }
     secondary = {
       name = "us-west-2"
       cidr = "10.1.0.0/16"
-      azs  = ["us-west-2a", "us-west-2b"]
+      azs  = ["eu-west-2a", "eu-west-2b"]
     }
   }
 
@@ -98,7 +98,7 @@ resource "random_password" "rds_password" {
 
 # Get latest Amazon Linux 2 AMI for primary region
 data "aws_ami" "amazon_linux_primary" {
-  provider    = aws.us_west_1
+  provider    = aws.eu_west_1
   most_recent = true
   owners      = ["amazon"]
 
@@ -115,7 +115,7 @@ data "aws_ami" "amazon_linux_primary" {
 
 # Get latest Amazon Linux 2 AMI for secondary region
 data "aws_ami" "amazon_linux_secondary" {
-  provider    = aws.us_west_2
+  provider    = aws.eu_west_2
   most_recent = true
   owners      = ["amazon"]
 
@@ -139,7 +139,7 @@ data "aws_caller_identity" "current" {}
 
 # KMS key for primary region
 resource "aws_kms_key" "primary" {
-  provider                = aws.us_west_1
+  provider                = aws.eu_west_1
   description             = "KMS key for ${var.project_name} primary region encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
@@ -175,21 +175,21 @@ resource "aws_kms_key" "primary" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-kms-primary-${var.environment}"
+    Name   = "${var.project_name}-kms-primary-tp-${var.environment}"
     Region = local.regions.primary.name
   })
 }
 
 # KMS key alias for primary region
 resource "aws_kms_alias" "primary" {
-  provider      = aws.us_west_1
-  name          = "alias/${var.project_name}-primary-${var.environment}"
+  provider      = aws.eu_west_1
+  name          = "alias/${var.project_name}-primary-tp-${var.environment}"
   target_key_id = aws_kms_key.primary.key_id
 }
 
 # KMS key for secondary region
 resource "aws_kms_key" "secondary" {
-  provider                = aws.us_west_2
+  provider                = aws.eu_west_2
   description             = "KMS key for ${var.project_name} secondary region encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
@@ -225,15 +225,15 @@ resource "aws_kms_key" "secondary" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-kms-secondary-${var.environment}"
+    Name   = "${var.project_name}-kms-secondary-tp-${var.environment}"
     Region = local.regions.secondary.name
   })
 }
 
 # KMS key alias for secondary region
 resource "aws_kms_alias" "secondary" {
-  provider      = aws.us_west_2
-  name          = "alias/${var.project_name}-secondary-${var.environment}"
+  provider      = aws.eu_west_2
+  name          = "alias/${var.project_name}-secondary-tp-${var.environment}"
   target_key_id = aws_kms_key.secondary.key_id
 }
 
@@ -243,31 +243,31 @@ resource "aws_kms_alias" "secondary" {
 
 # Primary VPC
 resource "aws_vpc" "primary" {
-  provider             = aws.us_west_1
+  provider             = aws.eu_west_1
   cidr_block           = local.regions.primary.cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.vpc_primary
+    Name   = "${local.naming.vpc_primary}-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Internet Gateway for primary VPC
 resource "aws_internet_gateway" "primary" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   vpc_id   = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-igw"
+    Name   = "${local.naming.vpc_primary}-igw-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Public subnets for primary VPC
 resource "aws_subnet" "primary_public" {
-  provider                = aws.us_west_1
+  provider                = aws.eu_west_1
   count                   = length(local.regions.primary.azs)
   vpc_id                  = aws_vpc.primary.id
   cidr_block              = cidrsubnet(local.regions.primary.cidr, 8, count.index)
@@ -275,7 +275,7 @@ resource "aws_subnet" "primary_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-public-${count.index + 1}"
+    Name   = "${local.naming.vpc_primary}-public-tp-${count.index + 1}"
     Type   = "Public"
     Region = local.regions.primary.name
   })
@@ -283,14 +283,14 @@ resource "aws_subnet" "primary_public" {
 
 # Private subnets for primary VPC
 resource "aws_subnet" "primary_private" {
-  provider          = aws.us_west_1
+  provider          = aws.eu_west_1
   count             = length(local.regions.primary.azs)
   vpc_id            = aws_vpc.primary.id
   cidr_block        = cidrsubnet(local.regions.primary.cidr, 8, count.index + 10)
   availability_zone = local.regions.primary.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-private-${count.index + 1}"
+    Name   = "${local.naming.vpc_primary}-private-tp-${count.index + 1}"
     Type   = "Private"
     Region = local.regions.primary.name
   })
@@ -298,11 +298,11 @@ resource "aws_subnet" "primary_private" {
 
 # NAT Gateway for primary VPC
 resource "aws_eip" "primary_nat" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-nat-eip"
+    Name   = "${local.naming.vpc_primary}-nat-eip-tp"
     Region = local.regions.primary.name
   })
 
@@ -310,12 +310,12 @@ resource "aws_eip" "primary_nat" {
 }
 
 resource "aws_nat_gateway" "primary" {
-  provider      = aws.us_west_1
+  provider      = aws.eu_west_1
   allocation_id = aws_eip.primary_nat.id
   subnet_id     = aws_subnet.primary_public[0].id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-nat"
+    Name   = "${local.naming.vpc_primary}-nat-tp"
     Region = local.regions.primary.name
   })
 
@@ -324,7 +324,7 @@ resource "aws_nat_gateway" "primary" {
 
 # Route tables for primary VPC
 resource "aws_route_table" "primary_public" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   vpc_id   = aws_vpc.primary.id
 
   route {
@@ -333,13 +333,13 @@ resource "aws_route_table" "primary_public" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-public-rt"
+    Name   = "${local.naming.vpc_primary}-public-rt-tp"
     Region = local.regions.primary.name
   })
 }
 
 resource "aws_route_table" "primary_private" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   vpc_id   = aws_vpc.primary.id
 
   route {
@@ -348,21 +348,21 @@ resource "aws_route_table" "primary_private" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-private-rt"
+    Name   = "${local.naming.vpc_primary}-private-rt-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Route table associations for primary VPC
 resource "aws_route_table_association" "primary_public" {
-  provider       = aws.us_west_1
+  provider       = aws.eu_west_1
   count          = length(aws_subnet.primary_public)
   subnet_id      = aws_subnet.primary_public[count.index].id
   route_table_id = aws_route_table.primary_public.id
 }
 
 resource "aws_route_table_association" "primary_private" {
-  provider       = aws.us_west_1
+  provider       = aws.eu_west_1
   count          = length(aws_subnet.primary_private)
   subnet_id      = aws_subnet.primary_private[count.index].id
   route_table_id = aws_route_table.primary_private.id
@@ -370,27 +370,27 @@ resource "aws_route_table_association" "primary_private" {
 
 # VPC Flow Logs for primary VPC
 resource "aws_flow_log" "primary" {
-  provider        = aws.us_west_1
+  provider        = aws.eu_west_1
   iam_role_arn    = aws_iam_role.flow_logs.arn
   log_destination = aws_cloudwatch_log_group.primary_vpc_flow_logs.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-flow-logs"
+    Name   = "${local.naming.vpc_primary}-flow-logs-tp"
     Region = local.regions.primary.name
   })
 }
 
 # CloudWatch Log Group for primary VPC flow logs
 resource "aws_cloudwatch_log_group" "primary_vpc_flow_logs" {
-  provider          = aws.us_west_1
+  provider          = aws.eu_west_1
   name              = "/aws/vpc/flowlogs/${local.naming.vpc_primary}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.primary.arn
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_primary}-flow-logs"
+    Name   = "${local.naming.vpc_primary}-flow-logs-tp"
     Region = local.regions.primary.name
   })
 
@@ -403,31 +403,31 @@ resource "aws_cloudwatch_log_group" "primary_vpc_flow_logs" {
 
 # Secondary VPC
 resource "aws_vpc" "secondary" {
-  provider             = aws.us_west_2
+  provider             = aws.eu_west_2
   cidr_block           = local.regions.secondary.cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.vpc_secondary
+    Name   = "${local.naming.vpc_secondary}-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # Internet Gateway for secondary VPC
 resource "aws_internet_gateway" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-igw"
+    Name   = "${local.naming.vpc_secondary}-igw-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # Public subnets for secondary VPC
 resource "aws_subnet" "secondary_public" {
-  provider                = aws.us_west_2
+  provider                = aws.eu_west_2
   count                   = length(local.regions.secondary.azs)
   vpc_id                  = aws_vpc.secondary.id
   cidr_block              = cidrsubnet(local.regions.secondary.cidr, 8, count.index)
@@ -435,7 +435,7 @@ resource "aws_subnet" "secondary_public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-public-${count.index + 1}"
+    Name   = "${local.naming.vpc_secondary}-public-tp-${count.index + 1}"
     Type   = "Public"
     Region = local.regions.secondary.name
   })
@@ -443,14 +443,14 @@ resource "aws_subnet" "secondary_public" {
 
 # Private subnets for secondary VPC
 resource "aws_subnet" "secondary_private" {
-  provider          = aws.us_west_2
+  provider          = aws.eu_west_2
   count             = length(local.regions.secondary.azs)
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = cidrsubnet(local.regions.secondary.cidr, 8, count.index + 10)
   availability_zone = local.regions.secondary.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-private-${count.index + 1}"
+    Name   = "${local.naming.vpc_secondary}-private-tp-${count.index + 1}"
     Type   = "Private"
     Region = local.regions.secondary.name
   })
@@ -458,11 +458,11 @@ resource "aws_subnet" "secondary_private" {
 
 # NAT Gateway for secondary VPC
 resource "aws_eip" "secondary_nat" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-nat-eip"
+    Name   = "${local.naming.vpc_secondary}-nat-eip-tp"
     Region = local.regions.secondary.name
   })
 
@@ -470,12 +470,12 @@ resource "aws_eip" "secondary_nat" {
 }
 
 resource "aws_nat_gateway" "secondary" {
-  provider      = aws.us_west_2
+  provider      = aws.eu_west_2
   allocation_id = aws_eip.secondary_nat.id
   subnet_id     = aws_subnet.secondary_public[0].id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-nat"
+    Name   = "${local.naming.vpc_secondary}-nat-tp"
     Region = local.regions.secondary.name
   })
 
@@ -484,7 +484,7 @@ resource "aws_nat_gateway" "secondary" {
 
 # Route tables for secondary VPC
 resource "aws_route_table" "secondary_public" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   route {
@@ -493,13 +493,13 @@ resource "aws_route_table" "secondary_public" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-public-rt"
+    Name   = "${local.naming.vpc_secondary}-public-rt-tp"
     Region = local.regions.secondary.name
   })
 }
 
 resource "aws_route_table" "secondary_private" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   route {
@@ -508,21 +508,21 @@ resource "aws_route_table" "secondary_private" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-private-rt"
+    Name   = "${local.naming.vpc_secondary}-private-rt-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # Route table associations for secondary VPC
 resource "aws_route_table_association" "secondary_public" {
-  provider       = aws.us_west_2
+  provider       = aws.eu_west_2
   count          = length(aws_subnet.secondary_public)
   subnet_id      = aws_subnet.secondary_public[count.index].id
   route_table_id = aws_route_table.secondary_public.id
 }
 
 resource "aws_route_table_association" "secondary_private" {
-  provider       = aws.us_west_2
+  provider       = aws.eu_west_2
   count          = length(aws_subnet.secondary_private)
   subnet_id      = aws_subnet.secondary_private[count.index].id
   route_table_id = aws_route_table.secondary_private.id
@@ -530,27 +530,27 @@ resource "aws_route_table_association" "secondary_private" {
 
 # VPC Flow Logs for secondary VPC
 resource "aws_flow_log" "secondary" {
-  provider        = aws.us_west_2
+  provider        = aws.eu_west_2
   iam_role_arn    = aws_iam_role.flow_logs_secondary.arn
   log_destination = aws_cloudwatch_log_group.secondary_vpc_flow_logs.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.secondary.id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-flow-logs"
+    Name   = "${local.naming.vpc_secondary}-flow-logs-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # CloudWatch Log Group for secondary VPC flow logs
 resource "aws_cloudwatch_log_group" "secondary_vpc_flow_logs" {
-  provider          = aws.us_west_2
-  name              = "/aws/vpc/flowlogs/${local.naming.vpc_secondary}"
+  provider          = aws.eu_west_2
+  name              = "/aws/vpc/flowlogs/tp/${local.naming.vpc_secondary}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.secondary.arn
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.vpc_secondary}-flow-logs"
+    Name   = "${local.naming.vpc_secondary}-flow-logs-tp"
     Region = local.regions.secondary.name
   })
 
@@ -563,8 +563,8 @@ resource "aws_cloudwatch_log_group" "secondary_vpc_flow_logs" {
 
 # IAM role for VPC Flow Logs (Primary Region)
 resource "aws_iam_role" "flow_logs" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-flow-logs-role-primary-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-flow-logs-role-primary-tp-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -580,15 +580,15 @@ resource "aws_iam_role" "flow_logs" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-flow-logs-role-primary-${var.environment}"
+    Name   = "${var.project_name}-flow-logs-role-primary-tp-${var.environment}"
     Region = local.regions.primary.name
   })
 }
 
 # IAM policy for VPC Flow Logs (Primary Region)
 resource "aws_iam_role_policy" "flow_logs" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-flow-logs-policy-primary-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-flow-logs-policy-primary-tp-${var.environment}"
   role     = aws_iam_role.flow_logs.id
 
   policy = jsonencode({
@@ -614,8 +614,8 @@ resource "aws_iam_role_policy" "flow_logs" {
 
 # IAM role for VPC Flow Logs (Secondary Region)
 resource "aws_iam_role" "flow_logs_secondary" {
-  provider = aws.us_west_2
-  name     = "${var.project_name}-flow-logs-role-secondary-${var.environment}"
+  provider = aws.eu_west_2
+  name     = "${var.project_name}-flow-logs-role-secondary-tp-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -631,15 +631,15 @@ resource "aws_iam_role" "flow_logs_secondary" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${var.project_name}-flow-logs-role-secondary-${var.environment}"
+    Name   = "${var.project_name}-flow-logs-role-secondary-tp-${var.environment}"
     Region = local.regions.secondary.name
   })
 }
 
 # IAM policy for VPC Flow Logs (Secondary Region)
 resource "aws_iam_role_policy" "flow_logs_secondary" {
-  provider = aws.us_west_2
-  name     = "${var.project_name}-flow-logs-policy-secondary-${var.environment}"
+  provider = aws.eu_west_2
+  name     = "${var.project_name}-flow-logs-policy-secondary-tp-${var.environment}"
   role     = aws_iam_role.flow_logs_secondary.id
 
   policy = jsonencode({
@@ -665,8 +665,8 @@ resource "aws_iam_role_policy" "flow_logs_secondary" {
 
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-ec2-role-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-ec2-role-tp-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -682,25 +682,25 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-ec2-role-${var.environment}"
+    Name = "${var.project_name}-ec2-role-tp-${var.environment}"
   })
 }
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-ec2-profile-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-ec2-profile-tp-${var.environment}"
   role     = aws_iam_role.ec2_role.name
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-ec2-profile-${var.environment}"
+    Name = "${var.project_name}-ec2-profile-tp-${var.environment}"
   })
 }
 
 # IAM policy for EC2 role (minimal permissions)
 resource "aws_iam_role_policy" "ec2_policy" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-ec2-policy-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-ec2-policy-tp-${var.environment}"
   role     = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -725,8 +725,8 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # Security group for EC2 instances in primary region
 resource "aws_security_group" "ec2_primary" {
-  provider    = aws.us_west_1
-  name        = "${local.naming.ec2_primary}-sg"
+  provider    = aws.eu_west_1
+  name        = "${local.naming.ec2_primary}-sg-tp"
   description = "Security group for EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -747,15 +747,15 @@ resource "aws_security_group" "ec2_primary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.ec2_primary}-sg"
+    Name   = "${local.naming.ec2_primary}-sg-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Security group for EC2 instances in secondary region
 resource "aws_security_group" "ec2_secondary" {
-  provider    = aws.us_west_2
-  name        = "${local.naming.ec2_secondary}-sg"
+  provider    = aws.eu_west_2
+  name        = "${local.naming.ec2_secondary}-sg-tp"
   description = "Security group for EC2 instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -776,15 +776,15 @@ resource "aws_security_group" "ec2_secondary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.ec2_secondary}-sg"
+    Name   = "${local.naming.ec2_secondary}-sg-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # Security group for RDS in primary region
 resource "aws_security_group" "rds_primary" {
-  provider    = aws.us_west_1
-  name        = "${local.naming.rds_primary}-sg"
+  provider    = aws.eu_west_1
+  name        = "${local.naming.rds_primary}-sg-tp"
   description = "Security group for RDS instances in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -805,14 +805,14 @@ resource "aws_security_group" "rds_primary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.rds_primary}-sg"
+    Name   = "${local.naming.rds_primary}-sg-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Security group for RDS in secondary region
 resource "aws_security_group" "rds_secondary" {
-  provider    = aws.us_west_2
+  provider    = aws.eu_west_2
   name        = "${local.naming.rds_secondary}-sg"
   description = "Security group for RDS instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
@@ -834,7 +834,7 @@ resource "aws_security_group" "rds_secondary" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.rds_secondary}-sg"
+    Name   = "${local.naming.rds_secondary}-sg-tp"
     Region = local.regions.secondary.name
   })
 }
@@ -845,7 +845,7 @@ resource "aws_security_group" "rds_secondary" {
 
 # EC2 instance in primary region
 resource "aws_instance" "primary" {
-  provider                    = aws.us_west_1
+  provider                    = aws.eu_west_1
   ami                         = data.aws_ami.amazon_linux_primary.id
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.primary_public[0].id
@@ -868,14 +868,14 @@ resource "aws_instance" "primary" {
   )
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.ec2_primary
+    Name   = "${local.naming.ec2_primary}-tp"
     Region = local.regions.primary.name
   })
 }
 
 # EC2 instance in secondary region
 resource "aws_instance" "secondary" {
-  provider                    = aws.us_west_2
+  provider                    = aws.eu_west_2
   ami                         = data.aws_ami.amazon_linux_secondary.id
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.secondary_public[0].id
@@ -897,7 +897,7 @@ resource "aws_instance" "secondary" {
   )
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.ec2_secondary
+    Name   = "${local.naming.ec2_secondary}-tp"
     Region = local.regions.secondary.name
   })
 }
@@ -908,18 +908,18 @@ resource "aws_instance" "secondary" {
 
 # S3 bucket in primary region
 resource "aws_s3_bucket" "primary" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = local.naming.s3_primary
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.s3_primary
+    Name   = "${local.naming.s3_primary}-tp"
     Region = local.regions.primary.name
   })
 }
 
 # S3 bucket encryption for primary region
 resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = aws_s3_bucket.primary.id
 
   rule {
@@ -932,7 +932,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
 
 # S3 bucket versioning for primary region
 resource "aws_s3_bucket_versioning" "primary" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = aws_s3_bucket.primary.id
 
   versioning_configuration {
@@ -942,7 +942,7 @@ resource "aws_s3_bucket_versioning" "primary" {
 
 # S3 bucket public access block for primary region
 resource "aws_s3_bucket_public_access_block" "primary" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = aws_s3_bucket.primary.id
 
   block_public_acls       = true
@@ -953,18 +953,18 @@ resource "aws_s3_bucket_public_access_block" "primary" {
 
 # S3 bucket in secondary region
 resource "aws_s3_bucket" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = local.naming.s3_secondary
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.s3_secondary
+    Name   = "${local.naming.s3_secondary}-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # S3 bucket encryption for secondary region
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   rule {
@@ -977,7 +977,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
 
 # S3 bucket versioning for secondary region
 resource "aws_s3_bucket_versioning" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   versioning_configuration {
@@ -988,7 +988,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 # S3 bucket public access block for secondary regioni
 # S3 bucket public access block for secondary region
 resource "aws_s3_bucket_public_access_block" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   block_public_acls       = true
@@ -1003,30 +1003,30 @@ resource "aws_s3_bucket_public_access_block" "secondary" {
 
 # RDS Subnet Groups
 resource "aws_db_subnet_group" "primary" {
-  provider = aws.us_west_1
-  name     = "${local.naming.rds_primary}-subnet-group"
+  provider = aws.eu_west_1
+  name     = "${local.naming.rds_primary}-subnet-group-tp"
   subnet_ids = aws_subnet.primary_private[*].id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.rds_primary}-subnet-group"
+    Name   = "${local.naming.rds_primary}-subnet-group-tp"
     Region = local.regions.primary.name
   })
 }
 
 resource "aws_db_subnet_group" "secondary" {
-  provider = aws.us_west_2
-  name     = "${local.naming.rds_secondary}-subnet-group"
+  provider = aws.eu_west_2
+  name     = "${local.naming.rds_secondary}-subnet-group-tp"
   subnet_ids = aws_subnet.secondary_private[*].id
 
   tags = merge(local.common_tags, {
-    Name   = "${local.naming.rds_secondary}-subnet-group"
+    Name   = "${local.naming.rds_secondary}-subnet-group-tp"
     Region = local.regions.secondary.name
   })
 }
 
 # Primary RDS Instance
 resource "aws_db_instance" "primary" {
-  provider                = aws.us_west_1
+  provider                = aws.eu_west_1
   identifier              = local.naming.rds_primary
   allocated_storage       = 20
   engine                  = "mysql"
@@ -1044,14 +1044,14 @@ resource "aws_db_instance" "primary" {
   backup_retention_period = 7
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.rds_primary
+    Name   = "${local.naming.rds_primary}-tp"
     Region = local.regions.primary.name
   })
 }
 
 # Secondary RDS Instance
 resource "aws_db_instance" "secondary" {
-  provider                = aws.us_west_2
+  provider                = aws.eu_west_2
   identifier              = local.naming.rds_secondary
   allocated_storage       = 20
   engine                  = "mysql"
@@ -1069,7 +1069,7 @@ resource "aws_db_instance" "secondary" {
   backup_retention_period = 7
 
   tags = merge(local.common_tags, {
-    Name   = local.naming.rds_secondary
+    Name   = "${local.naming.rds_secondary}-tp"
     Region = local.regions.secondary.name
   })
 }
@@ -1080,16 +1080,16 @@ resource "aws_db_instance" "secondary" {
 
 # CloudTrail S3 bucket
 resource "aws_s3_bucket" "cloudtrail" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = "${var.project_name}-cloudtrail-${random_id.bucket_suffix.hex}"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-cloudtrail-logs"
+    Name = "${var.project_name}-cloudtrail-logs-tp"
   })
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = aws_s3_bucket.cloudtrail.id
 
   rule {
@@ -1100,7 +1100,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  provider = aws.us_west_1
+  provider = aws.eu_west_1
   bucket   = aws_s3_bucket.cloudtrail.id
 
   block_public_acls       = true
@@ -1111,8 +1111,8 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 
 # CloudTrail log group
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  provider          = aws.us_west_1
-  name              = "/aws/cloudtrail/${var.project_name}-${var.environment}"
+  provider          = aws.eu_west_1
+  name              = "/aws/cloudtrail/tp/${var.project_name}-${var.environment}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.primary.arn
 
@@ -1125,8 +1125,8 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 # IAM Role & Policy for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-cloudtrail-role-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-cloudtrail-role-tp-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1143,8 +1143,8 @@ resource "aws_iam_role" "cloudtrail" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
-  provider = aws.us_west_1
-  name     = "${var.project_name}-cloudtrail-policy-${var.environment}"
+  provider = aws.eu_west_1
+  name     = "${var.project_name}-cloudtrail-policy-tp-${var.environment}"
   role     = aws_iam_role.cloudtrail.id
 
   policy = jsonencode({
@@ -1161,7 +1161,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 # Global CloudTrail
 resource "aws_cloudtrail" "this" {
-  provider                      = aws.us_west_1
+  provider                      = aws.eu_west_1
   name                          = "${var.project_name}-org-trail-${var.environment}"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
@@ -1171,7 +1171,7 @@ resource "aws_cloudtrail" "this" {
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail.arn
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-cloudtrail"
+    Name = "${var.project_name}-cloudtrail-tp"
   })
 }
 
