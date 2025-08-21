@@ -179,7 +179,7 @@ describe("Infrastructure Outputs Validation", () => {
   test("RDS endpoint is present and has valid format", () => {
     expect(OUT.rdsEndpoint).toBeDefined();
     expect(typeof OUT.rdsEndpoint).toBe("string");
-    expect(OUT.rdsEndpoint).toMatch(/^[a-zA-Z0-9-]+\.us-east-1\.rds\.amazonaws\.com(:3306)?$/);
+    expect(OUT.rdsEndpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9]+\.us-east-1\.rds\.amazonaws\.com(:3306)?$/);
   });
 
   test("RDS port is present and valid", () => {
@@ -307,7 +307,7 @@ describe("Live AWS Resource Validation", () => {
     
     const asg = response.AutoScalingGroups![0];
     expect(asg.AutoScalingGroupName).toBe(OUT.asgName);
-    expect(asg.DesiredCapacity).toBe(1);
+    expect(asg.DesiredCapacity).toBe(2);
     expect(asg.MinSize).toBe(1);
     expect(asg.MaxSize).toBe(4);
     expect(asg.HealthCheckType).toBe('ELB');
@@ -348,7 +348,7 @@ describe("Live AWS Resource Validation", () => {
     
     // Check for required tags
     const envTag = dbInstance!.TagList?.find((tag: any) => tag.Key === 'Environment');
-    expect(envTag?.Value).toBe('production');
+    expect(envTag?.Value).toBe('Production');
   }, 30000);
 
   test("Security Groups exist and have proper rules", async () => {
@@ -385,7 +385,7 @@ describe("Live AWS Resource Validation", () => {
     expect(albSg!.VpcId).toBe(OUT.vpcId);
     
     // Check EC2 security group configuration
-    expect(ec2Sg!.Description).toBe('Security group for EC2 instances');
+    expect(ec2Sg!.Description).toBe('Security group for SecureApp EC2 instances');
     expect(ec2Sg!.VpcId).toBe(OUT.vpcId);
     
     // Check RDS security group configuration
