@@ -784,7 +784,7 @@ resource "aws_lb_listener" "web_https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
+  certificate_arn   = var.acm_certificate_arn
 
   default_action {
     type             = "forward"
@@ -1100,21 +1100,21 @@ resource "aws_cloudtrail" "main" {
 
 # AWS caller identity already defined at line 63
 
-# SSL/TLS Certificate for HTTPS
-resource "aws_acm_certificate" "main" {
-  domain_name       = var.environment_suffix != "" ? "${var.project_name}-${var.environment_suffix}.meerio.com" : "${var.project_name}.meerio.com"
-  validation_method = "DNS"
-
-  subject_alternative_names = [
-    var.environment_suffix != "" ? "*.${var.project_name}-${var.environment_suffix}.meerio.com" : "*.${var.project_name}.meerio.com"
-  ]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = local.common_tags
-}
+# SSL/TLS Certificate for HTTPS - Using existing certificate
+# resource "aws_acm_certificate" "main" {
+#   domain_name       = var.environment_suffix != "" ? "${var.project_name}-${var.environment_suffix}.meerio.com" : "${var.project_name}.meerio.com"
+#   validation_method = "DNS"
+#
+#   subject_alternative_names = [
+#     var.environment_suffix != "" ? "*.${var.project_name}-${var.environment_suffix}.meerio.com" : "*.${var.project_name}.meerio.com"
+#   ]
+#
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+#
+#   tags = local.common_tags
+# }
 
 # AWS Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
