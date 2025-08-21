@@ -124,7 +124,7 @@ output "sns_topic_arn" {
 variable "key_pair_name" {
   description = "Name of the EC2 Key Pair for SSH access"
   type        = string
-  default     = "your-key-pair-name"
+  default     = "prod-bastion-key-acd1"
 }
 
 data "aws_ami" "amazon_linux" {
