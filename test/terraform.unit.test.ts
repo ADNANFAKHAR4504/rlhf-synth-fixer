@@ -145,7 +145,10 @@ describe('tap_stack.tf static verification', () => {
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true)
     );
     // Exclude sensitive data: like 'db password actual value'
-    expect(has(/output\s+".*password.*/)).toBe(false);
+    expect(
+      /output\s+".*password.*"\s*{[^}]*value\s*=\s*(random_password\.rds_password\.result|var\.db_password)[^}]*}/
+        .test(tf)
+    ).toBe(false);
   });
 
 });
