@@ -201,9 +201,9 @@ export class LoggingStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // ALB Access Logs
+    // S3 Bucket Policy for ALB and CloudTrail logs
     new aws.s3.BucketPolicy(
-      `${args.environment}-alb-logs-policy`,
+      `${args.environment}-logs-bucket-policy`,
       {
         bucket: logBucket.id,
         policy: pulumi
@@ -232,6 +232,27 @@ export class LoggingStack extends pulumi.ComponentResource {
                       's3:x-amz-acl': 'bucket-owner-full-control',
                     },
                   },
+                },
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/cloudtrail-logs/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
+                  },
+                },
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
                 },
               ],
             })
