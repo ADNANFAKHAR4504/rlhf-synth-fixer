@@ -26,5 +26,11 @@
     "RDS",
     "S3",
     "KMS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
