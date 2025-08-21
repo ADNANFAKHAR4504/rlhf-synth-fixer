@@ -1,5 +1,5 @@
 ########################
-# Variables
+# Variables 
 ########################
 variable "aws_region" {
   description = "AWS provider region"
