@@ -3,7 +3,16 @@
 This document contains the ideal, validated Terraform HCL configuration for a secure multi-region AWS environment. Each section is formatted for direct use in its respective `.tf` file. All resources follow best practices for security, naming, and modularity.
 
 ---
+## backend.tf
+```hcl
+terraform {
+  backend "s3" {
+    region = "us-east-1"
+  }
+}
+```
 
+---
 ## variables.tf
 
 ```hcl
