@@ -52,9 +52,9 @@ CDKTF TypeScript
 
 Modular design with only two files:
 
-lib/tap-stack.ts → main stack that composes and instantiates all modules
+lib/tap-stack.ts main stack that composes and instantiates all modules
 
-lib/modules.ts → contains reusable, modular infrastructure components (VPC, EC2, RDS, IAM, etc.)
+lib/modules.ts contains reusable, modular infrastructure components (VPC, EC2, RDS, IAM, etc.)
 
 Code should be idempotent and apply successfully without errors.
 

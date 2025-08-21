@@ -1,3 +1,144 @@
+# AWS CDK TypeScript Infrastructure
+
+This solution provides AWS infrastructure using CDK TypeScript.
+
+## lib/self-cert-util.ts
+
+```typescript
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { ACMClient, ImportCertificateCommand } from '@aws-sdk/client-acm';
+import {
+  SSMClient,
+  PutParameterCommand,
+  GetParameterCommand,
+} from '@aws-sdk/client-ssm';
+
+const DOMAIN = 'example.com';
+const REGION = 'us-east-1';
+const OUT_DIR = './certs';
+const SSM_PARAM = '/app/certArn';
+
+const KEY_FILE = path.join(OUT_DIR, `${DOMAIN}.key`);
+const CSR_FILE = path.join(OUT_DIR, `${DOMAIN}.csr`);
+const CRT_FILE = path.join(OUT_DIR, `${DOMAIN}.crt`);
+
+export async function generateSelfSignedCertAndStore(): Promise<void> {
+  const ssm = new SSMClient({ region: REGION });
+
+  // Check if cert already exists in SSM
+  try {
+    const existing = await ssm.send(
+      new GetParameterCommand({ Name: SSM_PARAM })
+    );
+    console.log(`ℹ️ Certificate already exists: ${existing.Parameter?.Value}`);
+    return;
+  } catch (err) {
+    const e = err as Record<string, unknown>;
+    if (e.name !== 'ParameterNotFound') {
+      console.error('❌ Error checking SSM parameter:', err);
+      throw err;
+    }
+    console.log('📎 No existing cert ARN, generating new one...');
+  }
+
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  console.log('🔧 Generating private key...');
+  execSync(`openssl genrsa -out "${KEY_FILE}" 2048`);
+
+  console.log('🔧 Creating CSR...');
+  execSync(
+    `openssl req -new -key "${KEY_FILE}" -out "${CSR_FILE}" -subj "/C=US/ST=Dev/L=Dev/O=Dev/OU=Dev/CN=${DOMAIN}"`
+  );
+
+  console.log('🔧 Creating self-signed certificate...');
+  execSync(
+    `openssl x509 -req -in "${CSR_FILE}" -signkey "${KEY_FILE}" -out "${CRT_FILE}" -days 365`
+  );
+
+  console.log('✅ Self-signed certificate generated in', OUT_DIR);
+
+  const certificate = fs.readFileSync(CRT_FILE);
+  const privateKey = fs.readFileSync(KEY_FILE);
+
+  const acm = new ACMClient({ region: REGION });
+
+  console.log('📤 Importing certificate to AWS ACM...');
+  const importResp = await acm.send(
+    new ImportCertificateCommand({
+      Certificate: certificate,
+      PrivateKey: privateKey,
+    })
+  );
+
+  const certArn = importResp.CertificateArn;
+  if (!certArn) {
+    throw new Error('❌ Certificate ARN was not returned from ACM.');
+  }
+
+  console.log(`✅ Certificate imported. ARN: ${certArn}`);
+
+  console.log(`📦 Storing ARN to SSM: ${SSM_PARAM}`);
+  await ssm.send(
+    new PutParameterCommand({
+      Name: SSM_PARAM,
+      Type: 'String',
+      Value: certArn,
+      Overwrite: true,
+    })
+  );
+
+  console.log(`✅ ARN stored in SSM: ${SSM_PARAM}`);
+}
+```
+
+## lib/tap-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+
+import { WebAppStack } from './webapp-stack';
+import { generateSelfSignedCertAndStore } from './self-cert-util';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+if (require.main === module) {
+  generateSelfSignedCertAndStore();
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+    const port = Number(process.env.PORT) || 80;
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+    new WebAppStack(this, 'WebAppStack', {
+      environmentSuffix,
+      port,
+      env: {
+        region: 'us-east-1',
+      },
+    });
+  }
+}
+```
+
+## lib/webapp-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -10,6 +151,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 export interface WebAppStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -44,6 +186,22 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
+    const flowLogRole = new iam.Role(this, 'FlowLogRole', {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        ),
+      ],
+    });
+
+    vpc.addFlowLog('FlowLogs', {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        new logs.LogGroup(this, 'FlowLogsGroup'),
+        flowLogRole
+      ),
+    });
+
     const encryptionKey = new kms.Key(this, 'S3EncryptionKey', {
       enableKeyRotation: true,
     });
@@ -70,18 +228,34 @@ export class WebAppStack extends cdk.Stack {
       ],
     });
 
-    const securityGroup = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
+    // Create ALB security group
+    const albSG = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
+      description: 'ALB security group',
       allowAllOutbound: true,
     });
 
-    securityGroup.addIngressRule(
+    const securityGroup = new ec2.SecurityGroup(this, 'InstanceSecurityGroup', {
+      vpc,
+      allowAllOutbound: true,
+      description: 'Allow HTTP from ALB',
+    });
+
+    albSG.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP'
+      'Allow HTTP from internet'
     );
+
     securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.securityGroupId(albSG.securityGroupId),
+      ec2.Port.tcp(80),
+      'Allow HTTP from ALB'
+    );
+
+    securityGroup.addIngressRule(
+      // ec2.Peer.anyIpv4(),
+      ec2.Peer.securityGroupId(albSG.securityGroupId),
       ec2.Port.tcp(443),
       'Allow HTTPS'
     );
@@ -184,7 +358,15 @@ export class WebAppStack extends cdk.Stack {
       value: bucket.bucketName,
       description: 'S3 Bucket ID',
     });
+    new cdk.CfnOutput(this, 'InstanceRoleName', {
+      value: ec2Role.roleName,
+      description: 'Instance role name',
+    });
+    new cdk.CfnOutput(this, 'SecurityGroupId', {
+      value: securityGroup.securityGroupId,
+      description: 'EC2 Security Group ID',
+    });
   }
 }
-
 ```
+
