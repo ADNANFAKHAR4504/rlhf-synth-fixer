@@ -244,7 +244,7 @@ describe('TAP Multi-Tier Architecture Integration Tests - Deployed AWS Resources
       const endpoints = response.VpcEndpoints || [];
       if (endpoints.length > 0) {
         const endpoint = endpoints[0];
-        expect(endpoint.State).toBe('Available');
+        expect(endpoint.State).toBe('available');
         expect(endpoint.VpcEndpointType).toBe('Interface');
         expect(endpoint.PrivateDnsEnabled).toBe(true);
       }
