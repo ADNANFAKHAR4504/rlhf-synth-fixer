@@ -412,7 +412,7 @@ describe('TapStack Integration Tests', () => {
             expect(targetGroup).toBeDefined();
             expect(targetGroup.HealthCheckPath).toBe('/health');
             expect(targetGroup.HealthyThresholdCount).toBe(2);
-            expect(targetGroup.UnhealthyThresholdCount).toBe(3);
+            expect(targetGroup.UnhealthyThresholdCount).toBe(5);
             expect(targetGroup.HealthCheckTimeoutSeconds).toBe(5);
         }, 30000);
     });
