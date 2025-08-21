@@ -336,7 +336,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier = "${local.name_prefix}-db"
+  identifier = lower("${local.name_prefix}-db")
 
   engine         = var.db_engine
   engine_version = var.db_engine_version
