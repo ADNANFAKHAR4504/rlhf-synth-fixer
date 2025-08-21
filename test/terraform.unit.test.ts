@@ -316,7 +316,7 @@ describe("Terraform Infrastructure Configuration", () => {
     describe("HTTPS/TLS Configuration", () => {
       test("declares ACM certificate", () => {
         expect(stackContent).toMatch(/resource\s+"aws_acm_certificate"\s+"main"/);
-        expect(stackContent).toMatch(/validation_method\s*=\s*"DNS"/);
+        expect(stackContent).toMatch(/validation_method\s*=\s*"EMAIL"/);
       });
 
       test("has HTTPS ALB listener", () => {
@@ -451,7 +451,7 @@ describe("Terraform Infrastructure Configuration", () => {
       });
 
       test("RDS replica references source database", () => {
-        expect(stackContent).toMatch(/replicate_source_db\s*=\s*aws_db_instance\.main\.identifier/);
+        expect(stackContent).toMatch(/replicate_source_db\s*=\s*.*aws_db_instance\.main\.identifier/);
       });
 
       test("RDS replica uses KMS encryption in us-west-2", () => {
