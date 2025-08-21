@@ -152,7 +152,7 @@ describe('TapStack Integration Tests', () => {
         expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
         
         // Check health check configuration
-        expect(asg.HealthCheckType).toBe('ELB');
+        expect(asg.HealthCheckType).toBe('EC2');
         expect(asg.HealthCheckGracePeriod).toBeGreaterThan(0);
         
         // Check it spans multiple AZs
