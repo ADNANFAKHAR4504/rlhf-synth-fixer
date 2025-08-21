@@ -1,879 +1,577 @@
-```python
-#!/usr/bin/env python3
-"""
-Secure AWS Infrastructure with CDKTF (Python)
-Implements a production-ready baseline with strict security controls:
-- S3 buckets with public access blocked and KMS encryption
-- IAM roles with least privilege policies
-- RDS with encryption at rest
-- VPC Flow Logs with CloudWatch integration
-- Security Groups with restricted ingress
-"""
+# tap_stack.tf - Single-file secure AWS infrastructure
 
-import os
-from constructs import Construct
-from cdktf import App, TerraformStack, TerraformOutput
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
-from cdktf_cdktf_provider_aws.route import Route
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup
-from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
-from cdktf_cdktf_provider_aws.flow_log import FlowLog
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRule,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
-)
-from cdktf_cdktf_provider_aws.data_aws_kms_key import DataAwsKmsKey
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.db_instance import DbInstance
-from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
-import json
+# Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+}
 
+variable "project_name" {
+  description = "Project name for resource naming and tagging"
+  type        = string
+  default     = "iac-nova"
+}
 
-class SecureAwsInfraStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str):
-        super().__init__(scope, id)
+variable "allowed_cidrs" {
+  description = "List of CIDR blocks allowed to access web tier"
+  type        = list(string)
+}
 
-        # Configuration
-        region = "us-east-1"
-        allowed_cidrs = os.getenv("ALLOWED_CIDRS", "203.0.113.0/24").split(",")
-        allowed_cidrs = [cidr.strip() for cidr in allowed_cidrs]
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "dev"
+}
 
-        # AWS Provider
-        AwsProvider(self, "aws", region=region)
+variable "multi_az" {
+  description = "Enable multi-AZ deployment for RDS"
+  type        = bool
+  default     = false
+}
 
-        # Get availability zones
-        azs = DataAwsAvailabilityZones(self, "available", state="available")
+variable "deletion_protection" {
+  description = "Enable deletion protection for RDS"
+  type        = bool
+  default     = true
+}
 
-        # KMS Keys (AWS Managed)
-        s3_kms_key = DataAwsKmsKey(self, "s3_kms", key_id="alias/aws/s3")
-        rds_kms_key = DataAwsKmsKey(self, "rds_kms", key_id="alias/aws/rds")
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
 
-        # VPC
-        vpc = Vpc(
-            self, "main_vpc",
-            cidr_block="10.0.0.0/16",
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={
-                "Name": "secure-vpc",
-                "Environment": "Production"
-            }
-        )
+variable "nat_per_az" {
+  description = "Deploy NAT Gateway per AZ (true) or single NAT Gateway (false)"
+  type        = bool
+  default     = false
+}
 
-        # Internet Gateway
-        igw = InternetGateway(
-            self, "main_igw",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-igw",
-                "Environment": "Production"
-            }
-        )
+variable "rds_engine" {
+  description = "RDS engine type"
+  type        = string
+  default     = "postgres"
+}
 
-        # Public Subnets (2 AZs)
-        public_subnets = []
-        for i in range(2):
-            subnet = Subnet(
-                self, f"public_subnet_{i}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=f"${{{azs.names}[{i}]}}",
-                map_public_ip_on_launch=True,
-                tags={
-                    "Name": f"secure-public-subnet-{i+1}",
-                    "Environment": "Production",
-                    "Type": "Public"
-                }
-            )
-            public_subnets.append(subnet)
+variable "rds_engine_version" {
+  description = "RDS engine version"
+  type        = string
+  default     = "15.4"
+}
 
-        # Private Subnets (2 AZs)
-        private_subnets = []
-        for i in range(2):
-            subnet = Subnet(
-                self, f"private_subnet_{i}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=f"${{{azs.names}[{i}]}}",
-                tags={
-                    "Name": f"secure-private-subnet-{i+1}",
-                    "Environment": "Production",
-                    "Type": "Private"
-                }
-            )
-            private_subnets.append(subnet)
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
 
-        # Route Table for Public Subnets
-        public_rt = RouteTable(
-            self, "public_rt",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-public-rt",
-                "Environment": "Production"
-            }
-        )
+variable "rds_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
+}
 
-        # Route to Internet Gateway
-        Route(
-            self, "public_internet_route",
-            route_table_id=public_rt.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=igw.id
-        )
+variable "cw_log_retention_days" {
+  description = "CloudWatch log retention period in days"
+  type        = number
+  default     = 30
+}
 
-        # Associate public subnets with route table
-        for i, subnet in enumerate(public_subnets):
-            RouteTableAssociation(
-                self, f"public_rt_assoc_{i}",
-                subnet_id=subnet.id,
-                route_table_id=public_rt.id
-            )
+# Locals
+locals {
+  common_tags = {
+    Project     = "IaC - AWS Nova Model Breaking"
+    ManagedBy   = "Terraform"
+    Environment = var.environment
+  }
+  
+  name_prefix = "${var.project_name}-${var.environment}"
+  
+  public_subnet_cidrs = [
+    cidrsubnet(var.vpc_cidr, 8, 1),
+    cidrsubnet(var.vpc_cidr, 8, 2)
+  ]
+  
+  private_subnet_cidrs = [
+    cidrsubnet(var.vpc_cidr, 8, 11),
+    cidrsubnet(var.vpc_cidr, 8, 12)
+  ]
+}
 
-        # CloudWatch Log Group for VPC Flow Logs
-        flow_log_group = CloudwatchLogGroup(
-            self, "vpc_flow_logs",
-            name="/aws/vpc/flowlogs",
-            retention_in_days=30,
-            tags={
-                "Environment": "Production"
-            }
-        )
+# Data sources
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
-        # IAM Role for VPC Flow Logs (Least Privilege)
-        flow_log_role_trust_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "vpc-flow-logs.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
+# Random ID for S3 bucket uniqueness
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count = 2
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = local.public_subnet_cidrs[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+    Type = "Public"
+  })
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count = 2
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = local.private_subnet_cidrs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+    Type = "Private"
+  })
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count = var.nat_per_az ? 2 : 1
+
+  domain = "vpc"
+  depends_on = [aws_internet_gateway.main]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+  })
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count = var.nat_per_az ? 2 : 1
+
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Tables - Public
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
+}
+
+# Route Tables - Private
+resource "aws_route_table" "private" {
+  count = var.nat_per_az ? 2 : 1
+
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+  })
+}
+
+# Route Table Associations - Public
+resource "aws_route_table_association" "public" {
+  count = 2
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Route Table Associations - Private
+resource "aws_route_table_association" "private" {
+  count = 2
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = var.nat_per_az ? aws_route_table.private[count.index].id : aws_route_table.private[0].id
+}
+
+# VPC Flow Logs IAM Role
+resource "aws_iam_role" "vpc_flow_logs" {
+  name = "${local.name_prefix}-vpc-flow-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
         }
+      }
+    ]
+  })
 
-        flow_log_role = IamRole(
-            self, "vpc_flow_log_role",
-            name="vpc-flow-logs-role",
-            assume_role_policy=json.dumps(flow_log_role_trust_policy),
-            tags={
-                "Environment": "Production"
-            }
-        )
+  tags = local.common_tags
+}
 
-        # IAM Policy for Flow Logs (Least Privilege - only specific log group)
-        flow_log_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"{flow_log_group.arn}:*"
-                }
-            ]
+# VPC Flow Logs IAM Policy
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name = "${local.name_prefix}-vpc-flow-logs-policy"
+  role = aws_iam_role.vpc_flow_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# CloudWatch Log Group for VPC Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/flowlogs/${local.name_prefix}"
+  retention_in_days = var.cw_log_retention_days
+
+  tags = local.common_tags
+}
+
+# VPC Flow Logs
+resource "aws_flow_log" "vpc" {
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = local.common_tags
+}
+
+# Security Group - Web Tier
+resource "aws_security_group" "web_tier" {
+  name        = "${local.name_prefix}-web-tier-sg"
+  description = "Security group for web tier - allows HTTP/HTTPS from specific CIDRs"
+  vpc_id      = aws_vpc.main.id
+
+  dynamic "ingress" {
+    for_each = [80, 443]
+    content {
+      description = "Allow ${ingress.value == 80 ? "HTTP" : "HTTPS"} from allowed CIDRs"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = var.allowed_cidrs
+    }
+  }
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-web-tier-sg"
+  })
+}
+
+# Security Group - Database
+resource "aws_security_group" "database" {
+  name        = "${local.name_prefix}-database-sg"
+  description = "Security group for database - allows access from web tier only"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Database access from web tier"
+    from_port       = var.rds_engine == "postgres" ? 5432 : 3306
+    to_port         = var.rds_engine == "postgres" ? 5432 : 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web_tier.id]
+  }
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-database-sg"
+  })
+}
+
+# DB Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-subnet-group"
+  })
+}
+
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier     = "${local.name_prefix}-database"
+  engine         = var.rds_engine
+  engine_version = var.rds_engine_version
+  instance_class = var.rds_instance_class
+
+  allocated_storage     = var.rds_allocated_storage
+  max_allocated_storage = var.rds_allocated_storage * 2
+  storage_encrypted     = true
+  storage_type          = "gp2"
+
+  db_name  = var.rds_engine == "postgres" ? "appdb" : "appdb"
+  username = "admin"
+  password = "changeme123!" # In production, use AWS Secrets Manager
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+
+  multi_az               = var.multi_az
+  publicly_accessible    = false
+  deletion_protection    = var.deletion_protection
+  skip_final_snapshot    = !var.deletion_protection
+  final_snapshot_identifier = var.deletion_protection ? "${local.name_prefix}-final-snapshot" : null
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-database"
+  })
+}
+
+# S3 Bucket
+resource "aws_s3_bucket" "main" {
+  bucket = "${local.name_prefix}-secure-bucket-${random_id.bucket_suffix.hex}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-secure-bucket"
+  })
+}
+
+# S3 Bucket Ownership Controls
+resource "aws_s3_bucket_ownership_controls" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+# S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket ACL
+resource "aws_s3_bucket_acl" "main" {
+  depends_on = [aws_s3_bucket_ownership_controls.main]
+
+  bucket = aws_s3_bucket.main.id
+  acl    = "private"
+}
+
+# S3 Bucket Server Side Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 Bucket Policy - Deny non-TLS requests
+resource "aws_s3_bucket_policy" "main" {
+  bucket = aws_s3_bucket.main.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.main.arn,
+          "${aws_s3_bucket.main.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
         }
-
-        IamRolePolicy(
-            self, "vpc_flow_log_policy",
-            name="vpc-flow-logs-policy",
-            role=flow_log_role.id,
-            policy=json.dumps(flow_log_policy)
-        )
-
-        # VPC Flow Logs
-        flow_log = FlowLog(
-            self, "vpc_flow_log",
-            iam_role_arn=flow_log_role.arn,
-            log_destination=flow_log_group.arn,
-            log_destination_type="cloud-watch-logs",
-            resource_id=vpc.id,
-            resource_type="VPC",
-            traffic_type="ALL",
-            tags={
-                "Environment": "Production"
-            }
-        )
-
-        # Security Group - Web/Application (Restricted Ingress)
-        web_sg = SecurityGroup(
-            self, "web_sg",
-            name="secure-web-sg",
-            description="Security group for web applications - restricted ingress",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-web-sg",
-                "Environment": "Production"
-            }
-        )
-
-        # Security Group Rules - HTTP (80) from allowed CIDRs only
-        for i, cidr in enumerate(allowed_cidrs):
-            SecurityGroupRule(
-                self, f"web_sg_http_{i}",
-                type="ingress",
-                from_port=80,
-                to_port=80,
-                protocol="tcp",
-                cidr_blocks=[cidr],
-                security_group_id=web_sg.id,
-                description=f"HTTP access from {cidr}"
-            )
-
-        # Security Group Rules - HTTPS (443) from allowed CIDRs only
-        for i, cidr in enumerate(allowed_cidrs):
-            SecurityGroupRule(
-                self, f"web_sg_https_{i}",
-                type="ingress",
-                from_port=443,
-                to_port=443,
-                protocol="tcp",
-                cidr_blocks=[cidr],
-                security_group_id=web_sg.id,
-                description=f"HTTPS access from {cidr}"
-            )
-
-        # Security Group Rule - All Egress (default behavior)
-        SecurityGroupRule(
-            self, "web_sg_egress",
-            type="egress",
-            from_port=0,
-            to_port=0,
-            protocol="-1",
-            cidr_blocks=["0.0.0.0/0"],
-            security_group_id=web_sg.id,
-            description="All outbound traffic"
-        )
-
-        # S3 Bucket with Security Controls
-        app_bucket = S3Bucket(
-            self, "secure_app_bucket",
-            bucket="secure-app-bucket-prod-${random_id.bucket_suffix.hex}",
-            tags={
-                "Name": "secure-app-bucket",
-                "Environment": "Production"
-            }
-        )
-
-        # Block all public access to S3 bucket
-        S3BucketPublicAccessBlock(
-            self, "app_bucket_pab",
-            bucket=app_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True
-        )
-
-        # S3 Bucket Server-Side Encryption with KMS
-        S3BucketServerSideEncryptionConfiguration(
-            self, "app_bucket_encryption",
-            bucket=app_bucket.id,
-            rule=[
-                S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=s3_kms_key.arn
-                    ),
-                    bucket_key_enabled=True
-                )
+      },
+      {
+        Sid       = "DenyPublicAccess"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.main.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "aws:PrincipalServiceName" = [
+              "ec2.amazonaws.com",
+              "lambda.amazonaws.com"
             ]
-        )
-
-        # IAM Role for Application (Least Privilege Example)
-        app_role_trust_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "ec2.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
+          }
         }
+      }
+    ]
+  })
+}
 
-        app_role = IamRole(
-            self, "app_role",
-            name="secure-app-role",
-            assume_role_policy=json.dumps(app_role_trust_policy),
-            tags={
-                "Environment": "Production"
-            }
-        )
+# Application IAM Role
+resource "aws_iam_role" "app_role" {
+  name = "${local.name_prefix}-app-role"
 
-        # IAM Policy for Application (Least Privilege - specific bucket path and log group)
-        app_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject"
-                    ],
-                    "Resource": f"{app_bucket.arn}/app-data/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"{flow_log_group.arn}:*"
-                }
-            ]
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
         }
+      }
+    ]
+  })
 
-        IamRolePolicy(
-            self, "app_policy",
-            name="secure-app-policy",
-            role=app_role.id,
-            policy=json.dumps(app_policy)
-        )
+  tags = local.common_tags
+}
 
-        # DB Subnet Group for RDS
-        db_subnet_group = DbSubnetGroup(
-            self, "db_subnet_group",
-            name="secure-db-subnet-group",
-            subnet_ids=[subnet.id for subnet in private_subnets],
-            tags={
-                "Name": "secure-db-subnet-group",
-                "Environment": "Production"
-            }
-        )
+# Application IAM Policy - Least Privilege S3 Access
+resource "aws_iam_role_policy" "app_s3_policy" {
+  name = "${local.name_prefix}-app-s3-policy"
+  role = aws_iam_role.app_role.id
 
-        # Security Group for RDS
-        db_sg = SecurityGroup(
-            self, "db_sg",
-            name="secure-db-sg",
-            description="Security group for RDS database",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-db-sg",
-                "Environment": "Production"
-            }
-        )
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.main.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.main.arn
+      }
+    ]
+  })
+}
 
-        # Allow PostgreSQL access only from web security group
-        SecurityGroupRule(
-            self, "db_sg_postgres",
-            type="ingress",
-            from_port=5432,
-            to_port=5432,
-            protocol="tcp",
-            source_security_group_id=web_sg.id,
-            security_group_id=db_sg.id,
-            description="PostgreSQL access from web tier"
-        )
+# Outputs
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
 
-        # RDS Instance with Encryption
-        db_instance = DbInstance(
-            self, "secure_db",
-            identifier="secure-postgres-db",
-            engine="postgres",
-            engine_version="15.4",
-            instance_class="db.t3.micro",
-            allocated_storage=20,
-            storage_type="gp2",
-            storage_encrypted=True,
-            kms_key_id=rds_kms_key.arn,
-            db_name="securedb",
-            username="dbadmin",
-            password="ChangeMe123!",  # In production, use AWS Secrets Manager
-            vpc_security_group_ids=[db_sg.id],
-            db_subnet_group_name=db_subnet_group.name,
-            publicly_accessible=False,
-            backup_retention_period=7,
-            backup_window="03:00-04:00",
-            maintenance_window="sun:04:00-sun:05:00",
-            skip_final_snapshot=True,  # For demo purposes
-            tags={
-                "Name": "secure-postgres-db",
-                "Environment": "Production"
-            }
-        )
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
 
-        # Outputs for verification
-        TerraformOutput(
-            self, "vpc_id",
-            value=vpc.id,
-            description="VPC ID"
-        )
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
 
-        TerraformOutput(
-            self, "flow_log_id",
-            value=flow_log.id,
-            description="VPC Flow Log ID"
-        )
+output "web_tier_security_group_id" {
+  description = "ID of the web tier security group"
+  value       = aws_security_group.web_tier.id
+}
 
-        TerraformOutput(
-            self, "s3_bucket_name",
-            value=app_bucket.bucket,
-            description="Secure S3 bucket name"
-        )
+output "database_security_group_id" {
+  description = "ID of the database security group"
+  value       = aws_security_group.database.id
+}
 
-        TerraformOutput(
-            self, "rds_endpoint",
-            value=db_instance.endpoint,
-            description="RDS instance endpoint"
-        )
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.main.bucket
+}
 
-        TerraformOutput(
-            self, "web_security_group_id",
-            value=web_sg.id,
-            description="Web security group ID"
-        )
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
 
+output "app_role_arn" {
+  description = "ARN of the application IAM role"
+  value       = aws_iam_role.app_role.arn
+}
 
-# Add random ID for bucket naming
-from cdktf_cdktf_provider_random.id import Id as RandomId
-from cdktf_cdktf_provider_random.provider import RandomProvider
-
-class SecureAwsInfraStackWithRandom(TerraformStack):
-    def __init__(self, scope: Construct, id: str):
-        super().__init__(scope, id)
-
-        # Random provider for unique bucket naming
-        RandomProvider(self, "random")
-        
-        bucket_suffix = RandomId(
-            self, "bucket_suffix",
-            byte_length=4
-        )
-
-        # Configuration
-        region = "us-east-1"
-        allowed_cidrs = os.getenv("ALLOWED_CIDRS", "203.0.113.0/24").split(",")
-        allowed_cidrs = [cidr.strip() for cidr in allowed_cidrs]
-
-        # AWS Provider
-        AwsProvider(self, "aws", region=region)
-
-        # Get availability zones
-        azs = DataAwsAvailabilityZones(self, "available", state="available")
-
-        # KMS Keys (AWS Managed)
-        s3_kms_key = DataAwsKmsKey(self, "s3_kms", key_id="alias/aws/s3")
-        rds_kms_key = DataAwsKmsKey(self, "rds_kms", key_id="alias/aws/rds")
-
-        # VPC
-        vpc = Vpc(
-            self, "main_vpc",
-            cidr_block="10.0.0.0/16",
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={
-                "Name": "secure-vpc",
-                "Environment": "Production"
-            }
-        )
-
-        # Internet Gateway
-        igw = InternetGateway(
-            self, "main_igw",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-igw",
-                "Environment": "Production"
-            }
-        )
-
-        # Public Subnets (2 AZs)
-        public_subnets = []
-        for i in range(2):
-            subnet = Subnet(
-                self, f"public_subnet_{i}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=f"${{{azs.names}[{i}]}}",
-                map_public_ip_on_launch=True,
-                tags={
-                    "Name": f"secure-public-subnet-{i+1}",
-                    "Environment": "Production",
-                    "Type": "Public"
-                }
-            )
-            public_subnets.append(subnet)
-
-        # Private Subnets (2 AZs)
-        private_subnets = []
-        for i in range(2):
-            subnet = Subnet(
-                self, f"private_subnet_{i}",
-                vpc_id=vpc.id,
-                cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=f"${{{azs.names}[{i}]}}",
-                tags={
-                    "Name": f"secure-private-subnet-{i+1}",
-                    "Environment": "Production",
-                    "Type": "Private"
-                }
-            )
-            private_subnets.append(subnet)
-
-        # Route Table for Public Subnets
-        public_rt = RouteTable(
-            self, "public_rt",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-public-rt",
-                "Environment": "Production"
-            }
-        )
-
-        # Route to Internet Gateway
-        Route(
-            self, "public_internet_route",
-            route_table_id=public_rt.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=igw.id
-        )
-
-        # Associate public subnets with route table
-        for i, subnet in enumerate(public_subnets):
-            RouteTableAssociation(
-                self, f"public_rt_assoc_{i}",
-                subnet_id=subnet.id,
-                route_table_id=public_rt.id
-            )
-
-        # CloudWatch Log Group for VPC Flow Logs
-        flow_log_group = CloudwatchLogGroup(
-            self, "vpc_flow_logs",
-            name="/aws/vpc/flowlogs",
-            retention_in_days=30,
-            tags={
-                "Environment": "Production"
-            }
-        )
-
-        # IAM Role for VPC Flow Logs (Least Privilege)
-        flow_log_role_trust_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "vpc-flow-logs.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-
-        flow_log_role = IamRole(
-            self, "vpc_flow_log_role",
-            name="vpc-flow-logs-role",
-            assume_role_policy=json.dumps(flow_log_role_trust_policy),
-            tags={
-                "Environment": "Production"
-            }
-        )
-
-        # IAM Policy for Flow Logs (Least Privilege - only specific log group)
-        flow_log_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"{flow_log_group.arn}:*"
-                }
-            ]
-        }
-
-        IamRolePolicy(
-            self, "vpc_flow_log_policy",
-            name="vpc-flow-logs-policy",
-            role=flow_log_role.id,
-            policy=json.dumps(flow_log_policy)
-        )
-
-        # VPC Flow Logs
-        flow_log = FlowLog(
-            self, "vpc_flow_log",
-            iam_role_arn=flow_log_role.arn,
-            log_destination=flow_log_group.arn,
-            log_destination_type="cloud-watch-logs",
-            resource_id=vpc.id,
-            resource_type="VPC",
-            traffic_type="ALL",
-            tags={
-                "Environment": "Production"
-            }
-        )
-
-        # Security Group - Web/Application (Restricted Ingress)
-        web_sg = SecurityGroup(
-            self, "web_sg",
-            name="secure-web-sg",
-            description="Security group for web applications - restricted ingress",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-web-sg",
-                "Environment": "Production"
-            }
-        )
-
-        # Security Group Rules - HTTP (80) from allowed CIDRs only
-        for i, cidr in enumerate(allowed_cidrs):
-            SecurityGroupRule(
-                self, f"web_sg_http_{i}",
-                type="ingress",
-                from_port=80,
-                to_port=80,
-                protocol="tcp",
-                cidr_blocks=[cidr],
-                security_group_id=web_sg.id,
-                description=f"HTTP access from {cidr}"
-            )
-
-        # Security Group Rules - HTTPS (443) from allowed CIDRs only
-        for i, cidr in enumerate(allowed_cidrs):
-            SecurityGroupRule(
-                self, f"web_sg_https_{i}",
-                type="ingress",
-                from_port=443,
-                to_port=443,
-                protocol="tcp",
-                cidr_blocks=[cidr],
-                security_group_id=web_sg.id,
-                description=f"HTTPS access from {cidr}"
-            )
-
-        # Security Group Rule - All Egress (default behavior)
-        SecurityGroupRule(
-            self, "web_sg_egress",
-            type="egress",
-            from_port=0,
-            to_port=0,
-            protocol="-1",
-            cidr_blocks=["0.0.0.0/0"],
-            security_group_id=web_sg.id,
-            description="All outbound traffic"
-        )
-
-        # S3 Bucket with Security Controls
-        app_bucket = S3Bucket(
-            self, "secure_app_bucket",
-            bucket=f"secure-app-bucket-prod-{bucket_suffix.hex}",
-            tags={
-                "Name": "secure-app-bucket",
-                "Environment": "Production"
-            }
-        )
-
-        # Block all public access to S3 bucket
-        S3BucketPublicAccessBlock(
-            self, "app_bucket_pab",
-            bucket=app_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True
-        )
-
-        # S3 Bucket Server-Side Encryption with KMS
-        S3BucketServerSideEncryptionConfiguration(
-            self, "app_bucket_encryption",
-            bucket=app_bucket.id,
-            rule=[
-                S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=s3_kms_key.arn
-                    ),
-                    bucket_key_enabled=True
-                )
-            ]
-        )
-
-        # IAM Role for Application (Least Privilege Example)
-        app_role_trust_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "ec2.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-
-        app_role = IamRole(
-            self, "app_role",
-            name="secure-app-role",
-            assume_role_policy=json.dumps(app_role_trust_policy),
-            tags={
-                "Environment": "Production"
-            }
-        )
-
-        # IAM Policy for Application (Least Privilege - specific bucket path and log group)
-        app_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject"
-                    ],
-                    "Resource": f"{app_bucket.arn}/app-data/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"{flow_log_group.arn}:*"
-                }
-            ]
-        }
-
-        IamRolePolicy(
-            self, "app_policy",
-            name="secure-app-policy",
-            role=app_role.id,
-            policy=json.dumps(app_policy)
-        )
-
-        # DB Subnet Group for RDS
-        db_subnet_group = DbSubnetGroup(
-            self, "db_subnet_group",
-            name="secure-db-subnet-group",
-            subnet_ids=[subnet.id for subnet in private_subnets],
-            tags={
-                "Name": "secure-db-subnet-group",
-                "Environment": "Production"
-            }
-        )
-
-        # Security Group for RDS
-        db_sg = SecurityGroup(
-            self, "db_sg",
-            name="secure-db-sg",
-            description="Security group for RDS database",
-            vpc_id=vpc.id,
-            tags={
-                "Name": "secure-db-sg",
-                "Environment": "Production"
-            }
-        )
-
-        # Allow PostgreSQL access only from web security group
-        SecurityGroupRule(
-            self, "db_sg_postgres",
-            type="ingress",
-            from_port=5432,
-            to_port=5432,
-            protocol="tcp",
-            source_security_group_id=web_sg.id,
-            security_group_id=db_sg.id,
-            description="PostgreSQL access from web tier"
-        )
-
-        # RDS Instance with Encryption
-        db_instance = DbInstance(
-            self, "secure_db",
-            identifier="secure-postgres-db",
-            engine="postgres",
-            engine_version="15.4",
-            instance_class="db.t3.micro",
-            allocated_storage=20,
-            storage_type="gp2",
-            storage_encrypted=True,
-            kms_key_id=rds_kms_key.arn,
-            db_name="securedb",
-            username="dbadmin",
-            password="ChangeMe123!",  # In production, use AWS Secrets Manager
-            vpc_security_group_ids=[db_sg.id],
-            db_subnet_group_name=db_subnet_group.name,
-            publicly_accessible=False,
-            backup_retention_period=7,
-            backup_window="03:00-04:00",
-            maintenance_window="sun:04:00-sun:05:00",
-            skip_final_snapshot=True,  # For demo purposes
-            tags={
-                "Name": "secure-postgres-db",
-                "Environment": "Production"
-            }
-        )
-
-        # Outputs for verification
-        TerraformOutput(
-            self, "vpc_id",
-            value=vpc.id,
-            description="VPC ID"
-        )
-
-        TerraformOutput(
-            self, "flow_log_id",
-            value=flow_log.id,
-            description="VPC Flow Log ID"
-        )
-
-        TerraformOutput(
-            self, "s3_bucket_name",
-            value=app_bucket.bucket,
-            description="Secure S3 bucket name"
-        )
-
-        TerraformOutput(
-            self, "rds_endpoint",
-            value=db_instance.endpoint,
-            description="RDS instance endpoint"
-        )
-
-        TerraformOutput(
-            self, "web_security_group_id",
-            value=web_sg.id,
-            description="Web security group ID"
-        )
-
-
-app = App()
-SecureAwsInfraStackWithRandom(app, "secure-aws-infra")
-app.synth()
-```
-
-## Explanation
-
-### Security Requirements Implementation
-
-**S3 Privacy & Encryption**
-- **Public Access Block**: All four block settings (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets`) are set to `True`, ensuring no public access is possible
-- **Server-Side Encryption**: Configured with `aws:kms` using the AWS-managed S3 key (`alias/aws/s3`) with bucket key enabled for cost optimization
-
-**IAM Least Privilege**
-- **Flow Logs Role**: Trusted only by `vpc-flow-logs.amazonaws.com` service principal, with permissions limited to `logs:CreateLogStream` and `logs:PutLogEvents` on the specific flow logs CloudWatch group ARN
-- **Application Role**: Example role trusted by EC2 service with minimal permissions - only `s3:GetObject` on a specific bucket path (`/app-data/*`) and log writing permissions to the flow logs group
-- **No Wildcard Actions**: All policies use specific actions and resource-level restrictions
-
-**RDS Encryption at Rest**
-- **Storage Encryption**: `storage_encrypted=True` with `kms_key_id` set to AWS-managed RDS key (`alias/aws/rds`)
-- **Private Deployment**: `publicly_accessible=False` and deployed in private subnets with dedicated subnet group
-- **Security Group**: Database security group only allows PostgreSQL (5432) access from the web security group
-
-**VPC Flow Logs**
-- **CloudWatch Integration**:
+output "vpc_flow_logs_role_arn" {
+  description = "ARN of the VPC Flow Logs IAM role"
+  value       = aws_iam_role.vpc_flow_logs.arn
+}

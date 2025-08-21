@@ -7,6 +7,7 @@
 variable "aws_region" {
   description = "AWS region to deploy resources (used by existing provider.tf)."
   type        = string
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -18,6 +19,7 @@ variable "project_name" {
 variable "allowed_cidrs" {
   description = "List of CIDR ranges allowed to access web-tier on ports 80/443."
   type        = list(string)
+  default     = []
 }
 
 variable "environment" {
@@ -59,7 +61,7 @@ variable "rds_engine" {
 variable "rds_engine_version" {
   description = "RDS engine version."
   type        = string
-  default     = "15.4"
+  default     = null
 }
 
 variable "rds_instance_class" {
@@ -117,6 +119,18 @@ locals {
   db_port = var.rds_engine == "postgres" ? 5432 : 3306
 }
 ########################
+# Random (for S3 uniqueness and DB password)
+########################
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+resource "random_password" "db" {
+  length           = 20
+  special          = true
+  override_special = "!#-%@_+"
+}
+########################
 # Networking - VPC, Routes, NAT
 ########################
 resource "aws_vpc" "main" {
@@ -170,7 +184,7 @@ locals { nat_keys = var.nat_per_az ? keys(aws_subnet.public) : ["0"] }
 
 resource "aws_eip" "nat" {
   for_each = { for k in local.nat_keys : k => true }
-  vpc      = true
+  domain   = "vpc"
   tags     = merge(local.tags, { Name = "${local.name_prefix}-nat-eip-${each.key}" })
 }
 
