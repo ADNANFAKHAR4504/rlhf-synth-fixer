@@ -763,65 +763,6 @@ resource "aws_iam_role_policy_attachment" "config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-# GuardDuty (conditional due to existing detectors)
-variable "create_guardduty" {
-  description = "Whether to create GuardDuty detectors (set to false if detectors already exist)"
-  type        = bool
-  default     = true
-}
-
-resource "aws_guardduty_detector" "main_usw2" {
-  count    = var.create_guardduty ? 1 : 0
-  provider = aws.usw2
-  enable   = true
-  
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = true
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
-  
-  tags = merge(local.common_tags, { Name = "${local.naming_prefix}-guardduty-usw2" })
-}
-
-resource "aws_guardduty_detector" "main_use1" {
-  count    = var.create_guardduty ? 1 : 0
-  provider = aws.use1
-  enable   = true
-  
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = true
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
-  
-  tags = merge(local.common_tags, { Name = "${local.naming_prefix}-guardduty-use1" })
-}
-
 # IAM Policy for MFA enforcement
 resource "aws_iam_policy" "mfa_enforcement" {
   name        = "${local.naming_prefix}-mfa-enforcement"
@@ -907,16 +848,6 @@ output "vpc_ids_usw2" {
 output "vpc_ids_use1" {
   description = "VPC ID for us-east-1"
   value = aws_vpc.main_use1.id
-}
-
-output "guardduty_detector_ids_usw2" {
-  description = "GuardDuty detector ID for us-west-2"
-  value = var.create_guardduty ? aws_guardduty_detector.main_usw2[0].id : "not_created"
-}
-
-output "guardduty_detector_ids_use1" {
-  description = "GuardDuty detector ID for us-east-1"
-  value = var.create_guardduty ? aws_guardduty_detector.main_use1[0].id : "not_created"
 }
 
 output "cloudtrail_arn" {

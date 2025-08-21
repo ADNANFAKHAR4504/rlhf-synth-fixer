@@ -144,16 +144,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(tapStackContent).toMatch(/include_global_resource_types\s*=\s*true/);
       expect(tapStackContent).toMatch(/aws_config_delivery_channel/);
     });
-
-    test("GuardDuty is enabled with comprehensive data sources", () => {
-      const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
-      expect(tapStackContent).toMatch(/aws_guardduty_detector[\s\S]*main_usw2/);
-      expect(tapStackContent).toMatch(/aws_guardduty_detector[\s\S]*main_use1/);
-      expect(tapStackContent).toMatch(/enable\s*=\s*true/);
-      expect(tapStackContent).toMatch(/s3_logs[\s\S]*enable\s*=\s*true/);
-      expect(tapStackContent).toMatch(/kubernetes[\s\S]*audit_logs[\s\S]*enable\s*=\s*true/);
-      expect(tapStackContent).toMatch(/malware_protection/);
-    });
   });
 
   describe("Resource Tagging", () => {
@@ -226,8 +216,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
         "kms_key_ids_use1",
         "vpc_ids_usw2",
         "vpc_ids_use1",
-        "guardduty_detector_ids_usw2",
-        "guardduty_detector_ids_use1",
       ];
   
       expectedOutputs.forEach(output => {
