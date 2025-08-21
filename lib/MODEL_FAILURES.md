@@ -91,4 +91,4 @@ export class TapStack extends cdk.Stack {
 
 **Root Cause**: Since we are using .mjs everywhere, convert your construct file to use export instead of module.exports
 
-**Resolution**: use `export { CloudWatchLoggingConstruct }` instead of `module.exports = { CloudWatchLoggingConstruct };`
+**Resolution**: use `export class CloudWatchLoggingConstruct` instead of `module.exports = { CloudWatchLoggingConstruct };`
