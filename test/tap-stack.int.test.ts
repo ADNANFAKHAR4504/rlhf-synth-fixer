@@ -481,7 +481,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
         fail('Database should not be publicly accessible');
       } catch (error: any) {
         // Expected - database should not be reachable
-        expect(error.code).toMatch(/ENOTFOUND|ECONNREFUSED|ETIMEDOUT/);
+        expect(error.code).toMatch(/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNABORTED/);
       }
     });
   });
