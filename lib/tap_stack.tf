@@ -633,9 +633,9 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
   bucket = aws_s3_bucket.app_data.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false  # Allow bucket policies to be applied
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false  # Allow bucket policies to be applied
 }
 
 resource "aws_s3_bucket_public_access_block" "config" {
@@ -683,33 +683,6 @@ resource "aws_s3_bucket_policy" "app_data" {
         Sid    = "AWSLogDeliveryWrite"
         Effect = "Allow"
         Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action = [
-          "s3:PutObject"
-        ]
-        Resource = "${aws_s3_bucket.app_data.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid    = "AWSLogDeliveryAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action = [
-          "s3:GetBucketAcl"
-        ]
-        Resource = aws_s3_bucket.app_data.arn
-      },
-      {
-        Sid    = "AWSLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
           AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
         }
         Action = [
@@ -735,6 +708,11 @@ resource "aws_s3_bucket_policy" "app_data" {
       }
     ]
   })
+
+  depends_on = [
+    aws_s3_bucket.app_data,
+    aws_s3_bucket_public_access_block.app_data
+  ]
 }
 
 # =============================================================================
@@ -887,7 +865,11 @@ resource "aws_lb" "web" {
     enabled = true
   }
 
-  depends_on = [aws_s3_bucket_policy.app_data]
+  depends_on = [
+    aws_s3_bucket_policy.app_data,
+    aws_s3_bucket.app_data,
+    aws_s3_bucket_public_access_block.app_data
+  ]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-web-alb"
@@ -1046,7 +1028,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # Flags to control deployment - set to false if resources already exist
 locals {
   deploy_config = false  # Set to false if Config delivery channel already exists in the region
-  deploy_iam_profile = true  # Set to false if IAM instance profile already exists
+  deploy_iam_profile = false  # Set to false if IAM instance profile already exists
 }
 
 resource "aws_config_configuration_recorder" "main" {
