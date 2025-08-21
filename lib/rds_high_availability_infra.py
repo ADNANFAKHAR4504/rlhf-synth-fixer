@@ -78,6 +78,10 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
     self.props = props
     self.common_tags = self._get_common_tags()
 
+    # Apply tags to this nested stack - they will be inherited by the CloudFormation stack
+    for key, value in self.common_tags.items():
+      cdk.Tags.of(self).add(key, value)
+
     # Create KMS keys for encryption
     self._create_kms_keys()
 
