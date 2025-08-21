@@ -19,6 +19,15 @@ if [ "$PLATFORM" = "cdk" ]; then
   npm run cdk:synth
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
+  # Pre-fetch Go modules to ensure go.sum is populated before any go run steps
+  echo "Pre-fetching Go modules (go mod download)"
+  export GOPROXY=${GOPROXY:-direct}
+  export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+  export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+  export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+  if [ -f "go.mod" ]; then
+    go mod download || true
+  fi
   npm run cdktf:get
   # Preflight: verify local provider bindings exist under .gen
   ensure_gen() {
