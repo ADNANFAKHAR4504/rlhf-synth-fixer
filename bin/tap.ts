@@ -10,9 +10,9 @@ const environmentSuffix =
   app.node.tryGetContext('environmentSuffix') || 'dev';
 
 // Exactly two regions as requested
-const primaryRegion =
+const primaryRegion: string =
   app.node.tryGetContext('primaryRegion') || 'us-east-1';
-const backupRegion =
+const backupRegion: string =
   app.node.tryGetContext('backupRegion') || 'us-east-2';
 
 const stackBaseName = `TapStack${environmentSuffix}`;
