@@ -120,6 +120,45 @@ describe('High Availability Web Application Infrastructure Integration Tests', (
         expect(outputs[outputKey]).toBeTruthy();
       });
     });
+
+    test('should fail if any required resource output is missing', () => {
+      const expectedResources = [
+        'VPCId',
+        'LoadBalancerURL',
+        'LoadBalancerDNSName',
+        'DatabaseEndpoint',
+        'DatabasePort',
+        'AutoScalingGroupName',
+        'SNSTopicArn',
+        'PublicSubnets',
+        'PrivateSubnets',
+        'Region',
+        // Additional critical resources for comprehensiveness
+        'ApplicationLoadBalancer',
+        'TargetGroup',
+        'WebServerSecurityGroup',
+        'DatabaseSecurityGroup',
+        'EC2Role',
+        'EC2InstanceProfile',
+        'DBSubnetGroup',
+        'DBSecret',
+        'KMSKey',
+        'KMSKeyAlias',
+      ];
+
+      const missingResources = expectedResources.filter(
+        key =>
+          outputs[key] === undefined ||
+          outputs[key] === null ||
+          outputs[key] === ''
+      );
+      expect(missingResources).toEqual([]);
+      if (missingResources.length > 0) {
+        throw new Error(
+          `Missing required resource outputs: ${missingResources.join(', ')}`
+        );
+      }
+    });
   });
 
   describe('Security Configuration', () => {
