@@ -2,7 +2,7 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -39,9 +39,40 @@ locals {
     Owner       = "infrastructure-team"
   }
 
+  # Region configuration
+  primary_region = var.aws_region
   vpc_cidr = "10.0.0.0/16"
   azs      = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
   name_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
+
+  # Regional resource configuration
+  regions = {
+    primary = var.aws_region
+    us_east_1 = "us-east-1"  # Primary deployment region - same as primary
+    us_west_2 = "us-west-2"  # Secondary region for cross-region replication
+    eu_west_1 = "eu-west-1"  # For EU data residency if needed
+  }
+
+  # Region-specific settings
+  region_settings = {
+    us_east_1 = {
+      name = "us-east-1"
+      short_name = "use1"
+      cloudfront_required = true
+      is_primary = true
+    }
+    us_west_2 = {
+      name = "us-west-2"
+      short_name = "usw2"
+      cloudfront_required = false
+      is_primary = false
+    }
+    eu_west_1 = {
+      name = "eu-west-1"
+      short_name = "euw1"
+      cloudfront_required = false
+    }
+  }
 }
 
 # Data sources

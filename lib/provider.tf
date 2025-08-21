@@ -9,16 +9,56 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "iac-rlhf-tf-states"      # Central S3 bucket for all TF states
-    key            = "global/292065/terraform.tfstate"  # Path in bucket
-    region         = "us-west-2"              # Region of S3 bucket
-    encrypt        = true
+    # Configuration provided during terraform init
   }
 }
 
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Project   = "iac-aws-nova-model"
+      Environment = var.environment
+      EnvironmentSuffix = var.environment_suffix
+    }
+  }
+}
+
+# Regional provider aliases for multi-region resources
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Project   = "iac-aws-nova-model"
+      Environment = var.environment
+      EnvironmentSuffix = var.environment_suffix
+    }
+  }
+}
+
+provider "aws" {
+  alias  = "us_west_2"
+  region = "us-west-2"
+
+  default_tags {
+    tags = {
+      ManagedBy = "terraform"
+      Project   = "iac-aws-nova-model"
+      Environment = var.environment
+      EnvironmentSuffix = var.environment_suffix
+    }
+  }
+}
+
+provider "aws" {
+  alias  = "eu_west_1"
+  region = "eu-west-1"
 
   default_tags {
     tags = {
