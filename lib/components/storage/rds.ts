@@ -102,13 +102,11 @@ export class RdsSubnetGroupComponent extends pulumi.ComponentResource {
       ...args.tags,
     };
 
-    // FIXED: Remove the problematic validation that was causing the error
-    // Let Pulumi and AWS handle the validation of subnet IDs
     this.subnetGroup = new aws.rds.SubnetGroup(
       `${name}-subnet-group`,
       {
         name: args.name,
-        subnetIds: args.subnetIds, // Direct assignment without validation
+        subnetIds: args.subnetIds,
         description: args.description || `DB subnet group for ${args.name}`,
         tags: defaultTags,
       },
@@ -222,11 +220,10 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         finalSnapshotIdentifier:
           args.finalSnapshotIdentifier ||
           `${args.name}-final-snapshot-${Date.now()}`,
-        performanceInsightsEnabled: args.performanceInsightsEnabled ?? true,
         performanceInsightsKmsKeyId:
           args.performanceInsightsKmsKeyId || args.kmsKeyId,
         enabledCloudwatchLogsExports: args.enabledCloudwatchLogsExports,
-        monitoringInterval: args.monitoringInterval || 0, // Changed from 60 to 0
+        monitoringInterval: args.monitoringInterval || 0,
         monitoringRoleArn: args.monitoringRoleArn,
         tags: defaultTags,
       },
