@@ -45,29 +45,6 @@ fi
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
-# Destroy step (remove this block in subsequent deployments)
-echo "=== Destroy Phase ==="
-if [ "$PLATFORM" = "cdk" ]; then
-  echo "💥 CDK project detected, running CDK destroy..."
-  npm run cdk:destroy || echo "CDK destroy completed or failed"
-elif [ "$PLATFORM" = "cdktf" ]; then
-  echo "💥 CDKTF project detected, running CDKTF destroy..."
-  npm run cdktf:destroy || echo "CDKTF destroy completed or failed"
-elif [ "$PLATFORM" = "cfn" ]; then
-  echo "💥 CloudFormation project detected, destroying stack..."
-  npm run cfn:destroy || echo "CloudFormation destroy completed or failed"
-elif [ "$PLATFORM" = "tf" ]; then
-  echo "💥 Terraform HCL project detected, running Terraform destroy..."
-  cd lib
-  terraform destroy -auto-approve || echo "Terraform destroy completed or failed"
-  cd ..
-elif [ "$PLATFORM" = "pulumi" ]; then
-  echo "💥 Pulumi project detected, running Pulumi destroy..."
-  export PYTHONPATH=.:bin
-  pipenv run pulumi-destroy || echo "Pulumi destroy completed or failed"
-else
-  echo "ℹ️ Unknown platform for destroy: $PLATFORM"
-fi
 
 # Deploy step
 echo "=== Deploy Phase ==="
