@@ -28,6 +28,8 @@ import {
   DescribeDBInstancesCommand,
   RDSClient
 } from '@aws-sdk/client-rds';
+import * as fs from "fs";
+import * as path from "path";
 
 /** ===================== Types & IO ===================== */
 
@@ -54,11 +56,14 @@ let cloudwatchClient: CloudWatchClient;
 let region: string;
 
 function loadOutputs() {
+  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  
+  if (!fs.existsSync(p)) {
+    throw new Error("Outputs file not found at cfn-outputs/all-outputs.json. Please run terraform apply first.");
+  }
+  
   try {
-    // Use terraform output command to get outputs
-    const { execSync } = require('child_process');
-    const outputsRaw = execSync('cd lib && terraform output -json', { encoding: 'utf8' });
-    const raw = JSON.parse(outputsRaw);
+    const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Outputs;
 
     const missing: string[] = [];
     const req = <K extends keyof Outputs>(k: K) => {
@@ -79,14 +84,14 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      throw new Error(`Missing required outputs: ${missing.join(", ")}`);
+      throw new Error(`Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`);
     }
     return o;
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Error reading Terraform outputs: ${error.message}`);
+      throw new Error(`Error reading outputs file: ${error.message}`);
     }
-    throw new Error("Error reading Terraform outputs");
+    throw new Error("Error reading outputs file");
   }
 }
 
