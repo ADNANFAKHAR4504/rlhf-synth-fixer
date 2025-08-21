@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable, and compliant AWS infrastructure foundation - TapStack'
 
@@ -8,7 +9,7 @@ Parameters:
     Default: 'tapstack'
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
-  
+
   Environment:
     Type: String
     Description: 'Environment for resource naming convention'
@@ -17,13 +18,12 @@ Parameters:
       - 'dev'
       - 'staging'
       - 'prod'
-  
+
   DBUsername:
     Type: String
     Description: 'Database master username'
     Default: 'admin'
     NoEcho: true
-
 
   UseExistingCloudFrontWebACL:
     Type: String
@@ -41,20 +41,32 @@ Parameters:
     Description: 'Set to true to provision AWS Config resources; set to false to skip in accounts without required permissions.'
     AllowedValues: ['true', 'false']
     Default: 'false'
-  
+
 # (no Mappings required)
 
 Conditions:
-  CreateCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'false' ], !Equals [ !Ref AWS::Region, 'us-east-1' ] ]
-  HasExistingCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'true' ], !Not [ !Equals [ !Ref ExistingCloudFrontWebACLArn, '' ] ] ]
-  UseAnyWebACL: !Or [ { Condition: CreateCloudFrontWebACL }, { Condition: HasExistingCloudFrontWebACL } ]
-  CreateConfig: !Equals [ !Ref EnableConfig, 'true' ]
+  CreateCloudFrontWebACL:
+    !And [
+      !Equals [!Ref UseExistingCloudFrontWebACL, 'false'],
+      !Equals [!Ref AWS::Region, 'us-east-1'],
+    ]
+  HasExistingCloudFrontWebACL:
+    !And [
+      !Equals [!Ref UseExistingCloudFrontWebACL, 'true'],
+      !Not [!Equals [!Ref ExistingCloudFrontWebACLArn, '']],
+    ]
+  UseAnyWebACL:
+    !Or [
+      { Condition: CreateCloudFrontWebACL },
+      { Condition: HasExistingCloudFrontWebACL },
+    ]
+  CreateConfig: !Equals [!Ref EnableConfig, 'true']
 
 Resources:
   # ============================================================================
   # 1. COMPLIANCE AND AUDITING FOUNDATION
   # ============================================================================
-  
+
   # CloudTrail S3 Bucket
   CloudTrailBucket:
     Type: AWS::S3::Bucket
@@ -203,7 +215,7 @@ Resources:
   # ============================================================================
   # 2. NETWORK FOUNDATION
   # ============================================================================
-  
+
   # VPC
   VPC:
     Type: AWS::EC2::VPC
@@ -360,7 +372,7 @@ Resources:
   # ============================================================================
   # 3. SECURE DATA TIER
   # ============================================================================
-  
+
   # Application Data S3 Bucket
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
@@ -441,7 +453,7 @@ Resources:
   # ============================================================================
   # 4. APPLICATION AND DELIVERY TIER
   # ============================================================================
-  
+
   # Lambda Security Group
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -604,7 +616,16 @@ Resources:
         Enabled: true
         HttpVersion: http2
         PriceClass: PriceClass_100
-        WebACLId: !If [ UseAnyWebACL, !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ], !Ref 'AWS::NoValue' ]
+        WebACLId:
+          !If [
+            UseAnyWebACL,
+            !If [
+              CreateCloudFrontWebACL,
+              !GetAtt WebACL.Arn,
+              !Ref ExistingCloudFrontWebACLArn,
+            ],
+            !Ref 'AWS::NoValue',
+          ]
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
       Tags:
@@ -706,7 +727,12 @@ Outputs:
   WebACLArn:
     Description: 'WAF Web ACL ARN'
     Condition: UseAnyWebACL
-    Value: !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ]
+    Value:
+      !If [
+        CreateCloudFrontWebACL,
+        !GetAtt WebACL.Arn,
+        !Ref ExistingCloudFrontWebACLArn,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-WebACL-ARN'
 
@@ -715,3 +741,4 @@ Outputs:
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+```
