@@ -51,8 +51,11 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("has locals block with common_tags", () => {
-      expect(stackContent).toMatch(/locals\s*{/);
-      expect(stackContent).toMatch(/common_tags\s*=/);
+      expect(stackContent).toMatch(/locals\s*\{[\s\S]*common_tags\s*=[\s\S]*\}/);
+    });
+
+    test("has environment_suffix local variable", () => {
+      expect(stackContent).toMatch(/environment_suffix\s*=\s*var\.environment\s*!=\s*"staging"\s*\?\s*"-\$\{var\.environment\}"\s*:\s*""/);
     });
   });
 
@@ -80,7 +83,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("KMS key has proper naming convention", () => {
-      expect(stackContent).toMatch(/TapStack-\$\{var\.environment\}-\$\{local\.primary_region\}/);
+      expect(stackContent).toMatch(/TapStack\$\{local\.environment_suffix\}-\$\{var\.environment\}-\$\{local\.primary_region\}/);
     });
   });
 
@@ -305,12 +308,12 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Naming Convention", () => {
     test("follows Service-Environment-Region naming pattern", () => {
-      expect(stackContent).toMatch(/TapStack-\$\{var\.environment\}-\$\{local\.primary_region\}/);
-      expect(stackContent).toMatch(/TapStack-\$\{var\.environment\}-\$\{local\.secondary_region\}/);
+      expect(stackContent).toMatch(/TapStack\$\{local\.environment_suffix\}-\$\{var\.environment\}-\$\{local\.primary_region\}/);
+      expect(stackContent).toMatch(/TapStack\$\{local\.environment_suffix\}-\$\{var\.environment\}-\$\{local\.secondary_region\}/);
     });
 
     test("uses consistent resource prefixes", () => {
-      expect(stackContent).toMatch(/tapstack-\$\{var\.environment\}/);
+      expect(stackContent).toMatch(/tapstack\$\{local\.environment_suffix\}-\$\{var\.environment\}/);
     });
   });
 
