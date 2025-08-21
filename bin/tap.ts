@@ -56,7 +56,7 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-const config = environmentConfigs[environmentSuffix];
+const config = environmentConfigs[environmentSuffix] ?? environmentConfigs['dev'];
 
 if (!config) {
   throw new Error(
