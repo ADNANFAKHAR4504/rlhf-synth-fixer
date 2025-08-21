@@ -48,7 +48,7 @@ locals {
     primary = {
       name = var.aws_region
       cidr = "10.0.0.0/16"
-      azs  = ["us-west-1a", "us-west-1c"]
+      azs  = ["us-west-1a", "us-west-1b"]
     }
     secondary = {
       name = "us-west-2"
@@ -144,6 +144,36 @@ resource "aws_kms_key" "primary" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "Allow CloudWatch Logs use of the key"
+        Effect    = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
   tags = merge(local.common_tags, {
     Name   = "${var.project_name}-kms-primary-${var.environment}"
     Region = local.regions.primary.name
@@ -163,6 +193,36 @@ resource "aws_kms_key" "secondary" {
   description             = "KMS key for ${var.project_name} secondary region encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "Allow CloudWatch Logs use of the key"
+        Effect    = "Allow"
+        Principal = {
+          Service = "logs.us-west-2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
   tags = merge(local.common_tags, {
     Name   = "${var.project_name}-kms-secondary-${var.environment}"
@@ -333,6 +393,8 @@ resource "aws_cloudwatch_log_group" "primary_vpc_flow_logs" {
     Name   = "${local.naming.vpc_primary}-flow-logs"
     Region = local.regions.primary.name
   })
+
+  depends_on = [aws_kms_key.primary]
 }
 
 #==============================================================================
@@ -491,6 +553,8 @@ resource "aws_cloudwatch_log_group" "secondary_vpc_flow_logs" {
     Name   = "${local.naming.vpc_secondary}-flow-logs"
     Region = local.regions.secondary.name
   })
+
+  depends_on = [aws_kms_key.secondary]
 }
 
 #==============================================================================
@@ -1051,6 +1115,12 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.project_name}-${var.environment}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.primary.arn
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-cloudtrail"
+  })
+
+  depends_on = [aws_kms_key.primary]
 }
 
 # IAM Role & Policy for CloudTrail
