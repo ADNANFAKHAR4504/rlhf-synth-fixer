@@ -490,6 +490,14 @@
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "LoggingBucket"
+                    },
+                    "LogFilePrefix": {
+                        "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-secure-access-logs/"
+                    }
+                },
                 "Tags": [
                     {
                         "Key": "Name",
