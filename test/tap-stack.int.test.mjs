@@ -21,8 +21,8 @@ const autoscaling = new AWS.AutoScaling();
 let outputs;
 try {
   outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 } catch (error) {
   throw new Error(
     `Integration tests require cfn-outputs/flat-outputs.json from successful deployment. ` +
@@ -35,7 +35,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Helper function to get output value
 const getOutput = (key) => {
-  const fullKey = `${key}-${environmentSuffix}`;
+  const fullKey = `${key}${environmentSuffix}`;
   const value = outputs[fullKey];
   if (!value) {
     throw new Error(`Output ${fullKey} not found in cfn-outputs/flat-outputs.json`);
@@ -274,7 +274,7 @@ describe('TapStack Integration Tests', () => {
       const environmentSuffix = getOutput('EnvironmentSuffix');
       
       const alarmsResponse = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: `HighCpuAlarm-${environmentSuffix}`
+        AlarmNamePrefix: `HighCpuAlarm${environmentSuffix}`
       }).promise();
       
       expect(alarmsResponse.MetricAlarms.length).toBeGreaterThan(0);
