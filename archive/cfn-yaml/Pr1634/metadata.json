@@ -16,14 +16,20 @@
   "training_quality": 9,
   "aws_services": [
     "AWS::KMS::Key",
-    "AWS::KMS::Alias", 
+    "AWS::KMS::Alias",
     "AWS::S3::Bucket",
     "AWS::S3::BucketPolicy",
     "AWS::IAM::Role",
-    "AWS::IAM::InstanceProfile", 
+    "AWS::IAM::InstanceProfile",
     "AWS::IAM::Group",
     "AWS::EC2::SecurityGroup",
     "AWS::Logs::LogGroup",
     "AWS::CloudTrail::Trail"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
