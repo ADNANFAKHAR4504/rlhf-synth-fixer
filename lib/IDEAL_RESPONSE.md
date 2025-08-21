@@ -4,7 +4,7 @@ A concise Go CDKTF implementation that creates an S3 → Lambda pipeline without
 - S3 bucket: versioning enabled, public access blocked, SSE AES256.
 - CloudWatch Log Group: 30-day retention.
 - IAM: Lambda assume-role, custom policy for S3 read, prefix-scoped writes, and logs write; attachment to role.
-- Lambda: python3.12, env vars, reserved concurrency, packaged via minimal local zip bytes.
+- Lambda: python3.12, env var s, reserved concurrency, packaged via minimal local zip bytes.
 - S3 notifications: object-created events invoke the Lambda; explicit lambda permission for S3 principal.
 - Outputs: bucket_name, lambda_function_name, lambda_function_arn.
 
