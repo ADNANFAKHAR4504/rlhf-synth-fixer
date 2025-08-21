@@ -1,6 +1,6 @@
 {
-  "platform": "cdk",
-  "language": "typescript",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr917",
