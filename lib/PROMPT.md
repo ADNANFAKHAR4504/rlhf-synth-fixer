@@ -1,18 +1,11 @@
-I need to deploy a highly available web application using AWS CDK in JavaScript. The infrastructure must meet these specific requirements:
+Hey, I need help building a web application infrastructure on AWS. We're looking to create something that can handle production traffic with good reliability.
 
-1. Create a VPC with at least 3 subnets distributed across different Availability Zones for high availability
-2. Set up an Auto Scaling group to ensure there are always at least two EC2 instances running
-3. Deploy an Application Load Balancer to distribute incoming traffic across the EC2 instances
-4. Configure an RDS MySQL database with Multi-AZ deployment enabled for failover
-5. Create IAM roles for EC2 instances to allow S3 access for static content delivery
-6. Apply consistent tagging to all AWS resources with 'Environment: Production' for cost allocation
-7. Enable CloudWatch logging and monitoring for all critical systems
+For the setup, I need a VPC that spans multiple availability zones with proper subnet configuration. The application should run on EC2 instances behind a load balancer, and we need at least 2 instances running at all times through auto scaling. 
 
-Additional requirements:
-- Deploy in the us-east-1 region
-- Use custom CIDR blocks for the VPC
-- Follow the 'teamname-projectname' naming convention
-- Use EKS Auto Mode for simplified Kubernetes cluster management
-- Incorporate AWS Clean Rooms for secure data collaboration if applicable
+The database should be MySQL on RDS with multi-AZ for redundancy. Our instances will need to access S3 for serving static files, so appropriate IAM permissions are required. Everything should be properly tagged for our production environment and cost tracking.
 
-Please provide the complete CDK infrastructure code in JavaScript format using .mjs file extensions. Organize the code into separate files for better maintainability. Ensure all resources follow AWS best practices and include proper error handling.
+Monitoring and logging through CloudWatch is essential for operational visibility. We want to deploy this in us-east-1 region.
+
+Since we're exploring some of the newer AWS capabilities, it would be good to incorporate EKS Auto Mode for future container workloads and potentially AWS Clean Rooms for any data collaboration needs down the line.
+
+Could you provide the CDK code in JavaScript using .mjs files? We prefer having the infrastructure organized in separate files for easier maintenance.
