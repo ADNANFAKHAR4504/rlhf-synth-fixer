@@ -26,7 +26,7 @@ export class TapStack extends cdk.Stack {
       expression: cdk.Fn.conditionEquals(cdk.Aws.REGION, 'us-east-1'),
     });
 
-    // 'KMS Key' for S3 encryption
+    // KMS Key for S3 encryption
     const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
       description: `KMS key for S3 bucket encryption and CloudTrail logs - ${suffix}`,
       enableKeyRotation: true, // Enable automatic key rotation for security
