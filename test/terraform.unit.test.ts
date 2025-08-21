@@ -8,7 +8,6 @@ describe('Terraform Configuration Unit Tests', () => {
   const requiredFiles = [
     'tap_stack.tf',
     'vars.tf',
-    'outputs.tf',
     'terraform.tfvars',
   ];
 
@@ -42,9 +41,9 @@ describe('Terraform Configuration Unit Tests', () => {
     expect(content).toMatch(/variable "region" {/);
   });
 
-  test('outputs.tf should define the "vpc_id" output', () => {
-    const outputsTfPath = path.join(LIB_DIR, 'outputs.tf');
+  test('tap_stack.tf should define the "ec2_autoscaling_group_name" output', () => {
+    const outputsTfPath = path.join(LIB_DIR, 'tap_stack.tf');
     const content = fs.readFileSync(outputsTfPath, 'utf8');
-    expect(content).toMatch(/output "vpc_id" {/);
+    expect(content).toMatch(/output "ec2_autoscaling_group_name" {/);
   });
 });
