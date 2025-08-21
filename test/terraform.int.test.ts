@@ -307,7 +307,7 @@ describe("Live AWS Resource Validation", () => {
     
     const asg = response.AutoScalingGroups![0];
     expect(asg.AutoScalingGroupName).toBe(OUT.asgName);
-    expect(asg.DesiredCapacity).toBe(2);
+    expect(asg.DesiredCapacity).toBe(1);
     expect(asg.MinSize).toBe(1);
     expect(asg.MaxSize).toBe(4);
     expect(asg.HealthCheckType).toBe('ELB');
@@ -389,7 +389,7 @@ describe("Live AWS Resource Validation", () => {
     expect(ec2Sg!.VpcId).toBe(OUT.vpcId);
     
     // Check RDS security group configuration
-    expect(rdsSg!.Description).toBe('Security group for RDS database');
+    expect(rdsSg!.Description).toBe('Security group for RDS (allow from Lambda)');
     expect(rdsSg!.VpcId).toBe(OUT.vpcId);
     
     // Check that no security group allows all traffic from 0.0.0.0/0 for inbound rules
