@@ -14,12 +14,9 @@ terraform {
     }
   }
 
-  # Backend configuration - Terraform Cloud backend
-  cloud {
-    organization = "<REPLACE_WITH_TFC_ORG>"
-    workspaces {
-      prefix = "myapp-"
-    }
+  # Backend configuration - S3 for bootstrap compatibility
+  backend "s3" {
+    # Backend configuration will be provided via command line arguments
   }
 }
 
