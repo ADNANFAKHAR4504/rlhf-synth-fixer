@@ -51,7 +51,7 @@ locals {
       azs  = ["eu-west-1a", "eu-west-1b"]
     }
     secondary = {
-      name = "us-west-2"
+      name = "eu-west-2"
       cidr = "10.1.0.0/16"
       azs  = ["eu-west-2a", "eu-west-2b"]
     }
@@ -88,8 +88,9 @@ resource "random_string" "rds_username" {
 
 # Random password for RDS instances
 resource "random_password" "rds_password" {
-  length  = 32
+  length  = 16
   special = true
+  override_special = "!#$%&()*+-=:?@^_"
 }
 
 #==============================================================================
@@ -210,7 +211,7 @@ resource "aws_kms_key" "secondary" {
         Sid       = "Allow CloudWatch Logs use of the key"
         Effect    = "Allow"
         Principal = {
-          Service = "logs.us-west-2.amazonaws.com"
+          Service = "logs.eu-west-2.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -1160,6 +1161,43 @@ resource "aws_iam_role_policy" "cloudtrail" {
 }
 
 # Global CloudTrail
+
+resource "aws_s3_bucket_policy" "cloudtrail_policy" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.cloudtrail.bucket}"
+      },
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.cloudtrail.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+  depends_on = [aws_s3_bucket.cloudtrail]
+}
+
+
 resource "aws_cloudtrail" "this" {
   provider                      = aws.eu_west_1
   name                          = "${var.project_name}-org-trail-${var.environment}"
