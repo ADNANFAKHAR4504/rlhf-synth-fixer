@@ -9,7 +9,7 @@ describe('Terraform Configuration Unit Tests', () => {
     'tap_stack.tf',
     'vars.tf',
     'outputs.tf',
-    'terraform.tfvars.example',
+    'terraform.tfvars',
   ];
 
   const requiredModules = ['data', 'security', 'monitoring'];
