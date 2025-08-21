@@ -447,7 +447,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-bucket${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'secure-bucket${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
