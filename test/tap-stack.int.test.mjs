@@ -1,13 +1,13 @@
 const { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } = require('@aws-sdk/client-ec2');
 const { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
 const { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } = require('@aws-sdk/client-rds');
-const { S3Client, GetBucketLocationCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetBucketVersioningCommand, GetPublicAccessBlockCommand } = require('@aws-sdk/client-s3');
 const { IAMClient, GetRoleCommand, GetInstanceProfileCommand } = require('@aws-sdk/client-iam');
 const { CloudWatchClient, DescribeAlarmsCommand, ListDashboardsCommand } = require('@aws-sdk/client-cloudwatch');
 const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
-const { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribeLaunchTemplatesCommand } = require('@aws-sdk/client-auto-scaling');
+const { AutoScalingClient, DescribeAutoScalingGroupsCommand } = require('@aws-sdk/client-auto-scaling');
+const { DescribeLaunchTemplatesCommand } = require('@aws-sdk/client-ec2');
 const fs = require('fs');
-const path = require('path');
 
 // Load the deployment outputs
 let deploymentOutputs = {};
@@ -55,7 +55,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const vpcId = deploymentOutputs[`VpcId-${environmentSuffix}`];
+            const vpcId = deploymentOutputs['VpcId'];
             expect(vpcId).toBeDefined();
 
             const response = await ec2Client.send(new DescribeVpcsCommand({
@@ -75,7 +75,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const vpcId = deploymentOutputs[`VpcId-${environmentSuffix}`];
+            const vpcId = deploymentOutputs['VpcId'];
             const response = await ec2Client.send(new DescribeSubnetsCommand({
                 Filters: [
                     {
@@ -111,7 +111,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const vpcId = deploymentOutputs[`VpcId-${environmentSuffix}`];
+            const vpcId = deploymentOutputs['VpcId'];
             const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
                 Filters: [
                     {
@@ -144,7 +144,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const bucketName = deploymentOutputs[`S3BucketName-${environmentSuffix}`];
+            const bucketName = deploymentOutputs['S3BucketName'];
             expect(bucketName).toBeDefined();
 
             // Check bucket versioning
@@ -170,25 +170,31 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const roleName = `TapStack${environmentSuffix}-ec2role${environmentSuffix}`;
+            // Try different naming patterns for the IAM role
+            let roleResponse;
+            const possibleRoleNames = [
+                `TapStack${environmentSuffix}-ec2role${environmentSuffix}`,
+                `TapStack${environmentSuffix}-ec2role-${environmentSuffix}`,
+                `ec2-role-${environmentSuffix}`
+            ];
             
-            try {
-                const roleResponse = await iamClient.send(new GetRoleCommand({
-                    RoleName: roleName
-                }));
-                
-                expect(roleResponse.Role).toBeDefined();
-                expect(roleResponse.Role.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
-            } catch (error) {
-                // Try alternative naming pattern
-                const altRoleName = `TapStack${environmentSuffix}-ec2role-${environmentSuffix}`;
-                const roleResponse = await iamClient.send(new GetRoleCommand({
-                    RoleName: altRoleName
-                }));
-                
-                expect(roleResponse.Role).toBeDefined();
-                expect(roleResponse.Role.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
+            let roleFound = false;
+            for (const roleName of possibleRoleNames) {
+                try {
+                    roleResponse = await iamClient.send(new GetRoleCommand({
+                        RoleName: roleName
+                    }));
+                    roleFound = true;
+                    break;
+                } catch (error) {
+                    // Continue to next role name
+                    continue;
+                }
             }
+            
+            expect(roleFound).toBe(true);
+            expect(roleResponse.Role).toBeDefined();
+            expect(roleResponse.Role.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
         }, 30000);
 
         test('Instance profile should exist', async () => {
@@ -213,7 +219,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const albDns = deploymentOutputs[`LoadBalancerDNS-${environmentSuffix}`];
+            const albDns = deploymentOutputs['LoadBalancerDNS'];
             expect(albDns).toBeDefined();
 
             const response = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
@@ -249,7 +255,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const dbEndpoint = deploymentOutputs[`DatabaseEndpoint-${environmentSuffix}`];
+            const dbEndpoint = deploymentOutputs['DatabaseEndpoint'];
             expect(dbEndpoint).toBeDefined();
 
             const response = await rdsClient.send(new DescribeDBInstancesCommand({}));
@@ -351,7 +357,7 @@ describe('TapStack Integration Tests', () => {
             }
 
             const response = await cloudwatchLogsClient.send(new DescribeLogGroupsCommand({}));
-            const logGroup = response.LogGroups.find(lg => 
+            const logGroup = response.logGroups?.find(lg => 
                 lg.logGroupName.includes(environmentSuffix)
             );
 
@@ -366,7 +372,7 @@ describe('TapStack Integration Tests', () => {
                 return;
             }
 
-            const vpcId = deploymentOutputs[`VpcId-${environmentSuffix}`];
+            const vpcId = deploymentOutputs['VpcId'];
             const response = await ec2Client.send(new DescribeVpcsCommand({
                 VpcIds: [vpcId]
             }));
