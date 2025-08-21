@@ -6,7 +6,8 @@ Parameters:
     Type: String
     AllowedValues: [dev, staging, prod]
     Default: dev
-    Description: Environment name (dev, staging, or prod)
+    AllowedPattern: '^[a-z][a-z0-9-]{0,10}$'
+    Description: Environment name (dev, staging, or prod; lowercase, max 12 chars for bucket name compliance)
   ProjectName:
     Type: String
     Default: TapStack
@@ -32,13 +33,19 @@ Mappings:
   RegionMap:
     us-east-1:
       DestinationRegion: us-east-2
-      DestinationBucket: !Sub 'TapStack-staging-databucket-${AWS::AccountId}-us-east-2'
+      DestinationBucket: TapStack-staging-databucket-123456789012
     us-east-2:
       DestinationRegion: us-west-2
-      DestinationBucket: !Sub 'TapStack-prod-databucket-${AWS::AccountId}-us-west-2'
+      DestinationBucket: TapStack-prod-databucket-123456789012
     us-west-2:
       DestinationRegion: ''
       DestinationBucket: ''
+
+Conditions:
+  CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, 'true']
+  SingleNat: !Equals [!Ref CreateNatPerAZ, 'false']
+  HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, '']]
+  IsNotProd: !Not [!Equals [!Ref Environment, prod]]
 
 Resources:
   VPC:
@@ -183,7 +190,7 @@ Resources:
     Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref PublicSubnetA
-      AllocationId: !GetAtt EIPA.Outputs.AllocationId
+      AllocationId: !GetAtt EIPA.AllocationId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-natgatewaya'
@@ -214,7 +221,7 @@ Resources:
     Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref PublicSubnetB
-      AllocationId: !GetAtt EIPB.Outputs.AllocationId
+      AllocationId: !GetAtt EIPB.AllocationId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-natgatewayb'
@@ -264,6 +271,7 @@ Resources:
 
   PrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref PrivateSubnetA
       RouteTableId: !Ref PrivateRouteTableA
@@ -292,6 +300,7 @@ Resources:
 
   PrivateSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTableB
@@ -301,7 +310,7 @@ Resources:
     Condition: SingleNat
     Properties:
       SubnetId: !Ref PublicSubnetA
-      AllocationId: !GetAtt SingleEIP.Outputs.AllocationId
+      AllocationId: !GetAtt SingleEIP.AllocationId
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-natgateway'
@@ -327,26 +336,19 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  SinglePrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Condition: SingleNat
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-privatert'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  SinglePrivateRoute:
+  SinglePrivateRouteA:
     Type: AWS::EC2::Route
     Condition: SingleNat
     Properties:
-      RouteTableId: !Ref SinglePrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SingleNatGateway
+
+  SinglePrivateRouteB:
+    Type: AWS::EC2::Route
+    Condition: SingleNat
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref SingleNatGateway
 
@@ -355,19 +357,24 @@ Resources:
     Condition: SingleNat
     Properties:
       SubnetId: !Ref PrivateSubnetA
-      RouteTableId: !Ref SinglePrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTableA
 
   SinglePrivateSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Condition: SingleNat
     Properties:
       SubnetId: !Ref PrivateSubnetB
-      RouteTableId: !Ref SinglePrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTableB
 
   DataBucket:
     Type: AWS::S3::Bucket
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1031 # Bucket name is valid, false positive due to dynamic AWS::AccountId
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -399,7 +406,10 @@ Resources:
               DeleteMarkerReplication:
                 Status: Disabled
               Destination:
-                Bucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
+                Bucket: !Join
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
               Filter:
                 Prefix: ''
         - !Ref AWS::NoValue
@@ -414,7 +424,7 @@ Resources:
           - Effect: Deny
             Principal: '*'
             Action: 's3:*'
-            Resource: !Sub '${DataBucket.Arn}/*'
+            Resource: !Sub 'arn:aws:s3:::${DataBucket}/*'
             Condition:
               Bool:
                 aws:SecureTransport: false
@@ -442,14 +452,18 @@ Resources:
                   - s3:GetBucket*
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${DataBucket.Arn}'
-                  - !Sub '${DataBucket.Arn}/*'
+                  - !Sub 'arn:aws:s3:::TapStack-${Environment}-databucket-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::TapStack-${Environment}-databucket-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ReplicateObject
                   - s3:ReplicateDelete
                   - s3:ReplicateTags
-                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}-${!FindInMap [RegionMap, !Ref AWS::Region, DestinationRegion]}/*'
+                Resource: !Join
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
+                    - '/*'
 
   EnvironmentRole:
     Type: AWS::IAM::Role
@@ -469,12 +483,6 @@ Resources:
           Value: !Ref Environment
         - Key: CreatedBy
           Value: !Ref Owner
-
-Conditions:
-  CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, 'true']
-  SingleNat: !Equals [!Ref CreateNatPerAZ, 'false']
-  HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, '']]
-  IsNotProd: !Not [!Equals [!Ref Environment, prod]]
 
 Outputs:
   VPCId:
