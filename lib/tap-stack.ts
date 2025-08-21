@@ -63,6 +63,7 @@ export class TapStack extends TerraformStack {
     // Deploy secure modules - NO CONFIG NEEDED NOW
     const secureInfra = new SecureModules(this, 'secure-infrastructure', {
       region: awsRegion,
+      environmentSuffix: environmentSuffix,
     });
 
     // Simple outputs
@@ -72,15 +73,12 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: [secureInfra.publicSubnets[0].id, secureInfra.publicSubnets[1].id],
+      value: secureInfra.publicSubnets.map(subnet => subnet.id),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private_subnet_ids', {
-      value: [
-        secureInfra.privateSubnets[0].id,
-        secureInfra.privateSubnets[1].id,
-      ],
+      value: secureInfra.privateSubnets.map(subnet => subnet.id),
       description: 'Private subnet IDs',
     });
 

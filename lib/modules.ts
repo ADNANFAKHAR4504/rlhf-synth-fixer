@@ -31,6 +31,7 @@ import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
 
 interface SecureModulesProps {
   region: string;
+  environmentSuffix?: string;
 }
 
 export class SecureModules extends Construct {
@@ -54,7 +55,8 @@ export class SecureModules extends Construct {
 
     // Configuration
     const region = props.region;
-    const appName = 'MyApp';
+    const environmentSuffix = props.environmentSuffix || 'dev';
+    const appName = 'myapp';
     const vpcCidr = '10.0.0.0/16';
     const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
     const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
@@ -102,22 +104,24 @@ export class SecureModules extends Construct {
         ],
       }),
       tags: {
-        Name: `${appName}-KMS-Key`,
-        Environment: 'production',
+        Name: `${appName}-kms-key-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // KMS Alias
     this.kmsAlias = new KmsAlias(this, 'kms-alias', {
-      name: `alias/${appName.toLowerCase()}-encryption-key`,
+      name: `alias/${appName}-encryption-key-${environmentSuffix}`,
       targetKeyId: this.kmsKey.keyId,
     });
 
-    // S3 Bucket
+    // S3 Bucket with stable naming
     this.s3Bucket = new S3Bucket(this, 's3-bucket', {
-      bucket: `${appName.toLowerCase()}-secure-bucket-${Math.floor(Date.now() / 1000)}`,
+      bucket: `${appName}-secure-bucket-${environmentSuffix}`,
+      forceDestroy: true, // Allow destruction during development
       tags: {
-        Name: `${appName}-S3-Bucket`,
+        Name: `${appName}-s3-bucket-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -154,9 +158,11 @@ export class SecureModules extends Construct {
 
     // S3 Access Logging Bucket
     const loggingBucket = new S3Bucket(this, 's3-logging-bucket', {
-      bucket: `${appName.toLowerCase()}-access-logs-${Math.floor(Date.now() / 1000)}`,
+      bucket: `${appName}-access-logs-${environmentSuffix}`,
+      forceDestroy: true,
       tags: {
-        Name: `${appName}-S3-AccessLogs`,
+        Name: `${appName}-s3-access-logs-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -172,7 +178,8 @@ export class SecureModules extends Construct {
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
-        Name: `${appName}-VPC`,
+        Name: `${appName}-vpc-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -180,7 +187,8 @@ export class SecureModules extends Construct {
     const igw = new InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
-        Name: `${appName}-IGW`,
+        Name: `${appName}-igw-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -193,8 +201,9 @@ export class SecureModules extends Construct {
         availabilityZone: availabilityZones[index],
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: `${appName}-Public-Subnet-${index + 1}`,
+          Name: `${appName}-public-subnet-${index + 1}-${environmentSuffix}`,
           Type: 'Public',
+          Environment: environmentSuffix,
         },
       });
       this.publicSubnets.push(subnet);
@@ -208,8 +217,9 @@ export class SecureModules extends Construct {
         cidrBlock: cidr,
         availabilityZone: availabilityZones[index],
         tags: {
-          Name: `${appName}-Private-Subnet-${index + 1}`,
+          Name: `${appName}-private-subnet-${index + 1}-${environmentSuffix}`,
           Type: 'Private',
+          Environment: environmentSuffix,
         },
       });
       this.privateSubnets.push(subnet);
@@ -221,7 +231,8 @@ export class SecureModules extends Construct {
         new Eip(this, `nat-eip-${index}`, {
           domain: 'vpc',
           tags: {
-            Name: `${appName}-NAT-EIP-${index + 1}`,
+            Name: `${appName}-nat-eip-${index + 1}-${environmentSuffix}`,
+            Environment: environmentSuffix,
           },
           dependsOn: [igw],
         })
@@ -234,7 +245,8 @@ export class SecureModules extends Construct {
           allocationId: eips[index].id,
           subnetId: subnet.id,
           tags: {
-            Name: `${appName}-NAT-Gateway-${index + 1}`,
+            Name: `${appName}-nat-gateway-${index + 1}-${environmentSuffix}`,
+            Environment: environmentSuffix,
           },
           dependsOn: [igw],
         })
@@ -244,7 +256,8 @@ export class SecureModules extends Construct {
     const publicRouteTable = new RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
-        Name: `${appName}-Public-RT`,
+        Name: `${appName}-public-rt-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -268,7 +281,8 @@ export class SecureModules extends Construct {
       const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
         vpcId: this.vpc.id,
         tags: {
-          Name: `${appName}-Private-RT-${index + 1}`,
+          Name: `${appName}-private-rt-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
         },
       });
 
@@ -288,7 +302,7 @@ export class SecureModules extends Construct {
 
     // Lambda execution role
     this.lambdaRole = new IamRole(this, 'lambda-role', {
-      name: `${appName}-Lambda-ExecutionRole`,
+      name: `${appName}-lambda-execution-role-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -302,13 +316,14 @@ export class SecureModules extends Construct {
         ],
       }),
       tags: {
-        Name: `${appName}-Lambda-Role`,
+        Name: `${appName}-lambda-role-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // Lambda policy
     const lambdaPolicy = new IamPolicy(this, 'lambda-policy', {
-      name: `${appName}-Lambda-Policy`,
+      name: `${appName}-lambda-policy-${environmentSuffix}`,
       description: 'Permissions for Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -355,17 +370,18 @@ export class SecureModules extends Construct {
 
     // CloudWatch Log Group
     this.lambdaLogGroup = new CloudwatchLogGroup(this, 'lambda-log-group', {
-      name: `/aws/lambda/${appName}-Function`,
+      name: `/aws/lambda/${appName}-function-${environmentSuffix}`,
       retentionInDays: 14,
       kmsKeyId: this.kmsKey.arn,
       tags: {
-        Name: `${appName}-Lambda-LogGroup`,
+        Name: `${appName}-lambda-log-group-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // Security Group for Lambda
     const lambdaSecurityGroup = new SecurityGroup(this, 'lambda-sg', {
-      name: `${appName}-Lambda-SG`,
+      name: `${appName}-lambda-sg-${environmentSuffix}`,
       description: 'Security group for Lambda function',
       vpcId: this.vpc.id,
       egress: [
@@ -385,13 +401,14 @@ export class SecureModules extends Construct {
         },
       ],
       tags: {
-        Name: `${appName}-Lambda-SG`,
+        Name: `${appName}-lambda-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // Security Group for RDS
     const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
-      name: `${appName}-RDS-SG`,
+      name: `${appName}-rds-sg-${environmentSuffix}`,
       description: 'Security group for RDS instance',
       vpcId: this.vpc.id,
       ingress: [
@@ -404,23 +421,25 @@ export class SecureModules extends Construct {
         },
       ],
       tags: {
-        Name: `${appName}-RDS-SG`,
+        Name: `${appName}-rds-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // DB Subnet Group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${appName.toLowerCase()}-db-subnet-group`,
+      name: `${appName}-db-subnet-group-${environmentSuffix}`,
       subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
       description: 'Subnet group for RDS instance',
       tags: {
-        Name: `${appName}-DB-SubnetGroup`,
+        Name: `${appName}-db-subnet-group-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // Lambda Function - Using S3 for deployment package
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
-      functionName: `${appName}-Function`,
+      functionName: `${appName}-function-${environmentSuffix}`,
       role: this.lambdaRole.arn,
       runtime: 'python3.9',
       s3Bucket: 'corp-image-uploads',
@@ -437,16 +456,18 @@ export class SecureModules extends Construct {
         variables: {
           S3_BUCKET: this.s3Bucket.id,
           KMS_KEY_ID: this.kmsKey.keyId,
+          ENVIRONMENT: environmentSuffix,
         },
       },
       tags: {
-        Name: `${appName}-Lambda-Function`,
+        Name: `${appName}-lambda-function-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
     // RDS Instance
     this.rdsInstance = new DbInstance(this, 'rds-instance', {
-      identifier: `${appName.toLowerCase()}-database`,
+      identifier: `${appName}-database-${environmentSuffix}`,
       engine: 'mysql',
       engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
@@ -456,16 +477,17 @@ export class SecureModules extends Construct {
       kmsKeyId: this.kmsKey.arn,
       dbName: 'myappdb',
       username: 'admin',
-      password: 'ChangeMe123!',
+      password: 'ChangeMe123!', // In production, use AWS Secrets Manager
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: true, // Changed to true for easier cleanup during development
-      deletionProtection: false, // Changed to false for easier cleanup during development
+      skipFinalSnapshot: true,
+      deletionProtection: false,
       tags: {
-        Name: `${appName}-RDS-Instance`,
+        Name: `${appName}-rds-instance-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -477,7 +499,8 @@ export class SecureModules extends Construct {
       encrypted: true,
       kmsKeyId: this.kmsKey.keyId,
       tags: {
-        Name: `${appName}-EBS-Volume`,
+        Name: `${appName}-ebs-volume-${environmentSuffix}`,
+        Environment: environmentSuffix,
       },
     });
   }
