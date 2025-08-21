@@ -896,3 +896,4 @@ class TapStack(pulumi.ComponentResource):
       tags={**self.common_tags, "Name": f"microservices-cloudtrail-{self.environment_suffix}"},
       opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy])
     )
+# Updated for testing deployment pipeline - analyzing CI/CD behavior
