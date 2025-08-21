@@ -731,14 +731,14 @@ Resources:
   # ========================================
   # KMS KEY FOR ADDITIONAL ENCRYPTION
   # AWS CONFIG
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${ProjectName}-${Environment}-config-recorder'
-      RoleARN: !GetAtt AdminRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   Properties:
+  #     Name: !Sub '${ProjectName}-${Environment}-config-recorder'
+  #     RoleARN: !GetAtt AdminRole.Arn
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
 
   # ConfigDeliveryChannel:
   #   Type: AWS::Config::DeliveryChannel
