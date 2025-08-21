@@ -10,7 +10,8 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region  = var.region
+  profile = "default"
 
   default_tags {
     tags = local.common_tags
