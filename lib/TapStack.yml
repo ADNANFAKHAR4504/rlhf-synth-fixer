@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
-  TapStack - Multi-environment infrastructure with S3 replication pipeline
-  Creates development, staging, and production environments in us-east-1
-  Includes VPCs, S3 buckets with replication, and IAM roles with environment isolation
+  TapStack - Single-environment infrastructure with S3 and VPC
+  Creates a single environment (based on EnvironmentSuffix) in us-east-1
+  Includes VPC, S3 bucket, and IAM roles
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -11,6 +11,7 @@ Metadata:
           default: "Project Configuration"
         Parameters:
           - ProjectName
+          - EnvironmentSuffix
           - Owner
       - Label:
           default: "IAM Configuration"
@@ -29,6 +30,13 @@ Parameters:
     AllowedPattern: ^[a-z][a-z0-9-]*$
     ConstraintDescription: Must start with a lowercase letter and contain only lowercase alphanumeric characters and hyphens.
 
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment identifier (e.g., dev, pr1847, prod)
+    AllowedPattern: ^[a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase alphanumeric characters and hyphens.
+
   Owner:
     Type: String
     Default: TapStackCFN
@@ -40,7 +48,7 @@ Parameters:
     Type: String
     Default: ""
     Description: |
-      ARN of IAM user/group/role that can assume the environment roles
+      ARN of IAM user/group/role that can assume the environment role
       Example: arn:aws:iam::123456789012:user/dev-team
     AllowedPattern: ^$|^arn:aws:iam::\d{12}:(user|group|role)/[a-zA-Z0-9+=,.@_-]+$
 
@@ -55,12 +63,8 @@ Parameters:
 
 Mappings:
   EnvironmentConfig:
-    development:
-      CIDR: 10.0.0.0/16
-    staging:
-      CIDR: 10.1.0.0/16
-    production:
-      CIDR: 10.2.0.0/16
+    VPC:
+      CIDR: "10.0.0.0/16"
 
 Conditions:
   CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, "true"]
@@ -69,954 +73,295 @@ Conditions:
 
 Resources:
   # ==================== VPC AND NETWORKING RESOURCES ====================
-  # Create VPCs and networking components for each environment
-  # Using 2 AZs (us-east-1a, us-east-1b) with public and private subnets
-  # NAT Gateway strategy: CreateNatPerAZ condition determines if we use 1 NAT per AZ or 1 NAT per environment
-
-  DevelopmentVPC:
+  VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !FindInMap [EnvironmentConfig, development, CIDR]
+      CidrBlock: !FindInMap [EnvironmentConfig, VPC, CIDR]
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-vpc
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-vpc
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentInternetGateway:
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-igw
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-igw
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentIGWAttachment:
+  IGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref DevelopmentVPC
-      InternetGatewayId: !Ref DevelopmentInternetGateway
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
-  DevelopmentPublicSubnetA:
+  PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref DevelopmentVPC
-      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvironmentConfig, development, CIDR], 4, 8]]
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-publicsubneta
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicsubneta
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPublicSubnetB:
+  PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref DevelopmentVPC
-      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvironmentConfig, development, CIDR], 4, 8]]
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-publicsubnetb
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicsubnetb
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPrivateSubnetA:
+  PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref DevelopmentVPC
-      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvironmentConfig, development, CIDR], 4, 8]]
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
       AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-privatesubneta
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatesubneta
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPrivateSubnetB:
+  PrivateSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref DevelopmentVPC
-      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvironmentConfig, development, CIDR], 4, 8]]
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
       AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-privatesubnetb
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatesubnetb
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentEIPNatA:
+  EIPNatA:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-nateipa
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateipa
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  DevelopmentEIPNatB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-development-nateipb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
     Condition: CreateNatPerAZ
 
-  DevelopmentEIPNatSingle:
+  EIPNatB:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-nateip
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateipb
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateNatPerAZ
+
+  EIPNatSingle:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateip
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
     Condition: CreateSingleNat
 
-  DevelopmentNatGatewayA:
+  NatGatewayA:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt DevelopmentEIPNatA.AllocationId
-      SubnetId: !Ref DevelopmentPublicSubnetA
+      AllocationId: !GetAtt EIPNatA.AllocationId
+      SubnetId: !Ref PublicSubnetA
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-natgatewaya
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgatewaya
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
     Condition: CreateNatPerAZ
 
-  DevelopmentNatGatewayB:
+  NatGatewayB:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt DevelopmentEIPNatB.AllocationId
-      SubnetId: !Ref DevelopmentPublicSubnetB
+      AllocationId: !GetAtt EIPNatB.AllocationId
+      SubnetId: !Ref PublicSubnetB
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-natgatewayb
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgatewayb
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
     Condition: CreateNatPerAZ
 
-  DevelopmentNatGatewaySingle:
+  NatGatewaySingle:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt DevelopmentEIPNatSingle.AllocationId
-      SubnetId: !Ref DevelopmentPublicSubnetA
+      AllocationId: !GetAtt EIPNatSingle.AllocationId
+      SubnetId: !Ref PublicSubnetA
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-natgateway
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgateway
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
     Condition: CreateSingleNat
 
-  DevelopmentPublicRouteTable:
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref DevelopmentVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-publicrt
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicrt
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref DevelopmentPublicRouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref DevelopmentInternetGateway
-    DependsOn: DevelopmentIGWAttachment
+      GatewayId: !Ref InternetGateway
+    DependsOn: IGWAttachment
 
-  DevelopmentPublicSubnetARouteTableAssociation:
+  PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref DevelopmentPublicSubnetA
-      RouteTableId: !Ref DevelopmentPublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
 
-  DevelopmentPublicSubnetBRouteTableAssociation:
+  PublicSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref DevelopmentPublicSubnetB
-      RouteTableId: !Ref DevelopmentPublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
 
-  DevelopmentPrivateRouteTableA:
+  PrivateRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref DevelopmentVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-privaterta
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privaterta
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPrivateRouteA:
+  PrivateRouteA:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref DevelopmentPrivateRouteTableA
+      RouteTableId: !Ref PrivateRouteTableA
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref DevelopmentNatGatewayA, !Ref DevelopmentNatGatewaySingle]
+      NatGatewayId: !If [CreateNatPerAZ, !Ref NatGatewayA, !Ref NatGatewaySingle]
 
-  DevelopmentPrivateSubnetARouteTableAssociation:
+  PrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref DevelopmentPrivateSubnetA
-      RouteTableId: !Ref DevelopmentPrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
 
-  DevelopmentPrivateRouteTableB:
+  PrivateRouteTableB:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref DevelopmentVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-development-privatertb
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatertb
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevelopmentPrivateRouteB:
+  PrivateRouteB:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref DevelopmentPrivateRouteTableB
+      RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref DevelopmentNatGatewayB, !Ref DevelopmentNatGatewaySingle]
+      NatGatewayId: !If [CreateNatPerAZ, !Ref NatGatewayB, !Ref NatGatewaySingle]
 
-  DevelopmentPrivateSubnetBRouteTableAssociation:
+  PrivateSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref DevelopmentPrivateSubnetB
-      RouteTableId: !Ref DevelopmentPrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
 
-  StagingVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !FindInMap [EnvironmentConfig, staging, CIDR]
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-vpc
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-igw
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingIGWAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref StagingVPC
-      InternetGatewayId: !Ref StagingInternetGateway
-
-  StagingPublicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref StagingVPC
-      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvironmentConfig, staging, CIDR], 4, 8]]
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-publicsubneta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPublicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref StagingVPC
-      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvironmentConfig, staging, CIDR], 4, 8]]
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-publicsubnetb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref StagingVPC
-      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvironmentConfig, staging, CIDR], 4, 8]]
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-privatesubneta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref StagingVPC
-      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvironmentConfig, staging, CIDR], 4, 8]]
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-privatesubnetb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingEIPNatA:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-nateipa
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  StagingEIPNatB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-nateipb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  StagingEIPNatSingle:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-nateip
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateSingleNat
-
-  StagingNatGatewayA:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt StagingEIPNatA.AllocationId
-      SubnetId: !Ref StagingPublicSubnetA
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-natgatewaya
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  StagingNatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt StagingEIPNatB.AllocationId
-      SubnetId: !Ref StagingPublicSubnetB
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-natgatewayb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  StagingNatGatewaySingle:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt StagingEIPNatSingle.AllocationId
-      SubnetId: !Ref StagingPublicSubnetA
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-natgateway
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateSingleNat
-
-  StagingPublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref StagingVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-publicrt
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref StagingPublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref StagingInternetGateway
-    DependsOn: StagingIGWAttachment
-
-  StagingPublicSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref StagingPublicSubnetA
-      RouteTableId: !Ref StagingPublicRouteTable
-
-  StagingPublicSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref StagingPublicSubnetB
-      RouteTableId: !Ref StagingPublicRouteTable
-
-  StagingPrivateRouteTableA:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref StagingVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-privaterta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPrivateRouteA:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref StagingNatGatewayA, !Ref StagingNatGatewaySingle]
-
-  StagingPrivateSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref StagingPrivateSubnetA
-      RouteTableId: !Ref StagingPrivateRouteTableA
-
-  StagingPrivateRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref StagingVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-privatertb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingPrivateRouteB:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref StagingNatGatewayB, !Ref StagingNatGatewaySingle]
-
-  StagingPrivateSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref StagingPrivateSubnetB
-      RouteTableId: !Ref StagingPrivateRouteTableB
-
-  ProductionVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !FindInMap [EnvironmentConfig, production, CIDR]
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-vpc
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-igw
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionIGWAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref ProductionVPC
-      InternetGatewayId: !Ref ProductionInternetGateway
-
-  ProductionPublicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ProductionVPC
-      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvironmentConfig, production, CIDR], 4, 8]]
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-publicsubneta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPublicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ProductionVPC
-      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvironmentConfig, production, CIDR], 4, 8]]
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-publicsubnetb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ProductionVPC
-      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvironmentConfig, production, CIDR], 4, 8]]
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-privatesubneta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref ProductionVPC
-      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvironmentConfig, production, CIDR], 4, 8]]
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-privatesubnetb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionEIPNatA:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-nateipa
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  ProductionEIPNatB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-nateipb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  ProductionEIPNatSingle:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-nateip
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateSingleNat
-
-  ProductionNatGatewayA:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt ProductionEIPNatA.AllocationId
-      SubnetId: !Ref ProductionPublicSubnetA
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-natgatewaya
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  ProductionNatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt ProductionEIPNatB.AllocationId
-      SubnetId: !Ref ProductionPublicSubnetB
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-natgatewayb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateNatPerAZ
-
-  ProductionNatGatewaySingle:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt ProductionEIPNatSingle.AllocationId
-      SubnetId: !Ref ProductionPublicSubnetA
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-natgateway
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-    Condition: CreateSingleNat
-
-  ProductionPublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ProductionVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-publicrt
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ProductionPublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref ProductionInternetGateway
-    DependsOn: ProductionIGWAttachment
-
-  ProductionPublicSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref ProductionPublicSubnetA
-      RouteTableId: !Ref ProductionPublicRouteTable
-
-  ProductionPublicSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref ProductionPublicSubnetB
-      RouteTableId: !Ref ProductionPublicRouteTable
-
-  ProductionPrivateRouteTableA:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ProductionVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-privaterta
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPrivateRouteA:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ProductionPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref ProductionNatGatewayA, !Ref ProductionNatGatewaySingle]
-
-  ProductionPrivateSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref ProductionPrivateSubnetA
-      RouteTableId: !Ref ProductionPrivateRouteTableA
-
-  ProductionPrivateRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref ProductionVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-production-privatertb
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionPrivateRouteB:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref ProductionPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !If [CreateNatPerAZ, !Ref ProductionNatGatewayB, !Ref ProductionNatGatewaySingle]
-
-  ProductionPrivateSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref ProductionPrivateSubnetB
-      RouteTableId: !Ref ProductionPrivateRouteTableB
-
-  # ==================== S3 BUCKETS ====================
-  # Create S3 buckets with versioning, encryption, and replication configuration
-  # Using DeletionPolicy: Retain to prevent accidental data loss
-
-  DevelopmentDataBucket:
+  # ==================== S3 BUCKET ====================
+  DataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub ${ProjectName}-development-databucket-${AWS::AccountId}-${AWS::Region}
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: CleanupIncompleteUploads
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      ReplicationConfiguration:
-        Role: !GetAtt DevelopmentReplicationRole.Arn
-        Rules:
-          - Id: ReplicateNonSensitiveToStaging
-            Status: Enabled
-            Priority: 1
-            Filter:
-              Prefix: non-sensitive/
-            Destination:
-              Bucket: !GetAtt StagingDataBucket.Arn
-              StorageClass: STANDARD
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-development-databucket
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: development
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingDataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub ${ProjectName}-staging-databucket-${AWS::AccountId}-${AWS::Region}
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: CleanupIncompleteUploads
-            Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-      ReplicationConfiguration:
-        Role: !GetAtt StagingReplicationRole.Arn
-        Rules:
-          - Id: ReplicateNonSensitiveToProduction
-            Status: Enabled
-            Priority: 1
-            Filter:
-              Prefix: non-sensitive/
-            Destination:
-              Bucket: !GetAtt ProductionDataBucket.Arn
-              StorageClass: STANDARD
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-staging-databucket
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionDataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub ${ProjectName}-production-databucket-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub ${ProjectName}-${EnvironmentSuffix}-databucket-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -1036,109 +381,25 @@ Resources:
               DaysAfterInitiation: 7
       Tags:
         - Key: Name
-          Value: !Sub ${ProjectName}-production-databucket
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-databucket
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
-  # ==================== S3 REPLICATION ROLES ====================
-  # IAM roles with minimal permissions for S3 replication
-  # Use constructed ARNs to avoid circular dependencies with buckets
-
-  DevelopmentReplicationRole:
+  # ==================== IAM ENVIRONMENT ROLE ====================
+  EnvironmentRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${ProjectName}-development-replicationrole
+      RoleName: !Sub ${ProjectName}-${EnvironmentSuffix}-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReplicationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionTagging
-                  - s3:ListBucket
-                Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${ProjectName}-development-databucket-${AWS::AccountId}-${AWS::Region}
-                  - !Sub arn:${AWS::Partition}:s3:::${ProjectName}-development-databucket-${AWS::AccountId}-${AWS::Region}/*
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                Resource: !Sub arn:${AWS::Partition}:s3:::${ProjectName}-staging-databucket-${AWS::AccountId}-${AWS::Region}/*
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: development
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingReplicationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ProjectName}-staging-replicationrole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReplicationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionTagging
-                  - s3:ListBucket
-                Resource:
-                  - !Sub arn:${AWS::Partition}:s3:::${ProjectName}-staging-databucket-${AWS::AccountId}-${AWS::Region}
-                  - !Sub arn:${AWS::Partition}:s3:::${ProjectName}-staging-databucket-${AWS::AccountId}-${AWS::Region}/*
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                Resource: !Sub arn:${AWS::Partition}:s3:::${ProjectName}-production-databucket-${AWS::AccountId}-${AWS::Region}/*
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  # ==================== IAM ENVIRONMENT ROLES ====================
-  # Roles for team members with environment-scoped permissions
-
-  DevelopmentRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ProjectName}-development-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Ref AWS::NoValue]
+              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub "arn:aws:iam::${AWS::AccountId}:root"]
             Action: sts:AssumeRole
       Policies:
         - PolicyName: S3EnvironmentAccess
@@ -1148,8 +409,8 @@ Resources:
               - Effect: Allow
                 Action: s3:*
                 Resource:
-                  - !GetAtt DevelopmentDataBucket.Arn
-                  - !Sub ${DevelopmentDataBucket.Arn}/*
+                  - !GetAtt DataBucket.Arn
+                  - !Sub ${DataBucket.Arn}/*
                 Condition:
                   StringEquals:
                     aws:RequestedRegion: us-east-1
@@ -1169,179 +430,31 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
-          Value: development
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  StagingRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ProjectName}-staging-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Ref AWS::NoValue]
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3EnvironmentAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: s3:*
-                Resource:
-                  - !GetAtt StagingDataBucket.Arn
-                  - !Sub ${StagingDataBucket.Arn}/*
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: us-east-1
-        - PolicyName: EC2ReadOnlyAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:Describe*
-                  - ec2:Get*
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: us-east-1
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: staging
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  ProductionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${ProjectName}-production-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Ref AWS::NoValue]
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3EnvironmentAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: s3:*
-                Resource:
-                  - !GetAtt ProductionDataBucket.Arn
-                  - !Sub ${ProductionDataBucket.Arn}/*
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: us-east-1
-        - PolicyName: EC2ReadOnlyAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:Describe*
-                  - ec2:Get*
-                Resource: "*"
-                Condition:
-                  StringEquals:
-                    aws:RequestedRegion: us-east-1
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: production
+          Value: !Ref EnvironmentSuffix
         - Key: CreatedBy
           Value: !Ref Owner
 
 Outputs:
-  DevelopmentVPCId:
-    Description: Development VPC ID
-    Value: !Ref DevelopmentVPC
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
 
-  DevelopmentPublicSubnets:
-    Description: Development Public Subnet IDs
-    Value: !Join [",", [!Ref DevelopmentPublicSubnetA, !Ref DevelopmentPublicSubnetB]]
+  PublicSubnets:
+    Description: Public Subnet IDs
+    Value: !Join [ ",", [ !Ref PublicSubnetA, !Ref PublicSubnetB ] ]
 
-  DevelopmentPrivateSubnets:
-    Description: Development Private Subnet IDs
-    Value: !Join [",", [!Ref DevelopmentPrivateSubnetA, !Ref DevelopmentPrivateSubnetB]]
+  PrivateSubnets:
+    Description: Private Subnet IDs
+    Value: !Join [ ",", [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ] ]
 
-  DevelopmentDataBucketName:
-    Description: Development S3 Bucket Name
-    Value: !Ref DevelopmentDataBucket
+  DataBucketName:
+    Description: S3 Bucket Name
+    Value: !Ref DataBucket
 
-  DevelopmentDataBucketARN:
-    Description: Development S3 Bucket ARN
-    Value: !GetAtt DevelopmentDataBucket.Arn
+  DataBucketARN:
+    Description: S3 Bucket ARN
+    Value: !GetAtt DataBucket.Arn
 
-  DevelopmentReplicationRoleARN:
-    Description: Development Replication Role ARN
-    Value: !GetAtt DevelopmentReplicationRole.Arn
-
-  DevelopmentRoleARN:
-    Description: Development IAM Role ARN
-    Value: !GetAtt DevelopmentRole.Arn
-
-  StagingVPCId:
-    Description: Staging VPC ID
-    Value: !Ref StagingVPC
-
-  StagingPublicSubnets:
-    Description: Staging Public Subnet IDs
-    Value: !Join [",", [!Ref StagingPublicSubnetA, !Ref StagingPublicSubnetB]]
-
-  StagingPrivateSubnets:
-    Description: Staging Private Subnet IDs
-    Value: !Join [",", [!Ref StagingPrivateSubnetA, !Ref StagingPrivateSubnetB]]
-
-  StagingDataBucketName:
-    Description: Staging S3 Bucket Name
-    Value: !Ref StagingDataBucket
-
-  StagingDataBucketARN:
-    Description: Staging S3 Bucket ARN
-    Value: !GetAtt StagingDataBucket.Arn
-
-  StagingReplicationRoleARN:
-    Description: Staging Replication Role ARN
-    Value: !GetAtt StagingReplicationRole.Arn
-
-  StagingRoleARN:
-    Description: Staging IAM Role ARN
-    Value: !GetAtt StagingRole.Arn
-
-  ProductionVPCId:
-    Description: Production VPC ID
-    Value: !Ref ProductionVPC
-
-  ProductionPublicSubnets:
-    Description: Production Public Subnet IDs
-    Value: !Join [",", [!Ref ProductionPublicSubnetA, !Ref ProductionPublicSubnetB]]
-
-  ProductionPrivateSubnets:
-    Description: Production Private Subnet IDs
-    Value: !Join [",", [!Ref ProductionPrivateSubnetA, !Ref ProductionPrivateSubnetB]]
-
-  ProductionDataBucketName:
-    Description: Production S3 Bucket Name
-    Value: !Ref ProductionDataBucket
-
-  ProductionDataBucketARN:
-    Description: Production S3 Bucket ARN
-    Value: !GetAtt ProductionDataBucket.Arn
-
-  ProductionRoleARN:
-    Description: Production IAM Role ARN
-    Value: !GetAtt ProductionRole.Arn
-
-  ReplicationPipeline:
-    Description: S3 Replication Pipeline (dev -> staging -> prod)
-    Value: "Development -> Staging -> Production (non-sensitive/ prefix only)"
+  EnvironmentRoleARN:
+    Description: IAM Role ARN
+    Value: !GetAtt EnvironmentRole.Arn
