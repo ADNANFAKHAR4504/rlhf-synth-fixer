@@ -439,14 +439,8 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
 }
 
 # IAM instance profile for EC2
-resource "aws_iam_instance_profile" "ec2_profile" {
+data "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
-  role = aws_iam_role.ec2_role.name
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-instance-profile"
-    Type = "iam"
-  })
 }
 
 # IAM role for Lambda functions
@@ -569,43 +563,8 @@ resource "aws_db_subnet_group" "main" {
 }
 
 # RDS instance with encryption and Multi-AZ
-resource "aws_db_instance" "main" {
-  identifier = "${local.name_prefix}-database"
-
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = var.environment == "prod" ? "db.t3.medium" : "db.t3.micro"
-
-  allocated_storage     = var.environment == "prod" ? 100 : 20
-  max_allocated_storage = var.environment == "prod" ? 1000 : 100
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.rds_key.arn
-
-  db_name  = "appdb"
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [module.security.rds_sg_id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = var.backup_retention_period
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "Sun:04:00-Sun:05:00"
-
-  multi_az            = var.environment == "prod" ? true : false
-  publicly_accessible = false
-  deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
-
-  skip_final_snapshot       = var.environment == "staging" ? true : false
-  final_snapshot_identifier = var.environment == "prod" ? "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
-
-  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-database"
-    Type = "database"
-  })
+data "aws_db_instance" "main" {
+  db_instance_identifier = "${local.name_prefix}-database"
 }
 
 #######################
