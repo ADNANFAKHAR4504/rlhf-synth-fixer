@@ -15,6 +15,7 @@ import {
   CloudWatchModule,
   IamModule,
   SecurityGroupModule,
+  RdsModule,
 } from '../lib/modules';
 import { TerraformOutput } from 'cdktf';
 import { Fn } from 'cdktf';
@@ -101,14 +102,14 @@ export class TapStack extends TerraformStack {
       s3BucketArn: s3Module.bucket.arn,
     });
 
-    // Create RDS database
-    // const rdsModule = new RdsModule(this, 'rds', {
-    //   namePrefix,
-    //   tags: projectTags,
-    //   vpcId: vpcModule.vpc.id,
-    //   subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
-    //   securityGroupIds: [securityGroupModule.rdsSecurityGroup.id],
-    // });
+    //Create RDS database
+    const rds = new RdsModule(this, 'rds', {
+      namePrefix,
+      tags: projectTags,
+      vpcId: vpcModule.vpc.id,
+      subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
+      securityGroupIds: [securityGroupModule.rdsSecurityGroup.id],
+    });
 
     // Create Application Load Balancer
     const albModule = new AlbModule(this, 'alb', {

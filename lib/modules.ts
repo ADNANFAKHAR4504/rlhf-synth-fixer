@@ -25,6 +25,9 @@ import {
 } from '@cdktf/provider-aws';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+
 export interface BaseModuleProps {
   namePrefix: string;
   tags: { [key: string]: string };
@@ -184,7 +187,18 @@ export class S3Module extends Construct {
 
     this.bucket = new s3Bucket.S3Bucket(this, 'bucket', {
       bucket: props.bucketName,
+      versioning: {
+        enabled: true,
+      },
       tags: props.tags,
+    });
+
+    new S3BucketPublicAccessBlock(this, 'main-bucket-public-access-block', {
+      bucket: this.bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     });
   }
 }
@@ -211,6 +225,14 @@ export class RdsModule extends Construct {
       },
     });
 
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
+
     this.instance = new DbInstance(this, 'instance', {
       identifier: `${props.namePrefix}database`,
       engine: 'mysql',
@@ -220,7 +242,7 @@ export class RdsModule extends Construct {
       storageType: 'gp2',
       dbName: 'myappdb',
       username: 'admin',
-      password: 'changeme123!',
+      password: dbPasswordSecret.secretString,
       vpcSecurityGroupIds: props.securityGroupIds,
       dbSubnetGroupName: this.subnetGroup.name,
       skipFinalSnapshot: true,
