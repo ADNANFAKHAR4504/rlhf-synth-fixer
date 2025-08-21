@@ -909,12 +909,12 @@ output "vpc_id" {
 
 output "private_subnet_ids" {
   description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
+  value       = join(",", aws_subnet.private[*].id)
 }
 
 output "public_subnet_ids" {
   description = "IDs of the public subnets"
-  value       = aws_subnet.public[*].id
+  value       = join(",", aws_subnet.public[*].id)
 }
 
 output "alb_dns_name" {
@@ -950,7 +950,7 @@ output "kms_key_id" {
 
 output "ec2_instance_ids" {
   description = "IDs of the EC2 instances"
-  value       = aws_instance.web_servers[*].id
+  value       = join(",", aws_instance.web_servers[*].id)
 }
 
 output "patch_baseline_id" {
