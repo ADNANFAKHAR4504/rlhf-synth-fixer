@@ -29,14 +29,20 @@ elif [ "$LANGUAGE" = "go" ]; then
         fi
     fi
     echo "Running go mod tidy to populate go.sum and fetch deps"
+    # Bypass proxy/checksum size limits for large CDKTF Go providers
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
     go mod tidy
-    UNFORMATTED=$(gofmt -l . || true)
+    # Only lint our Go sources; avoid node_modules/.gen template files
+    UNFORMATTED=$(gofmt -l lib || true)
     if [ -n "$UNFORMATTED" ]; then
         echo "❌ The following files are not gofmt formatted:"
         echo "$UNFORMATTED"
         exit 1
     fi
-    go vet ./...
+    # Vet only our library code
+    go vet ./lib/...
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
