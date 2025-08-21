@@ -42,17 +42,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('should have DBPassword parameter', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-    });
-
-    test('DBPassword parameter should have correct properties', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(41);
-      expect(param.AllowedPattern).toBe('[a-zA-Z0-9]*');
+    test('should not have DBPassword parameter (replaced with Secrets Manager)', () => {
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
 
     test('should have DBInstanceClass parameter', () => {
@@ -246,6 +237,29 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('Secrets Manager Resources', () => {
+    test('should have DatabaseSecret resource', () => {
+      expect(template.Resources.DatabaseSecret).toBeDefined();
+    });
+
+    test('DatabaseSecret should have correct properties', () => {
+      const secret = template.Resources.DatabaseSecret;
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.Name['Fn::Sub']).toContain('database-secret');
+      expect(secret.Properties.Description).toBe('Database credentials for production environment');
+    });
+
+    test('DatabaseSecret should generate password with correct settings', () => {
+      const secret = template.Resources.DatabaseSecret;
+      const generateSecret = secret.Properties.GenerateSecretString;
+      
+      expect(generateSecret.GenerateStringKey).toBe('password');
+      expect(generateSecret.PasswordLength).toBe(16);
+      expect(generateSecret.ExcludeCharacters).toBe('"@/\\');
+      expect(generateSecret.RequireEachIncludedType).toBe(true);
+    });
+  });
+
   describe('KMS Resources', () => {
     test('should have RDSKMSKey resource', () => {
       expect(template.Resources.RDSKMSKey).toBeDefined();
@@ -290,11 +304,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(db.Properties.DBSubnetGroupName.Ref).toBe('DBSubnetGroup');
     });
 
-    test('DatabaseInstance should use parameter values', () => {
+    test('DatabaseInstance should use dynamic references for credentials', () => {
       const db = template.Resources.DatabaseInstance;
       expect(db.Properties.DBInstanceClass.Ref).toBe('DBInstanceClass');
-      expect(db.Properties.MasterUsername.Ref).toBe('DBUsername');
-      expect(db.Properties.MasterUserPassword.Ref).toBe('DBPassword');
+      expect(db.Properties.MasterUsername['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(db.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
     });
   });
 
@@ -369,9 +383,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(15); // VPC, subnets, IGW, NAT, routes, SGs, KMS, RDS, IAM
     });
 
-    test('should have exactly three parameters', () => {
+    test('should have exactly two parameters (DBPassword replaced with Secrets Manager)', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have exactly seven outputs', () => {

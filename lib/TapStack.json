@@ -11,15 +11,6 @@
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
         },
-        "DBPassword": {
-            "Type": "String",
-            "Description": "Database administrator password",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*",
-            "ConstraintDescription": "Must contain only alphanumeric characters with minimum 8 characters"
-        },
         "DBInstanceClass": {
             "Type": "String",
             "Description": "RDS instance type",
@@ -369,6 +360,30 @@
                 ]
             }
         },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-database-secret"
+                },
+                "Description": "Database credentials for production environment",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\n  \"username\": \"${DBUsername}\"\n}\n"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
         "RDSKMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -456,7 +471,7 @@
                     "Ref": "DBInstanceClass"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.42",
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -465,10 +480,10 @@
                 },
                 "DBName": "productiondb",
                 "MasterUsername": {
-                    "Ref": "DBUsername"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -482,8 +497,6 @@
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
                 "DeletionProtection": true,
-                "EnablePerformanceInsights": true,
-                "PerformanceInsightsRetentionPeriod": 7,
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
                     "Fn::GetAtt": [
