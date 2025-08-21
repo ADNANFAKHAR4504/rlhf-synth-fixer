@@ -1,6 +1,13 @@
 import { Fn, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
 import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
 import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
@@ -22,13 +29,7 @@ export interface EnvironmentConfig {
   readonly envName: 'dev' | 'test' | 'prod';
   readonly awsRegion: string;
   readonly replicaRegion: string;
-  readonly awsAccountId: string;
-  readonly vpcId: string;
-  readonly publicSubnetIds: string[];
-  readonly privateSubnetIds: string[];
-  readonly amiId: string;
-  readonly cpu: number;
-  readonly memory: number;
+  readonly vpcCidr: string;
   readonly tags: { [key: string]: string };
 }
 
@@ -64,6 +65,121 @@ export class TapStack extends TerraformStack {
         }
       );
 
+      // Create VPC and Networking resources
+      const vpc = new Vpc(this, `Vpc${constructIdSuffix}`, {
+        provider: primaryProvider,
+        cidrBlock: config.vpcCidr,
+        enableDnsHostnames: true,
+        tags: { ...config.tags, Name: `vpc${constructIdSuffix}` },
+      });
+      const publicSubnetA = new Subnet(
+        this,
+        `PublicSubnetA${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 0),
+          availabilityZone: `${config.awsRegion}a`,
+          mapPublicIpOnLaunch: true,
+          tags: { ...config.tags, Name: `pub-subnet-a${constructIdSuffix}` },
+        }
+      );
+      const publicSubnetB = new Subnet(
+        this,
+        `PublicSubnetB${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 1),
+          availabilityZone: `${config.awsRegion}b`,
+          mapPublicIpOnLaunch: true,
+          tags: { ...config.tags, Name: `pub-subnet-b${constructIdSuffix}` },
+        }
+      );
+      const privateSubnetA = new Subnet(
+        this,
+        `PrivateSubnetA${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 2),
+          availabilityZone: `${config.awsRegion}a`,
+          tags: { ...config.tags, Name: `priv-subnet-a${constructIdSuffix}` },
+        }
+      );
+      const privateSubnetB = new Subnet(
+        this,
+        `PrivateSubnetB${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 3),
+          availabilityZone: `${config.awsRegion}b`,
+          tags: { ...config.tags, Name: `priv-subnet-b${constructIdSuffix}` },
+        }
+      );
+      const igw = new InternetGateway(this, `Igw${constructIdSuffix}`, {
+        provider: primaryProvider,
+        vpcId: vpc.id,
+        tags: config.tags,
+      });
+      const natEip = new Eip(this, `NatEip${constructIdSuffix}`, {
+        provider: primaryProvider,
+        domain: 'vpc',
+        tags: config.tags,
+      });
+      const natGw = new NatGateway(this, `NatGw${constructIdSuffix}`, {
+        provider: primaryProvider,
+        allocationId: natEip.id,
+        subnetId: publicSubnetA.id,
+        dependsOn: [igw],
+        tags: config.tags,
+      });
+
+      // FIX: Add Route Tables to use the IGW and NAT Gateway
+      const publicRouteTable = new RouteTable(
+        this,
+        `PublicRouteTable${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
+          tags: config.tags,
+        }
+      );
+      new RouteTableAssociation(this, `PublicRtaA${constructIdSuffix}`, {
+        provider: primaryProvider,
+        subnetId: publicSubnetA.id,
+        routeTableId: publicRouteTable.id,
+      });
+      new RouteTableAssociation(this, `PublicRtaB${constructIdSuffix}`, {
+        provider: primaryProvider,
+        subnetId: publicSubnetB.id,
+        routeTableId: publicRouteTable.id,
+      });
+
+      const privateRouteTable = new RouteTable(
+        this,
+        `PrivateRouteTable${constructIdSuffix}`,
+        {
+          provider: primaryProvider,
+          vpcId: vpc.id,
+          route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGw.id }],
+          tags: config.tags,
+        }
+      );
+      new RouteTableAssociation(this, `PrivateRtaA${constructIdSuffix}`, {
+        provider: primaryProvider,
+        subnetId: privateSubnetA.id,
+        routeTableId: privateRouteTable.id,
+      });
+      new RouteTableAssociation(this, `PrivateRtaB${constructIdSuffix}`, {
+        provider: primaryProvider,
+        subnetId: privateSubnetB.id,
+        routeTableId: privateRouteTable.id,
+      });
+
+      // S3 Cross-Region Replication Setup
       const replicaBucket = new S3Bucket(
         this,
         `S3ReplicaBucket${constructIdSuffix}`,
@@ -73,6 +189,12 @@ export class TapStack extends TerraformStack {
           tags: config.tags,
         }
       );
+      new S3BucketVersioningA(this, `S3ReplicaVersioning${constructIdSuffix}`, {
+        provider: replicaProvider,
+        bucket: replicaBucket.id,
+        versioningConfiguration: { status: 'Enabled' },
+      });
+
       const primaryBucket = new S3Bucket(
         this,
         `S3PrimaryBucket${constructIdSuffix}`,
@@ -82,8 +204,7 @@ export class TapStack extends TerraformStack {
           tags: config.tags,
         }
       );
-
-      new S3BucketVersioningA(this, `S3Versioning${constructIdSuffix}`, {
+      new S3BucketVersioningA(this, `S3PrimaryVersioning${constructIdSuffix}`, {
         provider: primaryProvider,
         bucket: primaryBucket.id,
         versioningConfiguration: { status: 'Enabled' },
@@ -174,10 +295,11 @@ export class TapStack extends TerraformStack {
         }
       );
 
+      // Security Groups, now using the created VPC ID
       const albSg = new SecurityGroup(this, `AlbSg${constructIdSuffix}`, {
         provider: primaryProvider,
         name: `alb-sg${resourceNameSuffix}`,
-        vpcId: config.vpcId,
+        vpcId: vpc.id,
         ingress: [
           {
             protocol: 'tcp',
@@ -194,7 +316,7 @@ export class TapStack extends TerraformStack {
       const ecsSg = new SecurityGroup(this, `EcsSg${constructIdSuffix}`, {
         provider: primaryProvider,
         name: `ecs-sg${resourceNameSuffix}`,
-        vpcId: config.vpcId,
+        vpcId: vpc.id,
         ingress: [
           {
             protocol: 'tcp',
@@ -315,8 +437,8 @@ export class TapStack extends TerraformStack {
         {
           provider: primaryProvider,
           family: `webapp${resourceNameSuffix}`,
-          cpu: config.cpu.toString(),
-          memory: config.memory.toString(),
+          cpu: '256',
+          memory: '512',
           networkMode: 'awsvpc',
           requiresCompatibilities: ['FARGATE'],
           executionRoleArn: ecsTaskExecutionRole.arn,
@@ -345,7 +467,7 @@ export class TapStack extends TerraformStack {
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [albSg.id],
-        subnets: config.publicSubnetIds,
+        subnets: [publicSubnetA.id, publicSubnetB.id],
         tags: config.tags,
       });
       const targetGroup = new LbTargetGroup(
@@ -356,7 +478,7 @@ export class TapStack extends TerraformStack {
           name: `tg${resourceNameSuffix}`,
           port: 80,
           protocol: 'HTTP',
-          vpcId: config.vpcId,
+          vpcId: vpc.id,
           targetType: 'ip',
           tags: config.tags,
         }
@@ -381,7 +503,7 @@ export class TapStack extends TerraformStack {
         desiredCount: 2,
         launchType: 'FARGATE',
         networkConfiguration: {
-          subnets: config.privateSubnetIds,
+          subnets: [privateSubnetA.id, privateSubnetB.id],
           securityGroups: [ecsSg.id],
         },
         loadBalancer: [
@@ -403,7 +525,6 @@ export class TapStack extends TerraformStack {
       new TerraformOutput(this, `AlbDnsName${constructIdSuffix}`, {
         value: alb.dnsName,
       });
-      // FIX: Added the missing TerraformOutput to "use" the snsTopic variable.
       new TerraformOutput(this, `SnsTopicArn${constructIdSuffix}`, {
         value: snsTopic.arn,
       });

@@ -5,19 +5,14 @@ import { TapStack, EnvironmentConfig } from '../lib/tap-stack';
 
 const app = new App();
 
-// Define all environment configurations in one place.
+// Define all environment configurations.
+// The stack now creates its own VPC, so we only need to provide a CIDR block.
 const allEnvironments: EnvironmentConfig[] = [
   {
     envName: 'dev',
     awsRegion: 'us-east-1',
-    replicaRegion: 'us-west-2', // Region for S3 bucket replication
-    awsAccountId: '123456789012', // Replace with your Dev Account ID
-    vpcId: 'vpc-0123abcd',
-    publicSubnetIds: ['subnet-0123puba', 'subnet-0123pubb'],
-    privateSubnetIds: ['subnet-0123pria', 'subnet-0123prib'],
-    amiId: 'ami-0c55b159cbfafe1f0',
-    cpu: 256,
-    memory: 512,
+    replicaRegion: 'us-west-2',
+    vpcCidr: '10.10.0.0/16', // CIDR for the new VPC
     tags: {
       Environment: 'Development',
       ManagedBy: 'CDKTF',
@@ -27,14 +22,8 @@ const allEnvironments: EnvironmentConfig[] = [
   {
     envName: 'prod',
     awsRegion: 'us-east-1',
-    replicaRegion: 'us-west-2', // Region for S3 bucket replication
-    awsAccountId: '210987654321', // Replace with your Prod Account ID
-    vpcId: 'vpc-prod1234',
-    publicSubnetIds: ['subnet-prodpuba', 'subnet-prodpubb'],
-    privateSubnetIds: ['subnet-prodpria', 'subnet-prodprib'],
-    amiId: 'ami-0c55b159cbfafe1f0',
-    cpu: 1024,
-    memory: 2048,
+    replicaRegion: 'us-west-2',
+    vpcCidr: '10.20.0.0/16', // A different CIDR for the prod VPC
     tags: {
       Environment: 'Production',
       ManagedBy: 'CDKTF',
