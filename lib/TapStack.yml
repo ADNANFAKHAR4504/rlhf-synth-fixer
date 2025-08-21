@@ -362,7 +362,9 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - 'arn:aws:s3:::*/*'
+                - !Sub '${SecureS3Bucket}/*'
+                - !Sub '${LoggingBucket}/*'
+                - !Sub '${CloudTrailS3Bucket}/*'
 
   # CloudWatch Log Groups
   S3LogGroup:
