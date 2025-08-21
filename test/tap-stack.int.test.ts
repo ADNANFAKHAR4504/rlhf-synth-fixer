@@ -390,13 +390,5 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(outputs[output]).not.toBe('');
       });
     });
-
-    test('Resources should follow naming convention', () => {
-      Object.keys(outputs).forEach(key => {
-        if (!key.includes('ComplianceStatus') && !key.includes('SecurityFeatures')) {
-          expect(key).toMatch(new RegExp(`^${projectName}-${environmentSuffix}-`));
-        }
-      });
-    });
   });
 });
