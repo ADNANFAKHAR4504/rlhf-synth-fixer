@@ -6,180 +6,166 @@ const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 const isNonEmptyString = (val: any): boolean =>
   typeof val === "string" && val.trim().length > 0;
 
-// Improved ARN validation to handle IAM role ARNs with slashes
 const isValidArn = (val: any): boolean => {
   if (typeof val !== "string" || val.trim().length === 0) return false;
-
-  const iamRoleArnPattern = /^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/;
-  const genericArnPattern = /^arn:aws:[^:]+:[^:]*:\d{12}:[^ ]+$/;
-
-  return iamRoleArnPattern.test(val) || genericArnPattern.test(val);
+  // Basic ARN pattern (aws:service:region:account-id:resource)
+  return /^arn:aws:[\w-]+:[\w-]*:\d{12}:[\w\-\/:.]+$/.test(val)
+    || /^arn:aws:[\w-]+:[\w-]*:\d{12}:trail\/[\w\-]+$/.test(val)
+    || /^arn:aws:s3:::[\w\-./]+$/.test(val); // For S3 bucket arn
 };
 
 const isValidVpcId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("vpc-");
+  isNonEmptyString(val) && /^vpc-[a-z0-9]+$/.test(val);
 
 const isValidSubnetId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("subnet-");
+  isNonEmptyString(val) && /^subnet-[a-z0-9]+$/.test(val);
 
 const isValidSecurityGroupId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("sg-");
+  isNonEmptyString(val) && /^sg-[a-z0-9]+$/.test(val);
 
 const isValidInternetGatewayId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("igw-");
+  isNonEmptyString(val) && /^igw-[a-z0-9]+$/.test(val);
 
 const isValidNatGatewayId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("nat-");
+  isNonEmptyString(val) && /^nat-[a-z0-9]+$/.test(val);
 
-const parseMaybeJsonArray = (val: any): any[] | null => {
-  if (!val) return null;
-  if (Array.isArray(val)) return val;
-  if (typeof val === "string") {
-    try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
+const isValidAmiId = (val: any): boolean =>
+  isNonEmptyString(val) && /^ami-[a-z0-9]+$/.test(val);
+
+const isValidDbInstanceId = (val: any): boolean =>
+  isNonEmptyString(val) && /^db-[A-Z0-9]+$/.test(val);
 
 const isValidIp = (val: string): boolean =>
-  typeof val === "string" &&
-  /^(\d{1,3}\.){3}\d{1,3}$/.test(val);
+  typeof val === "string" && /^(\d{1,3}\.){3}\d{1,3}$/.test(val);
 
-describe("Selective Terraform Stack Integration Tests (No Secondary RDS)", () => {
-  let outputsRaw: Record<string, any>;
+const isValidBucketName = (val: any): boolean =>
+  isNonEmptyString(val) && /^[a-z0-9-\.]+$/.test(val);
+
+const isValidParameterName = (val: any): boolean =>
+  isNonEmptyString(val) && /^\/[a-z0-9\-]+\/[a-z0-9\-]+\/rds\/(username|password)$/.test(val);
+
+const parseArray = (val: any): string[] => {
+  if (!val) return [];
+  // Accepts both string-encoded array and real array
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try { return JSON.parse(val); }
+    catch { return []; }
+  }
+  return [];
+};
+
+describe("Comprehensive AWS Terraform Integration Tests (from flat outputs)", () => {
   let outputs: Record<string, any>;
-
   beforeAll(() => {
-    outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
-    outputs = {};
-    for (const [key, val] of Object.entries(outputsRaw)) {
-      try {
-        if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
-          outputs[key] = JSON.parse(val);
-        } else {
-          outputs[key] = val;
-        }
-      } catch {
-        outputs[key] = val;
-      }
-    }
+    outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
   });
 
-  it("should have all expected keys", () => {
+  it("should have all expected output keys", () => {
     const expectedKeys = [
-      "ec2_instance_role_arn",
-      "kms_primary_key_arn",
-      "kms_secondary_key_arn",
-      "primary_app_sg_arn",
-      "primary_db_sg_arn",
-      "primary_iam_instance_profile",
-      "primary_igw_id",
-      "primary_nat_gateway_ids",
-      "primary_private_subnet_cidrs",
-      "primary_private_subnet_ids",
-      "primary_public_subnet_cidrs",
-      "primary_public_subnet_ids",
-      "primary_rds_endpoint",
-      "primary_s3_logs_bucket",
-      "primary_vpc_arn",
-      "primary_vpc_id",
-      "primary_web_instance_public_ips",
-      "primary_web_sg_arn",
-      "secondary_app_sg_arn",
-      "secondary_igw_id",
-      "secondary_private_subnet_cidrs",
-      "secondary_private_subnet_ids",
-      "secondary_public_subnet_cidrs",
-      "secondary_public_subnet_ids",
-      "secondary_s3_logs_bucket",
-      "secondary_vpc_arn",
-      "secondary_vpc_id",
-      "secondary_web_sg_arn"
+      "ami_id", "cloudtrail_arn", "cloudtrail_s3_bucket_name", "ec2_instance_id",
+      "ec2_instance_profile_name", "ec2_private_ip", "ec2_public_ip", "ec2_security_group_id",
+      "internet_gateway_id", "nat_gateway_eip", "nat_gateway_id", "private_subnet_ids",
+      "public_subnet_ids", "rds_access_role_arn", "rds_db_name", "rds_endpoint", "rds_instance_id",
+      "rds_password_parameter_name", "rds_security_group_id", "rds_username_parameter_name",
+      "s3_bucket_arn", "s3_bucket_name", "user_role_arn", "vpc_cidr_block", "vpc_id"
     ];
-    expectedKeys.forEach(key => {
-      expect(outputs).toHaveProperty(key);
-    });
+    expect(Object.keys(outputs).sort()).toEqual(expectedKeys.sort());
   });
 
-  [
-    "ec2_instance_role_arn",
-    "kms_primary_key_arn",
-    "kms_secondary_key_arn",
-    "primary_app_sg_arn",
-    "primary_db_sg_arn",
-    "primary_web_sg_arn",
-    "secondary_app_sg_arn",
-    "secondary_web_sg_arn",
-  ].forEach(key => {
-    it(`${key} should be a valid AWS ARN`, () => {
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
+  it("vpc_id should be valid", () => {
+    expect(isValidVpcId(outputs.vpc_id)).toBe(true);
   });
 
-  ["primary_vpc_id", "secondary_vpc_id"].forEach(key => {
-    it(`${key} should be a valid VPC ID`, () => {
-      expect(isValidVpcId(outputs[key])).toBe(true);
-    });
+  it("vpc_cidr_block should be valid CIDR", () => {
+    expect(outputs.vpc_cidr_block).toMatch(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/);
   });
 
-  ["primary_igw_id", "secondary_igw_id"].forEach(key => {
-    it(`${key} should be a valid Internet Gateway ID`, () => {
-      expect(isValidInternetGatewayId(outputs[key])).toBe(true);
-    });
+  it("internet_gateway_id should be valid", () => {
+    expect(isValidInternetGatewayId(outputs.internet_gateway_id)).toBe(true);
   });
 
-  it("primary_nat_gateway_ids should be an array of valid NAT Gateway IDs", () => {
-    const arr = parseMaybeJsonArray(outputs.primary_nat_gateway_ids);
-    expect(arr).not.toBeNull();
-    arr!.forEach(id => expect(isValidNatGatewayId(id)).toBe(true));
+  it("nat_gateway_id should be valid", () => {
+    expect(isValidNatGatewayId(outputs.nat_gateway_id)).toBe(true);
   });
 
-  ["primary_private_subnet_ids", "primary_public_subnet_ids", "secondary_private_subnet_ids", "secondary_public_subnet_ids"].forEach(key => {
-    it(`${key} should be an array of valid Subnet IDs`, () => {
-      const arr = parseMaybeJsonArray(outputs[key]);
-      expect(arr).not.toBeNull();
-      arr!.forEach(id => expect(isValidSubnetId(id)).toBe(true));
-    });
+  it("nat_gateway_eip should be valid IPv4", () => {
+    expect(isValidIp(outputs.nat_gateway_eip)).toBe(true);
   });
 
-  ["primary_private_subnet_cidrs", "primary_public_subnet_cidrs", "secondary_private_subnet_cidrs", "secondary_public_subnet_cidrs"].forEach(key => {
-    it(`${key} should be an array of CIDR strings`, () => {
-      const arr = parseMaybeJsonArray(outputs[key]);
-      expect(arr).not.toBeNull();
-      arr!.forEach(cidr => {
-        expect(typeof cidr).toBe("string");
-        expect(cidr).toMatch(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/);
-      });
-    });
+  it("ec2_instance_id should be valid AWS instance id", () => {
+    expect(isNonEmptyString(outputs.ec2_instance_id)).toBe(true);
+    expect(outputs.ec2_instance_id).toMatch(/^i-[a-z0-9]+$/);
   });
 
-  it("primary_rds_endpoint should be a valid RDS endpoint string", () => {
-    expect(isNonEmptyString(outputs.primary_rds_endpoint)).toBe(true);
-    expect(outputs.primary_rds_endpoint).toMatch(/\.rds\.amazonaws\.com$/);
+  it("ec2_instance_profile_name should be valid", () => {
+    expect(isNonEmptyString(outputs.ec2_instance_profile_name)).toBe(true);
   });
 
-  // No secondary RDS, so no test for secondary_rds_endpoint
-
-  it("primary_web_instance_public_ips should be an array of valid IP addresses", () => {
-    const ips = parseMaybeJsonArray(outputs.primary_web_instance_public_ips);
-    expect(ips).not.toBeNull();
-    ips!.forEach(ip => {
-      expect(typeof ip).toBe("string");
-      expect(/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)).toBe(true);
-    });
+  it("ec2_security_group_id should be valid SG ID", () => {
+    expect(isValidSecurityGroupId(outputs.ec2_security_group_id)).toBe(true);
   });
 
-  it("primary_iam_instance_profile should be non-empty string", () => {
-    expect(isNonEmptyString(outputs.primary_iam_instance_profile)).toBe(true);
+  it("ec2_private_ip and ec2_public_ip should be valid IPv4", () => {
+    expect(isValidIp(outputs.ec2_private_ip)).toBe(true);
+    expect(isValidIp(outputs.ec2_public_ip)).toBe(true);
   });
 
-  it("primary_s3_logs_bucket and secondary_s3_logs_bucket should be non-empty strings", () => {
-    expect(isNonEmptyString(outputs.primary_s3_logs_bucket)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_s3_logs_bucket)).toBe(true);
+  it("public_subnet_ids and private_subnet_ids arrays should be valid subnet IDs", () => {
+    const pubSubnets = parseArray(outputs.public_subnet_ids);
+    const privSubnets = parseArray(outputs.private_subnet_ids);
+    expect(pubSubnets.length).toBeGreaterThan(0);
+    expect(privSubnets.length).toBeGreaterThan(0);
+    pubSubnets.forEach(id => expect(isValidSubnetId(id)).toBe(true));
+    privSubnets.forEach(id => expect(isValidSubnetId(id)).toBe(true));
+  });
+
+  it("rds_access_role_arn and user_role_arn should be valid ARNs", () => {
+    expect(isValidArn(outputs.rds_access_role_arn)).toBe(true);
+    expect(isValidArn(outputs.user_role_arn)).toBe(true);
+  });
+
+  it("rds_instance_id should be valid", () => {
+    expect(isValidDbInstanceId(outputs.rds_instance_id)).toBe(true);
+  });
+
+  it("rds_db_name should be non-empty, matches expected format", () => {
+    expect(isNonEmptyString(outputs.rds_db_name)).toBe(true);
+    expect(outputs.rds_db_name).toMatch(/^[a-zA-Z0-9_]+$/);
+  });
+
+  it("rds_endpoint should be non-empty and end with .rds.amazonaws.com", () => {
+    expect(isNonEmptyString(outputs.rds_endpoint)).toBe(true);
+    expect(outputs.rds_endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
+  });
+
+  it("rds_security_group_id should be valid", () => {
+    expect(isValidSecurityGroupId(outputs.rds_security_group_id)).toBe(true);
+  });
+
+  it("rds_username_parameter_name and rds_password_parameter_name should be valid SSM parameter names", () => {
+    expect(isValidParameterName(outputs.rds_username_parameter_name)).toBe(true);
+    expect(isValidParameterName(outputs.rds_password_parameter_name)).toBe(true);
+  });
+
+  it("s3_bucket_arn should be a valid S3 ARN", () => {
+    expect(isValidArn(outputs.s3_bucket_arn)).toBe(true);
+  });
+
+  it("s3_bucket_name should be valid bucket name", () => {
+    expect(isValidBucketName(outputs.s3_bucket_name)).toBe(true);
+  });
+
+  it("cloudtrail_arn should be valid", () => {
+    expect(isValidArn(outputs.cloudtrail_arn)).toBe(true);
+  });
+
+  it("cloudtrail_s3_bucket_name should be valid", () => {
+    expect(isValidBucketName(outputs.cloudtrail_s3_bucket_name)).toBe(true);
+  });
+
+  it("ami_id should be valid", () => {
+    expect(isValidAmiId(outputs.ami_id)).toBe(true);
   });
 
 });
