@@ -214,24 +214,45 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+                # Cross-account trust for multi-account support
+                - !Sub 'arn:aws:iam::123456789012:root' # Replace with target account ID(s)
             Action: sts:AssumeRole
             Condition:
               Bool:
                 'aws:MultiFactorAuthPresent': 'true'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/PowerUserAccess
       Policies:
-        - PolicyName: AdminPolicy
+        - PolicyName: LeastPrivilegeAdminPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - iam:*
-                  - organizations:*
-                  - account:*
+                  - ec2:Describe*
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:RebootInstances
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - cloudwatch:Get*
+                  - logs:Describe*
+                  - logs:Get*
+                  - logs:List*
+                  - kms:List*
+                  - kms:Describe*
+                  - dynamodb:List*
+                  - dynamodb:Describe*
+                  - organizations:Describe*
+                  - account:List*
                 Resource: '*'
+              # Add more granular permissions as needed
+  # EBS ENCRYPTION BY DEFAULT
+  EBSEncryptionByDefault:
+    Type: AWS::EC2::EBSEncryptionByDefault
+    Properties:
+      Enabled: true
 
   # CloudTrail Role
   CloudTrailRole:
@@ -633,6 +654,12 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - 'arn:aws:s3'
+            - Type: 'AWS::Lambda::Function'
+              Values:
+                - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*'
+            - Type: 'AWS::DynamoDB::Table'
+              Values:
+                - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-cloudtrail'
@@ -641,6 +668,40 @@ Resources:
 
   # ========================================
   # GUARDDUTY
+  # GUARDDUTY ALERTING SNS
+  GuardDutyAlertTopic:
+    Condition: CreateGuardDuty
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-guardduty-alerts'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-guardduty-alerts'
+        - Key: Environment
+          Value: !Ref Environment
+
+  GuardDutyAlertSubscription:
+    Condition: CreateGuardDuty
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref GuardDutyAlertTopic
+      Protocol: email
+      Endpoint: 'security-team@example.com' # Replace with actual email
+  # VPC FLOW LOGS
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${Environment}'
+      RetentionInDays: 90
+
+  VPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt AdminRole.Arn
+      LogGroupName: !Ref VPCFlowLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
   # ========================================
 
   GuardDutyDetector:
@@ -677,6 +738,23 @@ Resources:
 
   # ========================================
   # KMS KEY FOR ADDITIONAL ENCRYPTION
+  # AWS CONFIG
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-config-recorder'
+      RoleARN: !GetAtt AdminRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-config-delivery'
+      S3BucketName: !Ref S3WebAssetsBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFourHours
   # ========================================
 
   KMSKey:
