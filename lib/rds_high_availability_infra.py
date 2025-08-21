@@ -234,6 +234,9 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
       topic_name=f"rds-alerts-{self.props.environment_suffix}",
       display_name=f"RDS Alerts - {self.props.environment_suffix.upper()}"
     )
+    
+    # Ensure SNS topic is deleted with stack
+    self.notification_topic.apply_removal_policy(RemovalPolicy.DESTROY)
 
     # Add email subscription
     self.notification_topic.add_subscription(
@@ -256,6 +259,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
         )
       ]
     )
+    self.rds_monitoring_role.apply_removal_policy(RemovalPolicy.DESTROY)
 
     # Role for AWS Backup
     self.backup_role = iam.Role(
@@ -270,6 +274,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
         )
       ]
     )
+    self.backup_role.apply_removal_policy(RemovalPolicy.DESTROY)
 
     # Additional permissions for S3 backup access
     self.backup_role.add_to_policy(
@@ -354,7 +359,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
     self.parameter_group = rds.ParameterGroup(
       self, "DbParameterGroup",
       engine=rds.DatabaseInstanceEngine.postgres(
-        version=rds.PostgresEngineVersion.VER_15_4
+        version=rds.PostgresEngineVersion.VER_15_7
       ),
       parameters={
         "log_statement": "all",
@@ -369,7 +374,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
       self, "PostgresInstance",
       instance_identifier=f"postgres-{self.props.project}-{self.props.environment_suffix}",
       engine=rds.DatabaseInstanceEngine.postgres(
-        version=rds.PostgresEngineVersion.VER_15_4
+        version=rds.PostgresEngineVersion.VER_15_7
       ),
       instance_type=ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -467,7 +472,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
       removal_policy=RemovalPolicy.DESTROY
     )
 
-    # Create backup plan with frequent backups for RPO < 5 minutes
+    # Create backup plan with hourly backups (minimum AWS Backup interval)
     self.backup_plan = backup.BackupPlan(
       self, "BackupPlan",
       backup_plan_name=f"rds-backup-plan-{self.props.environment_suffix}",
@@ -476,7 +481,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
           backup_vault=self.backup_vault,
           rule_name="FrequentBackups",
           schedule_expression=events.Schedule.cron(
-            minute="*/5",  # Every 5 minutes for RPO requirement
+            minute="0",  # Every hour (minimum allowed interval)
             hour="*",
             day="*",
             month="*",

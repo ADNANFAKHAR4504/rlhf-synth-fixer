@@ -248,9 +248,9 @@ class TestRdsHighAvailabilityInfra(unittest.TestCase):
       "ComparisonOperator": "GreaterThanThreshold"
     })
 
-  @mark.it("configures backup plan with RPO < 5 minutes")
+  @mark.it("configures backup plan with hourly backups")
   def test_backup_plan_rpo(self):
-    """Test backup plan meets RPO requirements."""
+    """Test backup plan with hourly backup schedule."""
     # ARRANGE
     rds_stack = RdsHighAvailabilityInfra(self.stack, "RdsInfra", self.props)
     template = assertions.Template.from_stack(rds_stack)
@@ -262,7 +262,7 @@ class TestRdsHighAvailabilityInfra(unittest.TestCase):
         "BackupPlanRule": assertions.Match.array_with([
           assertions.Match.object_like({
             "RuleName": "FrequentBackups",
-            "ScheduleExpression": "cron(*/5 * * * ? *)"  # Every 5 minutes
+            "ScheduleExpression": "cron(0 * * * ? *)"  # Every hour
           })
         ])
       }
