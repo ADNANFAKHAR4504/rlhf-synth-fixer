@@ -535,7 +535,7 @@ resource "aws_db_instance" "db" {
   allocated_storage      = var.db_allocated_storage
   db_name                = "${var.project}_db"
   username               = var.db_master_username
-  password               = var.db_master_password
+  manage_master_user_password = true
   db_subnet_group_name   = aws_db_subnet_group.default.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   publicly_accessible    = false
