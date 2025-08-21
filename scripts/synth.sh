@@ -39,6 +39,9 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   export GOPROXY=${GOPROXY:-direct}
   export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
   export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
+  # Pre-fetch CDKTF core and its jsii subpackage used by .gen code
+  go mod download github.com/hashicorp/terraform-cdk-go/cdktf || true
+  go mod download github.com/hashicorp/terraform-cdk-go/cdktf/jsii || true
   go mod tidy
   npm run cdktf:synth
 else
