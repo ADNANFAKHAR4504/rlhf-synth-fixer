@@ -349,6 +349,10 @@ data "aws_availability_zones" "available" {
   }
 }
 
+locals {
+  azs = length(data.aws_availability_zones.available.names) >= 2 ? data.aws_availability_zones.available.names : ["us-west-2a", "us-west-2b"]
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
@@ -372,7 +376,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  availability_zone       = local.azs[0]
   map_public_ip_on_launch = true
 
   tags = {
@@ -385,7 +389,7 @@ resource "aws_subnet" "public_1" {
 resource "aws_subnet" "public_2" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[1]
+  availability_zone       = local.azs[1]
   map_public_ip_on_launch = true
 
   tags = {
@@ -399,7 +403,7 @@ resource "aws_subnet" "public_2" {
 resource "aws_subnet" "private_1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.3.0/24"
-  availability_zone = data.aws_availability_zones.available.names[0]
+  availability_zone = local.azs[0]
 
   tags = {
     Name = "ha-web-app-private-subnet-1-${var.environment}"
@@ -411,7 +415,7 @@ resource "aws_subnet" "private_1" {
 resource "aws_subnet" "private_2" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.4.0/24"
-  availability_zone = data.aws_availability_zones.available.names[1]
+  availability_zone = local.azs[1]
 
   tags = {
     Name = "ha-web-app-private-subnet-2-${var.environment}"
@@ -438,8 +442,9 @@ output "private_subnet_ids" {
 
 output "availability_zones" {
   description = "Availability zones used"
-  value       = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1]]
+  value       = [local.azs[0], local.azs[1]]
 }
+
 ########################
 # Variables
 ########################
