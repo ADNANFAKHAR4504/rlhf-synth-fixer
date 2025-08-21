@@ -75,54 +75,58 @@ export class StorageConstruct extends Construct {
       );
 
     // Bucket policy to allow ALB to write access logs
-    this.accessLogsBucketPolicy = new s3BucketPolicy.S3BucketPolicy(this, 'access-logs-bucket-policy', {
-      bucket: this.accessLogsBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: albServiceAccount.arn,
+    this.accessLogsBucketPolicy = new s3BucketPolicy.S3BucketPolicy(
+      this,
+      'access-logs-bucket-policy',
+      {
+        bucket: this.accessLogsBucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                AWS: albServiceAccount.arn,
+              },
+              Action: 's3:PutObject',
+              Resource: [
+                `${this.accessLogsBucket.arn}/AWSLogs/*`,
+                `${this.accessLogsBucket.arn}/alb-access-logs/*`,
+              ],
             },
-            Action: 's3:PutObject',
-            Resource: [
-              `${this.accessLogsBucket.arn}/AWSLogs/*`,
-              `${this.accessLogsBucket.arn}/alb-access-logs/*`,
-            ],
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: albServiceAccount.arn,
+            {
+              Effect: 'Allow',
+              Principal: {
+                AWS: albServiceAccount.arn,
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.accessLogsBucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: this.accessLogsBucket.arn,
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.accessLogsBucket.arn}/AWSLogs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.accessLogsBucket.arn}/AWSLogs/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
               },
             },
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.accessLogsBucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: this.accessLogsBucket.arn,
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+      }
+    );
 
     this.logsBucket = new s3Bucket.S3Bucket(this, 'logs-bucket', {
       bucket: `${config.projectName}-${config.environment}-logs-${timestamp}`,
