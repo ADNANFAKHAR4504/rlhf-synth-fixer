@@ -539,9 +539,13 @@ export class IamModule extends Construct {
   public readonly ec2Role: iamRole.IamRole;
   public readonly instanceProfile: iamInstanceProfile.IamInstanceProfile;
 
-  constructor(scope: Construct, id: string, props: IamModuleProps & { 
-    secretArn?: string 
-  }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: IamModuleProps & {
+      secretArn?: string;
+    }
+  ) {
     super(scope, id);
 
     this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
@@ -573,22 +577,26 @@ export class IamModule extends Construct {
           }),
         },
         // Add Secrets Manager permissions if secret ARN is provided
-        ...(props.secretArn ? [{
-          name: 'SecretsManagerAccess',
-          policy: JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
+        ...(props.secretArn
+          ? [
               {
-                Effect: 'Allow',
-                Action: [
-                  'secretsmanager:GetSecretValue',
-                  'secretsmanager:DescribeSecret',
-                ],
-                Resource: props.secretArn,
+                name: 'SecretsManagerAccess',
+                policy: JSON.stringify({
+                  Version: '2012-10-17',
+                  Statement: [
+                    {
+                      Effect: 'Allow',
+                      Action: [
+                        'secretsmanager:GetSecretValue',
+                        'secretsmanager:DescribeSecret',
+                      ],
+                      Resource: props.secretArn,
+                    },
+                  ],
+                }),
               },
-            ],
-          }),
-        }] : []),
+            ]
+          : []),
       ],
       tags: {
         Name: `${props.namePrefix}ec2-role`,
