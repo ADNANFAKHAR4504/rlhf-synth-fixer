@@ -29,6 +29,7 @@ env:
   PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
   detect-metadata:
@@ -99,7 +100,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Synth
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -134,7 +135,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       # Terraform State Management Setup
       - name: Set up Terraform
@@ -280,7 +281,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Run integration tests against live environment
         run: ./scripts/integration-tests.sh
@@ -340,16 +341,17 @@ jobs:
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
           custom_instructions: |
-            CRITICAL: you MUST validate lib/PROMPT.md format, and fail the check if it appears to be AI-generated rather than human-written:
-            1. Read lib/PROMPT.md if it exists
-            2. Assess whether the content looks human-generated or AI-generated
-            3. Look for signs of AI generation such as:
+            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+            1. Identify the latest PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
+            2. Read the latest PROMPT file if it exists
+            3. Assess whether the content looks human-generated or AI-generated
+            4. Look for signs of AI generation such as:
                - Emojis or special symbols (icons) used for formatting
                - Table structures
                - Overly formal or template-like language
                - Perfect formatting that suggests AI assistance
                - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            4. If lib/PROMPT.md appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            5. If the latest PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
 
             CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
             1. Read lib/IDEAL_RESPONSE.md if it exists
@@ -400,7 +402,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
         run: ./scripts/destroy.sh
@@ -447,7 +449,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Archive folders and reset repository
         run: |
@@ -588,7 +590,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Extract platform and language for S3 upload
         id: extract-metadata
@@ -674,7 +676,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (if resources exist)
         run: ./scripts/destroy.sh
