@@ -8,8 +8,6 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-          - VpcId
-          - AllowedRoleArn
 
 Parameters:
   EnvironmentSuffix:
@@ -19,15 +17,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC where resources will be deployed
-
-  AllowedRoleArn:
-    Type: String
-    Description: ARN of IAM role allowed to access resources
-    AllowedPattern: '^arn:aws:iam::[0-9]{12}:role/.+$'
-    ConstraintDescription: Must be a valid IAM role ARN
 
 Resources:
   # KMS Key for DynamoDB encryption
@@ -55,10 +44,10 @@ Resources:
               - kms:GenerateDataKey*
               - kms:ReEncrypt*
             Resource: '*'
-          - Sid: Allow access for specified role
+          - Sid: Allow access for TAP role
             Effect: Allow
             Principal:
-              AWS: !Ref AllowedRoleArn
+              AWS: !GetAtt TAPAccessRole.Arn
             Action:
               - kms:Decrypt
               - kms:DescribeKey
@@ -79,29 +68,25 @@ Resources:
       AliasName: !Sub 'alias/tap-dynamodb-${EnvironmentSuffix}'
       TargetKeyId: !Ref TAPDynamoDBKMSKey
 
-  # VPC Endpoint for S3
-  TAPS3VPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
+  # IAM Role for TAP access
+  TAPAccessRole:
+    Type: AWS::IAM::Role
     Properties:
-      VpcId: !Ref VpcId
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
-      VpcEndpointType: Gateway
-      PolicyDocument:
+      RoleName: !Sub 'TAPAccessRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: '*'
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${TAPSecureS3Bucket}/*'
-              - !Ref TAPSecureS3Bucket
-            Condition:
-              StringEquals:
-                'aws:PrincipalArn': !Ref AllowedRoleArn
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: TAP-Access
 
   # S3 Bucket for TAP storage
   TAPSecureS3Bucket:
@@ -172,10 +157,10 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-          - Sid: AllowVPCEndpointAccess
+          - Sid: AllowTAPRoleAccess
             Effect: Allow
             Principal:
-              AWS: !Ref AllowedRoleArn
+              AWS: !GetAtt TAPAccessRole.Arn
             Action:
               - s3:GetObject
               - s3:PutObject
@@ -186,9 +171,6 @@ Resources:
             Resource:
               - !Sub '${TAPSecureS3Bucket}/*'
               - !Ref TAPSecureS3Bucket
-            Condition:
-              StringEquals:
-                'aws:SourceVpce': !Ref TAPS3VPCEndpoint
 
   # CloudWatch Log Group for S3
   TAPS3LogGroup:
@@ -342,10 +324,7 @@ Resources:
               - kms:GenerateDataKey
             Resource: !GetAtt TAPDynamoDBKMSKey.Arn
       Roles:
-        - !Select [
-            1,
-            !Split ['/', !Select [5, !Split [':', !Ref AllowedRoleArn]]],
-          ]
+        - !Ref TAPAccessRole
 
 Outputs:
   # S3 Outputs
@@ -381,12 +360,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-KMSKey'
 
-  # VPC Endpoint Outputs
-  VPCEndpointId:
-    Description: VPC Endpoint ID for S3 access
-    Value: !Ref TAPS3VPCEndpoint
+  # IAM Role Outputs
+  TAPAccessRoleArn:
+    Description: ARN of the TAP access role
+    Value: !GetAtt TAPAccessRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-S3VPCEndpoint'
+      Name: !Sub '${AWS::StackName}-TAPAccessRole'
 
   # CloudTrail Outputs
   CloudTrailArn:
