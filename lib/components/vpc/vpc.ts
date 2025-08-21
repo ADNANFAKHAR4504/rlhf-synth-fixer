@@ -43,7 +43,7 @@ export class VpcComponent extends pulumi.ComponentResource {
         enableDnsSupport: args.enableDnsSupport ?? true,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.vpcId = this.vpc.id;
@@ -57,8 +57,12 @@ export class VpcComponent extends pulumi.ComponentResource {
   }
 }
 
-export function createVpc(name: string, args: VpcArgs): VpcResult {
-  const vpcComponent = new VpcComponent(name, args);
+export function createVpc(
+  name: string,
+  args: VpcArgs,
+  opts?: pulumi.ComponentResourceOptions
+): VpcResult {
+  const vpcComponent = new VpcComponent(name, args, opts);
   return {
     vpc: vpcComponent.vpc,
     vpcId: vpcComponent.vpcId,

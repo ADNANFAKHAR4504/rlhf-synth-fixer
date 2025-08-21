@@ -38,7 +38,7 @@ export class InternetGatewayComponent extends pulumi.ComponentResource {
       {
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.vpcAttachment = new aws.ec2.InternetGatewayAttachment(
@@ -47,7 +47,7 @@ export class InternetGatewayComponent extends pulumi.ComponentResource {
         vpcId: args.vpcId,
         internetGatewayId: this.internetGateway.id,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.internetGatewayId = this.internetGateway.id;
@@ -62,9 +62,10 @@ export class InternetGatewayComponent extends pulumi.ComponentResource {
 
 export function createInternetGateway(
   name: string,
-  args: InternetGatewayArgs
+  args: InternetGatewayArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): InternetGatewayResult {
-  const igwComponent = new InternetGatewayComponent(name, args);
+  const igwComponent = new InternetGatewayComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     internetGateway: igwComponent.internetGateway,
     internetGatewayId: igwComponent.internetGatewayId,

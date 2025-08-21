@@ -66,48 +66,51 @@ export class KmsKeyComponent extends pulumi.ComponentResource {
     const defaultPolicy = pulumi
       .output(aws.getCallerIdentity())
       .apply(identity =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: {
-                AWS: `arn:aws:iam::${identity.accountId}:root`,
+        pulumi.output(aws.getRegion()).apply(region =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${identity.accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
               },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-            {
-              Sid: 'Allow CloudWatch Logs',
-              Effect: 'Allow',
-              Principal: {
-                Service: `logs.${aws.getRegion().then(r => r.name)}.amazonaws.com`,
+              {
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: `logs.${region.name}.amazonaws.com`,
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
               },
-              Action: [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey',
-              ],
-              Resource: '*',
-            },
-          ],
-        })
+            ],
+          })
+        )
       );
 
-    // Create key configuration without unsupported properties
     const keyConfig: aws.kms.KeyArgs = {
       description: args.description,
       keyUsage: args.keyUsage || 'ENCRYPT_DECRYPT',
-      // keySpec is not supported in the current provider version - removed
       policy: args.policy || defaultPolicy,
       deletionWindowInDays: args.deletionWindowInDays || 7,
       tags: defaultTags,
     };
 
-    this.key = new aws.kms.Key(`${name}-key`, keyConfig, { parent: this });
+    this.key = new aws.kms.Key(`${name}-key`, keyConfig, {
+      parent: this,
+      provider: opts?.provider,
+    });
 
     this.keyId = this.key.keyId;
     this.keyArn = this.key.arn;
@@ -136,7 +139,7 @@ export class KmsAliasComponent extends pulumi.ComponentResource {
         name: args.name.startsWith('alias/') ? args.name : `alias/${args.name}`,
         targetKeyId: args.targetKeyId,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.registerOutputs({
@@ -215,7 +218,7 @@ export class ApplicationKmsKeyComponent extends pulumi.ComponentResource {
         policy: keyPolicy,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.key = keyComponent.key;
@@ -228,7 +231,7 @@ export class ApplicationKmsKeyComponent extends pulumi.ComponentResource {
         name: `application-${args.name}`,
         targetKeyId: this.keyId,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.alias = aliasComponent.alias;
@@ -327,7 +330,7 @@ export class DatabaseKmsKeyComponent extends pulumi.ComponentResource {
         policy: keyPolicy,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.key = keyComponent.key;
@@ -340,7 +343,7 @@ export class DatabaseKmsKeyComponent extends pulumi.ComponentResource {
         name: `database-${args.name}`,
         targetKeyId: this.keyId,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.alias = aliasComponent.alias;
@@ -439,7 +442,7 @@ export class S3KmsKeyComponent extends pulumi.ComponentResource {
         policy: keyPolicy,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.key = keyComponent.key;
@@ -452,7 +455,7 @@ export class S3KmsKeyComponent extends pulumi.ComponentResource {
         name: `s3-${args.name}`,
         targetKeyId: this.keyId,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.alias = aliasComponent.alias;
@@ -466,8 +469,12 @@ export class S3KmsKeyComponent extends pulumi.ComponentResource {
   }
 }
 
-export function createKmsKey(name: string, args: KmsKeyArgs): KmsKeyResult {
-  const kmsKeyComponent = new KmsKeyComponent(name, args);
+export function createKmsKey(
+  name: string,
+  args: KmsKeyArgs,
+  opts?: pulumi.ComponentResourceOptions
+): KmsKeyResult {
+  const kmsKeyComponent = new KmsKeyComponent(name, args, opts);
   return {
     key: kmsKeyComponent.key,
     keyId: kmsKeyComponent.keyId,
@@ -478,17 +485,23 @@ export function createKmsKey(name: string, args: KmsKeyArgs): KmsKeyResult {
 
 export function createKmsAlias(
   name: string,
-  args: KmsAliasArgs
+  args: KmsAliasArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): aws.kms.Alias {
-  const aliasComponent = new KmsAliasComponent(name, args);
+  const aliasComponent = new KmsAliasComponent(name, args, opts);
   return aliasComponent.alias;
 }
 
 export function createApplicationKmsKey(
   name: string,
-  args: ApplicationKmsKeyArgs
+  args: ApplicationKmsKeyArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): KmsKeyResult {
-  const applicationKmsKeyComponent = new ApplicationKmsKeyComponent(name, args);
+  const applicationKmsKeyComponent = new ApplicationKmsKeyComponent(
+    name,
+    args,
+    opts
+  ); // ← FIXED: Pass opts through
   return {
     key: applicationKmsKeyComponent.key,
     keyId: applicationKmsKeyComponent.keyId,
@@ -499,9 +512,10 @@ export function createApplicationKmsKey(
 
 export function createDatabaseKmsKey(
   name: string,
-  args: DatabaseKmsKeyArgs
+  args: DatabaseKmsKeyArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): KmsKeyResult {
-  const databaseKmsKeyComponent = new DatabaseKmsKeyComponent(name, args);
+  const databaseKmsKeyComponent = new DatabaseKmsKeyComponent(name, args, opts);
   return {
     key: databaseKmsKeyComponent.key,
     keyId: databaseKmsKeyComponent.keyId,
@@ -510,8 +524,12 @@ export function createDatabaseKmsKey(
   };
 }
 
-export function createS3KmsKey(name: string, args: S3KmsKeyArgs): KmsKeyResult {
-  const s3KmsKeyComponent = new S3KmsKeyComponent(name, args);
+export function createS3KmsKey(
+  name: string,
+  args: S3KmsKeyArgs,
+  opts?: pulumi.ComponentResourceOptions
+): KmsKeyResult {
+  const s3KmsKeyComponent = new S3KmsKeyComponent(name, args, opts);
   return {
     key: s3KmsKeyComponent.key,
     keyId: s3KmsKeyComponent.keyId,

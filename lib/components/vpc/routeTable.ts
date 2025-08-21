@@ -77,7 +77,7 @@ export class RouteTableComponent extends pulumi.ComponentResource {
         vpcId: args.vpcId,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.routeTableId = this.routeTable.id;
@@ -98,7 +98,7 @@ export class RouteTableComponent extends pulumi.ComponentResource {
             transitGatewayId: routeConfig.transitGatewayId,
             vpcPeeringConnectionId: routeConfig.vpcPeeringConnectionId,
           },
-          { parent: this }
+          { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
         );
 
         this.routes.push(route);
@@ -129,7 +129,7 @@ export class RouteTableAssociationComponent extends pulumi.ComponentResource {
         routeTableId: args.routeTableId,
         subnetId: args.subnetId,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.registerOutputs({
@@ -166,7 +166,7 @@ export class RouteTablesComponent extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.publicRouteTable = {
@@ -185,7 +185,7 @@ export class RouteTablesComponent extends pulumi.ComponentResource {
             routeTableId: this.publicRouteTable.routeTableId,
             subnetId: subnetId,
           },
-          { parent: this }
+          { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
         );
         this.publicAssociations.push(association);
       });
@@ -216,7 +216,7 @@ export class RouteTablesComponent extends pulumi.ComponentResource {
             },
           ],
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
       );
 
       this.privateRouteTables.push({
@@ -233,7 +233,7 @@ export class RouteTablesComponent extends pulumi.ComponentResource {
             routeTableId: privateRouteTableComponent.routeTableId,
             subnetId: privateSubnetIdsArray[index],
           },
-          { parent: this }
+          { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
         );
         this.privateAssociations.push(association);
       }
@@ -250,9 +250,10 @@ export class RouteTablesComponent extends pulumi.ComponentResource {
 
 export function createRouteTable(
   name: string,
-  args: RouteTableArgs
+  args: RouteTableArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): RouteTableResult {
-  const routeTableComponent = new RouteTableComponent(name, args);
+  const routeTableComponent = new RouteTableComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     routeTable: routeTableComponent.routeTable,
     routeTableId: routeTableComponent.routeTableId,
@@ -262,21 +263,28 @@ export function createRouteTable(
 
 export function createRouteTableAssociation(
   name: string,
-  args: RouteTableAssociationArgs
+  args: RouteTableAssociationArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): aws.ec2.RouteTableAssociation {
-  const associationComponent = new RouteTableAssociationComponent(name, args);
+  const associationComponent = new RouteTableAssociationComponent(
+    name,
+    args,
+    opts
+  ); // ← FIXED: Pass opts through
   return associationComponent.association;
 }
 
 export function createRouteTables(
   name: string,
   publicArgs: PublicRouteTableArgs,
-  privateArgs: PrivateRouteTableArgs
+  privateArgs: PrivateRouteTableArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): RouteTablesResult {
   const routeTablesComponent = new RouteTablesComponent(
     name,
     publicArgs,
-    privateArgs
+    privateArgs,
+    opts // ← FIXED: Pass opts through
   );
   return {
     publicRouteTable: routeTablesComponent.publicRouteTable,

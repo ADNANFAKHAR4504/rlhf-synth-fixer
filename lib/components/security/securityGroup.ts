@@ -75,13 +75,13 @@ export class SecurityGroupComponent extends pulumi.ComponentResource {
         vpcId: args.vpcId,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.securityGroupId = this.securityGroup.id;
     this.rules = [];
 
-    // Create security group rules if provided
+    // Create security group rules
     if (args.rules) {
       args.rules.forEach((ruleConfig, index) => {
         const rule = new aws.ec2.SecurityGroupRule(
@@ -98,7 +98,7 @@ export class SecurityGroupComponent extends pulumi.ComponentResource {
               ruleConfig.description ||
               `${ruleConfig.type} rule for ${ruleConfig.protocol}:${ruleConfig.fromPort}-${ruleConfig.toPort}`,
           },
-          { parent: this }
+          { parent: this, provider: opts?.provider }
         );
 
         this.rules.push(rule);
@@ -159,7 +159,7 @@ export class WebSecurityGroupComponent extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.securityGroup = securityGroupComponent.securityGroup;
@@ -186,7 +186,7 @@ export class DatabaseSecurityGroupComponent extends pulumi.ComponentResource {
   ) {
     super('aws:security:DatabaseSecurityGroupComponent', name, {}, opts);
 
-    const databasePort = args.databasePort || 3306; // Default to MySQL port
+    const databasePort = args.databasePort || 3306;
 
     const securityGroupComponent = new SecurityGroupComponent(
       name,
@@ -214,7 +214,7 @@ export class DatabaseSecurityGroupComponent extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.securityGroup = securityGroupComponent.securityGroup;
@@ -241,7 +241,7 @@ export class ApplicationSecurityGroupComponent extends pulumi.ComponentResource 
   ) {
     super('aws:security:ApplicationSecurityGroupComponent', name, {}, opts);
 
-    const applicationPort = args.applicationPort || 8080; // Default application port
+    const applicationPort = args.applicationPort || 8080;
 
     const securityGroupComponent = new SecurityGroupComponent(
       name,
@@ -285,7 +285,7 @@ export class ApplicationSecurityGroupComponent extends pulumi.ComponentResource 
           },
         ],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.securityGroup = securityGroupComponent.securityGroup;
@@ -302,9 +302,10 @@ export class ApplicationSecurityGroupComponent extends pulumi.ComponentResource 
 
 export function createSecurityGroup(
   name: string,
-  args: SecurityGroupArgs
+  args: SecurityGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): SecurityGroupResult {
-  const securityGroupComponent = new SecurityGroupComponent(name, args);
+  const securityGroupComponent = new SecurityGroupComponent(name, args, opts);
   return {
     securityGroup: securityGroupComponent.securityGroup,
     securityGroupId: securityGroupComponent.securityGroupId,
@@ -314,9 +315,14 @@ export function createSecurityGroup(
 
 export function createWebSecurityGroup(
   name: string,
-  args: WebSecurityGroupArgs
+  args: WebSecurityGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): SecurityGroupResult {
-  const webSecurityGroupComponent = new WebSecurityGroupComponent(name, args);
+  const webSecurityGroupComponent = new WebSecurityGroupComponent(
+    name,
+    args,
+    opts
+  );
   return {
     securityGroup: webSecurityGroupComponent.securityGroup,
     securityGroupId: webSecurityGroupComponent.securityGroupId,
@@ -326,11 +332,13 @@ export function createWebSecurityGroup(
 
 export function createDatabaseSecurityGroup(
   name: string,
-  args: DatabaseSecurityGroupArgs
+  args: DatabaseSecurityGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): SecurityGroupResult {
   const databaseSecurityGroupComponent = new DatabaseSecurityGroupComponent(
     name,
-    args
+    args,
+    opts
   );
   return {
     securityGroup: databaseSecurityGroupComponent.securityGroup,
@@ -341,10 +349,11 @@ export function createDatabaseSecurityGroup(
 
 export function createApplicationSecurityGroup(
   name: string,
-  args: ApplicationSecurityGroupArgs
+  args: ApplicationSecurityGroupArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): SecurityGroupResult {
   const applicationSecurityGroupComponent =
-    new ApplicationSecurityGroupComponent(name, args);
+    new ApplicationSecurityGroupComponent(name, args, opts);
   return {
     securityGroup: applicationSecurityGroupComponent.securityGroup,
     securityGroupId: applicationSecurityGroupComponent.securityGroupId,

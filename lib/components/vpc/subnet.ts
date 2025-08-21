@@ -69,7 +69,7 @@ export class SubnetComponent extends pulumi.ComponentResource {
         mapPublicIpOnLaunch: args.mapPublicIpOnLaunch ?? args.isPublic,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.subnetId = this.subnet.id;
@@ -108,7 +108,7 @@ export class SubnetGroupComponent extends pulumi.ComponentResource {
           name: subnetConfig.name,
           tags: args.tags,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
       );
 
       return {
@@ -130,7 +130,7 @@ export class SubnetGroupComponent extends pulumi.ComponentResource {
           name: subnetConfig.name,
           tags: args.tags,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
       );
 
       return {
@@ -152,8 +152,12 @@ export class SubnetGroupComponent extends pulumi.ComponentResource {
   }
 }
 
-export function createSubnet(name: string, args: SubnetArgs): SubnetResult {
-  const subnetComponent = new SubnetComponent(name, args);
+export function createSubnet(
+  name: string,
+  args: SubnetArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
+): SubnetResult {
+  const subnetComponent = new SubnetComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     subnet: subnetComponent.subnet,
     subnetId: subnetComponent.subnetId,
@@ -163,9 +167,10 @@ export function createSubnet(name: string, args: SubnetArgs): SubnetResult {
 
 export function createSubnetGroup(
   name: string,
-  args: SubnetGroupArgs
+  args: SubnetGroupArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): SubnetGroupResult {
-  const subnetGroupComponent = new SubnetGroupComponent(name, args);
+  const subnetGroupComponent = new SubnetGroupComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     publicSubnets: subnetGroupComponent.publicSubnets,
     privateSubnets: subnetGroupComponent.privateSubnets,

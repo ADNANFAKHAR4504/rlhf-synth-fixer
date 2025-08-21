@@ -166,7 +166,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Set default values
     this.environmentSuffix = args?.environmentSuffix || 'prod';
-    this.regions = args?.regions || ['us-west-1', 'us-east-1'];
+    this.regions = args?.regions || ['us-west-1', 'us-east-1']; // ← RESTORED: Multi-region
     this.tags = args?.tags || {
       Environment: this.environmentSuffix,
       Project: 'IaC-AWS-Model-Breaking',
@@ -223,25 +223,36 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(`Creating Security Infrastructure for ${region}...`);
 
-      // Create KMS keys using existing components
-      const appKms = createApplicationKmsKey(`${name}-app-kms-${region}`, {
-        name: `${name}-application-${region}`,
-        description: `Application encryption key for ${region}`,
-        tags: this.tags,
-      });
+      //  Create KMS keys with regional provider
+      const appKms = createApplicationKmsKey(
+        `${name}-app-kms-${region}`,
+        {
+          name: `${name}-application-${region}`,
+          description: `Application encryption key for ${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      );
 
-      const dbKms = createDatabaseKmsKey(`${name}-db-kms-${region}`, {
-        name: `${name}-database-${region}`,
-        description: `Database encryption key for ${region}`,
-        tags: this.tags,
-      });
+      const dbKms = createDatabaseKmsKey(
+        `${name}-db-kms-${region}`,
+        {
+          name: `${name}-database-${region}`,
+          description: `Database encryption key for ${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      );
 
-      const s3Kms = createS3KmsKey(`${name}-s3-kms-${region}`, {
-        name: `${name}-s3-${region}`,
-        description: `S3 encryption key for ${region}`,
-        tags: this.tags,
-      });
-
+      const s3Kms = createS3KmsKey(
+        `${name}-s3-kms-${region}`,
+        {
+          name: `${name}-s3-${region}`,
+          description: `S3 encryption key for ${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      );
       this.regionalSecurity[region] = {
         applicationKms: appKms,
         databaseKms: dbKms,
@@ -250,55 +261,74 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(` Creating Networking Infrastructure for ${region}...`);
 
-      // Create VPC and networking using existing components
-      const vpc = createVpc(`${name}-vpc-${region}`, {
-        cidrBlock: '10.0.0.0/16',
-        name: `${name}-vpc-${region}`,
-        tags: this.tags,
-      });
+      //  Create VPC with regional provider
+      const vpc = createVpc(
+        `${name}-vpc-${region}`,
+        {
+          cidrBlock: '10.0.0.0/16',
+          name: `${name}-vpc-${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
-      // Use dynamic availability zones based on the actual region
-      const subnets = createSubnetGroup(`${name}-subnets-${region}`, {
-        vpcId: vpc.vpcId,
-        publicSubnets: [
-          {
-            cidrBlock: '10.0.1.0/24',
-            availabilityZone: availabilityZones[0],
-            name: `${name}-public-1-${region}`,
-          },
-          {
-            cidrBlock: '10.0.2.0/24',
-            availabilityZone: availabilityZones[1],
-            name: `${name}-public-2-${region}`,
-          },
-        ],
-        privateSubnets: [
-          {
-            cidrBlock: '10.0.10.0/24',
-            availabilityZone: availabilityZones[0],
-            name: `${name}-private-1-${region}`,
-          },
-          {
-            cidrBlock: '10.0.20.0/24',
-            availabilityZone: availabilityZones[1],
-            name: `${name}-private-2-${region}`,
-          },
-        ],
-        tags: this.tags,
-      });
+      //  Create subnets with regional provider
+      const subnets = createSubnetGroup(
+        `${name}-subnets-${region}`,
+        {
+          vpcId: vpc.vpcId,
+          publicSubnets: [
+            {
+              cidrBlock: '10.0.1.0/24',
+              availabilityZone: availabilityZones[0],
+              name: `${name}-public-1-${region}`,
+            },
+            {
+              cidrBlock: '10.0.2.0/24',
+              availabilityZone: availabilityZones[1],
+              name: `${name}-public-2-${region}`,
+            },
+          ],
+          privateSubnets: [
+            {
+              cidrBlock: '10.0.10.0/24',
+              availabilityZone: availabilityZones[0],
+              name: `${name}-private-1-${region}`,
+            },
+            {
+              cidrBlock: '10.0.20.0/24',
+              availabilityZone: availabilityZones[1],
+              name: `${name}-private-2-${region}`,
+            },
+          ],
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
-      const igw = createInternetGateway(`${name}-igw-${region}`, {
-        vpcId: vpc.vpcId,
-        name: `${name}-igw-${region}`,
-        tags: this.tags,
-      });
+      //  Create Internet Gateway with regional provider
+      const igw = createInternetGateway(
+        `${name}-igw-${region}`,
+        {
+          vpcId: vpc.vpcId,
+          name: `${name}-igw-${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
-      const natGateways = createMultiAzNatGateway(`${name}-nat-${region}`, {
-        publicSubnetIds: subnets.publicSubnetIds,
-        name: `${name}-nat-${region}`,
-        tags: this.tags,
-      });
+      //  Create NAT Gateways with regional provider
+      const natGateways = createMultiAzNatGateway(
+        `${name}-nat-${region}`,
+        {
+          publicSubnetIds: subnets.publicSubnetIds,
+          name: `${name}-nat-${region}`,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
+      //  Create Route Tables with regional provider
       const routeTables = createRouteTables(
         `${name}-routes-${region}`,
         {
@@ -314,29 +344,42 @@ export class TapStack extends pulumi.ComponentResource {
           privateSubnetIds: subnets.privateSubnetIds,
           name: `${name}-private-${region}`,
           tags: this.tags,
-        }
+        },
+        { provider: this.providers[region] } // ← FIXED: Added provider
       );
 
-      // Create security groups
-      const albSg = createWebSecurityGroup(`${name}-alb-sg-${region}`, {
-        name: `${name}-alb-sg-${region}`,
-        vpcId: vpc.vpcId,
-        tags: this.tags,
-      });
+      //  Create security groups with regional provider
+      const albSg = createWebSecurityGroup(
+        `${name}-alb-sg-${region}`,
+        {
+          name: `${name}-alb-sg-${region}`,
+          vpcId: vpc.vpcId,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
-      const appSg = createApplicationSecurityGroup(`${name}-app-sg-${region}`, {
-        name: `${name}-app-sg-${region}`,
-        vpcId: vpc.vpcId,
-        albSecurityGroupId: albSg.securityGroupId,
-        tags: this.tags,
-      });
+      const appSg = createApplicationSecurityGroup(
+        `${name}-app-sg-${region}`,
+        {
+          name: `${name}-app-sg-${region}`,
+          vpcId: vpc.vpcId,
+          albSecurityGroupId: albSg.securityGroupId,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
-      const dbSg = createDatabaseSecurityGroup(`${name}-db-sg-${region}`, {
-        name: `${name}-db-sg-${region}`,
-        vpcId: vpc.vpcId,
-        webSecurityGroupId: appSg.securityGroupId,
-        tags: this.tags,
-      });
+      const dbSg = createDatabaseSecurityGroup(
+        `${name}-db-sg-${region}`,
+        {
+          name: `${name}-db-sg-${region}`,
+          vpcId: vpc.vpcId,
+          webSecurityGroupId: appSg.securityGroupId,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] }
+      ); // ← FIXED: Added provider
 
       this.regionalNetworks[region] = {
         vpc,

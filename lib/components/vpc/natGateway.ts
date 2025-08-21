@@ -64,7 +64,7 @@ export class NatGatewayComponent extends pulumi.ComponentResource {
             Name: `${args.name}-eip`,
           },
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
       );
 
       this.elasticIpId = this.elasticIp.id;
@@ -80,7 +80,7 @@ export class NatGatewayComponent extends pulumi.ComponentResource {
         connectivityType: connectivityType,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
     );
 
     this.natGatewayId = this.natGateway.id;
@@ -118,7 +118,7 @@ export class MultiAzNatGatewayComponent extends pulumi.ComponentResource {
           name: `${args.name}-${index}`,
           tags: args.tags,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Pass provider through
       );
 
       const result: NatGatewayResult = {
@@ -142,9 +142,10 @@ export class MultiAzNatGatewayComponent extends pulumi.ComponentResource {
 
 export function createNatGateway(
   name: string,
-  args: NatGatewayArgs
+  args: NatGatewayArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): NatGatewayResult {
-  const natGatewayComponent = new NatGatewayComponent(name, args);
+  const natGatewayComponent = new NatGatewayComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     natGateway: natGatewayComponent.natGateway,
     natGatewayId: natGatewayComponent.natGatewayId,
@@ -156,9 +157,10 @@ export function createNatGateway(
 
 export function createMultiAzNatGateway(
   name: string,
-  args: MultiAzNatGatewayArgs
+  args: MultiAzNatGatewayArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): MultiAzNatGatewayResult {
-  const multiAzComponent = new MultiAzNatGatewayComponent(name, args);
+  const multiAzComponent = new MultiAzNatGatewayComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     natGateways: multiAzComponent.natGateways,
     natGatewayIds: multiAzComponent.natGatewayIds,
