@@ -131,12 +131,12 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.securityGroups[region] = sg;
 
-      // KMS Key with compliant key policy
+      // KMS Key with FIXED policy for CloudWatch Logs support
       const kmsKey = new aws.kms.Key(`${prefix}-kms`, {
         description: `KMS Customer Managed Key for ${region}`,
         enableKeyRotation: true,
         deletionWindowInDays: 30,
-        policy: pulumi.all([aws.getCallerIdentityOutput({})]).apply(([id]) => JSON.stringify({
+        policy: pulumi.all([aws.getCallerIdentityOutput()]).apply(([id]) => JSON.stringify({
           Version: '2012-10-17',
           Id: 'key-default-1',
           Statement: [
@@ -148,6 +148,26 @@ export class TapStack extends pulumi.ComponentResource {
               },
               Action: 'kms:*',
               Resource: '*',
+            },
+            {
+              Sid: 'Allow CloudWatch Logs',
+              Effect: 'Allow',
+              Principal: { 
+                Service: `logs.${region}.amazonaws.com`
+              },
+              Action: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey'
+              ],
+              Resource: '*',
+              Condition: {
+                ArnEquals: {
+                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${id.accountId}:log-group:/aws/apigateway/${prefix}`
+                }
+              }
             }
           ]
         })),
@@ -241,7 +261,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.apiGateways[region] = restApi;
 
-      // CloudWatch Log Group
+      // CloudWatch Log Group - FIXED: Create after KMS key exists
       const logGroup = new aws.cloudwatch.LogGroup(`${prefix}-apigw-logs`, {
         name: `/aws/apigateway/${prefix}`,
         retentionInDays: 90,
@@ -251,7 +271,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: 'Production',
           Name: `${prefix}-apigw-logs`,
         },
-      }, { provider });
+      }, { provider, dependsOn: [kmsKey] });
       this.cloudWatchLogGroups[region] = logGroup;
 
       // S3 Bucket for CloudTrail logs
@@ -264,7 +284,8 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      new aws.s3.BucketServerSideEncryptionConfigurationV2(`${prefix}-bucket-encryption`, {
+      // FIXED: Use non-deprecated S3 encryption resource
+      new aws.s3.BucketServerSideEncryptionConfiguration(`${prefix}-bucket-encryption`, {
         bucket: s3Bucket.id,
         rules: [{ 
           applyServerSideEncryptionByDefault: { 
