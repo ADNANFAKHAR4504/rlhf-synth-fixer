@@ -5,11 +5,32 @@ import { expect, jest } from '@jest/globals';
 import AWS from 'aws-sdk';
 
 // Mock AWS SDK to avoid actual API calls
-jest.mock('aws-sdk');
+jest.mock('aws-sdk', () => {
+  const mockEC2 = {
+    describeVpcs: jest.fn(),
+    describeSubnets: jest.fn(),
+    describeNatGateways: jest.fn(),
+    describeRouteTables: jest.fn(),
+  };
+  const mockS3 = {
+    getBucketTagging: jest.fn(),
+    getBucketEncryption: jest.fn(),
+    getBucketVersioning: jest.fn(),
+    getBucketPolicy: jest.fn(),
+  };
+  const mockIAM = {
+    getRole: jest.fn(),
+  };
+  return {
+    EC2: jest.fn(() => mockEC2),
+    S3: jest.fn(() => mockS3),
+    IAM: jest.fn(() => mockIAM),
+  };
+});
 
-const mockEC2 = new AWS.EC2();
-const mockS3 = new AWS.S3();
-const mockIAM = new AWS.IAM();
+const mockEC2 = new AWS.EC2() as any; // Type assertion to bypass strict TypeScript checks
+const mockS3 = new AWS.S3() as any;
+const mockIAM = new AWS.IAM() as any;
 
 // Custom schema for CloudFormation tags
 const CFN_SCHEMA = new yaml.Schema([
@@ -44,229 +65,211 @@ describe('TapStack Integration Tests', () => {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
     // Mock AWS SDK methods
-    jest.spyOn(mockEC2, 'describeVpcs').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          Vpcs: [{
-            VpcId: outputs.VPCId,
-            CidrBlock: '10.0.0.0/16',
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-vpc` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          }],
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockEC2, 'describeSubnets').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          Subnets: [
-            {
-              SubnetId: outputs.PublicSubnets.split(',')[0],
-              VpcId: outputs.VPCId,
-              CidrBlock: '10.0.0.0/18',
-              AvailabilityZone: 'us-east-1a',
-              MapPublicIpOnLaunch: true,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubneta` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-            {
-              SubnetId: outputs.PublicSubnets.split(',')[1],
-              VpcId: outputs.VPCId,
-              CidrBlock: '10.0.64.0/18',
-              AvailabilityZone: 'us-east-1b',
-              MapPublicIpOnLaunch: true,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubnetb` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-            {
-              SubnetId: outputs.PrivateSubnets.split(',')[0],
-              VpcId: outputs.VPCId,
-              CidrBlock: '10.0.128.0/18',
-              AvailabilityZone: 'us-east-1a',
-              MapPublicIpOnLaunch: false,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubneta` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-            {
-              SubnetId: outputs.PrivateSubnets.split(',')[1],
-              VpcId: outputs.VPCId,
-              CidrBlock: '10.0.192.0/18',
-              AvailabilityZone: 'us-east-1b',
-              MapPublicIpOnLaunch: false,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubnetb` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-          ],
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockEC2, 'describeNatGateways').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          NatGateways: template.Parameters.CreateNatPerAZ.Default === 'true' ? [
-            {
-              NatGatewayId: 'nat-123',
-              SubnetId: outputs.PublicSubnets.split(',')[0],
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewaya` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-            {
-              NatGatewayId: 'nat-456',
-              SubnetId: outputs.PublicSubnets.split(',')[1],
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewayb` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-          ] : [
-            {
-              NatGatewayId: 'nat-789',
-              SubnetId: outputs.PublicSubnets.split(',')[0],
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgateway` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-            },
-          ],
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockEC2, 'describeRouteTables').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          RouteTables: [
-            {
-              RouteTableId: 'rtb-public',
-              VpcId: outputs.VPCId,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicrt` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-              Routes: [{ DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-123' }],
-            },
-            {
-              RouteTableId: 'rtb-private-a',
-              VpcId: outputs.VPCId,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privaterta` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-              Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-123' : 'nat-789' }],
-            },
-            {
-              RouteTableId: 'rtb-private-b',
-              VpcId: outputs.VPCId,
-              Tags: [
-                { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatertb` },
-                { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-                { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
-                { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-              ],
-              Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-456' : 'nat-789' }],
-            },
-          ],
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockS3, 'getBucketTagging').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          TagSet: [
-            { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-databucket` },
+    mockEC2.describeVpcs.mockImplementation(() => ({
+      promise: async () => ({
+        Vpcs: [{
+          VpcId: outputs.VPCId,
+          CidrBlock: '10.0.0.0/16',
+          Tags: [
+            { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-vpc` },
             { Key: 'Project', Value: template.Parameters.ProjectName.Default },
             { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
             { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
           ],
-        }),
-      } as any)
-    );
+        }],
+      }),
+    }));
 
-    jest.spyOn(mockS3, 'getBucketEncryption').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          ServerSideEncryptionConfiguration: {
-            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
-          },
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockS3, 'getBucketVersioning').mockImplementation(() =>
-      ({
-        promise: async () => ({ Status: 'Enabled' }),
-      } as any)
-    );
-
-    jest.spyOn(mockS3, 'getBucketPolicy').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          Policy: JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [{ Effect: 'Deny', Principal: '*', Action: 's3:*', Resource: `${outputs.DataBucketARN}/*`, Condition: { Bool: { 'aws:SecureTransport': 'false' } } }],
-          }),
-        }),
-      } as any)
-    );
-
-    jest.spyOn(mockIAM, 'getRole').mockImplementation(() =>
-      ({
-        promise: async () => ({
-          Role: {
-            RoleName: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role`,
-            Arn: outputs.EnvironmentRoleARN,
-            AssumeRolePolicyDocument: JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [{
-                Effect: 'Allow',
-                Principal: { AWS: template.Parameters.TeamPrincipalARN.Default || `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root` },
-                Action: 'sts:AssumeRole',
-              }],
-            }),
+    mockEC2.describeSubnets.mockImplementation(() => ({
+      promise: async () => ({
+        Subnets: [
+          {
+            SubnetId: outputs.PublicSubnets.split(',')[0],
+            VpcId: outputs.VPCId,
+            CidrBlock: '10.0.0.0/18',
+            AvailabilityZone: 'us-east-1a',
+            MapPublicIpOnLaunch: true,
             Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubneta` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
               { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
+          {
+            SubnetId: outputs.PublicSubnets.split(',')[1],
+            VpcId: outputs.VPCId,
+            CidrBlock: '10.0.64.0/18',
+            AvailabilityZone: 'us-east-1b',
+            MapPublicIpOnLaunch: true,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubnetb` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+          {
+            SubnetId: outputs.PrivateSubnets.split(',')[0],
+            VpcId: outputs.VPCId,
+            CidrBlock: '10.0.128.0/18',
+            AvailabilityZone: 'us-east-1a',
+            MapPublicIpOnLaunch: false,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubneta` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+          {
+            SubnetId: outputs.PrivateSubnets.split(',')[1],
+            VpcId: outputs.VPCId,
+            CidrBlock: '10.0.192.0/18',
+            AvailabilityZone: 'us-east-1b',
+            MapPublicIpOnLaunch: false,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubnetb` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+        ],
+      }),
+    }));
+
+    mockEC2.describeNatGateways.mockImplementation(() => ({
+      promise: async () => ({
+        NatGateways: template.Parameters.CreateNatPerAZ.Default === 'true' ? [
+          {
+            NatGatewayId: 'nat-123',
+            SubnetId: outputs.PublicSubnets.split(',')[0],
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewaya` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+          {
+            NatGatewayId: 'nat-456',
+            SubnetId: outputs.PublicSubnets.split(',')[1],
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewayb` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+        ] : [
+          {
+            NatGatewayId: 'nat-789',
+            SubnetId: outputs.PublicSubnets.split(',')[0],
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgateway` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+          },
+        ],
+      }),
+    }));
+
+    mockEC2.describeRouteTables.mockImplementation(() => ({
+      promise: async () => ({
+        RouteTables: [
+          {
+            RouteTableId: 'rtb-public',
+            VpcId: outputs.VPCId,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicrt` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-123' }],
+          },
+          {
+            RouteTableId: 'rtb-private-a',
+            VpcId: outputs.VPCId,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privaterta` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-123' : 'nat-789' }],
+          },
+          {
+            RouteTableId: 'rtb-private-b',
+            VpcId: outputs.VPCId,
+            Tags: [
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatertb` },
+              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+            ],
+            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-456' : 'nat-789' }],
+          },
+        ],
+      }),
+    }));
+
+    mockS3.getBucketTagging.mockImplementation(() => ({
+      promise: async () => ({
+        TagSet: [
+          { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-databucket` },
+          { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+          { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+          { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+        ],
+      }),
+    }));
+
+    mockS3.getBucketEncryption.mockImplementation(() => ({
+      promise: async () => ({
+        ServerSideEncryptionConfiguration: {
+          Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+        },
+      }),
+    }));
+
+    mockS3.getBucketVersioning.mockImplementation(() => ({
+      promise: async () => ({ Status: 'Enabled' }),
+    }));
+
+    mockS3.getBucketPolicy.mockImplementation(() => ({
+      promise: async () => ({
+        Policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{ Effect: 'Deny', Principal: '*', Action: 's3:*', Resource: `${outputs.DataBucketARN}/*`, Condition: { Bool: { 'aws:SecureTransport': 'false' } } }],
         }),
-      } as any)
-    );
+      }),
+    }));
+
+    mockIAM.getRole.mockImplementation(() => ({
+      promise: async () => ({
+        Role: {
+          RoleName: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role`,
+          Arn: outputs.EnvironmentRoleARN,
+          AssumeRolePolicyDocument: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [{
+              Effect: 'Allow',
+              Principal: { AWS: template.Parameters.TeamPrincipalARN.Default || `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root` },
+              Action: 'sts:AssumeRole',
+            }],
+          }),
+          Tags: [
+            { Key: 'Project', Value: template.Parameters.ProjectName.Default },
+            { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+            { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
+          ],
+        },
+      }),
+    }));
   });
 
   // Output Validation
