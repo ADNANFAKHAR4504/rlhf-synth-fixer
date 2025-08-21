@@ -33,8 +33,6 @@ export interface RdsInstanceArgs {
   kmsKeyId?: pulumi.Input<string>;
   dbName?: string;
   username: string;
-  password?: pulumi.Input<string>;
-  passwordSecretArn?: pulumi.Input<string>;
   vpcSecurityGroupIds?: pulumi.Input<string>[];
   dbSubnetGroupName?: pulumi.Input<string>;
   parameterGroupName?: pulumi.Input<string>;
@@ -62,6 +60,9 @@ export interface RdsInstanceResult {
   endpoint: pulumi.Output<string>;
   port: pulumi.Output<number>;
   address: pulumi.Output<string>;
+  masterUserSecrets?: pulumi.Output<
+    aws.types.output.rds.InstanceMasterUserSecret[]
+  >;
   subnetGroup?: aws.rds.SubnetGroup;
   parameterGroup?: aws.rds.ParameterGroup;
 }
@@ -75,7 +76,6 @@ export interface SecureRdsInstanceArgs {
   allocatedStorage?: number;
   dbName?: string;
   username: string;
-  passwordSecretArn?: pulumi.Input<string>;
   subnetIds: pulumi.Input<string>[];
   securityGroupIds: pulumi.Input<string>[];
   kmsKeyId?: pulumi.Input<string>;
@@ -169,6 +169,9 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
   public readonly endpoint: pulumi.Output<string>;
   public readonly port: pulumi.Output<number>;
   public readonly address: pulumi.Output<string>;
+  public readonly masterUserSecrets: pulumi.Output<
+    aws.types.output.rds.InstanceMasterUserSecret[]
+  >;
   public readonly subnetGroup?: aws.rds.SubnetGroup;
   public readonly parameterGroup?: aws.rds.ParameterGroup;
 
@@ -201,11 +204,8 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         kmsKeyId: args.kmsKeyId,
         dbName: args.dbName,
         username: args.username,
-        password: args.password,
-        manageMasterUserPassword: args.passwordSecretArn ? false : true,
-        masterUserSecretKmsKeyId: args.passwordSecretArn
-          ? undefined
-          : args.kmsKeyId,
+        manageMasterUserPassword: true,
+        masterUserSecretKmsKeyId: args.kmsKeyId,
         vpcSecurityGroupIds: args.vpcSecurityGroupIds,
         dbSubnetGroupName: args.dbSubnetGroupName,
         parameterGroupName: args.parameterGroupName,
@@ -236,6 +236,7 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
     this.endpoint = this.instance.endpoint;
     this.port = this.instance.port;
     this.address = this.instance.address;
+    this.masterUserSecrets = this.instance.masterUserSecrets;
 
     this.registerOutputs({
       instance: this.instance,
@@ -244,6 +245,7 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
       endpoint: this.endpoint,
       port: this.port,
       address: this.address,
+      masterUserSecrets: this.masterUserSecrets,
     });
   }
 }
@@ -255,6 +257,9 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
   public readonly endpoint: pulumi.Output<string>;
   public readonly port: pulumi.Output<number>;
   public readonly address: pulumi.Output<string>;
+  public readonly masterUserSecrets: pulumi.Output<
+    aws.types.output.rds.InstanceMasterUserSecret[]
+  >;
   public readonly subnetGroup: aws.rds.SubnetGroup;
   public readonly parameterGroup: aws.rds.ParameterGroup;
 
@@ -330,7 +335,6 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         kmsKeyId: args.kmsKeyId,
         dbName: args.dbName,
         username: args.username,
-        passwordSecretArn: args.passwordSecretArn,
         vpcSecurityGroupIds: args.securityGroupIds,
         dbSubnetGroupName: this.subnetGroup.name,
         parameterGroupName: this.parameterGroup.name,
@@ -360,6 +364,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
     this.endpoint = rdsComponent.endpoint;
     this.port = rdsComponent.port;
     this.address = rdsComponent.address;
+    this.masterUserSecrets = rdsComponent.masterUserSecrets;
 
     this.registerOutputs({
       instance: this.instance,
@@ -368,6 +373,7 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
       endpoint: this.endpoint,
       port: this.port,
       address: this.address,
+      masterUserSecrets: this.masterUserSecrets,
       subnetGroup: this.subnetGroup,
       parameterGroup: this.parameterGroup,
     });
@@ -415,6 +421,7 @@ export function createRdsInstance(
     endpoint: rdsComponent.endpoint,
     port: rdsComponent.port,
     address: rdsComponent.address,
+    masterUserSecrets: rdsComponent.masterUserSecrets,
     subnetGroup: rdsComponent.subnetGroup,
     parameterGroup: rdsComponent.parameterGroup,
   };
@@ -433,6 +440,7 @@ export function createSecureRdsInstance(
     endpoint: secureRdsComponent.endpoint,
     port: secureRdsComponent.port,
     address: secureRdsComponent.address,
+    masterUserSecrets: secureRdsComponent.masterUserSecrets,
     subnetGroup: secureRdsComponent.subnetGroup,
     parameterGroup: secureRdsComponent.parameterGroup,
   };

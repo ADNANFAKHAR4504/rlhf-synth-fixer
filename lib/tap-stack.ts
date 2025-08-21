@@ -595,7 +595,7 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(`     Creating Database for ${region}...`);
 
-      // Create RDS database with regional provider
+      // FIXED: Create RDS database with AWS-managed password (no passwordSecretArn)
       const database = createSecureRdsInstance(
         `${name}-db-${region}`,
         {
@@ -605,7 +605,6 @@ export class TapStack extends pulumi.ComponentResource {
           allocatedStorage: 20,
           dbName: 'appdb',
           username: 'admin',
-          passwordSecretArn: dbCredentials.secretArn,
           subnetIds: subnets.privateSubnetIds,
           securityGroupIds: [dbSg.securityGroupId],
           kmsKeyId: dbKms.keyArn,
