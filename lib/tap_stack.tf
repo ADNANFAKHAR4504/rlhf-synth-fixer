@@ -1,4 +1,3 @@
-```hcl
 # tap_stack.tf
 
 ########################
@@ -117,6 +116,18 @@ locals {
   db_port = var.rds_engine == "postgres" ? 5432 : 3306
 }
 ########################
+# Random (for S3 uniqueness and DB password)
+########################
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+resource "random_password" "db" {
+  length           = 20
+  special          = true
+  override_special = "!#-%@_+"
+}
+########################
 # Networking - VPC, Routes, NAT
 ########################
 resource "aws_vpc" "main" {
@@ -138,7 +149,7 @@ resource "aws_subnet" "public" {
   cidr_block              = each.value.cidr
   availability_zone       = each.value.az
   map_public_ip_on_launch = true
-  tags = merge(local.tags, { Name = "${local.name_prefix}-public-${each.key}", Tier = "public" })
+  tags                    = merge(local.tags, { Name = "${local.name_prefix}-public-${each.key}", Tier = "public" })
 }
 
 resource "aws_subnet" "private" {
@@ -146,7 +157,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
-  tags = merge(local.tags, { Name = "${local.name_prefix}-private-${each.key}", Tier = "private" })
+  tags              = merge(local.tags, { Name = "${local.name_prefix}-private-${each.key}", Tier = "private" })
 }
 
 resource "aws_route_table" "public" {
@@ -212,7 +223,10 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 data "aws_iam_policy_document" "flow_logs_assume" {
   statement {
     effect = "Allow"
-    principals { type = "Service", identifiers = ["vpc-flow-logs.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
     actions = ["sts:AssumeRole"]
   }
 }
@@ -341,10 +355,15 @@ data "aws_iam_policy_document" "app_bucket_policy" {
     sid     = "DenyInsecureTransport"
     effect  = "Deny"
     actions = ["s3:*"]
-    principals { type = "*", identifiers = ["*"] }
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
     resources = [aws_s3_bucket.app.arn, "${aws_s3_bucket.app.arn}/*"]
     condition {
-      bool { variable = "aws:SecureTransport", values = ["false"] }
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
     }
   }
 
@@ -352,10 +371,15 @@ data "aws_iam_policy_document" "app_bucket_policy" {
     sid     = "DenyAnonymousRequests"
     effect  = "Deny"
     actions = ["s3:*"]
-    principals { type = "*", identifiers = ["*"] }
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
     resources = [aws_s3_bucket.app.arn, "${aws_s3_bucket.app.arn}/*"]
     condition {
-      string_equals { variable = "aws:PrincipalType", values = ["Anonymous"] }
+      test     = "StringEquals"
+      variable = "aws:PrincipalType"
+      values   = ["Anonymous"]
     }
   }
 }
@@ -370,7 +394,10 @@ resource "aws_s3_bucket_policy" "app" {
 data "aws_iam_policy_document" "app_assume" {
   statement {
     effect = "Allow"
-    principals { type = "Service", identifiers = ["ec2.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
     actions = ["sts:AssumeRole"]
   }
 }
@@ -487,19 +514,3 @@ output "iam_app_role_arn" {
   value       = aws_iam_role.app.arn
   description = "Application IAM role ARN"
 }
-```
-
-```
-
-```
-
-### Explanation & Mapping
-
-- **S3 Privacy**: `aws_s3_bucket_public_access_block.app` blocks public access; `aws_s3_bucket_acl.app` sets private ACL; `aws_s3_bucket_server_side_encryption_configuration.app` enforces SSE-S3 (`AES256`); `aws_s3_bucket_policy.app` denies non-TLS and anonymous requests.
-- **IAM Least Privilege**: `aws_iam_role.vpc_flow_logs` + `aws_iam_role_policy.vpc_flow_logs` limited to specific log group; `aws_iam_role.app` + `aws_iam_role_policy.app` scoped to `s3:GetObject` on `app-data/*` and CloudWatch logs actions.
-- **RDS Encryption at Rest**: `aws_db_instance.db` with `storage_encrypted = true`, `publicly_accessible = false`, `multi_az` and `deletion_protection` driven by variables; placed in private subnets via `aws_db_subnet_group.db`.
-- **VPC Flow Logs**: `aws_flow_log.vpc` delivers to `aws_cloudwatch_log_group.vpc_flow_logs` (retention via `cw_log_retention_days`).
-- **Strict Security Groups**: `aws_security_group.web` with rules `web_http` and `web_https` only from `var.allowed_cidrs`; `aws_security_group.db` rule `db_from_web` allows only DB port from web SG.
-- **Required Architecture**: `aws_vpc.main`, two public and two private subnets (`aws_subnet.public/private`), IGW (`aws_internet_gateway.igw`), NAT GW(s) (`aws_nat_gateway.this`) with per-AZ toggle `nat_per_az`, route tables for public/private, RDS in private subnets, IAM roles, S3 bucket.
-- **Tags**: All resources include `Project`, `ManagedBy`, and `Environment` via `local.tags`.
-- **Outputs**: VPC ID, subnet IDs, SG IDs, S3 bucket name, RDS endpoint, and IAM role ARNs.

@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 """
 Secure AWS Infrastructure with CDKTF (Python)
@@ -854,3 +855,25 @@ class SecureAwsInfraStackWithRandom(TerraformStack):
 app = App()
 SecureAwsInfraStackWithRandom(app, "secure-aws-infra")
 app.synth()
+```
+
+## Explanation
+
+### Security Requirements Implementation
+
+**S3 Privacy & Encryption**
+- **Public Access Block**: All four block settings (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets`) are set to `True`, ensuring no public access is possible
+- **Server-Side Encryption**: Configured with `aws:kms` using the AWS-managed S3 key (`alias/aws/s3`) with bucket key enabled for cost optimization
+
+**IAM Least Privilege**
+- **Flow Logs Role**: Trusted only by `vpc-flow-logs.amazonaws.com` service principal, with permissions limited to `logs:CreateLogStream` and `logs:PutLogEvents` on the specific flow logs CloudWatch group ARN
+- **Application Role**: Example role trusted by EC2 service with minimal permissions - only `s3:GetObject` on a specific bucket path (`/app-data/*`) and log writing permissions to the flow logs group
+- **No Wildcard Actions**: All policies use specific actions and resource-level restrictions
+
+**RDS Encryption at Rest**
+- **Storage Encryption**: `storage_encrypted=True` with `kms_key_id` set to AWS-managed RDS key (`alias/aws/rds`)
+- **Private Deployment**: `publicly_accessible=False` and deployed in private subnets with dedicated subnet group
+- **Security Group**: Database security group only allows PostgreSQL (5432) access from the web security group
+
+**VPC Flow Logs**
+- **CloudWatch Integration**:
