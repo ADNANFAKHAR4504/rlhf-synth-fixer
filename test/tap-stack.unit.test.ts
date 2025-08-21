@@ -105,7 +105,7 @@ describe('TapStack CloudFormation Template', () => {
     test('KMS Key policy should have correct statements', () => {
       const keyPolicy = template.Resources.SecureKMSKey.Properties.KeyPolicy;
       expect(keyPolicy.Version).toBe('2012-10-17');
-      expect(keyPolicy.Statement).toHaveLength(3);
+      expect(keyPolicy.Statement).toHaveLength(4);
       
       // Check root account permissions
       const rootStatement = keyPolicy.Statement[0];
