@@ -1,31 +1,28 @@
-import fs from 'fs';
-import path from 'path';
 import {
   CloudFormationClient,
   DescribeStackResourcesCommand,
-  DescribeStacksCommand
+  DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import {
-  EC2Client,
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
-  DescribeVpcsCommand
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
-  S3Client,
   GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
-  GetBucketVersioningCommand
+  S3Client,
 } from '@aws-sdk/client-s3';
-import {
-  KMSClient,
-  DescribeKeyCommand
-} from '@aws-sdk/client-kms';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
-} from '@aws-sdk/client-cloudwatch-logs';
+import fs from 'fs';
+import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
@@ -44,17 +41,22 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
 
   beforeAll(async () => {
     // Load flat outputs from deployment
-    const flatOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-    
+    const flatOutputsPath = path.join(
+      __dirname,
+      '../cfn-outputs/flat-outputs.json'
+    );
+
     if (!fs.existsSync(flatOutputsPath)) {
-      throw new Error('flat-outputs.json not found. Ensure the stack has been deployed.');
+      throw new Error(
+        'flat-outputs.json not found. Ensure the stack has been deployed.'
+      );
     }
 
     flatOutputs = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
 
     // Get stack resources
     const resourcesCommand = new DescribeStackResourcesCommand({
-      StackName: stackName
+      StackName: stackName,
     });
     const resourcesResponse = await cfnClient.send(resourcesCommand);
     stackResources = resourcesResponse.StackResources || [];
@@ -63,10 +65,10 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
   describe('Stack Deployment Validation', () => {
     test('should have successfully deployed stack', async () => {
       const command = new DescribeStacksCommand({
-        StackName: stackName
+        StackName: stackName,
       });
       const response = await cfnClient.send(command);
-      
+
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks!.length).toBe(1);
       expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
@@ -75,11 +77,11 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
     test('should have all required outputs', () => {
       const requiredOutputs = [
         'VPCId',
-        'PrivateSubnetId', 
+        'PrivateSubnetId',
         'EC2InstanceId',
         'S3BucketName',
         'KMSKeyId',
-        'CloudWatchLogGroup'
+        'CloudWatchLogGroup',
       ];
 
       requiredOutputs.forEach(output => {
@@ -95,18 +97,34 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(vpcId).toBeDefined();
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId]
+        VpcIds: [vpcId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs!.length).toBe(1);
-      
+
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      // Use DescribeVpcAttributeCommand to check DNS attributes
+      const { DescribeVpcAttributeCommand } = await import(
+        '@aws-sdk/client-ec2'
+      );
+      const dnsHostnamesAttr = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpc.VpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      const dnsSupportAttr = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpc.VpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('should have private subnet with correct configuration', async () => {
@@ -114,13 +132,13 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(subnetId).toBeDefined();
 
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [subnetId]
+        SubnetIds: [subnetId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(1);
-      
+
       const subnet = response.Subnets![0];
       expect(subnet.CidrBlock).toBe('10.0.2.0/24');
       expect(subnet.MapPublicIpOnLaunch).toBe(false); // Private subnet should not auto-assign public IPs
@@ -133,60 +151,68 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(instanceId).toBeDefined();
 
       const command = new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
+        InstanceIds: [instanceId],
       });
       const response = await ec2Client.send(command);
-      
+
       expect(response.Reservations).toBeDefined();
       expect(response.Reservations!.length).toBe(1);
-      
+
       const instance = response.Reservations![0].Instances![0];
       expect(instance.State?.Name).toBe('running');
       expect(instance.SubnetId).toBe(flatOutputs.PrivateSubnetId);
       expect(instance.InstanceType).toBeDefined();
-      
+
       // Verify encrypted EBS volumes
       const blockDevices = instance.BlockDeviceMappings || [];
       expect(blockDevices.length).toBeGreaterThan(0);
-      
-      blockDevices.forEach(device => {
-        if (device.Ebs) {
-          expect(device.Ebs.Encrypted).toBe(true);
-        }
-      });
+
+      // Check EBS volume encryption using DescribeVolumesCommand
+      const { DescribeVolumesCommand } = await import('@aws-sdk/client-ec2');
+      const volumeIds = blockDevices
+        .map(device => device.Ebs?.VolumeId)
+        .filter((id): id is string => typeof id === 'string');
+      if (volumeIds.length > 0) {
+        const volumesResponse = await ec2Client.send(
+          new DescribeVolumesCommand({ VolumeIds: volumeIds })
+        );
+        (volumesResponse.Volumes || []).forEach(volume => {
+          expect(volume.Encrypted).toBe(true);
+        });
+      }
     });
 
     test('should have properly configured security group', async () => {
       const instanceId = flatOutputs.EC2InstanceId;
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
+        InstanceIds: [instanceId],
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
-      
+
       const instance = instanceResponse.Reservations![0].Instances![0];
       const securityGroups = instance.SecurityGroups || [];
       expect(securityGroups.length).toBeGreaterThan(0);
-      
+
       const sgId = securityGroups[0].GroupId!;
-      
+
       const sgCommand = new DescribeSecurityGroupsCommand({
-        GroupIds: [sgId]
+        GroupIds: [sgId],
       });
       const sgResponse = await ec2Client.send(sgCommand);
-      
+
       const sg = sgResponse.SecurityGroups![0];
-      
+
       // Check SSH rule exists and is restricted
-      const sshRule = sg.IpPermissions?.find(rule => 
-        rule.FromPort === 22 && rule.ToPort === 22
+      const sshRule = sg.IpPermissions?.find(
+        rule => rule.FromPort === 22 && rule.ToPort === 22
       );
       expect(sshRule).toBeDefined();
       expect(sshRule!.IpRanges![0].CidrIp).toBe('10.0.0.0/8'); // Should match parameter
-      
+
       // Check egress rules are minimal and necessary
       const egressRules = sg.IpPermissionsEgress || [];
       expect(egressRules.length).toBeGreaterThan(0);
-      
+
       // Verify HTTP/HTTPS outbound rules exist
       const httpRule = egressRules.find(rule => rule.FromPort === 80);
       const httpsRule = egressRules.find(rule => rule.FromPort === 443);
@@ -201,27 +227,31 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(bucketName).toBeDefined();
 
       const command = new GetBucketEncryptionCommand({
-        Bucket: bucketName
+        Bucket: bucketName,
       });
       const response = await s3Client.send(command);
-      
+
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       const rules = response.ServerSideEncryptionConfiguration!.Rules!;
       expect(rules.length).toBeGreaterThan(0);
-      
+
       const rule = rules[0];
-      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      expect(rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
+      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+        'aws:kms'
+      );
+      expect(
+        rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
+      ).toBeDefined();
     });
 
     test('should have public access completely blocked', async () => {
       const bucketName = flatOutputs.S3BucketName;
-      
+
       const command = new GetPublicAccessBlockCommand({
-        Bucket: bucketName
+        Bucket: bucketName,
       });
       const response = await s3Client.send(command);
-      
+
       expect(response.PublicAccessBlockConfiguration).toBeDefined();
       const config = response.PublicAccessBlockConfiguration!;
       expect(config.BlockPublicAcls).toBe(true);
@@ -232,12 +262,12 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
 
     test('should have versioning enabled', async () => {
       const bucketName = flatOutputs.S3BucketName;
-      
+
       const command = new GetBucketVersioningCommand({
-        Bucket: bucketName
+        Bucket: bucketName,
       });
       const response = await s3Client.send(command);
-      
+
       expect(response.Status).toBe('Enabled');
     });
   });
@@ -248,10 +278,10 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(keyId).toBeDefined();
 
       const command = new DescribeKeyCommand({
-        KeyId: keyId
+        KeyId: keyId,
       });
       const response = await kmsClient.send(command);
-      
+
       expect(response.KeyMetadata).toBeDefined();
       const keyMetadata = response.KeyMetadata!;
       expect(keyMetadata.KeyState).toBe('Enabled');
@@ -267,14 +297,16 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
       expect(logGroupName).toBeDefined();
 
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: logGroupName
+        logGroupNamePrefix: logGroupName,
       });
       const response = await cwLogsClient.send(command);
-      
+
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups!.length).toBeGreaterThan(0);
-      
-      const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+
+      const logGroup = response.logGroups!.find(
+        lg => lg.logGroupName === logGroupName
+      );
       expect(logGroup).toBeDefined();
       expect(logGroup!.kmsKeyId).toBeDefined(); // Should be encrypted with KMS
       expect(logGroup!.retentionInDays).toBe(30);
@@ -287,12 +319,14 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
         // Physical resource IDs should contain environment suffix where applicable
         if (resource.LogicalResourceId.startsWith('Prod')) {
           const physicalId = resource.PhysicalResourceId;
-          
+
           // For resources that have names, verify they contain the environment suffix
-          if (resource.ResourceType === 'AWS::S3::Bucket' ||
-              resource.ResourceType === 'AWS::IAM::Role' ||
-              resource.ResourceType === 'AWS::SNS::Topic' ||
-              resource.ResourceType === 'AWS::Logs::LogGroup') {
+          if (
+            resource.ResourceType === 'AWS::S3::Bucket' ||
+            resource.ResourceType === 'AWS::IAM::Role' ||
+            resource.ResourceType === 'AWS::SNS::Topic' ||
+            resource.ResourceType === 'AWS::Logs::LogGroup'
+          ) {
             expect(physicalId).toContain(environmentSuffix);
           }
         }
@@ -303,54 +337,56 @@ describe('TapStack Integration Tests - Production Security Infrastructure', () =
   describe('End-to-End Security Workflow', () => {
     test('should validate complete security infrastructure connectivity', async () => {
       // This test validates that all components work together securely
-      
+
       // 1. Verify EC2 instance can be reached in private subnet (indirectly through status)
       const instanceId = flatOutputs.EC2InstanceId;
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
+        InstanceIds: [instanceId],
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instance = instanceResponse.Reservations![0].Instances![0];
-      
+
       expect(instance.State?.Name).toBe('running');
       expect(instance.IamInstanceProfile).toBeDefined();
-      
+
       // 2. Verify S3 bucket is accessible only through secure channels
       const bucketName = flatOutputs.S3BucketName;
       expect(bucketName).toMatch(/^prod-.*-secure-bucket-.*/);
-      
+
       // 3. Verify KMS key is available for encryption operations
       const keyId = flatOutputs.KMSKeyId;
       const keyCommand = new DescribeKeyCommand({ KeyId: keyId });
       const keyResponse = await kmsClient.send(keyCommand);
       expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
-      
+
       // 4. Verify CloudWatch logging is set up
       const logGroupName = flatOutputs.CloudWatchLogGroup;
-      expect(logGroupName).toMatch(new RegExp(`/aws/ec2/prod-${environmentSuffix}-logs`));
+      expect(logGroupName).toMatch(
+        new RegExp(`/aws/ec2/prod-${environmentSuffix}-logs`)
+      );
     });
 
     test('should validate least-privilege security model', async () => {
       // Verify that resources are properly isolated and follow least-privilege principles
-      
+
       // EC2 instance should be in private subnet (no public IP)
       const instanceId = flatOutputs.EC2InstanceId;
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
+        InstanceIds: [instanceId],
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instance = instanceResponse.Reservations![0].Instances![0];
-      
+
       expect(instance.PublicIpAddress).toBeUndefined();
       expect(instance.SubnetId).toBe(flatOutputs.PrivateSubnetId);
-      
+
       // S3 bucket should block all public access
       const bucketName = flatOutputs.S3BucketName;
       const publicAccessCommand = new GetPublicAccessBlockCommand({
-        Bucket: bucketName
+        Bucket: bucketName,
       });
       const publicAccessResponse = await s3Client.send(publicAccessCommand);
-      
+
       const config = publicAccessResponse.PublicAccessBlockConfiguration!;
       expect(config.BlockPublicAcls).toBe(true);
       expect(config.BlockPublicPolicy).toBe(true);
