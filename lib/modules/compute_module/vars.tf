@@ -23,6 +23,10 @@ variable "kms_key_id" {
     description = "KMS key ID "
 }
 
+variable "kms_key_arn" {
+    description = "KMS key ARN"
+}
+
 variable "tags" {
     description = "Common tags to configure for each service"
 }

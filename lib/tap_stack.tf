@@ -26,6 +26,7 @@ module "compute_module" {
   security_group_id = module.security_module.uniform_security_group_id
   instance_profile_name = module.security_module.ec2_instance_profile_name
   kms_key_id = module.security_module.kms_key_id
+  kms_key_arn = module.security_module.kms_key_arn
   private_subnet_ids = module.networking_module.private_subnet_ids
   public_subnet_ids = module.networking_module.public_subnet_ids
   min_size = var.min_size
