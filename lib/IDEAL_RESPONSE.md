@@ -29,3 +29,466 @@ This response delivers a **complete CloudFormation YAML template** named `TapSta
   - Resource names follow `TapStack-<env>-<resource>`
 
 This is the **gold-standard response**: complete, validated YAML with documentation, ready for deployment.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  TapStack - Single-environment infrastructure with S3 and VPC
+  Creates a single environment (based on EnvironmentSuffix) in us-east-1
+  Includes VPC, S3 bucket, and IAM roles
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Project Configuration"
+        Parameters:
+          - ProjectName
+          - EnvironmentSuffix
+          - Owner
+      - Label:
+          default: "IAM Configuration"
+        Parameters:
+          - TeamPrincipalARN
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - CreateNatPerAZ
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    Description: Name of the project (used in resource naming)
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must start with a lowercase letter and contain only lowercase alphanumeric characters and hyphens.
+
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment identifier (e.g., dev, pr1847, prod)
+    AllowedPattern: ^[a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase alphanumeric characters and hyphens.
+
+  Owner:
+    Type: String
+    Default: TapStackCFN
+    Description: Owner/creator tag value
+    AllowedPattern: ^[a-zA-Z0-9-]*$
+    ConstraintDescription: Must contain only alphanumeric characters and hyphens.
+
+  TeamPrincipalARN:
+    Type: String
+    Default: ""
+    Description: |
+      ARN of IAM user/group/role that can assume the environment role
+      Example: arn:aws:iam::123456789012:user/dev-team
+    AllowedPattern: ^$|^arn:aws:iam::\d{12}:(user|group|role)/[a-zA-Z0-9+=,.@_-]+$
+
+  CreateNatPerAZ:
+    Type: String
+    Default: "true"
+    Description: Create one NAT Gateway per AZ (true) or single NAT per environment (false)
+    AllowedValues:
+      - "true"
+      - "false"
+    ConstraintDescription: Must be either true or false.
+
+Mappings:
+  EnvironmentConfig:
+    VPC:
+      CIDR: "10.0.0.0/16"
+
+Conditions:
+  CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, "true"]
+  CreateSingleNat: !Equals [!Ref CreateNatPerAZ, "false"]
+  HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, ""]]
+
+Resources:
+  # ==================== VPC AND NETWORKING RESOURCES ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvironmentConfig, VPC, CIDR]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-vpc
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-igw
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicsubneta
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicsubnetb
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [2, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatesubneta
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!FindInMap [EnvironmentConfig, VPC, CIDR], 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatesubnetb
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  EIPNatA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateipa
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateNatPerAZ
+
+  EIPNatB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateipb
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateNatPerAZ
+
+  EIPNatSingle:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-nateip
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateSingleNat
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPNatA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgatewaya
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateNatPerAZ
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPNatB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgatewayb
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateNatPerAZ
+
+  NatGatewaySingle:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPNatSingle.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgateway
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+    Condition: CreateSingleNat
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-publicrt
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: IGWAttachment
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privaterta
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreateNatPerAZ, !Ref NatGatewayA, !Ref NatGatewaySingle]
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-privatertb
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreateNatPerAZ, !Ref NatGatewayB, !Ref NatGatewaySingle]
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  # ==================== S3 BUCKET ====================
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub ${ProjectName}-${EnvironmentSuffix}-databucket-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: CleanupIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-databucket
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  # ==================== IAM ENVIRONMENT ROLE ====================
+  EnvironmentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${EnvironmentSuffix}-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub "arn:aws:iam::${AWS::AccountId}:root"]
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3EnvironmentAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !GetAtt DataBucket.Arn
+                  - !Sub ${DataBucket.Arn}/*
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: us-east-1
+        - PolicyName: EC2ReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - ec2:Get*
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: us-east-1
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnets:
+    Description: Public Subnet IDs
+    Value: !Join [ ",", [ !Ref PublicSubnetA, !Ref PublicSubnetB ] ]
+
+  PrivateSubnets:
+    Description: Private Subnet IDs
+    Value: !Join [ ",", [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ] ]
+
+  DataBucketName:
+    Description: S3 Bucket Name
+    Value: !Ref DataBucket
+
+  DataBucketARN:
+    Description: S3 Bucket ARN
+    Value: !GetAtt DataBucket.Arn
+
+  EnvironmentRoleARN:
+    Description: IAM Role ARN
+    Value: !GetAtt EnvironmentRole.Arn
+```
