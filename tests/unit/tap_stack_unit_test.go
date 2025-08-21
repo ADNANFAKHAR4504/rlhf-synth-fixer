@@ -76,8 +76,8 @@ func Test_Synth_ResourcesPresentAndConfigured(t *testing.T) {
 	if s3bucket == nil {
 		t.Fatalf("aws_s3_bucket.ImageBucket missing")
 	}
-	if got := s3bucket["bucket_prefix"]; got != "serverless-image-processing" {
-		t.Fatalf("bucket_prefix = %v, want serverless-image-processing", got)
+	if prefix, ok := s3bucket["bucket_prefix"].(string); !ok || !strings.HasPrefix(prefix, "serverless-image-processing") {
+		t.Fatalf("bucket_prefix must start with serverless-image-processing, got %v", s3bucket["bucket_prefix"])
 	}
 	if got := s3bucket["force_destroy"]; got != true {
 		t.Fatalf("force_destroy = %v, want true", got)
@@ -153,8 +153,8 @@ func Test_Synth_ResourcesPresentAndConfigured(t *testing.T) {
 	if lg == nil {
 		t.Fatalf("aws_cloudwatch_log_group.LambdaLogGroup missing")
 	}
-	if lg["name"] != "/aws/lambda/image-thumbnail-processor" {
-		t.Fatalf("log group name = %v, want /aws/lambda/image-thumbnail-processor", lg["name"])
+	if name, ok := lg["name"].(string); !ok || !strings.HasPrefix(name, "/aws/lambda/image-thumbnail-processor") {
+		t.Fatalf("log group name must start with /aws/lambda/image-thumbnail-processor, got %v", lg["name"])
 	}
 	if lg["retention_in_days"] != float64(30) { // JSON numbers decode as float64
 		t.Fatalf("retention_in_days = %v, want 30", lg["retention_in_days"])

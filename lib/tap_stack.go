@@ -56,17 +56,29 @@ func main() {
 
 func str(v string) *string { return &v }
 
+// suffixName appends a hyphen and suffix to base when suffix is non-empty.
+// This helps avoid name collisions when resources already exist.
+func suffixName(base, suffix string) string {
+	if suffix == "" {
+		return base
+	}
+	return fmt.Sprintf("%s-%s", base, suffix)
+}
+
 // BuildServerlessImageStack provisions an S3 + Lambda solution with S3 event notifications, no VPC.
 func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	// Provider
 	awscdktf.NewAwsProvider(stack, str("aws"), &awscdktf.AwsProviderConfig{Region: &region})
 
+	// Optional name suffix to avoid collisions with existing resources
+	suffix := os.Getenv("NAME_SUFFIX")
+
 	// S3 bucket
 	bucket := s3.NewS3Bucket(stack, str("ImageBucket"), &s3.S3BucketConfig{
-		BucketPrefix: str("serverless-image-processing"),
+		BucketPrefix: str(suffixName("serverless-image-processing", suffix)),
 		ForceDestroy: jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name":        str("ServerlessImageProcessingBucket"),
+			"Name":        str(suffixName("ServerlessImageProcessingBucket", suffix)),
 			"Environment": str("Production"),
 		},
 	})
@@ -107,10 +119,10 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 
 	// Log group
 	lg := logs.NewCloudwatchLogGroup(stack, str("LambdaLogGroup"), &logs.CloudwatchLogGroupConfig{
-		Name:            str("/aws/lambda/image-thumbnail-processor"),
+		Name:            str(fmt.Sprintf("/aws/lambda/%s", suffixName("image-thumbnail-processor", suffix))),
 		RetentionInDays: jsii.Number(30),
 		Tags: &map[string]*string{
-			"Name":               str("ImageThumbnailProcessorLogs"),
+			"Name":               str(suffixName("ImageThumbnailProcessorLogs", suffix)),
 			"SecurityMonitoring": str("enabled"),
 			"DataClassification": str("internal"),
 		},
@@ -119,11 +131,11 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	// IAM Role
 	assume := `{"Version":"2012-10-17","Statement":[{"Action":"sts:AssumeRole","Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"}}]}`
 	role := iamrole.NewIamRole(stack, str("LambdaExecutionRole"), &iamrole.IamRoleConfig{
-		Name:               str("image-thumbnail-processor-role"),
+		Name:               str(suffixName("image-thumbnail-processor-role", suffix)),
 		AssumeRolePolicy:   str(assume),
 		MaxSessionDuration: jsii.Number(3600),
 		Tags: &map[string]*string{
-			"Name":                      str("ImageThumbnailProcessorRole"),
+			"Name":                      str(suffixName("ImageThumbnailProcessorRole", suffix)),
 			"SecurityLevel":             str("enhanced"),
 			"PrincipleOfLeastPrivilege": str("enforced"),
 		},
@@ -134,7 +146,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		*bucket.Arn(), *bucket.Arn(), *bucket.Arn(), *bucket.Arn(), *lg.Arn(), *lg.Arn())
 
 	pol := iampolicy.NewIamPolicy(stack, str("LambdaS3CloudWatchPolicy"), &iampolicy.IamPolicyConfig{
-		Name:        str("image-thumbnail-processor-policy"),
+		Name:        str(suffixName("image-thumbnail-processor-policy", suffix)),
 		Description: str("Policy for Lambda to access S3 and CloudWatch with least privilege"),
 		Policy:      str(policyDoc),
 	})
@@ -149,7 +161,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	zipPath, zipHash := buildLambdaZip(tmpDir)
 
 	fn := lambda.NewLambdaFunction(stack, str("ImageThumbnailProcessor"), &lambda.LambdaFunctionConfig{
-		FunctionName:                 str("image-thumbnail-processor"),
+		FunctionName:                 str(suffixName("image-thumbnail-processor", suffix)),
 		Runtime:                      str("python3.12"),
 		Handler:                      str("lambda_function.lambda_handler"),
 		Role:                         role.Arn(),
@@ -168,7 +180,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		},
 		DependsOn: &[]cdktf.ITerraformDependable{lg, role, pol},
 		Tags: &map[string]*string{
-			"Name":          str("ImageMetadataProcessor"),
+			"Name":          str(suffixName("ImageMetadataProcessor", suffix)),
 			"Environment":   str("Production"),
 			"ProcessorType": str("metadata-only"),
 			"SecurityLevel": str("enhanced"),
@@ -176,7 +188,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	})
 
 	lambdaperm.NewLambdaPermission(stack, str("S3InvokeLambdaPermission"), &lambdaperm.LambdaPermissionConfig{
-		StatementId:  str("AllowExecutionFromS3Bucket"),
+		StatementId:  str(suffixName("AllowExecutionFromS3Bucket", suffix)),
 		Action:       str("lambda:InvokeFunction"),
 		FunctionName: fn.FunctionName(),
 		Principal:    str("s3.amazonaws.com"),
