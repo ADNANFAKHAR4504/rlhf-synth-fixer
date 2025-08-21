@@ -354,13 +354,13 @@ data "aws_lb_target_group" "app" {
 
 # ALB Listener
 resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
+  load_balancer_arn = data.aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = data.aws_lb_target_group.app.arn
   }
 
   tags = merge(local.common_tags, {
@@ -381,21 +381,21 @@ data "aws_iam_role" "ec2_role" {
 # IAM policy for EC2 S3 access
 resource "aws_iam_role_policy" "ec2_s3_policy" {
   name   = "${local.name_prefix}-ec2-s3-policy"
-  role   = aws_iam_role.ec2_role.id
+  role   = data.aws_iam_role.ec2_role.id
   policy = module.data.ec2_s3_access_policy
 }
 
 # IAM policy for CloudWatch logs
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name   = "${local.name_prefix}-ec2-cloudwatch-policy"
-  role   = aws_iam_role.ec2_role.id
+  role   = data.aws_iam_role.ec2_role.id
   policy = module.data.cloudwatch_logs_policy
 }
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
-  role = aws_iam_role.ec2_role.name
+  role = data.aws_iam_role.ec2_role.name
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-instance-profile"
@@ -410,7 +410,7 @@ data "aws_iam_role" "lambda_role" {
 
 # Attach VPC execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
-  role       = aws_iam_role.lambda_role.name
+  role       = data.aws_iam_role.lambda_role.name
   policy_arn = "arn:${module.data.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
@@ -528,7 +528,7 @@ resource "aws_db_instance" "main" {
   password = var.db_password
 
   vpc_security_group_ids = [module.security.rds_sg_id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  db_subnet_group_name   = data.aws_db_subnet_group.main.name
 
   backup_retention_period = var.backup_retention_period
   backup_window           = "03:00-04:00"
@@ -681,7 +681,7 @@ output "database_subnet_ids" {
 
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
+  value       = data.aws_lb.main.dns_name
 }
 
 output "rds_instance_endpoint" {
