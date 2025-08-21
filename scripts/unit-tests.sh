@@ -52,9 +52,9 @@ elif [ "$LANGUAGE" = "go" ]; then
   if [ -d "lib" ]; then
     # Ensure Go sees tests even if they live under root tests/
     if [ -d "tests/unit" ]; then
-      echo "📦 Copying tests/unit into lib/ for Go module scope"
-      mkdir -p lib/tests
-      cp -r tests/unit lib/tests/ || true
+      echo "📦 Copying unit test files into lib/ so they share the same package"
+      # Copy only *_test.go files into lib root so they can access package main symbols
+      cp tests/unit/*_test.go lib/ || true
     fi
     cd lib
     go test ./... -v -coverprofile=../coverage.out
