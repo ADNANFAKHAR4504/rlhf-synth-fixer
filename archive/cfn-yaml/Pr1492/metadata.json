@@ -34,5 +34,11 @@
     "AWS::RDS::DBParameterGroup",
     "AWS::SecretsManager::Secret",
     "AWS::RDS::DBInstance"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
 }
