@@ -632,13 +632,13 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${LoggingBucket}/*"
+                                        "Fn::Sub": "${LoggingBucket.Arn}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${CloudTrailS3Bucket}/*"
+                                        "Fn::Sub": "${CloudTrailS3Bucket.Arn}/*"
                                     }
                                 ]
                             }
