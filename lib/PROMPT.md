@@ -12,4 +12,4 @@ On top of all that, we need to make sure we’re ticking all the boxes for the C
 
 So, what we’re after is a CloudFormation template—let’s call it `SecureInfraStack`—that pulls all this together. It should work out of the box in `us-west-2`, let us set things like the environment suffix and team name, and export the important resource IDs (like VPC, ASG, WAF ARN) so we can hook it up to other stacks if we need to. And of course, it’s got to pass all the security checks and tests we throw at it.
 
-Bottom line: we want a production-ready setup that’s secure, scalable, and tough enough for anything we throw at it. Let’s make sure it’s solid and follows all the best practices we’ve talked
+Bottom line: we want a production-ready setup that’s secure, scalable, and tough enough for anything we throw at it. Let’s make sure it’s solid and follows all the best practices we’ve talked about.
