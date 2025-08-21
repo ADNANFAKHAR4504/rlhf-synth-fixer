@@ -1,44 +1,4 @@
-# Secure AWS Environment CloudFormation Template
-
-I'll create a comprehensive CloudFormation YAML template that meets all your security and compliance requirements for a regulated AWS environment.
-
-## Key Features Implemented
-
-### Security & Encryption
-- **S3 Encryption**: AWS managed keys (AES256) with bucket key enabled
-- **RDS Encryption**: Storage encryption enabled  
-- **Secrets Management**: RDS passwords stored in AWS Secrets Manager
-- **SSL/TLS**: Security groups configured for HTTPS only
-
-### Infrastructure Architecture
-- **VPC**: Secure VPC with public and private subnets in us-west-2
-- **Network Segmentation**: Proper subnet isolation with NAT Gateway
-- **Security Groups**: Least privilege access with specific port restrictions
-- **Dynamic AZ Selection**: Uses CloudFormation functions to select availability zones
-
-### Monitoring & Logging
-- **CloudWatch**: Comprehensive logging for all services
-- **VPC Flow Logs**: Network traffic monitoring
-- **CloudTrail**: API call auditing with log file validation
-- **Config**: Configuration change tracking and compliance rules
-
-### Alerting & Compliance
-- **Security Alarms**: Unauthorized API calls and root account usage monitoring
-- **Config Rules**: Automated compliance checking for S3 SSL and RDS encryption
-- **Automated Backups**: RDS with 7-day retention period
-
-### Access Control
-- **IAM Roles**: Automatic role attachment to EC2 instances
-- **Instance Profile**: Secure access to AWS services
-- **Least Privilege**: Minimal required permissions for each service
-
-### Deployment Best Practices
-- **No Deletion Protection**: All resources are destroyable for clean deployments
-- **Environment Suffix**: All resource names include the environment suffix
-- **Region Agnostic**: Uses CloudFormation functions for AZ selection
-- **Proper Dependencies**: CloudTrail depends on bucket policy
-
-## CloudFormation Template
+I'll create a comprehensive CloudFormation YAML template that meets all your security and compliance requirements. This template will provision a secure AWS environment with proper encryption, monitoring, access controls, and production-ready best practices.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -94,7 +54,7 @@ Resources:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnet
+  # Multi-AZ Subnet Configuration
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -109,7 +69,6 @@ Resources:
         - Key: Name
           Value: !Sub 'public-subnet-${EnvironmentSuffix}'
 
-  # Private Subnet 1
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -123,7 +82,6 @@ Resources:
         - Key: Name
           Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
 
-  # Private Subnet 2 (for RDS Multi-AZ)
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -137,7 +95,7 @@ Resources:
         - Key: Name
           Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
 
-  # NAT Gateway for Private Subnet
+  # NAT Gateway for Private Subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
@@ -153,7 +111,7 @@ Resources:
         - Key: Name
           Value: !Sub 'nat-gateway-${EnvironmentSuffix}'
 
-  # Route Tables
+  # Route Tables with Proper Associations
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -245,7 +203,7 @@ Resources:
         - Key: Name
           Value: !Sub 'db-sg-${EnvironmentSuffix}'
 
-  # IAM Role for EC2 Instances
+  # IAM Roles with Proper S3 ARN References
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -281,7 +239,7 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # IAM Role for S3 Cleanup Lambda
+  # S3 Bucket Cleanup Lambda Resources
   S3CleanupRole:
     Type: AWS::IAM::Role
     Properties:
@@ -311,7 +269,6 @@ Resources:
                   - !Sub 'arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
                   - !Sub 'arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
 
-  # Lambda Function to Empty S3 Buckets
   S3CleanupFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -363,7 +320,7 @@ Resources:
                   print(f"Error: {e}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
-  # S3 Bucket with Encryption and Versioning
+  # S3 Buckets with SSL-Only Policies and Versioning
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
@@ -385,7 +342,6 @@ Resources:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: access-logs/
 
-  # Custom Resource to Empty Secure S3 Bucket
   EmptySecureS3Bucket:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -407,7 +363,6 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  # Custom Resource to Empty Logging S3 Bucket
   EmptyLoggingS3Bucket:
     Type: AWS::CloudFormation::CustomResource
     Properties:
@@ -465,7 +420,7 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
                 AWS:SourceAccount: !Ref AWS::AccountId
 
-  # RDS Subnet Group
+  # Multi-AZ RDS with Proper Log Configuration
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -477,7 +432,6 @@ Resources:
         - Key: Name
           Value: !Sub 'db-subnet-group-${EnvironmentSuffix}'
 
-  # RDS Instance with Automated Backups
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -507,7 +461,6 @@ Resources:
       DeletionProtection: false
       DeleteAutomatedBackups: true
 
-  # Secrets Manager for RDS Password
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -519,7 +472,7 @@ Resources:
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
 
-  # CloudWatch Log Groups
+  # Comprehensive CloudWatch Logging
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -538,7 +491,7 @@ Resources:
       LogGroupName: !Sub '/aws/ec2/secure-instance-${EnvironmentSuffix}'
       RetentionInDays: 30
 
-  # VPC Flow Logs
+  # VPC Flow Logs with Proper Permissions
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
@@ -573,7 +526,7 @@ Resources:
       LogGroupName: !Ref VPCFlowLogsGroup
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
 
-  # CloudTrail for API Monitoring
+  # CloudTrail with Proper S3 ARN Format
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -622,7 +575,7 @@ Resources:
               Values:
                 - !Sub '${SecureS3Bucket.Arn}/*'
 
-  # CloudWatch Metric Filters for Security Monitoring
+  # Security Monitoring with Metric Filters
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -674,7 +627,7 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
 
-  # AWS Config Configuration Recorder
+  # AWS Config with Proper Dependency Management
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -712,6 +665,7 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -719,7 +673,7 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  # IAM Role for Config Start Lambda
+  # Config Start Lambda Resources
   ConfigStartRole:
     Type: AWS::IAM::Role
     Properties:
@@ -743,7 +697,6 @@ Resources:
                   - config:DescribeConfigurationRecorders
                 Resource: '*'
 
-  # Lambda Function to Start Config Recorder
   ConfigStartFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -775,7 +728,6 @@ Resources:
                   print(f"Error: {e}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
-  # Custom Resource to Start Config Recorder
   StartConfigRecorder:
     Type: AWS::CloudFormation::CustomResource
     DependsOn:
@@ -806,7 +758,7 @@ Resources:
         Owner: AWS
         SourceIdentifier: RDS_STORAGE_ENCRYPTED
 
-  # EC2 Instance
+  # EC2 Instance with Dynamic AMI
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -888,31 +840,61 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Web-Server-ID'
 ```
 
+## Key Features Implemented
+
+### 🔐 Security & Encryption
+- **S3 Encryption**: AWS managed keys (AES256) with bucket key enabled
+- **RDS Encryption**: Storage encryption enabled with proper log configuration
+- **Secrets Management**: RDS passwords stored in AWS Secrets Manager
+- **SSL/TLS**: Security groups configured for HTTPS only with SSL-only bucket policies
+
+### 🏗️ Infrastructure Architecture
+- **Multi-AZ VPC**: Dynamic availability zone selection with proper subnet distribution
+- **Network Segmentation**: Proper subnet isolation with NAT Gateway
+- **Security Groups**: Least privilege access with specific port restrictions
+- **Dynamic AMI**: Uses SSM Parameter Store for latest AMI selection
+
+### 📊 Monitoring & Logging
+- **CloudWatch**: Comprehensive logging for all services with proper retention
+- **VPC Flow Logs**: Network traffic monitoring with dedicated log groups
+- **CloudTrail**: API call auditing with log file validation and proper S3 ARN format
+- **Config**: Configuration change tracking with custom recorder startup
+
+### 🚨 Alerting & Compliance
+- **Security Alarms**: Unauthorized API calls and root account usage monitoring
+- **Config Rules**: Automated compliance checking for S3 SSL and RDS encryption
+- **Automated Backups**: RDS with 7-day retention period
+- **Metric Filters**: Real-time security event detection
+
+### 🔑 Access Control
+- **IAM Roles**: Proper S3 ARN references in policies
+- **Instance Profile**: Secure access to AWS services
+- **Least Privilege**: Minimal required permissions for each service
+
+### 🗑️ Cleanup & Deletion Policies
+- **S3 Bucket Cleanup**: Lambda functions to empty buckets before deletion
+- **RDS Deletion**: Proper deletion policies without protection for dev environments
+- **Custom Resources**: Automated cleanup processes for stack deletion
+
 ## Deployment Instructions
 
-1. Deploy using AWS CLI:
+1. **Save the template** as `secure-infrastructure.yaml`
+
+2. **Deploy using AWS CLI**:
 ```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+aws cloudformation create-stack \
+  --stack-name secure-infrastructure-dev \
+  --template-body file://secure-infrastructure.yaml \
+  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+  --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
 ```
 
-2. Monitor deployment:
+3. **Monitor deployment**:
 ```bash
 aws cloudformation describe-stacks \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --stack-name secure-infrastructure-dev \
   --region us-west-2
 ```
 
-3. Get outputs:
-```bash
-aws cloudformation describe-stacks \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --region us-west-2 \
-  --query 'Stacks[0].Outputs'
-```
-
-This template provides a production-ready, secure AWS environment that meets all compliance requirements while maintaining operational efficiency and cost optimization.
+This template provides a production-ready, secure AWS environment that meets all compliance requirements while maintaining operational efficiency, proper resource cleanup, and comprehensive monitoring capabilities.
