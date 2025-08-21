@@ -17,6 +17,13 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
+# Random string for bucket naming
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -270,11 +277,6 @@ resource "aws_kms_key" "rds_key" {
   })
 }
 
-# KMS key alias for RDS
-data "aws_kms_alias" "rds_key" {
-  name = "alias/${local.name_prefix}-rds-key"
-}
-
 # KMS key for S3 encryption
 resource "aws_kms_key" "s3_key" {
   description             = "KMS key for S3 encryption in ${var.environment} environment"
@@ -317,11 +319,6 @@ resource "aws_kms_key" "s3_key" {
   })
 }
 
-# KMS key alias for S3
-data "aws_kms_alias" "s3_key" {
-  name = "alias/${local.name_prefix}-s3-key"
-}
-
 # KMS key for EBS encryption
 resource "aws_kms_key" "ebs_key" {
   description             = "KMS key for EBS encryption in ${var.environment} environment"
@@ -332,11 +329,6 @@ resource "aws_kms_key" "ebs_key" {
     Name = "${local.name_prefix}-ebs-kms-key"
     Type = "encryption"
   })
-}
-
-# KMS key alias for EBS
-data "aws_kms_alias" "ebs_key" {
-  name = "alias/${local.name_prefix}-ebs-key"
 }
 
 #######################
@@ -624,13 +616,6 @@ resource "aws_s3_bucket" "alb_logs" {
     Name = "${local.name_prefix}-alb-logs-bucket"
     Type = "storage"
   })
-}
-
-# Random string for bucket naming
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
 }
 
 # S3 bucket versioning

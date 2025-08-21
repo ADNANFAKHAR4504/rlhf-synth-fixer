@@ -47,10 +47,10 @@ describe('Terraform Configuration Unit Tests', () => {
     expect(content).toMatch(/output "ec2_autoscaling_group_name" {/);
   });
 
-  test('tap_stack.tf should use data sources for existing resources', () => {
+  test('tap_stack.tf should use resource blocks for managing resources', () => {
     const mainTfPath = path.join(LIB_DIR, 'tap_stack.tf');
     const content = fs.readFileSync(mainTfPath, 'utf8');
-    expect(content).toMatch(/data "aws_iam_instance_profile" "ec2_profile" {/);
-    expect(content).toMatch(/data "aws_db_instance" "main" {/);
+    expect(content).toMatch(/resource "aws_iam_instance_profile" "ec2_profile" {/);
+    expect(content).toMatch(/resource "aws_db_instance" "main" {/);
   });
 });
