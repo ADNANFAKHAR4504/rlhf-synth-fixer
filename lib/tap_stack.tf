@@ -605,7 +605,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate.alb_cert.arn
+  certificate_arn   = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secure_prod_tg.arn
@@ -789,5 +789,4 @@ resource "aws_acm_certificate_validation" "alb_cert_validation" {
   validation_record_fqdns = [aws_route53_record.alb_cert_validation.fqdn]
 }
 
-# In your ALB listener block, use:
-certificate_arn   = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
+## Removed stray certificate_arn assignment outside resource block
