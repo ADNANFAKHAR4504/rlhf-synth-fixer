@@ -472,7 +472,7 @@ resource "aws_launch_template" "app" {
 resource "aws_autoscaling_group" "app" {
   name                = "${local.name_prefix}-app-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
+  target_group_arns   = [data.aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
 
   min_size         = 1
