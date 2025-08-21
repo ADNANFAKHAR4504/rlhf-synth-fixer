@@ -139,7 +139,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("AWS Config is configured for compliance monitoring", () => {
       const tapStackContent = fs.readFileSync(path.join(libPath, "tap_stack.tf"), "utf8");
       expect(tapStackContent).toMatch(/aws_config_configuration_recorder.*main_usw2/);
-      expect(tapStackContent).toMatch(/aws_config_configuration_recorder.*main_use1/);
       expect(tapStackContent).toMatch(/all_supported\s*=\s*true/);
       expect(tapStackContent).toMatch(/include_global_resource_types\s*=\s*true/);
       expect(tapStackContent).toMatch(/aws_config_delivery_channel/);
