@@ -40,6 +40,10 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/data\s+"aws_subnets"\s+"public"/);
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
+
+    test("uses data sources for Secrets Manager", () => {
+      expect(stackContent).toMatch(/data\s+"aws_secretsmanager_secret_version"\s+"db_password"/);
+    });
   });
 
   describe("Variable Definitions", () => {
@@ -258,6 +262,33 @@ describe("High Availability Web Application - Unit Tests", () => {
     test("alarms trigger scaling policies", () => {
       expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_up\.arn\]/);
       expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_autoscaling_policy\.scale_down\.arn\]/);
+    });
+  });
+
+  describe("AWS Secrets Manager", () => {
+    test("creates database password secret", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_password"/);
+    });
+
+    test("creates secret version with random password", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"db_password"/);
+    });
+
+    test("generates random password", () => {
+      expect(stackContent).toMatch(/resource\s+"random_password"\s+"db_password"/);
+    });
+
+    test("RDS uses password from Secrets Manager", () => {
+      expect(stackContent).toMatch(/password\s*=\s*data\.aws_secretsmanager_secret_version\.db_password\.secret_string/);
+    });
+
+    test("secret has proper naming", () => {
+      expect(stackContent).toMatch(/name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db-password"/);
+    });
+
+    test("secret has proper tags", () => {
+      expect(stackContent).toMatch(/Environment\s*=\s*"Production"/);
+      expect(stackContent).toMatch(/ManagedBy\s*=\s*"terraform"/);
     });
   });
 

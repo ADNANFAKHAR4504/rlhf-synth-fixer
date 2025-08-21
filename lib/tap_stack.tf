@@ -76,6 +76,11 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Get database password from AWS Secrets Manager
+data "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = aws_secretsmanager_secret.db_password.id
+}
+
 ########################
 # Security Groups
 ########################
@@ -503,7 +508,7 @@ resource "aws_db_instance" "app" {
 
   db_name  = "webappdb"
   username = "admin"
-  password = "SecurePassword123!" # In production, use AWS Secrets Manager
+  password = data.aws_secretsmanager_secret_version.db_password.secret_string
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.app.name
@@ -522,6 +527,31 @@ resource "aws_db_instance" "app" {
     Environment = "Production"
     ManagedBy   = "terraform"
   }
+}
+
+########################
+# AWS Secrets Manager
+########################
+resource "aws_secretsmanager_secret" "db_password" {
+  name        = "${var.app_name}-${var.environment_suffix}-db-password"
+  description = "Database password for ${var.app_name} application"
+
+  tags = {
+    Name        = "${var.app_name}-${var.environment_suffix}-db-password"
+    Environment = "Production"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
+
+resource "random_password" "db_password" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 ########################
