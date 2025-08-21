@@ -44,10 +44,16 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
       {
         Effect = "Allow"
         Action = [
-          "logs:CreateLogStream",
+          "logs:CreateLogStream"
+        ]
+        Resource = aws_cloudwatch_log_group.cloudtrail.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:PutLogEvents"
         ]
-        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:log-stream:*"  # <-- Updated to allow log stream
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:log-stream:*"
       }
     ]
   })
