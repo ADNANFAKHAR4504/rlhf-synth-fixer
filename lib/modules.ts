@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-// import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
@@ -20,6 +19,8 @@ import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
@@ -49,8 +50,7 @@ export class SecureModules extends Construct {
   constructor(scope: Construct, id: string, props: SecureModulesProps) {
     super(scope, id);
 
-    // Get current AWS account and region
-    // const currentRegion = new DataAwsRegion(this, 'current-region');
+    // Get current AWS account
     const currentAccount = new DataAwsCallerIdentity(this, 'current-account');
 
     // Configuration
@@ -61,7 +61,7 @@ export class SecureModules extends Construct {
     const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
     const availabilityZones = [`${region}a`, `${region}b`];
 
-    // KMS Key for encryption at rest - FIXED POLICY
+    // KMS Key for encryption at rest
     this.kmsKey = new KmsKey(this, 'kms-key', {
       description: `${appName} encryption key for all services`,
       keyUsage: 'ENCRYPT_DECRYPT',
@@ -82,20 +82,23 @@ export class SecureModules extends Construct {
           {
             Sid: 'Allow AWS Services',
             Effect: 'Allow',
-            Principal: { AWS: '*' },
-            Action: ['kms:Decrypt', 'kms:GenerateDataKey*', 'kms:DescribeKey'],
-            Resource: '*',
-            Condition: {
-              StringEquals: {
-                'kms:ViaService': [
-                  `s3.${region}.amazonaws.com`,
-                  `rds.${region}.amazonaws.com`,
-                  `lambda.${region}.amazonaws.com`,
-                  `ec2.${region}.amazonaws.com`,
-                  `logs.${region}.amazonaws.com`,
-                ],
-              },
+            Principal: {
+              Service: [
+                's3.amazonaws.com',
+                'rds.amazonaws.com',
+                'lambda.amazonaws.com',
+                'ec2.amazonaws.com',
+                'logs.amazonaws.com',
+              ],
             },
+            Action: [
+              'kms:Decrypt',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Encrypt',
+              'kms:ReEncrypt*',
+            ],
+            Resource: '*',
           },
         ],
       }),
@@ -111,9 +114,9 @@ export class SecureModules extends Construct {
       targetKeyId: this.kmsKey.keyId,
     });
 
-    // S3 Bucket - ONLY ACTIVE RESOURCE
+    // S3 Bucket
     this.s3Bucket = new S3Bucket(this, 's3-bucket', {
-      bucket: `${appName.toLowerCase()}-secure-bucket-${Date.now()}`,
+      bucket: `${appName.toLowerCase()}-secure-bucket-${Math.floor(Date.now() / 1000)}`,
       tags: {
         Name: `${appName}-S3-Bucket`,
       },
@@ -150,9 +153,9 @@ export class SecureModules extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // S3 Access Logging
+    // S3 Access Logging Bucket
     const loggingBucket = new S3Bucket(this, 's3-logging-bucket', {
-      bucket: `${appName.toLowerCase()}-access-logs-${Date.now()}`,
+      bucket: `${appName.toLowerCase()}-access-logs-${Math.floor(Date.now() / 1000)}`,
       tags: {
         Name: `${appName}-S3-AccessLogs`,
       },
@@ -213,6 +216,31 @@ export class SecureModules extends Construct {
       this.privateSubnets.push(subnet);
     });
 
+    // Elastic IPs for NAT Gateways
+    const eips = this.publicSubnets.map(
+      (_, index) =>
+        new Eip(this, `nat-eip-${index}`, {
+          domain: 'vpc',
+          tags: {
+            Name: `${appName}-NAT-EIP-${index + 1}`,
+          },
+          dependsOn: [igw],
+        })
+    );
+
+    // NAT Gateways
+    const natGateways = this.publicSubnets.map(
+      (subnet, index) =>
+        new NatGateway(this, `nat-gateway-${index}`, {
+          allocationId: eips[index].id,
+          subnetId: subnet.id,
+          tags: {
+            Name: `${appName}-NAT-Gateway-${index + 1}`,
+          },
+          dependsOn: [igw],
+        })
+    );
+
     // Route table for public subnets
     const publicRouteTable = new RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
@@ -221,18 +249,41 @@ export class SecureModules extends Construct {
       },
     });
 
-    // Route to internet gateway
+    // Route to internet gateway for public subnets
     new Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
-    // Associate public subnets with route table
+    // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `public-rta-${index}`, {
         subnetId: subnet.id,
         routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // Route tables for private subnets
+    this.privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
+        vpcId: this.vpc.id,
+        tags: {
+          Name: `${appName}-Private-RT-${index + 1}`,
+        },
+      });
+
+      // Route to NAT gateway for private subnets
+      new Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: natGateways[index].id,
+      });
+
+      // Associate private subnet with private route table
+      new RouteTableAssociation(this, `private-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
       });
     });
 
@@ -259,14 +310,18 @@ export class SecureModules extends Construct {
     // Lambda policy
     const lambdaPolicy = new IamPolicy(this, 'lambda-policy', {
       name: `${appName}-Lambda-Policy`,
-      description: 'Minimal permissions for Lambda function',
+      description: 'Permissions for Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
             Effect: 'Allow',
-            Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-            Resource: `arn:aws:logs:${region}:*:log-group:/aws/lambda/${appName}-*`,
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+            ],
+            Resource: `arn:aws:logs:${region}:${currentAccount.accountId}:*`,
           },
           {
             Effect: 'Allow',
@@ -274,13 +329,20 @@ export class SecureModules extends Construct {
               'ec2:CreateNetworkInterface',
               'ec2:DescribeNetworkInterfaces',
               'ec2:DeleteNetworkInterface',
+              'ec2:AttachNetworkInterface',
+              'ec2:DetachNetworkInterface',
             ],
             Resource: '*',
           },
           {
             Effect: 'Allow',
-            Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+            Action: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
             Resource: this.kmsKey.arn,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject'],
+            Resource: `${this.s3Bucket.arn}/*`,
           },
         ],
       }),
@@ -312,7 +374,7 @@ export class SecureModules extends Construct {
       },
     });
 
-    // Lambda security group rule
+    // Lambda security group rules
     new SecurityGroupRule(this, 'lambda-sg-egress-https', {
       type: 'egress',
       fromPort: 443,
@@ -323,41 +385,14 @@ export class SecureModules extends Construct {
       description: 'HTTPS outbound for AWS API calls',
     });
 
-    // Lambda Function
-    this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
-      functionName: `${appName}-Function`,
-      role: this.lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'nodejs18.x',
-      filename: 'lambda.zip',
-      sourceCodeHash: 'placeholder',
-      timeout: 30,
-      memorySize: 128,
-      kmsKeyArn: this.kmsKey.arn,
-      vpcConfig: {
-        subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
-        securityGroupIds: [lambdaSecurityGroup.id],
-      },
-      dependsOn: [this.lambdaLogGroup],
-      environment: {
-        variables: {
-          S3_BUCKET: this.s3Bucket.id,
-          KMS_KEY_ID: this.kmsKey.keyId,
-        },
-      },
-      tags: {
-        Name: `${appName}-Lambda-Function`,
-      },
-    });
-
-    // DB Subnet Group
-    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${appName.toLowerCase()}-db-subnet-group`,
-      subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
-      description: 'Subnet group for RDS instance',
-      tags: {
-        Name: `${appName}-DB-SubnetGroup`,
-      },
+    new SecurityGroupRule(this, 'lambda-sg-egress-mysql', {
+      type: 'egress',
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: 'tcp',
+      cidrBlocks: [vpcCidr],
+      securityGroupId: lambdaSecurityGroup.id,
+      description: 'MySQL outbound to RDS',
     });
 
     // Security Group for RDS
@@ -381,6 +416,43 @@ export class SecureModules extends Construct {
       description: 'MySQL access from Lambda',
     });
 
+    // DB Subnet Group
+    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
+      name: `${appName.toLowerCase()}-db-subnet-group`,
+      subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
+      description: 'Subnet group for RDS instance',
+      tags: {
+        Name: `${appName}-DB-SubnetGroup`,
+      },
+    });
+
+    // Lambda Function - Using S3 for deployment package
+    this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
+      functionName: `${appName}-Function`,
+      role: this.lambdaRole.arn,
+      handler: 'index.handler',
+      runtime: 'nodejs18.x',
+      s3Bucket: 'corp-image-uploads',
+      s3Key: 'lambda-deployment.zip',
+      timeout: 30,
+      memorySize: 128,
+      kmsKeyArn: this.kmsKey.arn,
+      vpcConfig: {
+        subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
+        securityGroupIds: [lambdaSecurityGroup.id],
+      },
+      dependsOn: [this.lambdaLogGroup],
+      environment: {
+        variables: {
+          S3_BUCKET: this.s3Bucket.id,
+          KMS_KEY_ID: this.kmsKey.keyId,
+        },
+      },
+      tags: {
+        Name: `${appName}-Lambda-Function`,
+      },
+    });
+
     // RDS Instance
     this.rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: `${appName.toLowerCase()}-database`,
@@ -399,9 +471,8 @@ export class SecureModules extends Construct {
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `${appName.toLowerCase()}-final-snapshot`,
-      deletionProtection: true,
+      skipFinalSnapshot: true, // Changed to true for easier cleanup during development
+      deletionProtection: false, // Changed to false for easier cleanup during development
       tags: {
         Name: `${appName}-RDS-Instance`,
       },
