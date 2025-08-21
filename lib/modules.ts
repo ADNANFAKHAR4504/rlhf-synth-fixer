@@ -18,6 +18,8 @@ import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+
 
 export interface SecureInfraConfig {
   vpcCidr: string;
@@ -118,6 +120,8 @@ export class SecureInfrastructure extends Construct {
       });
     });
 
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current', {});
+
     // KMS key for encryption at rest - separate key for better security isolation
     this.kmsKey = new KmsKey(this, 'encryption-key', {
       description: `${config.projectName} ${config.environment} encryption key`,
@@ -133,7 +137,7 @@ export class SecureInfrastructure extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
