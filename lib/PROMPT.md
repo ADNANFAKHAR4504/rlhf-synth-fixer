@@ -2,7 +2,7 @@ Hey folks, we’ve got a pretty important job to tackle: let’s build out a sec
 
 Everything should land in the `us-west-2` region, and let’s keep our resource names consistent—something like `{team}-{environment}-{component}` so it’s easy to spot what belongs to who and where.
 
-Logging needs to be switched on everywhere. We want to see what’s happening across all our AWS services, so if anything weird pops up, we’ll catch it early. And don’t forget: any data at rest—whether it’s in S3, RDS, or anywhere else—has to be encrypted with AWS KMS. No exceptions.
+Logging needs to be switched on everywhere. We want to see what’s happening across all our AWS services, so if anything weird pops up, we’ll catch it early. And don’t forget: any data at rest—whether it’s in S3, RDS, or anywhere else—has to be encrypted with AWS KMS. No exceptions. 
 
 We’re steering clear of static access keys. Instead, let’s use IAM roles to give services the permissions they need. That way, we’re not leaving any credentials lying around that could get us in trouble.
 
