@@ -4,8 +4,11 @@ import * as path from 'path';
 describe('Terraform High Availability Web App E2E Deployment Outputs (Flat)', () => {
   let outputs: Record<string, any>;
   beforeAll(() => {
-    // Load outputs from artifact or file
-    const outPath = path.join(__dirname, '../cfn-outputs.json');
+    // Load outputs from artifact or file in the project root
+    const outPath = path.resolve(process.cwd(), 'cfn-outputs.json');
+    if (!fs.existsSync(outPath)) {
+      throw new Error(`Outputs file not found at ${outPath}`);
+    }
     outputs = JSON.parse(fs.readFileSync(outPath, 'utf8'));
   });
 
