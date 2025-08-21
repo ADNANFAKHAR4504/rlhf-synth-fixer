@@ -402,23 +402,22 @@ resource "aws_cloudtrail" "main" {
   count          = var.create_cloudtrail ? 1 : 0
   name           = "${local.naming_prefix}-cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
-  
+
   is_multi_region_trail         = true
   include_global_service_events = true
   is_organization_trail         = false
   enable_logging                = true
-  
+
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-    
+    read_write_type           = "All"
+    include_management_events = true
+
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      values = ["${aws_s3_bucket.cloudtrail_logs.arn}/"]
     }
   }
-  
+
   tags = merge(local.common_tags, { Name = "${local.naming_prefix}-cloudtrail" })
 }
 
