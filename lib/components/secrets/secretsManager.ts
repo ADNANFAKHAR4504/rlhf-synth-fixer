@@ -90,7 +90,7 @@ export class SecretsManagerSecretComponent extends pulumi.ComponentResource {
         replicas: args.replica,
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.secretArn = this.secret.arn;
@@ -127,7 +127,7 @@ export class SecretsManagerSecretVersionComponent extends pulumi.ComponentResour
         secretBinary: args.secretBinary,
         versionStages: args.versionStages || ['AWSCURRENT'],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.registerOutputs({
@@ -158,7 +158,7 @@ export class DatabaseCredentialsComponent extends pulumi.ComponentResource {
         kmsKeyId: args.kmsKeyId,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.secret = secretComponent.secret;
@@ -185,7 +185,7 @@ export class DatabaseCredentialsComponent extends pulumi.ComponentResource {
         secretId: this.secret.id,
         secretString: secretString,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.secretVersion = secretVersionComponent.secretVersion;
@@ -220,7 +220,7 @@ export class ApiKeysComponent extends pulumi.ComponentResource {
           kmsKeyId: args.kmsKeyId,
           tags: args.tags,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
       );
 
       const secretVersionComponent = new SecretsManagerSecretVersionComponent(
@@ -229,7 +229,7 @@ export class ApiKeysComponent extends pulumi.ComponentResource {
           secretId: secretComponent.secret.id,
           secretString: keyValue,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider } // ← FIXED: Added provider
       );
 
       this.secrets[keyName] = {
@@ -248,9 +248,10 @@ export class ApiKeysComponent extends pulumi.ComponentResource {
 
 export function createSecretsManagerSecret(
   name: string,
-  args: SecretsManagerSecretArgs
+  args: SecretsManagerSecretArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): SecretsManagerSecretResult {
-  const secretComponent = new SecretsManagerSecretComponent(name, args);
+  const secretComponent = new SecretsManagerSecretComponent(name, args, opts); // ← FIXED: Pass opts through
   return {
     secret: secretComponent.secret,
     secretArn: secretComponent.secretArn,
@@ -261,22 +262,26 @@ export function createSecretsManagerSecret(
 
 export function createSecretsManagerSecretVersion(
   name: string,
-  args: SecretsManagerSecretVersionArgs
+  args: SecretsManagerSecretVersionArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): aws.secretsmanager.SecretVersion {
   const secretVersionComponent = new SecretsManagerSecretVersionComponent(
     name,
-    args
+    args,
+    opts // ← FIXED: Pass opts through
   );
   return secretVersionComponent.secretVersion;
 }
 
 export function createDatabaseCredentials(
   name: string,
-  args: DatabaseCredentialsArgs
+  args: DatabaseCredentialsArgs,
+  opts?: pulumi.ComponentResourceOptions // ← FIXED: Added third parameter
 ): DatabaseCredentialsResult {
   const databaseCredentialsComponent = new DatabaseCredentialsComponent(
     name,
-    args
+    args,
+    opts // ← FIXED: Pass opts through
   );
   return {
     secret: databaseCredentialsComponent.secret,
@@ -286,8 +291,12 @@ export function createDatabaseCredentials(
   };
 }
 
-export function createApiKeys(name: string, args: ApiKeysArgs): ApiKeysResult {
-  const apiKeysComponent = new ApiKeysComponent(name, args);
+export function createApiKeys(
+  name: string,
+  args: ApiKeysArgs,
+  opts?: pulumi.ComponentResourceOptions
+): ApiKeysResult {
+  const apiKeysComponent = new ApiKeysComponent(name, args, opts);
   return {
     secrets: apiKeysComponent.secrets,
   };

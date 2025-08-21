@@ -92,13 +92,10 @@ export class ParameterStoreParameterComponent extends pulumi.ComponentResource {
       tags: defaultTags,
     };
 
-    // Only add policies if supported (removed from parameter creation)
-    // The policies property is not supported in the current provider version
-
     this.parameter = new aws.ssm.Parameter(
       `${name}-parameter`,
       parameterConfig,
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.parameterArn = this.parameter.arn;
@@ -138,7 +135,7 @@ export class DatabaseParametersComponent extends pulumi.ComponentResource {
         keyId: args.kmsKeyId,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.hostParameter = {
@@ -158,7 +155,7 @@ export class DatabaseParametersComponent extends pulumi.ComponentResource {
         description: `Database port for ${args.name}`,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.portParameter = {
@@ -178,7 +175,7 @@ export class DatabaseParametersComponent extends pulumi.ComponentResource {
         description: `Database name for ${args.name}`,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.nameParameter = {
@@ -199,7 +196,7 @@ export class DatabaseParametersComponent extends pulumi.ComponentResource {
         keyId: args.kmsKeyId,
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider } // ← FIXED: Added provider
     );
 
     this.usernameParameter = {
@@ -243,7 +240,7 @@ export class ApplicationParametersComponent extends pulumi.ComponentResource {
             paramConfig.type === 'SecureString' ? args.kmsKeyId : undefined,
           tags: args.tags,
         },
-        { parent: this }
+        { parent: this, provider: opts?.provider }
       );
 
       this.parameters[key] = {
@@ -262,9 +259,14 @@ export class ApplicationParametersComponent extends pulumi.ComponentResource {
 
 export function createParameterStoreParameter(
   name: string,
-  args: ParameterStoreParameterArgs
+  args: ParameterStoreParameterArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): ParameterStoreParameterResult {
-  const parameterComponent = new ParameterStoreParameterComponent(name, args);
+  const parameterComponent = new ParameterStoreParameterComponent(
+    name,
+    args,
+    opts
+  );
   return {
     parameter: parameterComponent.parameter,
     parameterArn: parameterComponent.parameterArn,
@@ -275,11 +277,13 @@ export function createParameterStoreParameter(
 
 export function createDatabaseParameters(
   name: string,
-  args: DatabaseParametersArgs
+  args: DatabaseParametersArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): DatabaseParametersResult {
   const databaseParametersComponent = new DatabaseParametersComponent(
     name,
-    args
+    args,
+    opts
   );
   return {
     hostParameter: databaseParametersComponent.hostParameter,
@@ -291,11 +295,13 @@ export function createDatabaseParameters(
 
 export function createApplicationParameters(
   name: string,
-  args: ApplicationParametersArgs
+  args: ApplicationParametersArgs,
+  opts?: pulumi.ComponentResourceOptions
 ): ApplicationParametersResult {
   const applicationParametersComponent = new ApplicationParametersComponent(
     name,
-    args
+    args,
+    opts
   );
   return {
     parameters: applicationParametersComponent.parameters,

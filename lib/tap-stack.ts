@@ -107,7 +107,7 @@ function getAvailabilityZones(region: string): string[] {
   const regionAzMap: Record<string, string[]> = {
     'us-east-1': ['us-east-1a', 'us-east-1b'],
     'us-east-2': ['us-east-2a', 'us-east-2b'],
-    'us-west-1': ['us-west-1a', 'us-west-1c'], // Note: us-west-1b doesn't exist
+    'us-west-1': ['us-west-1a', 'us-west-1c'],
     'us-west-2': ['us-west-2a', 'us-west-2b'],
     'eu-west-1': ['eu-west-1a', 'eu-west-1b'],
     'eu-west-2': ['eu-west-2a', 'eu-west-2b'],
@@ -118,6 +118,20 @@ function getAvailabilityZones(region: string): string[] {
   };
 
   return regionAzMap[region] || [`${region}a`, `${region}b`];
+}
+
+//  Generate unique bucket names for CI environments
+function generateUniqueBucketName(
+  baseName: string,
+  region: string,
+  _suffix: string
+): string {
+  // Use stack name and region for uniqueness instead of timestamp
+  const stackName = pulumi.getStack();
+  const projectName = pulumi.getProject();
+  return `${baseName}-${region}-${stackName}-${projectName}`
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-');
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -166,7 +180,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Set default values
     this.environmentSuffix = args?.environmentSuffix || 'prod';
-    this.regions = args?.regions || ['us-west-1', 'us-east-1']; // ← RESTORED: Multi-region
+    this.regions = args?.regions || ['us-west-1', 'us-east-1'];
     this.tags = args?.tags || {
       Environment: this.environmentSuffix,
       Project: 'IaC-AWS-Model-Breaking',
@@ -253,6 +267,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         { provider: this.providers[region] }
       );
+
       this.regionalSecurity[region] = {
         applicationKms: appKms,
         databaseKms: dbKms,
@@ -270,7 +285,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       //  Create subnets with regional provider
       const subnets = createSubnetGroup(
@@ -304,7 +319,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       //  Create Internet Gateway with regional provider
       const igw = createInternetGateway(
@@ -315,7 +330,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       //  Create NAT Gateways with regional provider
       const natGateways = createMultiAzNatGateway(
@@ -326,7 +341,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       //  Create Route Tables with regional provider
       const routeTables = createRouteTables(
@@ -345,7 +360,7 @@ export class TapStack extends pulumi.ComponentResource {
           name: `${name}-private-${region}`,
           tags: this.tags,
         },
-        { provider: this.providers[region] } // ← FIXED: Added provider
+        { provider: this.providers[region] }
       );
 
       //  Create security groups with regional provider
@@ -357,7 +372,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       const appSg = createApplicationSecurityGroup(
         `${name}-app-sg-${region}`,
@@ -368,7 +383,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       const dbSg = createDatabaseSecurityGroup(
         `${name}-db-sg-${region}`,
@@ -379,7 +394,7 @@ export class TapStack extends pulumi.ComponentResource {
           tags: this.tags,
         },
         { provider: this.providers[region] }
-      ); // ← FIXED: Added provider
+      );
 
       this.regionalNetworks[region] = {
         vpc,
@@ -394,22 +409,26 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(` Creating Certificates Infrastructure for ${region}...`);
 
-      // Create SSL certificate without validation (for demo purposes)
-      const certificate = createAcmCertificate(`${name}-cert-${region}`, {
-        domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-        subjectAlternativeNames: [
-          `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
-        ],
-        validationMethod: 'DNS',
-        skipValidation: true, // Skip validation for demo domain
-        tags: this.tags,
-      });
+      //  Create SSL certificate with regional provider
+      const certificate = createAcmCertificate(
+        `${name}-cert-${region}`,
+        {
+          domainName: `hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+          subjectAlternativeNames: [
+            `*.hackwithjoshua-${this.environmentSuffix}-${region}.demo.local`,
+          ],
+          validationMethod: 'DNS',
+          skipValidation: true, // Skip validation for demo domain
+          tags: this.tags,
+        },
+        { provider: this.providers[region] } // ← FIXED: Added regional provider
+      );
 
       this.regionalCertificates[region] = { certificate };
 
       console.log(` Creating Secrets Infrastructure for ${region}...`);
 
-      // Create secrets and parameters
+      //  Create secrets and parameters with regional provider
       const dbCredentials = createDatabaseCredentials(
         `${name}-db-creds-${region}`,
         {
@@ -422,7 +441,8 @@ export class TapStack extends pulumi.ComponentResource {
           engine: 'mysql',
           kmsKeyId: dbKms.keyArn,
           tags: this.tags,
-        }
+        },
+        { provider: this.providers[region] } // ← FIXED: Added regional provider
       );
 
       const appParams = createApplicationParameters(
@@ -443,7 +463,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
           kmsKeyId: appKms.keyArn,
           tags: this.tags,
-        }
+        },
+        { provider: this.providers[region] } // ← FIXED: Added regional provider
       );
 
       this.regionalSecrets[region] = {
@@ -453,27 +474,36 @@ export class TapStack extends pulumi.ComponentResource {
 
       console.log(` Creating Storage Infrastructure for ${region}...`);
 
-      // Create S3 buckets
+      //  Create S3 buckets with regional provider and fixed naming
       const configBucket = createSecureS3Bucket(
         `${name}-config-bucket-${region}`,
         {
           name: `${name}-config-${region}`,
-          bucketName: `${name}-config-${region}-${Date.now()}`,
+          bucketName: generateUniqueBucketName(
+            `${name}-config`,
+            region,
+            'config'
+          ), // ← FIXED: Unique naming
           kmsKeyId: s3Kms.keyArn,
           enableVersioning: true,
           enableLifecycle: true,
           tags: this.tags,
-        }
+        },
+        { provider: this.providers[region] } // ← FIXED: Added regional provider
       );
 
-      const dataBucket = createSecureS3Bucket(`${name}-data-bucket-${region}`, {
-        name: `${name}-data-${region}`,
-        bucketName: `${name}-data-${region}-${Date.now()}`,
-        kmsKeyId: s3Kms.keyArn,
-        enableVersioning: true,
-        enableLifecycle: true,
-        tags: this.tags,
-      });
+      const dataBucket = createSecureS3Bucket(
+        `${name}-data-bucket-${region}`,
+        {
+          name: `${name}-data-${region}`,
+          bucketName: generateUniqueBucketName(`${name}-data`, region, 'data'), // ← FIXED: Unique naming
+          kmsKeyId: s3Kms.keyArn,
+          enableVersioning: true,
+          enableLifecycle: true,
+          tags: this.tags,
+        },
+        { provider: this.providers[region] } // ← FIXED: Added regional provider
+      );
 
       // Create RDS database
       const database = createSecureRdsInstance(`${name}-db-${region}`, {
