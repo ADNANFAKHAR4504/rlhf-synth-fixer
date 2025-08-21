@@ -1,42 +1,44 @@
-// Configuration - Use local output files instead of live AWS calls
-import fs from 'fs';
-import path from 'path';
+import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 
-// Read outputs from local files
-describe('TapStack Integration Tests (local outputs)', () => {
+// Fetch live outputs from CloudFormation
+describe('TapStack Integration Tests (live AWS resources)', () => {
   let outputs: any;
 
   beforeAll(async () => {
-    // Try to read from local output files first
-    const possiblePaths = [
-      path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
-      path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json'),
-      'cfn-outputs/flat-outputs.json',
-    ];
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const suffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const stackName = `TapStack${suffix}`;
 
-    let outputsPath: string | null = null;
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        outputsPath = possiblePath;
-        console.log(`Found outputs file at: ${outputsPath}`);
-        break;
-      }
+    // Ensure shared config is loaded when using AWS_PROFILE
+    if (process.env.AWS_PROFILE && !process.env.AWS_SDK_LOAD_CONFIG) {
+      process.env.AWS_SDK_LOAD_CONFIG = '1';
     }
 
-    if (!outputsPath) {
+    // Basic env-based credential presence check for clearer error messages
+    const hasCreds = Boolean(
+      process.env.AWS_ACCESS_KEY_ID ||
+        process.env.AWS_PROFILE ||
+        process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+    );
+    if (!hasCreds) {
       throw new Error(
-        `Outputs file not found. Checked paths: ${possiblePaths.join(', ')}`
+        'AWS credentials are not configured. Set AWS_PROFILE (and AWS_SDK_LOAD_CONFIG=1) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY before running integration tests.'
       );
     }
 
-    try {
-      const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
-      outputs = JSON.parse(outputsContent);
-      console.log(`Successfully loaded outputs from: ${outputsPath}`);
-      console.log(`Available output keys: ${Object.keys(outputs).join(', ')}`);
-    } catch (error) {
-      throw new Error(`Failed to read or parse outputs file: ${error}`);
+    const cfn = new CloudFormationClient({ region });
+    const resp = await cfn.send(new DescribeStacksCommand({ StackName: stackName }));
+    const stack = resp.Stacks && resp.Stacks[0];
+    if (!stack || !stack.Outputs) {
+      throw new Error(`Could not load CloudFormation outputs for stack ${stackName} in ${region}. Ensure the stack is deployed and AWS credentials are configured (AWS_PROFILE/keys).`);
     }
+    outputs = (stack.Outputs || []).reduce((acc: Record<string, string>, o) => {
+      if (o.OutputKey && o.OutputValue) acc[o.OutputKey] = o.OutputValue;
+      return acc;
+    }, {});
+
+    console.log(`Loaded outputs from CloudFormation stack: ${stackName} (${region})`);
+    console.log(`Available output keys: ${Object.keys(outputs).join(', ')}`);
   });
 
   test('01 - has ApiGatewayUrl', () => {
