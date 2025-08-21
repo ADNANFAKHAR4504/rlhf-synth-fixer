@@ -48,7 +48,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.environment}-postgres-${var.region}"
 
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.14"
   instance_class = var.db_instance_class
 
   allocated_storage     = var.allocated_storage
