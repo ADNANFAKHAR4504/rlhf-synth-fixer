@@ -310,7 +310,7 @@ describe("Terraform Infrastructure - Database Module", () => {
     const mainContent = fs.readFileSync(path.join(DATABASE_MODULE_PATH, "main.tf"), "utf8");
     expect(mainContent).toMatch(/resource\s+"random_password"\s+"database"/);
     expect(mainContent).toMatch(/length\s*=\s*32/);
-    expect(mainContent).toMatch(/special\s*=\s*true/);
+    expect(mainContent).toMatch(/special\s*=\s*false/);
   });
 
   test("Database module stores password in SSM Parameter Store", () => {
@@ -455,8 +455,8 @@ describe("Terraform Infrastructure - Best Practices", () => {
     
     modules.forEach(modulePath => {
       const mainContent = fs.readFileSync(path.join(modulePath, "main.tf"), "utf8");
-      // Check for consistent naming pattern: ${var.environment}-resource-${var.region}
-      expect(mainContent).toMatch(/\$\{var\.environment\}-.*-\$\{var\.region\}/);
+      // Check for consistent naming pattern with UniqueSuffix: ${var.environment}-resource-${var.region}-${var.common_tags.UniqueSuffix}
+      expect(mainContent).toMatch(/\$\{var\.environment\}-.*-\$\{var\.common_tags\.UniqueSuffix\}/);
     });
   });
 

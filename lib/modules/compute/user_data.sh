@@ -11,7 +11,7 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
         "collect_list": [
           {
             "file_path": "/var/log/messages",
-            "log_group_name": "/aws/ec2/${environment}/${region}/messages",
+            "log_group_name": "/aws/ec2/${environment}/${region}/messages-${unique_suffix}",
             "log_stream_name": "{instance_id}"
           }
         ]

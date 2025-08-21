@@ -11,6 +11,7 @@ variable "vpc_eu_west_1_id" {
 variable "vpc_ap_southeast_1_id" {
   description = "VPC ID for AP Southeast 1"
   type        = string
+  default     = null
 }
 
 variable "vpc_us_east_1_cidr" {
@@ -26,6 +27,7 @@ variable "vpc_eu_west_1_cidr" {
 variable "vpc_ap_southeast_1_cidr" {
   description = "CIDR block for AP Southeast 1 VPC"
   type        = string
+  default     = null
 }
 
 variable "environment" {

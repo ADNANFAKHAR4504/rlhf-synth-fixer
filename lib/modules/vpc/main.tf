@@ -8,16 +8,26 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-vpc-${var.region}"
+    Name = "vpc-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-igw-${var.region}"
+    Name = "igw-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_subnet" "public" {
@@ -29,9 +39,14 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-public-subnet-${count.index + 1}-${var.region}"
+    Name = "subnet-public-${var.environment}-${var.region}-${count.index + 1}-${var.common_tags.UniqueSuffix}"
     Type = "Public"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_subnet" "private" {
@@ -42,9 +57,14 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-private-subnet-${count.index + 1}-${var.region}"
+    Name = "subnet-private-${var.environment}-${var.region}-${count.index + 1}-${var.common_tags.UniqueSuffix}"
     Type = "Private"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_nat_gateway" "main" {
@@ -54,10 +74,15 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-nat-gateway-${count.index + 1}-${var.region}"
+    Name = "nat-${var.environment}-${var.region}-${count.index + 1}-${var.common_tags.UniqueSuffix}"
   })
 
   depends_on = [aws_internet_gateway.main]
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_eip" "nat" {
@@ -66,8 +91,13 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-nat-eip-${count.index + 1}-${var.region}"
+    Name = "eip-nat-${var.environment}-${var.region}-${count.index + 1}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_route_table" "public" {
@@ -79,8 +109,13 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-public-rt-${var.region}"
+    Name = "rt-public-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_route_table" "private" {
@@ -94,8 +129,13 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-private-rt-${count.index + 1}-${var.region}"
+    Name = "rt-private-${var.environment}-${var.region}-${count.index + 1}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_route_table_association" "public" {
@@ -142,6 +182,11 @@ resource "aws_security_group" "web" {
   tags = merge(var.common_tags, {
     Name = "${var.environment}-web-sg-${var.region}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_security_group" "database" {
@@ -166,6 +211,11 @@ resource "aws_security_group" "database" {
   tags = merge(var.common_tags, {
     Name = "${var.environment}-db-sg-${var.region}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 # Network ACLs
@@ -191,6 +241,6 @@ resource "aws_network_acl" "main" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-main-nacl-${var.region}"
+    Name = "${var.environment}-main-nacl-${var.region}-${var.common_tags.UniqueSuffix}"
   })
 }

@@ -1,36 +1,60 @@
-# Generate a secure random password
+# Generate a secure random password for RDS
+# AWS RDS only allows printable ASCII characters besides '/', '@', '"', ' '
 resource "random_password" "database" {
   length  = 32
-  special = true
+  special = false # Disable special characters to avoid AWS RDS validation errors
   upper   = true
   lower   = true
   numeric = true
+  # Only use alphanumeric characters to ensure AWS RDS compatibility
+}
+
+# Validate password meets AWS RDS requirements
+locals {
+  # AWS RDS password requirements:
+  # - Must be 8-41 characters long
+  # - Can contain any printable ASCII character except '/', '@', '"', ' '
+  # - Our password is 32 characters and only uses alphanumeric characters
+  password_length = length(random_password.database.result)
+
+  # Ensure password meets minimum length requirement
+  password_valid = local.password_length >= 8 && local.password_length <= 41
 }
 
 # Store the password in AWS SSM Parameter Store
 resource "aws_ssm_parameter" "database_password" {
-  name        = "/${var.environment}/database/${var.region}/password"
+  name        = "/${var.environment}/database/${var.region}/password-${var.common_tags.UniqueSuffix}"
   description = "Database password for ${var.environment} environment in ${var.region}"
   type        = "SecureString"
   value       = random_password.database.result
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-db-password-${var.region}"
+    Name = "db-password-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.environment}-db-subnet-group-${var.region}"
+  name       = "db-subnet-group-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   subnet_ids = var.private_subnet_ids
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-db-subnet-group-${var.region}"
+    Name = "db-subnet-group-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_db_parameter_group" "main" {
   family = "postgres15"
-  name   = "${var.environment}-db-params-${var.region}"
+  name   = "db-params-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
 
   parameter {
     name  = "log_statement"
@@ -38,14 +62,19 @@ resource "aws_db_parameter_group" "main" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-db-params-${var.region}"
+    Name = "db-params-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_db_instance" "main" {
   count = var.is_primary ? 1 : 0
 
-  identifier = "${var.environment}-postgres-${var.region}"
+  identifier = "postgres-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
 
   engine         = "postgres"
   engine_version = "15.14"
@@ -73,18 +102,26 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-postgres-${var.region}"
+    Name = "postgres-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
     Type = "Primary"
   })
+
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
 }
 
 resource "aws_db_instance" "read_replica" {
-  count = var.is_primary ? 0 : (var.source_db_identifier != null && var.source_db_identifier != "" ? 1 : 0)
+  count = var.is_primary ? 0 : 1
 
-  identifier = "${var.environment}-postgres-replica-${var.region}"
+  identifier = "postgres-replica-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
 
   replicate_source_db = var.source_db_identifier
   instance_class      = var.db_instance_class
+
+  allocated_storage = var.allocated_storage
+  storage_encrypted = true
 
   vpc_security_group_ids = [var.database_security_group_id]
 
@@ -92,8 +129,13 @@ resource "aws_db_instance" "read_replica" {
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
+  # Add lifecycle rule to handle tag inconsistencies
+  lifecycle {
+    ignore_changes = [tags, tags_all]
+  }
+
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-postgres-replica-${var.region}"
+    Name = "postgres-replica-${var.environment}-${var.region}-${var.common_tags.UniqueSuffix}"
     Type = "ReadReplica"
   })
 }

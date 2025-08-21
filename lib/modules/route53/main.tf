@@ -7,7 +7,7 @@ resource "aws_route53_zone" "main" {
   name = var.domain_name
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-hosted-zone"
+    Name = "${var.environment}-hosted-zone-${var.common_tags.UniqueSuffix}"
   })
 }
 
@@ -23,7 +23,7 @@ resource "aws_route53_health_check" "us_east_1" {
   request_interval  = "30"
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-health-check-us-east-1"
+    Name = "${var.environment}-health-check-us-east-1-${var.common_tags.UniqueSuffix}"
   })
 }
 
@@ -38,7 +38,7 @@ resource "aws_route53_health_check" "eu_west_1" {
   request_interval  = "30"
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-health-check-eu-west-1"
+    Name = "${var.environment}-health-check-eu-west-1-${var.common_tags.UniqueSuffix}"
   })
 }
 
@@ -53,7 +53,7 @@ resource "aws_route53_health_check" "ap_southeast_1" {
   request_interval  = "30"
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-health-check-ap-southeast-1"
+    Name = "${var.environment}-health-check-ap-southeast-1-${var.common_tags.UniqueSuffix}"
   })
 }
 
