@@ -46,30 +46,114 @@ const TEST_CONFIG = {
 };
 
 // Helper function to check if infrastructure is deployed
-async function isInfrastructureDeployed(): Promise<boolean> {
+async function isInfrastructureDeployed(): Promise<{
+  deployed: boolean;
+  existingResources: string[];
+}> {
   try {
-    // Check if any of our resources exist
+    const existingResources: string[] = [];
+
+    // Check S3 buckets
     const { Buckets } = await s3.listBuckets().promise();
     const hasOurBuckets = Buckets?.some(
       b =>
         b.Name?.includes('secure-infra-prod') ||
         b.Name?.includes('secure-web-app')
     );
-
     if (hasOurBuckets) {
-      console.log(
-        '✅ Infrastructure appears to be deployed (found our buckets)'
-      );
-      return true;
+      existingResources.push('S3');
     }
 
-    console.log(
-      '⚠️  Infrastructure not fully deployed (no matching buckets found)'
-    );
-    return false;
+    // Check KMS keys
+    try {
+      const { Keys } = await kms.listKeys().promise();
+      const hasOurKeys = Keys?.some(
+        key =>
+          key.KeyId?.includes('secure-infra-prod') ||
+          key.KeyId?.includes('secure-web-app')
+      );
+      if (hasOurKeys) {
+        existingResources.push('KMS');
+      }
+    } catch (error) {
+      // KMS check failed, continue
+    }
+
+    // Check RDS instances
+    try {
+      const { DBInstances } = await rds.describeDBInstances().promise();
+      const hasOurRDS = DBInstances?.some(
+        db =>
+          db.DBInstanceIdentifier?.includes('secure-infra-prod') ||
+          db.DBInstanceIdentifier?.includes('secure-web-app')
+      );
+      if (hasOurRDS) {
+        existingResources.push('RDS');
+      }
+    } catch (error) {
+      // RDS check failed, continue
+    }
+
+    // Check CloudTrail
+    try {
+      const { trailList } = await cloudtrail.describeTrails().promise();
+      const hasOurTrail = trailList?.some(
+        trail =>
+          trail.Name?.includes('secure-infra-prod') ||
+          trail.Name?.includes('secure-web-app')
+      );
+      if (hasOurTrail) {
+        existingResources.push('CloudTrail');
+      }
+    } catch (error) {
+      // CloudTrail check failed, continue
+    }
+
+    // Check VPC Flow Logs
+    try {
+      const { FlowLogs } = await ec2.describeFlowLogs().promise();
+      if (FlowLogs && FlowLogs.length > 0) {
+        existingResources.push('VPC Flow Logs');
+      }
+    } catch (error) {
+      // VPC Flow Logs check failed, continue
+    }
+
+    // Check Security Groups
+    try {
+      const { SecurityGroups } = await ec2
+        .describeSecurityGroups({
+          Filters: [
+            {
+              Name: 'group-name',
+              Values: ['*secure-infra-prod*', '*secure-web-app*'],
+            },
+          ],
+        })
+        .promise();
+      if (SecurityGroups && SecurityGroups.length > 0) {
+        existingResources.push('Security Groups');
+      }
+    } catch (error) {
+      // Security Groups check failed, continue
+    }
+
+    const deployed = existingResources.length > 0;
+
+    if (deployed) {
+      console.log(
+        `✅ Infrastructure partially deployed (found: ${existingResources.join(', ')})`
+      );
+    } else {
+      console.log(
+        '⚠️  Infrastructure not deployed (no matching resources found)'
+      );
+    }
+
+    return { deployed, existingResources };
   } catch (error) {
     console.log('⚠️  Could not check infrastructure status');
-    return false;
+    return { deployed: false, existingResources: [] };
   }
 }
 
@@ -156,18 +240,18 @@ afterAll(async () => {
 describe('Infrastructure Integration Tests', () => {
   let bucketNames: { appData: string; accessLogs: string };
   let securityGroupIds: { ec2: string; rds: string };
-  let infrastructureDeployed: boolean;
+  let infrastructureStatus: { deployed: boolean; existingResources: string[] };
 
   beforeAll(async () => {
     bucketNames = await getActualBucketNames();
     securityGroupIds = await getSecurityGroupIds();
-    infrastructureDeployed = await isInfrastructureDeployed();
+    infrastructureStatus = await isInfrastructureDeployed();
   });
 
   describe('KMS Key Tests', () => {
     test('KMS key exists and rotation is enabled', async () => {
-      if (!infrastructureDeployed) {
-        console.log('⏭️  Skipping KMS test - infrastructure not deployed');
+      if (!infrastructureStatus.existingResources.includes('KMS')) {
+        console.log('⏭️  Skipping KMS test - KMS not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -189,8 +273,8 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('KMS can encrypt and decrypt', async () => {
-      if (!infrastructureDeployed) {
-        console.log('⏭️  Skipping KMS test - infrastructure not deployed');
+      if (!infrastructureStatus.existingResources.includes('KMS')) {
+        console.log('⏭️  Skipping KMS test - KMS not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -218,10 +302,8 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('S3 Bucket Tests', () => {
     test('App data bucket has encryption and access logging', async () => {
-      if (!infrastructureDeployed) {
-        console.log(
-          '⏭️  Skipping S3 bucket test - infrastructure not deployed'
-        );
+      if (!infrastructureStatus.existingResources.includes('S3')) {
+        console.log('⏭️  Skipping S3 bucket test - S3 not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -248,10 +330,8 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('Access logs bucket has encryption and self-logging', async () => {
-      if (!infrastructureDeployed) {
-        console.log(
-          '⏭️  Skipping S3 bucket test - infrastructure not deployed'
-        );
+      if (!infrastructureStatus.existingResources.includes('S3')) {
+        console.log('⏭️  Skipping S3 bucket test - S3 not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -271,10 +351,8 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('S3 buckets deny non-TLS connections', async () => {
-      if (!infrastructureDeployed) {
-        console.log(
-          '⏭️  Skipping S3 bucket test - infrastructure not deployed'
-        );
+      if (!infrastructureStatus.existingResources.includes('S3')) {
+        console.log('⏭️  Skipping S3 bucket test - S3 not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -302,8 +380,8 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('RDS Tests', () => {
     test('RDS instance is Multi-AZ and encrypted', async () => {
-      if (!infrastructureDeployed) {
-        console.log('⏭️  Skipping RDS test - infrastructure not deployed');
+      if (!infrastructureStatus.existingResources.includes('RDS')) {
+        console.log('⏭️  Skipping RDS test - RDS not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -323,8 +401,8 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('RDS is in private subnets', async () => {
-      if (!infrastructureDeployed) {
-        console.log('⏭️  Skipping RDS test - infrastructure not deployed');
+      if (!infrastructureStatus.existingResources.includes('RDS')) {
+        console.log('⏭️  Skipping RDS test - RDS not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -352,9 +430,9 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Alarms Tests', () => {
     test('CloudWatch alarm exists for UnauthorizedAPICalls', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('CloudTrail')) {
         console.log(
-          '⏭️  Skipping CloudWatch alarm test - infrastructure not deployed'
+          '⏭️  Skipping CloudWatch alarm test - CloudTrail not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -373,9 +451,9 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('Metric filter exists in CloudTrail log group', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('CloudTrail')) {
         console.log(
-          '⏭️  Skipping metric filter test - infrastructure not deployed'
+          '⏭️  Skipping metric filter test - CloudTrail not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -397,9 +475,9 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('CloudTrail log group has proper retention', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('CloudTrail')) {
         console.log(
-          '⏭️  Skipping log group retention test - infrastructure not deployed'
+          '⏭️  Skipping log group retention test - CloudTrail not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -422,9 +500,9 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('VPC Flow Logs Tests', () => {
     test('VPC Flow Logs are enabled', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('VPC Flow Logs')) {
         console.log(
-          '⏭️  Skipping VPC Flow Logs test - infrastructure not deployed'
+          '⏭️  Skipping VPC Flow Logs test - VPC Flow Logs not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -445,9 +523,9 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('VPC Flow Logs have proper format', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('VPC Flow Logs')) {
         console.log(
-          '⏭️  Skipping VPC Flow Logs format test - infrastructure not deployed'
+          '⏭️  Skipping VPC Flow Logs format test - VPC Flow Logs not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -469,9 +547,9 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('EC2 Security Groups Tests', () => {
     test('EC2 security group only allows specific ingress', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('Security Groups')) {
         console.log(
-          '⏭️  Skipping EC2 security group test - infrastructure not deployed'
+          '⏭️  Skipping EC2 security group test - Security Groups not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -502,9 +580,9 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('RDS security group only allows PostgreSQL from allowed CIDRs', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('Security Groups')) {
         console.log(
-          '⏭️  Skipping RDS security group test - infrastructure not deployed'
+          '⏭️  Skipping RDS security group test - Security Groups not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
@@ -530,10 +608,8 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('CloudTrail Tests', () => {
     test('CloudTrail is enabled and configured correctly', async () => {
-      if (!infrastructureDeployed) {
-        console.log(
-          '⏭️  Skipping CloudTrail test - infrastructure not deployed'
-        );
+      if (!infrastructureStatus.existingResources.includes('CloudTrail')) {
+        console.log('⏭️  Skipping CloudTrail test - CloudTrail not deployed');
         expect(true).toBe(true); // Skip test
         return;
       }
@@ -550,9 +626,9 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     test('CloudTrail has proper event selectors', async () => {
-      if (!infrastructureDeployed) {
+      if (!infrastructureStatus.existingResources.includes('CloudTrail')) {
         console.log(
-          '⏭️  Skipping CloudTrail event selectors test - infrastructure not deployed'
+          '⏭️  Skipping CloudTrail event selectors test - CloudTrail not deployed'
         );
         expect(true).toBe(true); // Skip test
         return;
