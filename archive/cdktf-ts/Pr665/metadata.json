@@ -34,5 +34,11 @@
     "SNS",
     "SSM Parameter Store",
     "Budgets"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anshuk-turing",
+  "dockerS3Location": ""
 }
