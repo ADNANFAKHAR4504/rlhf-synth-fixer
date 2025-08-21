@@ -87,7 +87,7 @@ I'll create a comprehensive, production-grade CDKTF infrastructure that meets al
 
 ## Infrastructure Code
 
-### `src/config/variables.ts`
+### `config/variables.ts`
 
 ```typescript
 export interface AppConfig {
@@ -127,7 +127,7 @@ export const config: AppConfig = {
 };
 ```
 
-### `src/constructs/networking.ts`
+### `constructs/networking.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -439,7 +439,7 @@ export class NetworkingConstruct extends Construct {
 - **Fixed**: Comprehensive alarm configuration for all components
 - **Fixed**: Budget alerts with percentage-based thresholds
 
-### `src/main.ts`
+### `main.ts`
 
 ```typescript
 import { App } from 'cdktf';
@@ -457,7 +457,7 @@ new TapStack(app, 'TapStack', {
 app.synth();
 ```
 
-### `src/tap-stack.ts`
+### `tap-stack.ts`
 
 ```typescript
 import {
@@ -563,7 +563,7 @@ export class TapStack extends TerraformStack {
 }
 ```
 
-### `src/constructs/compute.ts`
+### `constructs/compute.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -811,7 +811,7 @@ EOF
 }
 ```
 
-### `src/constructs/database.ts`
+### `constructs/database.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -908,7 +908,7 @@ export class DatabaseConstruct extends Construct {
 }
 ```
 
-### `src/constructs/storage.ts`
+### `constructs/storage.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -1034,7 +1034,7 @@ export class StorageConstruct extends Construct {
 }
 ```
 
-### `src/constructs/security.ts`
+### `constructs/security.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -1270,7 +1270,7 @@ export class SecurityConstruct extends Construct {
 }
 ```
 
-### `src/constructs/cdn.ts`
+### `constructs/cdn.ts`
 
 ```typescript
 import { Construct } from 'constructs';
@@ -1363,7 +1363,7 @@ export class CdnConstruct extends Construct {
 }
 ```
 
-### `src/constructs/monitoring.ts`
+### `constructs/monitoring.ts`
 
 ```typescript
 import { Construct } from 'constructs';
