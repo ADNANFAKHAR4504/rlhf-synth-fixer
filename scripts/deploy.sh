@@ -45,7 +45,6 @@ fi
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
-
 # Deploy step
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
