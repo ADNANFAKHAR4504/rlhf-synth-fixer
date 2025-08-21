@@ -738,4 +738,4 @@ This production-ready template includes the following critical fixes and improve
 8. **Set DeletionProtectionEnabled to false**: Ensured all resources can be deleted for development/testing environments
 9. **Removed Security Hub Role**: Removed problematic SecurityHub role that was referencing non-attachable policy
 
-The template now successfully deploys all 32 resources and passes comprehensive integration tests, demonstrating enterprise-level security best practices suitable for production environments.
+The template now successfully deploys all 32 resources, demonstrating enterprise-level security best practices suitable for production environments.
