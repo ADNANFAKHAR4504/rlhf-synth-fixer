@@ -16,9 +16,25 @@ describe('LambdaStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('KMS Key Configuration', () => {
+    test('should create KMS key for Lambda encryption', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: 'KMS key for Lambda function environment variable encryption',
+        EnableKeyRotation: true,
+      });
+    });
+
+    test('should create KMS alias', () => {
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: `alias/prod-lambda-encryption-${environmentSuffix}`,
+      });
+    });
+  });
+
   describe('S3 Bucket Configuration', () => {
-    test('should create S3 bucket for Lambda code', () => {
+    test('should create S3 bucket for dead letter events', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: expect.stringContaining(`prod-lambda-failed-events-${environmentSuffix}`),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [{
             ServerSideEncryptionByDefault: {
@@ -43,36 +59,110 @@ describe('LambdaStack Unit Tests', () => {
     });
   });
 
-  describe('Lambda Function ARNs', () => {
-    test('should expose user function ARN', () => {
-      expect(stack.userFunction).toBeDefined();
-      expect(stack.userFunction.functionArn).toContain('prod-user-function');
-      expect(stack.userFunction.functionArn).toContain(environmentSuffix);
+  describe('IAM Role Configuration', () => {
+    test('should create IAM role for Lambda execution', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `prod-lambda-execution-role-${environmentSuffix}`,
+        AssumeRolePolicyDocument: {
+          Statement: expect.arrayContaining([
+            expect.objectContaining({
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+      });
     });
 
-    test('should expose product function ARN', () => {
-      expect(stack.productFunction).toBeDefined();
-      expect(stack.productFunction.functionArn).toContain('prod-product-function');
-      expect(stack.productFunction.functionArn).toContain(environmentSuffix);
+    test('should include least privilege policies', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        Policies: expect.arrayContaining([
+          expect.objectContaining({
+            PolicyName: 'LambdaMinimalPolicy',
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    test('should create user management Lambda function', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `prod-user-management-${environmentSuffix}`,
+        Runtime: 'nodejs20.x',
+        Handler: 'index.handler',
+        MemorySize: 512,
+        Timeout: 30,
+      });
+    });
+
+    test('should create product catalog Lambda function', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `prod-product-catalog-${environmentSuffix}`,
+        Runtime: 'nodejs20.x',
+        Handler: 'index.handler',
+        MemorySize: 512,
+        Timeout: 30,
+      });
+    });
+
+    test('should create order processing Lambda function', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `prod-order-processing-${environmentSuffix}`,
+        Runtime: 'nodejs20.x',
+        Handler: 'index.handler',
+        MemorySize: 512,
+        Timeout: 30,
+      });
+    });
+
+    test('should enable X-Ray tracing on all functions', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      Object.values(functions).forEach(fn => {
+        expect(fn.Properties.TracingConfig.Mode).toBe('Active');
+      });
+    });
+
+    test('should encrypt environment variables', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      Object.values(functions).forEach(fn => {
+        expect(fn.Properties.KmsKeyArn).toBeDefined();
+      });
+    });
+  });
+
+  describe('Lambda Aliases', () => {
+    test('should create LIVE aliases for blue-green deployment', () => {
+      template.resourceCountIs('AWS::Lambda::Alias', 3);
+      template.hasResourceProperties('AWS::Lambda::Alias', {
+        Name: 'LIVE',
+      });
     });
   });
 
   describe('Stack Outputs', () => {
-    test('should output user function ARN', () => {
-      template.hasOutput('UserFunctionArn', {
-        Description: 'User Function ARN (mock)',
+    test('should output user management function ARN', () => {
+      template.hasOutput('UserManagementFunctionArn', {
+        Description: 'User Management Lambda Function ARN',
       });
     });
 
-    test('should output product function ARN', () => {
-      template.hasOutput('ProductFunctionArn', {
-        Description: 'Product Function ARN (mock)',
+    test('should output product catalog function ARN', () => {
+      template.hasOutput('ProductCatalogFunctionArn', {
+        Description: 'Product Catalog Lambda Function ARN',
       });
     });
 
-    test('should output code bucket name', () => {
-      template.hasOutput('CodeBucketName', {
-        Description: 'S3 Bucket for Lambda Code',
+    test('should output order processing function ARN', () => {
+      template.hasOutput('OrderProcessingFunctionArn', {
+        Description: 'Order Processing Lambda Function ARN',
+      });
+    });
+
+    test('should output KMS key ID', () => {
+      template.hasOutput('LambdaKMSKeyId', {
+        Description: 'KMS key for Lambda environment variable encryption',
       });
     });
   });

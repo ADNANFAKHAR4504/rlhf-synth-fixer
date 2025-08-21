@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { ApiGatewayStack } from '../lib/api-gateway-stack.mjs';
 
@@ -6,12 +7,29 @@ describe('ApiGatewayStack Unit Tests', () => {
   let app;
   let stack;
   let template;
+  let mockLambdaStack;
   const environmentSuffix = 'test';
 
   beforeEach(() => {
     app = new cdk.App();
+    
+    // Create a separate stack for mock Lambda functions
+    const mockStack = new cdk.Stack(app, 'MockStack');
+    const mockLambda = new lambda.Function(mockStack, 'MockLambda', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200 });'),
+    });
+
+    mockLambdaStack = {
+      userManagementFunction: mockLambda,
+      productCatalogFunction: mockLambda,
+      orderProcessingFunction: mockLambda,
+    };
+
     stack = new ApiGatewayStack(app, 'TestApiGatewayStack', {
       environmentSuffix,
+      lambdaStack: mockLambdaStack,
     });
     template = Template.fromStack(stack);
   });
@@ -108,8 +126,8 @@ describe('ApiGatewayStack Unit Tests', () => {
     });
   });
 
-  describe('Mock Integration', () => {
-    test('should use mock integration for all methods', () => {
+  describe('Lambda Integration', () => {
+    test('should use Lambda integration for all methods', () => {
       const methods = template.findResources('AWS::ApiGateway::Method', {
         Properties: {
           HttpMethod: Match.not('OPTIONS'),
@@ -118,11 +136,11 @@ describe('ApiGatewayStack Unit Tests', () => {
       
       Object.values(methods).forEach(method => {
         expect(method.Properties.Integration).toBeDefined();
-        expect(method.Properties.Integration.Type).toBe('MOCK');
+        expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
       });
     });
 
-    test('should configure mock integration responses', () => {
+    test('should configure Lambda integration URI', () => {
       const methods = template.findResources('AWS::ApiGateway::Method', {
         Properties: {
           HttpMethod: 'GET',
@@ -130,8 +148,23 @@ describe('ApiGatewayStack Unit Tests', () => {
       });
       
       Object.values(methods).forEach(method => {
-        expect(method.Properties.Integration.IntegrationResponses).toBeDefined();
-        expect(method.Properties.Integration.IntegrationResponses[0].StatusCode).toBe('200');
+        expect(method.Properties.Integration.Uri).toBeDefined();
+        expect(method.Properties.Integration.Uri).toEqual(
+          expect.objectContaining({
+            'Fn::Join': expect.arrayContaining([
+              expect.any(String),
+              expect.arrayContaining([
+                expect.stringContaining('lambda:path/2015-03-31/functions/'),
+              ])
+            ])
+          })
+        );
+      });
+    });
+
+    test('should create orders resource', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Resource', {
+        PathPart: 'orders',
       });
     });
   });

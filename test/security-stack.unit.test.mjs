@@ -25,15 +25,28 @@ describe('SecurityStack Unit Tests', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Name: `prod-api-waf-${environmentSuffix}`,
         Scope: 'REGIONAL',
-        Description: 'WAF for API Gateway protection',
+        Description: 'WAF for API Gateway protection with IP whitelisting',
       });
     });
 
-    test('should have default allow action', () => {
+    test('should have default block action', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         DefaultAction: {
-          Allow: {},
+          Block: {},
         },
+      });
+    });
+
+    test('should create IP Set for whitelisting', () => {
+      template.hasResourceProperties('AWS::WAFv2::IPSet', {
+        Name: `prod-whitelist-ipset-${environmentSuffix}`,
+        Scope: 'REGIONAL',
+        IPAddressVersion: 'IPV4',
+        Addresses: Match.arrayWith([
+          '10.0.0.0/8',
+          '192.168.0.0/16',
+          '172.16.0.0/12',
+        ]),
       });
     });
 
@@ -49,12 +62,26 @@ describe('SecurityStack Unit Tests', () => {
   });
 
   describe('WAF Rules', () => {
+    test('should include IP whitelist rule', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Name: 'IPWhitelistRule',
+            Priority: 1,
+            Action: {
+              Allow: {},
+            },
+          }),
+        ]),
+      });
+    });
+
     test('should include rate limiting rule', () => {
       template.hasResourceProperties('AWS::WAFv2::WebACL', {
         Rules: Match.arrayWith([
           Match.objectLike({
             Name: 'RateLimitRule',
-            Priority: 1,
+            Priority: 2,
             Statement: {
               RateBasedStatement: {
                 Limit: 2000,
@@ -74,7 +101,7 @@ describe('SecurityStack Unit Tests', () => {
         Rules: Match.arrayWith([
           Match.objectLike({
             Name: 'AWSManagedRulesCommonRuleSet',
-            Priority: 2,
+            Priority: 3,
             Statement: {
               ManagedRuleGroupStatement: {
                 VendorName: 'AWS',

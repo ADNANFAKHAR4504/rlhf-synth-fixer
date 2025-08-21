@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { MonitoringStack } from '../lib/monitoring-stack.mjs';
 
@@ -6,6 +7,7 @@ describe('MonitoringStack Unit Tests', () => {
   let app;
   let stack;
   let template;
+  let mockLambdaStack;
   const environmentSuffix = 'test';
   const mockApi = {
     restApiId: 'mock-api-id',
@@ -14,9 +16,25 @@ describe('MonitoringStack Unit Tests', () => {
 
   beforeEach(() => {
     app = new cdk.App();
+    
+    // Create a separate stack for mock Lambda functions
+    const mockStack = new cdk.Stack(app, 'MockStack');
+    const mockLambda = new lambda.Function(mockStack, 'MockLambda', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200 });'),
+    });
+
+    mockLambdaStack = {
+      userManagementFunction: mockLambda,
+      productCatalogFunction: mockLambda,
+      orderProcessingFunction: mockLambda,
+    };
+
     stack = new MonitoringStack(app, 'TestMonitoringStack', {
       environmentSuffix,
       api: mockApi,
+      lambdaStack: mockLambdaStack,
     });
     template = Template.fromStack(stack);
   });

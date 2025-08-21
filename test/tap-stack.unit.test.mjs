@@ -3,6 +3,7 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.mjs';
 
 // Mock nested stacks
+jest.mock('../lib/lambda-stack.mjs');
 jest.mock('../lib/api-gateway-stack.mjs');
 jest.mock('../lib/security-stack.mjs');
 jest.mock('../lib/monitoring-stack.mjs');
