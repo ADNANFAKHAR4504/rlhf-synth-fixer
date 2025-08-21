@@ -2,7 +2,7 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 so please create the resources according to this with provider block in each resource to get rid of resource conflicts.
 
 Please create the resources as per below requirements -
-1. There is requirement to have resources deployed in two different regions us-west-1 and us-west-2. So Please create proper VPC in each region and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16 for the primary and 10.1.0.0/16 for the secondary region. Please make us-east-2 primary and us-west-2 as secondary.
+1. There is requirement to have resources deployed in two different regions us-west-1 and us-west-2. So Please create proper VPC in each region and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16 for the primary and 10.1.0.0/16 for the secondary region. Please make us-west-1 primary and us-west-2 as secondary.
 2. VPCs should have  private and  public subnets in each VPC for each region. VPCs should have flow logs enabled for security analysis. 
 3. Create EC2 resource in each region and EC2 specific security group that allows SSH access only from a specific IP address from the CIDR.
 4. Create s3 bucket in each region  Ensure all S3 buckets are encrypted using Amazon S3-managed keys (SSE-S3).
