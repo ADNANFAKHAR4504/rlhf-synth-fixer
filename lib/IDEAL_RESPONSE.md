@@ -1,7 +1,3 @@
-# Secure Serverless API with AWS WAF and Lambda
-
-## CloudFormation Template
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TAP Stack - Secure Serverless API with AWS WAF and Lambda'
@@ -392,43 +388,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 ```
-
-## Architecture Overview
-
-This CloudFormation template creates a secure serverless API with the following components:
-
-### Security Layer
-
-- **AWS WAF v2** with rate limiting (2000 requests per 5 minutes per IP)
-- **AWS Managed Rules** for common attack patterns
-- **IAM roles** with least-privilege permissions
-- **Secrets Manager integration** for secure environment variable handling
-
-### API Layer
-
-- **API Gateway** with regional endpoints
-- **CloudWatch logging** with configurable retention
-- **CORS support** for web applications
-- **Default execute-api hostname** (no custom domain required)
-
-### Compute Layer
-
-- **Lambda function** with Python 3.9 runtime
-- **Secrets Manager** integration for environment variables
-- **CloudWatch logs** with configurable retention
-- **Error handling** and JSON response formatting
-
-### Infrastructure Features
-
-- **Environment-specific naming** using EnvironmentSuffix parameter
-- **Consistent tagging** across all resources
-- **No retention policies** - all resources clean up completely
-- **Region-agnostic** - works in any AWS region using `${AWS::Region}`
-
-## Key Design Decisions
-
-1. **Security First**: WAF protection, least-privilege IAM, Secrets Manager integration
-2. **Production Ready**: Comprehensive logging, monitoring, and error handling
-3. **Environment Isolation**: Parameterized resource naming for multi-environment support
-4. **Clean Deployment**: No retention policies, complete resource cleanup
-5. **Regional Flexibility**: Uses AWS intrinsic functions, no hardcoded regions
