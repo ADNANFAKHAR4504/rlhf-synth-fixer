@@ -702,10 +702,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}/*"
+                  "Fn::Sub": "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}/*"
                 },
                 {
-                  "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}"
+                  "Fn::Sub": "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
                 }
               ],
               "Condition": {
@@ -731,7 +731,7 @@
                 "s3:DeleteObject"
               ],
               "Resource": {
-                "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}/*"
+                "Fn::Sub": "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}/*"
               }
             }
           ]

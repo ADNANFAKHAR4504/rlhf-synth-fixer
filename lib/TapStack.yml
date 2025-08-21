@@ -424,8 +424,8 @@ Resources:
             Principal: "*"
             Action: "s3:*"
             Resource:
-              - !Sub "${ProdS3Bucket}/*"
-              - !Ref ProdS3Bucket
+              - !Sub "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}/*"
+              - !Sub "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -437,7 +437,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
-            Resource: !Sub "${ProdS3Bucket}/*"
+            Resource: !Sub "arn:aws:s3:::prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}/*"
 
   # ===== CloudWatch Resources =====
   ProdCloudWatchLogGroup:
