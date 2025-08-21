@@ -17,6 +17,7 @@ import {
   SecurityGroupModule,
 } from '../lib/modules';
 import { TerraformOutput } from 'cdktf';
+import { Fn } from 'cdktf';
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
@@ -68,7 +69,11 @@ export class TapStack extends TerraformStack {
       namePrefix,
       tags: projectTags,
       cidrBlock: '10.0.0.0/16',
-      availabilityZones: [azs.names[0], azs.names[1], azs.names[2]],
+      availabilityZones: [
+        Fn.element(azs.names, 0),
+        Fn.element(azs.names, 1),
+        Fn.element(azs.names, 2),
+      ],
     });
 
     // Create S3 bucket
@@ -266,7 +271,11 @@ export class TapStack extends TerraformStack {
 
     // Availability Zones Output
     new TerraformOutput(this, 'availability-zones', {
-      value: [azs.names[0], azs.names[1], azs.names[2]],
+      value: [
+        Fn.element(azs.names, 0),
+        Fn.element(azs.names, 1),
+        Fn.element(azs.names, 2),
+      ],
       description: 'Availability zones used for the infrastructure',
     });
   }

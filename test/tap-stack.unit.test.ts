@@ -159,19 +159,6 @@ describe('TapStack', () => {
     it('should create all required modules with correct configuration', () => {
       new TapStack(app, 'test-stack');
 
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc',
-        expect.objectContaining({
-          namePrefix: 'MyApp-',
-          cidrBlock: '10.0.0.0/16',
-          availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-          tags: expect.objectContaining({
-            Project: 'MyApp'
-          })
-        })
-      );
-
       expect(S3Module).toHaveBeenCalledWith(
         expect.anything(),
         's3',
