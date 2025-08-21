@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-01'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TAP Stack - Secure Task Assignment Platform with S3 and DynamoDB Infrastructure'
 
 Metadata:
@@ -219,6 +219,7 @@ Resources:
       DeletionProtectionEnabled: false
       SSESpecification:
         SSEEnabled: true
+        SSEType: KMS
         KMSMasterKeyId: !Ref TAPDynamoDBKMSKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -239,6 +240,7 @@ Resources:
       S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}/'
       IncludeGlobalServiceEvents: false
       IsMultiRegionTrail: false
+      IsLogging: true
       EnableLogFileValidation: true
       EventSelectors:
         - ReadWriteType: All
