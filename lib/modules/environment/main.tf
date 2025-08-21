@@ -21,7 +21,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-vpc"
+    Name        = "${var.environment}-vpc-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -31,7 +31,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-igw"
+    Name        = "${var.environment}-igw-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -46,7 +46,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-public-subnet-${count.index + 1}"
+    Name        = "${var.environment}-public-subnet-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
     Type        = "public"
   })
@@ -61,7 +61,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-private-subnet-${count.index + 1}"
+    Name        = "${var.environment}-private-subnet-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
     Type        = "private"
   })
@@ -74,7 +74,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-eip-${count.index + 1}"
+    Name        = "${var.environment}-eip-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
   })
 
@@ -89,7 +89,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-nat-${count.index + 1}"
+    Name        = "${var.environment}-nat-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
   })
 
@@ -106,7 +106,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-public-rt"
+    Name        = "${var.environment}-public-rt-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -123,7 +123,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-private-rt-${count.index + 1}"
+    Name        = "${var.environment}-private-rt-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -195,7 +195,7 @@ resource "aws_network_acl" "public" {
   }
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-public-nacl"
+    Name        = "${var.environment}-public-nacl-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -204,6 +204,25 @@ resource "aws_network_acl" "public" {
 resource "aws_network_acl" "private" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = aws_subnet.private[*].id
+
+  # Deny rules for cross-environment traffic
+  dynamic "ingress" {
+    for_each = var.environment == "prod" ? [
+      { cidr = "10.0.0.0/16", rule_no = 90 }, # Deny dev traffic
+      { cidr = "10.1.0.0/16", rule_no = 91 }  # Deny staging traffic
+      ] : var.environment == "staging" ? [
+      { cidr = "10.0.0.0/16", rule_no = 90 } # Deny dev traffic
+    ] : []
+
+    content {
+      protocol   = "-1"
+      rule_no    = ingress.value.rule_no
+      action     = "deny"
+      cidr_block = ingress.value.cidr
+      from_port  = 0
+      to_port    = 0
+    }
+  }
 
   ingress {
     protocol   = "tcp"
@@ -251,14 +270,14 @@ resource "aws_network_acl" "private" {
   }
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-private-nacl"
+    Name        = "${var.environment}-private-nacl-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 # Security Group for Web Servers
 resource "aws_security_group" "web" {
-  name_prefix = "${var.environment}-web-"
+  name        = "${var.environment}-web-sg-${var.environment_suffix}"
   vpc_id      = aws_vpc.main.id
   description = "Security group for web servers in ${var.environment} environment"
 
@@ -295,14 +314,14 @@ resource "aws_security_group" "web" {
   }
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-web-sg"
+    Name        = "${var.environment}-web-sg-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name_prefix = "${var.environment}-ec2-role-"
+  name = "${var.environment}-ec2-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -318,15 +337,15 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-ec2-role"
+    Name        = "${var.environment}-ec2-role-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 # IAM Policy for CloudWatch and SSM
 resource "aws_iam_role_policy" "ec2_policy" {
-  name_prefix = "${var.environment}-ec2-policy-"
-  role        = aws_iam_role.ec2_role.id
+  name = "${var.environment}-ec2-policy-${var.environment_suffix}"
+  role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -357,28 +376,28 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name_prefix = "${var.environment}-ec2-profile-"
-  role        = aws_iam_role.ec2_role.name
+  name = "${var.environment}-ec2-profile-${var.environment_suffix}"
+  role = aws_iam_role.ec2_role.name
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-ec2-profile"
+    Name        = "${var.environment}-ec2-profile-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs/${var.environment}"
+  name              = "/aws/vpc/flowlogs/${var.environment}-${var.environment_suffix}"
   retention_in_days = 30
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-vpc-flow-logs"
+    Name        = "${var.environment}-vpc-flow-logs-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 resource "aws_iam_role" "flow_logs_role" {
-  name_prefix = "${var.environment}-flow-logs-role-"
+  name = "${var.environment}-flow-logs-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -394,14 +413,14 @@ resource "aws_iam_role" "flow_logs_role" {
   })
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-flow-logs-role"
+    Name        = "${var.environment}-flow-logs-role-${var.environment_suffix}"
     Environment = var.environment
   })
 }
 
 resource "aws_iam_role_policy" "flow_logs_policy" {
-  name_prefix = "${var.environment}-flow-logs-policy-"
-  role        = aws_iam_role.flow_logs_role.id
+  name = "${var.environment}-flow-logs-policy-${var.environment_suffix}"
+  role = aws_iam_role.flow_logs_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -428,7 +447,7 @@ resource "aws_flow_log" "vpc_flow_logs" {
   vpc_id          = aws_vpc.main.id
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-vpc-flow-logs"
+    Name        = "${var.environment}-vpc-flow-logs-${var.environment_suffix}"
     Environment = var.environment
   })
 }
@@ -439,7 +458,7 @@ resource "aws_instance" "web" {
 
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public[count.index].id
+  subnet_id              = aws_subnet.private[count.index].id
   vpc_security_group_ids = [aws_security_group.web.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
@@ -454,7 +473,7 @@ resource "aws_instance" "web" {
   )
 
   tags = merge(var.common_tags, {
-    Name        = "${var.environment}-webserver-${count.index + 1}"
+    Name        = "${var.environment}-webserver-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
   })
 }

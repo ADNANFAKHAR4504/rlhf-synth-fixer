@@ -3,6 +3,11 @@ variable "environment" {
   type        = string
 }
 
+variable "environment_suffix" {
+  description = "Suffix to append to resource names for uniqueness"
+  type        = string
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
