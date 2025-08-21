@@ -26,7 +26,7 @@ locals {
 }
 
 variable "environment" {
-    default = ""
+    default = "default"
 }
 
 variable "min_size" {
