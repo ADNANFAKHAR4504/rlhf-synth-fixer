@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291583",
+  "team": "1",
+  "startedAt": "2025-08-21T12:46:54.861Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Access Control",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::S3::Bucket",
+    "AWS::IAM::Role",
+    "AWS::IAM::Group",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::CloudTrail::Trail",
+    "AWS::Logs::LogGroup",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::DynamoDB::Table",
+    "AWS::Budgets::Budget"
+  ]
+}
