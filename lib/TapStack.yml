@@ -117,7 +117,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - 'arn:aws:s3:::*/*'
+                - !Sub '${ApplicationDataBucket.Arn}/'
 
   # Config Service-Linked Role (preferred for AWS Config)
   ConfigServiceLinkedRole:
