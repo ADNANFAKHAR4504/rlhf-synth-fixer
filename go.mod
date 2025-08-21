@@ -7,16 +7,16 @@ require (
 )
 
 replace (
-	github.com/TuringGpt/iac-test-automations/aws/provider => ./.gen/providers/aws/provider
-	github.com/TuringGpt/iac-test-automations/aws/cloudwatchloggroup => ./.gen/providers/aws/cloudwatchloggroup
-	github.com/TuringGpt/iac-test-automations/aws/iampolicy => ./.gen/providers/aws/iampolicy
-	github.com/TuringGpt/iac-test-automations/aws/iamrole => ./.gen/providers/aws/iamrole
-	github.com/TuringGpt/iac-test-automations/aws/iamrolepolicyattachment => ./.gen/providers/aws/iamrolepolicyattachment
-	github.com/TuringGpt/iac-test-automations/aws/lambdafunction => ./.gen/providers/aws/lambdafunction
-	github.com/TuringGpt/iac-test-automations/aws/lambdapermission => ./.gen/providers/aws/lambdapermission
-	github.com/TuringGpt/iac-test-automations/aws/s3bucket => ./.gen/providers/aws/s3bucket
-	github.com/TuringGpt/iac-test-automations/aws/s3bucketnotification => ./.gen/providers/aws/s3bucketnotification
-	github.com/TuringGpt/iac-test-automations/aws/s3bucketpublicaccessblock => ./.gen/providers/aws/s3bucketpublicaccessblock
-	github.com/TuringGpt/iac-test-automations/aws/s3bucketserversideencryptionconfiguration => ./.gen/providers/aws/s3bucketserversideencryptionconfiguration
-	github.com/TuringGpt/iac-test-automations/aws/s3bucketversioning => ./.gen/providers/aws/s3bucketversioning
+	github.com/TuringGpt/iac-test-automations/aws/provider => ./.gen/aws/provider
+	github.com/TuringGpt/iac-test-automations/aws/cloudwatchloggroup => ./.gen/aws/cloudwatchloggroup
+	github.com/TuringGpt/iac-test-automations/aws/iampolicy => ./.gen/aws/iampolicy
+	github.com/TuringGpt/iac-test-automations/aws/iamrole => ./.gen/aws/iamrole
+	github.com/TuringGpt/iac-test-automations/aws/iamrolepolicyattachment => ./.gen/aws/iamrolepolicyattachment
+	github.com/TuringGpt/iac-test-automations/aws/lambdafunction => ./.gen/aws/lambdafunction
+	github.com/TuringGpt/iac-test-automations/aws/lambdapermission => ./.gen/aws/lambdapermission
+	github.com/TuringGpt/iac-test-automations/aws/s3bucket => ./.gen/aws/s3bucket
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketnotification => ./.gen/aws/s3bucketnotification
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketpublicaccessblock => ./.gen/aws/s3bucketpublicaccessblock
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketserversideencryptionconfiguration => ./.gen/aws/s3bucketserversideencryptionconfiguration
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketversioning => ./.gen/aws/s3bucketversioning
 )
