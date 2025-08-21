@@ -91,6 +91,7 @@ export class TapStack extends TerraformStack {
       instanceProfileName: security.ec2InstanceProfile.name,
       webAclArn: security.webAcl.arn,
       accessLogsBucket: storage.accessLogsBucket.bucket,
+      accessLogsBucketPolicy: storage.accessLogsBucketPolicy,
     });
 
     const cdn = new CdnConstruct(this, 'cdn', {

@@ -23,6 +23,7 @@ export interface ComputeProps {
   instanceProfileName: string;
   webAclArn: string;
   accessLogsBucket: string;
+  accessLogsBucketPolicy: any;
 }
 
 export class ComputeConstruct extends Construct {
@@ -44,6 +45,7 @@ export class ComputeConstruct extends Construct {
       instanceProfileName,
       webAclArn,
       accessLogsBucket,
+      accessLogsBucketPolicy,
     } = props;
 
     const amiData = new dataAwsAmi.DataAwsAmi(this, 'amazon-linux', {
@@ -165,6 +167,8 @@ EOF
         enabled: true,
         prefix: 'alb-access-logs',
       },
+
+      dependsOn: [accessLogsBucketPolicy],
 
       tags: {
         ...config.tags,

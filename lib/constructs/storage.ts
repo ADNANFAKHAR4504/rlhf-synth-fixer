@@ -18,6 +18,7 @@ export interface StorageProps {
 export class StorageConstruct extends Construct {
   public readonly logsBucket: s3Bucket.S3Bucket;
   public readonly accessLogsBucket: s3Bucket.S3Bucket;
+  public readonly accessLogsBucketPolicy: s3BucketPolicy.S3BucketPolicy;
 
   constructor(scope: Construct, id: string, props: StorageProps) {
     super(scope, id);
@@ -74,7 +75,7 @@ export class StorageConstruct extends Construct {
       );
 
     // Bucket policy to allow ALB to write access logs
-    new s3BucketPolicy.S3BucketPolicy(this, 'access-logs-bucket-policy', {
+    this.accessLogsBucketPolicy = new s3BucketPolicy.S3BucketPolicy(this, 'access-logs-bucket-policy', {
       bucket: this.accessLogsBucket.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
