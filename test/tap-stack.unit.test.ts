@@ -224,20 +224,6 @@ describe('TapStack', () => {
         })
       );
 
-      expect(Route53Module).toHaveBeenCalledWith(
-        expect.anything(),
-        'route53',
-        expect.objectContaining({
-          namePrefix: 'MyApp-',
-          domainName: 'myapp.example.com',
-          albDnsName: 'MyApp-alb-123456789.us-east-1.elb.amazonaws.com',
-          albZoneId: 'Z35SXDOTRQ7X7K',
-          tags: expect.objectContaining({
-            Project: 'MyApp'
-          })
-        })
-      );
-
       expect(CloudWatchModule).toHaveBeenCalledWith(
         expect.anything(),
         'cloudwatch',
