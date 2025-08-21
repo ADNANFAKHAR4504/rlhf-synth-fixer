@@ -46,9 +46,9 @@ S3 Replication (Optional)
 
 Support via parameters
 
-If ReplicationDestinationBucketArn is passed → enable CRR
+If ReplicationDestinationBucketArn is passed enable CRR
 
-Otherwise → skip (via Condition)
+Otherwise skip (via Condition)
 
 Functional Requirements
 Parameters
@@ -149,7 +149,7 @@ Min size = 2
 
 Optional: ALB in public subnets (HTTP/HTTPS listeners)
 
-If HTTPS → ACM cert ARN must be passed as parameter
+If HTTPS ACM cert ARN must be passed as parameter
 
 RDS
 

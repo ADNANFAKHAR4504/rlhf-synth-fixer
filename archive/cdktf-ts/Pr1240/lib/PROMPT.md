@@ -6,7 +6,7 @@ We're targeting a dual-region deployment in **`us-east-1`** and **`us-west-2`**.
 
 The core of this task is security and best practices:
 
-- **IAM Lockdown:** All IAM roles and policies need to follow the principle of least privilege. I want to see precise permissions for every function – no `"*"` wildcards allowed.
+- **IAM Lockdown:** All IAM roles and policies need to follow the principle of least privilege. I want to see precise permissions for every function - no `"*"` wildcards allowed.
 - **Encryption Everywhere:** All data at rest must be encrypted. We'll use our own **customer-managed KMS keys** for this. The key policies themselves need to be restrictive, only allowing specific, authorized IAM roles to perform crypto operations.
 - **Logging:** Let's get everything logged to CloudWatch. Any service we spin up must be configured to send its logs there for monitoring.
 - **Good Housekeeping:** Make sure we're applying our standard tags (`Environment`, `Owner`, `Project`) to every single resource. The design should also be modular, so we can easily reuse these components for other environments down the road.
