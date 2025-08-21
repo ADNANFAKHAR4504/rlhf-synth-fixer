@@ -9,9 +9,6 @@
 !/test/setup.js
 /lib/.terraform.lock.hcl
 
-# Ignore src folder inside lib
-lib/src/
-
 # Dependencies
 node_modules/
 
