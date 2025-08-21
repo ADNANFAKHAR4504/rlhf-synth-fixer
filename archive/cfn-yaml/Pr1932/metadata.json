@@ -38,10 +38,16 @@
   "training_quality": 9,
   "aws_services": [
     "S3",
-    "Lambda", 
+    "Lambda",
     "API Gateway",
     "DynamoDB",
     "IAM",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
