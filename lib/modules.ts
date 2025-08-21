@@ -46,7 +46,7 @@ export class VpcModule extends Construct {
     this.subnet = new Subnet(this, 'subnet', {
       vpcId: this.vpc.id,
       cidrBlock: subnetCidr,
-      availabilityZone: 'us-west-2a', // Hardcoded for simplicity, could be made configurable
+      availabilityZone: 'us-east-1a', // Hardcoded for simplicity, could be made configurable
       mapPublicIpOnLaunch: true,
       tags: {
         Name: `${config.name}-subnet`,

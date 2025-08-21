@@ -181,7 +181,7 @@ describe("TapStack Unit Tests", () => {
       "ec2-module",
       expect.objectContaining({
         instanceType: "t3.micro",
-        ami: "ami-0c02fb55956c7d316",
+        ami: "ami-0e95a5e2743ec9ec9",
         subnetId: "vpc-module-subnet-id",
         name: "tap-dev",
         tags: {

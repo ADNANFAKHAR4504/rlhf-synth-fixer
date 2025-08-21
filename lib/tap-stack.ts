@@ -66,7 +66,7 @@ export class TapStack extends TerraformStack {
     // Create EC2 module
     const ec2Module = new Ec2Module(this, 'ec2-module', {
       instanceType: 't3.micro',
-      ami: 'ami-0c02fb55956c7d316', // Amazon Linux 2 AMI (adjust based on your region)
+      ami: 'ami-0e95a5e2743ec9ec9', // Amazon Linux 2 AMI (adjust based on your region)
       subnetId: vpcModule.subnetId,
       name: `tap-${environmentSuffix}`,
       tags: {
