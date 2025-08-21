@@ -1,19 +1,12 @@
-# Secure AWS Environment Setup - CloudFormation Template
+# AWS Secure Environment Template
 
-This CloudFormation template creates a comprehensive secure AWS environment setup for a multi-account AWS Organization, implementing all required security controls and best practices.
+This CloudFormation template creates a secure AWS environment for multi-account organizations. It implements the required security controls and follows AWS best practices for infrastructure deployment.
 
-## Template Overview
+## What It Creates
 
-The template establishes a secure foundation with the following key components:
-- Complete VPC networking with public/private subnets
-- KMS-encrypted S3 buckets with versioning and access logging
-- CloudTrail for comprehensive audit logging
-- Security-focused IAM roles with least privilege
-- API Gateway with HTTPS-only access
-- CloudWatch monitoring and security alarms
-- Environment-specific resource naming for multi-deployment support
+The template sets up a complete secure environment with VPC networking, encrypted storage, audit logging, IAM security, HTTPS-only API access, monitoring, and security alerts. All resources use environment-specific naming to support multiple deployments.
 
-## CloudFormation Template (TapStack.yml)
+## CloudFormation Template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -94,7 +87,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1'
@@ -104,7 +97,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2'
@@ -114,7 +107,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.101.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -125,7 +118,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.102.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -298,7 +291,10 @@ Resources:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: access-logs/
+        LogFilePrefix: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-access-logs/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-bucket'
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldLogs
@@ -381,6 +377,8 @@ Resources:
             - Type: AWS::S3::Object
               Values:
                 - !Sub '${SecureS3Bucket.Arn}/*'
+                - !Sub '${LoggingBucket.Arn}/*'
+                - !Sub '${CloudTrailS3Bucket.Arn}/*'
 
   # CloudWatch Log Groups
   S3LogGroup:
@@ -585,60 +583,29 @@ Outputs:
       Name: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-instance-profile-arn'
 ```
 
-## Key Security Features Implemented
+## Security Features
 
-### IAM Roles & Least Privilege
-- **EC2 Role**: Minimal permissions for S3 access and CloudWatch logging only
-- **API Gateway Role**: Limited to CloudWatch logs for API monitoring
-- **Instance Profile**: Secure attachment mechanism for EC2 instances
-- All roles follow the principle of least privilege with specific resource restrictions
+IAM roles follow least privilege principles with specific resource access. EC2 instances get only S3 and CloudWatch permissions. API Gateway role is limited to log creation.
 
-### S3 Encryption & Security
-- **KMS Encryption**: Custom KMS key for all S3 buckets
-- **Bucket Policies**: Complete public access blocking
-- **Versioning**: Enabled for data protection and recovery
-- **Access Logging**: Comprehensive audit trail for all bucket operations
-- **Lifecycle Policies**: Automatic cleanup of old data
+S3 buckets use KMS encryption with a custom key. All buckets block public access and have versioning enabled. The main bucket logs access to a separate logging bucket.
 
-### CloudTrail Logging
-- **Multi-region Coverage**: Captures events across all AWS regions
-- **Management Events**: Full logging of control plane operations
-- **Data Events**: Specific monitoring of S3 object operations
-- **Log Validation**: Ensures log file integrity cannot be tampered with
+CloudTrail captures all management events and S3 object access across regions. Log file validation prevents tampering. Events are stored in an encrypted bucket.
 
-### API Gateway Security
-- **HTTPS Only**: Resource policy enforces secure transport
-- **Regional Endpoint**: Better security and lower latency than edge-optimized
-- **Access Logging**: Detailed request/response logging
-- **Throttling**: Rate limiting to prevent abuse (100 burst, 50 sustained)
-- **Metrics & Tracing**: Full observability enabled
+API Gateway enforces HTTPS-only access through a resource policy. The regional endpoint provides better security than edge-optimized. Request throttling prevents abuse.
 
-### Network Security
-- **VPC Isolation**: All resources deployed within VPC
-- **Security Groups**: Restrictive ingress rules from trusted IP ranges only
-- **Layered Security**: Separate security groups for web and database tiers
-- **Private Subnets**: Database and application tiers isolated from internet
+Networking uses VPC isolation with separate subnets for public and private resources. Security groups restrict access to trusted IP ranges. Database access is limited to web tier traffic.
 
-### Monitoring & Alerting
-- **CloudWatch Alarms**: Unauthorized access detection
-- **Root Account Monitoring**: Alerts on root account usage
-- **SNS Integration**: Email notifications for security events
-- **Metric Filters**: Custom security metrics from log data
-- **Log Retention**: 30-day retention for compliance
+CloudWatch monitoring includes alarms for unauthorized access and root account usage. Security alerts go to an SNS topic with email notifications. Log retention is set to 30 days.
 
-### Multi-Environment Support
-- **Environment Suffix**: All resources include environment identifier
-- **Resource Isolation**: Complete separation between deployments
-- **Deletion Policies**: All resources can be safely deleted
-- **No Hardcoded Values**: Full parameterization for flexibility
+## Deployment
 
-## Deployment Instructions
-
+Validate the template first:
 ```bash
-# Validate the template
 aws cloudformation validate-template --template-body file://TapStack.yml
+```
 
-# Deploy the stack
+Deploy the stack:
+```bash
 aws cloudformation deploy \
   --template-file TapStack.yml \
   --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
@@ -648,32 +615,24 @@ aws cloudformation deploy \
     NotificationEmail=security@yourcompany.com \
     TrustedIPRange=10.0.0.0/8 \
   --region us-east-1
+```
 
-# Get stack outputs
+Get outputs:
+```bash
 aws cloudformation describe-stacks \
   --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
   --query 'Stacks[0].Outputs' \
   --output json
 ```
 
-## Multi-Account Considerations
+## Multi-Account Usage
 
-For multi-account AWS Organization setup:
+Deploy this template in each AWS account as a security baseline. Use AWS Organizations service control policies to enforce these security settings across all accounts. 
 
-1. **Deploy this template in each account** as a security foundation
-2. **Use AWS Organizations SCPs** to enforce these security policies organization-wide
-3. **Centralize logging** to a dedicated security/audit account
-4. **Implement cross-account roles** for centralized security monitoring
-5. **Use AWS Config** for compliance monitoring across all accounts
-6. **Consider AWS Control Tower** for automated account provisioning with security baselines
+Centralize logging by configuring CloudTrail to send logs to a dedicated security account. Set up cross-account IAM roles for centralized monitoring.
 
-## Compliance & Best Practices
+Use AWS Config for compliance checking across accounts. Consider AWS Control Tower for automated account setup with security baselines.
 
-This template adheres to:
-- AWS Well-Architected Framework Security Pillar
-- CIS AWS Foundations Benchmark
-- AWS Security Best Practices
-- Infrastructure as Code best practices
-- Environment isolation and multi-tenancy patterns
+## Standards Compliance
 
-The implementation ensures defense in depth with multiple layers of security controls, comprehensive logging and monitoring, and automated response to security events.
+This template follows AWS Well-Architected Framework security principles, CIS AWS Foundations Benchmark recommendations, and AWS security best practices. It implements defense in depth with multiple security layers and comprehensive monitoring.
