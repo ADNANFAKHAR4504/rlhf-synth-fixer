@@ -567,7 +567,7 @@ export const primaryRdsInstance = new aws.rds.Instance(
     storageEncrypted: true,
     kmsKeyId: primaryKmsKey.arn,
     engine: 'mysql',
-    engineVersion: '5.7',
+    engineVersion: '8.0',
     instanceClass: dbInstanceClass,
     dbName: 'productiondb',
     username: 'admin',

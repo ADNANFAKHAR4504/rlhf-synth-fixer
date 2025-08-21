@@ -49,6 +49,7 @@ import * as path from 'path';
 // Configure AWS clients for both regions
 const primaryRegion = 'ap-south-1';
 const secondaryRegion = 'eu-west-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 
 const primaryClients = {
   ec2: new EC2Client({ region: primaryRegion }),
@@ -248,7 +249,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       expect(instance.DBInstanceStatus).toBe('available');
       expect(instance.Engine).toBe('mysql');
-      expect(instance.EngineVersion).toMatch(/^5\.7/);
+      expect(instance.EngineVersion).toMatch(/^8\.0/);
       expect(instance.StorageEncrypted).toBe(true);
       expect(instance.KmsKeyId).toBeDefined();
       expect(instance.DbInstancePort).toBe(3306);
@@ -275,7 +276,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       expect(instance.DBInstanceStatus).toBe('available');
       expect(instance.Engine).toBe('mysql');
-      expect(instance.EngineVersion).toMatch(/^5\.7/);
+      expect(instance.EngineVersion).toMatch(/^8\.0/);
       expect(instance.StorageEncrypted).toBe(true);
       expect(instance.KmsKeyId).toBeDefined();
       expect(instance.ReadReplicaSourceDBInstanceIdentifier).toBeDefined();
@@ -527,7 +528,7 @@ describe('TAP Infrastructure Integration Tests', () => {
         expect(cpuAlarms.length).toBeGreaterThanOrEqual(1);
 
         cpuAlarms.forEach(alarm => {
-          expect(alarm.Namespace).toBe('AWS/EC2');
+          expect(alarm.Namespace).toBe('AWS/RDS');
           expect(alarm.Statistic).toBeDefined();
           expect(alarm.Period).toBeDefined();
           expect(alarm.EvaluationPeriods).toBeDefined();
@@ -677,7 +678,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       const environmentTag = vpc.Tags!.find(tag => tag.Key === 'Environment');
       expect(environmentTag).toBeDefined();
-      expect(environmentTag!.Value).toBe('Production');
+      expect(environmentTag!.Value).toBe(environmentSuffix);
     });
   });
 

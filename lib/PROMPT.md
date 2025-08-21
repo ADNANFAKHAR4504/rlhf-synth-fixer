@@ -3,7 +3,7 @@
 I need help setting up a multi-region, highly available, and consistent infrastructure using **Pulumi with TypeScript**. Here are the requirements:
 
 - Define a Virtual Private Cloud (VPC) in both `ap-south-1` and `eu-west-1` regions with non-overlapping CIDR blocks  
-- Deploy a primary RDS MySQL 5.7 database in `ap-south-1` and configure a cross-region read-replica in `eu-west-1`  
+- Deploy a primary RDS MySQL 8.0 database in `ap-south-1` and configure a cross-region read-replica in `eu-west-1`  
 - Use AWS KMS to enable encryption at rest for all RDS instances and related storage  
 - Ensure all infrastructure is parameterized and reusable via Pulumi config, including:
   - VPC CIDR blocks
