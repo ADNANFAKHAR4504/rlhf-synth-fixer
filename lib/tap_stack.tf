@@ -525,15 +525,15 @@ resource "aws_lb" "secure_prod_alb" {
   internal           = false
   load_balancer_type = "application"
   subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
-  security_groups    = [aws_security_group.alb_sg.id]
+  security_groups    = [aws_security_group.alb_sg_http.id]
   tags = {
     Name        = "secure-prod-alb-${local.env_suffix}"
     Environment = local.env_suffix
   }
 }
 
-resource "aws_security_group" "alb_sg" {
-  name        = "secure-prod-alb-sg-${local.env_suffix}"
+resource "aws_security_group" "alb_sg_http" {
+  name        = "secure-prod-alb-sg-http-${local.env_suffix}"
   vpc_id      = aws_vpc.main.id
   description = "Allow 80 inbound for ALB"
   ingress {
@@ -549,7 +549,7 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   tags = {
-    Name        = "secure-prod-alb-sg-${local.env_suffix}"
+    Name        = "secure-prod-alb-sg-http-${local.env_suffix}"
     Environment = local.env_suffix
   }
 }
@@ -640,7 +640,7 @@ resource "aws_security_group" "rds_sg" {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
+    security_groups = [aws_security_group.alb_sg_http.id]
   }
   egress {
     from_port   = 0
