@@ -134,25 +134,28 @@ variable "environment_names" {
 
 ### Output Definitions
 
-Outputs provide access to deployed resource information with environment-specific keys:
+Outputs provide access to deployed resource information for both environments:
 
 ```hcl
 # outputs.tf
 output "bucket_names" {
   value = {
-    (local.env) = module.storage.bucket_name
+    staging    = module.storage.bucket_name
+    production = module.storage.bucket_name
   }
 }
 
 output "security_group_ids" {
   value = {
-    (local.env) = module.network.security_group_id
+    staging    = module.network.security_group_id
+    production = module.network.security_group_id
   }
 }
 
 output "iam_role_arns" {
   value = {
-    (local.env) = module.iam_role.role_arn
+    staging    = module.iam_role.role_arn
+    production = module.iam_role.role_arn
   }
 }
 
