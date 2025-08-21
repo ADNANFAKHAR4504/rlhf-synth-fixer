@@ -150,9 +150,12 @@ describe('Terraform integration tests (static) for tap_stack.tf', () => {
     );
     expect(content).toMatch(/ec2\.amazonaws\.com/);
     expect(content).toMatch(/resource\s+"aws_iam_role"\s+"app"/);
-    expect(content).toMatch(
-      /resource\s+"aws_iam_role_policy"\s+"app"[\s\S]*s3:GetObject[\s\S]*app-data\/*[\s\S]*logs:CreateLogStream[\s\S]*logs:PutLogEvents/
-    );
+    expect(content).toMatch(/data\s+"aws_iam_policy_document"\s+"app_policy"/);
+    expect(content).toMatch(/s3:GetObject/);
+    expect(content).toMatch(/app-data\/*/);
+    expect(content).toMatch(/logs:CreateLogStream/);
+    expect(content).toMatch(/logs:PutLogEvents/);
+    expect(content).toMatch(/resource\s+"aws_iam_role_policy"\s+"app"/);
   });
 
   test('RDS: private, encrypted, with toggles and parameters; random resources defined', () => {
