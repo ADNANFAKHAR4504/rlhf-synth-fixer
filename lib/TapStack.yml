@@ -1,50 +1,50 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-grade secure infrastructure with encryption, monitoring, and least-privilege access controls'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Production-grade secure infrastructure with encryption, monitoring, and least-privilege access controls"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'EC2 Configuration'
+          default: "EC2 Configuration"
         Parameters:
           - EC2AMIId
           - EC2InstanceType
       - Label:
-          default: 'Security Configuration'
+          default: "Security Configuration"
         Parameters:
           - AllowedSSHCIDR
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-    
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
   EC2AMIId:
     Type: AWS::EC2::Image::Id
-    Description: 'AMI ID for EC2 instance'
-    Default: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI (update as needed)
-  
+    Description: "AMI ID for EC2 instance"
+    Default: "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI (update as needed)
+
   EC2InstanceType:
     Type: String
-    Description: 'EC2 instance type'
-    Default: 't3.medium'
+    Description: "EC2 instance type"
+    Default: "t3.medium"
     AllowedValues:
       - t3.micro
       - t3.small
       - t3.medium
       - t3.large
-  
+
   AllowedSSHCIDR:
     Type: String
-    Description: 'CIDR block allowed for SSH access'
-    Default: '10.0.0.0/8'
+    Description: "CIDR block allowed for SSH access"
+    Default: "10.0.0.0/8"
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
 
 Resources:
@@ -54,27 +54,27 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Description: !Sub 'Production KMS key for encryption at rest - ${EnvironmentSuffix}'
+      Description: !Sub "Production KMS key for encryption at rest - ${EnvironmentSuffix}"
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
             Action:
               - kms:Encrypt
               - kms:Decrypt
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
-            Resource: '*'
+            Resource: "*"
           - Sid: Allow S3 Service
             Effect: Allow
             Principal:
@@ -85,7 +85,7 @@ Resources:
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
-            Resource: '*'
+            Resource: "*"
           - Sid: Allow EC2 Service
             Effect: Allow
             Principal:
@@ -96,7 +96,7 @@ Resources:
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
-            Resource: '*'
+            Resource: "*"
           - Sid: Allow SNS Service
             Effect: Allow
             Principal:
@@ -107,14 +107,14 @@ Resources:
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
-            Resource: '*'
+            Resource: "*"
       KeyUsage: ENCRYPT_DECRYPT
       KeySpec: SYMMETRIC_DEFAULT
 
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/prod-${EnvironmentSuffix}-security-key'
+      AliasName: !Sub "alias/prod-${EnvironmentSuffix}-security-key"
       TargetKeyId: !Ref ProdKMSKey
 
   # ===== VPC and Networking =====
@@ -123,12 +123,12 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      CidrBlock: '10.0.0.0/16'
+      CidrBlock: "10.0.0.0/16"
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-vpc'
+          Value: !Sub "prod-${EnvironmentSuffix}-vpc"
 
   ProdInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -137,7 +137,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-igw'
+          Value: !Sub "prod-${EnvironmentSuffix}-igw"
 
   ProdVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -152,12 +152,12 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref ProdVPC
-      CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-public-subnet'
+          Value: !Sub "prod-${EnvironmentSuffix}-public-subnet"
 
   # Private Subnet for EC2
   ProdPrivateSubnet:
@@ -166,11 +166,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref ProdVPC
-      CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-private-subnet'
+          Value: !Sub "prod-${EnvironmentSuffix}-private-subnet"
 
   # NAT Gateway
   ProdNATGatewayEIP:
@@ -182,7 +182,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-nat-eip'
+          Value: !Sub "prod-${EnvironmentSuffix}-nat-eip"
 
   ProdNATGateway:
     Type: AWS::EC2::NatGateway
@@ -193,7 +193,7 @@ Resources:
       SubnetId: !Ref ProdPublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-nat-gateway'
+          Value: !Sub "prod-${EnvironmentSuffix}-nat-gateway"
 
   # Route Tables
   ProdPublicRouteTable:
@@ -204,7 +204,7 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-public-rt'
+          Value: !Sub "prod-${EnvironmentSuffix}-public-rt"
 
   ProdPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -214,21 +214,21 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-private-rt'
+          Value: !Sub "prod-${EnvironmentSuffix}-private-rt"
 
   ProdPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: ProdVPCGatewayAttachment
     Properties:
       RouteTableId: !Ref ProdPublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
+      DestinationCidrBlock: "0.0.0.0/0"
       GatewayId: !Ref ProdInternetGateway
 
   ProdPrivateRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref ProdPrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
+      DestinationCidrBlock: "0.0.0.0/0"
       NatGatewayId: !Ref ProdNATGateway
 
   ProdPublicSubnetRouteTableAssociation:
@@ -249,60 +249,60 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupDescription: !Sub 'Security group for production EC2 instance - ${EnvironmentSuffix}'
+      GroupDescription: !Sub "Security group for production EC2 instance - ${EnvironmentSuffix}"
       VpcId: !Ref ProdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedSSHCIDR
-          Description: 'SSH access from allowed CIDR'
+          Description: "SSH access from allowed CIDR"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref ProdALBSecurityGroup
-          Description: 'HTTPS from ALB'
+          Description: "HTTPS from ALB"
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP outbound for package updates'
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTP outbound for package updates"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS outbound for secure connections'
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTPS outbound for secure connections"
         - IpProtocol: tcp
           FromPort: 53
           ToPort: 53
-          CidrIp: '0.0.0.0/0'
-          Description: 'DNS TCP'
+          CidrIp: "0.0.0.0/0"
+          Description: "DNS TCP"
         - IpProtocol: udp
           FromPort: 53
           ToPort: 53
-          CidrIp: '0.0.0.0/0'
-          Description: 'DNS UDP'
+          CidrIp: "0.0.0.0/0"
+          Description: "DNS UDP"
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-ec2-sg'
+          Value: !Sub "prod-${EnvironmentSuffix}-ec2-sg"
 
   ProdALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupDescription: !Sub 'Security group for ALB (if needed for future use) - ${EnvironmentSuffix}'
+      GroupDescription: !Sub "Security group for ALB (if needed for future use) - ${EnvironmentSuffix}"
       VpcId: !Ref ProdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS from internet'
+          CidrIp: "0.0.0.0/0"
+          Description: "HTTPS from internet"
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-alb-sg'
+          Value: !Sub "prod-${EnvironmentSuffix}-alb-sg"
 
   # ===== IAM Roles and Policies =====
   ProdEC2Role:
@@ -310,9 +310,9 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'prod-${EnvironmentSuffix}-ec2-role'
+      RoleName: !Sub "prod-${EnvironmentSuffix}-ec2-role"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -321,21 +321,21 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: !Sub 'prod-${EnvironmentSuffix}-s3-access-policy'
+        - PolicyName: !Sub "prod-${EnvironmentSuffix}-s3-access-policy"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: 
-                  - !Sub '${ProdS3Bucket}/*'
+                Resource:
+                  - !Sub "arn:aws:s3:::${ProdS3Bucket}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ProdS3Bucket
+                Resource: !Sub "arn:aws:s3:::${ProdS3Bucket}"
               - Effect: Allow
                 Action:
                   - kms:Encrypt
@@ -344,9 +344,9 @@ Resources:
                   - kms:GenerateDataKey*
                   - kms:DescribeKey
                 Resource: !GetAtt ProdKMSKey.Arn
-        - PolicyName: !Sub 'prod-${EnvironmentSuffix}-cloudwatch-policy'
+        - PolicyName: !Sub "prod-${EnvironmentSuffix}-cloudwatch-policy"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -361,7 +361,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      InstanceProfileName: !Sub 'prod-${EnvironmentSuffix}-ec2-instance-profile'
+      InstanceProfileName: !Sub "prod-${EnvironmentSuffix}-ec2-instance-profile"
       Roles:
         - !Ref ProdEC2Role
 
@@ -371,7 +371,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -387,17 +387,17 @@ Resources:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref ProdS3LoggingBucket
-        LogFilePrefix: 'access-logs/'
+        LogFilePrefix: "access-logs/"
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-secure-bucket'
+          Value: !Sub "prod-${EnvironmentSuffix}-secure-bucket"
 
   ProdS3LoggingBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'prod-${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "prod-${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -410,25 +410,25 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-access-logs-bucket'
+          Value: !Sub "prod-${EnvironmentSuffix}-access-logs-bucket"
 
   ProdS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref ProdS3Bucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: DenyInsecureConnections
             Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
+            Principal: "*"
+            Action: "s3:*"
             Resource:
-              - !Sub '${ProdS3Bucket}/*'
+              - !Sub "${ProdS3Bucket}/*"
               - !Ref ProdS3Bucket
             Condition:
               Bool:
-                'aws:SecureTransport': 'false'
+                "aws:SecureTransport": "false"
           - Sid: AllowEC2RoleAccess
             Effect: Allow
             Principal:
@@ -437,7 +437,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
-            Resource: !Sub '${ProdS3Bucket}/*'
+            Resource: !Sub "${ProdS3Bucket}/*"
 
   # ===== CloudWatch Resources =====
   ProdCloudWatchLogGroup:
@@ -445,7 +445,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/ec2/prod-${EnvironmentSuffix}-logs'
+      LogGroupName: !Sub "/aws/ec2/prod-${EnvironmentSuffix}-logs"
       RetentionInDays: 30
       KmsKeyId: !GetAtt ProdKMSKey.Arn
 
@@ -474,7 +474,7 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          
+
           # Configure CloudWatch agent
           cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
           {
@@ -515,13 +515,13 @@ Resources:
             }
           }
           EOF
-          
+
           # Start CloudWatch agent
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
             -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
       Tags:
         - Key: Name
-          Value: !Sub 'prod-${EnvironmentSuffix}-ec2-instance'
+          Value: !Sub "prod-${EnvironmentSuffix}-ec2-instance"
 
   # CloudWatch Alarms
   ProdCPUAlarm:
@@ -529,8 +529,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'prod-${EnvironmentSuffix}-high-cpu-utilization'
-      AlarmDescription: 'Alarm when CPU exceeds 80%'
+      AlarmName: !Sub "prod-${EnvironmentSuffix}-high-cpu-utilization"
+      AlarmDescription: "Alarm when CPU exceeds 80%"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -549,14 +549,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'prod-${EnvironmentSuffix}-high-network-in'
-      AlarmDescription: 'Alarm when NetworkIn exceeds threshold'
+      AlarmName: !Sub "prod-${EnvironmentSuffix}-high-network-in"
+      AlarmDescription: "Alarm when NetworkIn exceeds threshold"
       MetricName: NetworkIn
       Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 1000000000  # 1GB in bytes
+      Threshold: 1000000000 # 1GB in bytes
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: InstanceId
@@ -569,14 +569,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'prod-${EnvironmentSuffix}-high-network-out'
-      AlarmDescription: 'Alarm when NetworkOut exceeds threshold'
+      AlarmName: !Sub "prod-${EnvironmentSuffix}-high-network-out"
+      AlarmDescription: "Alarm when NetworkOut exceeds threshold"
       MetricName: NetworkOut
       Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 1000000000  # 1GB in bytes
+      Threshold: 1000000000 # 1GB in bytes
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: InstanceId
@@ -590,54 +590,54 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TopicName: !Sub 'prod-${EnvironmentSuffix}-alerts'
+      TopicName: !Sub "prod-${EnvironmentSuffix}-alerts"
       KmsMasterKeyId: !Ref ProdKMSKey
 
 Outputs:
   VPCId:
-    Description: 'VPC ID'
+    Description: "VPC ID"
     Value: !Ref ProdVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   PrivateSubnetId:
-    Description: 'Private Subnet ID'
+    Description: "Private Subnet ID"
     Value: !Ref ProdPrivateSubnet
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnetId'
+      Name: !Sub "${AWS::StackName}-PrivateSubnetId"
 
   EC2InstanceId:
-    Description: 'EC2 Instance ID'
+    Description: "EC2 Instance ID"
     Value: !Ref ProdEC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+      Name: !Sub "${AWS::StackName}-EC2InstanceId"
 
   S3BucketName:
-    Description: 'S3 Bucket Name'
+    Description: "S3 Bucket Name"
     Value: !Ref ProdS3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3BucketName'
+      Name: !Sub "${AWS::StackName}-S3BucketName"
 
   KMSKeyId:
-    Description: 'KMS Key ID'
+    Description: "KMS Key ID"
     Value: !Ref ProdKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyId'
+      Name: !Sub "${AWS::StackName}-KMSKeyId"
 
   CloudWatchLogGroup:
-    Description: 'CloudWatch Log Group'
+    Description: "CloudWatch Log Group"
     Value: !Ref ProdCloudWatchLogGroup
     Export:
-      Name: !Sub '${AWS::StackName}-CloudWatchLogGroup'
+      Name: !Sub "${AWS::StackName}-CloudWatchLogGroup"
 
   StackName:
-    Description: 'Name of this CloudFormation stack'
+    Description: "Name of this CloudFormation stack"
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub "${AWS::StackName}-StackName"
 
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
