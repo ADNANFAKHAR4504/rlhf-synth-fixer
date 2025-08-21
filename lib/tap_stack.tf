@@ -343,8 +343,25 @@ data "aws_kms_alias" "ebs_key" {
 # Application Load Balancer
 #######################
 
-data "aws_lb" "main" {
-  name = "${local.name_prefix}-alb"
+resource "aws_lb" "main" {
+  name               = "${local.name_prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [module.security.alb_sg_id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.bucket
+    prefix  = "alb-logs"
+    enabled = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+    Type = "load-balancer"
+  })
 }
 
 # Target group for EC2 instances
@@ -370,7 +387,7 @@ resource "aws_lb_target_group" "app" {
 
 # ALB Listener
 resource "aws_lb_listener" "app" {
-  load_balancer_arn = data.aws_lb.main.arn
+  load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -390,37 +407,74 @@ resource "aws_lb_listener" "app" {
 #######################
 
 # IAM role for EC2 instances
-data "aws_iam_role" "ec2_role" {
+resource "aws_iam_role" "ec2_role" {
   name = "${local.name_prefix}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-role"
+    Type = "iam"
+  })
 }
 
 # IAM policy for EC2 S3 access
 resource "aws_iam_role_policy" "ec2_s3_policy" {
   name   = "${local.name_prefix}-ec2-s3-policy"
-  role   = data.aws_iam_role.ec2_role.id
+  role   = aws_iam_role.ec2_role.id
   policy = module.data.ec2_s3_access_policy
 }
 
 # IAM policy for CloudWatch logs
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name   = "${local.name_prefix}-ec2-cloudwatch-policy"
-  role   = data.aws_iam_role.ec2_role.id
+  role   = aws_iam_role.ec2_role.id
   policy = module.data.cloudwatch_logs_policy
 }
 
 # IAM instance profile for EC2
-data "aws_iam_instance_profile" "ec2_profile" {
+resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
 }
 
 # IAM role for Lambda functions
-data "aws_iam_role" "lambda_role" {
+resource "aws_iam_role" "lambda_role" {
   name = "${local.name_prefix}-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-lambda-role"
+    Type = "iam"
+  })
 }
 
 # Attach VPC execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
-  role       = data.aws_iam_role.lambda_role.name
+  role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:${module.data.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
@@ -437,7 +491,7 @@ resource "aws_launch_template" "app" {
   vpc_security_group_ids = [module.security.ec2_sg_id]
 
   iam_instance_profile {
-    name = data.aws_iam_instance_profile.ec2_profile.name
+    name = aws_iam_instance_profile.ec2_profile.name
   }
 
   block_device_mappings {
@@ -515,13 +569,37 @@ resource "aws_autoscaling_group" "app" {
 #######################
 
 # DB subnet group
-data "aws_db_subnet_group" "main" {
-  name = "${local.name_prefix}-db-subnet-group"
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.database[*].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-subnet-group"
+    Type = "database"
+  })
 }
 
 # RDS instance with encryption and Multi-AZ
-data "aws_db_instance" "main" {
-  db_instance_identifier = "${local.name_prefix}-database"
+resource "aws_db_instance" "main" {
+  identifier             = "${local.name_prefix}-database"
+  allocated_storage      = 20
+  storage_type           = "gp2"
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [module.security.rds_sg_id]
+  skip_final_snapshot    = true
+  multi_az               = false
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_key.arn
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-database"
+    Type = "database"
+  })
 }
 
 #######################
@@ -656,12 +734,12 @@ output "database_subnet_ids" {
 
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
-  value       = data.aws_lb.main.dns_name
+  value       = aws_lb.main.dns_name
 }
 
 output "rds_instance_endpoint" {
   description = "Endpoint of the RDS database instance"
-  value       = data.aws_db_instance.main.endpoint
+  value       = aws_db_instance.main.endpoint
   sensitive   = true
 }
 
