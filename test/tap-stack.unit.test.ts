@@ -31,6 +31,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     const requiredParameters = [
       'EnvironmentSuffix',
+      'DatabasePassword',
       'KeyPairName',
       'VpcCidr',
       'PublicSubnetACidr',
@@ -55,13 +56,10 @@ describe('TapStack CloudFormation Template', () => {
 
     test('DatabasePassword parameter should be secure', () => {
       const dbPasswordParam = template.Parameters.DatabasePassword;
-      console.log("template issue", template.Parameters.DatabasePassword);
-      if (dbPasswordParam) {
-        expect(dbPasswordParam.Type).toBe('String');
-        expect(dbPasswordParam.NoEcho).toBe(true);
-        expect(dbPasswordParam.MinLength).toBe(8);
-        expect(dbPasswordParam.MaxLength).toBe(41);
-      }
+      expect(dbPasswordParam.Type).toBe('String');
+      expect(dbPasswordParam.NoEcho).toBe(true);
+      expect(dbPasswordParam.MinLength).toBe(8);
+      expect(dbPasswordParam.MaxLength).toBe(41);
     });
 
     test('VPC CIDR parameters should have valid patterns', () => {
@@ -393,14 +391,9 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Security Best Practices', () => {
-    test('database password should be a parameter with NoEcho', async () => {
-      console.log("template issue",template.Parameters.DatabasePassword);
+    test('database password should be a parameter with NoEcho', () => {
       const dbPassword = template.Parameters.DatabasePassword;
-      if (dbPassword) {
-        await new Promise((res) => setTimeout(res, 1000));
-        console.log("template issue", dbPassword);
-        expect(dbPassword.NoEcho).toBe(true);
-      }
+      expect(dbPassword.NoEcho).toBe(true);
     });
 
     test('S3 bucket should block public access', () => {
