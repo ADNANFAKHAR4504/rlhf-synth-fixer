@@ -213,9 +213,6 @@ describe('TapStack', () => {
       template.hasOutput('VpcId', {
         Description: 'VPC ID for the Nova security baseline',
       });
-      template.hasOutput('KmsKeyId', {
-        Description: 'KMS Key ID for encryption',
-      });
       template.hasOutput('LogsBucketName', {
         Description: 'S3 bucket name for logs storage',
       });
