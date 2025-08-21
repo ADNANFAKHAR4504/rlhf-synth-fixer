@@ -21,13 +21,41 @@ const cloudWatch = new AWS.CloudWatch({ region });
 const cloudTrail = new AWS.CloudTrail({ region });
 
 describe('Secure Infrastructure Integration Tests', () => {
-  // Helper function to get output value
+  // Helper function to get output value - Updated to handle the different output key formats
   const getOutput = (key: string): string => {
-    const outputKey = `${key}${environmentSuffix}`;
-    if (!outputs[outputKey]) {
-      throw new Error(`Output ${outputKey} not found in cfn-outputs`);
+    // Map of expected keys to actual keys in flat-outputs.json
+    const keyMap: Record<string, string> = {
+      'VPC-ID': 'VPCId',
+      'PublicSubnet1-ID': 'PublicSubnet1Id',
+      'PublicSubnet2-ID': 'PublicSubnet2Id',
+      'PrivateSubnet1-ID': 'PrivateSubnet1Id',
+      'PrivateSubnet2-ID': 'PrivateSubnet2Id',
+      'EC2-ID': 'EC2InstanceId',
+      'EC2-SG-ID': 'EC2SecurityGroupId',
+      'RDS-ID': 'RDSInstanceId',
+      'RDS-Endpoint': 'RDSEndpoint',
+      'RDS-Port': 'RDSPort',
+      'DB-Secret-ARN': 'DBSecretArn',
+      'S3-Bucket': 'S3BucketName',
+      'S3-Bucket-ARN': 'S3BucketArn',
+      'Lambda-Name': 'LambdaFunctionName',
+      'Lambda-ARN': 'LambdaFunctionArn',
+      'CloudTrail-ARN': 'CloudTrailArn',
+      'CloudTrail-S3-Bucket': 'CloudTrailS3BucketName',
+      'NAT-Gateway-ID': 'NATGatewayId',
+      'IGW-ID': 'InternetGatewayId',
+      'SecretsManager-VPC-Endpoint-ID': 'SecretsManagerVPCEndpointId',
+      'Latest-AMI-ID': 'LatestAmiId',
+    };
+
+    const mappedKey = keyMap[key] || key;
+
+    if (!outputs[mappedKey]) {
+      throw new Error(
+        `Output ${mappedKey} not found in cfn-outputs. Available keys: ${Object.keys(outputs).join(', ')}`
+      );
     }
-    return outputs[outputKey];
+    return outputs[mappedKey];
   };
 
   describe('VPC Infrastructure Tests', () => {
@@ -420,7 +448,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
       const alarmsResponse = await cloudWatch
         .describeAlarms({
-          AlarmNamePrefix: `${process.env.STACK_NAME || 'secure'}-ec2`,
+          AlarmNamePrefix: `${process.env.STACK_NAME || 'TapStack'}-ec2`,
         })
         .promise();
 
