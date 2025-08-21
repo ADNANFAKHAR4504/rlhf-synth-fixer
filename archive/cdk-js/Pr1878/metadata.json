@@ -1,7 +1,7 @@
 {
   "platform": "cdk",
   "language": "js",
-  "complexity": "hard", 
+  "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr191",
   "team": "synth",
@@ -28,5 +28,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
