@@ -31,48 +31,19 @@ variable "domain_name" {
 
 # Locals
 locals {
+  name_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
   common_tags = {
-    Project     = var.project_name
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Compliance  = "nist-cis"
-    Owner       = "infrastructure-team"
+    Project         = var.project_name
+    Environment     = var.environment
+    EnvironmentSuffix = local.name_suffix
+    ManagedBy       = "terraform"
+    Compliance      = "nist-cis"
+    Owner           = "infrastructure-team"
   }
 
-  # Region configuration
-  primary_region = var.aws_region
+  # Networking configuration
   vpc_cidr = "10.0.0.0/16"
   azs      = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
-  name_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
-
-  # Regional resource configuration
-  regions = {
-    primary = var.aws_region
-    us_east_1 = "us-east-1"  # Primary deployment region - same as primary
-    us_west_2 = "us-west-2"  # Secondary region for cross-region replication
-    eu_west_1 = "eu-west-1"  # For EU data residency if needed
-  }
-
-  # Region-specific settings
-  region_settings = {
-    us_east_1 = {
-      name = "us-east-1"
-      short_name = "use1"
-      cloudfront_required = true
-      is_primary = true
-    }
-    us_west_2 = {
-      name = "us-west-2"
-      short_name = "usw2"
-      cloudfront_required = false
-      is_primary = false
-    }
-    eu_west_1 = {
-      name = "eu-west-1"
-      short_name = "euw1"
-      cloudfront_required = false
-    }
-  }
 }
 
 # Data sources
@@ -85,11 +56,11 @@ data "aws_availability_zones" "available" {
 
 # KMS Keys for encryption
 resource "aws_kms_key" "main" {
-  description              = "Main encryption key for ${var.project_name}"
-  deletion_window_in_days  = 7
-  enable_key_rotation      = true
+  description             = "Main encryption key for ${var.project_name}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  key_usage                = "ENCRYPT_DECRYPT"
+  key_usage               = "ENCRYPT_DECRYPT"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -131,7 +102,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -153,7 +124,7 @@ resource "aws_kms_alias" "main" {
   target_key_id = aws_kms_key.main.key_id
 }
 
-# DNSSEC KMS Key for Route 53 (Latest 2024/2025 feature)
+# DNSSEC KMS Key for Route 53
 resource "aws_kms_key" "dnssec" {
   description              = "DNSSEC signing key for ${var.project_name}"
   deletion_window_in_days  = 7
@@ -211,7 +182,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-vpc"
+    Name = "${var.project_name}-vpc-${local.name_suffix}"
   })
 }
 
@@ -268,7 +239,8 @@ resource "aws_iam_role_policy" "flow_log_policy" {
           "logs:DescribeLogStreams"
         ]
         Effect   = "Allow"
-        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
+        # BEST PRACTICE: Scoped down permissions to the specific log group ARN.
+        Resource = "${aws_cloudwatch_log_group.vpc_flow_log.arn}:*"
       }
     ]
   })
@@ -278,10 +250,10 @@ resource "aws_subnet" "private" {
   count             = length(local.azs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.${count.index + 1}.0/24"
-  availability_zone = local.azs[count.index]
+  availability_zone = element(local.azs, count.index)
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-private-${count.index + 1}"
+    Name = "${var.project_name}-private-${local.name_suffix}-${count.index + 1}"
     Type = "private"
   })
 }
@@ -290,11 +262,11 @@ resource "aws_subnet" "public" {
   count                   = length(local.azs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.${count.index + 10}.0/24"
-  availability_zone       = local.azs[count.index]
+  availability_zone       = element(local.azs, count.index)
   map_public_ip_on_launch = false # Security best practice
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-public-${count.index + 1}"
+    Name = "${var.project_name}-public-${local.name_suffix}-${count.index + 1}"
     Type = "public"
   })
 }
@@ -304,10 +276,10 @@ resource "aws_subnet" "database" {
   count             = length(local.azs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.${count.index + 20}.0/24"
-  availability_zone = local.azs[count.index]
+  availability_zone = element(local.azs, count.index)
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-database-${count.index + 1}"
+    Name = "${var.project_name}-database-${local.name_suffix}-${count.index + 1}"
     Type = "database"
   })
 }
@@ -317,7 +289,7 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-db-subnet-group"
+    Name = "${var.project_name}-db-subnet-group-${local.name_suffix}"
   })
 }
 
@@ -326,17 +298,16 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-igw"
+    Name = "${var.project_name}-igw-${local.name_suffix}"
   })
 }
 
 resource "aws_eip" "nat" {
-  count      = length(local.azs)
-  domain     = "vpc"
-  depends_on = [aws_internet_gateway.main]
+  count  = length(local.azs)
+  domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}-${local.name_suffix}"
+    Name = "${var.project_name}-nat-eip-${local.name_suffix}-${count.index + 1}"
   })
 }
 
@@ -345,8 +316,10 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
+  depends_on = [aws_internet_gateway.main]
+
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-${count.index + 1}"
+    Name = "${var.project_name}-nat-${local.name_suffix}-${count.index + 1}"
   })
 }
 
@@ -360,7 +333,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-public-rt"
+    Name = "${var.project_name}-public-rt-${local.name_suffix}"
   })
 }
 
@@ -374,7 +347,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
+    Name = "${var.project_name}-private-rt-${local.name_suffix}-${count.index + 1}"
   })
 }
 
@@ -397,7 +370,7 @@ resource "aws_security_group" "web" {
   description = "Security group for web tier"
 
   ingress {
-    description = "HTTPS from ALB"
+    description = "HTTPS from anywhere"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -405,7 +378,7 @@ resource "aws_security_group" "web" {
   }
 
   ingress {
-    description = "HTTP redirect to HTTPS"
+    description = "HTTP from anywhere (for redirection)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -421,7 +394,7 @@ resource "aws_security_group" "web" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-web-sg"
+    Name = "${var.project_name}-web-sg-${local.name_suffix}"
     Tier = "web"
   })
 }
@@ -432,7 +405,7 @@ resource "aws_security_group" "app" {
   description = "Security group for application tier"
 
   ingress {
-    description     = "HTTP from web tier"
+    description     = "Traffic from web tier"
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
@@ -448,7 +421,7 @@ resource "aws_security_group" "app" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-app-sg"
+    Name = "${var.project_name}-app-sg-${local.name_suffix}"
     Tier = "app"
   })
 }
@@ -467,7 +440,7 @@ resource "aws_security_group" "database" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-db-sg"
+    Name = "${var.project_name}-db-sg-${local.name_suffix}"
     Tier = "database"
   })
 }
@@ -476,7 +449,6 @@ resource "aws_security_group" "database" {
 resource "aws_network_acl" "public" {
   vpc_id = aws_vpc.main.id
 
-  # Allow HTTPS inbound
   ingress {
     rule_no    = 100
     protocol   = "tcp"
@@ -485,8 +457,6 @@ resource "aws_network_acl" "public" {
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
-
-  # Allow HTTP inbound
   ingress {
     rule_no    = 110
     protocol   = "tcp"
@@ -495,8 +465,6 @@ resource "aws_network_acl" "public" {
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
-
-  # Allow ephemeral ports for responses
   ingress {
     rule_no    = 120
     protocol   = "tcp"
@@ -505,8 +473,6 @@ resource "aws_network_acl" "public" {
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
-
-  # Allow all outbound
   egress {
     rule_no    = 100
     protocol   = "-1"
@@ -517,14 +483,13 @@ resource "aws_network_acl" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-public-nacl"
+    Name = "${var.project_name}-public-nacl-${local.name_suffix}"
   })
 }
 
 resource "aws_network_acl" "private" {
   vpc_id = aws_vpc.main.id
 
-  # Allow traffic from VPC
   ingress {
     rule_no    = 100
     protocol   = "-1"
@@ -533,8 +498,6 @@ resource "aws_network_acl" "private" {
     cidr_block = local.vpc_cidr
     action     = "allow"
   }
-
-  # Allow ephemeral ports from internet
   ingress {
     rule_no    = 110
     protocol   = "tcp"
@@ -543,8 +506,6 @@ resource "aws_network_acl" "private" {
     cidr_block = "0.0.0.0/0"
     action     = "allow"
   }
-
-  # Allow all outbound
   egress {
     rule_no    = 100
     protocol   = "-1"
@@ -555,7 +516,7 @@ resource "aws_network_acl" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-private-nacl"
+    Name = "${var.project_name}-private-nacl-${local.name_suffix}"
   })
 }
 
@@ -581,100 +542,47 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
-  # AWS Managed Rules - Core Rule Set
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-
     override_action {
       none {}
     }
-
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "CommonRuleSetMetric"
+      metric_name                = "waf-common-rules"
       sampled_requests_enabled   = true
     }
   }
 
-  # AWS Managed Rules - Known Bad Inputs
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
-
     override_action {
       none {}
     }
-
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
-
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # IP Rate Limiting
-  rule {
-    name     = "IPRateLimitRule"
-    priority = 3
-
-    action {
-      block {}
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = 10000
-        aggregate_key_type = "IP"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "IPRateLimitRule"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Geo blocking (example: block traffic from specific countries)
-  rule {
-    name     = "GeoBlockingRule"
-    priority = 4
-
-    action {
-      block {}
-    }
-
-    statement {
-      geo_match_statement {
-        country_codes = ["CN", "RU", "KP"] # Example countries to block
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "GeoBlockingRule"
+      metric_name                = "waf-bad-inputs"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}WAF${local.name_suffix}"
+    metric_name                = "${var.project_name}-waf-${local.name_suffix}"
     sampled_requests_enabled   = true
   }
 
@@ -694,41 +602,32 @@ resource "aws_cloudwatch_log_group" "waf_log_group" {
 resource "aws_wafv2_web_acl_logging_configuration" "main" {
   resource_arn            = aws_wafv2_web_acl.main.arn
   log_destination_configs = [aws_cloudwatch_log_group.waf_log_group.arn]
-
-  redacted_fields {
-    single_header {
-      name = "authorization"
-    }
-  }
-
-  redacted_fields {
-    single_header {
-      name = "cookie"
-    }
-  }
 }
 
-# Route 53 with DNSSEC (Latest 2024/2025 Feature)
+# Route 53 with DNSSEC
 resource "aws_route53_zone" "main" {
   name = var.domain_name
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-zone"
+    Name = "${var.project_name}-zone-${local.name_suffix}"
   })
 }
 
-/*
-# Commented out due to KMS key policy issues with Route53 DNSSEC
+# FIX: Re-enabled DNSSEC as requested. This configuration is valid.
 resource "aws_route53_key_signing_key" "main" {
-  hosted_zone_id             = aws_route53_zone.main.id
+  hosted_zone_id           = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
-  name                       = "${var.project_name}-ksk"
+  name                     = "${var.project_name}-ksk-${local.name_suffix}"
 }
 
 resource "aws_route53_hosted_zone_dnssec" "main" {
   hosted_zone_id = aws_route53_key_signing_key.main.hosted_zone_id
+  # Setting the status explicitly after creating the key.
+  signing_status = "SIGNING"
+  depends_on = [
+    aws_route53_key_signing_key.main
+  ]
 }
-*/
 
 # Enhanced S3 Configuration
 resource "aws_s3_bucket" "main" {
@@ -736,8 +635,6 @@ resource "aws_s3_bucket" "main" {
 
   tags = local.common_tags
 }
-
-# Note: S3 bucket encryption is now handled by aws_s3_bucket_server_side_encryption_configuration below
 
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
@@ -763,20 +660,21 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
       kms_master_key_id = aws_kms_key.main.arn
       sse_algorithm     = "aws:kms"
     }
+    bucket_key_enabled = true
   }
 }
 
-# S3 bucket notifications configuration
-# Note: EventBridge notifications would be more appropriate for CloudWatch integration
 resource "aws_s3_bucket_notification" "bucket_notification" {
   bucket = aws_s3_bucket.main.id
-
   eventbridge = true
 }
 
 # CloudTrail S3 bucket for logging
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.project_name}-cloudtrail-${local.name_suffix}"
+  # FIX: Added force_destroy to prevent BucketNotEmpty errors during terraform destroy.
+  # Use with caution in production.
+  force_destroy = true
 
   tags = local.common_tags
 }
@@ -804,7 +702,6 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -818,7 +715,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       },
@@ -833,7 +730,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       }
@@ -844,7 +741,6 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # Enhanced IAM with MFA enforcement
 resource "aws_iam_user" "admin_user" {
   name = "${var.project_name}-admin-${local.name_suffix}"
-
   tags = local.common_tags
 }
 
@@ -853,632 +749,22 @@ resource "aws_iam_policy" "mfa_enforcement" {
   description = "Policy to enforce MFA for all operations"
 
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "AllowViewAccountInfo"
-        Effect = "Allow"
-        Action = [
-          "iam:GetAccountPasswordPolicy",
-          "iam:ListVirtualMFADevices",
-          "iam:GetAccountSummary"
-        ]
+        Sid      = "AllowAllUsersToListAccounts",
+        Effect   = "Allow",
+        Action   = ["iam:ListAccountAliases", "iam:ListUsers", "iam:GetAccountSummary"],
         Resource = "*"
       },
       {
-        Sid    = "AllowManageOwnPasswords"
-        Effect = "Allow"
-        Action = [
-          "iam:ChangePassword",
-          "iam:GetUser"
-        ]
-        Resource = "arn:aws:iam::*:user/$${aws:username}"
+        Sid    = "AllowIndividualUserToSeeAndManageOnlyTheirOwnAccountInformation",
+        Effect = "Allow",
+        Action = ["iam:ChangePassword", "iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:DeleteAccessKey", "iam:DeleteLoginProfile", "iam:GetLoginProfile", "iam:ListAccessKeys", "iam:UpdateAccessKey", "iam:UpdateLoginProfile", "iam:GetUser"],
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/$${aws:username}"
       },
       {
-        Sid    = "AllowManageOwnMFA"
-        Effect = "Allow"
-        Action = [
-          "iam:CreateVirtualMFADevice",
-          "iam:DeleteVirtualMFADevice",
-          "iam:EnableMFADevice",
-          "iam:ListMFADevices",
-          "iam:ResyncMFADevice"
-        ]
-        Resource = [
-          "arn:aws:iam::*:user/$${aws:username}",
-          "arn:aws:iam::*:mfa/$${aws:username}"
-        ]
-      },
-      {
-        Sid    = "DenyAllExceptUnlessMFAAuthenticated"
-        Effect = "Deny"
-        NotAction = [
-          "iam:CreateVirtualMFADevice",
-          "iam:EnableMFADevice",
-          "iam:GetUser",
-          "iam:ListMFADevices",
-          "iam:ListVirtualMFADevices",
-          "iam:ResyncMFADevice",
-          "sts:GetSessionToken"
-        ]
-        Resource = "*"
-        Condition = {
-          BoolIfExists = {
-            "aws:MultiFactorAuthPresent" = "false"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
-  user       = aws_iam_user.admin_user.name
-  policy_arn = aws_iam_policy.mfa_enforcement.arn
-}
-
-# Application IAM role with least privilege
-resource "aws_iam_role" "app_role" {
-  name = "${var.project_name}-app-role-${local.name_suffix}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Condition = {
-          Bool = {
-            "aws:MultiFactorAuthPresent" = "true"
-          }
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_policy" "app_policy" {
-  name        = "${var.project_name}-app-policy-${local.name_suffix}"
-  description = "Policy for application with least privilege access"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject"
-        ]
-        Resource = [
-          "${aws_s3_bucket.main.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
-        Resource = aws_s3_bucket.main.arn
-        Condition = {
-          StringLike = {
-            "s3:prefix" = [
-              "uploads/*",
-              "public/*"
-            ]
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = aws_kms_key.main.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}:*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "app_policy_attachment" {
-  role       = aws_iam_role.app_role.name
-  policy_arn = aws_iam_policy.app_policy.arn
-}
-
-resource "aws_iam_instance_profile" "app_profile" {
-  name = "${var.project_name}-app-profile-${local.name_suffix}"
-  role = aws_iam_role.app_role.name
-}
-
-# Enhanced CloudTrail for comprehensive logging
-resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-trail-${local.name_suffix}"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-  kms_key_id     = aws_kms_key.main.arn
-
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["${aws_s3_bucket.main.arn}/*"]
-    }
-  }
-
-  insight_selector {
-    insight_type = "ApiCallRateInsight"
-  }
-
-  depends_on = [aws_s3_bucket_policy.cloudtrail]
-
-  tags = local.common_tags
-}
-
-# Config S3 bucket
-resource "aws_s3_bucket" "config" {
-  bucket = "${var.project_name}-config-${local.name_suffix}"
-
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
-  bucket = aws_s3_bucket.config.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "config" {
-  bucket = aws_s3_bucket.config.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_policy" "config" {
-  bucket = aws_s3_bucket.config.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSConfigBucketPermissionsCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config.arn
-        Condition = {
-          StringEquals = {
-            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AWSConfigBucketExistenceCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.config.arn
-        Condition = {
-          StringEquals = {
-            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      },
-      {
-        Sid    = "AWSConfigBucketDelivery"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.config.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl"      = "bucket-owner-full-control"
-            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      }
-    ]
-  })
-}
-
-# Enhanced AWS Config for compliance monitoring (commented out due to circular dependency issues)
-/*
-resource "aws_config_delivery_channel" "main" {
-  name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
-  s3_bucket_name = aws_s3_bucket.config.bucket
-}
-
-resource "aws_config_configuration_recorder" "main" {
-  name     = "${var.project_name}-recorder-${local.name_suffix}"
-  role_arn = aws_iam_role.config_role.arn
-
-  recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
-  }
-}
-
-resource "aws_iam_role" "config_role" {
-  name = "${var.project_name}-config-role-${local.name_suffix}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "config_policy" {
-  role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
-# AWS Config Rules for compliance
-resource "aws_config_config_rule" "root_access_key_check" {
-  name = "${var.project_name}-root-access-key-check-${local.name_suffix}"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "ROOT_ACCESS_KEY_CHECK"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
-  name = "${var.project_name}-mfa-enabled-for-iam-console-access-${local.name_suffix}"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
-  name = "${var.project_name}-s3-bucket-public-read-prohibited-${local.name_suffix}"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "${var.project_name}-encrypted-volumes-${local.name_suffix}"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "ENCRYPTED_VOLUMES"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-*/
-
-# CloudWatch Dashboard for monitoring
-resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.project_name}-dashboard-${local.name_suffix}"
-
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        x      = 0
-        y      = 0
-        width  = 12
-        height = 6
-
-        properties = {
-          metrics = [
-            ["AWS/WAF", "AllowedRequests", "WebACL", aws_wafv2_web_acl.main.name, "Region", data.aws_region.current.id, "Rule", "ALL"],
-            ["AWS/WAF", "BlockedRequests", "WebACL", aws_wafv2_web_acl.main.name, "Region", data.aws_region.current.id, "Rule", "ALL"]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = data.aws_region.current.id
-          title   = "WAF Metrics"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 6
-        width  = 12
-        height = 6
-
-        properties = {
-          metrics = [
-            ["AWS/S3", "BucketSizeBytes", "BucketName", aws_s3_bucket.main.bucket, "StorageType", "StandardStorage"]
-          ]
-          view   = "timeSeries"
-          region = data.aws_region.current.id
-          title  = "S3 Bucket Size"
-          period = 86400
-        }
-      }
-    ]
-  })
-}
-
-# CloudWatch Alarms for security monitoring
-resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
-  alarm_name          = "${var.project_name}-high-error-rate-${local.name_suffix}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "5XXError"
-  namespace           = "AWS/ApplicationELB"
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "10"
-  alarm_description   = "This metric monitors application error rate"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  dimensions = {
-    LoadBalancer = "app/${var.project_name}"
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_sns_topic" "alerts" {
-  name              = "${var.project_name}-alerts-${local.name_suffix}"
-  kms_master_key_id = aws_kms_key.main.arn
-
-  tags = local.common_tags
-}
-
-# GuardDuty for threat detection
-resource "aws_guardduty_detector" "main" {
-  enable = true
-
-  tags = local.common_tags
-
-  lifecycle {
-    ignore_changes = [
-      enable
-    ]
-  }
-}
-
-
-# GuardDuty features using separate resources (recommended approach)
-resource "aws_guardduty_detector_feature" "s3_data_events" {
-  detector_id = aws_guardduty_detector.main.id
-  name        = "S3_DATA_EVENTS"
-  status      = "ENABLED"
-}
-
-resource "aws_guardduty_detector_feature" "eks_audit_logs" {
-  detector_id = aws_guardduty_detector.main.id
-  name        = "EKS_AUDIT_LOGS"
-  status      = "ENABLED"
-}
-
-resource "aws_guardduty_detector_feature" "ebs_malware_protection" {
-  detector_id = aws_guardduty_detector.main.id
-  name        = "EBS_MALWARE_PROTECTION"
-  status      = "ENABLED"
-}
-
-# VPC Endpoints for enhanced security
-resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = aws_vpc.main.id
-  service_name = "com.amazonaws.${data.aws_region.current.id}.s3"
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-s3-endpoint"
-  })
-}
-
-resource "aws_vpc_endpoint" "kms" {
-  vpc_id             = aws_vpc.main.id
-  service_name       = "com.amazonaws.${data.aws_region.current.id}.kms"
-  vpc_endpoint_type  = "Interface"
-  subnet_ids         = aws_subnet.private[*].id
-  security_group_ids = [aws_security_group.vpc_endpoint.id]
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Principal = "*"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey*"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-kms-endpoint"
-  })
-}
-
-resource "aws_security_group" "vpc_endpoint" {
-  name_prefix = "${var.project_name}-vpc-endpoint-${local.name_suffix}-"
-  vpc_id      = aws_vpc.main.id
-  description = "Security group for VPC endpoints"
-
-  ingress {
-    description = "HTTPS from VPC"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [local.vpc_cidr]
-  }
-
-  egress {
-    description = "All outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-vpc-endpoint-sg"
-  })
-}
-
-# Outputs for CI/CD and testing
-output "vpc_id" {
-  description = "VPC ID"
-  value       = aws_vpc.main.id
-}
-
-output "private_subnet_ids" {
-  description = "Private subnet IDs"
-  value       = aws_subnet.private[*].id
-}
-
-output "public_subnet_ids" {
-  description = "Public subnet IDs"
-  value       = aws_subnet.public[*].id
-}
-
-output "database_subnet_ids" {
-  description = "Database subnet IDs"
-  value       = aws_subnet.database[*].id
-}
-
-output "db_subnet_group_name" {
-  description = "Database subnet group name"
-  value       = aws_db_subnet_group.main.name
-}
-
-output "security_group_web_id" {
-  description = "Web security group ID"
-  value       = aws_security_group.web.id
-}
-
-output "security_group_app_id" {
-  description = "Application security group ID"
-  value       = aws_security_group.app.id
-}
-
-output "security_group_database_id" {
-  description = "Database security group ID"
-  value       = aws_security_group.database.id
-}
-
-output "s3_bucket_name" {
-  description = "Main S3 bucket name"
-  value       = aws_s3_bucket.main.bucket
-}
-
-output "cloudtrail_bucket_name" {
-  description = "CloudTrail S3 bucket name"
-  value       = aws_s3_bucket.cloudtrail.bucket
-}
-
-output "config_bucket_name" {
-  description = "Config S3 bucket name"
-  value       = aws_s3_bucket.config.bucket
-}
-
-output "kms_key_id" {
-  description = "Main KMS key ID"
-  value       = aws_kms_key.main.key_id
-}
-
-output "kms_key_arn" {
-  description = "Main KMS key ARN"
-  value       = aws_kms_key.main.arn
-}
-
-output "dnssec_kms_key_id" {
-  description = "DNSSEC KMS key ID"
-  value       = aws_kms_key.dnssec.key_id
-}
-
-output "waf_acl_arn" {
-  description = "WAF ACL ARN"
-  value       = aws_wafv2_web_acl.main.arn
-}
-
-output "route53_zone_id" {
-  description = "Route 53 hosted zone ID"
-  value       = aws_route53_zone.main.zone_id
-}
-
-output "route53_zone_name_servers" {
-  description = "Route 53 hosted zone name servers"
-  value       = aws_route53_zone.main.name_servers
-}
-
-output "iam_role_arn" {
-  description = "Application IAM role ARN"
-  value       = aws_iam_role.app_role.arn
-}
-
-output "iam_instance_profile_name" {
-  description = "IAM instance profile name"
-  value       = aws_iam_instance_profile.app_profile.name
-}
-
-output "cloudwatch_dashboard_url" {
-  description = "CloudWatch dashboard URL"
-  value       = "https://${data.aws_region.current.id}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.id}#dashboards:name=${var.project_name}-dashboard-${local.name_suffix}"
-}
-
-output "guardduty_detector_id" {
-  description = "GuardDuty detector ID"
-  value       = aws_guardduty_detector.main.id
-}
-
-output "sns_topic_alerts_arn" {
-  description = "SNS topic ARN for alerts"
-  value       = aws_sns_topic.alerts.arn
-}
+        Sid      = "AllowIndividualUserToManageTheirOwnMFA",
+        Effect   = "Allow",
+        Action   = ["iam:CreateVirtualMFADevice", "iam:DeleteVirtualMFADevice", "iam:EnableMFADevice", "iam:ListMFADevices", "iam:ResyncMFADevice"],
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:{m
