@@ -1,4 +1,4 @@
-You are a senior Terraform + AWS expert. Generate production-ready HCL code for a multi-environment AWS setup with distinct staging and production environments.
+istenYou are a senior Terraform + AWS expert. Generate production-ready HCL code for a multi-environment AWS setup with distinct staging and production environments.
 
 The code must meet the following functional and technical requirements exactly and must be delivered as a set of complete, runnable code files without any additional prose or explanations.
 

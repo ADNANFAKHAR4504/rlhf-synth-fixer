@@ -149,12 +149,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Configuration Consistency', () => {
-    test('S3 backend is configured', () => {
+    test('Terraform Cloud backend is configured', () => {
       const backendPath = path.join(LIB_DIR, 'backend.tf');
       const content = fs.readFileSync(backendPath, 'utf8');
 
-      expect(content).toMatch(/backend\s+"s3"/);
-      expect(content).toMatch(/workspace.*prefix/);
+      expect(content).toMatch(/cloud\s*{/);
+      expect(content).toMatch(/organization\s*=\s*"TuringGpt"/);
+      expect(content).toMatch(/workspaces\s*{/);
+      expect(content).toMatch(
+        /name\s*=\s*"iac-test-automations-\${terraform\.workspace}"/
+      );
     });
 
     test('required providers are specified', () => {
