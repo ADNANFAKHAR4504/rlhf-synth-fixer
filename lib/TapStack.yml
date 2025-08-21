@@ -1,6 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TAP - Cloud formation Template for  Multi-Tier AWS Architecture'
-
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
@@ -464,7 +463,6 @@ Resources:
               - Sid: ReadDBSecret
                 Effect: Allow
                 Action: secretsmanager:GetSecretValue
-                # Use wildcard ARN to satisfy both lint and deploy (secret name has random suffix in ARN)
                 Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${SecretDB}*'
               - Sid: UseDataCMK
                 Effect: Allow
@@ -504,9 +502,10 @@ Resources:
             dnf -y install httpd
             echo '<h1>AppServer (ASG)</h1>' > /var/www/html/index.html
             systemctl enable --now httpd
-      TagSpecifications:
-        - ResourceType: instance
-          Tags: [{Key: Name, Value: app-asg-instance}]
+        TagSpecifications:                 # << moved here (valid for instance and volume)
+          - ResourceType: instance
+            Tags: [{Key: Name, Value: app-asg-instance}]
+      # (no top-level TagSpecifications)
 
   ASGApp:
     Type: AWS::AutoScaling::AutoScalingGroup
