@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Suffix to append to resource names for uniqueness"
   type        = string
-  default     = "dev"
+  default     = "9k2"
 }
 
 variable "common_tags" {
