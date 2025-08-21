@@ -5,5 +5,28 @@
   "turn_type": "single",
   "po_id": "292004",
   "team": "2",
-  "startedAt": "2025-08-20T16:19:54.414Z"
+  "startedAt": "2025-08-21T04:19:54.414Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "KMS",
+    "Auto Scaling",
+    "Application Load Balancer (ALB)",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "WAF",
+    "Shield"
+  ]
 }
