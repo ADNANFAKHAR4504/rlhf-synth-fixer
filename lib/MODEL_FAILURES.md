@@ -1,4 +1,4 @@
-Model Failures and Common Issues
+Model_Failures.md
 
 This document outlines common failures and issues encountered when implementing the AWS infrastructure requirements, along with their solutions.
 
