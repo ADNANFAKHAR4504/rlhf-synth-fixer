@@ -5,6 +5,12 @@ plugins {
     id 'jacoco'
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 
 repositories {
     maven {
@@ -30,13 +36,13 @@ configurations.all {
 dependencies {
     implementation 'com.pulumi:pulumi:0.11.0'
     implementation 'com.pulumi:aws:7.4.0'
-    
+
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.mockito:mockito-core:5.11.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
-    
+
 }
 
 application {
@@ -51,7 +57,7 @@ tasks.named('run') {
     environment = System.getenv()
 }
 
-// Configure source directories  
+// Configure source directories
 sourceSets {
     main.java {
         srcDirs = ['src/main/java', 'lib/src/main/java']
@@ -71,15 +77,15 @@ sourceSets {
 jar {
     manifest {
         attributes(
-            'Main-Class': 'app.Main'
+                'Main-Class': 'app.Main'
         )
     }
-    
+
     // Create fat JAR with all dependencies
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-    
+
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = 'app.jar'
 }
@@ -96,7 +102,7 @@ test {
     useJUnitPlatform()
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
-    
+
     // Show test results in console
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
@@ -105,10 +111,10 @@ test {
         showExceptions true
         showStackTraces true
     }
-    
+
     // Always run tests, never use cache
     outputs.upToDateWhen { false }
-    
+
     finalizedBy jacocoTestReport
 }
 
@@ -116,11 +122,11 @@ test {
 tasks.register('integrationTest', Test) {
     description = 'Runs integration tests.'
     group = 'verification'
-    
+
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     useJUnitPlatform()
-    
+
     // Show test results in console
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
@@ -129,10 +135,10 @@ tasks.register('integrationTest', Test) {
         showExceptions true
         showStackTraces true
     }
-    
+
     // Always run tests, never use cache
     outputs.upToDateWhen { false }
-    
+
     shouldRunAfter test
 }
 
@@ -157,18 +163,18 @@ jacocoTestReport {
         html.required = true
         csv.required = false
     }
-    
+
     executionData fileTree(project.buildDir.absolutePath).include("jacoco/*.exec")
-    
+
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                // Exclude main method from coverage (hard to test)
-                '**/Main.class'
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
             ])
         }))
     }
-    
+
     finalizedBy jacocoTestCoverageVerification
 }
 
@@ -197,7 +203,7 @@ tasks.register('showCoverage') {
     doLast {
         def reportFile = file("$buildDir/reports/jacoco/test/html/index.html")
         def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
-        
+
         if (xmlReportFile.exists()) {
             // Parse XML to get coverage percentage
             def xml = new XmlParser().parse(xmlReportFile)
@@ -207,13 +213,13 @@ tasks.register('showCoverage') {
                 def missed = counter.@missed.toInteger()
                 def total = covered + missed
                 def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
-                
+
                 println "\n📊 Code Coverage Summary:"
                 println "Lines Covered: ${covered}/${total} (${percentage}%)"
                 println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
             }
         }
-        
+
         if (reportFile.exists()) {
             println "📄 Detailed HTML Report: file://${reportFile.absolutePath}"
         }
@@ -225,7 +231,7 @@ tasks.register('testAll') {
     dependsOn test, integrationTest, showCoverage
     group = 'verification'
     description = 'Runs all tests and displays coverage summary'
-    
+
     doFirst {
         println "\n🚀 Running all tests with coverage analysis..."
     }
