@@ -1,0 +1,1132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  TapStack - Single-file CloudFormation creating three isolated environments: development, staging, production.
+  - VPCs per environment with non-overlapping CIDRs
+  - Public/Private subnets (2 AZs)
+  - S3 buckets per environment with Versioning and Replication pipeline (dev -> staging -> prod)
+  - IAM roles per environment and replication roles
+  Notes:
+    * Replication only for objects under prefix: non-sensitive/
+    * Buckets configured with SSE-S3 (no KMS) to simplify replication permissions
+    * S3 buckets are created with DeletionPolicy: Retain to avoid accidental data loss
+
+Metadata:
+  Project: TapStack
+  Author: TapStackCFN
+  Region: us-east-1
+  Notes: |
+    This template is intended for fresh accounts/regions in us-east-1. It creates all resources.
+    To validate template syntax: aws cloudformation validate-template --template-body file://TapStack.yml
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: TapStack
+    Description: Project name used in resource prefixes
+  Owner:
+    Type: String
+    Default: TapStackCFN
+    Description: Owner tag value
+  TeamPrincipalARN:
+    Type: String
+    Default: ""
+    Description: >-
+      ARN of the team principal (user/group/role) that will be allowed to assume
+      the environment roles. Leave blank to allow account root to assume (NOT recommended).
+  CreateNatPerAZ:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: Whether to create one NAT Gateway per AZ (true) or a single NAT per environment (false)
+  AvailabilityZoneA:
+    Type: String
+    Default: us-east-1a
+    Description: First AZ to use for subnets
+  AvailabilityZoneB:
+    Type: String
+    Default: us-east-1b
+    Description: Second AZ to use for subnets
+
+Mappings:
+  EnvToCidr:
+    development:
+      Cidr: 10.0.0.0/16
+    staging:
+      Cidr: 10.1.0.0/16
+    production:
+      Cidr: 10.2.0.0/16
+
+Conditions:
+  HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, ""]]
+  CreatePerAZ: !Equals [!Ref CreateNatPerAZ, "true"]
+
+Transform: AWS::LanguageExtensions # allow for Fn::If short syntax in some deployments (harmless if unsupported)
+
+Resources:
+  ##########################
+  # Helper: Tag Value Map
+  ##########################
+  TapStackCommonTags:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/tapstack/${AWS::StackName}/common-tags"
+      Type: String
+      Value: !Sub "Project=${ProjectName},CreatedBy=${Owner}"
+    DeletionPolicy: Retain
+
+  ########################################
+  # VPCs, Subnets, Gateways per Environment
+  ########################################
+
+  # We'll create resources for each environment using explicit names for clarity
+
+  # ----------------- Development -----------------
+  TapStack-development-VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvToCidr, development, Cidr]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-development-VPC"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  TapStack-development-IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TapStack-development-IGW
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+  TapStack-development-VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      InternetGatewayId: !Ref TapStack-development-IGW
+
+  # Public Subnets (2 AZs)
+  TapStack-development-PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PublicSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+  TapStack-development-PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PublicSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+
+  # Private Subnets (2 AZs)
+  TapStack-development-PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PrivateSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+  TapStack-development-PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PrivateSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+
+  # Route Tables
+  TapStack-development-PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PublicRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+  TapStack-development-PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: TapStack-development-VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref TapStack-development-PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref TapStack-development-IGW
+
+  TapStack-development-PublicSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-development-PublicSubnetA
+      RouteTableId: !Ref TapStack-development-PublicRouteTable
+  TapStack-development-PublicSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-development-PublicSubnetB
+      RouteTableId: !Ref TapStack-development-PublicRouteTable
+
+  TapStack-development-PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-development-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-development-PrivateRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+
+  TapStack-development-PrivateSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-development-PrivateSubnetA
+      RouteTableId: !Ref TapStack-development-PrivateRouteTable
+  TapStack-development-PrivateSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-development-PrivateSubnetB
+      RouteTableId: !Ref TapStack-development-PrivateRouteTable
+
+  # NAT Gateways (per AZ if CreatePerAZ true, else single NAT in AZ A)
+  TapStack-development-EIP-NAT-A:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-EIP-A
+  TapStack-development-NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !If [CreatePerAZ, !GetAtt TapStack-development-EIP-NAT-A.AllocationId, !Ref AWS::NoValue]
+      SubnetId: !Ref TapStack-development-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-A
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+  TapStack-development-EIP-NAT-SINGLE:
+    Type: AWS::EC2::EIP
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-EIP-SINGLE
+  TapStack-development-NATGateway-SINGLE:
+    Type: AWS::EC2::NatGateway
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      AllocationId: !GetAtt TapStack-development-EIP-NAT-SINGLE.AllocationId
+      SubnetId: !Ref TapStack-development-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-SINGLE
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+
+  # If per AZ, create NAT in AZ B too
+  TapStack-development-EIP-NAT-B:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-EIP-B
+  TapStack-development-NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Condition: CreatePerAZ
+    Properties:
+      AllocationId: !GetAtt TapStack-development-EIP-NAT-B.AllocationId
+      SubnetId: !Ref TapStack-development-PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: TapStack-development-NAT-B
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+
+  # Routes from private RT to NAT(s)
+  TapStack-development-PrivateRouteToNAT-A:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref TapStack-development-PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreatePerAZ, !Ref TapStack-development-NATGatewayA, !Ref TapStack-development-NATGateway-SINGLE]
+
+  ################################
+  # Repeat for Staging & Production
+  ################################
+
+  # ----------------- Staging -----------------
+  TapStack-staging-VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvToCidr, staging, Cidr]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-staging-VPC"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+        - Key: CreatedBy
+          Value: !Ref Owner
+  TapStack-staging-IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-IGW
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      InternetGatewayId: !Ref TapStack-staging-IGW
+
+  TapStack-staging-PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      CidrBlock: 10.1.0.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PublicSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PublicSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      CidrBlock: 10.1.10.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PrivateSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      CidrBlock: 10.1.11.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PrivateSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+
+  TapStack-staging-PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PublicRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: TapStack-staging-VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref TapStack-staging-PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref TapStack-staging-IGW
+  TapStack-staging-PublicSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-staging-PublicSubnetA
+      RouteTableId: !Ref TapStack-staging-PublicRouteTable
+  TapStack-staging-PublicSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-staging-PublicSubnetB
+      RouteTableId: !Ref TapStack-staging-PublicRouteTable
+
+  TapStack-staging-PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-staging-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-PrivateRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PrivateSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-staging-PrivateSubnetA
+      RouteTableId: !Ref TapStack-staging-PrivateRouteTable
+  TapStack-staging-PrivateSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-staging-PrivateSubnetB
+      RouteTableId: !Ref TapStack-staging-PrivateRouteTable
+
+  TapStack-staging-EIP-NAT-A:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-EIP-A
+  TapStack-staging-NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !If [CreatePerAZ, !GetAtt TapStack-staging-EIP-NAT-A.AllocationId, !Ref AWS::NoValue]
+      SubnetId: !Ref TapStack-staging-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-A
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-EIP-NAT-SINGLE:
+    Type: AWS::EC2::EIP
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-EIP-SINGLE
+  TapStack-staging-NATGateway-SINGLE:
+    Type: AWS::EC2::NatGateway
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      AllocationId: !GetAtt TapStack-staging-EIP-NAT-SINGLE.AllocationId
+      SubnetId: !Ref TapStack-staging-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-SINGLE
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-EIP-NAT-B:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-EIP-B
+  TapStack-staging-NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Condition: CreatePerAZ
+    Properties:
+      AllocationId: !GetAtt TapStack-staging-EIP-NAT-B.AllocationId
+      SubnetId: !Ref TapStack-staging-PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-NAT-B
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+  TapStack-staging-PrivateRouteToNAT-A:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref TapStack-staging-PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreatePerAZ, !Ref TapStack-staging-NATGatewayA, !Ref TapStack-staging-NATGateway-SINGLE]
+
+  # ----------------- Production -----------------
+  TapStack-production-VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [EnvToCidr, production, Cidr]
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-production-VPC"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+        - Key: CreatedBy
+          Value: !Ref Owner
+  TapStack-production-IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TapStack-production-IGW
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      InternetGatewayId: !Ref TapStack-production-IGW
+
+  TapStack-production-PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      CidrBlock: 10.2.0.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PublicSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      CidrBlock: 10.2.1.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PublicSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+
+  TapStack-production-PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      CidrBlock: 10.2.10.0/24
+      AvailabilityZone: !Ref AvailabilityZoneA
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PrivateSubnetA
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      CidrBlock: 10.2.11.0/24
+      AvailabilityZone: !Ref AvailabilityZoneB
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PrivateSubnetB
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+
+  TapStack-production-PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PublicRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: TapStack-production-VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref TapStack-production-PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref TapStack-production-IGW
+  TapStack-production-PublicSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-production-PublicSubnetA
+      RouteTableId: !Ref TapStack-production-PublicRouteTable
+  TapStack-production-PublicSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-production-PublicSubnetB
+      RouteTableId: !Ref TapStack-production-PublicRouteTable
+
+  TapStack-production-PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapStack-production-VPC
+      Tags:
+        - Key: Name
+          Value: TapStack-production-PrivateRT
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-PrivateSubnetA-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-production-PrivateSubnetA
+      RouteTableId: !Ref TapStack-production-PrivateRouteTable
+  TapStack-production-PrivateSubnetB-RTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapStack-production-PrivateSubnetB
+      RouteTableId: !Ref TapStack-production-PrivateRouteTable
+
+  TapStack-production-EIP-NAT-A:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-EIP-A
+  TapStack-production-NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !If [CreatePerAZ, !GetAtt TapStack-production-EIP-NAT-A.AllocationId, !Ref AWS::NoValue]
+      SubnetId: !Ref TapStack-production-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-A
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-EIP-NAT-SINGLE:
+    Type: AWS::EC2::EIP
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-EIP-SINGLE
+  TapStack-production-NATGateway-SINGLE:
+    Type: AWS::EC2::NatGateway
+    Condition: !Not [CreatePerAZ]
+    Properties:
+      AllocationId: !GetAtt TapStack-production-EIP-NAT-SINGLE.AllocationId
+      SubnetId: !Ref TapStack-production-PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-SINGLE
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-EIP-NAT-B:
+    Type: AWS::EC2::EIP
+    Condition: CreatePerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-EIP-B
+  TapStack-production-NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Condition: CreatePerAZ
+    Properties:
+      AllocationId: !GetAtt TapStack-production-EIP-NAT-B.AllocationId
+      SubnetId: !Ref TapStack-production-PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: TapStack-production-NAT-B
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+  TapStack-production-PrivateRouteToNAT-A:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref TapStack-production-PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreatePerAZ, !Ref TapStack-production-NATGatewayA, !Ref TapStack-production-NATGateway-SINGLE]
+
+  ################################
+  # S3 Buckets and Replication
+  ################################
+
+  # Development bucket
+  TapStack-development-DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Join ["-", [!Ref ProjectName, "development-databucket", !Ref "AWS::AccountId", !Ref "AWS::Region"]]
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: TapStack-development-DataBucket
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: development
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  # Staging bucket
+  TapStack-staging-DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Join ["-", [!Ref ProjectName, "staging-databucket", !Ref "AWS::AccountId", !Ref "AWS::Region"]]
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: TapStack-staging-DataBucket
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: staging
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  # Production bucket
+  TapStack-production-DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Join ["-", [!Ref ProjectName, "production-databucket", !Ref "AWS::AccountId", !Ref "AWS::Region"]]
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Name
+          Value: TapStack-production-DataBucket
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: production
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  # Replication IAM Role for Development -> Staging
+  TapStack-development-ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-development-replication-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: DevelopmentReplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowGetAndListSource
+                Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}/*
+              - Sid: AllowReplicateToDest
+                Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                Resource: !Sub arn:aws:s3:::${TapStack-staging-DataBucket}/*
+
+  # Replication IAM Role for Staging -> Production
+  TapStack-staging-ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-staging-replication-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: StagingReplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowGetAndListSource
+                Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}/*
+              - Sid: AllowReplicateToDest
+                Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                Resource: !Sub arn:aws:s3:::${TapStack-production-DataBucket}/*
+
+  #########################################
+  # Add Bucket Replication Configuration
+  # Note: Replication requires the role ARN; we reference it below.
+  #########################################
+
+  TapStack-development-DataBucketReplicationConfig:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref TapStack-development-DataBucket
+      ReplicationConfiguration:
+        Role: !GetAtt TapStack-development-ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateNonSensitiveToStaging
+            Status: Enabled
+            Prefix: non-sensitive/
+            Destination:
+              Bucket: !GetAtt TapStack-staging-DataBucket.Arn
+    DependsOn: TapStack-development-ReplicationRole
+
+  TapStack-staging-DataBucketReplicationConfig:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref TapStack-staging-DataBucket
+      ReplicationConfiguration:
+        Role: !GetAtt TapStack-staging-ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateNonSensitiveToProduction
+            Status: Enabled
+            Prefix: non-sensitive/
+            Destination:
+              Bucket: !GetAtt TapStack-production-DataBucket.Arn
+    DependsOn: TapStack-staging-ReplicationRole
+
+  ################################
+  # Environment IAM Roles (per-env)
+  ################################
+
+  # Development Role
+  TapStack-development-Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-development-Role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub "arn:aws:iam::${AWS::AccountId}:root"]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: DevS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowFullS3OnDevBucket
+                Effect: Allow
+                Action: "s3:*"
+                Resource:
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}/*
+              - Sid: DenyAccessToOtherBuckets
+                Effect: Deny
+                Action: "s3:*"
+                NotResource:
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-development-DataBucket}/*
+              - Sid: EC2DescribeOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSecurityGroups
+                Resource: "*"
+        - PolicyName: DevTagConstraint
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: "iam:ListRoles"
+                Resource: "*"
+
+  # Staging Role
+  TapStack-staging-Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-staging-Role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub "arn:aws:iam::${AWS::AccountId}:root"]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: StagingS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowFullS3OnStagingBucket
+                Effect: Allow
+                Action: "s3:*"
+                Resource:
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}/*
+              - Sid: DenyAccessToOtherBuckets
+                Effect: Deny
+                Action: "s3:*"
+                NotResource:
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-staging-DataBucket}/*
+              - Sid: EC2DescribeOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSecurityGroups
+                Resource: "*"
+
+  # Production Role
+  TapStack-production-Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-production-Role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub "arn:aws:iam::${AWS::AccountId}:root"]
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: ProductionS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowFullS3OnProdBucket
+                Effect: Allow
+                Action: "s3:*"
+                Resource:
+                  - !Sub arn:aws:s3:::${TapStack-production-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-production-DataBucket}/*
+              - Sid: DenyAccessToOtherBuckets
+                Effect: Deny
+                Action: "s3:*"
+                NotResource:
+                  - !Sub arn:aws:s3:::${TapStack-production-DataBucket}
+                  - !Sub arn:aws:s3:::${TapStack-production-DataBucket}/*
+              - Sid: EC2DescribeOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSecurityGroups
+                Resource: "*"
+
+Outputs:
+  # Development Outputs
+  DevelopmentVPC:
+    Description: Development VPC ID
+    Value: !Ref TapStack-development-VPC
+  DevelopmentPublicSubnets:
+    Description: Development public subnet IDs
+    Value: !Join [",", [!Ref TapStack-development-PublicSubnetA, !Ref TapStack-development-PublicSubnetB]]
+  DevelopmentPrivateSubnets:
+    Description: Development private subnet IDs
+    Value: !Join [",", [!Ref TapStack-development-PrivateSubnetA, !Ref TapStack-development-PrivateSubnetB]]
+  DevelopmentDataBucketName:
+    Description: Development S3 bucket name
+    Value: !Ref TapStack-development-DataBucket
+  DevelopmentDataBucketArn:
+    Description: Development S3 bucket ARN
+    Value: !GetAtt TapStack-development-DataBucket.Arn
+  DevelopmentReplicationRoleArn:
+    Description: IAM Role ARN used for dev->staging replication
+    Value: !GetAtt TapStack-development-ReplicationRole.Arn
+  DevelopmentEnvRoleArn:
+    Description: Development environment IAM role ARN
+    Value: !GetAtt TapStack-development-Role.Arn
+
+  # Staging Outputs
+  StagingVPC:
+    Description: Staging VPC ID
+    Value: !Ref TapStack-staging-VPC
+  StagingPublicSubnets:
+    Description: Staging public subnet IDs
+    Value: !Join [",", [!Ref TapStack-staging-PublicSubnetA, !Ref TapStack-staging-PublicSubnetB]]
+  StagingPrivateSubnets:
+    Description: Staging private subnet IDs
+    Value: !Join [",", [!Ref TapStack-staging-PrivateSubnetA, !Ref TapStack-staging-PrivateSubnetB]]
+  StagingDataBucketName:
+    Description: Staging S3 bucket name
+    Value: !Ref TapStack-staging-DataBucket
+  StagingDataBucketArn:
+    Description: Staging S3 bucket ARN
+    Value: !GetAtt TapStack-staging-DataBucket.Arn
+  StagingReplicationRoleArn:
+    Description: IAM Role ARN used for staging->prod replication
+    Value: !GetAtt TapStack-staging-ReplicationRole.Arn
+  StagingEnvRoleArn:
+    Description: Staging environment IAM role ARN
+    Value: !GetAtt TapStack-staging-Role.Arn
+
+  # Production Outputs
+  ProductionVPC:
+    Description: Production VPC ID
+    Value: !Ref TapStack-production-VPC
+  ProductionPublicSubnets:
+    Description: Production public subnet IDs
+    Value: !Join [",", [!Ref TapStack-production-PublicSubnetA, !Ref TapStack-production-PublicSubnetB]]
+  ProductionPrivateSubnets:
+    Description: Production private subnet IDs
+    Value: !Join [",", [!Ref TapStack-production-PrivateSubnetA, !Ref TapStack-production-PrivateSubnetB]]
+  ProductionDataBucketName:
+    Description: Production S3 bucket name
+    Value: !Ref TapStack-production-DataBucket
+  ProductionDataBucketArn:
+    Description: Production S3 bucket ARN
+    Value: !GetAtt TapStack-production-DataBucket.Arn
+  ProductionEnvRoleArn:
+    Description: Production environment IAM role ARN
+    Value: !GetAtt TapStack-production-Role.Arn
+
+  ReplicationPipeline:
+    Description: Short description of replication chain
+    Value: "Development -> Staging -> Production (objects under prefix 'non-sensitive/' only)"
