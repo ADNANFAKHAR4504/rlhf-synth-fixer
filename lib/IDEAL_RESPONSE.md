@@ -1,5 +1,6 @@
-//modules.ts
+## lib/module.ts
 
+```typescript 
 import { Construct } from 'constructs';
 import { Alb } from '@cdktf/provider-aws/lib/alb';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
@@ -452,10 +453,10 @@ export class IamModule extends Construct {
   }
 }
 
+```
+## lib/tap-stack.ts
 
-// tap-stack.ts
-
-// tapstack.ts
+```typescript
 
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import {
@@ -646,3 +647,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+```
