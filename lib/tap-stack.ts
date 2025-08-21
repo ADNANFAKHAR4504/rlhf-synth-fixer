@@ -61,27 +61,11 @@ export class TapStack extends TerraformStack {
 
     // ? Add your stack instantiations here
     // Deploy secure modules - NO CONFIG NEEDED NOW
-    const secureInfra = new SecureModules(this, 'secure-infrastructure');
-
-    // Simple outputs
-    new TerraformOutput(this, 'vpc_id', {
-      value: secureInfra.vpc.id,
-      description: 'VPC ID for the secure infrastructure',
+    const secureInfra = new SecureModules(this, 'secure-infrastructure', {
+      region: awsRegion,
     });
 
-    new TerraformOutput(this, 'public_subnet_ids', {
-      value: [secureInfra.publicSubnets[0].id, secureInfra.publicSubnets[1].id],
-      description: 'Public subnet IDs',
-    });
-
-    new TerraformOutput(this, 'private_subnet_ids', {
-      value: [
-        secureInfra.privateSubnets[0].id,
-        secureInfra.privateSubnets[1].id,
-      ],
-      description: 'Private subnet IDs',
-    });
-
+    // Simple outputs - ONLY S3 RELATED OUTPUTS
     new TerraformOutput(this, 'kms_key_id', {
       value: secureInfra.kmsKey.keyId,
       description: 'KMS key ID',
@@ -92,16 +76,45 @@ export class TapStack extends TerraformStack {
       description: 'S3 bucket name',
     });
 
-    new TerraformOutput(this, 'lambda_function_name', {
-      value: secureInfra.lambdaFunction.functionName,
-      description: 'Lambda function name',
-    });
+    // // Simple outputs
+    // new TerraformOutput(this, 'vpc_id', {
+    //   value: secureInfra.vpc.id,
+    //   description: 'VPC ID for the secure infrastructure',
+    // });
 
-    new TerraformOutput(this, 'rds_endpoint', {
-      value: secureInfra.rdsInstance.endpoint,
-      description: 'RDS endpoint',
-      sensitive: true,
-    });
+    // new TerraformOutput(this, 'public_subnet_ids', {
+    //   value: [secureInfra.publicSubnets[0].id, secureInfra.publicSubnets[1].id],
+    //   description: 'Public subnet IDs',
+    // });
+
+    // new TerraformOutput(this, 'private_subnet_ids', {
+    //   value: [
+    //     secureInfra.privateSubnets[0].id,
+    //     secureInfra.privateSubnets[1].id,
+    //   ],
+    //   description: 'Private subnet IDs',
+    // });
+
+    // new TerraformOutput(this, 'kms_key_id', {
+    //   value: secureInfra.kmsKey.keyId,
+    //   description: 'KMS key ID',
+    // });
+
+    // new TerraformOutput(this, 's3_bucket_name', {
+    //   value: secureInfra.s3Bucket.id,
+    //   description: 'S3 bucket name',
+    // });
+
+    // new TerraformOutput(this, 'lambda_function_name', {
+    //   value: secureInfra.lambdaFunction.functionName,
+    //   description: 'Lambda function name',
+    // });
+
+    // new TerraformOutput(this, 'rds_endpoint', {
+    //   value: secureInfra.rdsInstance.endpoint,
+    //   description: 'RDS endpoint',
+    //   sensitive: true,
+    // });
 
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.

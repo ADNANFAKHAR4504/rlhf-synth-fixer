@@ -1,11 +1,13 @@
 import { Construct } from 'constructs';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+// import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+// import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+// import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -13,50 +15,53 @@ import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+// import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+// import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+// import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+// import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+// import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+// import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+// import { Route } from '@cdktf/provider-aws/lib/route';
+// import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+// import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+// import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+// import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+// import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+// import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
 
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-
-import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
+interface SecureModulesProps {
+  region: string;
+}
 
 export class SecureModules extends Construct {
   public readonly kmsKey: KmsKey;
   public readonly kmsAlias: KmsAlias;
-  public readonly vpc: Vpc;
-  public readonly publicSubnets: Subnet[];
-  public readonly privateSubnets: Subnet[];
-  public readonly lambdaRole: IamRole;
   public readonly s3Bucket: S3Bucket;
-  public readonly lambdaFunction: LambdaFunction;
-  public readonly lambdaLogGroup: CloudwatchLogGroup;
-  public readonly rdsInstance: DbInstance;
-  public readonly ebsVolume: EbsVolume;
+  // public readonly vpc: Vpc;
+  // public readonly publicSubnets: Subnet[];
+  // public readonly privateSubnets: Subnet[];
+  // public readonly lambdaRole: IamRole;
+  // public readonly lambdaFunction: LambdaFunction;
+  // public readonly lambdaLogGroup: CloudwatchLogGroup;
+  // public readonly rdsInstance: DbInstance;
+  // public readonly ebsVolume: EbsVolume;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: SecureModulesProps) {
     super(scope, id);
 
-    // Hardcoded configuration
-    const region = 'us-east-1';
-    const appName = 'MyApp';
-    const vpcCidr = '10.0.0.0/16';
-    const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
-    const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
-    const availabilityZones = ['us-east-1a', 'us-east-1b'];
+    // Get current AWS account and region
+    // const currentRegion = new DataAwsRegion(this, 'current-region');
+    const currentAccount = new DataAwsCallerIdentity(this, 'current-account');
 
-    // KMS Key for encryption at rest
+    // Configuration
+    const region = props.region;
+    const appName = 'MyApp';
+    // const vpcCidr = '10.0.0.0/16';
+    // const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
+    // const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
+    // const availabilityZones = [`${region}a`, `${region}b`];
+
+    // KMS Key for encryption at rest - FIXED POLICY
     this.kmsKey = new KmsKey(this, 'kms-key', {
       description: `${appName} encryption key for all services`,
       keyUsage: 'ENCRYPT_DECRYPT',
@@ -66,10 +71,19 @@ export class SecureModules extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'Enable IAM User Permissions',
+            Sid: 'Enable IAM Root Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${currentAccount.accountId}:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow AWS Services',
             Effect: 'Allow',
             Principal: { AWS: '*' },
-            Action: 'kms:*',
+            Action: ['kms:Decrypt', 'kms:GenerateDataKey*', 'kms:DescribeKey'],
             Resource: '*',
             Condition: {
               StringEquals: {
@@ -78,6 +92,7 @@ export class SecureModules extends Construct {
                   `rds.${region}.amazonaws.com`,
                   `lambda.${region}.amazonaws.com`,
                   `ec2.${region}.amazonaws.com`,
+                  `logs.${region}.amazonaws.com`,
                 ],
               },
             },
@@ -96,77 +111,132 @@ export class SecureModules extends Construct {
       targetKeyId: this.kmsKey.keyId,
     });
 
-    // // VPC
-    // this.vpc = new Vpc(this, 'vpc', {
-    //   cidrBlock: vpcCidr,
-    //   enableDnsHostnames: true,
-    //   enableDnsSupport: true,
-    //   tags: {
-    //     Name: `${appName}-VPC`,
-    //   },
-    // });
+    // S3 Bucket - ONLY ACTIVE RESOURCE
+    this.s3Bucket = new S3Bucket(this, 's3-bucket', {
+      bucket: `${appName.toLowerCase()}-secure-bucket-${Date.now()}`,
+      tags: {
+        Name: `${appName}-S3-Bucket`,
+      },
+    });
 
-    // // Internet Gateway
-    // const igw = new InternetGateway(this, 'igw', {
-    //   vpcId: this.vpc.id,
-    //   tags: {
-    //     Name: `${appName}-IGW`,
-    //   },
-    // });
+    // S3 Bucket encryption
+    new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
+      bucket: this.s3Bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'aws:kms',
+            kmsMasterKeyId: this.kmsKey.arn,
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
 
-    // // Public Subnets
-    // this.publicSubnets = [];
-    // publicSubnetCidrs.forEach((cidr, index) => {
-    //   const subnet = new Subnet(this, `public-subnet-${index}`, {
-    //     vpcId: this.vpc.id,
-    //     cidrBlock: cidr,
-    //     availabilityZone: availabilityZones[index],
-    //     mapPublicIpOnLaunch: true,
-    //     tags: {
-    //       Name: `${appName}-Public-Subnet-${index + 1}`,
-    //       Type: 'Public',
-    //     },
-    //   });
-    //   this.publicSubnets.push(subnet);
-    // });
+    // S3 Bucket versioning
+    new S3BucketVersioningA(this, 's3-versioning', {
+      bucket: this.s3Bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+    });
 
-    // // Private Subnets
-    // this.privateSubnets = [];
-    // privateSubnetCidrs.forEach((cidr, index) => {
-    //   const subnet = new Subnet(this, `private-subnet-${index}`, {
-    //     vpcId: this.vpc.id,
-    //     cidrBlock: cidr,
-    //     availabilityZone: availabilityZones[index],
-    //     tags: {
-    //       Name: `${appName}-Private-Subnet-${index + 1}`,
-    //       Type: 'Private',
-    //     },
-    //   });
-    //   this.privateSubnets.push(subnet);
-    // });
+    // S3 Public Access Block
+    new S3BucketPublicAccessBlock(this, 's3-public-access-block', {
+      bucket: this.s3Bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // S3 Access Logging
+    const loggingBucket = new S3Bucket(this, 's3-logging-bucket', {
+      bucket: `${appName.toLowerCase()}-access-logs-${Date.now()}`,
+      tags: {
+        Name: `${appName}-S3-AccessLogs`,
+      },
+    });
+
+    new S3BucketLoggingA(this, 's3-logging', {
+      bucket: this.s3Bucket.id,
+      targetBucket: loggingBucket.id,
+      targetPrefix: 'access-logs/',
+    });
+
+    // COMMENTED OUT - VPC and related resources
+    /*
+    // VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: vpcCidr,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        Name: `${appName}-VPC`,
+      },
+    });
+
+    // Internet Gateway
+    const igw = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${appName}-IGW`,
+      },
+    });
+
+    // Public Subnets
+    this.publicSubnets = [];
+    publicSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new Subnet(this, `public-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: availabilityZones[index],
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `${appName}-Public-Subnet-${index + 1}`,
+          Type: 'Public',
+        },
+      });
+      this.publicSubnets.push(subnet);
+    });
+
+    // Private Subnets
+    this.privateSubnets = [];
+    privateSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new Subnet(this, `private-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: availabilityZones[index],
+        tags: {
+          Name: `${appName}-Private-Subnet-${index + 1}`,
+          Type: 'Private',
+        },
+      });
+      this.privateSubnets.push(subnet);
+    });
 
     // Route table for public subnets
-    // const publicRouteTable = new RouteTable(this, 'public-rt', {
-    //   vpcId: this.vpc.id,
-    //   tags: {
-    //     Name: `${appName}-Public-RT`,
-    //   },
-    // });
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${appName}-Public-RT`,
+      },
+    });
 
-    // // Route to internet gateway
-    // new Route(this, 'public-route', {
-    //   routeTableId: publicRouteTable.id,
-    //   destinationCidrBlock: '0.0.0.0/0',
-    //   gatewayId: igw.id,
-    // });
+    // Route to internet gateway
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
 
-    // // Associate public subnets with route table
-    // this.publicSubnets.forEach((subnet, index) => {
-    //   new RouteTableAssociation(this, `public-rta-${index}`, {
-    //     subnetId: subnet.id,
-    //     routeTableId: publicRouteTable.id,
-    //   });
-    // });
+    // Associate public subnets with route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
 
     // Lambda execution role
     this.lambdaRole = new IamRole(this, 'lambda-role', {
@@ -255,60 +325,7 @@ export class SecureModules extends Construct {
       description: 'HTTPS outbound for AWS API calls',
     });
 
-    // S3 Bucket
-    this.s3Bucket = new S3Bucket(this, 's3-bucket', {
-      bucket: `${appName.toLowerCase()}-secure-bucket-${Date.now()}`,
-      tags: {
-        Name: `${appName}-S3-Bucket`,
-      },
-    });
-
-    // S3 Bucket encryption
-    new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
-      bucket: this.s3Bucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: this.kmsKey.arn,
-          },
-          bucketKeyEnabled: true,
-        },
-      ],
-    });
-
-    // S3 Bucket versioning
-    new S3BucketVersioningA(this, 's3-versioning', {
-      bucket: this.s3Bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
-
-    // S3 Public Access Block
-    new S3BucketPublicAccessBlock(this, 's3-public-access-block', {
-      bucket: this.s3Bucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    // S3 Access Logging
-    const loggingBucket = new S3Bucket(this, 's3-logging-bucket', {
-      bucket: `${appName.toLowerCase()}-access-logs-${Date.now()}`,
-      tags: {
-        Name: `${appName}-S3-AccessLogs`,
-      },
-    });
-
-    new S3BucketLoggingA(this, 's3-logging', {
-      bucket: this.s3Bucket.id,
-      targetBucket: loggingBucket.id,
-      targetPrefix: 'access-logs/',
-    });
-
-    // Lambda Function - HARDCODED subnet IDs
+    // Lambda Function
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${appName}-Function`,
       role: this.lambdaRole.arn,
@@ -320,7 +337,6 @@ export class SecureModules extends Construct {
       memorySize: 128,
       kmsKeyArn: this.kmsKey.arn,
       vpcConfig: {
-        // HARDCODED: Direct reference to subnet IDs
         subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
         securityGroupIds: [lambdaSecurityGroup.id],
       },
@@ -336,74 +352,74 @@ export class SecureModules extends Construct {
       },
     });
 
-    // // DB Subnet Group - HARDCODED subnet IDs
-    // const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-    //   name: `${appName.toLowerCase()}-db-subnet-group`,
-    //   // HARDCODED: Direct reference to subnet IDs
-    //   subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
-    //   description: 'Subnet group for RDS instance',
-    //   tags: {
-    //     Name: `${appName}-DB-SubnetGroup`,
-    //   },
-    // });
+    // DB Subnet Group
+    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
+      name: `${appName.toLowerCase()}-db-subnet-group`,
+      subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
+      description: 'Subnet group for RDS instance',
+      tags: {
+        Name: `${appName}-DB-SubnetGroup`,
+      },
+    });
 
-    // // Security Group for RDS
-    // const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
-    //   name: `${appName}-RDS-SG`,
-    //   description: 'Security group for RDS instance',
-    //   vpcId: this.vpc.id,
-    //   tags: {
-    //     Name: `${appName}-RDS-SG`,
-    //   },
-    // });
+    // Security Group for RDS
+    const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
+      name: `${appName}-RDS-SG`,
+      description: 'Security group for RDS instance',
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${appName}-RDS-SG`,
+      },
+    });
 
     // RDS security group rule
-    // new SecurityGroupRule(this, 'rds-sg-ingress', {
-    //   type: 'ingress',
-    //   fromPort: 3306,
-    //   toPort: 3306,
-    //   protocol: 'tcp',
-    //   sourceSecurityGroupId: lambdaSecurityGroup.id,
-    //   securityGroupId: rdsSecurityGroup.id,
-    //   description: 'MySQL access from Lambda',
-    // });
+    new SecurityGroupRule(this, 'rds-sg-ingress', {
+      type: 'ingress',
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: 'tcp',
+      sourceSecurityGroupId: lambdaSecurityGroup.id,
+      securityGroupId: rdsSecurityGroup.id,
+      description: 'MySQL access from Lambda',
+    });
 
-    // // RDS Instance
-    // this.rdsInstance = new DbInstance(this, 'rds-instance', {
-    //   identifier: `${appName.toLowerCase()}-database`,
-    //   engine: 'mysql',
-    //   engineVersion: '8.0',
-    //   instanceClass: 'db.t3.micro',
-    //   allocatedStorage: 20,
-    //   storageType: 'gp2',
-    //   storageEncrypted: true,
-    //   kmsKeyId: this.kmsKey.arn,
-    //   dbName: 'myappdb',
-    //   username: 'admin',
-    //   password: 'ChangeMe123!',
-    //   vpcSecurityGroupIds: [rdsSecurityGroup.id],
-    //   dbSubnetGroupName: dbSubnetGroup.name,
-    //   backupRetentionPeriod: 7,
-    //   backupWindow: '03:00-04:00',
-    //   maintenanceWindow: 'sun:04:00-sun:05:00',
-    //   skipFinalSnapshot: false,
-    //   finalSnapshotIdentifier: `${appName.toLowerCase()}-final-snapshot`,
-    //   deletionProtection: true,
-    //   tags: {
-    //     Name: `${appName}-RDS-Instance`,
-    //   },
-    // });
+    // RDS Instance
+    this.rdsInstance = new DbInstance(this, 'rds-instance', {
+      identifier: `${appName.toLowerCase()}-database`,
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      storageType: 'gp2',
+      storageEncrypted: true,
+      kmsKeyId: this.kmsKey.arn,
+      dbName: 'myappdb',
+      username: 'admin',
+      password: 'ChangeMe123!',
+      vpcSecurityGroupIds: [rdsSecurityGroup.id],
+      dbSubnetGroupName: dbSubnetGroup.name,
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+      skipFinalSnapshot: false,
+      finalSnapshotIdentifier: `${appName.toLowerCase()}-final-snapshot`,
+      deletionProtection: true,
+      tags: {
+        Name: `${appName}-RDS-Instance`,
+      },
+    });
 
-    // // EBS Volume
-    // this.ebsVolume = new EbsVolume(this, 'ebs-volume', {
-    //   availabilityZone: availabilityZones[0],
-    //   size: 10,
-    //   type: 'gp3',
-    //   encrypted: true,
-    //   kmsKeyId: this.kmsKey.keyId,
-    //   tags: {
-    //     Name: `${appName}-EBS-Volume`,
-    //   },
-    // });
+    // EBS Volume
+    this.ebsVolume = new EbsVolume(this, 'ebs-volume', {
+      availabilityZone: availabilityZones[0],
+      size: 10,
+      type: 'gp3',
+      encrypted: true,
+      kmsKeyId: this.kmsKey.keyId,
+      tags: {
+        Name: `${appName}-EBS-Volume`,
+      },
+    });
+    */
   }
 }
