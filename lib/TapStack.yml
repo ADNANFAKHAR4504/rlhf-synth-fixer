@@ -636,10 +636,10 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                 Resource: !GetAtt SecurityKMSKey.Arn
-              - Effect: Allow
-                Action:
-                  - rds:DescribeDBInstances
-                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}'
+            #  - Effect: Allow
+            #    Action:
+            #      - rds:DescribeDBInstances
+            #    Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}'
 
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
@@ -834,11 +834,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-SecureBucket'
 
-  DatabaseEndpoint:
-    Description: 'RDS Database endpoint'
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+#  DatabaseEndpoint:
+#    Description: 'RDS Database endpoint'
+#    Value: !GetAtt DatabaseInstance.Endpoint.Address
+#    Export:
+#      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
 
   LambdaFunctionArn:
     Description: 'ARN of the Lambda function'
