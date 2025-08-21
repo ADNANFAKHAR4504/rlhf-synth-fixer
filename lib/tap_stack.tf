@@ -98,7 +98,7 @@ resource "random_password" "rds_password" {
 
 # Get latest Amazon Linux 2 AMI for primary region
 data "aws_ami" "amazon_linux_primary" {
-  provider    = aws
+  provider    = aws.us_west_1
   most_recent = true
   owners      = ["amazon"]
 
@@ -139,7 +139,7 @@ data "aws_caller_identity" "current" {}
 
 # KMS key for primary region
 resource "aws_kms_key" "primary" {
-  provider                = aws
+  provider                = aws.us_west_1
   description             = "KMS key for ${var.project_name} primary region encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
@@ -152,7 +152,7 @@ resource "aws_kms_key" "primary" {
 
 # KMS key alias for primary region
 resource "aws_kms_alias" "primary" {
-  provider      = aws
+  provider      = aws.us_west_1
   name          = "alias/${var.project_name}-primary-${var.environment}"
   target_key_id = aws_kms_key.primary.key_id
 }
@@ -183,7 +183,7 @@ resource "aws_kms_alias" "secondary" {
 
 # Primary VPC
 resource "aws_vpc" "primary" {
-  provider             = aws
+  provider             = aws.us_west_1
   cidr_block           = local.regions.primary.cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -207,7 +207,7 @@ resource "aws_internet_gateway" "primary" {
 
 # Public subnets for primary VPC
 resource "aws_subnet" "primary_public" {
-  provider                = aws
+  provider                = aws.us_west_1
   count                   = length(local.regions.primary.azs)
   vpc_id                  = aws_vpc.primary.id
   cidr_block              = cidrsubnet(local.regions.primary.cidr, 8, count.index)
@@ -223,7 +223,7 @@ resource "aws_subnet" "primary_public" {
 
 # Private subnets for primary VPC
 resource "aws_subnet" "primary_private" {
-  provider          = aws
+  provider          = aws.us_west_1
   count             = length(local.regions.primary.azs)
   vpc_id            = aws_vpc.primary.id
   cidr_block        = cidrsubnet(local.regions.primary.cidr, 8, count.index + 10)
@@ -250,7 +250,7 @@ resource "aws_eip" "primary_nat" {
 }
 
 resource "aws_nat_gateway" "primary" {
-  provider      = aws
+  provider      = aws.us_west_1
   allocation_id = aws_eip.primary_nat.id
   subnet_id     = aws_subnet.primary_public[0].id
 
@@ -295,14 +295,14 @@ resource "aws_route_table" "primary_private" {
 
 # Route table associations for primary VPC
 resource "aws_route_table_association" "primary_public" {
-  provider       = aws
+  provider       = aws.us_west_1
   count          = length(aws_subnet.primary_public)
   subnet_id      = aws_subnet.primary_public[count.index].id
   route_table_id = aws_route_table.primary_public.id
 }
 
 resource "aws_route_table_association" "primary_private" {
-  provider       = aws
+  provider       = aws.us_west_1
   count          = length(aws_subnet.primary_private)
   subnet_id      = aws_subnet.primary_private[count.index].id
   route_table_id = aws_route_table.primary_private.id
@@ -310,7 +310,7 @@ resource "aws_route_table_association" "primary_private" {
 
 # VPC Flow Logs for primary VPC
 resource "aws_flow_log" "primary" {
-  provider        = aws
+  provider        = aws.us_west_1
   iam_role_arn    = aws_iam_role.flow_logs.arn
   log_destination = aws_cloudwatch_log_group.primary_vpc_flow_logs.arn
   traffic_type    = "ALL"
@@ -324,7 +324,7 @@ resource "aws_flow_log" "primary" {
 
 # CloudWatch Log Group for primary VPC flow logs
 resource "aws_cloudwatch_log_group" "primary_vpc_flow_logs" {
-  provider          = aws
+  provider          = aws.us_west_1
   name              = "/aws/vpc/flowlogs/${local.naming.vpc_primary}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.primary.arn
@@ -661,7 +661,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # Security group for EC2 instances in primary region
 resource "aws_security_group" "ec2_primary" {
-  provider    = aws
+  provider    = aws.us_west_1
   name        = "${local.naming.ec2_primary}-sg"
   description = "Security group for EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
@@ -719,7 +719,7 @@ resource "aws_security_group" "ec2_secondary" {
 
 # Security group for RDS in primary region
 resource "aws_security_group" "rds_primary" {
-  provider    = aws
+  provider    = aws.us_west_1
   name        = "${local.naming.rds_primary}-sg"
   description = "Security group for RDS instances in primary region"
   vpc_id      = aws_vpc.primary.id
@@ -781,7 +781,7 @@ resource "aws_security_group" "rds_secondary" {
 
 # EC2 instance in primary region
 resource "aws_instance" "primary" {
-  provider                    = aws
+  provider                    = aws.us_west_1
   ami                         = data.aws_ami.amazon_linux_primary.id
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.primary_public[0].id
@@ -962,7 +962,7 @@ resource "aws_db_subnet_group" "secondary" {
 
 # Primary RDS Instance
 resource "aws_db_instance" "primary" {
-  provider                = aws
+  provider                = aws.us_west_1
   identifier              = local.naming.rds_primary
   allocated_storage       = 20
   engine                  = "mysql"
@@ -1047,7 +1047,7 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 
 # CloudTrail log group
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  provider          = aws
+  provider          = aws.us_west_1
   name              = "/aws/cloudtrail/${var.project_name}-${var.environment}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.primary.arn
@@ -1091,7 +1091,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 # Global CloudTrail
 resource "aws_cloudtrail" "this" {
-  provider                      = aws
+  provider                      = aws.us_west_1
   name                          = "${var.project_name}-org-trail-${var.environment}"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
