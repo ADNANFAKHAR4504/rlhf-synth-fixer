@@ -41,8 +41,9 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
 
-    test("uses data sources for Secrets Manager", () => {
-      expect(stackContent).toMatch(/data\s+"aws_secretsmanager_secret_version"\s+"db_password"/);
+    test("uses Secrets Manager resources", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_password"/);
+      expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"db_password"/);
     });
   });
 
@@ -279,7 +280,7 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("RDS uses password from Secrets Manager", () => {
-      expect(stackContent).toMatch(/password\s*=\s*data\.aws_secretsmanager_secret_version\.db_password\.secret_string/);
+      expect(stackContent).toMatch(/password\s*=\s*aws_secretsmanager_secret_version\.db_password\.secret_string/);
     });
 
     test("secret has proper naming", () => {

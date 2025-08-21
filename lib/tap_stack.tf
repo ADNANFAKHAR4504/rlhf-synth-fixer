@@ -76,10 +76,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Get database password from AWS Secrets Manager
-data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = aws_secretsmanager_secret.db_password.id
-}
+# Database password will be retrieved from the secret version resource
 
 ########################
 # Security Groups
@@ -508,7 +505,7 @@ resource "aws_db_instance" "app" {
 
   db_name  = "webappdb"
   username = "admin"
-  password = data.aws_secretsmanager_secret_version.db_password.secret_string
+  password = aws_secretsmanager_secret_version.db_password.secret_string
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.app.name
