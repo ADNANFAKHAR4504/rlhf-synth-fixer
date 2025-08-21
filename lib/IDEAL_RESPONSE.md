@@ -45,8 +45,18 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
+  # Backend configuration - supports both S3 and Terraform Cloud
+  # For S3: backend "s3" {}
+  # For Terraform Cloud: backend "remote" {}
   backend "s3" {}
+
+  # Alternative Terraform Cloud backend configuration:
+  # backend "remote" {
+  #   organization = "your-organization"
+  #   workspaces {
+  #     prefix = "iac-test-automations-"
+  #   }
+  # }
 }
 
 # Primary AWS provider for general resources
@@ -124,46 +134,59 @@ variable "environment_names" {
 
 ### Output Definitions
 
-Outputs provide access to deployed resource information:
+Outputs provide access to deployed resource information with environment-specific keys:
 
 ```hcl
 # outputs.tf
 output "bucket_names" {
   value = {
-    staging    = module.storage.bucket_name
-    production = module.storage.bucket_name
+    (local.env) = module.storage.bucket_name
   }
 }
 
 output "security_group_ids" {
   value = {
-    staging    = module.network.security_group_id
-    production = module.network.security_group_id
+    (local.env) = module.network.security_group_id
   }
 }
 
 output "iam_role_arns" {
   value = {
-    staging    = module.iam_role.role_arn
-    production = module.iam_role.role_arn
+    (local.env) = module.iam_role.role_arn
   }
+}
+
+# Environment-specific outputs for current deployment
+output "current_bucket_name" {
+  value = module.storage.bucket_name
+}
+
+output "current_security_group_id" {
+  value = module.network.security_group_id
+}
+
+output "current_iam_role_arn" {
+  value = module.iam_role.role_arn
 }
 ```
 
 ### Main Configuration
 
-The main configuration orchestrates all modules:
+The main configuration orchestrates all modules with environment-specific provider selection:
 
 ```hcl
 # Main Terraform configuration
 locals {
   env = replace(terraform.workspace, "myapp-", "")
+
+  # Determine provider based on environment
+  aws_provider = local.env == "production" ? aws.production : aws.staging
 }
 
 module "storage" {
   source = "./modules/storage"
   providers = {
-    aws = aws.staging
+    aws = local.aws_provider
   }
   environment = local.env
 }
@@ -171,7 +194,7 @@ module "storage" {
 module "network" {
   source = "./modules/network"
   providers = {
-    aws = aws.staging
+    aws = local.aws_provider
   }
   environment = local.env
 }
@@ -179,7 +202,7 @@ module "network" {
 module "iam_role" {
   source = "./modules/iam_role"
   providers = {
-    aws = aws.staging
+    aws = local.aws_provider
   }
   environment = local.env
   bucket_arn = module.storage.bucket_arn
