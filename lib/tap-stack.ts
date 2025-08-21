@@ -657,10 +657,8 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VpcId', {
       description: 'VPC ID for the Nova security baseline',
       value: this.vpc.vpcId,
-      exportName: `NovaVpcId-${this.stackName}`,
     });
 
-    // 🔹 Add Private Subnets for tests
     new cdk.CfnOutput(this, 'PrivateSubnet1Id', {
       description: 'Private Subnet 1 ID',
       value: this.vpc.privateSubnets[0].subnetId,
@@ -671,33 +669,19 @@ export class TapStack extends cdk.Stack {
       value: this.vpc.privateSubnets[1].subnetId,
     });
 
-    new cdk.CfnOutput(this, 'KmsKeyId', {
-      description: 'KMS Key ID for encryption',
-      value: this.kmsKey.keyId,
-      exportName: `NovaKmsKeyId-${this.stackName}`,
-    });
-
-    new cdk.CfnOutput(this, 'LogsBucketName', {
-      description: 'S3 bucket name for logs storage',
-      value: this.logsBucket.bucketName,
-      exportName: `NovaLogsBucketName-${this.stackName}`,
-    });
-
-    // 🔹 Add ApiEndpointUrl (tests expect this name)
-    new cdk.CfnOutput(this, 'ApiEndpointUrl', {
-      description: 'API Gateway endpoint URL',
-      value: this.apiGateway.url,
-    });
     new cdk.CfnOutput(this, 'KmsKeyArn', {
       description: 'KMS Key ARN for encryption',
       value: this.kmsKey.keyArn,
     });
 
-    // You can still keep HealthCheckEndpoint
-    new cdk.CfnOutput(this, 'HealthCheckEndpoint', {
-      description: 'Health check endpoint URL',
-      value: `${this.apiGateway.url}health`,
-      exportName: `NovaHealthCheckEndpoint-${this.stackName}`,
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      description: 'S3 bucket name for logs storage',
+      value: this.logsBucket.bucketName,
+    });
+
+    new cdk.CfnOutput(this, 'ApiEndpointUrl', {
+      description: 'API Gateway endpoint URL',
+      value: this.apiGateway.url,
     });
   }
 }
