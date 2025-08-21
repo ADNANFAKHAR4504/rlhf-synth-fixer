@@ -37,5 +37,11 @@
   ],
   "business_context": "Customer portal infrastructure for Black Friday campaign requiring high availability and scalability",
   "prompt_authenticity": "human-written",
-  "validation_requirements": "Core validation requirement for human-written prompts satisfied"
+  "validation_requirements": "Core validation requirement for human-written prompts satisfied",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
