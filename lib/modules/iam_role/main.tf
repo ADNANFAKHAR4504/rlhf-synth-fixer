@@ -12,9 +12,7 @@ resource "aws_iam_role" "main" {
     }]
   })
   
-  tags = merge({
-    Environment = var.environment
-  }, var.role_tags)
+  tags = var.role_tags
 }
 
 resource "aws_iam_policy" "s3_access" {
