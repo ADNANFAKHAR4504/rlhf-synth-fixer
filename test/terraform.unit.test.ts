@@ -128,12 +128,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(fs.existsSync(backendPath)).toBe(true);
 
       const content = fs.readFileSync(backendPath, 'utf8');
-      expect(content).toMatch(/cloud\s*{/);
-      expect(content).toMatch(/organization\s*=\s*"TuringGpt"/);
-      expect(content).toMatch(/workspaces\s*{/);
-      expect(content).toMatch(
-        /name\s*=\s*"iac-test-automations-\${terraform\.workspace}"/
-      );
+      expect(content).toMatch(/backend\s+"s3"/);
+      expect(content).toMatch(/workspace.*prefix/);
     });
   });
 

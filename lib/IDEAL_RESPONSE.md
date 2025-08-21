@@ -118,7 +118,7 @@ terraform {
 #     # region         = "us-east-1"
 #     # dynamodb_table = "terraform-state-lock"
 #     # encrypt        = true
-#     
+#
 #     # Key structure supports workspace prefixes:
 #     # - staging:     "staging/terraform.tfstate"
 #     # - production:  "production/terraform.tfstate"
@@ -137,7 +137,7 @@ Centralized environment detection and configuration:
 locals {
   # Environment detection - treat default workspace as staging
   env = terraform.workspace == "production" ? "production" : "staging"
-  
+
   # Common tags for all resources
   common_tags = {
     Project     = var.project_name
@@ -145,7 +145,7 @@ locals {
     ManagedBy   = "terraform"
     Repository  = "iac-test-automations"
   }
-  
+
   # Environment-specific configurations
   environment_config = {
     staging = {
@@ -155,7 +155,7 @@ locals {
       region = var.production_region
     }
   }
-  
+
   # Current environment configuration
   current_env_config = local.environment_config[local.env]
 }
@@ -786,16 +786,19 @@ The infrastructure is organized into separate environments with conditional reso
 ## Key Improvements Made
 
 ### ✅ **Issue 1: Provider Mapping - Conditional Logic**
+
 - **Before**: Always used staging provider
 - **After**: Provider automatically selected based on current workspace
 - **Implementation**: Uses `local.current_env_config.region` and `local.env`
 
 ### ✅ **Issue 2: Terraform Cloud Backend - Workspace Prefix Support**
+
 - **Before**: S3 backend without workspace separation
 - **After**: Terraform Cloud backend with proper workspace prefix support
 - **Implementation**: Uses `iac-test-automations-${terraform.workspace}` naming
 
 ### ✅ **Issue 3: Environment-Keyed Outputs - Proper Module Separation**
+
 - **Before**: Outputs referenced same module instances for both environments
 - **After**: Uses environment-agnostic modules with proper separation
 - **Implementation**: Uses `module.storage[0]`, `module.network[0]`, `module.iam_role[0]`
@@ -838,6 +841,7 @@ The infrastructure is organized into separate environments with conditional reso
 ### Common Issues
 
 1. **Provider Selection Error**
+
    ```bash
    # Ensure workspace is set correctly
    terraform workspace show
@@ -845,6 +849,7 @@ The infrastructure is organized into separate environments with conditional reso
    ```
 
 2. **Backend Configuration Error**
+
    ```bash
    # Check Terraform Cloud organization and workspace
    # Ensure proper authentication
