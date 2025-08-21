@@ -420,9 +420,10 @@ export class SecureInfrastructure extends Construct {
       functionName: `${config.projectName}-${config.environment}-function`,
       role: this.lambdaRole.arn,
       handler: 'index.handler',
-      runtime: 'nodejs18.x',
+      runtime: 'python3.9',
       // Simple function code - in practice, this would come from a deployment package
-      filename: 'lambda.zip', // You'll need to create this zip file
+      s3Bucket: 'corp-image-uploads',
+      s3Key: 'lambda-deployment.zip',
       sourceCodeHash: 'dummy-hash', // This should be the actual file hash
 
       // Run Lambda in private subnets for security
