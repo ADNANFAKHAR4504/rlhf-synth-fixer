@@ -26,5 +26,11 @@
     "EC2",
     "VPC",
     "AWS Backup"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
