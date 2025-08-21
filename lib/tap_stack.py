@@ -1,4 +1,5 @@
 import json
+import os
 from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
@@ -21,12 +22,16 @@ from constructs import Construct
 
 
 class TapStack(Stack):
+    """Main CDK Stack for the Tap Web Application Infrastructure"""
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Project naming convention
-        self.project_name = "tap-webapp"
+        # Get environment suffix for resource naming
+        self.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+        
+        # Project naming convention with environment suffix
+        self.project_name = f"tap-webapp-{self.environment_suffix}"
 
         # Create VPC and networking components
         self.create_networking()
@@ -104,6 +109,13 @@ class TapStack(Stack):
             ec2.Peer.any_ipv4(),
             ec2.Port.tcp(443),
             "Allow HTTPS traffic"
+        )
+        
+        # Allow outbound traffic to EC2 instances
+        self.alb_sg.add_egress_rule(
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(80),
+            "Allow HTTP traffic to EC2 instances"
         )
 
         # EC2 Security Group
@@ -406,11 +418,21 @@ class TapStack(Stack):
             )
         )
 
+        # Create Config Configuration Recorder
+        self.config_recorder = config.CfnConfigurationRecorder(
+            self, f"{self.project_name}-config-recorder",
+            name=f"{self.project_name}-config-recorder",
+            role_arn=self.config_role.role_arn,
+            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
+                all_supported=True,
+                include_global_resource_types=True
+            )
+        )
+
         # Create Config Delivery Channel
         self.config_delivery_channel = config.CfnDeliveryChannel(
             self, f"{self.project_name}-config-delivery-channel",
-            name=f"{self.project_name}-config-delivery-"
-            "channel",
+            name=f"{self.project_name}-config-delivery-channel",
             s3_bucket_name=self.config_bucket.bucket_name
         )
 
@@ -433,7 +455,7 @@ class TapStack(Stack):
                         none={}
                     ),
                     statement=wafv2.CfnWebACL.StatementProperty(
-                        managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
+                        managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(  # pylint: disable=line-too-long
                             vendor_name="AWS",
                             name="AWSManagedRulesCommonRuleSet"
                         )
@@ -451,7 +473,7 @@ class TapStack(Stack):
                         none={}
                     ),
                     statement=wafv2.CfnWebACL.StatementProperty(
-                        managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
+                        managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(  # pylint: disable=line-too-long
                             vendor_name="AWS",
                             name="AWSManagedRulesKnownBadInputsRuleSet"
                         )
