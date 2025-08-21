@@ -15,14 +15,7 @@ generates infrastructure described in the task description.
 1. **Generate Requirements**
    - Create  `lib/PROMPT.md` from task description. Restrict the scope of the prompt to generate
     what the task description is requiring, keeping a minimal approach.
-   - **CRITICAL: Human-Generated Content Validation** - The prompt MUST pass automated validation:
-     - Use conversational, informal language with natural imperfections
-     - Avoid numbered requirements, bullet points, or formal structure
-     - NO template-like organization patterns
-     - Include incomplete thoughts, contractions, and casual tone
-     - Write as if a real developer is explaining their problem
-     - **Failure to pass this validation will cause PR rejection**
-     - **Reference**: See `human-prompt-examples.md` for scoring system (8-10 required) and detailed examples
+   - The prompt should look like 'Human generated'. Do not make it more complex than needed.
    - Explore AWS docs and include 2 latest features or services in the prompt. Keep it simple.
    - Avoid creating resources that take too long to deploy. If those are needed,
     make sure to set properties that reduce the deployment time.
