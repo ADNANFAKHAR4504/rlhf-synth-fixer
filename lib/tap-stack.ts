@@ -151,9 +151,6 @@ export class TapStack extends TerraformStack {
       tags: projectTags,
       logGroupName: `${namePrefix}application-logs`,
     });
-
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
-
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
@@ -278,6 +275,11 @@ export class TapStack extends TerraformStack {
         Fn.element(azs.names, 2),
       ],
       description: 'Availability zones used for the infrastructure',
+    });
+
+    new TerraformOutput(this, 'rds-instance-id', {
+      value: rds.instance.id,
+      description: 'ID of the RDS database instance',
     });
   }
 }
