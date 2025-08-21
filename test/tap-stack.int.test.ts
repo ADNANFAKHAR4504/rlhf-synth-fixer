@@ -28,7 +28,7 @@ jest.mock('aws-sdk', () => {
   };
 });
 
-const mockEC2 = new AWS.EC2() as any; // Type assertion to bypass strict TypeScript checks
+const mockEC2 = new AWS.EC2() as any;
 const mockS3 = new AWS.S3() as any;
 const mockIAM = new AWS.IAM() as any;
 
@@ -51,6 +51,7 @@ const CFN_SCHEMA = new yaml.Schema([
 describe('TapStack Integration Tests', () => {
   let template: any;
   let outputs: any;
+  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr1847'}`; // Use environment suffix from CI
 
   beforeAll(() => {
     // Load TapStack.yml
@@ -59,10 +60,14 @@ describe('TapStack Integration Tests', () => {
     const yamlContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(yamlContent, { schema: CFN_SCHEMA }) as any;
 
-    // Load all-outputs.json
+    // Load all-outputs.json and transform to flat object
     const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
     expect(fs.existsSync(outputsPath)).toBe(true);
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    outputs = rawOutputs[stackName].reduce((acc: any, output: any) => {
+      acc[output.OutputKey] = output.OutputValue;
+      return acc;
+    }, {});
 
     // Mock AWS SDK methods
     mockEC2.describeVpcs.mockImplementation(() => ({
@@ -343,7 +348,6 @@ describe('TapStack Integration Tests', () => {
       expect(['true', 'false']).toContain(template.Parameters.CreateNatPerAZ.Default);
     });
 
-    // Edge Cases
     test('ProjectName rejects uppercase', () => {
       expect('TapStack').not.toMatch(template.Parameters.ProjectName.AllowedPattern);
     });
