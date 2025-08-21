@@ -33,7 +33,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: dev
-    Description: Environment identifier (e.g., dev, pr1848, prod)
+    Description: Environment identifier (e.g., dev, pr1847, prod)
     AllowedPattern: ^[a-z0-9-]*$
     ConstraintDescription: Must contain only lowercase alphanumeric characters and hyphens.
 
