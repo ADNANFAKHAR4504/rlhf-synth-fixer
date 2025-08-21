@@ -1,10 +1,10 @@
 You are an expert Pulumi engineer. Produce a single Pulumi implementation in Python that meets the high-availability, security, compliance, and automation requirements below. You must only edit these three files in the repository:
 
-lib/tap_stack.py — the Pulumi stack implementation (the only file that can contain resource code)
+lib/tap_stack.py the Pulumi stack implementation (the only file that can contain resource code)
 
-tests/unit/test_tap_stack.py — unit tests (must be updated/created to validate logic)
+tests/unit/test_tap_stack.py unit tests (must be updated/created to validate logic)
 
-tests/integration/test_tap_stack.py — integration tests (must be updated/created to validate resource wiring)
+tests/integration/test_tap_stack.py integration tests (must be updated/created to validate resource wiring)
 
 DO NOT modify any other files (no package.json, no repo-level config changes). If a required variable is missing, declare it as a Pulumi config variable and use sensible defaults.
 
@@ -12,11 +12,11 @@ DO NOT modify any other files (no package.json, no repo-level config changes). I
 Create a highly available, secure, multi-region AWS environment named IaC - AWS Nova Model Breaking using Pulumi (Python), implementing VPCs, subnets, autoscaling compute, managed DB with PITR & backups, IAM roles, monitoring, encryption, tagging, logging, and a CI/CD-friendly deployment layout.
 
 2) Required inputs (replace placeholders when running)
-<TeamName> — team prefix (e.g., Nova)
+<TeamName> team prefix (e.g., Nova)
 
-<Environment> — env name (e.g., prod, stg, dev)
+<Environment> env name (e.g., prod, stg, dev)
 
-<AWS_REGIONS> — comma-separated list of at least three AWS regions (e.g., us-east-1, us-west-2, eu-west-1)
+<AWS_REGIONS> comma-separated list of at least three AWS regions (e.g., us-east-1, us-west-2, eu-west-1)
 
 Pulumi config or env: projectName = "IaC - AWS Nova Model Breaking" and required AWS credentials must be available in the environment.
 
@@ -68,7 +68,7 @@ Create IAM roles and policies with principle of least privilege for compute serv
 
 Use managed policies only where appropriate and put inline policies only when necessary.
 
-Enforce encryption at rest (EBS, RDS) and in transit (ALB HTTPS listener; provide self-signed cert if ACM or real cert not available — prefer ACM with region-aware issuance).
+Enforce encryption at rest (EBS, RDS) and in transit (ALB HTTPS listener; provide self-signed cert if ACM or real cert not available prefer ACM with region-aware issuance).
 
 Define Security Groups to restrict traffic to authorized CIDR ranges (configurable via Pulumi config).
 
@@ -118,11 +118,11 @@ Assert that security groups restrict SSH to the configured CIDR.
 Tests must run quickly and deterministically.
 
 Integration tests (tests/integration/test_tap_stack.py)
-Use Pulumi’s Mocks but simulate more of the resources to validate wiring (e.g., ALB target group registered with autoscaling group).
+Use Pulumis Mocks but simulate more of the resources to validate wiring (e.g., ALB target group registered with autoscaling group).
 
 Validate that at least three region stacks (or region-dependent resources) are represented and have consistent naming and tagging.
 
-The integration tests should not actually call AWS APIs — run with Pulumi test mocks to emulate outputs.
+The integration tests should not actually call AWS APIs run with Pulumi test mocks to emulate outputs.
 
 Integration tests must fail if any strict naming/tagging requirement is not met.
 
@@ -135,7 +135,7 @@ Keep logic modular with helper functions inside the same file (no new modules).
 
 Use typed Pulumi resource options and validate Pulumi config at startup (fail fast with human-readable messages).
 
-Respect the user’s preference: single-file stack implementation, minimal extra imports, no modifications to package.json.
+Respect the users preference: single-file stack implementation, minimal extra imports, no modifications to package.json.
 
 14) Edge cases & safety
 If fewer than 3 regions are provided, fail with a clear error message.
@@ -156,25 +156,25 @@ Ensure unit and integration tests run with pytest and use Pulumi mocks.
 The final lib/tap_stack.py must define an entrypoint that Pulumi expects (e.g., creating TapStack() or exporting outputs so pulumi preview/up works).
 
 16) Evaluation/QA checklist (what I will check)
- Stack deploys logically in mocks and passes unit tests with Pulumi mocks.
+Stack deploys logically in mocks and passes unit tests with Pulumi mocks.
 
- Names strictly follow <TeamName>-<Environment>-<ServiceName>.
+Names strictly follow <TeamName>-<Environment>-<ServiceName>.
 
- Tags Owner, Purpose, Environment exist on core resources.
+Tags Owner, Purpose, Environment exist on core resources.
 
- VPC with public/private subnets created in ≥3 regions and ≥2 AZs per region.
+VPC with public/private subnets created in >=3 regions and >=2 AZs per region.
 
- Compute is autoscaling behind an ALB with health checks and scaling policies.
+Compute is autoscaling behind an ALB with health checks and scaling policies.
 
- DB is RDS-like with encryption, PITR, backups enabled.
+DB is RDS-like with encryption, PITR, backups enabled.
 
- IAM roles/policies created with least privilege patterns.
+IAM roles/policies created with least privilege patterns.
 
- CloudWatch logging/alarms/dashboards or skeletons created.
+CloudWatch logging/alarms/dashboards or skeletons created.
 
- CI/CD workflow snippet included as a comment.
+CI/CD workflow snippet included as a comment.
 
- Tests deterministic, fast, and pass with Pulumi mocks.
+Tests deterministic, fast, and pass with Pulumi mocks.
 
 17) Example minimal Pulumi config (for runner)
 Place these in Pulumi config or environment when running:
@@ -185,12 +185,12 @@ environment = "<Environment>"
 
 aws:regions = "<AWS_REGIONS>" (comma-separated)
 
-allowed_ssh_cidr = "203.0.113.0/32" (example — must be set)
+allowed_ssh_cidr = "203.0.113.0/32" (example must be set)
 
 db_backup_retention_days = 7
 
 Final note to the assistant (strict)
 If anything is ambiguous, fail with an explicit configuration error in the Pulumi program rather than guessing.
 
-Only produce code for the three files listed. Do not produce or modify cloud config, GitHub workflow files, or other repo files — only include a commented CI skeleton inside lib/tap_stack.py.
+Only produce code for the three files listed. Do not produce or modify cloud config, GitHub workflow files, or other repo files only include a commented CI skeleton inside lib/tap_stack.py.
 

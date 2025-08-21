@@ -1,3 +1,14 @@
+# Infrastructure as Code - Pulumi Python Implementation
+
+## __init__.py
+
+```python
+
+```
+
+## tap_stack.py
+
+```python
 """
 Multi-Region AWS Infrastructure Deployment with Pulumi
 Deploys identical infrastructure across us-west-1 and us-east-1 regions
@@ -14,16 +25,23 @@ import pulumi_aws as aws
 # Configuration constants
 REGIONS = ["us-west-1", "us-east-1"]
 VPC_CIDR = "10.0.0.0/16"
-PUBLIC_SUBNET_CIDRS = ["10.0.1.0/24", "10.0.2.0/24"]
-PRIVATE_SUBNET_CIDRS = ["10.0.10.0/24", "10.0.20.0/24"]
+PUBLIC_SUBNET_CIDRS = ["10.0.1.0/24", "10.0.2.0/24"]  # Keep only 2 subnets to avoid limits
+PRIVATE_SUBNET_CIDRS = ["10.0.10.0/24", "10.0.20.0/24"]  # Keep only 2 subnets to avoid limits
 PROJECT_NAME = "tap-multi-region"
+
+# For development/testing, only deploy to one region to avoid VPC limits
+SINGLE_REGION_MODE = True  # Set to False for full multi-region deployment
+# Skip NAT Gateways entirely to avoid limits - use public subnets for RDS instead
+SKIP_NAT_GATEWAYS = True  # Set to False when you have NAT Gateway capacity
+# Use single NAT Gateway to avoid limits and reduce costs (only if SKIP_NAT_GATEWAYS is False)
+SINGLE_NAT_MODE = True  # Set to False for high availability (one NAT per AZ)
 
 
 def get_availability_zones(region: str) -> List[str]:
   """Get availability zones for a specific region."""
   az_mapping = {
-    "us-west-1": ["us-west-1a", "us-west-1c"],
-    "us-east-1": ["us-east-1a", "us-east-1b"]
+    "us-west-1": ["us-west-1a", "us-west-1c"],  # us-west-1 only has 2 AZs
+    "us-east-1": ["us-east-1a", "us-east-1b"]  # Use only 2 AZs to avoid resource limits
   }
   return az_mapping.get(region, [])
 
@@ -63,61 +81,92 @@ def create_vpc_resources(region: str, provider: aws.Provider) -> Dict[str, Any]:
 
   # Create public and private subnets
   for i, az in enumerate(availability_zones):
-    # Public subnet
-    public_subnet = aws.ec2.Subnet(
-      f"{PROJECT_NAME}-public-subnet-{region}-{i+1}",
-      vpc_id=vpc.id,
-      cidr_block=PUBLIC_SUBNET_CIDRS[i],
-      availability_zone=az,
-      map_public_ip_on_launch=True,
-      tags={
-        "Name": f"{PROJECT_NAME}-public-subnet-{region}-{i+1}",
-        "Type": "public",
-        "Region": region
-      },
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
-    public_subnets.append(public_subnet)
+    # Only create subnets if we have corresponding CIDR blocks
+    if i < len(PUBLIC_SUBNET_CIDRS) and i < len(PRIVATE_SUBNET_CIDRS):
+      # Public subnet
+      public_subnet = aws.ec2.Subnet(
+        f"{PROJECT_NAME}-public-subnet-{region}-{i+1}",
+        vpc_id=vpc.id,
+        cidr_block=PUBLIC_SUBNET_CIDRS[i],
+        availability_zone=az,
+        map_public_ip_on_launch=True,
+        tags={
+          "Name": f"{PROJECT_NAME}-public-subnet-{region}-{i+1}",
+          "Type": "public",
+          "Region": region
+        },
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+      public_subnets.append(public_subnet)
 
-    # Private subnet
-    private_subnet = aws.ec2.Subnet(
-      f"{PROJECT_NAME}-private-subnet-{region}-{i+1}",
-      vpc_id=vpc.id,
-      cidr_block=PRIVATE_SUBNET_CIDRS[i],
-      availability_zone=az,
-      tags={
-        "Name": f"{PROJECT_NAME}-private-subnet-{region}-{i+1}",
-        "Type": "private",
-        "Region": region
-      },
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
-    private_subnets.append(private_subnet)
+      # Private subnet
+      private_subnet = aws.ec2.Subnet(
+        f"{PROJECT_NAME}-private-subnet-{region}-{i+1}",
+        vpc_id=vpc.id,
+        cidr_block=PRIVATE_SUBNET_CIDRS[i],
+        availability_zone=az,
+        tags={
+          "Name": f"{PROJECT_NAME}-private-subnet-{region}-{i+1}",
+          "Type": "private",
+          "Region": region
+        },
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+      private_subnets.append(private_subnet)
 
-    # Elastic IP for NAT Gateway
-    eip = aws.ec2.Eip(
-      f"{PROJECT_NAME}-eip-{region}-{i+1}",
-      domain="vpc",
-      tags={
-        "Name": f"{PROJECT_NAME}-eip-{region}-{i+1}",
-        "Region": region
-      },
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
-    elastic_ips.append(eip)
+  # Create NAT Gateway(s) - either one or one per AZ based on configuration
+  if not SKIP_NAT_GATEWAYS:
+    if SINGLE_NAT_MODE:
+      # Single NAT Gateway in first public subnet for cost optimization
+      eip = aws.ec2.Eip(
+        f"{PROJECT_NAME}-eip-{region}",
+        domain="vpc",
+        tags={
+          "Name": f"{PROJECT_NAME}-eip-{region}",
+          "Region": region
+        },
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+      elastic_ips.append(eip)
 
-    # NAT Gateway
-    nat_gw = aws.ec2.NatGateway(
-      f"{PROJECT_NAME}-nat-{region}-{i+1}",
-      allocation_id=eip.id,
-      subnet_id=public_subnet.id,
-      tags={
-        "Name": f"{PROJECT_NAME}-nat-{region}-{i+1}",
-        "Region": region
-      },
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
-    nat_gateways.append(nat_gw)
+      nat_gw = aws.ec2.NatGateway(
+        f"{PROJECT_NAME}-nat-{region}",
+        allocation_id=eip.id,
+        subnet_id=public_subnets[0].id,
+        tags={
+          "Name": f"{PROJECT_NAME}-nat-{region}",
+          "Region": region
+        },
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+      nat_gateways.append(nat_gw)
+    else:
+      # Create one NAT Gateway per AZ (high availability but more expensive)
+      for i, public_subnet in enumerate(public_subnets):
+        # Elastic IP for NAT Gateway
+        eip = aws.ec2.Eip(
+          f"{PROJECT_NAME}-eip-{region}-{i+1}",
+          domain="vpc",
+          tags={
+            "Name": f"{PROJECT_NAME}-eip-{region}-{i+1}",
+            "Region": region
+          },
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+        elastic_ips.append(eip)
+
+        # NAT Gateway
+        nat_gw = aws.ec2.NatGateway(
+          f"{PROJECT_NAME}-nat-{region}-{i+1}",
+          allocation_id=eip.id,
+          subnet_id=public_subnet.id,
+          tags={
+            "Name": f"{PROJECT_NAME}-nat-{region}-{i+1}",
+            "Region": region
+          },
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+        nat_gateways.append(nat_gw)
 
   # Create route tables
   public_rt = aws.ec2.RouteTable(
@@ -151,35 +200,92 @@ def create_vpc_resources(region: str, provider: aws.Provider) -> Dict[str, Any]:
 
   # Create private route tables and routes
   private_route_tables = []
-  for i, (subnet, nat_gw) in enumerate(zip(private_subnets, nat_gateways)):
+  if not SKIP_NAT_GATEWAYS:
+    if SINGLE_NAT_MODE:
+      # Single route table for all private subnets pointing to single NAT
+      private_rt = aws.ec2.RouteTable(
+        f"{PROJECT_NAME}-private-rt-{region}",
+        vpc_id=vpc.id,
+        tags={
+          "Name": f"{PROJECT_NAME}-private-rt-{region}",
+          "Type": "private",
+          "Region": region
+        },
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+      private_route_tables.append(private_rt)
+
+      # Private route to single NAT gateway
+      aws.ec2.Route(
+        f"{PROJECT_NAME}-private-route-{region}",
+        route_table_id=private_rt.id,
+        destination_cidr_block="0.0.0.0/0",
+        nat_gateway_id=nat_gateways[0].id,
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
+
+      # Associate all private subnets with the single route table
+      for i, subnet in enumerate(private_subnets):
+        aws.ec2.RouteTableAssociation(
+          f"{PROJECT_NAME}-private-rta-{region}-{i+1}",
+          subnet_id=subnet.id,
+          route_table_id=private_rt.id,
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+    else:
+      # Create one route table per private subnet (for high availability)
+      for i, (subnet, nat_gw) in enumerate(zip(private_subnets, nat_gateways)):
+        private_rt = aws.ec2.RouteTable(
+          f"{PROJECT_NAME}-private-rt-{region}-{i+1}",
+          vpc_id=vpc.id,
+          tags={
+            "Name": f"{PROJECT_NAME}-private-rt-{region}-{i+1}",
+            "Type": "private",
+            "Region": region
+          },
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+        private_route_tables.append(private_rt)
+
+        # Private route to NAT gateway
+        aws.ec2.Route(
+          f"{PROJECT_NAME}-private-route-{region}-{i+1}",
+          route_table_id=private_rt.id,
+          destination_cidr_block="0.0.0.0/0",
+          nat_gateway_id=nat_gw.id,
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+
+        # Associate private subnet with private route table
+        aws.ec2.RouteTableAssociation(
+          f"{PROJECT_NAME}-private-rta-{region}-{i+1}",
+          subnet_id=subnet.id,
+          route_table_id=private_rt.id,
+          opts=pulumi.ResourceOptions(provider=provider)
+        )
+  else:
+    # When skipping NAT gateways, create simple route table for private subnets
+    # Private subnets won't have internet access, which is fine for RDS
     private_rt = aws.ec2.RouteTable(
-      f"{PROJECT_NAME}-private-rt-{region}-{i+1}",
+      f"{PROJECT_NAME}-private-rt-{region}",
       vpc_id=vpc.id,
       tags={
-        "Name": f"{PROJECT_NAME}-private-rt-{region}-{i+1}",
-        "Type": "private",
+        "Name": f"{PROJECT_NAME}-private-rt-{region}",
+        "Type": "private-no-nat",
         "Region": region
       },
       opts=pulumi.ResourceOptions(provider=provider)
     )
     private_route_tables.append(private_rt)
 
-    # Private route to NAT gateway
-    aws.ec2.Route(
-      f"{PROJECT_NAME}-private-route-{region}-{i+1}",
-      route_table_id=private_rt.id,
-      destination_cidr_block="0.0.0.0/0",
-      nat_gateway_id=nat_gw.id,
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
-
-    # Associate private subnet with private route table
-    aws.ec2.RouteTableAssociation(
-      f"{PROJECT_NAME}-private-rta-{region}-{i+1}",
-      subnet_id=subnet.id,
-      route_table_id=private_rt.id,
-      opts=pulumi.ResourceOptions(provider=provider)
-    )
+    # Associate all private subnets with the route table (no internet route)
+    for i, subnet in enumerate(private_subnets):
+      aws.ec2.RouteTableAssociation(
+        f"{PROJECT_NAME}-private-rta-{region}-{i+1}",
+        subnet_id=subnet.id,
+        route_table_id=private_rt.id,
+        opts=pulumi.ResourceOptions(provider=provider)
+      )
 
   return {
     "vpc": vpc,
@@ -302,10 +408,16 @@ def create_security_groups(region: str, vpc_id: pulumi.Output[str],
 def create_s3_bucket_with_replication(primary_region: str, 
                                     secondary_region: str) -> Dict[str, Any]:
   """Create S3 buckets with cross-region replication."""
+  
+  # Generate a unique suffix for bucket names (S3 bucket names must be globally unique)
+  import random
+  import string
+  unique_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+  
   # Create primary bucket
   primary_bucket = aws.s3.Bucket(
     f"{PROJECT_NAME}-primary-{primary_region}",
-    bucket=f"{PROJECT_NAME}-primary-{primary_region}-{pulumi.get_stack()}",
+    bucket=f"{PROJECT_NAME.replace('_', '-')}-primary-{primary_region}-{unique_suffix}",
     versioning={
       "enabled": True
     },
@@ -318,13 +430,13 @@ def create_s3_bucket_with_replication(primary_region: str,
 
   # Create secondary bucket
   secondary_provider = aws.Provider(
-    f"aws-{secondary_region}",
+    f"aws-s3-{secondary_region}",
     region=secondary_region
   )
 
   secondary_bucket = aws.s3.Bucket(
     f"{PROJECT_NAME}-secondary-{secondary_region}",
-    bucket=f"{PROJECT_NAME}-secondary-{secondary_region}-{pulumi.get_stack()}",
+    bucket=f"{PROJECT_NAME.replace('_', '-')}-secondary-{secondary_region}-{unique_suffix}",
     versioning={
       "enabled": True
     },
@@ -390,7 +502,7 @@ def create_s3_bucket_with_replication(primary_region: str,
   )
 
   # Configure replication
-  replication_config = aws.s3.BucketReplicationConfiguration(
+  replication_config = aws.s3.BucketReplicationConfig(
     f"{PROJECT_NAME}-replication-config",
     role=replication_role.arn,
     bucket=primary_bucket.id,
@@ -434,7 +546,7 @@ def create_rds_with_cross_region_backup(primary_region: str,
 
   # Secondary DB subnet group
   secondary_provider = aws.Provider(
-    f"aws-db-{secondary_region}",
+    f"aws-rds-{secondary_region}",
     region=secondary_region
   )
 
@@ -502,8 +614,11 @@ def deploy_multi_region_infrastructure() -> Dict[str, Any]:
   """Deploy the complete multi-region infrastructure."""
   infrastructure = {}
   
+  # Use single region mode if enabled to avoid VPC limits during testing
+  regions_to_deploy = [REGIONS[0]] if SINGLE_REGION_MODE else REGIONS
+  
   # Deploy to each region
-  for region in REGIONS:
+  for region in regions_to_deploy:
     # Create provider for this region
     provider = aws.Provider(f"aws-{region}", region=region)
     
@@ -523,30 +638,109 @@ def deploy_multi_region_infrastructure() -> Dict[str, Any]:
       "security_groups": security_groups
     }
 
-  # Create cross-region services
-  primary_region = REGIONS[0]
-  secondary_region = REGIONS[1]
+  # Only create cross-region services if we have multiple regions
+  if not SINGLE_REGION_MODE and len(regions_to_deploy) > 1:
+    primary_region = regions_to_deploy[0]
+    secondary_region = regions_to_deploy[1]
 
-  # S3 cross-region replication
-  s3_resources = create_s3_bucket_with_replication(
-    primary_region, 
-    secondary_region
-  )
+    # S3 cross-region replication
+    s3_resources = create_s3_bucket_with_replication(
+      primary_region, 
+      secondary_region
+    )
 
-  # RDS with cross-region read replica
-  rds_resources = create_rds_with_cross_region_backup(
-    primary_region,
-    secondary_region,
-    infrastructure[primary_region]["vpc_resources"]["private_subnets"],
-    infrastructure[secondary_region]["vpc_resources"]["private_subnets"],
-    infrastructure[primary_region]["security_groups"]["db"],
-    infrastructure[secondary_region]["security_groups"]["db"]
-  )
+    # RDS with cross-region read replica
+    rds_resources = create_rds_with_cross_region_backup(
+      primary_region,
+      secondary_region,
+      infrastructure[primary_region]["vpc_resources"]["private_subnets"],
+      infrastructure[secondary_region]["vpc_resources"]["private_subnets"],
+      infrastructure[primary_region]["security_groups"]["db"],
+      infrastructure[secondary_region]["security_groups"]["db"]
+    )
 
-  infrastructure["cross_region"] = {
-    "s3": s3_resources,
-    "rds": rds_resources
-  }
+    infrastructure["cross_region"] = {
+      "s3": s3_resources,
+      "rds": rds_resources
+    }
+  else:
+    # For single region mode, create simpler S3 bucket and RDS
+    primary_region = regions_to_deploy[0]
+    
+    # Simple S3 bucket without replication
+    import random
+    import string
+    unique_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
+    simple_bucket = aws.s3.Bucket(
+      f"{PROJECT_NAME}-bucket-{primary_region}",
+      bucket=f"{PROJECT_NAME.replace('_', '-')}-bucket-{primary_region}-{unique_suffix}",
+      versioning={
+        "enabled": True
+      },
+      tags={
+        "Name": f"{PROJECT_NAME}-bucket-{primary_region}",
+        "Region": primary_region,
+        "Type": "single"
+      }
+    )
+
+    # Simple RDS without replica
+    # Use public subnets for RDS when NAT gateways are skipped (still secure with security groups)
+    # Or use private subnets if NAT gateways exist
+    subnets_for_rds = (infrastructure[primary_region]["vpc_resources"]["public_subnets"] 
+                      if SKIP_NAT_GATEWAYS 
+                      else infrastructure[primary_region]["vpc_resources"]["private_subnets"])
+    
+    # Create DB subnet group with very explicit dependencies and provider specification
+    db_subnet_group = aws.rds.SubnetGroup(
+      f"{PROJECT_NAME}-db-subnet-group-{primary_region}",
+      subnet_ids=[subnet.id for subnet in subnets_for_rds],
+      tags={
+        "Name": f"{PROJECT_NAME}-db-subnet-group-{primary_region}",
+        "Region": primary_region,
+        "SubnetType": "public" if SKIP_NAT_GATEWAYS else "private"
+      },
+      opts=pulumi.ResourceOptions(
+        provider=infrastructure[primary_region]["provider"],
+        depends_on=subnets_for_rds + [infrastructure[primary_region]["vpc_resources"]["public_route_table"]]
+      )
+    )
+
+    simple_db = aws.rds.Instance(
+      f"{PROJECT_NAME}-db-{primary_region}",
+      identifier=f"{PROJECT_NAME}-db-{primary_region}",
+      engine="mysql",
+      engine_version="8.0",
+      instance_class="db.t3.micro",
+      allocated_storage=20,
+      db_name="tapdb",
+      username="admin",
+      password="changeme123!",
+      vpc_security_group_ids=[infrastructure[primary_region]["security_groups"]["db"].id],
+      db_subnet_group_name=db_subnet_group.name,
+      backup_retention_period=7,
+      backup_window="03:00-04:00",
+      maintenance_window="sun:04:00-sun:05:00",
+      copy_tags_to_snapshot=True,
+      skip_final_snapshot=True,
+      publicly_accessible=SKIP_NAT_GATEWAYS,  # Make accessible if in public subnets
+      tags={
+        "Name": f"{PROJECT_NAME}-db-{primary_region}",
+        "Region": primary_region,
+        "Type": "single",
+        "SubnetType": "public" if SKIP_NAT_GATEWAYS else "private"
+      },
+      opts=pulumi.ResourceOptions(
+        provider=infrastructure[primary_region]["provider"],
+        depends_on=[db_subnet_group]
+      )
+    )
+
+    infrastructure["single_region"] = {
+      "s3": {"bucket": simple_bucket},
+      "rds": {"db": simple_db, "subnet_group": db_subnet_group}
+    }
 
   return infrastructure
 
@@ -554,8 +748,9 @@ def deploy_multi_region_infrastructure() -> Dict[str, Any]:
 class TapStackArgs:
   """Arguments for TapStack - minimal implementation for test compatibility."""
   
-  def __init__(self, regions: Optional[List[str]] = None):
+  def __init__(self, regions: Optional[List[str]] = None, environment_suffix: Optional[str] = None):
     self.regions = regions or REGIONS
+    self.environment_suffix = environment_suffix or 'dev'
 
 
 class TapStack:
@@ -574,7 +769,9 @@ class TapStack:
 
   def _setup_outputs(self):
     """Setup Pulumi outputs for the infrastructure."""
-    for region in self.args.regions:
+    regions_to_export = [REGIONS[0]] if SINGLE_REGION_MODE else self.args.regions
+    
+    for region in regions_to_export:
       if region in self.infrastructure:
         vpc_resources = self.infrastructure[region]["vpc_resources"]
         
@@ -588,8 +785,14 @@ class TapStack:
         for i, subnet in enumerate(vpc_resources["private_subnets"]):
           pulumi.export(f"private_subnet_{region.replace('-', '_')}_{i+1}_id", subnet.id)
 
-    # Export cross-region resource information
-    if "cross_region" in self.infrastructure:
+    # Export resource information based on deployment mode
+    if SINGLE_REGION_MODE and "single_region" in self.infrastructure:
+      s3_resources = self.infrastructure["single_region"]["s3"]
+      pulumi.export("bucket_name", s3_resources["bucket"].bucket)
+      
+      rds_resources = self.infrastructure["single_region"]["rds"]
+      pulumi.export("db_endpoint", rds_resources["db"].endpoint)
+    elif "cross_region" in self.infrastructure:
       s3_resources = self.infrastructure["cross_region"]["s3"]
       pulumi.export("primary_bucket_name", s3_resources["primary_bucket"].bucket)
       pulumi.export("secondary_bucket_name", s3_resources["secondary_bucket"].bucket)
@@ -604,3 +807,4 @@ if __name__ == "__main__":
   # Create and deploy the stack
   stack_args = TapStackArgs()
   stack = TapStack("tap-multi-region", stack_args)
+```

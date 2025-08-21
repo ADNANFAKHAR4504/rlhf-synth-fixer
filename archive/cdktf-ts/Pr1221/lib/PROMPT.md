@@ -1,6 +1,6 @@
-I’m working on an AWS project using CDK for Terraform (CDKTF) with TypeScript, and I need a complete, production-ready setup that builds a secure and scalable network on AWS.
+Im working on an AWS project using CDK for Terraform (CDKTF) with TypeScript, and I need a complete, production-ready setup that builds a secure and scalable network on AWS.
 
-Here’s what I’m looking for:
+Heres what Im looking for:
 
 Tech stack & setup
 
@@ -17,9 +17,9 @@ All resources tagged with: { "Environment": "Production" }
 Project structure
 I only want two files:
 
-lib/modules.ts – This should have a reusable VpcModule (L3 construct) that sets up all the networking (VPC, subnets, gateways, route tables, security groups) and takes configuration options.
+lib/modules.ts This should have a reusable VpcModule (L3 construct) that sets up all the networking (VPC, subnets, gateways, route tables, security groups) and takes configuration options.
 
-lib/tap-stack.ts – The main stack that imports VpcModule and focuses on composition only (no direct resource definitions).
+lib/tap-stack.ts The main stack that imports VpcModule and focuses on composition only (no direct resource definitions).
 
 VPC requirements (inside VpcModule):
 
@@ -33,11 +33,11 @@ Gateways & routes:
 
 Internet Gateway for public subnets
 
-Public route table → IGW for 0.0.0.0/0
+Public route table IGW for 0.0.0.0/0
 
 Elastic IP + NAT Gateway in one private subnet
 
-Private route table → NAT Gateway for 0.0.0.0/0
+Private route table NAT Gateway for 0.0.0.0/0
 
 Security groups:
 

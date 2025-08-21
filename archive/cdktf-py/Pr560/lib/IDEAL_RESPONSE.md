@@ -1,483 +1,668 @@
-# AWS Production Infrastructure - Ideal Response Specification
+# Ideal Response - CDKTF Python Infrastructure
 
 ## Overview
+This implementation provides a production-ready AWS infrastructure using CDKTF (Cloud Development Kit for Terraform) with Python.
 
-This document defines the expected ideal response for the AWS production infrastructure requirement using CDKTF Python. It serves as a benchmark for evaluating the completeness, quality, and compliance of the infrastructure implementation against production standards.
+## Implementation Files
 
-## Technical Implementation Requirements
-
-### CDKTF Python Structure Standards
-
-The implementation must follow these structural requirements:
-
-**Entry Point Requirements**
-- Clean `tap.py` file with main application logic and proper error handling
-- Proper imports and dependency management
-- Clear documentation and usage instructions
-- Exception handling for common deployment scenarios
-
-**Stack Definition Standards**  
-- Comprehensive `tap_stack.py` with modular TapStack class structure
-- Private methods for logical component grouping
-- Proper resource dependency management and ordering
-- Comprehensive docstring documentation for all methods
-
-**Dependency Management**
-- Complete `requirements.txt` with all necessary CDKTF packages
-- Specific version pinning for reproducible deployments
-- Clear separation of core dependencies and development tools
-- Testing framework dependencies included
-
-**Testing Requirements**
-- Unit tests in `test_tap_stack.py` with minimum 90% code coverage
-- Integration tests in `test_integration.py` for end-to-end scenarios
-- Security validation tests for compliance verification
-- Performance and scalability testing components
-
-**Documentation Standards**
-- Complete documentation package with all specified markdown files
-- Clear setup and deployment instructions with troubleshooting guidance
-- Architecture documentation with diagrams and component descriptions
-- Security documentation covering all implemented controls
-
-### AWS Infrastructure Component Requirements
-
-**Virtual Private Cloud Standards**
-- VPC must use exactly `10.0.0.0/16` CIDR block as specified in requirements
-- DNS hostnames and DNS resolution must be enabled for service discovery
-- Resource naming must follow consistent conventions with environment identification
-- Comprehensive tagging strategy implemented across all VPC resources
-
-**Subnet Architecture Standards**
-- Exactly 2 public subnets and 2 private subnets minimum requirement
-- Even distribution across exactly 2 availability zones for high availability
-- Proper CIDR allocation within VPC range without overlapping addresses
-- Public subnets configured with automatic public IP assignment
-- Private subnets configured without public IP assignment for security
-
-**Gateway Infrastructure Standards**
-- Single Internet Gateway attached to VPC for public subnet connectivity
-- Multiple NAT Gateways deployed for high availability across availability zones
-- Elastic IP addresses properly allocated and associated with NAT Gateways
-- Route table configuration supporting proper traffic flow and segmentation
-
-**Security Infrastructure Standards**
-- Bastion host properly configured in public subnet with security controls
-- Security group segregation between bastion host and private instance access
-- SSH access restriction implemented exactly as specified in requirements
-- S3 bucket security controls with Block Public Access enabled on all buckets
-
-## Security Implementation Standards
-
-### Network Security Requirements
-
-**SSH Access Control Validation**
-- SSH access must be restricted to exactly `203.0.113.0/24` CIDR block
-- No security group rules allowing SSH access from `0.0.0.0/0` or broader ranges
-- Security group rules must include proper descriptions for audit purposes
-- Access logging and monitoring capabilities must be configured
-
-**Security Group Segregation Standards**
-- Separate security groups for bastion host and private instance access
-- Bastion security group allows inbound SSH only from specified CIDR
-- Private instance security group allows SSH only from bastion security group
-- All security group rules must follow principle of least privilege access
-
-**Network Segmentation Enforcement**
-- Clear separation between public and private subnet traffic flows
-- Private subnets must not have direct routes to Internet Gateway
-- NAT Gateway routing must be properly configured for private subnet internet access
-- Network ACLs may be implemented for additional security layer controls
-
-### Data Protection Requirements
-
-**S3 Bucket Security Standards**
-- All S3 buckets must have Block Public Access enabled with all four settings:
-
-```json
-{
-    "BlockPublicAcls": true,
-    "IgnorePublicAcls": true,
-    "BlockPublicPolicy": true,
-    "RestrictPublicBuckets": true
-}
-```
-
-- S3 bucket versioning must be enabled on all buckets for data protection
-- Server-side encryption should be configured with appropriate key management
-- Bucket policies must restrict access to authorized principals only
-
-**Access Control Implementation**
-- Bastion host must be the only entry point for private subnet resource access
-- SSH key pairs must be properly configured and referenced in resources
-- IAM roles and policies should follow least privilege access principles
-- Resource-based policies must restrict access to authorized services only
-
-## High Availability Design Standards
-
-### Multi-Availability Zone Architecture
-
-**Subnet Distribution Requirements**
-- Subnets must be distributed across exactly 2 availability zones
-- Each availability zone must contain both public and private subnets
-- Load balancing capability must be supported across availability zones
-- Single availability zone failure must not impact overall service availability
-
-**NAT Gateway Redundancy Standards**
-- Each availability zone should have its own NAT Gateway for redundancy
-- Elastic IP addresses must be allocated for each NAT Gateway
-- Route table configuration must support automatic failover capabilities
-- Cross-availability zone traffic must be optimized for performance and cost
-
-**Fault Tolerance Implementation**
-- Architecture must handle single availability zone failures gracefully
-- Resource dependencies must be properly configured to prevent cascade failures
-- Monitoring and alerting must be configured for infrastructure health checking
-- Recovery procedures must be documented for common failure scenarios
-
-## Production Readiness Standards
-
-### Resource Tagging Requirements
-
-All resources must be tagged with these mandatory tags:
-
-```yaml
-Environment: Production
-Project: AWS Nova Model Breaking  
-ManagedBy: CDKTF
-```
-
-Additional recommended tags for operational excellence:
-
-```yaml
-Owner: Infrastructure Team
-Component: [Networking/Security/Storage]
-Purpose: [Specific resource purpose]
-CostCenter: Production-Infrastructure
-```
-
-### Naming Convention Standards
-
-**Resource Naming Pattern**
-- Consistent prefix: `nova-production-*` for all resources
-- Clear resource type identification in names
-- Environment indication in resource names
-- Unique suffixes using random IDs for resource uniqueness
-
-**Examples of Proper Naming**
+### lib/tap_stack.py
 
 ```python
-vpc_name = f"nova-production-vpc-{random_id}"
-subnet_name = f"nova-production-public-subnet-1-{random_id}"
-security_group_name = f"nova-production-bastion-sg-{random_id}"
+"""
+AWS Production Infrastructure Stack - CDKTF Python Implementation
+
+This module defines the AWS production infrastructure stack with comprehensive
+security measures, high availability design, and production-grade components
+including VPC, subnets, Bastion host, and secure S3 storage.
+"""
+
+from typing import Any, Dict
+
+from cdktf import Fn, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
+from cdktf_cdktf_provider_aws.data_aws_availability_zones import \
+    DataAwsAvailabilityZones
+from cdktf_cdktf_provider_aws.eip import Eip
+from cdktf_cdktf_provider_aws.instance import Instance
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route import Route
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.security_group import SecurityGroup
+from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
+
+
+class TapStack(TerraformStack):
+  """
+  AWS Production Infrastructure Stack - TapStack
+
+  This stack creates a complete production-grade AWS infrastructure including:
+  - VPC with DNS support and security
+  - Public and private subnets across multiple AZs
+  - Internet Gateway and NAT Gateways for connectivity
+  - Bastion host for secure access to private resources
+  - Security groups with strict access controls
+  - S3 buckets with Block Public Access enabled
+  - Comprehensive tagging and monitoring
+
+  All resources are tagged with Environment: Production
+  """
+
+  def __init__(self, scope: Construct, construct_id: str, description: str = None):
+    """
+    Initialize the TapStack.
+
+    Args:
+      scope: The scope in which to define this construct
+      construct_id: The scoped construct ID
+      description: Optional description for the stack
+    """
+    super().__init__(scope, construct_id)
+
+    # Configuration constants
+    self.vpc_cidr = "10.0.0.0/16"
+    self.allowed_ssh_cidr = "203.0.113.0/24"
+    self.aws_region = "us-west-2"
+    self.environment = "Production"
+
+    # Infrastructure resource containers (reduces instance attributes)
+    self.networking: Dict[str, Any] = {}
+    self.security: Dict[str, Any] = {}
+    self.storage: Dict[str, Any] = {}
+    self.config: Dict[str, Any] = {}
+
+    # Set stack description if provided
+    if description:
+      self.description = description
+
+    # Initialize infrastructure components
+    self._setup_providers()
+    self._create_networking_infrastructure()
+    self._create_security_groups()
+    self._create_bastion_host()
+    self._create_storage_infrastructure()
+    self._create_outputs()
+
+  def _setup_providers(self) -> None:
+    """Configure AWS and Random providers with production settings."""
+    # Configure AWS Provider
+    AwsProvider(
+      self, "aws",
+      region=self.aws_region,
+      default_tags=[{
+        "tags": {
+          "Project": "AWS Nova Model Breaking",
+          "ManagedBy": "CDKTF",
+          "Environment": self.environment,
+          "Owner": "Infrastructure Team",
+          "CostCenter": "Production-Infrastructure"
+        }
+      }]
+    )
+
+  def _create_networking_infrastructure(self) -> None:
+    """Create VPC, subnets, gateways, and routing components."""
+    # Get availability zones for high availability deployment
+    self.config['azs'] = DataAwsAvailabilityZones(
+      self, "available_azs",
+      state="available"
+    )
+
+    # Use a static infrastructure identifier instead of random
+    self.config['infrastructure_id'] = "prod-infra"
+
+    # Common tags for all networking resources
+    self.config['common_tags'] = {
+      "Environment": self.environment,
+      "Project": "AWS Nova Model Breaking",
+      "Component": "Networking"
+    }
+
+    # Create infrastructure components in order
+    self._create_vpc()
+    self._create_internet_gateway()
+    self._create_subnets()
+    self._create_nat_gateways()
+    self._create_routing()
+
+  def _create_vpc(self) -> None:
+    """Create the main VPC with production-grade settings."""
+    self.networking['vpc'] = Vpc(
+      self, "production_vpc",
+      cidr_block=self.vpc_cidr,
+      enable_dns_hostnames=True,
+      enable_dns_support=True,
+      tags={
+        **self.config['common_tags'],
+        "Name": f"nova-production-vpc-{self.config['infrastructure_id']}",
+        "Description": "Main VPC for production infrastructure"
+      }
+    )
+
+  def _create_internet_gateway(self) -> None:
+    """Create Internet Gateway for public subnet access."""
+    self.networking['internet_gateway'] = InternetGateway(
+      self, "production_internet_gateway",
+      vpc_id=self.networking['vpc'].id,
+      tags={
+        **self.config['common_tags'],
+        "Name": f"nova-production-igw-{self.config['infrastructure_id']}",
+        "Description": "Internet Gateway for public subnet access"
+      }
+    )
+
+  def _create_subnets(self) -> None:
+    """Create public and private subnets across multiple availability zones."""
+    # Create 2 subnets across 2 AZs using Fn.element for safe access
+    
+    # Public Subnets (2 subnets across 2 AZs)
+    self.networking['public_subnets'] = []
+    for i in range(2):
+      subnet = Subnet(
+        self, f"production_public_subnet_{i+1}",
+        vpc_id=self.networking['vpc'].id,
+        cidr_block=f"10.0.{i+1}.0/24",
+        availability_zone=Fn.element(self.config['azs'].names, i),
+        map_public_ip_on_launch=True,
+        tags={
+          **self.config['common_tags'],
+          "Name": f"nova-production-public-subnet-{i+1}-{self.config['infrastructure_id']}",
+          "Type": "Public",
+          "AZ": Fn.element(self.config['azs'].names, i),
+          "Description": f"Public subnet {i+1} in AZ {i+1}"
+        }
+      )
+      self.networking['public_subnets'].append(subnet)
+
+    # Private Subnets (2 subnets across 2 AZs)
+    self.networking['private_subnets'] = []
+    for i in range(2):
+      subnet = Subnet(
+        self, f"production_private_subnet_{i+1}",
+        vpc_id=self.networking['vpc'].id,
+        cidr_block=f"10.0.{i+10}.0/24",
+        availability_zone=Fn.element(self.config['azs'].names, i),
+        tags={
+          **self.config['common_tags'],
+          "Name": f"nova-production-private-subnet-{i+1}-{self.config['infrastructure_id']}",
+          "Type": "Private",
+          "AZ": Fn.element(self.config['azs'].names, i),
+          "Description": f"Private subnet {i+1} in AZ {i+1}"
+        }
+      )
+      self.networking['private_subnets'].append(subnet)
+
+  def _create_nat_gateways(self) -> None:
+    """Create NAT Gateways with Elastic IPs for private subnet internet access."""
+    # Create Elastic IPs for NAT Gateways (2 for 2 AZs)
+    self.networking['nat_eips'] = []
+    for i in range(2):
+      eip = Eip(
+        self, f"production_nat_eip_{i+1}",
+        domain="vpc",
+        depends_on=[self.networking['internet_gateway']],
+        tags={
+          **self.config['common_tags'],
+          "Name": f"nova-production-nat-eip-{i+1}-{self.config['infrastructure_id']}",
+          "Description": f"Elastic IP for NAT Gateway {i+1}"
+        }
+      )
+      self.networking['nat_eips'].append(eip)
+
+    # Create NAT Gateways in public subnets (2 for 2 AZs)
+    self.networking['nat_gateways'] = []
+    for i in range(2):
+      nat_gw = NatGateway(
+        self, f"production_nat_gateway_{i+1}",
+        allocation_id=self.networking['nat_eips'][i].id,
+        subnet_id=self.networking['public_subnets'][i].id,
+        depends_on=[self.networking['internet_gateway']],
+        tags={
+          **self.config['common_tags'],
+          "Name": f"nova-production-nat-gw-{i+1}-{self.config['infrastructure_id']}",
+          "AZ": Fn.element(self.config['azs'].names, i),
+          "Description": f"NAT Gateway {i+1} in AZ {i+1}"
+        }
+      )
+      self.networking['nat_gateways'].append(nat_gw)
+
+  def _create_routing(self) -> None:
+    """Create route tables and associations for public and private subnets."""
+    # Public Route Table
+    self.networking['public_route_table'] = RouteTable(
+      self, "production_public_route_table",
+      vpc_id=self.networking['vpc'].id,
+      tags={
+        **self.config['common_tags'],
+        "Name": f"nova-production-public-rt-{self.config['infrastructure_id']}",
+        "Type": "Public",
+        "Description": "Route table for public subnets"
+      }
+    )
+
+    # Route to Internet Gateway for public subnets
+    Route(
+      self, "production_public_internet_route",
+      route_table_id=self.networking['public_route_table'].id,
+      destination_cidr_block="0.0.0.0/0",
+      gateway_id=self.networking['internet_gateway'].id
+    )
+
+    # Associate public subnets with public route table
+    for i, subnet in enumerate(self.networking['public_subnets']):
+      RouteTableAssociation(
+        self, f"production_public_subnet_{i+1}_association",
+        subnet_id=subnet.id,
+        route_table_id=self.networking['public_route_table'].id
+      )
+
+    # Private Route Tables (one per AZ for high availability)
+    self.networking['private_route_tables'] = []
+    for i in range(2):
+      route_table = RouteTable(
+        self, f"production_private_route_table_{i+1}",
+        vpc_id=self.networking['vpc'].id,
+        tags={
+          **self.config['common_tags'],
+          "Name": f"nova-production-private-rt-{i+1}-{self.config['infrastructure_id']}",
+          "Type": "Private",
+          "AZ": Fn.element(self.config['azs'].names, i),
+          "Description": f"Route table for private subnet {i+1}"
+        }
+      )
+      self.networking['private_route_tables'].append(route_table)
+
+      # Route to NAT Gateway for private subnets
+      Route(
+        self, f"production_private_nat_route_{i+1}",
+        route_table_id=route_table.id,
+        destination_cidr_block="0.0.0.0/0",
+        nat_gateway_id=self.networking['nat_gateways'][i].id
+      )
+
+      # Associate private subnet with its route table
+      RouteTableAssociation(
+        self, f"production_private_subnet_{i+1}_association",
+        subnet_id=self.networking['private_subnets'][i].id,
+        route_table_id=route_table.id
+      )
+
+  def _create_security_groups(self) -> None:
+    """Create security groups with strict access controls."""
+    # Security Group for Bastion Host
+    self.security['bastion_sg'] = SecurityGroup(
+      self, "production_bastion_security_group",
+      name=f"nova-production-bastion-sg-{self.config['infrastructure_id']}",
+      description="Security group for Bastion host with restricted SSH access",
+      vpc_id=self.networking['vpc'].id,
+      tags={
+        "Environment": self.environment,
+        "Project": "AWS Nova Model Breaking",
+        "Component": "Security",
+        "Purpose": "Bastion Host Access",
+        "Name": f"nova-production-bastion-sg-{self.config['infrastructure_id']}",
+        "Description": "Security group for Bastion host"
+      }
+    )
+
+    self._create_bastion_security_rules()
+
+    # Security Group for Private Instances
+    self.security['private_sg'] = SecurityGroup(
+      self, "production_private_security_group",
+      name=f"nova-production-private-sg-{self.config['infrastructure_id']}",
+      description="Security group for private subnet instances",
+      vpc_id=self.networking['vpc'].id,
+      tags={
+        "Environment": self.environment,
+        "Project": "AWS Nova Model Breaking",
+        "Component": "Security",
+        "Purpose": "Private Instance Access",
+        "Name": f"nova-production-private-sg-{self.config['infrastructure_id']}",
+        "Description": "Security group for private instances"
+      }
+    )
+
+    self._create_private_security_rules()
+
+  def _create_bastion_security_rules(self) -> None:
+    """Create security group rules for the Bastion host."""
+    # Bastion inbound SSH rule
+    SecurityGroupRule(
+      self, "bastion_ssh_inbound",
+      type="ingress",
+      from_port=22,
+      to_port=22,
+      protocol="tcp",
+      cidr_blocks=[self.allowed_ssh_cidr],
+      security_group_id=self.security['bastion_sg'].id,
+      description="SSH access from authorized networks"
+    )
+
+    # Bastion outbound SSH to private subnets
+    for i, subnet in enumerate(self.networking['private_subnets']):
+      SecurityGroupRule(
+        self, f"bastion_ssh_outbound_private_{i+1}",
+        type="egress",
+        from_port=22,
+        to_port=22,
+        protocol="tcp",
+        cidr_blocks=[subnet.cidr_block],
+        security_group_id=self.security['bastion_sg'].id,
+        description=f"SSH access to private subnet {i+1}"
+      )
+
+    # Bastion outbound HTTPS for updates
+    SecurityGroupRule(
+      self, "bastion_https_outbound",
+      type="egress",
+      from_port=443,
+      to_port=443,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.security['bastion_sg'].id,
+      description="HTTPS outbound for package updates"
+    )
+
+    # Bastion outbound HTTP for updates
+    SecurityGroupRule(
+      self, "bastion_http_outbound",
+      type="egress",
+      from_port=80,
+      to_port=80,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.security['bastion_sg'].id,
+      description="HTTP outbound for package updates"
+    )
+
+  def _create_private_security_rules(self) -> None:
+    """Create security group rules for private instances."""
+    # Private instances SSH from Bastion
+    SecurityGroupRule(
+      self, "private_ssh_from_bastion",
+      type="ingress",
+      from_port=22,
+      to_port=22,
+      protocol="tcp",
+      source_security_group_id=self.security['bastion_sg'].id,
+      security_group_id=self.security['private_sg'].id,
+      description="SSH access from Bastion host"
+    )
+
+    # Private instances HTTP within VPC
+    SecurityGroupRule(
+      self, "private_http_internal",
+      type="ingress",
+      from_port=80,
+      to_port=80,
+      protocol="tcp",
+      cidr_blocks=[self.vpc_cidr],
+      security_group_id=self.security['private_sg'].id,
+      description="HTTP access within VPC"
+    )
+
+    # Private instances HTTPS within VPC
+    SecurityGroupRule(
+      self, "private_https_internal",
+      type="ingress",
+      from_port=443,
+      to_port=443,
+      protocol="tcp",
+      cidr_blocks=[self.vpc_cidr],
+      security_group_id=self.security['private_sg'].id,
+      description="HTTPS access within VPC"
+    )
+
+    # Private instances outbound internet access
+    SecurityGroupRule(
+      self, "private_internet_outbound",
+      type="egress",
+      from_port=0,
+      to_port=65535,
+      protocol="tcp",
+      cidr_blocks=["0.0.0.0/0"],
+      security_group_id=self.security['private_sg'].id,
+      description="Outbound internet access via NAT Gateway"
+    )
+
+  def _create_bastion_host(self) -> None:
+    """Create Bastion host for secure access to private resources."""
+    # Get the latest Amazon Linux 2 AMI
+    self.security['amazon_linux_ami'] = DataAwsAmi(
+      self, "amazon_linux_ami",
+      most_recent=True,
+      owners=["amazon"],
+      filter=[
+        {
+          "name": "name",
+          "values": ["amzn2-ami-hvm-*-x86_64-gp2"]
+        },
+        {
+          "name": "virtualization-type",
+          "values": ["hvm"]
+        }
+      ]
+    )
+
+    # Create Bastion Host Instance (No SSH key - using Session Manager)
+    self.security['bastion_host'] = Instance(
+      self, "production_bastion_host",
+      ami=self.security['amazon_linux_ami'].id,
+      instance_type="t3.micro",
+      # No key_name parameter - Session Manager access only
+      subnet_id=self.networking['public_subnets'][0].id,
+      vpc_security_group_ids=[self.security['bastion_sg'].id],
+      associate_public_ip_address=True,
+      user_data="""#!/bin/bash
+yum update -y
+yum install -y htop amazon-ssm-agent
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+echo 'Bastion host setup complete' > /var/log/bastion-setup.log
+""",
+      tags={
+        "Environment": self.environment,
+        "Project": "AWS Nova Model Breaking",
+        "Component": "Security",
+        "Purpose": "Bastion Host",
+        "Name": f"nova-production-bastion-{self.config['infrastructure_id']}",
+        "Description": "Bastion host for secure access via Session Manager"
+      }
+    )
+
+  def _create_storage_infrastructure(self) -> None:
+    """Create S3 buckets with Block Public Access enabled."""
+    # Application Logs Bucket
+    self.storage['logs_bucket'] = S3Bucket(
+      self, "production_application_logs_bucket",
+      tags={
+        "Environment": self.environment,
+        "Project": "AWS Nova Model Breaking",
+        "Component": "Storage",
+        "Purpose": "Application Logs",
+        "Name": f"nova-production-app-logs-{self.config['infrastructure_id']}",
+        "DataClassification": "Internal"
+      }
+    )
+
+    self._configure_s3_bucket_security(self.storage['logs_bucket'], "logs")
+
+    # Backup Bucket
+    self.storage['backup_bucket'] = S3Bucket(
+      self, "production_backup_bucket",
+      tags={
+        "Environment": self.environment,
+        "Project": "AWS Nova Model Breaking",
+        "Component": "Storage",
+        "Purpose": "Backup Storage",
+        "Name": f"nova-production-backup-{self.config['infrastructure_id']}",
+        "DataClassification": "Confidential"
+      }
+    )
+
+    self._configure_s3_bucket_security(self.storage['backup_bucket'], "backup")
+
+  def _configure_s3_bucket_security(self, bucket: S3Bucket, bucket_type: str) -> None:
+    """Configure S3 bucket security settings including versioning and public access block."""
+    # Enable versioning on bucket
+    S3BucketVersioningA(
+      self, f"production_{bucket_type}_bucket_versioning",
+      bucket=bucket.id,
+      versioning_configuration={
+        "status": "Enabled"
+      }
+    )
+
+    # Block public access on bucket
+    S3BucketPublicAccessBlock(
+      self, f"production_{bucket_type}_bucket_public_access_block",
+      bucket=bucket.id,
+      block_public_acls=True,
+      block_public_policy=True,
+      ignore_public_acls=True,
+      restrict_public_buckets=True
+    )
+
+  def _create_outputs(self) -> None:
+    """Create Terraform outputs for important resource references."""
+    # VPC Information
+    TerraformOutput(
+      self, "vpc_id",
+      value=self.networking['vpc'].id,
+      description="ID of the production VPC"
+    )
+
+    TerraformOutput(
+      self, "vpc_cidr_block",
+      value=self.networking['vpc'].cidr_block,
+      description="CIDR block of the production VPC"
+    )
+
+    # Subnet Information
+    TerraformOutput(
+      self, "public_subnet_ids",
+      value=[subnet.id for subnet in self.networking['public_subnets']],
+      description="IDs of the public subnets"
+    )
+
+    TerraformOutput(
+      self, "private_subnet_ids",
+      value=[subnet.id for subnet in self.networking['private_subnets']],
+      description="IDs of the private subnets"
+    )
+
+    # Gateway Information
+    TerraformOutput(
+      self, "internet_gateway_id",
+      value=self.networking['internet_gateway'].id,
+      description="ID of the Internet Gateway"
+    )
+
+    TerraformOutput(
+      self, "nat_gateway_ids",
+      value=[nat_gw.id for nat_gw in self.networking['nat_gateways']],
+      description="IDs of the NAT Gateways"
+    )
+
+    # Security Group Information
+    TerraformOutput(
+      self, "bastion_security_group_id",
+      value=self.security['bastion_sg'].id,
+      description="ID of the Bastion host security group"
+    )
+
+    TerraformOutput(
+      self, "private_security_group_id",
+      value=self.security['private_sg'].id,
+      description="ID of the private instances security group"
+    )
+
+    # Bastion Host Information
+    TerraformOutput(
+      self, "bastion_host_id",
+      value=self.security['bastion_host'].id,
+      description="ID of the Bastion host instance"
+    )
+
+    TerraformOutput(
+      self, "bastion_host_public_ip",
+      value=self.security['bastion_host'].public_ip,
+      description="Public IP address of the Bastion host"
+    )
+
+    # Storage Information
+    TerraformOutput(
+      self, "logs_bucket_name",
+      value=self.storage['logs_bucket'].bucket,
+      description="Name of the application logs S3 bucket"
+    )
+
+    TerraformOutput(
+      self, "backup_bucket_name",
+      value=self.storage['backup_bucket'].bucket,
+      description="Name of the backup S3 bucket"
+    )
+
+    # Availability Zones
+    TerraformOutput(
+      self, "availability_zones",
+      value=[Fn.element(self.config['azs'].names, 0), Fn.element(self.config['azs'].names, 1)],
+      description="Availability zones used for deployment"
+    )
 ```
 
-## Code Quality Standards
-
-### CDKTF Python Best Practices
-
-**Class Structure Requirements**
-- Modular TapStack class with logical method separation
-- Private methods for component grouping (prefixed with underscore)
-- Proper initialization and configuration management
-- Clear separation of concerns between different infrastructure components
-
-**Documentation Standards**
-- Comprehensive docstrings for all classes and methods
-- Inline comments explaining complex configuration decisions
-- Type hints where applicable for better code maintainability
-- README-style documentation for setup and deployment procedures
-
-**Error Handling Implementation**
-- Proper exception handling for common deployment scenarios
-- Validation of input parameters and configuration values
-- Graceful handling of resource creation failures
-- Clear error messages for troubleshooting and debugging
-
-### Testing Coverage Requirements
-
-**Unit Testing Standards**
-- Minimum 90% code coverage for all infrastructure components
-- Individual resource configuration validation testing
-- Security configuration compliance testing
-- Output generation verification testing
-
-**Integration Testing Standards**
-- Complete workflow testing from deployment to validation
-- Security control verification through automated testing
-- High availability and fault tolerance testing scenarios
-- Performance and scalability testing for production readiness
-
-**Security Testing Requirements**
-- SSH access control validation through automated testing
-- S3 bucket security configuration verification
-- Network segmentation testing and validation
-- Compliance testing against AWS security best practices
-
-## Expected File Structure
-
-The implementation must provide these files with proper organization:
-
-```
-aws-production-infrastructure/
-├── tap.py                    # Main CDKTF application entry point
-├── tap_stack.py             # TapStack class with complete infrastructure  
-├── requirements.txt         # Python dependencies with version pinning
-├── test_tap_stack.py        # Comprehensive unit test suite
-├── test_integration.py      # Integration and security test suite
-├── model_response.md        # Complete infrastructure documentation
-├── prompt.md               # Original requirements specification
-├── ideal_response.md       # This specification document  
-└── model_failure.md        # Failure scenarios and troubleshooting guide
-```
-
-## Infrastructure Output Requirements
-
-### Critical Infrastructure Outputs
-
-The infrastructure must provide these essential outputs for integration:
-
-**Network Infrastructure Outputs**
+### tap.py
 
 ```python
-vpc_id                    # VPC identifier for resource references
-vpc_cidr_block           # VPC CIDR block for network planning
-public_subnet_ids        # List of public subnet IDs for load balancers
-private_subnet_ids       # List of private subnet IDs for applications
-availability_zones       # Availability zones used for planning
+#!/usr/bin/env python3
+
+"""
+AWS Production Infrastructure - CDKTF Application Entry Point
+
+This file serves as the entry point for the CDKTF application,
+orchestrating the deployment of production-grade AWS infrastructure
+components with comprehensive security and high availability.
+"""
+
+from cdktf import App
+
+from lib.tap_stack import TapStack
+
+
+def main():
+  """
+  Main function to initialize and synthesize the CDKTF application.
+  
+  Creates the CDKTF app and instantiates the AWS production infrastructure stack
+  with all required components including VPC, subnets, security groups,
+  Bastion host, and S3 storage with comprehensive security measures.
+  """
+  # Initialize the CDKTF application
+  app = App()
+  
+  # Create the AWS production infrastructure stack
+  TapStack(
+    app, 
+    "aws-production-infrastructure",
+    description="Production-grade AWS infrastructure with Bastion host and security controls"
+  )
+  
+  # Synthesize the Terraform configuration
+  app.synth()
+
+
+if __name__ == "__main__":
+  main()
 ```
 
-**Gateway Infrastructure Outputs**
-
-```python
-internet_gateway_id      # Internet Gateway ID for routing
-nat_gateway_ids         # List of NAT Gateway IDs for monitoring
-```
-
-**Security Infrastructure Outputs**
-
-```python
-bastion_host_id         # Bastion instance ID for management
-bastion_host_public_ip  # SSH access IP address  
-bastion_security_group_id    # Bastion security group for references
-private_security_group_id    # Private instances security group
-```
-
-**Storage Infrastructure Outputs**
-
-```python
-logs_bucket_name        # Application logs bucket for configuration
-backup_bucket_name      # Backup storage bucket for disaster recovery
-```
-
-### Output Quality Standards
-
-**Description Requirements**
-- Every output must include clear and comprehensive descriptions
-- Descriptions must explain the purpose and usage of each output
-- Integration examples should be provided where applicable
-- Dependencies and relationships should be documented
-
-**Value Type Standards**
-- Appropriate data types for each output (strings, lists, objects)
-- Consistent formatting and structure across all outputs
-- Validation of output values before export
-- Error handling for missing or invalid output values
-
-## Security Validation Checklist
-
-### Network Security Verification
-
-The following security controls must be verified through automated testing:
-
-**SSH Access Control Verification**
-
-```bash
-# Verify SSH access is restricted to specified CIDR only
-aws ec2 describe-security-groups \
-    --query 'SecurityGroups[?IpPermissions[?FromPort==`22` && ToPort==`22` && IpRanges[?CidrIp==`203.0.113.0/24`]]]'
-```
-
-**Security Group Rule Validation**
-
-```bash
-# Verify no security group allows SSH from anywhere
-aws ec2 describe-security-groups \
-    --query 'SecurityGroups[?IpPermissions[?FromPort==`22` && ToPort==`22` && IpRanges[?CidrIp==`0.0.0.0/0`]]]'
-```
-
-### Data Protection Verification
-
-**S3 Bucket Security Validation**
-
-```bash
-# Verify Block Public Access is enabled on all buckets
-aws s3api get-public-access-block --bucket bucket-name
-```
-
-**S3 Bucket Versioning Verification**
-
-```bash
-# Verify versioning is enabled on all buckets  
-aws s3api get-bucket-versioning --bucket bucket-name
-```
-
-### Access Control Verification
-
-**Bastion Host Configuration Validation**
-
-```bash
-# Verify bastion host is in public subnet with public IP
-aws ec2 describe-instances --filters "Name=tag:Purpose,Values=Bastion Host"
-```
-
-**Private Instance Security Validation**
-
-```bash
-# Verify private instances have no public IP addresses
-aws ec2 describe-instances --filters "Name=subnet-id,Values=private-subnet-id"
-```
-
-## Performance and Scalability Standards
-
-### Network Performance Requirements
-
-**Subnet Capacity Planning**
-- Each subnet must support minimum 200 concurrent instances
-- IP address allocation must be efficient with room for growth
-- Cross-availability zone communication must be optimized
-- Internet bandwidth must support expected traffic loads
-
-**Scalability Design Requirements**
-- Architecture must support horizontal scaling through Auto Scaling Groups
-- Load balancing must be supported across multiple availability zones
-- Database scaling must be supported through private subnet architecture
-- Container workloads must be supported through appropriate networking
-
-### Resource Sizing Standards
-
-**Production Appropriateness**
-- Instance types must be appropriate for production workloads
-- Storage allocation must support expected data volumes
-- Network bandwidth must support expected traffic patterns
-- Cost optimization must be balanced with performance requirements
-
-## Compliance and Best Practices
-
-### AWS Well-Architected Framework Compliance
-
-**Security Pillar Requirements**
-- Network segmentation with appropriate access controls
-- Data protection through encryption and access restrictions
-- Identity and access management through proper resource configuration
-- Detective controls through monitoring and logging capabilities
-
-**Reliability Pillar Requirements**  
-- Multi-availability zone design for fault tolerance
-- Backup and recovery procedures for data protection
-- Change management through infrastructure as code practices
-- Failure management through redundant component design
-
-**Performance Efficiency Pillar Requirements**
-- Right-sized resources for expected workload patterns
-- Monitoring capabilities for performance optimization
-- Technology selection appropriate for use case requirements
-- Review processes for continuous optimization
-
-**Cost Optimization Pillar Requirements**
-- Resource tagging for cost allocation and management
-- Efficient resource utilization without over-provisioning
-- Reserved capacity planning for predictable workloads
-- Cost monitoring and optimization procedures
-
-**Operational Excellence Pillar Requirements**
-- Infrastructure as code for consistent deployments
-- Automated testing and validation procedures  
-- Documentation for operational procedures and troubleshooting
-- Monitoring and alerting for operational visibility
-
-### Industry Standards Compliance
-
-**Security Framework Compliance**
-- NIST Cybersecurity Framework alignment for security controls
-- ISO 27001 information security management principles
-- SOC 2 security, availability, and confidentiality controls
-- PCI DSS network segmentation and access control requirements
-
-## Testing Requirements
-
-### Unit Test Coverage Requirements
-
-**Resource Configuration Testing**
-- Verify all infrastructure resources are created with correct configurations
-- Validate resource dependencies and ordering requirements
-- Confirm proper resource tagging and naming conventions
-- Test error handling for invalid configuration scenarios
-
-**Security Configuration Testing**
-- Validate security group rules match requirements exactly
-- Verify S3 bucket security settings are properly configured
-- Test SSH access restrictions through automated validation
-- Confirm network segmentation is properly implemented
-
-### Integration Test Coverage Requirements
-
-**End-to-End Deployment Testing**
-- Complete stack deployment testing in isolated environment
-- Resource interaction and dependency validation
-- Security control verification through automated testing
-- Performance and scalability testing under realistic loads
-
-**Production Readiness Testing**
-- High availability testing through availability zone failure simulation
-- Disaster recovery testing through infrastructure reconstruction
-- Security penetration testing for vulnerability assessment
-- Compliance testing against regulatory requirements
-
-## Deployment Validation Criteria
-
-### Successful Deployment Indicators
-
-The following conditions must be met for successful deployment validation:
-
-**Infrastructure Creation Validation**
-- All required resources created without errors or warnings
-- Resource configurations match specifications exactly
-- Dependencies resolved correctly without circular references
-- Outputs generated with correct values and descriptions
-
-**Security Implementation Validation**
-- SSH access restricted to specified CIDR block only
-- S3 buckets secured with Block Public Access enabled
-- Security groups configured with least privilege access
-- Network segmentation properly implemented and tested
-
-**High Availability Validation**
-- Resources distributed across multiple availability zones
-- Redundant components operational and properly configured
-- Failover capabilities tested and validated
-- Recovery procedures documented and tested
-
-### Failure Criteria
-
-The following conditions indicate deployment failure requiring remediation:
-
-**Critical Security Failures**
-- SSH access allows broader CIDR ranges than specified
-- S3 buckets allow public access through any mechanism
-- Private subnet resources have direct internet access
-- Security groups allow unnecessary access permissions
-
-**Infrastructure Design Failures**
-- VPC CIDR block differs from required specification
-- Insufficient number of subnets or availability zones
-- Missing or improperly configured gateway infrastructure
-- Resource tagging does not meet mandatory requirements
-
-**Quality and Documentation Failures**
-- Missing or incomplete documentation files
-- Test coverage below minimum requirements
-- Poor code organization or lack of error handling
-- Inadequate resource naming or organizational structure
-
-This ideal response specification ensures that infrastructure implementations meet enterprise-grade standards for security, scalability, maintainability, and operational excellence in production environments.

@@ -1,4 +1,12 @@
-Here's a comprehensive CloudFormation template for your serverless image processing service:
+# CloudFormation Infrastructure Solution
+
+This solution implements a comprehensive serverless image processing service with S3, Lambda, DynamoDB, and API Gateway, enhanced with security and performance best practices.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -853,4 +861,25 @@ Outputs:
     Value: !Ref LambdaTimeout
     Export:
       Name: !Sub 'LambdaTimeout-${EnvironmentSuffix}'
+```
+
+## Key Features
+
+- **Serverless Architecture**: Fully serverless design using Lambda, API Gateway, S3, and DynamoDB
+- **Image Processing Pipeline**: Automated image processing triggered by S3 uploads with Lambda functions
+- **Security Best Practices**: IAM roles with least privilege, encrypted S3 buckets, and API Gateway authorization
+- **Performance Optimization**: CloudFront CDN for processed images, DynamoDB with on-demand billing, and configurable Lambda memory/timeout
+- **Monitoring & Logging**: CloudWatch Logs with configurable retention, Lambda error alarms, and comprehensive metrics
+- **Infrastructure as Code**: Parameterized CloudFormation template with environment suffix support
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```
