@@ -158,11 +158,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Load Balancers', () => {
     test('primary ALB exists and is active', async () => {
-      if (skipIfNotDeployed('Primary ALB test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       try {
         const command = new DescribeLoadBalancersCommand({
           Names: [`TapStack-${environment}-${primaryRegion}`],
@@ -187,11 +182,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('secondary ALB exists and is active', async () => {
-      if (skipIfNotDeployed('Secondary ALB test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       try {
         const command = new DescribeLoadBalancersCommand({
           Names: [`TapStack-${environment}-${secondaryRegion}`],
@@ -386,11 +376,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('S3 Bucket', () => {
     test('S3 logs bucket exists and is accessible', async () => {
-      if (skipIfNotDeployed('S3 bucket test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       const bucketName = outputs.s3_logs_bucket || `tapstack-${environment}-${primaryRegion}-logs-*`;
       
       // List all buckets and find the one matching our pattern
@@ -414,11 +399,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('S3 bucket has encryption enabled', async () => {
-      if (skipIfNotDeployed('S3 encryption test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       const listCommand = new ListBucketsCommand({});
       const listResponse = await s3Client.send(listCommand);
       
@@ -443,11 +423,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('S3 bucket has versioning enabled', async () => {
-      if (skipIfNotDeployed('S3 versioning test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       const listCommand = new ListBucketsCommand({});
       const listResponse = await s3Client.send(listCommand);
       
@@ -472,11 +447,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('KMS', () => {
     test('KMS key exists and is enabled', async () => {
-      if (skipIfNotDeployed('KMS key test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       const aliasCommand = new ListAliasesCommand({});
       const aliasResponse = await kmsClient.send(aliasCommand);
       
@@ -503,11 +473,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('IAM Resources', () => {
     test('EC2 IAM role exists with correct policies', async () => {
-      if (skipIfNotDeployed('IAM role test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       try {
         const roleCommand = new GetRoleCommand({
           RoleName: `TapStack-${environment}-${primaryRegion}-ec2-role`,
@@ -537,11 +502,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('EC2 instance profile exists', async () => {
-      if (skipIfNotDeployed('Instance profile test')) {
-        expect(true).toBe(true);
-        return;
-      }
-
       try {
         const command = new GetInstanceProfileCommand({
           InstanceProfileName: `TapStack-${environment}-${primaryRegion}-ec2-profile`,
