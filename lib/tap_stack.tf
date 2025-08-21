@@ -634,7 +634,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
+  certificate_arn   = "arn:aws:acm:us-west-2:718240086340:certificate/60502ec4-a6a3-458f-871d-ffb20382c38b"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secure_prod_tg.arn
@@ -783,51 +783,4 @@ output "dynamodb_table_name" {
 
 output "dynamodb_table_arn" {
   value = aws_dynamodb_table.secure_prod_table.arn
-}
-
-########################
-# Route53 Hosted Zone and ACM Certificate
-########################
-
-resource "aws_route53_zone" "secure_prod_zone" {
-  name = "secure-${local.env_suffix}.tap.local"  # Unique domain with env_suffix
-  tags = {
-    Name        = "secure-prod-zone-${local.env_suffix}"
-    Environment = local.env_suffix
-  }
-}
-
-resource "aws_acm_certificate" "alb_cert" {
-  domain_name       = "secure-${local.env_suffix}.tap.local"
-  validation_method = "DNS"
-  tags = {
-    Name        = "secure-cert-${local.env_suffix}"
-    Environment = local.env_suffix
-  }
-}
-
-locals {
-  alb_cert_dvo = tolist(aws_acm_certificate.alb_cert.domain_validation_options)
-}
-
-resource "aws_route53_record" "alb_cert_validation" {
-  count   = length(local.alb_cert_dvo)
-  zone_id = aws_route53_zone.secure_prod_zone.zone_id
-  name    = local.alb_cert_dvo[count.index].resource_record_name
-  type    = local.alb_cert_dvo[count.index].resource_record_type
-  records = [local.alb_cert_dvo[count.index].resource_record_value]
-  ttl     = 60
-}
-
-resource "aws_acm_certificate_validation" "alb_cert_validation" {
-  certificate_arn         = aws_acm_certificate.alb_cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.alb_cert_validation : record.fqdn]
-}
-
-output "route53_zone_id" {
-  value = aws_route53_zone.secure_prod_zone.zone_id
-}
-
-output "acm_certificate_arn" {
-  value = aws_acm_certificate_validation.alb_cert_validation.certificate_arn
 }
