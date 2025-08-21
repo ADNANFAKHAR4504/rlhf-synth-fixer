@@ -20,6 +20,12 @@ if [ "$PLATFORM" = "cdk" ]; then
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
   npm run cdktf:get
+  # Ensure Go module dependencies (e.g., cdktf core) are downloaded before synth
+  echo "Ensuring Go module deps are available (go mod tidy)"
+  export GOPROXY=${GOPROXY:-direct}
+  export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
+  export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
+  go mod tidy
   npm run cdktf:synth
 else
   echo "ℹ️ Not a CDK project, skipping CDK synth"
