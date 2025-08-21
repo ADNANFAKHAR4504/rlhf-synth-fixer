@@ -125,7 +125,7 @@ EOF
             ebs: {
               volumeSize: 8,
               volumeType: 'gp3',
-              encrypted: 'true',
+              encrypted: 'false',
               deleteOnTermination: 'true',
             },
           },
