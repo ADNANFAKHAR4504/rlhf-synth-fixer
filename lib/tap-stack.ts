@@ -131,12 +131,12 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.securityGroups[region] = sg;
 
-      // KMS Key with FIXED policy for CloudWatch Logs support
+      // KMS Key with CloudWatch Logs support
       const kmsKey = new aws.kms.Key(`${prefix}-kms`, {
         description: `KMS Customer Managed Key for ${region}`,
         enableKeyRotation: true,
         deletionWindowInDays: 30,
-        policy: pulumi.all([aws.getCallerIdentityOutput()]).apply(([id]) => JSON.stringify({
+        policy: aws.getCallerIdentityOutput().apply(id => JSON.stringify({
           Version: '2012-10-17',
           Id: 'key-default-1',
           Statement: [
@@ -208,7 +208,7 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.iamRoles[region] = apiGatewayRole;
 
-      // VPC Endpoint for API Gateway, restrict by policy
+      // VPC Endpoint for API Gateway
       const vpcEndpoint = new aws.ec2.VpcEndpoint(`${prefix}-apigw-vpce`, {
         serviceName: `com.amazonaws.${region}.execute-api`,
         vpcId: vpc.id,
@@ -261,7 +261,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.apiGateways[region] = restApi;
 
-      // CloudWatch Log Group - FIXED: Create after KMS key exists
+      // CloudWatch Log Group
       const logGroup = new aws.cloudwatch.LogGroup(`${prefix}-apigw-logs`, {
         name: `/aws/apigateway/${prefix}`,
         retentionInDays: 90,
@@ -284,10 +284,62 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      // FIXED: Use non-deprecated S3 encryption resource
+      // FIXED: S3 Bucket Policy for CloudTrail
+      new aws.s3.BucketPolicy(`${prefix}-cloudtrail-bucket-policy`, {
+        bucket: s3Bucket.id,
+        policy: pulumi.all([s3Bucket.bucket, aws.getCallerIdentityOutput()]).apply(([bucketName, identity]) => JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com'
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: `arn:aws:s3:::${bucketName}`,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`
+                }
+              }
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com'
+              },
+              Action: 's3:PutObject',
+              Resource: `arn:aws:s3:::${bucketName}/AWSLogs/${identity.accountId}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`
+                }
+              }
+            },
+            {
+              Sid: 'AWSCloudTrailGetBucketLocation',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com'
+              },
+              Action: 's3:GetBucketLocation',
+              Resource: `arn:aws:s3:::${bucketName}`,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`
+                }
+              }
+            }
+          ]
+        }))
+      }, { provider });
+
       new aws.s3.BucketServerSideEncryptionConfiguration(`${prefix}-bucket-encryption`, {
         bucket: s3Bucket.id,
-        rules: [{ 
+        rule: [{ 
           applyServerSideEncryptionByDefault: { 
             sseAlgorithm: 'aws:kms',
             kmsMasterKeyId: kmsKey.arn
@@ -305,7 +357,9 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.s3Buckets[region] = s3Bucket;
 
+      // CloudTrail for security auditing
       new aws.cloudtrail.Trail(`${prefix}-cloudtrail`, {
+        name: `${prefix}-cloudtrail`,
         s3BucketName: s3Bucket.bucket,
         includeGlobalServiceEvents: region === 'us-east-1',
         isMultiRegionTrail: region === 'us-east-1',
@@ -331,11 +385,6 @@ export class TapStack extends pulumi.ComponentResource {
           passwordReusePrevention: 5,
           maxPasswordAge: 90,
         }, { provider });
-
-        // Config resources removed since they already exist:
-        // - ConfigRecorder-pr1768 in us-east-1
-        // - config-recorder-pr1739 in us-west-2
-        // - SecurityRecorder-default-eu-central-1 in eu-central-1
       }
     }
 
