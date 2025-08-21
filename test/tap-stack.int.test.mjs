@@ -1,25 +1,21 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } from '@aws-sdk/client-rds';
-import { S3Client, GetBucketLocationCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from '@aws-sdk/client-iam';
-import { CloudWatchClient, DescribeAlarmsCommand, ListDashboardsCommand } from '@aws-sdk/client-cloudwatch';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribeLaunchTemplatesCommand } from '@aws-sdk/client-auto-scaling';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } = require('@aws-sdk/client-ec2');
+const { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
+const { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } = require('@aws-sdk/client-rds');
+const { S3Client, GetBucketLocationCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } = require('@aws-sdk/client-s3');
+const { IAMClient, GetRoleCommand, GetInstanceProfileCommand } = require('@aws-sdk/client-iam');
+const { CloudWatchClient, DescribeAlarmsCommand, ListDashboardsCommand } = require('@aws-sdk/client-cloudwatch');
+const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+const { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribeLaunchTemplatesCommand } = require('@aws-sdk/client-auto-scaling');
+const fs = require('fs');
+const path = require('path');
 
 // Load the deployment outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 let deploymentOutputs = {};
 
 try {
-    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    deploymentOutputs = JSON.parse(outputsContent);
+    deploymentOutputs = JSON.parse(
+        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+    );
     console.log('✅ Deployment outputs loaded successfully');
 } catch (error) {
     console.log('⚠️  Could not load deployment outputs - this is expected for local development');
