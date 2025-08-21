@@ -6,13 +6,14 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Context or defaults (no deploy params needed)
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const environmentSuffix =
+  app.node.tryGetContext('environmentSuffix') || 'dev';
 
 // Exactly two regions as requested
-const primaryRegion: string =
- app.node.tryGetContext('primaryRegion') || 'us-east-1';
-const backupRegion: string =
- app.node.tryGetContext('backupRegion') || 'us-east-2';
+const primaryRegion =
+  app.node.tryGetContext('primaryRegion') || 'us-east-1';
+const backupRegion =
+  app.node.tryGetContext('backupRegion') || 'us-east-2';
 
 const stackBaseName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
@@ -22,6 +23,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
+
 const synth = new cdk.CliCredentialsStackSynthesizer();
 
 // Primary (us-east-1)
