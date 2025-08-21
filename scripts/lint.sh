@@ -41,8 +41,8 @@ elif [ "$LANGUAGE" = "go" ]; then
         echo "$UNFORMATTED"
         exit 1
     fi
-    # Vet only our library code
-    go vet ./lib/...
+    # Vet the whole module
+    go vet ./...
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
