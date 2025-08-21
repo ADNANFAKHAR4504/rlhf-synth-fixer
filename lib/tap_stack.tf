@@ -22,13 +22,13 @@ variable "environment_suffix" {
 variable "enable_cloudtrail" {
   description = "Enable CloudTrail resources (set to false if trail limits exceeded)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_rds_replica" {
   description = "Enable RDS read replica in us-west-2"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "project_name" {
@@ -1096,11 +1096,11 @@ resource "aws_cloudtrail" "main" {
 
 # SSL/TLS Certificate for HTTPS
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.project_name}-${var.environment_suffix}.meerio.com"
+  domain_name       = var.environment_suffix != "" ? "${var.project_name}-${var.environment_suffix}.meerio.com" : "${var.project_name}.meerio.com"
   validation_method = "DNS"
 
   subject_alternative_names = [
-    "*.${var.project_name}-${var.environment_suffix}.meerio.com"
+    var.environment_suffix != "" ? "*.${var.project_name}-${var.environment_suffix}.meerio.com" : "*.${var.project_name}.meerio.com"
   ]
 
   lifecycle {
