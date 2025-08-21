@@ -374,19 +374,19 @@ Outputs:
 
 ## Architecture Overview & Best Practices
 
-### 🏗️ **Network Architecture**
+### Network Architecture
 - **VPC**: 10.0.0.0/16 CIDR provides 65,536 IP addresses
 - **Public Subnet**: 10.0.1.0/24 (256 IPs) for NAT Gateway and load balancers
 - **Private Subnets**: 10.0.2.0/24 and 10.0.3.0/24 across different AZs for high availability
 - **NAT Gateway**: Enables secure internet access for private resources
 
-### 🔒 **Security Features**
+### Security Features
 1. **Network Isolation**: Strict separation between public and private resources
 2. **Security Groups**: Least privilege access with specific CIDR restrictions
 3. **KMS Encryption**: Custom KMS key for RDS encryption
 4. **Database Security**: RDS in private subnets with restricted access
 
-### 📊 **Production-Ready Features**
+### Production-Ready Features
 - **Deletion Protection**: Enabled for RDS to prevent accidental deletion
 - **Automated Backups**: 7-day retention period
 - **Enhanced Monitoring**: Performance insights enabled
