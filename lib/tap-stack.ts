@@ -50,31 +50,15 @@ export class TapStack extends cdk.Stack {
 
     this.primaryBucketArn = bucket.bucketArn;
 
-    // Cross-region replication (only for primary region)
+    // Cross-region replication setup (only for primary region)
+    // Note: Replication will be configured manually after both stacks are deployed
     if (isPrimary) {
-      // Create replication role first without bucket reference
+      // Create replication role with necessary permissions
       const replicationRole = new iam.Role(this, 'ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
       });
 
-      // Add replication configuration via CfnBucket
-      const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
-      cfnBucket.replicationConfiguration = {
-        role: replicationRole.roleArn,
-        rules: [
-          {
-            id: 'ReplicateToSecondaryRegion',
-            status: 'Enabled',
-            prefix: '',
-            destination: {
-              bucket: `arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}`,
-              storageClass: 'STANDARD_IA',
-            },
-          },
-        ],
-      };
-
-      // Add policies to replication role after bucket is created
+      // Add policies to replication role
       replicationRole.addToPolicy(
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
@@ -114,6 +98,12 @@ export class TapStack extends cdk.Stack {
           resources: [kmsKey.keyArn],
         })
       );
+
+      // Output replication role ARN for manual configuration
+      new cdk.CfnOutput(this, 'ReplicationRoleArn', {
+        value: replicationRole.roleArn,
+        description: 'IAM Role ARN for S3 Cross-Region Replication',
+      });
     }
 
     // CloudFront Distribution (only in primary region)
