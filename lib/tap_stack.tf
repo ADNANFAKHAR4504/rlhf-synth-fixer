@@ -1,37 +1,42 @@
-# module "networking_module" {
-#   source = "./modules/networking_module"
-#   environment = var.environment
-#   vpc_cidr = var.vpc_cidr
-#   public_subnet_cidrs = var.public_subnet_cidrs
-#   private_subnet_cidrs = var.private_subnet_cidrs
-#   tags = local.common_tags
-# }
+module "networking_module" {
+  source = "./modules/networking_module"
+  environment = var.environment
+  vpc_cidr = var.vpc_cidr
+  public_subnet_cidrs = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  tags = local.common_tags
+}
 
-# module "security_module" {
-#   source = "./modules/security_module"
-#   environment = var.environment
-#   vpc_id = module.networking_module.vpc_id
-#   vpc_cidr_block = var.vpc_cidr
+module "security_module" {
+  source = "./modules/security_module"
+  environment = var.environment
+  vpc_id = module.networking_module.vpc_id
+  vpc_cidr_block = var.vpc_cidr
+  tags = local.common_tags
 
-#   depends_on = [ 
-#     module.networking_module 
-#   ]
-# }
+  depends_on = [ 
+    module.networking_module 
+  ]
+}
 
-# module "iam_module" {
-#   source = "./modules/iam_module"
-#   environment = var.environment
-#   s3_bucket_arn = module.security_module.s3_bucket_arn
-#   kms_key_arns = [module.security_module.kms_key_arn]
-#   tags = local.common_tags
-
-#   depends_on = [ module.security_module ]
-# }
-
-# module "compute_module" {
-#   source = "./modules/compute_module"
-#   depends_on = [ 
-#     module.networking_module,
-#     module.security_module
-#   ]
-# }
+module "compute_module" {
+  source = "./modules/compute_module"
+  environment = var.environment
+  instance_type = var.instance_type
+  security_group_id = module.security_module.uniform_security_group_id
+  instance_profile_name = module.security_module.ec2_instance_profile_name
+  kms_key_id = module.security_module.kms_key_id
+  private_subnet_ids = module.networking_module.private_subnet_ids
+  public_subnet_ids = module.networking_module.public_subnet_ids
+  min_size = var.min_size
+  max_size = var.max_size
+  desired_capacity = var.desired_capacity
+  alb_security_group_id = module.security_module.alb_security_group_id
+  vpc_id = module.networking_module.vpc_id
+  tags = local.common_tags
+  
+  depends_on = [ 
+    module.networking_module,
+    module.security_module
+  ]
+}

@@ -1,7 +1,23 @@
+# Data source for latest Ubuntu canonical AMI
+data "aws_ami" "ubuntu_jammy" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical's AWS account ID
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 # Launch Template for EC2 instances
 resource "aws_launch_template" "main" {
-  name_prefix   = "${var.environment}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
+  name_prefix   = "${var.environment}-lt-turing"
+  image_id      = data.aws_ami.ubuntu_jammy.id
   instance_type = var.instance_type
 
   vpc_security_group_ids = [var.security_group_id]

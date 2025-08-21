@@ -1,6 +1,10 @@
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+  validation {
+    condition     = contains(["default", "staging", "prod"], var.environment)
+    error_message = "Environment must be dev, staging, or prod."
+  }
 }
 
 variable "vpc_id" {
@@ -10,11 +14,6 @@ variable "vpc_id" {
 
 variable "vpc_cidr_block" {
   description = "CIDR block of the VPC"
-  type        = string
-}
-
-variable "ec2_role_arn" {
-  description = "ARN of the EC2 IAM role"
   type        = string
 }
 
