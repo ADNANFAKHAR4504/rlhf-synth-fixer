@@ -175,7 +175,7 @@ output "current_iam_role_arn" {
 
 ### Main Configuration
 
-The main configuration orchestrates all modules with environment-specific provider selection:
+The main configuration orchestrates all modules:
 
 ```hcl
 # Main Terraform configuration
@@ -186,7 +186,7 @@ locals {
 module "storage" {
   source = "./modules/storage"
   providers = {
-    aws = local.env == "production" ? aws.production : aws.staging
+    aws = aws.staging
   }
   environment = local.env
 }
@@ -194,7 +194,7 @@ module "storage" {
 module "network" {
   source = "./modules/network"
   providers = {
-    aws = local.env == "production" ? aws.production : aws.staging
+    aws = aws.staging
   }
   environment = local.env
 }
@@ -202,7 +202,7 @@ module "network" {
 module "iam_role" {
   source = "./modules/iam_role"
   providers = {
-    aws = local.env == "production" ? aws.production : aws.staging
+    aws = aws.staging
   }
   environment = local.env
   bucket_arn = module.storage.bucket_arn
