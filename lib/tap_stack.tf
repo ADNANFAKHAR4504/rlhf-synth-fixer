@@ -196,7 +196,7 @@ resource "aws_vpc" "primary" {
 
 # Internet Gateway for primary VPC
 resource "aws_internet_gateway" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   vpc_id   = aws_vpc.primary.id
 
   tags = merge(local.common_tags, {
@@ -238,7 +238,7 @@ resource "aws_subnet" "primary_private" {
 
 # NAT Gateway for primary VPC
 resource "aws_eip" "primary_nat" {
-  provider = aws
+  provider = aws.us_west_1
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
@@ -264,7 +264,7 @@ resource "aws_nat_gateway" "primary" {
 
 # Route tables for primary VPC
 resource "aws_route_table" "primary_public" {
-  provider = aws
+  provider = aws.us_west_1
   vpc_id   = aws_vpc.primary.id
 
   route {
@@ -279,7 +279,7 @@ resource "aws_route_table" "primary_public" {
 }
 
 resource "aws_route_table" "primary_private" {
-  provider = aws
+  provider = aws.us_west_1
   vpc_id   = aws_vpc.primary.id
 
   route {
@@ -499,7 +499,7 @@ resource "aws_cloudwatch_log_group" "secondary_vpc_flow_logs" {
 
 # IAM role for VPC Flow Logs (Primary Region)
 resource "aws_iam_role" "flow_logs" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-flow-logs-role-primary-${var.environment}"
 
   assume_role_policy = jsonencode({
@@ -523,7 +523,7 @@ resource "aws_iam_role" "flow_logs" {
 
 # IAM policy for VPC Flow Logs (Primary Region)
 resource "aws_iam_role_policy" "flow_logs" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-flow-logs-policy-primary-${var.environment}"
   role     = aws_iam_role.flow_logs.id
 
@@ -601,7 +601,7 @@ resource "aws_iam_role_policy" "flow_logs_secondary" {
 
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-ec2-role-${var.environment}"
 
   assume_role_policy = jsonencode({
@@ -624,7 +624,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-ec2-profile-${var.environment}"
   role     = aws_iam_role.ec2_role.name
 
@@ -635,7 +635,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # IAM policy for EC2 role (minimal permissions)
 resource "aws_iam_role_policy" "ec2_policy" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-ec2-policy-${var.environment}"
   role     = aws_iam_role.ec2_role.id
 
@@ -844,7 +844,7 @@ resource "aws_instance" "secondary" {
 
 # S3 bucket in primary region
 resource "aws_s3_bucket" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = local.naming.s3_primary
 
   tags = merge(local.common_tags, {
@@ -855,7 +855,7 @@ resource "aws_s3_bucket" "primary" {
 
 # S3 bucket encryption for primary region
 resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = aws_s3_bucket.primary.id
 
   rule {
@@ -868,7 +868,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
 
 # S3 bucket versioning for primary region
 resource "aws_s3_bucket_versioning" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = aws_s3_bucket.primary.id
 
   versioning_configuration {
@@ -878,7 +878,7 @@ resource "aws_s3_bucket_versioning" "primary" {
 
 # S3 bucket public access block for primary region
 resource "aws_s3_bucket_public_access_block" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = aws_s3_bucket.primary.id
 
   block_public_acls       = true
@@ -939,7 +939,7 @@ resource "aws_s3_bucket_public_access_block" "secondary" {
 
 # RDS Subnet Groups
 resource "aws_db_subnet_group" "primary" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${local.naming.rds_primary}-subnet-group"
   subnet_ids = aws_subnet.primary_private[*].id
 
@@ -1016,7 +1016,7 @@ resource "aws_db_instance" "secondary" {
 
 # CloudTrail S3 bucket
 resource "aws_s3_bucket" "cloudtrail" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = "${var.project_name}-cloudtrail-${random_id.bucket_suffix.hex}"
 
   tags = merge(local.common_tags, {
@@ -1025,7 +1025,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = aws_s3_bucket.cloudtrail.id
 
   rule {
@@ -1036,7 +1036,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  provider = aws
+  provider = aws.us_west_1
   bucket   = aws_s3_bucket.cloudtrail.id
 
   block_public_acls       = true
@@ -1055,7 +1055,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 # IAM Role & Policy for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-cloudtrail-role-${var.environment}"
 
   assume_role_policy = jsonencode({
@@ -1073,7 +1073,7 @@ resource "aws_iam_role" "cloudtrail" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
-  provider = aws
+  provider = aws.us_west_1
   name     = "${var.project_name}-cloudtrail-policy-${var.environment}"
   role     = aws_iam_role.cloudtrail.id
 
@@ -1209,4 +1209,3 @@ output "ami_ids" {
     secondary = data.aws_ami.amazon_linux_secondary.id
   }
 }
-
