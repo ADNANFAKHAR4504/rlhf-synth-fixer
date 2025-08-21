@@ -32,25 +32,25 @@ Create a complete CloudFormation template that implements a secure AWS environme
 ### Required AWS Services
 - **Compute**: EC2 instances with Auto Scaling capabilities
 - **Database**: RDS MySQL/PostgreSQL in private subnet
-- **Storage**: S3 buckets with proper encryption and access controls  
+- **Storage**: S3 buckets with proper encryption and access controls 
 - **Security**: IAM, KMS, WAF, Security Groups, NACLs
 - **Monitoring**: CloudWatch Logs, CloudWatch Metrics, CloudWatch Alarms
 - **Networking**: VPC, Subnets, Route Tables, Internet Gateway, NAT Gateway
 
 ### Template Structure Requirements
 ```yaml
-AWSTemplateFormatVersion: ‘2010-09-09’
-Description: ‘Secure AWS Infrastructure - IaC AWS Nova Model Breaking’
+AWSTemplateFormatVersion: 2010-09-09
+Description: Secure AWS Infrastructure - IaC AWS Nova Model Breaking
 Parameters:
-    Environment and configuration parameters
+Environment and configuration parameters
 Mappings:
-    Region and environment-specific configurations
+Region and environment-specific configurations
 Conditions:
-    Conditional logic for resource creation
+Conditional logic for resource creation
 Resources:
-    All infrastructure components defined here
+All infrastructure components defined here
 Outputs:
-    Key resource identifiers and endpoints
+Key resource identifiers and endpoints
 ```
 ## Implementation Guidelines
 
@@ -76,13 +76,13 @@ Outputs:
 ## Expected Deliverable
 
 A complete, production-ready CloudFormation YAML template that:
--  Implements all security requirements
--  Follows AWS best practices and Well-Architected principles
--  Is deployable in us-east-1 region
--  Passes CloudFormation validation
--  Includes comprehensive resource tagging
--  Provides meaningful outputs for integration
--  Implements proper error handling and rollback policies
+- Implements all security requirements
+- Follows AWS best practices and Well-Architected principles
+- Is deployable in us-east-1 region
+- Passes CloudFormation validation
+- Includes comprehensive resource tagging
+- Provides meaningful outputs for integration
+- Implements proper error handling and rollback policies
 
 ## Success Criteria
 

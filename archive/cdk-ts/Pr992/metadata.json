@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291522",
+  "team": "4",
+  "startedAt": "2025-08-12T12:02:26.697Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anilg-turing",
+  "dockerS3Location": ""
+}

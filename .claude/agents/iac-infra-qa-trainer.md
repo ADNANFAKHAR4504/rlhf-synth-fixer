@@ -127,4 +127,5 @@ initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the i
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
-- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside the lib/ folder
+- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
+the lib/ folder
