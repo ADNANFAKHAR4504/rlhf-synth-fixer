@@ -70,7 +70,6 @@ describe('TemplateValidator', () => {
   describe('Parameter Validation', () => {
     const requiredParams = [
       'EnvironmentSuffix',
-      'DatabasePassword',
       'KeyPairName',
       'VpcCidr'
     ];

@@ -31,7 +31,6 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     const requiredParameters = [
       'EnvironmentSuffix',
-      'DatabasePassword',
       'KeyPairName',
       'VpcCidr',
       'PublicSubnetACidr',

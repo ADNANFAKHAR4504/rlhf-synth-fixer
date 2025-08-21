@@ -18,7 +18,40 @@ export class TemplateValidator {
   constructor(templatePath: string) {
     const content = fs.readFileSync(templatePath, 'utf8');
     if (templatePath.endsWith('.yaml') || templatePath.endsWith('.yml')) {
-      this.template = yaml.load(content) as CloudFormationTemplate;
+      // Configure YAML parser to handle CloudFormation intrinsic functions
+      const cfnTypes = [
+        new yaml.Type('!Ref', {
+          kind: 'scalar',
+          construct: (data) => ({ 'Ref': data })
+        }),
+        new yaml.Type('!Sub', {
+          kind: 'scalar',
+          construct: (data) => ({ 'Fn::Sub': data })
+        }),
+        new yaml.Type('!GetAtt', {
+          kind: 'sequence',
+          construct: (data) => ({ 'Fn::GetAtt': data })
+        }),
+        new yaml.Type('!GetAtt', {
+          kind: 'scalar',
+          construct: (data) => ({ 'Fn::GetAtt': data.split('.') })
+        }),
+        new yaml.Type('!Select', {
+          kind: 'sequence',
+          construct: (data) => ({ 'Fn::Select': data })
+        }),
+        new yaml.Type('!GetAZs', {
+          kind: 'scalar',
+          construct: (data) => ({ 'Fn::GetAZs': data })
+        }),
+        new yaml.Type('!FindInMap', {
+          kind: 'sequence',
+          construct: (data) => ({ 'Fn::FindInMap': data })
+        })
+      ];
+      
+      const cfnSchema = yaml.DEFAULT_SCHEMA.extend(cfnTypes);
+      this.template = yaml.load(content, { schema: cfnSchema }) as CloudFormationTemplate;
     } else {
       this.template = JSON.parse(content) as CloudFormationTemplate;
     }
