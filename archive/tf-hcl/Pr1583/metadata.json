@@ -33,5 +33,11 @@
     "internet-gateway",
     "route-tables",
     "subnets"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
 }
