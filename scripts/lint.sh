@@ -34,15 +34,20 @@ elif [ "$LANGUAGE" = "go" ]; then
     export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
     export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
     go mod tidy
-    # Only lint our Go sources; avoid node_modules/.gen template files
-    UNFORMATTED=$(gofmt -l lib || true)
+    # Only format our Go sources under lib and tests
+    UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
         echo "❌ The following files are not gofmt formatted:"
         echo "$UNFORMATTED"
         exit 1
     fi
-    # Vet the whole module
-    go vet ./...
+    # Vet only lib and tests packages; exclude node_modules and .gen
+    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    if [ -n "$PKGS" ]; then
+        echo "$PKGS" | xargs -r go vet
+    else
+        echo "No Go packages found under lib or tests to vet."
+    fi
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
