@@ -2,7 +2,7 @@ You are an expert AWS CloudFormation architect with deep experience in security-
 
 Context:
 Project Name: IaC - AWS Nova Model Breaking
-We need a CloudFormation template that is production-ready, syntactically valid, and tested against AWS’s validation rules. The environment must be secure by default and meet strict access control requirements.
+We need a CloudFormation template that is production-ready, syntactically valid, and tested against AWSs validation rules. The environment must be secure by default and meet strict access control requirements.
 
 Detailed Requirements:
 
@@ -14,7 +14,7 @@ IAM Roles:
 
 Create application-specific IAM roles.
 
-Apply the principle of least privilege — roles should only have permissions absolutely required for their function.
+Apply the principle of least privilege roles should only have permissions absolutely required for their function.
 
 No wildcard "*" permissions unless strictly necessary (and justify if used).
 

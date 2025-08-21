@@ -1,4 +1,4 @@
-### ✅ Prompt:
+### Prompt:
 
 > **Act as an AWS Solution Architect.**
 >

@@ -1,0 +1,1704 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack - Secure Production Environment (production-hardened, idempotent, conditional) - Multi-AZ VPC (optional) - Separate ALB & Instance security groups - Encrypted CloudTrail to KMS-backed S3 - AWS Config recorder - Optional encrypted RDS (multi-AZ) - Custom S3 cleanup custom resource (Lambda)\n",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Networking"
+                    },
+                    "Parameters": [
+                        "UseExistingVPC",
+                        "VpcId",
+                        "UseExistingPublicSubnets",
+                        "PublicSubnetIds",
+                        "UseExistingPrivateSubnets",
+                        "PrivateSubnetIds"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Certificate"
+                    },
+                    "Parameters": [
+                        "CertificateArn"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "VpcId": {
+                    "default": "VPC ID"
+                },
+                "PublicSubnetIds": {
+                    "default": "Public Subnet IDs (comma-delimited)"
+                },
+                "PrivateSubnetIds": {
+                    "default": "Private Subnet IDs (comma-delimited)"
+                },
+                "CertificateArn": {
+                    "default": "ACM Certificate ARN"
+                }
+            }
+        },
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1030"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "CompanyPrefix": {
+            "Type": "String",
+            "Default": "corp-sec",
+            "Description": "Resource name prefix"
+        },
+        "UseExistingVPC": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, use existing VPC (provide VpcId)"
+        },
+        "VpcId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing VPC ID to use when UseExistingVPC is true (leave blank otherwise)",
+            "AllowedPattern": "^$|^vpc-([0-9a-f]{8}|[0-9a-f]{17})$"
+        },
+        "UseExistingPublicSubnets": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, use existing public subnets (provide PublicSubnetIds)"
+        },
+        "PublicSubnetIds": {
+            "Type": "CommaDelimitedList",
+            "Default": "",
+            "Description": "Existing public subnet IDs (comma-separated)"
+        },
+        "UseExistingPrivateSubnets": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, use existing private subnets (provide PrivateSubnetIds)"
+        },
+        "PrivateSubnetIds": {
+            "Type": "CommaDelimitedList",
+            "Default": "",
+            "Description": "Existing private subnet IDs (comma-separated)"
+        },
+        "CertificateArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional ACM certificate ARN for ALB HTTPS listener"
+        },
+        "AllowedSSHIP": {
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "Description": "CIDR block allowed for SSH access to instances (no 0.0.0.0/0)"
+        },
+        "UseExistingCloudTrail": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, assume an existing CloudTrail & bucket (provide CloudTrailBucketName)"
+        },
+        "CloudTrailBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing CloudTrail bucket name to reuse when UseExistingCloudTrail is true"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "SSM parameter holding latest Amazon Linux 2 AMI in the region (can override)"
+        },
+        "CreateRDS": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, create an encrypted, multi-AZ RDS instance"
+        },
+        "DBMasterUser": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "RDS master username (used only if CreateRDS=true)"
+        },
+        "DBPasswordSecretName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional Secrets Manager secret name for DB password (if blank, a new secret will be created)"
+        },
+        "UseExistingConfigRecorder": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, assume an existing AWS Config recorder (set to true if you already have one)"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-west-2": {
+                "AZs": [
+                    "us-west-2a",
+                    "us-west-2b",
+                    "us-west-2c"
+                ]
+            },
+            "us-east-1": {
+                "AZs": [
+                    "us-east-1a",
+                    "us-east-1b",
+                    "us-east-1c"
+                ]
+            },
+            "eu-west-1": {
+                "AZs": [
+                    "eu-west-1a",
+                    "eu-west-1b",
+                    "eu-west-1c"
+                ]
+            }
+        }
+    },
+    "Conditions": {
+        "CreateVPC": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingVPC"
+                },
+                "false"
+            ]
+        },
+        "CreatePublicSubnets": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingPublicSubnets"
+                },
+                "false"
+            ]
+        },
+        "CreatePrivateSubnets": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingPrivateSubnets"
+                },
+                "false"
+            ]
+        },
+        "CreateVPCAndPublicSubnets": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateVPC"
+                },
+                {
+                    "Condition": "CreatePublicSubnets"
+                }
+            ]
+        },
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingCloudTrail"
+                },
+                "false"
+            ]
+        },
+        "CreateRDSFlag": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateRDS"
+                },
+                "true"
+            ]
+        },
+        "HasCloudTrailBucketName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CloudTrailBucketName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDBPasswordSecretName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBPasswordSecretName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingConfigRecorder"
+                },
+                "false"
+            ]
+        }
+    },
+    "Resources": {
+        "ProdVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "IaC - AWS Nova Model Breaking"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-igw"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ProdVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreatePublicSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.0.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-public-subnet-a"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PublicSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreatePublicSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-public-subnet-b"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-private-subnet-a"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-private-subnet-b"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "NatEIP1": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGW1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIP1",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "CreatePublicSubnets",
+                        {
+                            "Ref": "PublicSubnetA"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-nat-gw-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatEIP2": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "NatGW2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEIP2",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "CreatePublicSubnets",
+                        {
+                            "Ref": "PublicSubnetB"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-nat-gw-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "CreateVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "ProdVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-public-rt"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "CreateVPC",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetARouteTableAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateVPCAndPublicSubnets",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetBRouteTableAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateVPCAndPublicSubnets",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTableA": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-private-rt-a"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableB": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-private-rt-b"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetARoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "NatGW1"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateSubnetBRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "NatGW2"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateSubnetARouteAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableA"
+                }
+            }
+        },
+        "PrivateSubnetBRouteAssoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreatePrivateSubnets",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "ALB security group (public access for HTTP/HTTPS)",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-alb-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "InstanceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Instance security group - restrict SSH and accept ALB traffic",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSSHIP"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-instance-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-ec2-role"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "CloudTrailKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for CloudTrail encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:Decrypt",
+                                "kms:Encrypt",
+                                "kms:DescribeKey",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-cloudtrail-key"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdTrailBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::If": [
+                        "CreateCloudTrail",
+                        {
+                            "Fn::Sub": "${CompanyPrefix}-cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}"
+                        },
+                        {
+                            "Fn::If": [
+                                "HasCloudTrailBucketName",
+                                {
+                                    "Ref": "CloudTrailBucketName"
+                                },
+                                {
+                                    "Fn::Sub": "${CompanyPrefix}-cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "CloudTrailKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-cloudtrail-bucket"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ProdTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyNonHttpsRequests",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ProdTrailBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ProdTrailBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ProdTrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ProdTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ProdCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateCloudTrail",
+            "DependsOn": "ProdTrailBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${CompanyPrefix}-cloudtrail"
+                },
+                "S3BucketName": {
+                    "Ref": "ProdTrailBucket"
+                },
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "KMSKeyId": {
+                    "Ref": "CloudTrailKMSKey"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsLogging": true
+            }
+        },
+        "ProdLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${CompanyPrefix}-ec2-lt"
+                },
+                "LaunchTemplateData": {
+                    "InstanceType": "t3.micro",
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "InstanceSecurityGroup"
+                        }
+                    ],
+                    "IamInstanceProfile": {
+                        "Name": {
+                            "Ref": "EC2InstanceProfile"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${CompanyPrefix}-ec2-instance"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "ProdASG": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Fn::If": [
+                            "CreatePrivateSubnets",
+                            {
+                                "Ref": "PrivateSubnetA"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreatePrivateSubnets",
+                            {
+                                "Ref": "PrivateSubnetB"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "ProdLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "ProdLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": "2",
+                "MaxSize": "4",
+                "DesiredCapacity": "2",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-asg"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ProdALB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyPrefix}-alb"
+                },
+                "Subnets": [
+                    {
+                        "Fn::If": [
+                            "CreatePublicSubnets",
+                            {
+                                "Ref": "PublicSubnetA"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreatePublicSubnets",
+                            {
+                                "Ref": "PublicSubnetB"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "ProdTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyPrefix}-tg"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateVPC",
+                        {
+                            "Ref": "ProdVPC"
+                        },
+                        {
+                            "Ref": "VpcId"
+                        }
+                    ]
+                },
+                "TargetType": "instance",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPort": "80",
+                "HealthCheckPath": "/"
+            }
+        },
+        "ProdHTTPSListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasCertificate",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ProdALB"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "CertificateArn"
+                        }
+                    }
+                ],
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ProdTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ProdHTTPListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ProdALB"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": {
+                    "Fn::If": [
+                        "HasCertificate",
+                        [
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "ProdTargetGroup"
+                                }
+                            }
+                        ]
+                    ]
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfigRecorder",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "config.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfigRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyPrefix}-config-recorder"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfigRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyPrefix}-config-delivery"
+                },
+                "S3BucketName": {
+                    "Ref": "ProdTrailBucket"
+                },
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "TwentyFour_Hours"
+                }
+            }
+        },
+        "S3BucketCleanupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Cleanup",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:DeleteObject",
+                                        "s3:DeleteObjectVersion",
+                                        "s3:ListBucketVersions"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ProdTrailBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProdTrailBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3BucketCleanupFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${CompanyPrefix}-s3-cleanup"
+                },
+                "Handler": "index.handler",
+                "Runtime": "python3.11",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3BucketCleanupRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport urllib.request\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef send_response(event, context, status, data=None, physical_resource_id=None):\n    response_url = event.get('ResponseURL')\n    if not response_url:\n        return\n    response_body = {\n        'Status': status,\n        'Reason': f'See the details in CloudWatch Log Stream: {context.log_stream_name}',\n        'PhysicalResourceId': physical_resource_id or context.log_stream_name,\n        'StackId': event.get('StackId'),\n        'RequestId': event.get('RequestId'),\n        'LogicalResourceId': event.get('LogicalResourceId'),\n        'Data': data or {}\n    }\n    json_response_body = json.dumps(response_body).encode('utf-8')\n    req = urllib.request.Request(response_url, data=json_response_body, method='PUT')\n    req.add_header('Content-Type', '')\n    req.add_header('Content-Length', str(len(json_response_body)))\n    try:\n        with urllib.request.urlopen(req) as response:\n            logger.info('CloudFormation returned status code: %s', response.getcode())\n    except Exception as e:\n        logger.error('send_response failed: %s', str(e))\n\ndef handler(event, context):\n    s3 = boto3.resource('s3')\n    try:\n        logger.info(\"Received event: %s\", json.dumps(event))\n        bucket_name = event['ResourceProperties']['BucketName']\n        if event['RequestType'] == 'Delete':\n            bucket = s3.Bucket(bucket_name)\n            # delete all object versions and markers\n            bucket.object_versions.delete()\n        send_response(event, context, \"SUCCESS\")\n    except Exception as e:\n        logger.exception(\"Error during cleanup\")\n        send_response(event, context, \"FAILED\", { \"Message\": str(e) })\n"
+                }
+            }
+        },
+        "S3BucketCleanup": {
+            "Type": "Custom::S3BucketCleanup",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3BucketCleanupFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "ProdTrailBucket"
+                }
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Condition": "CreateRDSFlag",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyPrefix}-rds-master-secret"
+                },
+                "Description": "RDS master credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DBMasterUser}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludePunctuation": true
+                }
+            }
+        },
+        "RDSSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "CreateRDSFlag",
+            "Properties": {
+                "DBSubnetGroupDescription": {
+                    "Fn::Sub": "${CompanyPrefix}-rds-subnet-group"
+                },
+                "SubnetIds": [
+                    {
+                        "Fn::If": [
+                            "CreatePrivateSubnets",
+                            {
+                                "Ref": "PrivateSubnetA"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreatePrivateSubnets",
+                            {
+                                "Ref": "PrivateSubnetB"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyPrefix}-rds-subnet-group"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpRDS": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "CreateRDSFlag",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${CompanyPrefix}-rds"
+                },
+                "Engine": "mysql",
+                "MasterUsername": {
+                    "Ref": "DBMasterUser"
+                },
+                "MasterUserPassword": {
+                    "Fn::If": [
+                        "HasDBPasswordSecretName",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecretName}:SecretString:password}}"
+                        },
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                        }
+                    ]
+                },
+                "AllocatedStorage": 20,
+                "DBInstanceClass": "db.t3.medium",
+                "StorageEncrypted": true,
+                "MultiAZ": true,
+                "PubliclyAccessible": false,
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "InstanceSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "RDSSubnetGroup"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID (created or existing)",
+            "Value": {
+                "Fn::If": [
+                    "CreateVPC",
+                    {
+                        "Ref": "ProdVPC"
+                    },
+                    {
+                        "Ref": "VpcId"
+                    }
+                ]
+            }
+        },
+        "PublicSubnets": {
+            "Description": "Public Subnet IDs (created or reused)",
+            "Value": {
+                "Fn::If": [
+                    "CreatePublicSubnets",
+                    {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Ref": "PublicSubnetA"
+                                },
+                                {
+                                    "Ref": "PublicSubnetB"
+                                }
+                            ]
+                        ]
+                    },
+                    {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "PublicSubnetIds"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "PrivateSubnets": {
+            "Description": "Private Subnet IDs (created or reused)",
+            "Value": {
+                "Fn::If": [
+                    "CreatePrivateSubnets",
+                    {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Ref": "PrivateSubnetA"
+                                },
+                                {
+                                    "Ref": "PrivateSubnetB"
+                                }
+                            ]
+                        ]
+                    },
+                    {
+                        "Fn::Join": [
+                            ",",
+                            {
+                                "Ref": "PrivateSubnetIds"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "ALBEndpoint": {
+            "Description": "ALB DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProdALB",
+                    "DNSName"
+                ]
+            }
+        },
+        "ProdSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            }
+        },
+        "InstanceSecurityGroupId": {
+            "Description": "Instance Security Group ID",
+            "Value": {
+                "Ref": "InstanceSecurityGroup"
+            }
+        },
+        "ProdTrailBucketName": {
+            "Description": "CloudTrail S3 bucket name (created or provided)",
+            "Value": {
+                "Ref": "ProdTrailBucket"
+            }
+        },
+        "CloudTrailKMSKeyId": {
+            "Description": "CloudTrail KMS Key ID",
+            "Value": {
+                "Ref": "CloudTrailKMSKey"
+            }
+        },
+        "ProdCloudTrailName": {
+            "Description": "CloudTrail Name (if created)",
+            "Value": {
+                "Fn::If": [
+                    "CreateCloudTrail",
+                    {
+                        "Ref": "ProdCloudTrail"
+                    },
+                    "Using existing CloudTrail"
+                ]
+            }
+        },
+        "ProdASGName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "ProdASG"
+            }
+        },
+        "ProdLaunchTemplateName": {
+            "Description": "Launch Template Name",
+            "Value": {
+                "Ref": "ProdLaunchTemplate"
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "Config Recorder Name",
+            "Value": {
+                "Fn::If": [
+                    "CreateConfigRecorder",
+                    {
+                        "Ref": "ConfigRecorder"
+                    },
+                    "Using existing Config Recorder"
+                ]
+            }
+        },
+        "S3BucketCleanupFunctionName": {
+            "Description": "S3 Bucket Cleanup Lambda Function Name",
+            "Value": {
+                "Ref": "S3BucketCleanupFunction"
+            }
+        }
+    }
+}
