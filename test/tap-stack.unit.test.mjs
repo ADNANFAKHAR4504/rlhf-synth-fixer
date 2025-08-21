@@ -173,17 +173,17 @@ describe('TapStack', () => {
     test('validates security groups have correct ingress rules', () => {
       // Check that ALB security group exists with correct description
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for Application Load Balancer - dev',
+        GroupDescription: `Security group for Application Load Balancer - ${environmentSuffix}`,
       });
       
       // Check that web server security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for web servers - dev',
+        GroupDescription: `Security group for web servers - ${environmentSuffix}`,
       });
       
       // Check that database security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS database - dev',
+        GroupDescription: `Security group for RDS database - ${environmentSuffix}`,
       });
     });
 
