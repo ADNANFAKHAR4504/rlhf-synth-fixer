@@ -520,12 +520,41 @@ resource "aws_s3_bucket_public_access_block" "main" {
 }
 
 # S3 Bucket Server Side Encryption
+#resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+#  bucket = aws_s3_bucket.main.id
+#
+#  rule {
+#    apply_server_side_encryption_by_default {
+#      sse_algorithm = "AES256"
+#    }
+#  }
+#}
+resource "aws_kms_key" "s3_encryption" {
+  description = "KMS key for S3 bucket encryption"
+  deletion_window_in_days = 10
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-s3-kms-key"
+  }
+}
+
+resource "aws_kms_alias" "s3_encryption_alias" {
+  name          = "alias/${var.project_name}-${var.environment}-s3-kms-key"
+  target_key_id = aws_kms_key.s3_encryption.id
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
 
+  depends_on = [
+    aws_s3_bucket.main,
+    aws_kms_key.s3_encryption
+  ]
+
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3_encryption.arn
     }
   }
 }
