@@ -18,7 +18,7 @@
   "training_quality": 8,
   "aws_services": [
     "AWS KMS",
-    "AWS SNS", 
+    "AWS SNS",
     "AWS Security Hub",
     "Amazon Macie",
     "Amazon EventBridge",
@@ -26,5 +26,11 @@
     "AWS GuardDuty",
     "AWS Config",
     "AWS CloudTrail"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
