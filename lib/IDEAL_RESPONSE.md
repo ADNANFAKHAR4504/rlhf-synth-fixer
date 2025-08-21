@@ -160,10 +160,10 @@ class TapStack extends cdk.Stack {
     appVersionParam.grantRead(ec2Role);
     dbConnectionParam.grantRead(ec2Role);
 
-    // Use a specific AMI ID for us-west-2 to avoid DescribeImages permission requirement
+    // Use a specific AMI ID for us-east-1 to avoid DescribeImages permission requirement
     const amazonLinux = ec2.MachineImage.genericLinux({
-      'us-west-2': 'ami-05c3dc660cb6907f0', // Amazon Linux 2 AMI
-      'us-east-1': 'ami-0c02fb55731490381', // Fallback for other regions
+      'us-east-1': 'ami-0abcdef1234567890', // Amazon Linux 2 AMI
+      'us-west-2': 'ami-05c3dc660cb6907f0', // Fallback for other regions
     });
 
     // User data script for EC2 instances
@@ -348,13 +348,13 @@ export { TapStack };
 1. **Set Environment Variables**
 ```bash
 export ENVIRONMENT_SUFFIX="dev"
-export AWS_REGION="us-west-2"
-export CDK_DEFAULT_REGION="us-west-2"
+export AWS_REGION="us-east-1"
+export CDK_DEFAULT_REGION="us-east-1"
 ```
 
 2. **Bootstrap CDK (first time only)**
 ```bash
-npx cdk bootstrap aws://ACCOUNT-ID/us-west-2
+npx cdk bootstrap aws://ACCOUNT-ID/us-east-1
 ```
 
 3. **Deploy Stack**

@@ -68,10 +68,10 @@ const amazonLinux = ec2.MachineImage.latestAmazonLinux2023({
 
 **Fixed Code**:
 ```javascript
-// Use a specific AMI ID for us-west-2 to avoid DescribeImages permission requirement
+// Use a specific AMI ID for us-east-1 to avoid DescribeImages permission requirement
 const amazonLinux = ec2.MachineImage.genericLinux({
-  'us-west-2': 'ami-05c3dc660cb6907f0', // Amazon Linux 2 AMI
-  'us-east-1': 'ami-0c02fb55731490381', // Fallback for other regions
+  'us-east-1': 'ami-0abcdef1234567890', // Amazon Linux 2 AMI
+  'us-west-2': 'ami-05c3dc660cb6907f0', // Fallback for other regions
 });
 ```
 
