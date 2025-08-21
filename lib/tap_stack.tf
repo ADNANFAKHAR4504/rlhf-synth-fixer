@@ -1,4 +1,3 @@
-```hcl
 # tap_stack.tf
 # Comprehensive Terraform configuration for multi-region AWS infrastructure
 # with security best practices and compliance requirements
@@ -1107,10 +1106,9 @@ resource "aws_cloudtrail" "this" {
 }
 
 
-"""""""""""""""""""""
-"""OUTPUTS"""""""""""
-"""""""""""""""""""""""
-
+#############
+###OUTPUTS#######
+##############
 output "vpc_ids" {
   description = "The IDs of the primary and secondary VPCs"
   value = {
