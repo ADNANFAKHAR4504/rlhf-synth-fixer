@@ -457,23 +457,6 @@ describe("SecureApp Infrastructure Integration Tests", () => {
         s.name === secureAppRecorderUsw2?.name
       );
       expect(recorderStatusUsw2?.recording).toBe(true);
-      
-      // Test us-east-1 config recorder
-      const configClientUse1 = new AWS.ConfigService({ region: "us-east-1" });
-      const recordersUse1 = await configClientUse1.describeConfigurationRecorders().promise();
-      const secureAppRecorderUse1 = recordersUse1.ConfigurationRecorders?.find(r => 
-        r.name?.includes("iac-291323-secureapp-prod-config-recorder-use1")
-      );
-      
-      expect(secureAppRecorderUse1).toBeDefined();
-      expect(secureAppRecorderUse1?.recordingGroup?.allSupported).toBe(true);
-      expect(secureAppRecorderUse1?.recordingGroup?.includeGlobalResourceTypes).toBe(false); // Only primary region includes global resources
-      
-      const statusUse1 = await configClientUse1.describeConfigurationRecorderStatus().promise();
-      const recorderStatusUse1 = statusUse1.ConfigurationRecordersStatus?.find(s => 
-        s.name === secureAppRecorderUse1?.name
-      );
-      expect(recorderStatusUse1?.recording).toBe(true);
     });
 
     test("Config delivery channels are configured in both regions", async () => {

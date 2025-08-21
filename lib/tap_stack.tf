@@ -635,18 +635,6 @@ resource "aws_config_configuration_recorder" "main_usw2" {
   }
 }
 
-resource "aws_config_configuration_recorder" "main_use1" {
-  count    = var.create_config ? 1 : 0
-  provider = aws.use1
-  name     = "${local.naming_prefix}-config-recorder-use1"
-  role_arn = aws_iam_role.config.arn
-
-  recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
-  }
-}
-
 resource "aws_config_delivery_channel" "main_usw2" {
   count          = var.create_config ? 1 : 0
   provider       = aws.usw2
