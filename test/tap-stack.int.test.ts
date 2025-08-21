@@ -25,33 +25,34 @@ describe('Terraform High Availability Web App E2E Deployment Outputs', () => {
     expectedKeys.forEach(key => {
       expect(outputs).toHaveProperty(key);
       expect(outputs[key]).toBeDefined();
+      expect(outputs[key]).toHaveProperty('value');
     });
   });
 
   it('should have valid formats for IDs and ARNs', () => {
-    expect(outputs['vpc_id']).toMatch(/^vpc-[a-z0-9]+$/);
-    expect(outputs['elb_security_group_id']).toMatch(/^sg-[a-z0-9]+$/);
-    expect(outputs['web_servers_security_group_id']).toMatch(/^sg-[a-z0-9]+$/);
-    expect(outputs['sns_topic_arn']).toMatch(/^arn:aws:sns:us-east-1:/);
-    (JSON.parse(outputs['public_subnet_ids']) as string[]).forEach(id => {
+    expect(outputs['vpc_id'].value).toMatch(/^vpc-[a-z0-9]+$/);
+    expect(outputs['elb_security_group_id'].value).toMatch(/^sg-[a-z0-9]+$/);
+    expect(outputs['web_servers_security_group_id'].value).toMatch(/^sg-[a-z0-9]+$/);
+    expect(outputs['sns_topic_arn'].value).toMatch(/^arn:aws:sns:us-east-1:/);
+    (outputs['public_subnet_ids'].value as string[]).forEach(id => {
       expect(id).toMatch(/^subnet-[a-z0-9]+$/);
     });
-    (JSON.parse(outputs['private_subnet_ids']) as string[]).forEach(id => {
+    (outputs['private_subnet_ids'].value as string[]).forEach(id => {
       expect(id).toMatch(/^subnet-[a-z0-9]+$/);
     });
   });
 
   it('should have correct values for environment and region', () => {
-    expect(outputs['autoscaling_group_name']).toContain('-dev');
-    expect(outputs['load_balancer_dns_name']).toMatch(/\.us-east-1\.elb\.amazonaws\.com$/);
-    expect(JSON.parse(outputs['availability_zones'])).toEqual(
+    expect(outputs['autoscaling_group_name'].value).toContain('-dev');
+    expect(outputs['load_balancer_dns_name'].value).toMatch(/\.us-east-1\.elb\.amazonaws\.com$/);
+    expect(outputs['availability_zones'].value).toEqual(
       expect.arrayContaining(['us-east-1a', 'us-east-1b'])
     );
   });
 
   it('should expose a reachable DNS for the load balancer', () => {
-    expect(outputs['load_balancer_dns_name']).toMatch(/^ha-web-app-alb-dev-[a-z0-9\-]+\.us-east-1\.elb\.amazonaws\.com$/);
+    expect(outputs['load_balancer_dns_name'].value).toMatch(/^ha-web-app-alb-dev-[a-z0-9\-]+\.us-east-1\.elb\.amazonaws\.com$/);
   });
 
-  // ...add more assertions as needed for your app's requirements
+  // Additional E2E checks can be added here as needed.
 });
