@@ -44,6 +44,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have NotificationEmail parameter', () => {
       expect(template.Parameters.NotificationEmail).toBeDefined();
       expect(template.Parameters.NotificationEmail.Type).toBe('String');
+      expect(template.Parameters.NotificationEmail.Default).toBe('security@example.com');
       expect(template.Parameters.NotificationEmail.AllowedPattern).toBeDefined();
     });
 
@@ -68,9 +69,21 @@ describe('TapStack CloudFormation Template', () => {
   describe('Conditions', () => {
     test('should have ShouldCreateMacie condition', () => {
       expect(template.Conditions.ShouldCreateMacie).toBeDefined();
-      expect(template.Conditions.ShouldCreateMacie['Fn::Equals']).toBeDefined();
-      expect(template.Conditions.ShouldCreateMacie['Fn::Equals'][0].Ref).toBe('EnableMacie');
-      expect(template.Conditions.ShouldCreateMacie['Fn::Equals'][1]).toBe('true');
+      expect(template.Conditions.ShouldCreateMacie['Fn::And']).toBeDefined();
+      
+      const andConditions = template.Conditions.ShouldCreateMacie['Fn::And'];
+      expect(andConditions).toHaveLength(2);
+      
+      // First condition: EnableMacie equals 'true'
+      expect(andConditions[0]['Fn::Equals']).toBeDefined();
+      expect(andConditions[0]['Fn::Equals'][0].Ref).toBe('EnableMacie');
+      expect(andConditions[0]['Fn::Equals'][1]).toBe('true');
+      
+      // Second condition: NOT (region equals 'us-east-1')
+      expect(andConditions[1]['Fn::Not']).toBeDefined();
+      expect(andConditions[1]['Fn::Not'][0]['Fn::Equals']).toBeDefined();
+      expect(andConditions[1]['Fn::Not'][0]['Fn::Equals'][0].Ref).toBe('AWS::Region');
+      expect(andConditions[1]['Fn::Not'][0]['Fn::Equals'][1]).toBe('us-east-1');
     });
   });
 
@@ -235,7 +248,7 @@ describe('TapStack CloudFormation Template', () => {
       const macieOutput = template.Outputs.MacieSessionArn;
       expect(macieOutput.Value['Fn::If']).toBeDefined();
       expect(macieOutput.Value['Fn::If'][0]).toBe('ShouldCreateMacie');
-      expect(macieOutput.Value['Fn::If'][2]).toBe('Not Created');
+      expect(macieOutput.Value['Fn::If'][2]).toBe('Not Created (disabled or unsupported region)');
     });
   });
 

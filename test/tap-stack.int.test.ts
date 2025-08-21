@@ -298,8 +298,8 @@ describe('Security Services Integration Tests', () => {
       expect(outputs.CloudTrailInfo).toContain('limit reached');
     });
 
-    test('should verify Macie was not created when disabled', () => {
-      expect(outputs.MacieSessionArn).toBe('Not Created');
+    test('should verify Macie was not created when disabled or unsupported', () => {
+      expect(outputs.MacieSessionArn).toBe('Not Created (disabled or unsupported region)');
     });
   });
 
