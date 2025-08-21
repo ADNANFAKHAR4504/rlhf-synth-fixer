@@ -94,7 +94,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
   describe("S3 Storage Security", () => {
     test("S3 app data buckets exist and have proper encryption", async () => {
       // Test us-west-2 app data bucket
-      const bucketNameUsw2 = "secureapp-prod-app-data-usw2";
+      const bucketNameUsw2 = "iac-291323-secureapp-prod-app-data-usw2";
       
       const encryptionUsw2 = await s3Client.getBucketEncryption({
         Bucket: bucketNameUsw2
@@ -105,7 +105,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       expect(ruleUsw2?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(deploymentOutputs.kms_key_ids_usw2);
       
       // Test us-east-1 app data bucket
-      const bucketNameUse1 = "secureapp-prod-app-data-use1";
+      const bucketNameUse1 = "iac-291323-secureapp-prod-app-data-use1";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       
       const encryptionUse1 = await s3ClientUse1.getBucketEncryption({
@@ -118,7 +118,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     });
 
     test("CloudTrail S3 bucket has proper encryption", async () => {
-      const cloudtrailBucket = "secureapp-prod-cloudtrail-logs";
+      const cloudtrailBucket = "iac-291323-secureapp-prod-cloudtrail-logs";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       
       const encryption = await s3ClientUse1.getBucketEncryption({
@@ -130,7 +130,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     });
 
     test("S3 buckets have proper tags", async () => {
-      const bucketNameUsw2 = "secureapp-prod-app-data-usw2";
+      const bucketNameUsw2 = "iac-291323-secureapp-prod-app-data-usw2";
       
       const tags = await s3Client.getBucketTagging({
         Bucket: bucketNameUsw2
@@ -144,7 +144,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
 
     test("Config S3 buckets have proper encryption", async () => {
       // Test us-west-2 config bucket
-      const configBucketUsw2 = "secureapp-prod-config-usw2";
+      const configBucketUsw2 = "iac-291323-secureapp-prod-config-usw2";
       const encryptionUsw2 = await s3Client.getBucketEncryption({
         Bucket: configBucketUsw2
       }).promise();
@@ -153,7 +153,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       expect(ruleUsw2?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
       
       // Test us-east-1 config bucket
-      const configBucketUse1 = "secureapp-prod-config-use1";
+      const configBucketUse1 = "iac-291323-secureapp-prod-config-use1";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       const encryptionUse1 = await s3ClientUse1.getBucketEncryption({
         Bucket: configBucketUse1
@@ -296,7 +296,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     test("RDS instances are not publicly accessible in both regions", async () => {
       // Test us-west-2 RDS instance
       const dbInstancesUsw2 = await rdsClient.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-usw2"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-usw2"
       }).promise();
       
       const dbInstanceUsw2 = dbInstancesUsw2.DBInstances?.[0];
@@ -307,7 +307,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-east-1 RDS instance
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
       }).promise();
       
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -319,7 +319,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     test("RDS instances are in private subnets in both regions", async () => {
       // Test us-west-2 RDS instance
       const dbInstancesUsw2 = await rdsClient.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-usw2"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-usw2"
       }).promise();
       
       const dbInstanceUsw2 = dbInstancesUsw2.DBInstances?.[0];
@@ -329,7 +329,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-east-1 RDS instance
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
       }).promise();
       
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -340,7 +340,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     test("RDS security groups restrict access properly in both regions", async () => {
       // Test us-west-2 RDS security groups
       const dbInstancesUsw2 = await rdsClient.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-usw2"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-usw2"
       }).promise();
       
       const dbInstanceUsw2 = dbInstancesUsw2.DBInstances?.[0];
@@ -363,7 +363,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       const ec2ClientUse1 = new AWS.EC2({ region: "us-east-1" });
       
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
       }).promise();
       
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -386,7 +386,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
   describe("CloudTrail Logging", () => {
     test("CloudTrail is active and configured correctly", async () => {
       const trails = await cloudTrailClient.describeTrails().promise();
-      const secureAppTrail = trails.trailList?.find(trail => trail.Name?.includes("secureapp-prod-cloudtrail"));
+      const secureAppTrail = trails.trailList?.find(trail => trail.Name?.includes("iac-291323-secureapp-prod-cloudtrail"));
       
       expect(secureAppTrail).toBeDefined();
       expect(secureAppTrail?.IsMultiRegionTrail).toBe(true);
@@ -401,10 +401,10 @@ describe("SecureApp Infrastructure Integration Tests", () => {
 
     test("CloudTrail S3 bucket is properly configured", async () => {
       const trails = await cloudTrailClient.describeTrails().promise();
-      const secureAppTrail = trails.trailList?.find(trail => trail.Name?.includes("secureapp-prod-cloudtrail"));
+      const secureAppTrail = trails.trailList?.find(trail => trail.Name?.includes("iac-291323-secureapp-prod-cloudtrail"));
       
       expect(secureAppTrail?.S3BucketName).toBeDefined();
-      expect(secureAppTrail?.S3BucketName).toBe("secureapp-prod-cloudtrail-logs");
+      expect(secureAppTrail?.S3BucketName).toBe("iac-291323-secureapp-prod-cloudtrail-logs");
       
       // CloudTrail bucket uses AES256 encryption based on infrastructure config
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
@@ -422,7 +422,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-west-2 config recorder
       const recordersUsw2 = await configClient.describeConfigurationRecorders().promise();
       const secureAppRecorderUsw2 = recordersUsw2.ConfigurationRecorders?.find(r => 
-        r.name?.includes("secureapp-prod-config-recorder-usw2")
+        r.name?.includes("iac-291323-secureapp-prod-config-recorder-usw2")
       );
       
       expect(secureAppRecorderUsw2).toBeDefined();
@@ -439,7 +439,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       const configClientUse1 = new AWS.ConfigService({ region: "us-east-1" });
       const recordersUse1 = await configClientUse1.describeConfigurationRecorders().promise();
       const secureAppRecorderUse1 = recordersUse1.ConfigurationRecorders?.find(r => 
-        r.name?.includes("secureapp-prod-config-recorder-use1")
+        r.name?.includes("iac-291323-secureapp-prod-config-recorder-use1")
       );
       
       expect(secureAppRecorderUse1).toBeDefined();
@@ -457,21 +457,21 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-west-2 config delivery channel
       const channelsUsw2 = await configClient.describeDeliveryChannels().promise();
       const secureAppChannelUsw2 = channelsUsw2.DeliveryChannels?.find(c => 
-        c.name?.includes("secureapp-prod-config-delivery-usw2")
+        c.name?.includes("iac-291323-secureapp-prod-config-delivery-usw2")
       );
       
       expect(secureAppChannelUsw2).toBeDefined();
-      expect(secureAppChannelUsw2?.s3BucketName).toBe("secureapp-prod-config-usw2");
+      expect(secureAppChannelUsw2?.s3BucketName).toBe("iac-291323-secureapp-prod-config-usw2");
       
       // Test us-east-1 config delivery channel
       const configClientUse1 = new AWS.ConfigService({ region: "us-east-1" });
       const channelsUse1 = await configClientUse1.describeDeliveryChannels().promise();
       const secureAppChannelUse1 = channelsUse1.DeliveryChannels?.find(c => 
-        c.name?.includes("secureapp-prod-config-delivery-use1")
+        c.name?.includes("iac-291323-secureapp-prod-config-delivery-use1")
       );
       
       expect(secureAppChannelUse1).toBeDefined();
-      expect(secureAppChannelUse1?.s3BucketName).toBe("secureapp-prod-config-use1");
+      expect(secureAppChannelUse1?.s3BucketName).toBe("iac-291323-secureapp-prod-config-use1");
     });
   });
 
@@ -570,7 +570,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     test("RDS instances can be reached from within VPCs", async () => {
       // Test us-west-2 RDS instance
       const dbInstancesUsw2 = await rdsClient.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-usw2"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-usw2"
       }).promise();
       
       const dbInstanceUsw2 = dbInstancesUsw2.DBInstances?.[0];
@@ -581,7 +581,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-east-1 RDS instance
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
       }).promise();
       
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -594,7 +594,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // Test us-west-2 app data bucket
       try {
         await s3Client.headBucket({
-          Bucket: "secureapp-prod-app-data-usw2"
+          Bucket: "iac-291323-secureapp-prod-app-data-usw2"
         }).promise();
       } catch (error: any) {
         if (error.statusCode !== 403) {
@@ -606,7 +606,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       try {
         await s3ClientUse1.headBucket({
-          Bucket: "secureapp-prod-app-data-use1"
+          Bucket: "iac-291323-secureapp-prod-app-data-use1"
         }).promise();
       } catch (error: any) {
         if (error.statusCode !== 403) {
