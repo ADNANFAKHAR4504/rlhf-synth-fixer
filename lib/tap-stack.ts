@@ -8,11 +8,8 @@ import {
 import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
-  
   environmentSuffix?: string;
 }
-
-
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -21,17 +18,13 @@ export class TapStack extends cdk.Stack {
     const envSuffix =
       (props?.environmentSuffix ?? this.node.tryGetContext('environmentSuffix')) ??
       'prod';
-
-    
     const auditLogGroup = new logs.LogGroup(this, 'IamAuditLogGroup', {
       logGroupName: `/secure/iam/audit/${region}/${envSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       // Keep logs by default in production; safe for tests as well.
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
-
     const lambdaAuditRole = new iam.Role(this, 'LambdaIamAuditRole', {
-    
       roleName: `LambdaIamAuditRole-${region}-${envSuffix}`.slice(0, 64),
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description:
@@ -55,16 +48,12 @@ export class TapStack extends cdk.Stack {
         }),
       },
     });
-
- 
     const ec2EmptyRole = new iam.Role(this, 'Ec2EmptyRole', {
       roleName: `Ec2EmptyRole-${region}-${envSuffix}`.slice(0, 64),
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description:
         'Baseline EC2 role with no permissions; attach only the exact actions required.',
     });
-
-    // Helpful outputs
     new cdk.CfnOutput(this, 'LambdaIamAuditRoleArn', {
       value: lambdaAuditRole.roleArn,
       exportName: `LambdaIamAuditRoleArn-${region}-${envSuffix}`,
@@ -77,8 +66,6 @@ export class TapStack extends cdk.Stack {
       value: auditLogGroup.logGroupName,
       exportName: `AuditLogGroupName-${region}-${envSuffix}`,
     });
-
-   
     const rollbackAlarm = new cloudwatch.Alarm(this, 'RollbackGuardAlarm', {
       alarmName: `RollbackGuardAlarm-${region}-${envSuffix}`,
       metric: new cloudwatch.Metric({
@@ -93,13 +80,11 @@ export class TapStack extends cdk.Stack {
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-
     // Minimal nested template body – just enough to carry RollbackConfiguration
     const nestedTemplateBody =
       "AWSTemplateFormatVersion: '2010-09-09'\n" +
       "Description: 'Nested stack solely to carry RollbackConfiguration (no resources)'\n" +
       'Resources: {}';
-
     // Low-level resource so we can attach RollbackConfiguration
     const rollbackNested = new cdk.CfnResource(this, 'RollbackNestedStack', {
       type: 'AWS::CloudFormation::Stack',
@@ -124,7 +109,6 @@ export class TapStack extends cdk.Stack {
       },
     });
     rollbackNested.addDependency(rollbackAlarm.node.defaultChild as cdk.CfnResource);
-
     // Nice template description for traceability
     this.templateOptions.description =
       'TapStack: least-privilege IAM roles + rollback configuration via nested stack .';

@@ -5,26 +5,28 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+// Context or defaults (no deploy params needed)
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
+
+// Exactly two regions as requested
+const primaryRegion: string = app.node.tryGetContext('primaryRegion') || 'us-east-1';
+const backupRegion: string = app.node.tryGetContext('backupRegion') || 'us-east-2';
+
+const stackBaseName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-const primaryRegion: string =
-  app.node.tryGetContext('primaryRegion') || 'us-east-1';
-const backupRegion: string =
-  app.node.tryGetContext('backupRegion') || 'us-east-2';
-
-
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+// Global tags
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
+const synth = new cdk.CliCredentialsStackSynthesizer();
 
-new TapStack(app, `${stackName}-${primaryRegion}`, {
-  stackName: `${stackName}-${primaryRegion}`,
+// Primary (us-east-1)
+new TapStack(app, `${stackBaseName}-${primaryRegion}`, {
+  stackName: `${stackBaseName}-${primaryRegion}`,
   environmentSuffix,
+  synthesizer: synth,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: primaryRegion,
@@ -32,9 +34,10 @@ new TapStack(app, `${stackName}-${primaryRegion}`, {
 });
 
 // Secondary (us-east-2)
-new TapStack(app, `${stackName}-${backupRegion}`, {
-  stackName: `${stackName}-${backupRegion}`,
+new TapStack(app, `${stackBaseName}-${backupRegion}`, {
+  stackName: `${stackBaseName}-${backupRegion}`,
   environmentSuffix,
+  synthesizer: synth,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: backupRegion,
