@@ -460,23 +460,28 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       }
     });
 
-    test('EC2 instance profile should exist', async () => {
-      const profileName = `TapStackpr1739-EC2InstanceProfile`;
+    test('EC2 instance should have IAM instance profile attached', async () => {
+      if (
+        !outputs.WebServerInstanceId ||
+        outputs.WebServerInstanceId === 'i-mock'
+      ) {
+        console.log('Skipping test - no real instance ID available');
+        return;
+      }
 
-      const command = new GetInstanceProfileCommand({
-        InstanceProfileName: profileName,
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [outputs.WebServerInstanceId],
       });
 
       try {
-        const response = await iamClient.send(command);
-        expect(response.InstanceProfile).toBeDefined();
-        expect(response.InstanceProfile!.Roles).toHaveLength(1);
+        const response = await ec2Client.send(command);
+        const instance = response.Reservations?.[0]?.Instances?.[0];
+        expect(instance).toBeDefined();
+        expect(instance!.IamInstanceProfile).toBeDefined();
+        expect(instance!.IamInstanceProfile!.Arn).toContain('EC2InstanceProfile');
       } catch (error: any) {
-        if (error.name === 'NoSuchEntity') {
-          console.log('Instance profile does not exist yet');
-        } else {
-          throw error;
-        }
+        console.log('Error checking instance profile:', error.message);
+        throw error;
       }
     });
   });
