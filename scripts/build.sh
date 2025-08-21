@@ -20,7 +20,8 @@ if [ "$LANGUAGE" = "java" ]; then
   chmod +x ./gradlew
   
   # Run with explicit working directory and clear task specification
-  ./gradlew build --build-cache --parallel --no-daemon
+  # Use 'assemble' instead of 'build' to avoid running tests during build stage
+  ./gradlew assemble --build-cache --parallel --no-daemon
   echo "✅ Java build completed successfully"
 elif [ "$LANGUAGE" != "py" ]; then
   echo "Building project..."

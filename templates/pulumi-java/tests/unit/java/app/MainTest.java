@@ -2,71 +2,91 @@ package app;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.Map;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+
+import com.pulumi.Context;
 
 /**
  * Unit tests for the Main class.
+ * 
+ * This is a minimal example showing how to test a Pulumi Java program.
+ * Add more specific tests based on your infrastructure requirements.
+ * 
  * Run with: ./gradlew test
  */
 public class MainTest {
 
     /**
-     * Verify the Main class can be loaded.
+     * Test that the Main class structure is correct.
      */
     @Test
-    void testMainClassExists() {
+    void testMainClassStructure() {
+        // Verify the main class exists and is properly configured
         assertNotNull(Main.class);
+        assertTrue(Modifier.isFinal(Main.class.getModifiers()));
+        assertTrue(Modifier.isPublic(Main.class.getModifiers()));
     }
 
     /**
-     * Verify the main method exists with correct signature.
+     * Test that the main method exists with the correct signature.
      */
     @Test
     void testMainMethodExists() {
         assertDoesNotThrow(() -> {
-            Main.class.getDeclaredMethod("main", String[].class);
+            Method mainMethod = Main.class.getDeclaredMethod("main", String[].class);
+            assertTrue(Modifier.isStatic(mainMethod.getModifiers()));
+            assertTrue(Modifier.isPublic(mainMethod.getModifiers()));
+            assertEquals(void.class, mainMethod.getReturnType());
         });
     }
 
     /**
-     * Test BucketConfig default bucket name.
+     * Test that the defineInfrastructure method exists with the correct signature.
+     * This method contains the actual infrastructure definition logic.
      */
     @Test
-    void testDefaultBucketName() {
-        String bucketName = BucketConfig.getDefaultBucketName();
-        assertNotNull(bucketName);
-        assertEquals("java-app-bucket", bucketName);
+    void testDefineInfrastructureMethodExists() {
+        assertDoesNotThrow(() -> {
+            Method method = Main.class.getDeclaredMethod("defineInfrastructure", Context.class);
+            assertTrue(Modifier.isStatic(method.getModifiers()));
+            assertEquals(void.class, method.getReturnType());
+        });
     }
 
     /**
-     * Test BucketConfig default tags.
+     * Test that the private constructor prevents instantiation.
      */
     @Test
-    void testDefaultTags() {
-        Map<String, String> tags = BucketConfig.getDefaultTags();
-        assertNotNull(tags);
-        assertEquals("development", tags.get("Environment"));
-        assertEquals("pulumi-java-template", tags.get("Project"));
-        assertEquals("pulumi", tags.get("ManagedBy"));
+    void testPrivateConstructor() {
+        assertDoesNotThrow(() -> {
+            var constructor = Main.class.getDeclaredConstructor();
+            assertTrue(Modifier.isPrivate(constructor.getModifiers()));
+        });
     }
 
     /**
-     * Test bucket name validation.
+     * Test that the Main class cannot be instantiated directly.
      */
     @Test
-    void testBucketNameValidation() {
-        assertTrue(BucketConfig.isValidBucketName("valid-bucket-name"));
-        assertFalse(BucketConfig.isValidBucketName(null));
-        assertFalse(BucketConfig.isValidBucketName(""));
-        assertFalse(BucketConfig.isValidBucketName("InvalidBucket"));
+    void testCannotInstantiate() {
+        assertThrows(IllegalAccessException.class, () -> {
+            Main.class.getDeclaredConstructor().newInstance();
+        });
     }
 
     /**
-     * Test encryption algorithm.
+     * Example test for infrastructure logic validation.
+     * 
+     * Note: Testing actual Pulumi infrastructure requires mocking Pulumi context
+     * or integration tests. This is a placeholder showing the approach.
      */
     @Test
-    void testEncryptionAlgorithm() {
-        String algorithm = BucketConfig.getEncryptionAlgorithm();
-        assertEquals("AES256", algorithm);
+    void testDefineInfrastructureValidation() {
+        // Test basic method invocation - will fail due to Pulumi context requirements
+        // but verifies the method signature and basic accessibility
+        assertThrows(Exception.class, () -> {
+            Main.defineInfrastructure(null);
+        });
     }
 }

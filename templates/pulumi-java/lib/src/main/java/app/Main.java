@@ -1,5 +1,6 @@
 package app;
 
+import com.pulumi.Context;
 import com.pulumi.Pulumi;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
@@ -33,17 +34,26 @@ public final class Main {
      * 
      * @param args Command line arguments (not used in this example)
      */
-    public static void main(final String[] args) {
-        Pulumi.run(ctx -> {
-            // Create an S3 bucket with development tags
-            Bucket bucket = new Bucket("java-app-bucket", BucketArgs.builder()
-                    .tags(Map.of("Environment", "development", 
-                               "Project", "pulumi-java-template",
-                               "ManagedBy", "pulumi"))
-                    .build());
+    public static void main(String[] args) {
+        Pulumi.run(Main::defineInfrastructure);
+    }
 
-            // Export important values for reference
-            ctx.export("bucketName", bucket.id());
-        });
+    /**
+     * Defines the infrastructure resources to be created.
+     * 
+     * This method is separated from main() to make it easier to test
+     * and to follow best practices for Pulumi Java programs.
+     * 
+     * @param ctx The Pulumi context for exporting outputs
+     */
+    static void defineInfrastructure(Context ctx) {
+        Bucket bucket = new Bucket("java-app-bucket", BucketArgs.builder()
+                .tags(Map.of(
+                        "Environment", "development",
+                        "Project", "pulumi-java-template",
+                        "ManagedBy", "pulumi"))
+                .build());
+
+        ctx.export("bucketName", bucket.id());
     }
 }
