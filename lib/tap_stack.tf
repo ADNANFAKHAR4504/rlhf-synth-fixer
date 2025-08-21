@@ -183,7 +183,7 @@ locals { nat_keys = var.nat_per_az ? keys(aws_subnet.public) : ["0"] }
 
 resource "aws_eip" "nat" {
   for_each = { for k in local.nat_keys : k => true }
-  vpc      = true
+  domain   = "vpc"
   tags     = merge(local.tags, { Name = "${local.name_prefix}-nat-eip-${each.key}" })
 }
 
