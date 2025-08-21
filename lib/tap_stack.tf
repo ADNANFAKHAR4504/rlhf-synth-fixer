@@ -26,7 +26,7 @@ module "iam_role_staging" {
     aws = aws.staging
   }
   environment = "staging"
-  bucket_arn = module.storage_staging[0].bucket_arn
+  bucket_arn  = local.env == "staging" ? module.storage_staging[0].bucket_arn : null
 }
 
 # Production environment modules
@@ -55,5 +55,34 @@ module "iam_role_production" {
     aws = aws.production
   }
   environment = "production"
-  bucket_arn = module.storage_production[0].bucket_arn
+  bucket_arn  = local.env == "production" ? module.storage_production[0].bucket_arn : null
+}
+
+# Environment-agnostic modules using conditional provider
+module "storage" {
+  count  = 1
+  source = "./modules/storage"
+  providers = {
+    aws = aws
+  }
+  environment = local.env
+}
+
+module "network" {
+  count  = 1
+  source = "./modules/network"
+  providers = {
+    aws = aws
+  }
+  environment = local.env
+}
+
+module "iam_role" {
+  count  = 1
+  source = "./modules/iam_role"
+  providers = {
+    aws = aws
+  }
+  environment = local.env
+  bucket_arn  = module.storage[0].bucket_arn
 }

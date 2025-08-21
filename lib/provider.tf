@@ -13,19 +13,21 @@ terraform {
       version = "~> 3.0"
     }
   }
+}
 
-  # Backend configuration - S3 for bootstrap compatibility
-  backend "s3" {
-    # Backend configuration will be provided via command line arguments
+# Conditional AWS provider based on current environment
+provider "aws" {
+  region = local.current_env_config.region
+  default_tags {
+    tags = {
+      environment = local.env
+      project     = var.project_name
+      managed_by  = "terraform"
+    }
   }
 }
 
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}
-
-# Staging environment provider
+# Staging environment provider (for explicit staging deployments)
 provider "aws" {
   alias  = "staging"
   region = var.staging_region
@@ -33,11 +35,12 @@ provider "aws" {
     tags = {
       environment = var.environment_names.staging
       project     = var.project_name
+      managed_by  = "terraform"
     }
   }
 }
 
-# Production environment provider
+# Production environment provider (for explicit production deployments)
 provider "aws" {
   alias  = "production"
   region = var.production_region
@@ -45,6 +48,7 @@ provider "aws" {
     tags = {
       environment = var.environment_names.production
       project     = var.project_name
+      managed_by  = "terraform"
     }
   }
 }
