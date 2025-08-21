@@ -102,11 +102,27 @@ export class RdsSubnetGroupComponent extends pulumi.ComponentResource {
       ...args.tags,
     };
 
+    // FIXED: Ensure subnet IDs are properly resolved
     this.subnetGroup = new aws.rds.SubnetGroup(
       `${name}-subnet-group`,
       {
         name: args.name,
-        subnetIds: args.subnetIds,
+        subnetIds: pulumi.output(args.subnetIds).apply(ids => {
+          // Log the subnet IDs for debugging
+          console.log(
+            `Creating DB subnet group ${args.name} with subnet IDs:`,
+            ids
+          );
+
+          // Ensure we have valid subnet IDs
+          if (!ids || ids.length === 0) {
+            throw new Error(
+              `No subnet IDs provided for DB subnet group ${args.name}`
+            );
+          }
+
+          return ids;
+        }),
         description: args.description || `DB subnet group for ${args.name}`,
         tags: defaultTags,
       },
