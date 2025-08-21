@@ -920,7 +920,7 @@ output "guardduty_detector_ids_use1" {
 }
 
 output "cloudtrail_arn" {
-  description = "CloudTrail ARN (when enabled)"
+  description = "CloudTrail ARN"
   value = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : "not_created"
 }
 
