@@ -1054,8 +1054,21 @@
                 ]
             }
         },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "LoggingBucket"
+                },
+                "S3KeyPrefix": "config"
+            }
+        },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": "ConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
@@ -1070,19 +1083,6 @@
                     "AllSupported": true,
                     "IncludeGlobalResourceTypes": true
                 }
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "DependsOn": "ConfigurationRecorder",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
-                },
-                "S3BucketName": {
-                    "Ref": "LoggingBucket"
-                },
-                "S3KeyPrefix": "config"
             }
         },
         "S3BucketSSLRequestsOnlyRule": {

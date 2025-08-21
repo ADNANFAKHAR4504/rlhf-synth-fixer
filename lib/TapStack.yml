@@ -661,22 +661,22 @@ Resources:
                   - s3:GetBucketAcl
                 Resource: !Sub '${LoggingBucket.Arn}/config/*'
 
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub 'config-delivery-${EnvironmentSuffix}'
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: 'config'
+
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigurationRecorder
-    Properties:
-      Name: !Sub 'config-delivery-${EnvironmentSuffix}'
-      S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: 'config'
 
   # Config Rules for Compliance
   S3BucketSSLRequestsOnlyRule:
