@@ -1,0 +1,13 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291954",
+  "team": "1",
+  "startedAt": "2025-08-19T18:39:48.697Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": ["General Infrastructure Tooling QA", "Security Configuration", "Network Configuration", "Database Management", "Monitoring Setup"],
+  "training_quality": 8,
+  "aws_services": ["CloudFormation", "S3", "CloudTrail", "Config", "VPC", "EC2", "RDS", "Lambda", "IAM", "CloudFront", "WAF", "SecretsManager"]
+}
