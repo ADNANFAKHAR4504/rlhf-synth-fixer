@@ -1,6 +1,6 @@
 # Ideal Response
 
-The assistant should output **only** a valid `tap_stack.yml` CloudFormation template, with no extra commentary, meeting all requirements:
+The assistant should output **only** a valid `TapStack.yml` CloudFormation template, with no extra commentary, meeting all requirements:
 
 - Full VPC setup across two AZs in `us-west-2`.
 - 2 public and 2 private subnets, correctly routed via IGW/NAT.
