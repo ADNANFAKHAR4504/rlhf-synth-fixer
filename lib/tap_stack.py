@@ -15,6 +15,7 @@ from typing import Dict, Optional
 
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions
 
 
@@ -48,6 +49,13 @@ class TapStack(pulumi.ComponentResource):
             "Owner": "DevOps",
             **args.tags
         }
+        
+        # Create random suffix for globally unique resource names
+        self.random_suffix = random.RandomId(
+            f"suffix-{self.environment_suffix}",
+            byte_length=4,
+            opts=ResourceOptions(parent=self)
+        )
 
         # Create VPC and networking
         self._create_networking()
@@ -736,7 +744,7 @@ class TapStack(pulumi.ComponentResource):
         # Artifacts bucket
         self.s3_bucket = aws.s3.Bucket(
             f"microservices-artifacts-{self.environment_suffix}",
-            bucket=f"microservices-artifacts-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=self.random_suffix.hex.apply(lambda suffix: f"microservices-artifacts-{self.environment_suffix}-{suffix}"),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=(
                 aws.s3.BucketServerSideEncryptionConfigurationArgs(
@@ -774,7 +782,7 @@ class TapStack(pulumi.ComponentResource):
         # S3 bucket for static content
         self.static_bucket = aws.s3.Bucket(
             f"microservices-static-{self.environment_suffix}",
-            bucket=f"microservices-static-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=self.random_suffix.hex.apply(lambda suffix: f"microservices-static-{self.environment_suffix}-{suffix}"),
             tags={**self.common_tags, "Name": f"microservices-static-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -887,7 +895,7 @@ class TapStack(pulumi.ComponentResource):
         # CloudTrail S3 bucket
         self.cloudtrail_bucket = aws.s3.Bucket(
             f"microservices-cloudtrail-{self.environment_suffix}",
-            bucket=f"microservices-cloudtrail-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=self.random_suffix.hex.apply(lambda suffix: f"microservices-cloudtrail-{self.environment_suffix}-{suffix}"),
             versioning=aws.s3.BucketVersioningArgs(enabled=True),
             server_side_encryption_configuration=(
                 aws.s3.BucketServerSideEncryptionConfigurationArgs(
