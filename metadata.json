@@ -5,5 +5,26 @@
   "turn_type": "multi",
   "po_id": "291779",
   "team": "2",
-  "startedAt": "2025-08-18T19:23:48.863Z"
+  "startedAt": "2025-08-18T19:23:48.863Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "IaC Optimization",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS IAM",
+    "AWS KMS",
+    "AWS VPC",
+    "AWS Lambda",
+    "AWS CloudWatch",
+    "AWS S3",
+    "AWS CloudTrail",
+    "AWS EC2",
+    "AWS SNS"
+  ]
 }
