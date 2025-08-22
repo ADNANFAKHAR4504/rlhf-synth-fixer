@@ -5,7 +5,6 @@ import * as fs from 'fs';
 // These tests run against deployed infrastructure
 
 const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
-const REGION = process.env.AWS_REGION || 'us-east-1';
 let outputs: Record<string, any> = {};
 const outputsFile = 'cfn-outputs/flat-outputs.json';
 
@@ -21,91 +20,12 @@ if (fs.existsSync(outputsFile)) {
   );
 }
 
+// Use region from outputs or fall back to us-east-1
+const REGION = outputs.AWSRegion || 'us-east-1';
+
 const ec2Client = new EC2Client({ region: REGION });
 
-// Dynamic resource discovery functions
-async function discoverVPC(environmentSuffix: string): Promise<string | null> {
-  try {
-    const command = new DescribeVpcsCommand({});
-    const response = await ec2Client.send(command);
 
-    // Find VPC by environment tag
-    const vpc = response.Vpcs?.find(vpc =>
-      vpc.Tags?.some(tag =>
-        tag.Key === 'Environment' && tag.Value === environmentSuffix
-      )
-    );
-
-    return vpc?.VpcId || null;
-  } catch (error) {
-    console.warn(`Failed to discover VPC: ${error}`);
-    return null;
-  }
-}
-
-async function discoverEC2Instance(environmentSuffix: string): Promise<string | null> {
-  try {
-    const command = new DescribeInstancesCommand({
-      Filters: [
-        {
-          Name: 'instance-state-name',
-          Values: ['running', 'pending']
-        }
-      ]
-    });
-    const response = await ec2Client.send(command);
-
-    // Find instance by environment tag
-    const instance = response.Reservations?.flatMap(reservation =>
-      reservation.Instances || []
-    ).find(instance =>
-      instance.Tags?.some(tag =>
-        tag.Key === 'Environment' && tag.Value === environmentSuffix
-      )
-    );
-
-    return instance?.InstanceId || null;
-  } catch (error) {
-    console.warn(`Failed to discover EC2 instance: ${error}`);
-    return null;
-  }
-}
-
-async function discoverSecurityGroup(environmentSuffix: string): Promise<string | null> {
-  try {
-    const command = new DescribeSecurityGroupsCommand({});
-    const response = await ec2Client.send(command);
-
-    // Find security group by environment tag
-    const securityGroup = response.SecurityGroups?.find(sg =>
-      sg.Tags?.some(tag =>
-        tag.Key === 'Environment' && tag.Value === environmentSuffix
-      )
-    );
-
-    return securityGroup?.GroupId || null;
-  } catch (error) {
-    console.warn(`Failed to discover security group: ${error}`);
-    return null;
-  }
-}
-
-async function discoverKeyPair(environmentSuffix: string): Promise<string | null> {
-  try {
-    const command = new DescribeKeyPairsCommand({});
-    const response = await ec2Client.send(command);
-
-    // Find key pair by naming pattern (includes timestamp)
-    const keyPair = response.KeyPairs?.find(kp =>
-      kp.KeyName?.match(new RegExp(`^key-pair-${environmentSuffix}-\\d+$`))
-    );
-
-    return keyPair?.KeyName || null;
-  } catch (error) {
-    console.warn(`Failed to discover key pair: ${error}`);
-    return null;
-  }
-}
 
 describe('TapStack Integration Tests', () => {
   let vpcId: string | null = null;
@@ -114,13 +34,28 @@ describe('TapStack Integration Tests', () => {
   let keyPairName: string | null = null;
 
   beforeAll(async () => {
-    console.log(`🔍 Discovering resources for environment: ${environmentSuffix}`);
+    console.log(`🔍 Discovering resources for environment: ${environmentSuffix} in region: ${REGION}`);
+
+    // Log what we have in outputs
+    console.log(`Outputs file contains:`);
+    console.log(`AWS Region: ${outputs.AWSRegion || 'NOT FOUND (using fallback)'}`);
+    console.log(`VPC ID: ${outputs.VPCID || 'NOT FOUND'}`);
+    console.log(`Instance ID: ${outputs.InstanceID || 'NOT FOUND'}`);
+    console.log(`Security Group ID: ${outputs.SecurityGroupID || 'NOT FOUND'}`);
+    console.log(`Key Pair Name: ${outputs.KeyPairName || 'NOT FOUND'}`);
 
     // Try to get resource IDs from outputs first, then fall back to dynamic discovery
-    vpcId = outputs.VPCID || await discoverVPC(environmentSuffix);
-    instanceId = outputs.InstanceID || await discoverEC2Instance(environmentSuffix);
-    securityGroupId = outputs.SecurityGroupID || await discoverSecurityGroup(environmentSuffix);
-    keyPairName = outputs.KeyPairName || await discoverKeyPair(environmentSuffix);
+    vpcId = outputs.VPCID
+    instanceId = outputs.InstanceID
+    securityGroupId = outputs.SecurityGroupID
+    keyPairName = outputs.KeyPairName
+
+    // Log discovered resources
+    console.log(`📋 Final discovered resources:`);
+    console.log(`   VPC ID: ${vpcId || 'NOT FOUND'}`);
+    console.log(`   Instance ID: ${instanceId || 'NOT FOUND'}`);
+    console.log(`   Security Group ID: ${securityGroupId || 'NOT FOUND'}`);
+    console.log(`   Key Pair Name: ${keyPairName || 'NOT FOUND'}`);
 
     // Validate that we have at least some resources to test
     if (!vpcId && !instanceId && !securityGroupId && !keyPairName) {
@@ -128,6 +63,17 @@ describe('TapStack Integration Tests', () => {
         `No resources found for environment ${environmentSuffix}. ` +
         `Please ensure the stack is deployed and resources are tagged with Environment=${environmentSuffix}`
       );
+    }
+
+    // Validate resource consistency - if we have outputs, prefer them
+    if (outputs.VPCID && outputs.InstanceID && outputs.SecurityGroupID && outputs.KeyPairName) {
+      console.log(`✅ Using outputs file data for consistency`);
+      vpcId = outputs.VPCID;
+      instanceId = outputs.InstanceID;
+      securityGroupId = outputs.SecurityGroupID;
+      keyPairName = outputs.KeyPairName;
+    } else {
+      console.log(`⚠️ Using mixed sources - some from outputs, some from discovery`);
     }
   });
 
@@ -142,6 +88,7 @@ describe('TapStack Integration Tests', () => {
       expect(REGION).toBeDefined();
       expect(typeof REGION).toBe('string');
       expect(REGION).toMatch(/^[a-z]{2}-[a-z]+-\d+$/);
+      expect(REGION).toBe('us-east-1'); // Infrastructure is deployed in us-east-1
     });
 
     test('should have discovered at least some resources', () => {
