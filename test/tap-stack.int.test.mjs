@@ -94,11 +94,11 @@ describe('TapStack: Deployment Integration Tests', () => {
   // VPC & Networking (Existing VPC)
   // ------------------------------
   describe('VPC & Networking', () => {
-    test('Uses an existing VPC (reachable in us-east-1) — optional if VpcId output exists', async () => {
-      const vpcId = outputs.VpcId; // optional, if you add CfnOutput
-      if (!definedOrSkip(vpcId, 'VpcId not found in outputs; add CfnOutput if you want strict VPC validation')) return;
+    test('Uses an existing VPC (reachable in us-east-1) — optional if existingVpcId output exists', async () => {
+      const existingVpcId = outputs.existingVpcId; // optional, if you add CfnOutput
+      if (!definedOrSkip(existingVpcId, 'existingVpcId not found in outputs; add CfnOutput if you want strict VPC validation')) return;
 
-      const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [existingVpcId] }));
       expect(resp.Vpcs).toHaveLength(1);
       const vpc = resp.Vpcs[0];
       expect(vpc).toBeDefined();

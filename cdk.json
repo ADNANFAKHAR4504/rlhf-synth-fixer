@@ -20,7 +20,7 @@
     "environments": {
       "dev": {
         "createIfNotExists": true,
-        "vpcId": "vpc-11111111",
+        "existingVpcId": "vpc-11111111",
         "existingS3Bucket": "dev-logs-bucket",
         "sshCidrBlock": "192.168.1.0/24",
         "trustedOutboundCidrs": [
@@ -30,7 +30,7 @@
       },
       "prod": {
         "createIfNotExists": true,
-        "vpcId": "vpc-12345678",
+        "existingVpcId": "vpc-12345678",
         "existingS3Bucket": "test-logs-bucket",
         "sshCidrBlock": "10.0.0.0/8",
         "trustedOutboundCidrs": [
