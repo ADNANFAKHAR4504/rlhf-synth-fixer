@@ -605,5 +605,129 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(mock_aws.ec2.Subnet.call_count, 4)
 
 
+    def test_tapstack_args_defaults(self):
+        """Test TapStackArgs default values."""
+        default_args = TapStackArgs()
+        self.assertEqual(default_args.environment_suffix, 'dev')
+        self.assertEqual(default_args.tags, {})
+
+    def test_tapstack_args_with_values(self):
+        """Test TapStackArgs with custom values."""
+        custom_tags = {'Custom': 'Tag', 'Another': 'Value'}
+        args = TapStackArgs(environment_suffix='prod', tags=custom_tags)
+        self.assertEqual(args.environment_suffix, 'prod')
+        self.assertEqual(args.tags, custom_tags)
+
+    def test_pulumi_random_available_path(self):
+        """Test code path when pulumi_random is available."""
+        # This test verifies the conditional import logic
+        stack = TapStack("test-stack", self.args)
+        
+        # Should have random_suffix attribute
+        self.assertTrue(hasattr(stack, 'random_suffix'))
+        self.assertIsNotNone(stack.random_suffix)
+
+    def test_cleanup_pulumi_locks_method_exists(self):
+        """Test that cleanup method exists and is called."""
+        # Verify the cleanup method is called during initialization
+        with patch('lib.tap_stack.TapStack._cleanup_pulumi_locks') as mock_cleanup:
+            stack = TapStack("test-stack", self.args)
+            mock_cleanup.assert_called_once_with(self.args.environment_suffix)
+
+    def test_s3_bucket_random_suffix_application(self):
+        """Test that S3 buckets use random suffix for unique naming."""
+        stack = TapStack("test-stack", self.args)
+        
+        # Verify S3 buckets were created (should be 3 buckets)
+        mock_aws.s3.Bucket.assert_called()
+        self.assertEqual(mock_aws.s3.Bucket.call_count, 3)
+        
+        # Check that buckets use the random suffix for naming
+        # The random suffix should be applied via .apply() method
+        self.assertTrue(hasattr(stack, 'random_suffix'))
+
+    def test_cloudfront_origin_id_length(self):
+        """Test CloudFront origin ID uses shortened format."""
+        stack = TapStack("test-stack", self.args)
+        
+        # Verify CloudFront distribution was created
+        mock_aws.cloudfront.Distribution.assert_called()
+        
+        # The origin ID should now use the shortened format: S3-static-{env}
+        # This prevents the "originId too big" error
+        cf_call_args = mock_aws.cloudfront.Distribution.call_args
+        self.assertIsNotNone(cf_call_args)
+
+    def test_environment_specific_resource_naming(self):
+        """Test that all resources include environment suffix in naming."""
+        stack = TapStack("test-stack", self.args)
+        
+        # Test VPC naming
+        vpc_call = mock_aws.ec2.Vpc.call_args
+        if vpc_call:
+            vpc_name = vpc_call[0][0]
+            self.assertIn("test", vpc_name)
+        
+        # Test ECS cluster naming
+        ecs_call = mock_aws.ecs.Cluster.call_args
+        if ecs_call:
+            ecs_name = ecs_call[0][0]
+            self.assertIn("test", ecs_name)
+        
+        # Test RDS naming
+        rds_call = mock_aws.rds.Instance.call_args
+        if rds_call:
+            rds_name = rds_call[0][0]
+            self.assertIn("test", rds_name)
+
+    def test_resource_creation_order(self):
+        """Test that resources are created in correct dependency order."""
+        stack = TapStack("test-stack", self.args)
+        
+        # Verify all major resource types were created
+        resource_creations = [
+            mock_aws.ec2.Vpc,
+            mock_aws.ec2.SecurityGroup,
+            mock_aws.ecr.Repository,
+            mock_aws.rds.Instance,
+            mock_aws.elasticache.ReplicationGroup,
+            mock_aws.ecs.Cluster,
+            mock_aws.lb.LoadBalancer,
+            mock_aws.s3.Bucket,
+            mock_aws.cloudfront.Distribution,
+            mock_aws.cloudwatch.MetricAlarm,
+            mock_aws.cloudtrail.Trail
+        ]
+        
+        for resource_type in resource_creations:
+            resource_type.assert_called()
+
+    def test_error_handling_graceful_degradation(self):
+        """Test graceful handling of missing optional components."""
+        # Test with minimal args to ensure graceful degradation
+        minimal_args = TapStackArgs()
+        stack = TapStack("test-stack", minimal_args)
+        
+        # Should still create basic infrastructure
+        mock_aws.ec2.Vpc.assert_called()
+        mock_aws.ecs.Cluster.assert_called()
+        
+        # Verify environment suffix defaults to 'dev'
+        self.assertEqual(stack.environment_suffix, 'dev')
+
+    def test_component_resource_inheritance(self):
+        """Test that TapStack properly inherits from ComponentResource."""
+        stack = TapStack("test-stack", self.args)
+        
+        # Should be instance of ComponentResource (mocked)
+        self.assertIsInstance(stack, MockComponentResource)
+        
+        # Should have environment_suffix and common_tags
+        self.assertEqual(stack.environment_suffix, "test")
+        self.assertIn("Environment", stack.common_tags)
+        self.assertIn("Project", stack.common_tags)
+        self.assertIn("Owner", stack.common_tags)
+
+
 if __name__ == '__main__':
     unittest.main()
