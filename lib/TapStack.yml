@@ -59,7 +59,7 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
 
-  # Public Subnets
+  # Public Subnets - Non-overlapping CIDRs in different AZs
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -82,7 +82,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PublicSubnet2-${EnvironmentSuffix}'
 
-  # Private Subnets
+  # Private Subnets - Non-overlapping CIDRs in different AZs
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -305,7 +305,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'TAP-${EnvironmentSuffix}-ALB'
+      Name: !Sub '${AWS::StackName}-ALB-${EnvironmentSuffix}'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -317,40 +317,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ALB-${EnvironmentSuffix}'
 
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub 'TAP-${EnvironmentSuffix}-TG'
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      HealthCheckEnabled: true
-      HealthCheckPath: '/'
-      HealthCheckProtocol: HTTP
-      HealthCheckIntervalSeconds: 30
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 5
-      TargetType: instance
-      Targets:
-        - Id: !Ref EC2Instance1
-          Port: 80
-        - Id: !Ref EC2Instance2
-          Port: 80
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-TG-${EnvironmentSuffix}'
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # EC2 Instances
+  # EC2 Instances - Define before target group to avoid circular dependency
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -446,6 +413,39 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2Instance2-${EnvironmentSuffix}'
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-TG-${EnvironmentSuffix}'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckPath: '/'
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2Instance1
+          Port: 80
+        - Id: !Ref EC2Instance2
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-TG-${EnvironmentSuffix}'
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
 
 Outputs:
   LoadBalancerDNS:
