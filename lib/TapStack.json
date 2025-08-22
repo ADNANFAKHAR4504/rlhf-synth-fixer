@@ -130,7 +130,7 @@
         "ExistingConfigDeliveryChannelName": {
             "Type": "String",
             "Default": "use-existing",
-            "Description": "Name of an existing AWS Config Delivery Channel (leave blank to create a new one)"
+            "Description": "Name of an existing AWS Config Delivery Channel. To create a new one, set this to blank (\"\"), otherwise the template will NOT create a delivery channel."
         }
     },
     "Conditions": {
@@ -273,7 +273,7 @@
                 {
                     "Ref": "ExistingConfigDeliveryChannelName"
                 },
-                "use-existing"
+                ""
             ]
         }
     },
@@ -1194,6 +1194,18 @@
                 ]
             }
         },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfigDeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "SecurityDeliveryChannel-${Environment}"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                }
+            }
+        },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
             "Condition": "CreateConfigDeliveryChannel",
@@ -1210,18 +1222,6 @@
                 "RecordingGroup": {
                     "AllSupported": true,
                     "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Condition": "CreateConfigDeliveryChannel",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "SecurityDeliveryChannel-${Environment}"
-                },
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
                 }
             }
         },

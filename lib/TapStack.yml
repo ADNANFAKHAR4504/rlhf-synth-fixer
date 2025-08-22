@@ -114,7 +114,7 @@ Parameters:
   ExistingConfigDeliveryChannelName:
     Type: String
     Default: 'use-existing'
-    Description: 'Name of an existing AWS Config Delivery Channel (leave blank to create a new one)'
+    Description: 'Name of an existing AWS Config Delivery Channel. To create a new one, set this to blank (""), otherwise the template will NOT create a delivery channel.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -140,7 +140,7 @@ Conditions:
   CreateAccessKeyRotationRole:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
-    !Equals [!Ref ExistingConfigDeliveryChannelName, 'use-existing']
+    !Equals [!Ref ExistingConfigDeliveryChannelName, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -657,6 +657,13 @@ Resources:
                   - s3:GetBucketAcl
                 Resource: !Sub '${ConfigBucket.Arn}/*'
 
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfigDeliveryChannel
+    Properties:
+      Name: !Sub 'SecurityDeliveryChannel-${Environment}'
+      S3BucketName: !Ref ConfigBucket
+
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Condition: CreateConfigDeliveryChannel
@@ -666,13 +673,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Condition: CreateConfigDeliveryChannel
-    Properties:
-      Name: !Sub 'SecurityDeliveryChannel-${Environment}'
-      S3BucketName: !Ref ConfigBucket
 
   # Config Rules for Security Group Monitoring and EBS Encryption
   SecurityGroupConfigRule:
