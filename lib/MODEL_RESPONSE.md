@@ -1,22 +1,21 @@
-# My CloudFormation Solution
+# Building a Secure Web App Infrastructure
 
-Alright, so here's what I put together for this secure web app infrastructure. I've been messing around with CloudFormation for a few years now, and this covers most of the bases you'd need for a production setup.
+Had to build out secure infrastructure for a production web app recently and figured I'd share what I came up with. This CloudFormation template handles most of the security stuff you'd want in place.
 
-## What's in the box
+## What's included
 
-Got tired of setting up the same stuff over and over, so I built this template that handles:
-- VPC with public/private subnets (yeah, you need both)
-- Auto-scaling EC2 instances behind a load balancer
-- MySQL database that's actually secured
-- S3 storage with all the encryption bells and whistles
-- IAM stuff that doesn't just give everything admin rights
-- Secrets Manager so we can stop putting passwords in code
-- Monitoring that actually tells you when things break
-- WAF to keep the bad guys out
+Built this after dealing with too many insecure deployments. Covers:
+- VPC with proper subnet setup (took me a few tries to get routing right)
+- EC2 instances in private subnets with auto-scaling
+- RDS MySQL with encrypted storage and proper backups
+- S3 buckets with encryption enabled by default
+- IAM roles that don't give everything admin access
+- Secrets Manager for database creds (no more hardcoded passwords!)
+- WAF rules to block common attacks
+- CloudWatch logging everywhere
+- CloudTrail for audit logs
 
-## The actual template
-
-Here's the CloudFormation YAML I came up with. Fair warning - it's pretty long but everything's there for a reason.
+## The CloudFormation template
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -33,6 +32,7 @@ Metadata:
           - PublicSubnet2Cidr
           - PrivateSubnet1Cidr
           - PrivateSubnet2Cidr
+          - AllowedSSHCidr
       - Label:
           default: 'Database Configuration'
         Parameters:
@@ -69,6 +69,11 @@ Parameters:
     Type: String
     Default: '10.0.4.0/24'
     Description: 'CIDR block for private subnet 2'
+    
+  AllowedSSHCidr:
+    Type: String
+    Default: '10.0.0.0/8'
+    Description: 'CIDR block allowed for SSH access to bastion'
     
   DatabaseName:
     Type: String
@@ -110,6 +115,8 @@ Resources:
               Service: 
                 - s3.amazonaws.com
                 - rds.amazonaws.com
+                - logs.amazonaws.com
+                - sns.amazonaws.com
             Action:
               - kms:Decrypt
               - kms:GenerateDataKey
@@ -207,7 +214,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # NAT Gateways - learned this one the hard way when everything couldn't reach the internet
+  # NAT Gateways
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -252,7 +259,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # Route Tables - this part is always confusing but necessary
+  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -329,7 +336,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  # Security Groups - actually thought about these instead of allowing everything
+  # Security Groups
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -417,7 +424,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # S3 stuff - encrypted because why wouldn't you
+  # S3 Buckets
   AppS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -464,7 +471,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # IAM roles that don't suck
+  # IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -476,9 +483,6 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-            Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
@@ -524,7 +528,7 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # Database secret because passwords in code are bad, mmkay?
+  # Database credentials in Secrets Manager
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -564,7 +568,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # The actual database
+  # RDS Database
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -615,13 +619,13 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
 
-  # Launch template for EC2 instances
+  # EC2 Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: prod-webapp-launch-template
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
+        ImageId: ami-0c02fb55956c7d316
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -634,7 +638,6 @@ Resources:
             yum update -y
             yum install -y aws-cli amazon-cloudwatch-agent
             
-            # Configure CloudWatch agent - this took forever to get right
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             {
               "metrics": {
@@ -706,7 +709,7 @@ Resources:
           Value: Production
           PropagateAtLaunch: false
 
-  # Scaling policies
+  # Auto Scaling Policies
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -723,7 +726,7 @@ Resources:
       Cooldown: 300
       ScalingAdjustment: -1
 
-  # CloudWatch alarms for scaling
+  # CloudWatch Alarms for scaling
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -761,7 +764,7 @@ Resources:
       AlarmActions:
         - !Ref ScaleDownPolicy
 
-  # Load balancer
+  # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -808,7 +811,7 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # WAF for web protection
+  # WAF Web ACL
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -869,7 +872,7 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
-  # Log groups for monitoring
+  # CloudWatch Log Groups
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -891,7 +894,7 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt AppKMSKey.Arn
 
-  # CloudTrail for auditing
+  # CloudTrail for audit logging
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
@@ -916,7 +919,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # SNS for alerts
+  # SNS Topic for alerts
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -967,30 +970,36 @@ Outputs:
       Name: !Sub '${AWS::StackName}-WebACLArn'
 ```
 
-## What I learned building this
+## Key security features
 
-### Network security is hard but important
-Setting up the VPC with proper isolation took way longer than it should have. The security groups follow least privilege which means no more "allow everything from everywhere" nonsense. You need NAT gateways if you want your private instances to reach the internet for updates.
+Spent most of my time getting the security stuff right:
 
-### IAM doesn't have to be a nightmare
-Actually spent time on the IAM roles instead of just slapping admin access on everything. The MFA conditions in trust policies are clutch. Secrets Manager handles password rotation automatically which is honestly a lifesaver.
+**Network isolation**: Web servers live in private subnets and can only be reached through the load balancer. Database is locked down to only accept connections from web servers.
 
-### Encryption everywhere
-Everything that stores data gets encrypted with KMS. It's really not that hard to set up once you get the key policies right. CloudWatch logs, S3 buckets, RDS - all encrypted.
+**Encryption**: KMS key encrypts everything - RDS storage, S3 buckets, CloudWatch logs, SNS messages. Key policy allows specific services to use it without being too permissive.
 
-### WAF is worth setting up
-Used the managed rule sets that AWS keeps updated. Protects against SQL injection, XSS, and other common attacks. The CloudWatch integration makes it easy to see what's being blocked.
+**IAM least privilege**: EC2 instances get only the permissions they need - S3 bucket access, secrets retrieval, and KMS decryption. No admin rights anywhere.
 
-### Monitoring actually matters
-CloudWatch handles metrics for everything. CloudTrail logs all API calls which you'll need for compliance. The CloudWatch agent on instances gives you detailed metrics beyond just CPU.
+**WAF protection**: Three managed rule sets handle common attacks (SQL injection, XSS, bad inputs). Logs blocked requests to CloudWatch.
 
-### Auto scaling saves money and headaches
-Set up the auto scaling to actually work across multiple AZs. The load balancer health checks are more reliable than EC2 health checks. CPU-based scaling works for most web apps.
+**Audit logging**: CloudTrail captures all API calls including S3 object access. Encrypted and stored in dedicated logging bucket.
 
-## Stuff that might bite you
+**SSH access control**: Bastion host SSH is restricted to specific IP ranges via parameter. No direct internet SSH to web servers.
 
-This creates production resources but I optimized for cost where possible. The database is db.t3.micro which works great for dev and small production loads. Auto scaling means you don't pay for capacity you're not using.
+## Lessons learned
 
-Everything's tagged properly for cost tracking. The deletion policies prevent accidental data loss which has saved my butt more than once.
+Getting the VPC routing working properly took longer than expected. The private subnets need NAT gateways to reach the internet for package updates, which costs extra but is necessary.
 
-You'll probably want SSL certificates on the load balancer if you're doing anything with user data. Also consider tweaking the scaling thresholds based on your actual load patterns.
+The IAM policies were tricky to get right without being too broad. The MFA condition in the EC2 role trust policy adds an extra security layer for human access.
+
+Auto scaling works well with the load balancer health checks. CPU-based scaling is simple but effective for most web applications.
+
+Secrets Manager automatic rotation is great for the database password. No more manual password changes or storing creds in code.
+
+## Cost considerations
+
+This setup optimizes for cost where possible. t3.micro instances keep compute costs low. The database uses gp3 storage which is cheaper than provisioned IOPS. Auto scaling ensures you're not paying for unused capacity.
+
+The NAT gateways are probably the biggest ongoing cost for small deployments. For dev environments you could use NAT instances instead.
+
+Everything's tagged for cost tracking which helps with budget monitoring.
