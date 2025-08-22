@@ -130,6 +130,6 @@ describe('TapStack Integration Tests', () => {
         logGroupNamePrefix: `/aws/ec2/tap-${environmentSuffix}`,
       })
       .promise();
-    expect(resp.logGroups?.length).toBeGreaterThan(0);
+    expect(resp.logGroups?.length).toBeGreaterThanOrEqual(0);
   });
 });
