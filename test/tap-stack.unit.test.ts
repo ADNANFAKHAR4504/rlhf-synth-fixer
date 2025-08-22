@@ -28,7 +28,7 @@ describe('TapStack', () => {
   };
 
   describe('Primary Stack Resources', () => {
-    test('creates KMS key with rotation enabled', () => {
+    test('creates KMS key with rotation enabled and comprehensive service permissions', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::KMS::Key', {
         Description: 'TAP Multi-Region KMS Key - us-east-1',
@@ -39,6 +39,42 @@ describe('TapStack', () => {
               Effect: 'Allow',
               Principal: { AWS: Match.anyValue() },
               Action: 'kms:*',
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 'ec2.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 'autoscaling.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 'rds.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 's3.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 'sns.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+              Resource: '*',
+            }),
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: { Service: 'lambda.amazonaws.com' },
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
               Resource: '*',
             }),
           ]),
@@ -156,13 +192,44 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates Auto Scaling Group with proper configuration', () => {
+    test('creates Auto Scaling Group with EBS encryption', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '1',
         MaxSize: '3',
         DesiredCapacity: '1',
       });
+
+      // Check for launch configuration or launch template with encrypted EBS volumes
+      // CDK may create either depending on the configuration
+      try {
+        template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+          LaunchTemplateData: {
+            BlockDeviceMappings: Match.arrayWith([
+              Match.objectLike({
+                DeviceName: '/dev/xvda',
+                Ebs: {
+                  Encrypted: true,
+                  VolumeType: 'gp3',
+                },
+              }),
+            ]),
+          },
+        });
+      } catch (error) {
+        // If no launch template, check for launch configuration
+        template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
+          BlockDeviceMappings: Match.arrayWith([
+            Match.objectLike({
+              DeviceName: '/dev/xvda',
+              Ebs: {
+                Encrypted: true,
+                VolumeType: 'gp3',
+              },
+            }),
+          ]),
+        });
+      }
     });
 
     test('creates EC2 security group with HTTP/HTTPS access', () => {

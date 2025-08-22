@@ -29,11 +29,100 @@ export class TapStack extends cdk.Stack {
     const isPrimary = props?.isPrimary ?? true;
     const region = this.region;
 
-    // KMS Key for encryption at rest
+    // KMS Key for encryption at rest with comprehensive service permissions
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
       description: `TAP Multi-Region KMS Key - ${region}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      policy: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'Enable IAM User Permissions',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow EC2 Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow AutoScaling Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow RDS Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow S3 Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow SNS Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow Lambda Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+        ],
+      }),
     });
 
     // S3 Bucket with versioning and encryption
@@ -270,7 +359,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Auto Scaling Group
+    // Auto Scaling Group with EBS encryption
     new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
       vpc,
       instanceType: ec2.InstanceType.of(
@@ -286,6 +375,15 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: autoscaling.BlockDeviceVolume.ebs(8, {
+            encrypted: true,
+            volumeType: autoscaling.EbsDeviceVolumeType.GP3,
+          }),
+        },
+      ],
     });
 
     // SNS Topic for replication alerts

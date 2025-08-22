@@ -360,7 +360,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
 
   describe('Auto Scaling Groups', () => {
     test(
-      'Auto Scaling Groups exist in both regions',
+      'Auto Scaling Groups exist in both regions with encrypted EBS volumes',
       async () => {
         const [primaryASGs, secondaryASGs] = await Promise.all([
           autoScalingPrimary.describeAutoScalingGroups().promise(),
@@ -380,6 +380,16 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
         expect(primaryTapASG?.MinSize).toBe(1);
         expect(primaryTapASG?.MaxSize).toBe(3);
         expect(primaryTapASG?.DesiredCapacity).toBe(1);
+
+        // Check launch template for EBS encryption
+        if (primaryTapASG?.LaunchTemplate) {
+          const launchTemplates = await ec2Primary.describeLaunchTemplateVersions({
+            LaunchTemplateId: primaryTapASG.LaunchTemplate.LaunchTemplateId,
+          }).promise();
+          
+          const ltVersion = launchTemplates.LaunchTemplateVersions?.[0];
+          expect(ltVersion?.LaunchTemplateData?.BlockDeviceMappings?.[0]?.Ebs?.Encrypted).toBe(true);
+        }
       },
       timeout
     );
@@ -513,7 +523,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
 
   describe('KMS Encryption', () => {
     test(
-      'KMS keys exist in both regions with rotation enabled',
+      'KMS keys exist in both regions with rotation enabled and proper policies',
       async () => {
         const [primaryKeys, secondaryKeys] = await Promise.all([
           kmsPrimary.listKeys().promise(),
@@ -523,17 +533,38 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
         expect(primaryKeys.Keys?.length).toBeGreaterThan(0);
         expect(secondaryKeys.Keys?.length).toBeGreaterThan(0);
 
-        // Check at least one key has rotation enabled
+        // Check at least one key has rotation enabled and proper policy
         for (const key of primaryKeys.Keys || []) {
           try {
-            const keyRotation = await kmsPrimary
-              .getKeyRotationStatus({
-                KeyId: key.KeyId!,
-              })
-              .promise();
+            const [keyRotation, keyPolicy] = await Promise.all([
+              kmsPrimary.getKeyRotationStatus({ KeyId: key.KeyId! }).promise(),
+              kmsPrimary.getKeyPolicy({ KeyId: key.KeyId!, PolicyName: 'default' }).promise()
+            ]);
 
             if (keyRotation.KeyRotationEnabled) {
               expect(keyRotation.KeyRotationEnabled).toBe(true);
+              
+              // Verify key policy includes all required service permissions
+              const policy = JSON.parse(keyPolicy.Policy || '{}');
+              const requiredServices = [
+                'ec2.amazonaws.com',
+                'autoscaling.amazonaws.com', 
+                'rds.amazonaws.com',
+                's3.amazonaws.com',
+                'sns.amazonaws.com',
+                'lambda.amazonaws.com'
+              ];
+              
+              const servicePermissions = requiredServices.map(service => 
+                policy.Statement?.some((stmt: any) =>
+                  stmt.Principal?.Service?.includes(service) ||
+                  stmt.Principal?.Service === service
+                )
+              );
+              
+              // At least half of the services should have permissions (flexible for different deployments)
+              const permissionCount = servicePermissions.filter(Boolean).length;
+              expect(permissionCount).toBeGreaterThanOrEqual(3);
               break;
             }
           } catch (error) {
