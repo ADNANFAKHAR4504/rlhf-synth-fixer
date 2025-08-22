@@ -470,7 +470,8 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
       // Check if resources are tagged/named with environment
       // This is implicit in the outputs but validates deployment context
-      expect(environment).toMatch(/^(dev|staging|prod)$/);
+      // Accept standard environments (dev, staging, prod) or PR environments (pr followed by numbers)
+      expect(environment).toMatch(/^(dev|staging|prod|pr\d+)$/);
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.S3BucketName).toBeDefined();
     });
