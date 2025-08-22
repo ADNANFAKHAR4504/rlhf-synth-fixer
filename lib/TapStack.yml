@@ -9,7 +9,6 @@ Metadata:
         Parameters:
           - EnvironmentSuffix
           - DBUsername
-          - DBPassword
 
 Parameters:
   EnvironmentSuffix:
@@ -27,14 +26,6 @@ Parameters:
     MaxLength: '16'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Default: 'Password123456'
-    Description: 'Database administrator password'
-    MinLength: '8'
-    MaxLength: '41'
-    AllowedPattern: '[a-zA-Z0-9]*'
 
 Resources:
   # VPC and Network Infrastructure
@@ -47,6 +38,17 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'SecureWebApp-VPC-${EnvironmentSuffix}'
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'SecureWebApp-DB-Secret-${EnvironmentSuffix}'
+      Description: 'Database credentials for SecureWebApp'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -445,7 +447,7 @@ Resources:
       MultiAZ: true
       DBName: securewebapp
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
