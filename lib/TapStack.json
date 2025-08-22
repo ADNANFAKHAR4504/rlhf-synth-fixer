@@ -522,7 +522,7 @@
                             "Principal": "*",
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringNotEquals": {
@@ -536,7 +536,7 @@
                             "Principal": "*",
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringNotEquals": {
@@ -624,7 +624,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailBucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -639,9 +639,6 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-ec2-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
                         {
@@ -666,7 +663,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                                     }
                                 },
                                 {
@@ -717,9 +714,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${Environment}-ec2-profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -730,9 +724,6 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-lambda-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
                         {
@@ -756,7 +747,7 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*"
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*"
                                     }
                                 }
                             ]
@@ -782,9 +773,6 @@
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-config-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
                         {
@@ -797,7 +785,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
                 ],
                 "Policies": [
                     {
@@ -820,11 +808,10 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:PutObject",
-                                        "s3:GetBucketAcl"
+                                        "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/config/*"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/config/*"
                                     },
                                     "Condition": {
                                         "StringEquals": {
@@ -855,9 +842,6 @@
         "CloudTrailRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-cloudtrail-logs-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
                         {
@@ -882,7 +866,7 @@
                                         "logs:CreateLogStream"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*"
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*"
                                     }
                                 }
                             ]

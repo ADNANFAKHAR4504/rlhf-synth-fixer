@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       'AWS::EC2::SubnetRouteTableAssociation',
       'AWS::S3::BucketPolicy',
       'AWS::IAM::InstanceProfile',
-      'AWS::EC2::Instance',
+      // EC2 Instances support Tags; don't treat as non-taggable
       'AWS::Logs::MetricFilter',
       'AWS::Config::ConfigurationRecorder',
       'AWS::Config::DeliveryChannel',
@@ -206,7 +206,10 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('RDS should use Secrets Manager for password, not DBPassword parameter', () => {
       const rdsInstance = template.Resources.RDSInstance;
-      expect(rdsInstance.Properties.MasterUserPassword).toMatch(/{{resolve:secretsmanager/);
+      const mup = rdsInstance.Properties.MasterUserPassword;
+      const mupString = typeof mup === 'string' ? mup : (mup && mup['Fn::Sub']);
+      expect(typeof mupString).toBe('string');
+      expect(mupString).toMatch(/{{resolve:secretsmanager/);
       expect(template.Parameters.DBPassword).toBeUndefined();
     });
   });

@@ -298,7 +298,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${S3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -306,7 +306,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${S3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt S3KMSKey.Arn
@@ -349,7 +349,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -358,7 +358,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-ec2-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -374,7 +373,7 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
@@ -393,14 +392,12 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-ec2-profile'
       Roles:
         - !Ref EC2Role
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-lambda-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -415,7 +412,7 @@ Resources:
                 Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -425,7 +422,6 @@ Resources:
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-config-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -433,7 +429,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
       Policies:
         - PolicyName: ConfigDeliveryPermissions
           PolicyDocument:
@@ -446,8 +442,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:PutObject'
-                  - 's3:GetBucketAcl'
-                Resource: !Sub '${S3Bucket}/config/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/config/*'
                 Condition:
                   StringEquals:
                     's3:x-amz-acl': 'bucket-owner-full-control'
@@ -460,7 +455,6 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-cloudtrail-logs-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -476,7 +470,7 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
-                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
