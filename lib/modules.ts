@@ -565,6 +565,7 @@ export class SecureInfrastructureModules extends Construct {
               },
               metrics: {
                 status: 'Enabled',
+                eventThreshold: { minutes: 15 },
               },
             },
             sourceSelectionCriteria: {
