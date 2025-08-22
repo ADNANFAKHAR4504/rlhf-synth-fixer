@@ -322,7 +322,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
+      MasterUserPassword: '{{resolve:secretsmanager:secret-291545-safe:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
