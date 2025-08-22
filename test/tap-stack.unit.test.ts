@@ -5,20 +5,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 
 describe('TapStack CloudFormation Template Unit Tests', () => {
   let template: any;
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
   beforeAll(() => {
-    // Convert YAML to JSON if needed
-    const jsonPath = path.join(__dirname, 'TapStack.json');
-    if (!fs.existsSync(jsonPath)) {
-      execSync('python convert-yaml.py', { cwd: __dirname });
-    }
-    
-    // Load the JSON version
+    // Load the JSON version from lib directory
+    const jsonPath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     const templateContent = fs.readFileSync(jsonPath, 'utf8');
     template = JSON.parse(templateContent);
   });
