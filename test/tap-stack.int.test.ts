@@ -13,6 +13,12 @@ const outputs = JSON.parse(
   fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8")
 );
 
+const templatePath = path.resolve(__dirname, '../lib/TapStack.json');
+if (!fs.existsSync(templatePath)) {
+  throw new Error(`CloudFormation template not found at ${templatePath}`);
+}
+const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
+
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
 // Extract CloudFormation outputs
