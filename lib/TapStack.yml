@@ -639,8 +639,6 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
