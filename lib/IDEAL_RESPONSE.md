@@ -1,3 +1,4 @@
+## Model Response
 ``` yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Comprehensive Security Infrastructure - TAP Stack with KMS, VPC, Config, CloudTrail, and GuardDuty

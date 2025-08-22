@@ -1,3 +1,4 @@
+## Model Response
 ``` yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure with comprehensive security controls for IAM, S3, RDS, Lambda, and CloudTrail'

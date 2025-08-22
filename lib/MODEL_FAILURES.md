@@ -1,4 +1,4 @@
-# Model Response vs Ideal Response Analysis
+# Model Failures
 
 ## 1. Parameter Management
 ### Model Response Failures:
