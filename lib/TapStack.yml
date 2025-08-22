@@ -338,6 +338,7 @@ Resources:
             Status: Enabled
             ExpirationInDays: 2555
             NoncurrentVersionExpirationInDays: 30
+    DeletionPolicy: Retain
 
   CloudTrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -868,6 +869,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'RDS-Instance-${Environment}'
+    DeletionPolicy: Retain
+    SkipFinalSnapshot: true
 
   # EC2 Security Group
   EC2SecurityGroup:
