@@ -1,4 +1,4 @@
-# CI/CD Pipeline Setup using AWS CloudFormation
+# CI/CD Pipeline Setup using AWS CDK
 
 ## Overview
 We need to create a  cdk typescript stack to set up a **CI/CD pipeline** on **AWS**.  
