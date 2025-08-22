@@ -1,26 +1,35 @@
-You are an expert Prompt Engineer with 10 years of experience. Your task is to create prompts for AI so that the AI will generate a response (IAC code).
+You are an expert Terraform engineer. Generate Infrastructure as Code (IaC) in Terraform HCL for a multinational organization handling sensitive data across multiple AWS regions.
 
-Help me write a prompt for creating Infrastructure as Code (IAC) in CDKTF. Please make sure that the provided data should remain intact and it should not change in any way.
+**Objective:**  
+Create a secure, scalable AWS environment using Terraform HCL. The architecture must include:
+- A VPC with public and private subnets
+- S3 buckets
+- An RDS instance
+- An Application Load Balancer (ALB)
 
-**Constraints:**
-- Use Terraform version 1.0.0 or greater.
-- Ensure all security groups are configured with specified inbound and outbound rules.
-- The configuration must support multiple environments using workspaces.
-- Integrate AWS IAM roles and policies to adhere to the principle of least privilege.
-- Use Terraform modules to encapsulate reusable components.
-- Implement a logging mechanism for auditing configuration changes.
+**Security & Compliance Requirements:**  
+Your Terraform code must strictly enforce ALL the following constraints. Do NOT modify, skip, or reinterpret any items:
 
-**Environment:**
-Create a Terraform HCL configuration that implements a secure cloud infrastructure. The requirements are as follows:
-1. Define and deploy Security Groups with strict inbound and outbound rules in AWS across multiple regions using AWS VPC.
-2. Utilize Terraform workspaces to manage multiple environments (development, staging, production) with isolated settings.
-3. Implement AWS IAM policies and roles to restrict access in line with the principle of least privilege. These roles should be assigned to specific EC2 instances depending on the workspace.
-4. Use Terraform modules to define reusable components for security groups and IAM configurations.
-5. Include detailed resource tagging for cost monitoring and organization.
-6. Ensure all configuration changes are logged for audit purposes.
+1. No resource should have a public IP address by default.
+2. All resources must be tagged with the naming format `Environment-Name` (e.g., `Prod-MyApp`).
+3. Use IAM roles for all AWS service access. Do NOT use root credentials.
+4. IAM roles must follow least privilege principles.
+5. S3 buckets must be encrypted with AES-256.
+6. Enable access logging for every S3 bucket; logs must go to a dedicated logging bucket.
+7. All ALBs must enforce SSL/TLS.
+8. No security group should allow inbound port 22 (SSH) from 0.0.0.0/0.
+9. S3 buckets must have versioning enabled.
 
-**Expected output:**  
-The solution should include well-commented HCL files with correct implementations of all required security groups, IAM roles, workspace configurations, and necessary modules. Passing tests must validate the deployment in multiple environments and regions, ensuring all security constraints are met without errors.
+**Deliverables:**  
+- Output a single, valid Terraform HCL file that implements all requirements.
+- The solution must pass AWS security checks and best-practice audits.
+- If possible, simulate a deployment and provide evidence (such as log outputs or screenshots) that all constraints are met.
 
-**Proposed Statement:**  
-The infrastructure environment consists of multiple AWS accounts distinguished by Terraform workspaces. Resources must be deployed in the us-east-1 and us-west-2 regions, using standard naming conventions with environment-specific prefixes (e.g., dev-, prod-). Each workspace should have its own state file, and backend configurations must be set up for remote state management. Security groups should allow traffic only from known IP ranges, and all ports should be closed by default. IAM roles should have permissions limited to the minimum required actions and resources.
+**Additional Instructions:**  
+- Do not alter or omit any requirement.
+- Use clear resource names and comments to illustrate compliance.
+- The solution should be production-ready for a global enterprise.
+
+---
+
+*Keep all listed requirements and constraints unchanged in your output.*

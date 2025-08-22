@@ -1,7 +1,4 @@
-I'll create a comprehensive Terraform HCL configuration that meets all your security and compliance requirements for a multinational organization. Here's the complete infrastructure code:
-
-```hcl
-# terraform/main.tf
+# terraform/tap_stack.tf
 # Terraform configuration for secure, multi-region AWS infrastructure
 # Compliant with enterprise security requirements
 
@@ -733,73 +730,3 @@ output "s3_logs_bucket" {
   description = "Name of the access logs S3 bucket"
   value       = aws_s3_bucket.access_logs.id
 }
-```
-
-## Compliance Verification
-
-This Terraform configuration strictly adheres to all specified requirements:
-
-### ✅ **Requirement Compliance Checklist:**
-
-1. **✅ No public IP by default**: 
-   - `associate_public_ip_address = false` in launch template
-   - `map_public_ip_on_launch = false` for public subnets
-
-2. **✅ Environment-Name tagging format**: 
-   - All resources tagged with `Environment = var.environment_tag` (default: "Prod-SecureApp")
-
-3. **✅ IAM roles for service access**: 
-   - EC2 instances use `aws_iam_role.ec2_role` with instance profile
-   - No root credentials used
-
-4. **✅ Least privilege IAM**: 
-   - EC2 role only has specific S3 permissions for the app bucket
-   - Limited to GetObject, PutObject, DeleteObject, and ListBucket
-
-5. **✅ S3 AES-256 encryption**: 
-   - `aws_s3_bucket_server_side_encryption_configuration` with `sse_algorithm = "AES256"`
-
-6. **✅ S3 access logging**: 
-   - Dedicated `aws_s3_bucket.access_logs` bucket
-   - `aws_s3_bucket_logging` configured for app data bucket
-
-7. **✅ ALB SSL/TLS enforcement**: 
-   - HTTPS listener with SSL certificate
-   - HTTP listener redirects to HTTPS (301 redirect)
-   - SSL policy: `ELBSecurityPolicy-TLS-1-2-2017-01`
-
-8. **✅ No SSH from 0.0.0.0/0**: 
-   - SSH (port 22) only allowed from VPC CIDR block
-   - Security group explicitly restricts SSH access
-
-9. **✅ S3 versioning enabled**: 
-   - `aws_s3_bucket_versioning` with `status = "Enabled"` for both buckets
-
-## Deployment Instructions
-
-1. **Initialize Terraform**:
-```bash
-terraform init
-```
-
-2. **Plan the deployment**:
-```bash
-terraform plan -var="environment_tag=Prod-MyApp"
-```
-
-3. **Apply the configuration**:
-```bash
-terraform apply -var="environment_tag=Prod-MyApp"
-```
-
-## Security Best Practices Implemented
-
-- **Network Isolation**: Private subnets for applications and databases
-- **Encryption at Rest**: S3 buckets and RDS with encryption enabled
-- **Encryption in Transit**: ALB enforces HTTPS/TLS
-- **Access Control**: Security groups with minimal required access
-- **Monitoring**: Access logging enabled for audit trails
-- **High Availability**: Multi-AZ deployment across availability zones
-- **Scalability**: Auto Scaling Group for application tier
-
-This infrastructure is production-ready and will pass AWS security audits and compliance checks for multinational organizations handling sensitive data.
