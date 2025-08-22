@@ -319,15 +319,6 @@ export class Ec2AsgModule extends Construct {
       iamInstanceProfile: {
         name: config.instanceProfile.name,
       },
-      userData: Buffer.from(
-        `#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from ${config.name} - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
-`
-      ).toString('base64'),
       tagSpecifications: [
         {
           resourceType: 'instance',
@@ -357,8 +348,6 @@ echo "<h1>Hello from ${config.name} - Instance ID: $(curl -s http://169.254.169.
       minSize: 1,
       maxSize: 6,
       desiredCapacity: 3,
-      healthCheckType: 'EC2',
-      healthCheckGracePeriod: 300,
       launchTemplate: {
         id: launchTemplate.id,
         version: '$Latest',

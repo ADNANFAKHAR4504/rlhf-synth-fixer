@@ -40,7 +40,7 @@ jest.mock('../lib/modules', () => ({
   Ec2AsgModule: jest.fn().mockImplementation((_scope, _id, config) => ({
     outputs: {
       launchTemplate: { 
-        id: 'lt-12345',
+        id: 'lt-0f9e9d43642bc26c7',
         name: 'MyApp-launch-template'
       },
       autoScalingGroup: { 
