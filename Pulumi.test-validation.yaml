@@ -1,4 +1,0 @@
-encryptionsalt: v1:1itK65HEtBo=:v1:n/3hw0xMj3mSri3c:gfDTr4losa0Kg4c52a65p+sJisqlAQ==
-config:
-  TapStack:env: test
-  aws:region: us-east-1

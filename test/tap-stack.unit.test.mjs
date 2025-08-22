@@ -64,7 +64,9 @@ jest.mock("@pulumi/aws", () => ({
       arn: 'arn:aws:s3:::mock-bucket-name' 
     })),
     BucketPolicy: jest.fn(() => ({ id: 'mock-bucket-policy-id' })),
-    BucketPublicAccessBlock: jest.fn(() => ({ id: 'mock-bucket-pab-id' }))
+    BucketPublicAccessBlock: jest.fn(() => ({ id: 'mock-bucket-pab-id' })),
+    BucketVersioning: jest.fn(() => ({ id: 'mock-bucket-versioning-id' })),
+    BucketServerSideEncryptionConfiguration: jest.fn(() => ({ id: 'mock-bucket-encryption-id' }))
   }
 }));
 
@@ -602,8 +604,12 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
           description: 'Parameter group for RDS MySQL database',
           parameters: expect.arrayContaining([
             expect.objectContaining({
-              name: 'performance_schema',
+              name: 'slow_query_log',
               value: '1'
+            }),
+            expect.objectContaining({
+              name: 'long_query_time',
+              value: '2'
             })
           ]),
           tags: expect.objectContaining({
@@ -658,22 +664,45 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
       });
     });
 
-    it("should create S3 bucket with encryption and versioning", () => {
+    it("should create S3 bucket", () => {
       expect(aws.s3.Bucket).toHaveBeenCalledWith('prod-static-assets',
         expect.objectContaining({
-          versioning: expect.objectContaining({
-            enabled: true
-          }),
-          serverSideEncryptionConfiguration: expect.objectContaining({
-            rule: expect.objectContaining({
+          bucket: expect.stringMatching(/prod-static-assets-/),
+          tags: expect.objectContaining({
+            Name: 'prod-static-assets'
+          })
+        }),
+        expect.objectContaining({
+          parent: expect.any(Object)
+        })
+      );
+    });
+
+    it("should create bucket versioning configuration", () => {
+      expect(aws.s3.BucketVersioning).toHaveBeenCalledWith('prod-bucket-versioning',
+        expect.objectContaining({
+          bucket: expect.any(String),
+          versioningConfiguration: expect.objectContaining({
+            status: 'Enabled'
+          })
+        }),
+        expect.objectContaining({
+          parent: expect.any(Object)
+        })
+      );
+    });
+
+    it("should create bucket server-side encryption configuration", () => {
+      expect(aws.s3.BucketServerSideEncryptionConfiguration).toHaveBeenCalledWith('prod-bucket-encryption',
+        expect.objectContaining({
+          bucket: expect.any(String),
+          rules: expect.arrayContaining([
+            expect.objectContaining({
               applyServerSideEncryptionByDefault: expect.objectContaining({
                 sseAlgorithm: 'AES256'
               })
             })
-          }),
-          tags: expect.objectContaining({
-            Name: 'prod-static-assets'
-          })
+          ])
         }),
         expect.objectContaining({
           parent: expect.any(Object)
