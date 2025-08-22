@@ -5,14 +5,15 @@ This module defines the TapStack class, the main Pulumi ComponentResource for
 the CI/CD pipeline implementing a complete microservices platform on AWS.
 """
 
-from typing import Optional, Dict
 import json
 import os
 import subprocess
 import time
+from typing import Dict, Optional
+
 import pulumi
-from pulumi import ResourceOptions
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
 
 class TapStackArgs:
@@ -84,7 +85,6 @@ class TapStack(pulumi.ComponentResource):
       "vpc_id": self.vpc.id,
       "ecs_cluster_arn": self.ecs_cluster.arn,
       "rds_endpoint": self.db_instance.endpoint,
-      "redis_endpoint": self.redis_cluster.cache_nodes[0].address,
       "alb_dns_name": self.alb.dns_name,
       "cloudfront_domain": self.cloudfront_distribution.domain_name,
       "ecr_repository_url": self.ecr_repository.repository_url,
@@ -338,7 +338,15 @@ class TapStack(pulumi.ComponentResource):
       image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
         scan_on_push=True
       ),
-      lifecycle_policy=json.dumps({
+      tags={**self.common_tags, "Name": f"microservices-ecr-{self.environment_suffix}"},
+      opts=ResourceOptions(parent=self)
+    )
+
+    # Create lifecycle policy separately
+    aws.ecr.LifecyclePolicy(
+      f"microservices-ecr-lifecycle-{self.environment_suffix}",
+      repository=self.ecr_repository.name,
+      policy=json.dumps({
         "rules": [{
           "rulePriority": 1,
           "description": "Keep last 10 images",
@@ -352,7 +360,6 @@ class TapStack(pulumi.ComponentResource):
           }
         }]
       }),
-      tags={**self.common_tags, "Name": f"microservices-ecr-{self.environment_suffix}"},
       opts=ResourceOptions(parent=self)
     )
 
@@ -372,13 +379,15 @@ class TapStack(pulumi.ComponentResource):
       f"microservices-db-secret-{self.environment_suffix}",
       name=f"microservices-db-secret-{self.environment_suffix}",
       description="Database credentials for microservices",
-      generate_secret_string=aws.secretsmanager.SecretGenerateSecretStringArgs(
-        secret_string_template='{"username": "dbadmin"}',
-        generate_string_key="password",
-        exclude_characters='"@/\\',
-        password_length=32
-      ),
       tags={**self.common_tags, "Name": f"microservices-db-secret-{self.environment_suffix}"},
+      opts=ResourceOptions(parent=self)
+    )
+
+    # Create secret version with generated password
+    aws.secretsmanager.SecretVersion(
+      f"microservices-db-secret-version-{self.environment_suffix}",
+      secret_id=self.db_secret.id,
+      secret_string='{"username": "dbadmin", "password": "temp-password-change-me"}',
       opts=ResourceOptions(parent=self)
     )
 
@@ -387,15 +396,15 @@ class TapStack(pulumi.ComponentResource):
       f"microservices-db-{self.environment_suffix}",
       identifier=f"microservices-db-{self.environment_suffix}",
       engine="postgres",
-      engine_version="15",
+      engine_version="15.4",
       instance_class="db.t3.micro",
       allocated_storage=20,
       max_allocated_storage=100,
       storage_type="gp2",
       storage_encrypted=True,
       db_name="microservices",
-      manage_master_user_password=True,
-      master_user_secret_kms_key_id="alias/aws/rds",
+      username="dbadmin",
+      password="temp-password-change-me",
       db_subnet_group_name=self.db_subnet_group.name,
       vpc_security_group_ids=[self.rds_sg.id],
       backup_retention_period=7,
@@ -436,7 +445,7 @@ class TapStack(pulumi.ComponentResource):
       security_group_ids=[self.elasticache_sg.id],
       at_rest_encryption_enabled=True,
       transit_encryption_enabled=True,
-      auth_token="MyAuthToken123!",
+      auth_token="MyAuthToken123456789!",
       tags={**self.common_tags, "Name": f"microservices-redis-{self.environment_suffix}"},
       opts=ResourceOptions(parent=self)
     )
@@ -521,15 +530,12 @@ class TapStack(pulumi.ComponentResource):
       desired_count=2,
       launch_type="FARGATE",
       platform_version="LATEST",
-      network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-        subnets=[subnet.id for subnet in self.private_subnets],
-        security_groups=[self.ecs_sg.id],
-        assign_public_ip=False
-      ),
-      deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
-        maximum_percent=200,
-        minimum_healthy_percent=50
-      ),
+      network_configuration={
+        "subnets": [subnet.id for subnet in self.private_subnets],
+        "security_groups": [self.ecs_sg.id],
+        "assign_public_ip": False
+      },
+
       tags={**self.common_tags, "Name": f"microservices-service-{self.environment_suffix}"},
       opts=ResourceOptions(parent=self, depends_on=[self.alb_target_group])
     )
@@ -802,7 +808,7 @@ class TapStack(pulumi.ComponentResource):
     # CloudWatch Alarms
     aws.cloudwatch.MetricAlarm(
       f"microservices-cpu-alarm-{self.environment_suffix}",
-      alarm_name=f"microservices-cpu-alarm-{self.environment_suffix}",
+      name=f"microservices-cpu-alarm-{self.environment_suffix}",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="CPUUtilization",
@@ -822,7 +828,7 @@ class TapStack(pulumi.ComponentResource):
 
     aws.cloudwatch.MetricAlarm(
       f"microservices-memory-alarm-{self.environment_suffix}",
-      alarm_name=f"microservices-memory-alarm-{self.environment_suffix}",
+      name=f"microservices-memory-alarm-{self.environment_suffix}",
       comparison_operator="GreaterThanThreshold",
       evaluation_periods=2,
       metric_name="MemoryUtilization",
