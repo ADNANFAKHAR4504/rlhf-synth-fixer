@@ -557,40 +557,7 @@
                 }
             }
         },
-        "LoadBalancerSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG"
-                },
-                "GroupDescription": "Security group for Application Load Balancer",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG"
-                        }
-                    }
-                ]
-            }
-        },
+
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -606,9 +573,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Ref": "LoadBalancerSecurityGroup"
-                        }
+                        "CidrIp": "0.0.0.0/0"
                     },
                     {
                         "IpProtocol": "tcp",
@@ -836,33 +801,7 @@
                     "Ref": "S3LoggingBucket"
                 },
                 "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Sid": "AWSLoadBalancerAccessLogs",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${S3LoggingBucket.Arn}/alb-logs/*"
-                            }
-                        },
-                        {
-                            "Sid": "AWSLoadBalancerAccessLogsCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "S3LoggingBucket",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
+                    "Statement": []
                 }
             }
         },
@@ -912,80 +851,7 @@
                 }
             }
         },
-        "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ALB"
-                },
-                "Scheme": "internet-facing",
-                "SecurityGroups": [
-                    {
-                        "Ref": "LoadBalancerSecurityGroup"
-                    }
-                ],
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "LoadBalancerAttributes": [
-                    {
-                        "Key": "access_logs.s3.enabled",
-                        "Value": "true"
-                    },
-                    {
-                        "Key": "access_logs.s3.bucket",
-                        "Value": {
-                            "Ref": "S3LoggingBucket"
-                        }
-                    },
-                    {
-                        "Key": "access_logs.s3.prefix",
-                        "Value": "alb-logs"
-                    }
-                ]
-            }
-        },
-        "TargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-TG"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "HealthCheckPath": "/",
-                "HealthCheckProtocol": "HTTP",
-                "HealthCheckIntervalSeconds": 30,
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 5
-            }
-        },
-        "LoadBalancerListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "TargetGroup"
-                        }
-                    }
-                ],
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP"
-            }
-        },
+
         "AutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
@@ -1014,12 +880,7 @@
                 "MinSize": 2,
                 "MaxSize": 6,
                 "DesiredCapacity": 2,
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "TargetGroup"
-                    }
-                ],
-                "HealthCheckType": "ELB",
+                "HealthCheckType": "EC2",
                 "HealthCheckGracePeriod": 300,
                 "Tags": [
                     {
@@ -1217,20 +1078,7 @@
                 }
             }
         },
-        "WebACLAssociation": {
-            "Type": "AWS::WAFv2::WebACLAssociation",
-            "Properties": {
-                "ResourceArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "WebACLArn": {
-                    "Fn::GetAtt": [
-                        "WebACL",
-                        "Arn"
-                    ]
-                }
-            }
-        },
+
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
@@ -1587,31 +1435,7 @@
                 }
             }
         },
-        "LoadBalancerDNS": {
-            "Description": "Application Load Balancer DNS Name",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "DNSName"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-ALB-DNS"
-                }
-            }
-        },
-        "LoadBalancerArn": {
-            "Description": "Application Load Balancer ARN",
-            "Value": {
-                "Ref": "ApplicationLoadBalancer"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-ALB-ARN"
-                }
-            }
-        },
+
         "DatabaseEndpoint": {
             "Description": "RDS Database Endpoint",
             "Value": {

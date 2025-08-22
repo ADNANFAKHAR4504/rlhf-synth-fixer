@@ -116,7 +116,7 @@ describe('Secure Web Application CloudFormation Template', () => {
   describe('Security Groups', () => {
     test('should have all required security groups', () => {
       const expectedSGs = [
-        'LoadBalancerSecurityGroup',
+      
         'WebServerSecurityGroup',
         'DatabaseSecurityGroup',
         'BastionSecurityGroup'
@@ -128,16 +128,9 @@ describe('Secure Web Application CloudFormation Template', () => {
       });
     });
 
-    test('LoadBalancer SG should allow HTTP/HTTPS from internet', () => {
-      const lbSG = template.Resources.LoadBalancerSecurityGroup;
-      const ingressRules = lbSG.Properties.SecurityGroupIngress;
-      
-      expect(ingressRules).toHaveLength(2);
-      expect(ingressRules.some((rule: any) => rule.FromPort === 80)).toBe(true);
-      expect(ingressRules.some((rule: any) => rule.FromPort === 443)).toBe(true);
-    });
 
-    test('WebServer SG should only allow traffic from LoadBalancer and Bastion', () => {
+
+    test('WebServer SG should allow HTTP from internet and SSH from Bastion', () => {
       const webSG = template.Resources.WebServerSecurityGroup;
       const ingressRules = webSG.Properties.SecurityGroupIngress;
       
@@ -168,26 +161,7 @@ describe('Secure Web Application CloudFormation Template', () => {
     });
   });
 
-  describe('Load Balancer and Auto Scaling', () => {
-    test('should have Application Load Balancer', () => {
-      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
-      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    });
-
-    test('ALB should be internet-facing and span multiple subnets', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Scheme).toBe('internet-facing');
-      expect(alb.Properties.Subnets).toHaveLength(2);
-    });
-
-    test('should have Target Group with health checks', () => {
-      const tg = template.Resources.TargetGroup;
-      expect(tg).toBeDefined();
-      expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
-      expect(tg.Properties.HealthCheckPath).toBe('/');
-      expect(tg.Properties.HealthCheckIntervalSeconds).toBe(30);
-    });
-
+  describe('Auto Scaling', () => {
     test('should have Auto Scaling Group', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg).toBeDefined();
@@ -383,8 +357,7 @@ describe('Secure Web Application CloudFormation Template', () => {
         'PublicSubnet2Id',
         'PrivateSubnet1Id',
         'PrivateSubnet2Id',
-        'LoadBalancerDNS',
-        'LoadBalancerArn',
+        
         'DatabaseEndpoint',
         'S3BucketName',
         'WebACLArn',

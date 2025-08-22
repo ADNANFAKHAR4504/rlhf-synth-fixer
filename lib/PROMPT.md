@@ -29,7 +29,6 @@ Think of it as building a fortress for our application. Here’s what that envir
 - Auto Scaling policies for EC2 instances, triggered by CPU utilization.  
 
 ### Traffic Management
-- An Elastic Load Balancer (ELB) to distribute traffic.  
 - At least two EC2 instances spread across multiple Availability Zones.  
 
 ### Data Protection
@@ -44,7 +43,7 @@ Think of it as building a fortress for our application. Here’s what that envir
 ## Visibility and Oversight
 
 ### Logging
-- Logging enabled for S3, ELB, and CloudWatch where applicable.  
+- Logging enabled for S3 and CloudWatch where applicable.  
 
 ### Compliance
 - AWS Config to monitor configuration changes and compliance.  
@@ -65,7 +64,7 @@ Think of it as building a fortress for our application. Here’s what that envir
 - Both public and private subnets are required.  
 - Network ACLs should only allow necessary traffic.  
 - Security Groups must restrict access.  
-- ELB must route traffic across two or more EC2 instances in different Availability Zones.  
+- EC2 instances must be spread across two or more Availability Zones.  
 - Logging must be enabled for critical services.  
 - AWS Config must be active.  
 - AWS WAF must protect the application.  

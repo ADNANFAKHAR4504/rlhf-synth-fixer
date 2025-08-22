@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
+
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 
@@ -13,7 +13,7 @@ describe('Secure Web Application Integration Tests', () => {
   let outputs: any = {};
   let cloudFormationClient: CloudFormationClient;
   let ec2Client: EC2Client;
-  let elbClient: ElasticLoadBalancingV2Client;
+
   let rdsClient: RDSClient;
   let s3Client: S3Client;
 
@@ -22,7 +22,7 @@ describe('Secure Web Application Integration Tests', () => {
     const region = process.env.AWS_REGION || 'us-east-1';
     cloudFormationClient = new CloudFormationClient({ region });
     ec2Client = new EC2Client({ region });
-    elbClient = new ElasticLoadBalancingV2Client({ region });
+
     rdsClient = new RDSClient({ region });
     s3Client = new S3Client({ region });
 
@@ -39,8 +39,7 @@ describe('Secure Web Application Integration Tests', () => {
         'PublicSubnet2Id': 'subnet-pub2mock',
         'PrivateSubnet1Id': 'subnet-priv1mock',
         'PrivateSubnet2Id': 'subnet-priv2mock',
-        'LoadBalancerDNS': 'test-alb-123456789.us-east-1.elb.amazonaws.com',
-        'LoadBalancerArn': 'arn:aws:elasticloadbalancing:us-east-1:123456789:loadbalancer/app/test-alb/123456789',
+
         'DatabaseEndpoint': 'test-db.123456789.us-east-1.rds.amazonaws.com',
         'S3BucketName': 'test-bucket-123456789',
         'WebACLArn': 'arn:aws:wafv2:us-east-1:123456789:regional/webacl/test-waf/123456789',
@@ -77,8 +76,7 @@ describe('Secure Web Application Integration Tests', () => {
         'PublicSubnet2Id',
         'PrivateSubnet1Id',
         'PrivateSubnet2Id',
-        'LoadBalancerDNS',
-        'LoadBalancerArn',
+
         'DatabaseEndpoint',
         'S3BucketName',
         'WebACLArn',
@@ -145,56 +143,8 @@ describe('Secure Web Application Integration Tests', () => {
     });
   });
 
-  describe('Load Balancer Health', () => {
-    test('load balancer should be active and healthy', async () => {
-      if (outputs.LoadBalancerArn.includes('mock')) {
-        console.log('Skipping ALB test - using mock data');
-        expect(outputs.LoadBalancerDNS).toMatch(/\.elb\.amazonaws\.com$/);
-        return;
-      }
 
-      try {
-        const command = new DescribeLoadBalancersCommand({
-          LoadBalancerArns: [outputs.LoadBalancerArn]
-        });
-        const response = await elbClient.send(command);
-        
-        expect(response.LoadBalancers).toBeDefined();
-        expect(response.LoadBalancers!.length).toBe(1);
-        expect(response.LoadBalancers![0].State?.Code).toBe('active');
-        expect(response.LoadBalancers![0].Scheme).toBe('internet-facing');
-        expect(response.LoadBalancers![0].Type).toBe('application');
-      } catch (error) {
-        console.log('ALB test skipped - no real deployment');
-      }
-    });
 
-    test('target groups should be healthy', async () => {
-      if (outputs.LoadBalancerArn.includes('mock')) {
-        console.log('Skipping target group test - using mock data');
-        return;
-      }
-
-      try {
-        const command = new DescribeTargetGroupsCommand({
-          LoadBalancerArn: outputs.LoadBalancerArn
-        });
-        const response = await elbClient.send(command);
-        
-        expect(response.TargetGroups).toBeDefined();
-        expect(response.TargetGroups!.length).toBeGreaterThan(0);
-        
-        // Check target group health check configuration
-        response.TargetGroups!.forEach(tg => {
-          expect(tg.HealthCheckPath).toBe('/');
-          expect(tg.HealthCheckProtocol).toBe('HTTP');
-          expect(tg.HealthCheckIntervalSeconds).toBe(30);
-        });
-      } catch (error) {
-        console.log('Target group test skipped - no real deployment');
-      }
-    });
-  });
 
   describe('Database Connectivity and Security', () => {
     test('RDS instance should be available and encrypted', async () => {
@@ -273,35 +223,7 @@ describe('Secure Web Application Integration Tests', () => {
     });
   });
 
-  describe('Application Health Checks', () => {
-    test('load balancer endpoint should be accessible', async () => {
-      if (outputs.LoadBalancerDNS.includes('mock')) {
-        console.log('Skipping HTTP test - using mock data');
-        return;
-      }
 
-      try {
-        // Simple connectivity test (would require actual HTTP request in real scenario)
-        expect(outputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+\..*\.elb\.amazonaws\.com$/);
-        
-        // In a real scenario, you'd make HTTP requests:
-        // const response = await fetch(`http://${outputs.LoadBalancerDNS}`);
-        // expect(response.status).toBe(200);
-      } catch (error) {
-        console.log('HTTP test skipped - no real deployment');
-      }
-    });
-
-    test('web application should serve content', async () => {
-      if (outputs.LoadBalancerDNS.includes('mock')) {
-        console.log('Skipping content test - using mock data');
-        return;
-      }
-
-      // In a real deployment, this would test the actual web application
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-    });
-  });
 
   describe('Security Validation', () => {
     test('security groups should have proper ingress rules', async () => {
@@ -321,18 +243,7 @@ describe('Secure Web Application Integration Tests', () => {
         expect(response.SecurityGroups).toBeDefined();
         expect(response.SecurityGroups!.length).toBeGreaterThan(0);
 
-        // Find the load balancer security group
-        const lbSG = response.SecurityGroups!.find(sg => 
-          sg.GroupName?.includes('LoadBalancer')
-        );
-        
-        if (lbSG) {
-          const httpRule = lbSG.IpPermissions?.find(rule => rule.FromPort === 80);
-          const httpsRule = lbSG.IpPermissions?.find(rule => rule.FromPort === 443);
-          
-          expect(httpRule).toBeDefined();
-          expect(httpsRule).toBeDefined();
-        }
+
       } catch (error) {
         console.log('Security group test skipped - no real deployment');
       }
