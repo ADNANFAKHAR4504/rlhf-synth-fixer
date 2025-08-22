@@ -122,11 +122,9 @@ Parameters:
   ExistingRDSSubnetGroupName:
     Type: String
     Default: ''
-    Description: 'Name of an existing RDS DBSubnetGroup. Leave blank to create a new one. If using an existing group, set this to the actual subnet group name.'
-  ExistingCloudTrailLogsBucketName:
-    Type: String
-    Default: 'use-existing'
-    Description: 'Name of an existing S3 bucket for CloudTrail logs. To create a new one, set this to blank (""), otherwise the template will NOT create a new bucket.'
+    Description: |
+      Name of an existing RDS DBSubnetGroup. Leave blank to create a new one.
+      If you see an error that the subnet group already exists, set this to the actual existing DBSubnetGroup name (e.g., 'rds-subnet-group-production').
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -169,6 +167,14 @@ Conditions:
   CreateRDSSubnetGroup: !Equals [!Ref ExistingRDSSubnetGroupName, '']
   CreateCloudTrailLogsBucket:
     !Equals [!Ref ExistingCloudTrailLogsBucketName, '']
+  FailIfSubnetGroupExists:
+    !And [
+      !Equals [!Ref ExistingRDSSubnetGroupName, ''],
+      !Not [!Condition CreateRDSSubnetGroup],
+    ]
+  SubnetGroupAlreadyExistsFail:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Condition: FailIfSubnetGroupExists
 
 Resources:
   # KMS Key for Encryption with cross-account access
