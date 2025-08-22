@@ -145,12 +145,14 @@ Conditions:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
     !Equals [!Ref ExistingConfigDeliveryChannelName, '']
-  CreateConfigRecorder: !Equals [!Ref ExistingConfigRecorderName, 'use-existing']
+  CreateConfigRecorder:
+    !Equals [!Ref ExistingConfigRecorderName, 'use-existing']
   CreateConfigDeliveryChannelAndRecorder:
     !And [
       !Condition CreateConfigDeliveryChannel,
       !Condition CreateConfigRecorder,
     ]
+  CreateConfigRules: !Condition CreateConfigDeliveryChannelAndRecorder
   HasValidCertificateArn:
     !And [
       !Not [!Equals [!Ref CertificateArn, '']],
@@ -692,6 +694,7 @@ Resources:
   # Config Rules for Security Group Monitoring and EBS Encryption
   SecurityGroupConfigRule:
     Type: AWS::Config::ConfigRule
+    Condition: CreateConfigRules
     Properties:
       ConfigRuleName: !Sub 'security-group-ssh-check-${Environment}'
       Description: 'Checks whether security groups allow unrestricted incoming SSH traffic'
@@ -704,6 +707,7 @@ Resources:
 
   EBSEncryptionConfigRule:
     Type: AWS::Config::ConfigRule
+    Condition: CreateConfigRules
     Properties:
       ConfigRuleName: !Sub 'ebs-encryption-by-default-${Environment}'
       Description: 'Checks whether EBS encryption is enabled by default for the account'

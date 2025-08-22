@@ -299,6 +299,9 @@
                 }
             ]
         },
+        "CreateConfigRules": {
+            "Condition": "CreateConfigDeliveryChannelAndRecorder"
+        },
         "HasValidCertificateArn": {
             "Fn::And": [
                 {
@@ -1277,6 +1280,7 @@
         },
         "SecurityGroupConfigRule": {
             "Type": "AWS::Config::ConfigRule",
+            "Condition": "CreateConfigRules",
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "security-group-ssh-check-${Environment}"
@@ -1295,6 +1299,7 @@
         },
         "EBSEncryptionConfigRule": {
             "Type": "AWS::Config::ConfigRule",
+            "Condition": "CreateConfigRules",
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "ebs-encryption-by-default-${Environment}"
