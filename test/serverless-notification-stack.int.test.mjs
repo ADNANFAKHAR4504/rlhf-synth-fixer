@@ -1,17 +1,22 @@
 // Serverless Notification Service Integration Tests
 // Tests the complete workflow using real AWS deployment outputs
-import AWS from 'aws-sdk';
+import { LambdaClient, InvokeCommand, GetFunctionConfigurationCommand } from '@aws-sdk/client-lambda';
+import { S3Client, HeadBucketCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetObjectCommand, GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand, PutObjectCommand, DeleteObjectCommand, ListObjectVersionsCommand, GetBucketTaggingCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { SNSClient, GetTopicAttributesCommand, PublishCommand, ListTagsForResourceCommand } from '@aws-sdk/client-sns';
+import { IAMClient, SimulatePrincipalPolicyCommand, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand, GetRoleCommand } from '@aws-sdk/client-iam';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeLogStreamsCommand, FilterLogEventsCommand, GetLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 // AWS SDK Configuration
 const region = process.env.AWS_REGION || 'us-east-1';
-AWS.config.update({ region });
+const config = { region };
 
-const lambda = new AWS.Lambda();
-const s3 = new AWS.S3();
-const sns = new AWS.SNS();
-const iam = new AWS.IAM();
+const lambda = new LambdaClient(config);
+const s3 = new S3Client(config);
+const sns = new SNSClient(config);
+const iam = new IAMClient(config);
+const cloudwatchLogs = new CloudWatchLogsClient(config);
 
 // Load deployment outputs
 let outputs = {};
@@ -68,22 +73,16 @@ describe('Serverless Notification Service - Integration Tests', () => {
       'validates all required AWS resources exist',
       async () => {
         // Test S3 bucket exists and is accessible
-        const bucketHeadResponse = await s3
-          .headBucket({ Bucket: bucketName })
-          .promise();
+        const bucketHeadResponse = await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
         expect(bucketHeadResponse).toBeDefined();
 
         // Test SNS topic exists and is accessible
-        const topicAttributes = await sns
-          .getTopicAttributes({ TopicArn: topicArn })
-          .promise();
+        const topicAttributes = await sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
         expect(topicAttributes.Attributes).toBeDefined();
         expect(topicAttributes.Attributes.TopicArn).toBe(topicArn);
 
         // Test Lambda function exists and is accessible
-        const functionConfig = await lambda
-          .getFunctionConfiguration({ FunctionName: functionName })
-          .promise();
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: functionName }));
         expect(functionConfig.FunctionArn).toBe(functionArn);
         expect(functionConfig.Runtime).toBe('python3.11');
       },
@@ -94,9 +93,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
       'validates S3 bucket security configuration',
       async () => {
         // Check bucket public access block configuration
-        const publicAccessBlock = await s3
-          .getPublicAccessBlock({ Bucket: bucketName })
-          .promise();
+        const publicAccessBlock = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucketName }));
         expect(
           publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls
         ).toBe(true);
@@ -111,9 +108,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
         ).toBe(true);
 
         // Check bucket encryption
-        const encryption = await s3
-          .getBucketEncryption({ Bucket: bucketName })
-          .promise();
+        const encryption = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
         expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(
           1
         );
@@ -123,9 +118,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
         ).toBe('AES256');
 
         // Check bucket versioning
-        const versioning = await s3
-          .getBucketVersioning({ Bucket: bucketName })
-          .promise();
+        const versioning = await s3.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
         expect(versioning.Status).toBe('Enabled');
       },
       AWS_TIMEOUT
@@ -134,9 +127,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
     test(
       'validates Lambda function configuration and environment',
       async () => {
-        const functionConfig = await lambda
-          .getFunctionConfiguration({ FunctionName: functionName })
-          .promise();
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: functionName }));
 
         // Validate function configuration
         expect(functionConfig.Timeout).toBe(300);
@@ -165,21 +156,15 @@ describe('Serverless Notification Service - Integration Tests', () => {
     test(
       'validates Lambda function has correct IAM permissions',
       async () => {
-        const functionConfig = await lambda
-          .getFunctionConfiguration({ FunctionName: functionName })
-          .promise();
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: functionName }));
         const roleArn = functionConfig.Role;
 
         // Extract role name from ARN
         const roleName = roleArn.split('/').pop();
 
         // Get attached policies
-        const attachedPolicies = await iam
-          .listAttachedRolePolicies({ RoleName: roleName })
-          .promise();
-        const inlinePolicies = await iam
-          .listRolePolicies({ RoleName: roleName })
-          .promise();
+        const attachedPolicies = await iam.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+        const inlinePolicies = await iam.send(new ListRolePoliciesCommand({ RoleName: roleName }));
 
         // Should have at least one policy attached (service role + custom permissions)
         expect(
@@ -201,14 +186,12 @@ describe('Serverless Notification Service - Integration Tests', () => {
     test(
       'validates Lambda can assume its execution role',
       async () => {
-        const functionConfig = await lambda
-          .getFunctionConfiguration({ FunctionName: functionName })
-          .promise();
+        const functionConfig = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: functionName }));
         const roleArn = functionConfig.Role;
         const roleName = roleArn.split('/').pop();
 
         // Get role assume role policy
-        const role = await iam.getRole({ RoleName: roleName }).promise();
+        const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
         const assumeRolePolicy = JSON.parse(
           decodeURIComponent(role.Role.AssumeRolePolicyDocument)
         );
@@ -242,19 +225,18 @@ describe('Serverless Notification Service - Integration Tests', () => {
         };
 
         // Step 1: Invoke Lambda function
-        const invocationResult = await lambda
-          .invoke({
-            FunctionName: functionName,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(testPayload),
-          })
-          .promise();
+        const invocationResult = await lambda.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'RequestResponse',
+          Payload: JSON.stringify(testPayload),
+        }));
 
         // Validate Lambda execution succeeded
         expect(invocationResult.StatusCode).toBe(200);
         expect(invocationResult.FunctionError).toBeUndefined();
 
-        const response = JSON.parse(invocationResult.Payload);
+        const payloadString = new TextDecoder().decode(invocationResult.Payload);
+        const response = JSON.parse(payloadString);
         expect(response.statusCode).toBe(200);
 
         const responseBody = JSON.parse(response.body);
@@ -266,14 +248,13 @@ describe('Serverless Notification Service - Integration Tests', () => {
         const s3Key = responseBody.s3Key;
         await new Promise(resolve => setTimeout(resolve, 2000)); // Small delay for eventual consistency
 
-        const s3Object = await s3
-          .getObject({
-            Bucket: bucketName,
-            Key: s3Key,
-          })
-          .promise();
+        const s3Object = await s3.send(new GetObjectCommand({
+          Bucket: bucketName,
+          Key: s3Key,
+        }));
 
-        const s3Data = JSON.parse(s3Object.Body.toString());
+        const s3BodyString = await s3Object.Body.transformToString();
+        const s3Data = JSON.parse(s3BodyString);
         expect(s3Data.taskId).toBe(responseBody.taskId);
         expect(s3Data.status).toBe('completed');
         expect(s3Data.inputData).toEqual(testPayload.taskData);
@@ -285,25 +266,21 @@ describe('Serverless Notification Service - Integration Tests', () => {
         expect(s3Object.Metadata.status).toBe('completed');
 
         // Step 3: Verify SNS notification was sent (check CloudWatch logs)
-        const logStreams = await new AWS.CloudWatchLogs()
-          .describeLogStreams({
-            logGroupName: `/aws/lambda/${functionName}`,
-            orderBy: 'LastEventTime',
-            descending: true,
-            limit: 5,
-          })
-          .promise();
+        const logStreams = await cloudwatchLogs.send(new DescribeLogStreamsCommand({
+          logGroupName: `/aws/lambda/${functionName}`,
+          orderBy: 'LastEventTime',
+          descending: true,
+          limit: 5,
+        }));
 
         // Verify log streams exist (indicates function was invoked)
         if (logStreams.logStreams.length > 0) {
           const recentLogStream = logStreams.logStreams[0];
-          const logEvents = await new AWS.CloudWatchLogs()
-            .getLogEvents({
-              logGroupName: `/aws/lambda/${functionName}`,
-              logStreamName: recentLogStream.logStreamName,
-              startTime: Date.now() - 300000, // Last 5 minutes
-            })
-            .promise();
+          const logEvents = await cloudwatchLogs.send(new GetLogEventsCommand({
+            logGroupName: `/aws/lambda/${functionName}`,
+            logStreamName: recentLogStream.logStreamName,
+            startTime: Date.now() - 300000, // Last 5 minutes
+          }));
 
           // Check for SNS publish in logs (optional - may not always be present in recent logs)
           const snsPublishLog = logEvents.events.find(
@@ -333,18 +310,17 @@ describe('Serverless Notification Service - Integration Tests', () => {
         };
 
         // Invoke Lambda with invalid payload
-        const invocationResult = await lambda
-          .invoke({
-            FunctionName: functionName,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(invalidPayload),
-          })
-          .promise();
+        const invocationResult = await lambda.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'RequestResponse',
+          Payload: JSON.stringify(invalidPayload),
+        }));
 
         // Lambda should handle the error gracefully
         expect(invocationResult.StatusCode).toBe(200);
 
-        const response = JSON.parse(invocationResult.Payload);
+        const payloadString = new TextDecoder().decode(invocationResult.Payload);
+        const response = JSON.parse(payloadString);
 
         // Should return error response but not crash
         if (response.statusCode === 500) {
@@ -367,54 +343,46 @@ describe('Serverless Notification Service - Integration Tests', () => {
 
         // Upload test object
         await s3
-          .putObject({
+          .send(new PutObjectCommand({
             Bucket: bucketName,
             Key: testKey,
             Body: JSON.stringify(testData),
             ContentType: 'application/json',
-          })
-          .promise();
+          }));
 
         // Upload second version of same object
         const updatedData = { ...testData, version: 2 };
-        await s3
-          .putObject({
-            Bucket: bucketName,
-            Key: testKey,
-            Body: JSON.stringify(updatedData),
-            ContentType: 'application/json',
-          })
-          .promise();
+        await s3.send(new PutObjectCommand({
+          Bucket: bucketName,
+          Key: testKey,
+          Body: JSON.stringify(updatedData),
+          ContentType: 'application/json',
+        }));
 
         // List object versions
-        const versions = await s3
-          .listObjectVersions({
-            Bucket: bucketName,
-            Prefix: testKey,
-          })
-          .promise();
+        const versions = await s3.send(new ListObjectVersionsCommand({
+          Bucket: bucketName,
+          Prefix: testKey,
+        }));
 
         // Should have 2 versions due to versioning being enabled
         expect(versions.Versions.length).toBe(2);
 
         // Get current version should return latest data
-        const currentObject = await s3
-          .getObject({
-            Bucket: bucketName,
-            Key: testKey,
-          })
-          .promise();
+        const currentObject = await s3.send(new GetObjectCommand({
+          Bucket: bucketName,
+          Key: testKey,
+        }));
 
-        const currentData = JSON.parse(currentObject.Body.toString());
+        const currentBodyString = await currentObject.Body.transformToString();
+        const currentData = JSON.parse(currentBodyString);
         expect(currentData.version).toBe(2);
 
         // Cleanup test object
-        await s3
-          .deleteObject({
-            Bucket: bucketName,
-            Key: testKey,
-          })
-          .promise();
+        await s3.send(new DeleteObjectCommand({
+          Bucket: bucketName,
+          Key: testKey,
+        }));
       },
       AWS_TIMEOUT
     );
@@ -433,27 +401,24 @@ describe('Serverless Notification Service - Integration Tests', () => {
           },
         };
 
-        const invocationResult = await lambda
-          .invoke({
-            FunctionName: functionName,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(testPayload),
-          })
-          .promise();
+        const invocationResult = await lambda.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'RequestResponse',
+          Payload: JSON.stringify(testPayload),
+        }));
 
         expect(invocationResult.StatusCode).toBe(200);
-        const response = JSON.parse(invocationResult.Payload);
+        const payloadString = new TextDecoder().decode(invocationResult.Payload);
+        const response = JSON.parse(payloadString);
         expect(response.statusCode).toBe(200);
 
         const responseBody = JSON.parse(response.body);
 
         // Verify S3 object exists
-        const s3Object = await s3
-          .headObject({
-            Bucket: bucketName,
-            Key: responseBody.s3Key,
-          })
-          .promise();
+        const s3Object = await s3.send(new HeadObjectCommand({
+          Bucket: bucketName,
+          Key: responseBody.s3Key,
+        }));
 
         expect(s3Object).toBeDefined();
         expect(s3Object.ContentLength).toBeGreaterThan(0);
@@ -471,16 +436,15 @@ describe('Serverless Notification Service - Integration Tests', () => {
           },
         };
 
-        const invocationResult = await lambda
-          .invoke({
-            FunctionName: functionName,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(testPayload),
-          })
-          .promise();
+        const invocationResult = await lambda.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'RequestResponse',
+          Payload: JSON.stringify(testPayload),
+        }));
 
         expect(invocationResult.StatusCode).toBe(200);
-        const response = JSON.parse(invocationResult.Payload);
+        const payloadString = new TextDecoder().decode(invocationResult.Payload);
+        const response = JSON.parse(payloadString);
         expect(response.statusCode).toBe(200);
 
         const responseBody = JSON.parse(response.body);
@@ -496,9 +460,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
       'validates resource tagging and governance',
       async () => {
         // Check S3 bucket tags
-        const bucketTags = await s3
-          .getBucketTagging({ Bucket: bucketName })
-          .promise();
+        const bucketTags = await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }));
         const tagSet = bucketTags.TagSet;
 
         const environmentTag = tagSet.find(tag => tag.Key === 'Environment');
@@ -510,9 +472,7 @@ describe('Serverless Notification Service - Integration Tests', () => {
         expect(departmentTag.Value).toBe('IT');
 
         // Check SNS topic tags
-        const topicTags = await sns
-          .listTagsForResource({ ResourceArn: topicArn })
-          .promise();
+        const topicTags = await sns.send(new ListTagsForResourceCommand({ ResourceArn: topicArn }));
         const snsTagMap = topicTags.Tags.reduce(
           (acc, tag) => ({ ...acc, [tag.Key]: tag.Value }),
           {}
@@ -538,13 +498,11 @@ describe('Serverless Notification Service - Integration Tests', () => {
             },
           };
 
-          return lambda
-            .invoke({
-              FunctionName: functionName,
-              InvocationType: 'RequestResponse',
-              Payload: JSON.stringify(testPayload),
-            })
-            .promise();
+          return lambda.send(new InvokeCommand({
+            FunctionName: functionName,
+            InvocationType: 'RequestResponse',
+            Payload: JSON.stringify(testPayload),
+          }));
         });
 
         const results = await Promise.all(concurrentInvocations);
@@ -554,7 +512,8 @@ describe('Serverless Notification Service - Integration Tests', () => {
           expect(result.StatusCode).toBe(200);
           expect(result.FunctionError).toBeUndefined();
 
-          const response = JSON.parse(result.Payload);
+          const payloadString = new TextDecoder().decode(result.Payload);
+          const response = JSON.parse(payloadString);
           expect(response.statusCode).toBe(200);
 
           const responseBody = JSON.parse(response.body);
@@ -565,7 +524,8 @@ describe('Serverless Notification Service - Integration Tests', () => {
 
         // Verify all S3 objects were created
         const s3Keys = results.map(result => {
-          const response = JSON.parse(result.Payload);
+          const payloadString = new TextDecoder().decode(result.Payload);
+          const response = JSON.parse(payloadString);
           const responseBody = JSON.parse(response.body);
           return responseBody.s3Key;
         });
@@ -573,12 +533,10 @@ describe('Serverless Notification Service - Integration Tests', () => {
         await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for eventual consistency
 
         for (const s3Key of s3Keys) {
-          const s3Object = await s3
-            .headObject({
-              Bucket: bucketName,
-              Key: s3Key,
-            })
-            .promise();
+          const s3Object = await s3.send(new HeadObjectCommand({
+            Bucket: bucketName,
+            Key: s3Key,
+          }));
           expect(s3Object).toBeDefined();
         }
       },
@@ -605,17 +563,16 @@ describe('Serverless Notification Service - Integration Tests', () => {
         };
 
         const startTime = Date.now();
-        const invocationResult = await lambda
-          .invoke({
-            FunctionName: functionName,
-            InvocationType: 'RequestResponse',
-            Payload: JSON.stringify(largePayload),
-          })
-          .promise();
+        const invocationResult = await lambda.send(new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: 'RequestResponse',
+          Payload: JSON.stringify(largePayload),
+        }));
         const endTime = Date.now();
 
         expect(invocationResult.StatusCode).toBe(200);
-        const response = JSON.parse(invocationResult.Payload);
+        const payloadString = new TextDecoder().decode(invocationResult.Payload);
+        const response = JSON.parse(payloadString);
         expect(response.statusCode).toBe(200);
 
         const responseBody = JSON.parse(response.body);
@@ -623,14 +580,13 @@ describe('Serverless Notification Service - Integration Tests', () => {
 
         // Verify S3 object contains all data
         await new Promise(resolve => setTimeout(resolve, 2000));
-        const s3Object = await s3
-          .getObject({
-            Bucket: bucketName,
-            Key: responseBody.s3Key,
-          })
-          .promise();
+        const s3Object = await s3.send(new GetObjectCommand({
+          Bucket: bucketName,
+          Key: responseBody.s3Key,
+        }));
 
-        const s3Data = JSON.parse(s3Object.Body.toString());
+        const s3BodyString = await s3Object.Body.transformToString();
+        const s3Data = JSON.parse(s3BodyString);
         expect(s3Data.result.processedItems).toBe(100);
         expect(s3Data.inputData.items).toHaveLength(100);
 
