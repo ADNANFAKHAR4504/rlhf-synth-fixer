@@ -1,0 +1,40 @@
+{
+  "task_id": "trainr946",
+  "problem_id": "cloud-environment-setup_CloudFormation_YAML_k3h8srv5uyct",
+  "difficulty": "hard",
+  "platform": "cfn",
+  "language": "yaml",
+  "subject": "Cloud Environment Setup",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Security Configuration",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP"
+  ],
+  "complexity": "hard",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "turn_type": "single",
+  "po_id": "trainr946",
+  "team": "synth",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

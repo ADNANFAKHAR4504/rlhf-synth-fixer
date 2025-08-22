@@ -158,9 +158,9 @@ locals {
   # - lowercase
   # - replace underscores/spaces with hyphens
   # - truncate to 63 chars
-  bucket_name_raw   = lower(trimspace(var.bucket_name))
-  bucket_name_step1 = replace(replace(local.bucket_name_raw, "_", "-"), " ", "-")
-  bucket_base_name  = length(local.bucket_name_step1) > 0 ? local.bucket_name_step1 : "${local.name_prefix}-app-bucket"
+  bucket_name_raw       = lower(trimspace(var.bucket_name))
+  bucket_name_step1     = replace(replace(local.bucket_name_raw, "_", "-"), " ", "-")
+  bucket_base_name      = length(local.bucket_name_step1) > 0 ? local.bucket_name_step1 : "${local.name_prefix}-app-bucket"
   effective_bucket_name = substr(local.bucket_base_name, 0, 63)
 
   common_tags = {
@@ -337,7 +337,7 @@ resource "aws_security_group" "instance" {
 # - dev   -> first PUBLIC subnet, public IP
 # - nondev-> first PRIVATE subnet, NO public IP (egress via NAT)
 locals {
-  public_subnet_ids  = [for k in sort(keys(aws_subnet.public))  : aws_subnet.public[k].id]
+  public_subnet_ids  = [for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id]
   private_subnet_ids = [for k in sort(keys(aws_subnet.private)) : aws_subnet.private[k].id]
   instance_subnet_id = local.is_dev ? element(local.public_subnet_ids, 0) : element(local.private_subnet_ids, 0)
 }
