@@ -14,6 +14,10 @@ import pulumi
 from pulumi import Config, ResourceOptions
 from lib.tap_stack import TapStack, TapStackArgs
 
+# Disable Pulumi config encryption for CI/CD compatibility
+if not os.environ.get('PULUMI_CONFIG_PASSPHRASE'):
+    os.environ['PULUMI_CONFIG_PASSPHRASE'] = ''
+
 # Initialize Pulumi configuration
 config = Config()
 
