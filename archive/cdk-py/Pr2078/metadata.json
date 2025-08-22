@@ -11,7 +11,7 @@
     "Security Configuration",
     "IAM Access Control",
     "Network Security",
-    "Database Management", 
+    "Database Management",
     "Storage Security",
     "Audit Logging",
     "Resource Encryption",
@@ -31,5 +31,11 @@
     "CloudTrail",
     "GuardDuty",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
