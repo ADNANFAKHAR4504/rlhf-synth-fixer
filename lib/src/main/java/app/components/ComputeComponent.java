@@ -8,6 +8,8 @@ import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
 
+import com.pulumi.tls.PrivateKey;
+import com.pulumi.tls.PrivateKeyArgs;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +30,15 @@ public class ComputeComponent extends ComponentResource {
                             IamComponent iam, String region, ComponentResourceOptions opts) {
         super("custom:infrastructure:ComputeComponent", name, opts);
 
+        var genKey = new PrivateKey("compute-private-key", PrivateKeyArgs.builder()
+                .algorithm("RSA")
+                .rsaBits(4096)
+                .build());
+
         // Create key pair for secure SSH access
         this.keyPair = new KeyPair(name + "-key-pair", KeyPairArgs.builder()
                 .keyName(name + "-secure-key")
+                .publicKey(genKey.publicKeyOpenssh())
                 .tags(getTags(name + "-key-pair", "KeyPair", Map.of()))
                 .build(), CustomResourceOptions.builder().parent(this).build());
 
