@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr129cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-22T22:12:51+05:30",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "AWS Lambda Functions",
+    "S3 Event Processing",
+    "API Gateway Configuration",
+    "IAM Security Policies",
+    "Dead Letter Queues",
+    "CloudWatch Monitoring",
+    "Infrastructure as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon S3",
+    "API Gateway",
+    "IAM",
+    "SQS",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

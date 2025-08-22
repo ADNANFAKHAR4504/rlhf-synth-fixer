@@ -169,7 +169,7 @@
     "@aws-sdk/client-acm": "^3.856.0",
     "@aws-sdk/client-cloudtrail": "^3.859.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.865.0",
-    "@aws-sdk/client-elastic-load-balancing-v2": "^3.864.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.873.0",
     "@aws-sdk/client-sqs": "^3.855.0",
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",

@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291274",
+  "team": "1",
+  "startedAt": "2025-08-20T18:36:13.085Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control",
+    "Web Application Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "ALB",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Auto Scaling",
+    "SNS",
+    "Route53"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ngwakoleslieelijah",
+  "dockerS3Location": ""
+}
