@@ -50,10 +50,7 @@ Parameters:
     Default: 'admin@example.com'
 
 Resources:
-  # ========================================
-  # NETWORK INFRASTRUCTURE
-  # ========================================
-  
+  # VPC and Network Infrastructure
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -90,8 +87,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Public-Subnet-AZ1'
-        - Key: Type
-          Value: 'Public'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -103,8 +98,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Public-Subnet-AZ2'
-        - Key: Type
-          Value: 'Public'
 
   # Private Subnets for RDS
   PrivateSubnet1:
@@ -116,8 +109,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Private-Subnet-AZ1'
-        - Key: Type
-          Value: 'Private'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -128,8 +119,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Private-Subnet-AZ2'
-        - Key: Type
-          Value: 'Private'
 
   # Route Tables
   PublicRouteTable:
@@ -180,10 +169,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
 
-  # ========================================
-  # SECURITY GROUPS
-  # ========================================
-
+  # Security Groups
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -236,10 +222,7 @@ Resources:
         - Key: Security
           Value: 'Private'
 
-  # ========================================
-  # IAM ROLES AND POLICIES
-  # ========================================
-
+  # IAM Roles and Policies
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -284,10 +267,7 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # ========================================
-  # S3 BUCKETS WITH ENCRYPTION
-  # ========================================
-
+  # S3 Buckets with Encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     DependsOn: SecurityAlertsTopicPolicy
@@ -348,6 +328,7 @@ Resources:
         - Key: Purpose
           Value: 'AccessLogs'
 
+  # S3 Bucket Policy for Secure Bucket
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -374,10 +355,7 @@ Resources:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
 
-  # ========================================
-  # SECRETS MANAGER
-  # ========================================
-
+  # Secrets Manager Secret for RDS Password
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -389,10 +367,7 @@ Resources:
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
 
-  # ========================================
-  # RDS DATABASE
-  # ========================================
-
+  # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -405,6 +380,7 @@ Resources:
         - Key: Name
           Value: !Sub '${AWS::StackName}-DBSubnetGroup'
 
+  # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -434,6 +410,7 @@ Resources:
         - Key: Security
           Value: 'Encrypted-Private'
 
+  # RDS Monitoring Role
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
@@ -448,10 +425,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
 
-  # ========================================
-  # MONITORING AND ALERTING
-  # ========================================
-
+  # SNS Topic for Security Alerts
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -485,11 +459,18 @@ Resources:
       Protocol: email
       Endpoint: !Ref NotificationEmail
 
+  # CloudWatch Log Group for Security Events
   SecurityLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/security/${AWS::StackName}'
       RetentionInDays: 365
+
+  # Note: GuardDuty detector removed as it can only be created once per account/region
+  # Use AWS Config rules for compliance monitoring instead
+
+  # Note: AWS Config components removed as account already has Config setup
+  # The security monitoring is handled through CloudWatch logs and SNS alerts
 
 Outputs:
   VPCId:
