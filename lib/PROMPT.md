@@ -24,7 +24,7 @@ We need to build a secure, production-ready AWS infrastructure using Terraform. 
 
 ## Regional Setup
 
-Deploy everything in **us-west-2** region. This gives us good availability zones and keeps latency low for West Coast users.
+Deploy everything in **eu-west-3** region.
 
 ## Security Standards
 
