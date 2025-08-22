@@ -1,7 +1,7 @@
 # Terraform configuration for High Availability Web Application
 # This configuration creates a production-ready infrastructure on AWS
 
-```markdown
+```hcl
 ########################
 # Variables
 ########################
