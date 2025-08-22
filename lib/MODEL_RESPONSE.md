@@ -1,29 +1,4 @@
-I'll help you build a robust, production-ready CDK solution for multi-region IAM management with strict security practices. Let me break this down into a comprehensive approach.
 
-## Project Structure
-
-First, let's establish a proper project structure:
-
-```
-iam-management/
-├── bin/
-│   └── iam-app.ts
-├── lib/
-│   ├── constructs/
-│   │   ├── secure-iam-role.ts
-│   │   └── rollback-protection.ts
-│   ├── stacks/
-│   │   ├── iam-base-stack.ts
-│   │   └── iam-regional-stack.ts
-│   └── config/
-│       ├── environments.ts
-│       └── policies.ts
-├── test/
-│   ├── unit/
-│   └── integration/
-├── scripts/
-│   └── validate-templates.sh
-└── cdk.json
 ```
 
 ## Core Implementation
@@ -630,21 +605,3 @@ npx cdk deploy --all --require-approval broadening --rollback
 npx cdk deploy TestStack --parameters FailureSimulation=true
 ```
 
-## Key Security Considerations
-
-1. **Least Privilege Enforcement**: The `SecureIamRole` construct validates policies and prevents wildcard resources
-2. **Condition-Based Access**: All roles include conditions for region, IP, and MFA requirements
-3. **Rollback Protection**: Automatic rollback triggers prevent failed deployments from leaving resources in inconsistent states
-4. **Deletion Protection**: MFA requirements for role deletion operations
-5. **Monitoring**: CloudWatch alarms trigger rollbacks and notifications
-
-## Testing Rollback Scenarios
-
-For safe rollback testing:
-
-1. **Use separate test stacks** with similar configuration
-2. **Simulate failures** by introducing intentional errors
-3. **Monitor CloudWatch** alarms and SNS notifications
-4. **Verify cleanup** after rollback completion
-
-This architecture provides production-ready, secure, multi-region IAM management with comprehensive rollback protection while maintaining strict least-privilege principles.
