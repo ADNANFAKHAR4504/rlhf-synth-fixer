@@ -1,4 +1,9 @@
 import {
+  DescribeContinuousBackupsCommand,
+  DescribeTableCommand,
+  DynamoDBClient
+} from "@aws-sdk/client-dynamodb";
+import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
@@ -12,6 +17,14 @@ import {
   ElasticLoadBalancingV2Client,
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
+  DescribeKeyCommand,
+  KMSClient
+} from "@aws-sdk/client-kms";
+import {
+  GetFunctionCommand,
+  LambdaClient
+} from "@aws-sdk/client-lambda";
+import {
   DescribeDBInstancesCommand,
   RDSClient,
 } from "@aws-sdk/client-rds";
@@ -24,6 +37,10 @@ import {
 import {
   SecretsManagerClient
 } from "@aws-sdk/client-secrets-manager";
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from "@aws-sdk/client-sns";
 import fs from "fs";
 
 const region =
@@ -34,6 +51,10 @@ const s3 = new S3Client({ region });
 const rds = new RDSClient({ region });
 const elbv2 = new ElasticLoadBalancingV2Client({ region });
 const secrets = new SecretsManagerClient({ region });
+const dynamodb = new DynamoDBClient({ region });
+const lambda = new LambdaClient({ region });
+const sns = new SNSClient({ region });
+const kms = new KMSClient({ region });
 
 // Load CloudFormation flat outputs
 const outputs: Record<string, string> = JSON.parse(
@@ -43,7 +64,15 @@ const outputs: Record<string, string> = JSON.parse(
 describe("YourTemplate Infrastructure Integration Tests", () => {
   describe("CloudFormation Outputs", () => {
     test("should have required stack outputs", () => {
-      const keys = ["VpcId", "ALBEndpoint", "S3Bucket", "RDSInstanceEndpoint"];
+      const keys = [
+        "VpcId",
+        "ALBEndpoint",
+        "S3Bucket",
+        "RDSInstanceEndpoint",
+        "DynamoDBTableName",
+        "LambdaName",
+        "SNSTopic"
+      ];
       keys.forEach((key) => {
         expect(outputs[key]).toBeDefined();
         expect(outputs[key]).not.toBe("");
@@ -166,8 +195,46 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
     });
   });
 
+  describe("DynamoDB", () => {
+    test("DynamoDB table should exist with PITR enabled", async () => {
+      const tableName = outputs.DynamoDBTableName;
+      const res = await dynamodb.send(
+        new DescribeTableCommand({ TableName: tableName })
+      );
+      expect(res.Table?.TableName).toBe(tableName);
+
+      const pitrRes = await dynamodb.send(
+        new DescribeContinuousBackupsCommand({ TableName: tableName })
+      );
+      expect(pitrRes.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
+    });
+  });
+
+  describe("Lambda", () => {
+    test("Lambda function should exist and be configured with VPC", async () => {
+      const fnName = outputs.LambdaName;
+      const res = await lambda.send(new GetFunctionCommand({ FunctionName: fnName }));
+      expect(res.Configuration?.FunctionName).toBe(fnName);
+      expect(res.Configuration?.Runtime).toContain("python3.9");
+      expect(res.Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("SNS", () => {
+    test("SNS Topic should exist and be encrypted with KMS", async () => {
+      const topicArn = outputs.SNSTopic;
+      const res = await sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
+      expect(res.Attributes?.KmsMasterKeyId).toBeDefined();
+
+      const keyId = res.Attributes?.KmsMasterKeyId;
+      const keyRes = await kms.send(new DescribeKeyCommand({ KeyId: keyId! }));
+      expect(keyRes.KeyMetadata?.KeyId).toBeDefined();
+      expect(keyRes.KeyMetadata?.KeyState).toBe("Enabled");
+    });
+  });
+
   describe("Security Groups", () => {
-    test("should have ALB, EC2, and RDS security groups with expected rules", async () => {
+    test("should have ALB, EC2, RDS, and Lambda security groups with expected rules", async () => {
       const res = await ec2.send(
         new DescribeSecurityGroupsCommand({
           Filters: [{ Name: "vpc-id", Values: [outputs.VpcId] }],
@@ -184,10 +251,14 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       const rdsSG = sgs.find((sg: any) =>
         (sg.GroupName || "").includes("RDSSecurityGroup")
       );
+      const lambdaSG = sgs.find((sg: any) =>
+        (sg.GroupName || "").includes("LambdaSecurityGroup")
+      );
 
       expect(albSG).toBeDefined();
       expect(ec2SG).toBeDefined();
       expect(rdsSG).toBeDefined();
+      expect(lambdaSG).toBeDefined();
 
       const albIngress = albSG!.IpPermissions || [];
       const httpsRule = albIngress.find(
@@ -200,6 +271,12 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
         (r: any) => r.FromPort === 3306 && r.ToPort === 3306
       );
       expect(mysqlRule).toBeDefined();
+
+      const lambdaIngress = lambdaSG!.IpPermissions || [];
+      const allTrafficRule = lambdaIngress.find(
+        (r: any) => r.IpProtocol === "-1"
+      );
+      expect(allTrafficRule).toBeDefined();
     });
   });
 });

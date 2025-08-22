@@ -4,7 +4,7 @@ Here's the complete secure_infrastructure.yml CloudFormation template that meets
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM)'
+Description: 'Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM, Lambda, DynamoDB, SNS)'
 
 Parameters:
   Environment:
@@ -173,7 +173,16 @@ Resources:
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
 
-  ### IAM Roles (no explicit names → no CAPABILITY_NAMED_IAM) ###
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Lambda inside VPC
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 10.0.0.0/16
+
+  ### IAM Roles ###
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -210,6 +219,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
         - PolicyName: lambda-s3-logs
           PolicyDocument:
@@ -237,7 +247,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 (example, update as needed)
+      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds: [!Ref EC2SecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -280,7 +290,7 @@ Resources:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: "\"@/'"
         PasswordLength: 16
 
   ### RDS Database ###
@@ -303,6 +313,75 @@ Resources:
       DBSubnetGroupDescription: Subnet group for RDS
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
 
+  EC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm if EC2 CPU exceeds 70%"
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref EC2Instance
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref NotificationTopic]
+
+  ### --- NEW: Encrypted SNS Topic --- ###
+  NotificationKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for SNS encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: !Ref NotificationKey
+      Subscription: [] # Add email subscriptions later if needed
+
+  ### --- NEW: Lambda Function in VPC --- ###
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-lambda'
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      VpcConfig:
+        SecurityGroupIds: [!Ref LambdaSecurityGroup]
+        SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("Hello from Lambda in VPC")
+
+  ### --- NEW: DynamoDB with PITR --- ###
+  MyDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-dynamodb'
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
 Outputs:
   VpcId:
     Value: !Ref VPC
@@ -312,6 +391,12 @@ Outputs:
     Value: !Ref SecureLogsBucket
   RDSInstanceEndpoint:
     Value: !GetAtt RDSInstance.Endpoint.Address
+  DynamoDBTableName:
+    Value: !Ref MyDynamoTable
+  LambdaName:
+    Value: !Ref MyLambdaFunction
+  SNSTopic:
+    Value: !Ref NotificationTopic
 
 ```
 

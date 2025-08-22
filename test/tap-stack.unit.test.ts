@@ -89,12 +89,19 @@ describe("TapStack CloudFormation Template", () => {
       expect(sgRDS.Properties.SecurityGroupIngress[0].FromPort).toBe(3306);
     });
 
+    test("should define LambdaSecurityGroup allowing internal VPC traffic", () => {
+      const sgLambda = template.Resources.LambdaSecurityGroup;
+      expect(sgLambda).toBeDefined();
+      expect(sgLambda.Type).toBe("AWS::EC2::SecurityGroup");
+      expect(sgLambda.Properties.SecurityGroupIngress[0].CidrIp).toBe("10.0.0.0/16");
+    });
+
     test("should define IAM Role and InstanceProfile", () => {
       const role = template.Resources.EC2InstanceRole;
       const profile = template.Resources.EC2InstanceProfile;
       expect(role).toBeDefined();
       expect(profile).toBeDefined();
-      expect(profile.Properties.Roles).toContainEqual({Ref: "EC2InstanceRole"});
+      expect(profile.Properties.Roles).toContainEqual({ Ref: "EC2InstanceRole" });
     });
 
     test("should define LambdaExecutionRole with basic execution policy", () => {
@@ -143,11 +150,44 @@ describe("TapStack CloudFormation Template", () => {
       expect(rds.UpdateReplacePolicy).toBe("Snapshot");
       expect(subnetGroup.Type).toBe("AWS::RDS::DBSubnetGroup");
     });
+
+    test("should define KMS key and encrypted SNS Topic", () => {
+      const key = template.Resources.NotificationKey;
+      const topic = template.Resources.NotificationTopic;
+      expect(key).toBeDefined();
+      expect(key.Type).toBe("AWS::KMS::Key");
+      expect(topic).toBeDefined();
+      expect(topic.Type).toBe("AWS::SNS::Topic");
+      expect(topic.Properties.KmsMasterKeyId).toBeDefined();
+    });
+
+    test("should define Lambda function in VPC", () => {
+      const fn = template.Resources.MyLambdaFunction;
+      expect(fn).toBeDefined();
+      expect(fn.Type).toBe("AWS::Lambda::Function");
+      expect(fn.Properties.VpcConfig).toBeDefined();
+      expect(fn.Properties.Runtime).toBe("python3.9");
+    });
+
+    test("should define DynamoDB table with PITR enabled", () => {
+      const table = template.Resources.MyDynamoTable;
+      expect(table).toBeDefined();
+      expect(table.Type).toBe("AWS::DynamoDB::Table");
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
   });
 
   describe("Outputs", () => {
     test("should define all key outputs", () => {
-      const expected = ["VpcId", "ALBEndpoint", "S3Bucket", "RDSInstanceEndpoint"];
+      const expected = [
+        "VpcId",
+        "ALBEndpoint",
+        "S3Bucket",
+        "RDSInstanceEndpoint",
+        "DynamoDBTableName",
+        "LambdaName",
+        "SNSTopic"
+      ];
       expected.forEach(key => expect(template.Outputs[key]).toBeDefined());
     });
   });
