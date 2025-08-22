@@ -92,7 +92,6 @@ Resources:
   # S3 Bucket for TAP storage
   TAPSecureS3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn: TAPS3AccessLogsBucket
     Properties:
       BucketName: !Sub 'tap-storage-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -144,9 +143,6 @@ Resources:
   # S3 Bucket Policy
   TAPSecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn: 
-      - TAPSecureS3Bucket
-      - TAPAccessRole
     Properties:
       Bucket: !Ref TAPSecureS3Bucket
       PolicyDocument:
@@ -158,7 +154,7 @@ Resources:
             Action: 's3:*'
             Resource:
               - !GetAtt TAPSecureS3Bucket.Arn
-              - !Sub '${TAPSecureS3Bucket}/*'
+              - !Sub '${TAPSecureS3Bucket.Arn}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -175,7 +171,7 @@ Resources:
               - s3:GetObjectVersion
             Resource:
               - !GetAtt TAPSecureS3Bucket.Arn
-              - !Sub '${TAPSecureS3Bucket}/*'
+              - !Sub '${TAPSecureS3Bucket.Arn}/*'
 
   # CloudWatch Log Group for S3
   TAPS3LogGroup:
