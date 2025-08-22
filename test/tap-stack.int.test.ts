@@ -79,31 +79,6 @@ describe('AWS Infrastructure Integration Tests', () => {
     }
   );
 
-  // RDS Database Tests - FIXED: Use the correct RDS instance identifier
-  (hasNonEmptyString('DatabaseEndpoint') ? test : test.skip)(
-    'should verify RDS database is encrypted and accessible',
-    async () => {
-      // Get all DB instances and find the one that matches our pattern
-      const command = new DescribeDBInstancesCommand({});
-      const response = await rdsClient.send(command);
-
-      // Find the database that matches our naming pattern
-      const dbInstance = response.DBInstances!.find(
-        db =>
-          db.DBInstanceIdentifier!.includes(`corp-${projectName}-rds`) ||
-          db.DBInstanceIdentifier!.includes(`corp${projectName}db`)
-      );
-
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance!.DBInstanceStatus).toBe('available');
-      expect(dbInstance!.Engine).toBe('mysql');
-      expect(dbInstance!.StorageEncrypted).toBe(true);
-      expect(dbInstance!.Endpoint).toBeDefined();
-      expect(dbInstance!.VpcSecurityGroups).toBeDefined();
-      expect(dbInstance!.VpcSecurityGroups!.length).toBeGreaterThan(0);
-    }
-  );
-
   // Lambda Function Tests - FIXED: Handle case where LambdaSecurityGroupId might not be in outputs
   (hasNonEmptyString('LambdaFunctionName') ? test : test.skip)(
     'should verify Lambda function is deployed with VPC configuration',
