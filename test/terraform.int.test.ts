@@ -72,8 +72,7 @@ const isS3BucketName = (s: any) =>
 const isAlbDnsName = (s: any) =>
   typeof s === 'string' && /\.elb\.amazonaws\.com$/.test(s);
 const isRdsEndpoint = (s: any) =>
-  typeof s === 'string' &&
-  /\.rds\.[a-z0-9-]+\.amazonaws\.com(:\d+)?(\/.*)?$/i.test(s);
+  typeof s === 'string' && /\.rds\.amazonaws\.com(:\d+)?(\/.*)?$/i.test(s);
 
 function optionalExpect(value: any, predicate: (v: any) => boolean) {
   if (value === undefined || value === null || value === '') return; // optional output
