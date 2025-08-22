@@ -36,9 +36,9 @@ describe('TapStack CloudFormation Template', () => {
       const table = template.Resources.TurnAroundPromptTable;
       const tags = table.Properties.Tags;
       
-      const environmentTag = tags.find(tag => tag.Key === 'Environment');
-      const applicationTag = tags.find(tag => tag.Key === 'Application');
-      const purposeTag = tags.find(tag => tag.Key === 'Purpose');
+      const environmentTag = tags.find((tag: { Key: string; Value: any }) => tag.Key === 'Environment');
+      const applicationTag = tags.find((tag: { Key: string; Value: any }) => tag.Key === 'Application');
+      const purposeTag = tags.find((tag: { Key: string; Value: any }) => tag.Key === 'Purpose');
       
       expect(environmentTag).toBeDefined();
       expect(environmentTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
