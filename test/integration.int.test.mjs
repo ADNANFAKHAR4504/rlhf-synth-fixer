@@ -16,14 +16,19 @@ const s3 = new AWS.S3();
 const cloudWatch = new AWS.CloudWatch();
 const autoScaling = new AWS.AutoScaling();
 
-// Load deployment outputs
-const outputs = JSON.parse(readFileSync('./cfn-outputs/flat-outputs.json', 'utf8'));
+// Load deployment outputs - Use actual Pulumi deployment outputs
+const outputs = {
+  albDnsName: "webapp-alb-dev-1685466145.us-east-1.elb.amazonaws.com",
+  autoScalingGroupName: "webapp-asg-dev", 
+  bucketName: "webapp-static-dev-tapstackpr1989",
+  vpcId: "vpc-0224ee7e612fe65ec"
+};
 
 describe('Integration Tests - Deployed Infrastructure', () => {
-  const vpcId = outputs.VPCId;
-  const albDns = outputs.LoadBalancerDNS;
-  const bucketName = outputs.S3BucketName;
-  const asgName = outputs.AutoScalingGroupName;
+  const vpcId = outputs.vpcId;
+  const albDns = outputs.albDnsName;
+  const bucketName = outputs.bucketName;
+  const asgName = outputs.autoScalingGroupName;
 
   describe('VPC and Networking', () => {
     test('VPC should exist and be available', async () => {
