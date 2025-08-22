@@ -9,7 +9,7 @@
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Network Configuration",
     "Resource Scaling",
@@ -19,7 +19,7 @@
   "training_quality": 8,
   "aws_services": [
     "EC2",
-    "VPC", 
+    "VPC",
     "S3",
     "Application Load Balancer",
     "Auto Scaling",
@@ -28,5 +28,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "Elastic IP"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
