@@ -375,6 +375,10 @@ echo "<h1>Hello from ${config.name} - Instance ID: $(curl -s http://169.254.169.
           propagateAtLaunch: false,
         })),
       ],
+
+      dependsOn: [
+        launchTemplate, // ensures ASG waits for Launch Template
+      ],
     });
 
     this.outputs = {
