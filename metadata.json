@@ -1,0 +1,34 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291529",
+  "team": "1",
+  "startedAt": "2025-08-22T17:13:38.445Z",
+  "subtask": "multi-environment-setup",
+  "subject_labels": [
+    "cdktf",
+    "typescript",
+    "multi-environment",
+    "iam",
+    "vpc",
+    "rds",
+    "kms",
+    "cloudwatch",
+    "least-privilege",
+    "parameterization"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "iam",
+    "vpc",
+    "ec2",
+    "rds",
+    "kms",
+    "elbv2",
+    "autoscaling",
+    "cloudwatch",
+    "network-acl"
+  ]
+}
