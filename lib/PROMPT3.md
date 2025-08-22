@@ -1,51 +1,25 @@
-You are an expert AWS CloudFormation architect.
+Human brief: Keep these critical corrections in the CloudFormation template for us‑east‑1 so it deploys cleanly and passes linting.
 
-## Goal
+## AWS Config (do this)
 
-Generate **one** CloudFormation **YAML** template that satisfies all previously stated functional and security requirements.
-**Output rule:** print **exactly one** fenced code block that starts with \`\`\`yaml and contains **only** the YAML template. **No prose or extra blocks.**
+- Don’t use `AWS::Config::ConfigurationRecorderStatus` (not a valid resource type in us‑east‑1).
+- Configure only:
+  - `AWS::Config::ConfigurationRecorder` (with a valid RoleArn and RecordingGroup)
+  - `AWS::Config::DeliveryChannel`
+  - `AWS::Config::ConfigRule` for security group monitoring
+- Don’t try to “start” the recorder via a resource that doesn’t exist; rely on normal behavior when Recorder + DeliveryChannel are present.
 
----
+## Tags (where supported only)
 
-## Critical Fixes (must be reflected in the template)
+- Do not add Tags to unsupported resources (e.g., Logs MetricFilter, Lambda Permission, Config Recorder/DeliveryChannel/ConfigRule, certain EC2 associations, IAM InstanceProfile).
+- It’s fine to tag VPC, Subnet, SecurityGroup, EC2 Instance, S3 Bucket, KMS Key, DBInstance, DBSubnetGroup, CloudTrail Trail, Logs LogGroup, CloudWatch Alarm, IAM Role, SecretsManager Secret.
+- Ensure every taggable resource includes `Environment` and `Owner`.
 
-1. **AWS Config — remove invalid resource (fix E3006)**
+## Keep earlier guardrails
 
-   * **Do NOT** use `AWS::Config::ConfigurationRecorderStatus` (this resource type does **not** exist in `us-east-1`).
-   * Configure AWS Config with **only** these resources:
-
-     * `AWS::Config::ConfigurationRecorder` (with a valid `RoleARN` and `RecordingGroup`).
-     * `AWS::Config::DeliveryChannel`.
-     * `AWS::Config::ConfigRule`(s) for security group monitoring.
-   * Do **not** attempt to “start” the recorder via a non‑existent resource. If needed, rely on standard behavior when `ConfigurationRecorder` and `DeliveryChannel` are present.
-
-2. **Tags only on resources that support them (fix E3002)**
-
-   * **Do NOT** add `Tags` to resources that don’t support it. In particular, **do not** put `Tags` on:
-
-     * `AWS::Logs::MetricFilter`
-     * `AWS::Lambda::Permission`
-     * `AWS::Config::ConfigurationRecorder`
-     * `AWS::Config::DeliveryChannel`
-     * `AWS::Config::ConfigRule`
-     * `AWS::EC2::Route`, `AWS::EC2::RouteTableAssociation`, `AWS::EC2::SubnetRouteTableAssociation`, `AWS::EC2::NetworkAclEntry`, `AWS::EC2::SubnetNetworkAclAssociation`
-     * `AWS::IAM::InstanceProfile`
-   * It’s fine to use `Tags` on resources that support them (e.g., `VPC`, `Subnet`, `SecurityGroup`, `EC2 Instance`, `S3 Bucket`, `KMS Key`, `DBInstance`, `DBSubnetGroup`, `CloudTrail Trail`, `Logs LogGroup`, `CloudWatch Alarm`, `IAM Role`, `SecretsManager Secret`).
-   * Ensure **every taggable resource** has `Environment` and `Owner` tags. Avoid adding `Tags` to any non‑taggable resources listed above.
-
-3. **Keep earlier linter fixes in place**
-
-   * **No hardcoded AZs** — use `!GetAZs` + `!Select`.
-   * **No unnecessary `Fn::Sub`** — use plain strings when no variables are present.
-   * **RDS EngineVersion** — parameterize `DBEngineVersion` with **AllowedValues**:
-     `5.7.44-rds.20240408, 5.7.44-rds.20240529, 5.7.44-rds.20240808, 5.7.44-rds.20250103, 5.7.44-rds.20250213, 5.7.44-rds.20250508, 8.0.37, 8.0.39, 8.0.40, 8.0.41, 8.0.42, 8.0.43, 8.4.3, 8.4.4, 8.4.5, 8.4.6` (choose a valid default, e.g., `8.0.43`).
-   * **Secrets via dynamic refs** — **no `DBPassword` parameter**; create an `AWS::SecretsManager::Secret` and reference via `{{resolve:secretsmanager:...::password}}`.
-   * **CloudTrail** — ensure `IsMultiRegionTrail: true`, `IsLogging: true`, and `LogFileValidationEnabled: true`.
-   * **IAM** — absolutely **no wildcards** in `Action` or `Resource`.
-
----
-
-## What to Print
-
-* **Exactly one** fenced code block that starts with \`\`\`yaml and contains **only** the CloudFormation template (no commentary).
-* The template must be valid in **us-east-1** and pass lint with the fixes above.
+- No hardcoded AZs (use GetAZs + Select).
+- Avoid unnecessary `Fn::Sub`.
+- RDS EngineVersion comes from a `DBEngineVersion` parameter constrained to allowed values (choose a valid default like `8.0.43`).
+- Use Secrets Manager dynamic references for DB credentials; do not add a DBPassword parameter.
+- CloudTrail: set multi‑region, logging enabled, and log file validation enabled.
+- IAM: no wildcards in Action or Resource.
