@@ -687,8 +687,14 @@ resource "aws_cloudwatch_log_group" "application" {
 }
 
 ########################
-# CloudTrail
+# CloudTrail - Using Existing Trail
 ########################
+# Data source to get existing CloudTrail trail
+data "aws_cloudtrail" "existing" {
+  name = "prod-dev-trail"
+}
+
+# Data source to get existing CloudTrail service principal
 data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
   statement {
     sid    = "AWSCloudTrailAclCheck"
@@ -721,39 +727,6 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
 resource "aws_s3_bucket_policy" "cloudtrail_logs" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
   policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
-}
-
-resource "aws_cloudtrail" "main" {
-  name                          = "${var.project_name}-${var.environment}-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  kms_key_id                    = aws_kms_key.main.arn
-
-  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*"]
-    }
-  }
-
-  tags = merge(var.common_tags, {
-    Name = "${var.project_name}-${var.environment}-cloudtrail"
-  })
-
-  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 }
 
 ########################
@@ -815,6 +788,6 @@ output "vpc_endpoints" {
 }
 
 output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  description = "ARN of the existing CloudTrail"
+  value       = data.aws_cloudtrail.existing.arn
 }

@@ -278,28 +278,16 @@ describe("SecureCorp AWS Infrastructure - Unit Tests", () => {
   });
 
   describe("CloudTrail Configuration", () => {
-    test("creates CloudTrail with comprehensive logging", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"\s*{/);
-      expect(stackContent).toMatch(/include_global_service_events\s*=\s*true/);
-      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
-      expect(stackContent).toMatch(/enable_logging\s*=\s*true/);
+    test("uses existing CloudTrail trail", () => {
+      expect(stackContent).toMatch(/data\s+"aws_cloudtrail"\s+"existing"\s*{/);
+      expect(stackContent).toMatch(/name\s*=\s*"prod-dev-trail"/);
     });
 
-    test("CloudTrail integrates with CloudWatch", () => {
-      expect(stackContent).toMatch(/cloud_watch_logs_group_arn\s*=\s*"\$\{aws_cloudwatch_log_group\.cloudtrail\.arn\}:\*"/);
-      expect(stackContent).toMatch(/cloud_watch_logs_role_arn\s*=\s*aws_iam_role\.cloudtrail\.arn/);
-    });
-
-    test("CloudTrail captures data events", () => {
-      expect(stackContent).toMatch(/event_selector\s*{/);
-      expect(stackContent).toMatch(/read_write_type\s*=\s*"All"/);
-      expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
-      expect(stackContent).toMatch(/data_resource\s*{/);
-      expect(stackContent).toMatch(/type\s*=\s*"AWS::S3::Object"/);
-    });
-
-    test("CloudTrail uses KMS encryption", () => {
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.arn/);
+    test("CloudTrail bucket policy allows CloudTrail service access", () => {
+      expect(stackContent).toMatch(/data\s+"aws_iam_policy_document"\s+"cloudtrail_bucket_policy"/);
+      expect(stackContent).toMatch(/cloudtrail\.amazonaws\.com/);
+      expect(stackContent).toMatch(/s3:GetBucketAcl/);
+      expect(stackContent).toMatch(/s3:PutObject/);
     });
   });
 
@@ -362,7 +350,7 @@ describe("SecureCorp AWS Infrastructure - Unit Tests", () => {
 
     test("outputs CloudTrail information", () => {
       expect(stackContent).toMatch(/output\s+"cloudtrail_arn"\s*{/);
-      expect(stackContent).toMatch(/value\s*=\s*aws_cloudtrail\.main\.arn/);
+      expect(stackContent).toMatch(/value\s*=\s*data\.aws_cloudtrail\.existing\.arn/);
     });
   });
 
