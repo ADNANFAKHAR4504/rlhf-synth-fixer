@@ -1115,7 +1115,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     }
 
     console.log(
-      `✅ Created ${this.publicSubnets.length} public and ${this.privateSubnets.length} private subnets`
+      ` Created ${this.publicSubnets.length} public and ${this.privateSubnets.length} private subnets`
     );
   }
 
@@ -1175,7 +1175,7 @@ export class NetworkingInfrastructure extends ComponentResource {
       this.natGateways.push(natGw);
     }
 
-    console.log(`✅ Created ${this.natGateways.length} NAT Gateways`);
+    console.log(` Created ${this.natGateways.length} NAT Gateways`);
   }
 
   /**
@@ -1251,7 +1251,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     }
 
     console.log(
-      `✅ Created public route table and ${this.privateRts.length} private route tables`
+      ` Created public route table and ${this.privateRts.length} private route tables`
     );
     return publicRt;
   }
