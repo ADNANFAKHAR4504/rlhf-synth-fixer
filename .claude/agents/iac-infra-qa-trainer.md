@@ -136,3 +136,12 @@ Use your best judgement to decide.
 - Do not create specific github actions or workflows. Those are already created.
 - Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
 the lib/ folder
+
+### Agent-Specific Reporting
+- Report start of each QA pipeline stage with current infrastructure being tested
+- Report deployment attempt results (success/failure with attempt number)
+- Report any deployment blockers (missing dependencies, AWS access issues, resource conflicts)
+- Report test execution progress and coverage metrics with current test being run
+- Report cleanup completion status and any cleanup failures
+- Report blocking conditions if infrastructure deployment fails repeatedly
+- Report unit-test coverage.
