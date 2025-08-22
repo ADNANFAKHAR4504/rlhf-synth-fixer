@@ -32,5 +32,11 @@
     "WAF",
     "KMS",
     "NAT Gateway"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
 }
