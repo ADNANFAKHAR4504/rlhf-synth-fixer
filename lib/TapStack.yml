@@ -985,9 +985,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrailLogGroup'
 
-  # CloudTrail
-  CloudTrailArn:
-    Description: 'CloudTrail ARN'
-    Value: !GetAtt SecureCloudTrail.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+#  # CloudTrail
+#  CloudTrailArn:
+#    Description: 'CloudTrail ARN'
+#    Value: !GetAtt SecureCloudTrail.Arn
+#    Export:
+#      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
