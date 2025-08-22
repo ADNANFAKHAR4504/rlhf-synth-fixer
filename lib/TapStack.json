@@ -1243,7 +1243,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Ref": "CloudTrailBucket"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1261,7 +1261,7 @@
                             },
                             "Action": "s3:GetBucketLocation",
                             "Resource": {
-                                "Ref": "CloudTrailBucket"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1279,7 +1279,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailBucket}/cloudtrail-logs/*"
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailBucket}/cloudtrail-logs/*"
                             },
                             "Condition": {
                                 "StringEquals": {
