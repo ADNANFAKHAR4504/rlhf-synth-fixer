@@ -56,6 +56,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly kmsKeyArn: pulumi.Output<string>;
   public readonly webAclArn: pulumi.Output<string>;
   public readonly logGroupName: pulumi.Output<string>;
+  public readonly albLogsBucketName: pulumi.Output<string>;
+  public readonly cloudFrontLogsBucketName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -110,6 +112,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.kmsKeyArn = infrastructureStack.kmsKeyArn;
     this.webAclArn = infrastructureStack.webAclArn;
     this.logGroupName = infrastructureStack.logGroupName;
+    this.albLogsBucketName = infrastructureStack.albLogsBucketName;
+    this.cloudFrontLogsBucketName = infrastructureStack.cloudFrontLogsBucketName;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -126,6 +130,8 @@ export class TapStack extends pulumi.ComponentResource {
       kmsKeyArn: this.kmsKeyArn,
       webAclArn: this.webAclArn,
       logGroupName: this.logGroupName,
+      albLogsBucketName: this.albLogsBucketName,
+      cloudFrontLogsBucketName: this.cloudFrontLogsBucketName,
     });
   }
 }
