@@ -435,14 +435,14 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create Application Load Balancer", () => {
-      expect(aws.lb.LoadBalancer).toHaveBeenCalledWith('prod-alb',
+      expect(aws.lb.LoadBalancer).toHaveBeenCalledWith(expect.stringMatching(/prod-alb-.+/),
         expect.objectContaining({
-          name: 'prod-alb',
+          name: expect.stringMatching(/prod-alb-.+/),
           internal: false,
           loadBalancerType: 'application',
           enableDeletionProtection: false,
           tags: expect.objectContaining({
-            Name: 'prod-alb'
+            Name: expect.stringMatching(/prod-alb-.+/)
           })
         }),
         expect.objectContaining({
@@ -452,9 +452,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create target group with health checks", () => {
-      expect(aws.lb.TargetGroup).toHaveBeenCalledWith('prod-tg',
+      expect(aws.lb.TargetGroup).toHaveBeenCalledWith(expect.stringMatching(/prod-tg-.+/),
         expect.objectContaining({
-          name: 'prod-tg',
+          name: expect.stringMatching(/prod-tg-.+/),
           port: 80,
           protocol: 'HTTP',
           healthCheck: expect.objectContaining({
@@ -469,7 +469,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
             protocol: 'HTTP'
           }),
           tags: expect.objectContaining({
-            Name: 'prod-tg'
+            Name: expect.stringMatching(/prod-tg-.+/)
           })
         }),
         expect.objectContaining({
@@ -479,7 +479,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create ALB listener", () => {
-      expect(aws.lb.Listener).toHaveBeenCalledWith('prod-alb-listener',
+      expect(aws.lb.Listener).toHaveBeenCalledWith(expect.stringMatching(/prod-alb-listener-.+/),
         expect.objectContaining({
           port: 80,
           protocol: 'HTTP',
@@ -506,9 +506,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create launch template", () => {
-      expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith('prod-launch-template',
+      expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(expect.stringMatching(/prod-launch-template-.+/),
         expect.objectContaining({
-          namePrefix: 'prod-launch-template',
+          namePrefix: expect.stringMatching(/prod-launch-template-.+/),
           instanceType: 't3.micro',
           userData: expect.any(String),
           tagSpecifications: expect.arrayContaining([
@@ -527,9 +527,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create Auto Scaling Group", () => {
-      expect(aws.autoscaling.Group).toHaveBeenCalledWith('prod-asg',
+      expect(aws.autoscaling.Group).toHaveBeenCalledWith(expect.stringMatching(/prod-asg-.+/),
         expect.objectContaining({
-          name: 'prod-asg',
+          name: expect.stringMatching(/prod-asg-.+/),
           healthCheckType: 'ELB',
           healthCheckGracePeriod: 300,
           minSize: 2,
@@ -546,9 +546,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create scaling policies", () => {
-      expect(aws.autoscaling.Policy).toHaveBeenCalledWith('prod-scale-up',
+      expect(aws.autoscaling.Policy).toHaveBeenCalledWith(expect.stringMatching(/prod-scale-up-.+/),
         expect.objectContaining({
-          name: 'prod-scale-up',
+          name: expect.stringMatching(/prod-scale-up-.+/),
           scalingAdjustment: 2,
           adjustmentType: 'ChangeInCapacity',
           cooldown: 300
@@ -558,9 +558,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
         })
       );
 
-      expect(aws.autoscaling.Policy).toHaveBeenCalledWith('prod-scale-down',
+      expect(aws.autoscaling.Policy).toHaveBeenCalledWith(expect.stringMatching(/prod-scale-down-.+/),
         expect.objectContaining({
-          name: 'prod-scale-down',
+          name: expect.stringMatching(/prod-scale-down-.+/),
           scalingAdjustment: -1,
           adjustmentType: 'ChangeInCapacity',
           cooldown: 300
@@ -582,12 +582,12 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create DB subnet group", () => {
-      expect(aws.rds.SubnetGroup).toHaveBeenCalledWith('prod-db-subnet-group',
+      expect(aws.rds.SubnetGroup).toHaveBeenCalledWith(expect.stringMatching(/prod-db-subnet-group-.+/),
         expect.objectContaining({
-          name: 'prod-db-subnet-group',
+          name: expect.stringMatching(/prod-db-subnet-group-.+/),
           description: 'Subnet group for RDS database',
           tags: expect.objectContaining({
-            Name: 'prod-db-subnet-group'
+            Name: expect.stringMatching(/prod-db-subnet-group-.+/)
           })
         }),
         expect.objectContaining({
@@ -597,9 +597,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create parameter group", () => {
-      expect(aws.rds.ParameterGroup).toHaveBeenCalledWith('prod-db-param-group',
+      expect(aws.rds.ParameterGroup).toHaveBeenCalledWith(expect.stringMatching(/prod-db-param-group-.+/),
         expect.objectContaining({
-          name: 'prod-db-param-group',
+          name: expect.stringMatching(/prod-db-param-group-.+/),
           family: 'mysql8.0',
           description: 'Parameter group for RDS MySQL database',
           parameters: expect.arrayContaining([
@@ -613,7 +613,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
             })
           ]),
           tags: expect.objectContaining({
-            Name: 'prod-db-param-group'
+            Name: expect.stringMatching(/prod-db-param-group-.+/)
           })
         }),
         expect.objectContaining({
@@ -623,9 +623,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create RDS instance with Multi-AZ and monitoring", () => {
-      expect(aws.rds.Instance).toHaveBeenCalledWith('prod-mysql-db',
+      expect(aws.rds.Instance).toHaveBeenCalledWith(expect.stringMatching(/prod-mysql-db-.+/),
         expect.objectContaining({
-          identifier: 'prod-mysql-db',
+          identifier: expect.stringMatching(/prod-mysql-db-.+/),
           engine: 'mysql',
           engineVersion: '8.0',
           instanceClass: 'db.t3.micro',
@@ -645,7 +645,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
           performanceInsightsRetentionPeriod: 7,
           monitoringInterval: 60,
           tags: expect.objectContaining({
-            Name: 'prod-mysql-db'
+            Name: expect.stringMatching(/prod-mysql-db-.+/)
           })
         }),
         expect.objectContaining({
@@ -665,11 +665,11 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create S3 bucket", () => {
-      expect(aws.s3.Bucket).toHaveBeenCalledWith('prod-static-assets',
+      expect(aws.s3.Bucket).toHaveBeenCalledWith(expect.stringMatching(/prod-static-assets-.+/),
         expect.objectContaining({
           bucket: expect.stringMatching(/prod-static-assets-/),
           tags: expect.objectContaining({
-            Name: 'prod-static-assets'
+            Name: expect.stringMatching(/prod-static-assets-.+/)
           })
         }),
         expect.objectContaining({
@@ -679,7 +679,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create bucket versioning configuration", () => {
-      expect(aws.s3.BucketVersioning).toHaveBeenCalledWith('prod-bucket-versioning',
+      expect(aws.s3.BucketVersioning).toHaveBeenCalledWith(expect.stringMatching(/prod-bucket-versioning-.+/),
         expect.objectContaining({
           bucket: expect.any(String),
           versioningConfiguration: expect.objectContaining({
@@ -693,7 +693,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create bucket server-side encryption configuration", () => {
-      expect(aws.s3.BucketServerSideEncryptionConfiguration).toHaveBeenCalledWith('prod-bucket-encryption',
+      expect(aws.s3.BucketServerSideEncryptionConfiguration).toHaveBeenCalledWith(expect.stringMatching(/prod-bucket-encryption-.+/),
         expect.objectContaining({
           bucket: expect.any(String),
           rules: expect.arrayContaining([
@@ -711,7 +711,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create bucket policy for HTTPS only", () => {
-      expect(aws.s3.BucketPolicy).toHaveBeenCalledWith('prod-bucket-policy',
+      expect(aws.s3.BucketPolicy).toHaveBeenCalledWith(expect.stringMatching(/prod-bucket-policy-.+/),
         expect.objectContaining({
           bucket: expect.any(String),
           policy: expect.any(String)
@@ -723,7 +723,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should block public access", () => {
-      expect(aws.s3.BucketPublicAccessBlock).toHaveBeenCalledWith('prod-bucket-pab',
+      expect(aws.s3.BucketPublicAccessBlock).toHaveBeenCalledWith(expect.stringMatching(/prod-bucket-pab-.+/),
         expect.objectContaining({
           blockPublicAcls: true,
           blockPublicPolicy: true,
@@ -747,9 +747,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create CPU-based alarms for scaling", () => {
-      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith('prod-high-cpu-alarm',
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(expect.stringMatching(/prod-high-cpu-alarm-.+/),
         expect.objectContaining({
-          name: 'prod-high-cpu-alarm',
+          name: expect.stringMatching(/prod-high-cpu-alarm-.+/),
           description: 'Alarm when CPU exceeds 70%',
           metricName: 'CPUUtilization',
           namespace: 'AWS/EC2',
@@ -764,9 +764,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
         })
       );
 
-      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith('prod-low-cpu-alarm',
+      expect(aws.cloudwatch.MetricAlarm).toHaveBeenCalledWith(expect.stringMatching(/prod-low-cpu-alarm-.+/),
         expect.objectContaining({
-          name: 'prod-low-cpu-alarm',
+          name: expect.stringMatching(/prod-low-cpu-alarm-.+/),
           description: 'Alarm when CPU is below 30%',
           metricName: 'CPUUtilization',
           namespace: 'AWS/EC2',
@@ -783,9 +783,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create CloudWatch dashboard", () => {
-      expect(aws.cloudwatch.Dashboard).toHaveBeenCalledWith('prod-dashboard',
+      expect(aws.cloudwatch.Dashboard).toHaveBeenCalledWith(expect.stringMatching(/prod-dashboard-.+/),
         expect.objectContaining({
-          dashboardName: 'prod-web-app-dashboard',
+          dashboardName: expect.stringMatching(/prod-web-app-dashboard-.+/),
           dashboardBody: expect.any(String)
         }),
         expect.objectContaining({
@@ -795,9 +795,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
     });
 
     it("should create log groups", () => {
-      expect(aws.cloudwatch.LogGroup).toHaveBeenCalledWith('prod-ec2-logs',
+      expect(aws.cloudwatch.LogGroup).toHaveBeenCalledWith(expect.stringMatching(/prod-ec2-logs-.+/),
         expect.objectContaining({
-          name: '/aws/ec2/prod-web-servers',
+          name: expect.stringMatching(/\/aws\/ec2\/prod-web-servers-.+/),
           retentionInDays: 14
         }),
         expect.objectContaining({
@@ -805,9 +805,9 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
         })
       );
 
-      expect(aws.cloudwatch.LogGroup).toHaveBeenCalledWith('prod-alb-logs',
+      expect(aws.cloudwatch.LogGroup).toHaveBeenCalledWith(expect.stringMatching(/prod-alb-logs-.+/),
         expect.objectContaining({
-          name: '/aws/applicationloadbalancer/prod-alb',
+          name: expect.stringMatching(/\/aws\/applicationloadbalancer\/prod-alb-.+/),
           retentionInDays: 14
         }),
         expect.objectContaining({
