@@ -8,294 +8,28 @@ describe('TapStack', () => {
   let template: Template;
   const environmentSuffix = 'test';
   const accountId = '123456789012';
-  const primaryRegion = 'us-east-1';
-  const backupRegion = 'us-west-2';
+  const region = 'us-east-1';
 
   beforeEach(() => {
     app = new cdk.App({
       context: {
         environmentSuffix,
-        primaryRegion,
-        backupRegion,
       },
     });
     stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
       env: {
         account: accountId,
-        region: primaryRegion,
+        region,
       },
     });
     template = Template.fromStack(stack);
   });
 
-  describe('S3 Bucket Configuration', () => {
-    test('creates S3 bucket with correct naming convention', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `corp-data-${environmentSuffix}-${primaryRegion}-${accountId}`,
-      });
-    });
-
-    test('enables versioning on the bucket', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-      });
-    });
-
-    test('configures S3-managed encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: [
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256',
-              },
-            },
-          ],
-        },
-      });
-    });
-
-    test('blocks all public access', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-      });
-    });
-
-    test('enforces SSL connections', () => {
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Deny',
-              Action: 's3:*',
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('sets bucket ownership to BUCKET_OWNER_ENFORCED', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        OwnershipControls: {
-          Rules: [
-            {
-              ObjectOwnership: 'BucketOwnerEnforced',
-            },
-          ],
-        },
-      });
-    });
-
-    test('has auto-delete objects enabled', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        Tags: Match.arrayWith([
-          {
-            Key: 'aws-cdk:auto-delete-objects',
-            Value: 'true',
-          },
-        ]),
-      });
-    });
-
-    test('has deletion policy set to Delete', () => {
-      template.hasResource('AWS::S3::Bucket', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
-        Properties: Match.objectLike({
-          BucketName: Match.anyValue(),
-        }),
-      });
-    });
-  });
-
-  describe('SSM Parameter', () => {
-    test('creates SSM parameter with correct path', () => {
-      template.hasResourceProperties('AWS::SSM::Parameter', {
-        Name: `/corp/tap/${environmentSuffix}/${primaryRegion}/bucket-name`,
-        Type: 'String',
-        Value: Match.objectLike({
-          Ref: Match.anyValue(),
-        }),
-      });
-    });
-
-    test('SSM parameter has correct description', () => {
-      template.hasResourceProperties('AWS::SSM::Parameter', {
-        Description: 'Bucket name for this region used by cross-region sync',
-      });
-    });
-
-    test('SSM parameter has deletion policy set to Delete', () => {
-      template.hasResource('AWS::SSM::Parameter', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
-      });
-    });
-  });
-
-  describe('Lambda Function', () => {
-    test('creates Lambda function with correct name', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `Corp-S3Sync-${primaryRegion}-${environmentSuffix}`,
-      });
-    });
-
-    test('uses Node.js 18 runtime', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x',
-      });
-    });
-
-    test('has 5 minute timeout', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Timeout: 300,
-      });
-    });
-
-    test('has correct environment variables', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: {
-            DEST_PARAM_PATH: `/corp/tap/${environmentSuffix}/${backupRegion}/bucket-name`,
-            DEST_REGION: backupRegion,
-          },
-        },
-      });
-    });
-
-    test('has inline code with correct handler', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: 'index.handler',
-        Code: {
-          ZipFile: Match.stringLikeRegexp('exports.handler'),
-        },
-      });
-    });
-
-    test('has correct description', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Description: 'Copies newly created S3 objects to the peer region bucket',
-      });
-    });
-  });
-
-  describe('Lambda IAM Permissions', () => {
-    test('grants read permissions on source bucket', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: Match.arrayWith([
-                's3:GetObject*',
-                's3:GetBucket*',
-                's3:List*',
-              ]),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('grants write permissions on peer bucket', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'AllowWriteToPeerBucket',
-              Effect: 'Allow',
-              Action: [
-                's3:PutObject',
-                's3:AbortMultipartUpload',
-                's3:ListBucket',
-                's3:ListBucketMultipartUploads',
-              ],
-              Resource: Match.anyValue(), // CDK uses Fn::Join for dynamic values
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('grants SSM parameter read permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'AllowReadPeerBucketParam',
-              Effect: 'Allow',
-              Action: 'ssm:GetParameter', // CDK generates this as a string, not array
-              Resource: Match.anyValue(), // CDK uses Fn::Join for dynamic values
-            }),
-          ]),
-        },
-      });
-    });
-  });
-
-  describe('S3 Event Notifications', () => {
-    test('configures PUT event notification', () => {
-      template.hasResourceProperties('Custom::S3BucketNotifications', {
-        NotificationConfiguration: {
-          LambdaFunctionConfigurations: Match.arrayWith([
-            Match.objectLike({
-              Events: ['s3:ObjectCreated:Put'],
-              LambdaFunctionArn: Match.objectLike({
-                'Fn::GetAtt': Match.arrayWith([
-                  Match.stringLikeRegexp('CorpS3SyncFunction'),
-                  'Arn',
-                ]),
-              }),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('configures multipart upload complete event notification', () => {
-      template.hasResourceProperties('Custom::S3BucketNotifications', {
-        NotificationConfiguration: {
-          LambdaFunctionConfigurations: Match.arrayWith([
-            Match.objectLike({
-              Events: ['s3:ObjectCreated:CompleteMultipartUpload'],
-              LambdaFunctionArn: Match.objectLike({
-                'Fn::GetAtt': Match.arrayWith([
-                  Match.stringLikeRegexp('CorpS3SyncFunction'),
-                  'Arn',
-                ]),
-              }),
-            }),
-          ]),
-        },
-      });
-    });
-
-    test('grants Lambda permission to be invoked by S3', () => {
-      template.hasResourceProperties('AWS::Lambda::Permission', {
-        Action: 'lambda:InvokeFunction',
-        Principal: 's3.amazonaws.com',
-        SourceAccount: accountId,
-      });
-    });
-  });
-
   describe('CloudWatch Log Group', () => {
-    test('creates log group with correct name', () => {
+    test('creates audit log group with correct name', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/lambda/Corp-S3Sync-${primaryRegion}-${environmentSuffix}`,
+        LogGroupName: `/corp/iam/audit/${environmentSuffix}/${region}`,
       });
     });
 
@@ -313,94 +47,247 @@ describe('TapStack', () => {
     });
   });
 
-  describe('CloudWatch Dashboard', () => {
-    test('creates dashboard with correct name', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `Corp-Replication-${environmentSuffix}-${primaryRegion}-${accountId}`,
+  describe('Application Service Role', () => {
+    test('creates role with correct name', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-app-service-role-${environmentSuffix}-${region}`,
       });
     });
 
-    test('dashboard has deletion policy set to Delete', () => {
-      template.hasResource('AWS::CloudWatch::Dashboard', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
+    test('assumes EC2 service principal', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-app-service-role-${environmentSuffix}-${region}`,
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            }),
+          ]),
+        },
       });
     });
 
-    test('dashboard contains expected metrics', () => {
-      // DashboardBody is generated as Fn::Join, so we check if the dashboard exists
-      // and verify it has the correct structure
-      const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
-      expect(Object.keys(dashboards).length).toBeGreaterThan(0);
-      
-      // The actual metrics are in the Fn::Join array, but we can verify the dashboard exists
-      Object.values(dashboards).forEach((dashboard) => {
-        expect(dashboard.Properties?.DashboardBody).toBeDefined();
-        // DashboardBody uses Fn::Join to construct the JSON
-        if (dashboard.Properties?.DashboardBody?.['Fn::Join']) {
-          const joinArray = dashboard.Properties.DashboardBody['Fn::Join'];
-          expect(joinArray).toBeDefined();
-          expect(Array.isArray(joinArray)).toBe(true);
-        }
+    test('has max session duration of 1 hour', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-app-service-role-${environmentSuffix}-${region}`,
+        MaxSessionDuration: 3600,
+      });
+    });
+
+    test('has correct description', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-app-service-role-${environmentSuffix}-${region}`,
+        Description: Match.stringLikeRegexp('Least-privilege role for EC2-based services'),
       });
     });
   });
 
+  describe('Lambda Execution Role', () => {
+    test('creates role with correct name', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-lambda-exec-role-${environmentSuffix}-${region}`,
+      });
+    });
+
+    test('assumes Lambda service principal', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-lambda-exec-role-${environmentSuffix}-${region}`,
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('has max session duration of 1 hour', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-lambda-exec-role-${environmentSuffix}-${region}`,
+        MaxSessionDuration: 3600,
+      });
+    });
+
+    test('has correct description', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `corp-lambda-exec-role-${environmentSuffix}-${region}`,
+        Description: Match.stringLikeRegexp('Least-privilege role for Lambda'),
+      });
+    });
+  });
+
+  describe('IAM Policies - Application Role', () => {
+    test('creates logs policy for app role', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: `corp-app-logs-${environmentSuffix}-${region}`,
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'WriteToAuditLogGroup',
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+            }),
+            Match.objectLike({
+              Sid: 'CreateGroupIfMissing',
+              Effect: 'Allow',
+              Action: ['logs:CreateLogGroup', 'logs:DescribeLogStreams'],
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('creates SSM read policy for app role', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: `corp-app-ssm-read-${environmentSuffix}-${region}`,
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'ReadScopedParameters',
+              Effect: 'Allow',
+              Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+              Resource: Match.stringLikeRegexp(`.*parameter/corp/iam/${environmentSuffix}/${region}/.*`),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('logs policy targets specific log group', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      const logsPolicy = Object.values(policies).find(
+        p => p.Properties?.PolicyName === `corp-app-logs-${environmentSuffix}-${region}`
+      );
+      
+      const statements = logsPolicy?.Properties?.PolicyDocument?.Statement;
+      const writeStatement = statements?.find((s: any) => s.Sid === 'WriteToAuditLogGroup');
+      
+      expect(writeStatement?.Resource).toBeDefined();
+      expect(writeStatement?.Resource).toMatch(/log-stream:\*/);
+    });
+  });
+
+  describe('IAM Policies - Lambda Role', () => {
+    test('creates logs policy for Lambda role', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: `corp-lambda-logs-${environmentSuffix}-${region}`,
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'WriteToAuditLogGroup',
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+            }),
+            Match.objectLike({
+              Sid: 'CreateGroupIfMissing',
+              Effect: 'Allow',
+              Action: ['logs:CreateLogGroup', 'logs:DescribeLogStreams'],
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('creates SSM read policy for Lambda role', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: `corp-lambda-ssm-read-${environmentSuffix}-${region}`,
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'ReadScopedParameters',
+              Effect: 'Allow',
+              Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+              Resource: Match.stringLikeRegexp(`.*parameter/corp/iam/${environmentSuffix}/${region}/.*`),
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('Self-Protection Policy', () => {
+    test('creates self-protection policy', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: `corp-iam-self-protect-${environmentSuffix}-${region}`,
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'DenyDeleteOrDetachWithoutMFA',
+              Effect: 'Deny',
+              Action: [
+                'iam:DeleteRole',
+                'iam:DeleteRolePolicy',
+                'iam:DetachRolePolicy',
+                'iam:PutRolePolicy',
+                'iam:AttachRolePolicy',
+              ],
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('self-protection requires MFA', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      const selfProtectPolicy = Object.values(policies).find(
+        p => p.Properties?.PolicyName === `corp-iam-self-protect-${environmentSuffix}-${region}`
+      );
+      
+      const statement = selfProtectPolicy?.Properties?.PolicyDocument?.Statement?.[0];
+      expect(statement?.Conditions).toEqual({
+        Bool: { 'aws:MultiFactorAuthPresent': 'false' },
+      });
+    });
+
+    test('self-protection applies to both roles', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      const selfProtectPolicy = Object.values(policies).find(
+        p => p.Properties?.PolicyName === `corp-iam-self-protect-${environmentSuffix}-${region}`
+      );
+      
+      const statement = selfProtectPolicy?.Properties?.PolicyDocument?.Statement?.[0];
+      expect(statement?.Resource).toBeDefined();
+      expect(Array.isArray(statement?.Resource)).toBe(true);
+      expect(statement?.Resource.length).toBe(2);
+    });
+  });
+
   describe('Stack Outputs', () => {
-    test('exports bucket name', () => {
-      template.hasOutput('CorpBucketName', {
+    test('exports audit log group name', () => {
+      template.hasOutput('AuditLogGroupName', {
         Export: {
-          Name: `Corp-BucketName-${environmentSuffix}-${primaryRegion}`,
+          Name: `corp-iam-audit-loggroup-${environmentSuffix}-${region}`,
         },
       });
     });
 
-    test('exports sync function name', () => {
-      template.hasOutput('CorpSyncFunctionName', {
+    test('exports app service role ARN', () => {
+      template.hasOutput('AppServiceRoleArn', {
         Export: {
-          Name: `Corp-SyncFunctionName-${environmentSuffix}-${primaryRegion}`,
+          Name: `corp-app-role-${environmentSuffix}-${region}`,
         },
       });
     });
 
-    test('exports sync function ARN', () => {
-      template.hasOutput('CorpSyncFunctionArn', {
+    test('exports Lambda execution role ARN', () => {
+      template.hasOutput('LambdaExecutionRoleArn', {
         Export: {
-          Name: `Corp-SyncFunctionArn-${environmentSuffix}-${primaryRegion}`,
-        },
-      });
-    });
-
-    test('exports SSM parameter name', () => {
-      template.hasOutput('CorpLocalBucketParamName', {
-        Export: {
-          Name: `Corp-LocalBucketParam-${environmentSuffix}-${primaryRegion}`,
-        },
-      });
-    });
-
-    test('exports dashboard name', () => {
-      template.hasOutput('CorpDashboardName', {
-        Export: {
-          Name: `Corp-DashboardName-${environmentSuffix}-${primaryRegion}`,
-        },
-      });
-    });
-
-    test('exports dashboard URL', () => {
-      template.hasOutput('CorpDashboardUrl', {
-        Value: Match.anyValue(), // CDK uses Fn::Join to construct the URL
-        Export: {
-          Name: `Corp-DashboardUrl-${environmentSuffix}-${primaryRegion}`,
-        },
-      });
-    });
-
-    test('exports peer region', () => {
-      template.hasOutput('CorpPeerRegion', {
-        Value: backupRegion,
-        Export: {
-          Name: `Corp-PeerRegion-${environmentSuffix}-${primaryRegion}`,
+          Name: `corp-lambda-role-${environmentSuffix}-${region}`,
         },
       });
     });
@@ -417,10 +304,8 @@ describe('TapStack', () => {
       });
       expect(minimalStack).toBeDefined();
       const minimalTemplate = Template.fromStack(minimalStack);
-      minimalTemplate.resourceCountIs('AWS::S3::Bucket', 1);
-      // CDK creates additional Lambda functions for bucket notifications and auto-delete
-      const lambdas = minimalTemplate.findResources('AWS::Lambda::Function');
-      expect(Object.keys(lambdas).length).toBeGreaterThanOrEqual(2);
+      minimalTemplate.resourceCountIs('AWS::IAM::Role', 2);
+      minimalTemplate.resourceCountIs('AWS::Logs::LogGroup', 1);
     });
 
     test('uses provided environment suffix', () => {
@@ -434,8 +319,8 @@ describe('TapStack', () => {
         },
       });
       const customTemplate = Template.fromStack(customStack);
-      customTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`corp-data-${customSuffix}`),
+      customTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.stringLikeRegexp(`corp-.*-${customSuffix}-.*`),
       });
     });
 
@@ -448,126 +333,65 @@ describe('TapStack', () => {
         },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
-      defaultTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('corp-data-dev'),
+      defaultTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.stringLikeRegexp('corp-.*-dev-.*'),
       });
     });
 
-    test('handles context-based configuration', () => {
+    test('prioritizes props over context', () => {
       const contextApp = new cdk.App({
         context: {
-          environmentSuffix: 'staging',
-          primaryRegion: 'eu-west-1',
-          backupRegion: 'eu-central-1',
+          environmentSuffix: 'context-env',
         },
       });
-      const contextStack = new TapStack(contextApp, 'ContextStack', {
+      const overrideStack = new TapStack(contextApp, 'OverrideStack', {
+        environmentSuffix: 'prop-env',
         env: {
           account: accountId,
-          region: 'eu-west-1',
+          region: 'us-west-2',
         },
       });
-      const contextTemplate = Template.fromStack(contextStack);
-      contextTemplate.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: {
-            DEST_REGION: 'eu-central-1',
-          },
-        },
+      const overrideTemplate = Template.fromStack(overrideStack);
+      overrideTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.stringLikeRegexp('corp-.*-prop-env-.*'),
       });
-    });
-  });
-
-  describe('Cross-Region Configuration', () => {
-    test('correctly determines peer region when in primary region', () => {
-      // Create a new app and stack for this test to avoid synthesis conflicts
-      const testApp = new cdk.App({
-        context: {
-          environmentSuffix,
-          primaryRegion,
-          backupRegion,
-        },
-      });
-      const primaryStack = new TapStack(testApp, 'PrimaryStack', {
-        environmentSuffix,
-        env: {
-          account: accountId,
-          region: primaryRegion,
-        },
-      });
-      const primaryTemplate = Template.fromStack(primaryStack);
-      primaryTemplate.hasOutput('CorpPeerRegion', {
-        Value: backupRegion,
-      });
-    });
-
-    test('correctly determines peer region when in backup region', () => {
-      // Create a new app and stack for this test to avoid synthesis conflicts
-      const testApp = new cdk.App({
-        context: {
-          environmentSuffix,
-          primaryRegion,
-          backupRegion,
-        },
-      });
-      const backupStack = new TapStack(testApp, 'BackupStack', {
-        environmentSuffix,
-        env: {
-          account: accountId,
-          region: backupRegion,
-        },
-      });
-      const backupTemplate = Template.fromStack(backupStack);
-      backupTemplate.hasOutput('CorpPeerRegion', {
-        Value: primaryRegion,
-      });
-    });
-
-    test('generates correct peer bucket name', () => {
-      // Verify that the peer bucket resources are referenced in IAM policies
-      const policies = template.findResources('AWS::IAM::Policy');
-      let foundPeerBucketPermission = false;
-      
-      Object.values(policies).forEach((policy) => {
-        const statements = policy.Properties?.PolicyDocument?.Statement as any[];
-        statements?.forEach((statement) => {
-          if (statement.Sid === 'AllowWriteToPeerBucket') {
-            foundPeerBucketPermission = true;
-            expect(statement.Resource).toBeDefined();
-            // Resource will be Fn::Join with the peer bucket name components
-          }
-        });
-      });
-      
-      expect(foundPeerBucketPermission).toBe(true);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('all resources follow Corp- naming convention', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: Match.stringLikeRegexp('^Corp-'),
+    test('all resources follow corp- naming convention', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.stringLikeRegexp('^corp-'),
       });
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: Match.stringLikeRegexp('^Corp-'),
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('^/corp/'),
       });
-    });
-
-    test('bucket names are lowercase and DNS-compliant', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('^corp-data-[a-z0-9-]+$'),
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyName: Match.stringLikeRegexp('^corp-'),
       });
     });
 
     test('all resource names include environment suffix', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`.*${environmentSuffix}.*`),
+      const roles = template.findResources('AWS::IAM::Role');
+      Object.values(roles).forEach((role) => {
+        expect(role.Properties?.RoleName).toContain(environmentSuffix);
       });
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: Match.stringLikeRegexp(`.*${environmentSuffix}.*`),
+      
+      const policies = template.findResources('AWS::IAM::Policy');
+      Object.values(policies).forEach((policy) => {
+        expect(policy.Properties?.PolicyName).toContain(environmentSuffix);
       });
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: Match.stringLikeRegexp(`.*${environmentSuffix}.*`),
+    });
+
+    test('all resource names include region', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      Object.values(roles).forEach((role) => {
+        expect(role.Properties?.RoleName).toContain(region);
+      });
+      
+      const policies = template.findResources('AWS::IAM::Policy');
+      Object.values(policies).forEach((policy) => {
+        expect(policy.Properties?.PolicyName).toContain(region);
       });
     });
   });
@@ -580,65 +404,94 @@ describe('TapStack', () => {
       });
     });
 
-    test('S3 bucket enforces SSL', () => {
-      const policies = template.findResources('AWS::S3::BucketPolicy');
-      Object.values(policies).forEach((policy) => {
-        const statements = policy.Properties?.PolicyDocument?.Statement as any[];
-        const sslDenyStatement = statements?.find(
-          (s) =>
-            s.Effect === 'Deny' &&
-            s.Condition?.Bool?.['aws:SecureTransport'] === 'false'
-        );
-        expect(sslDenyStatement).toBeDefined();
-      });
-    });
-
-    test('Lambda function has least-privilege permissions', () => {
-      // Verify Lambda only has specific required permissions
+    test('roles have least-privilege permissions', () => {
+      // Check that policies are scoped to specific resources
       const policies = template.findResources('AWS::IAM::Policy');
       Object.values(policies).forEach((policy) => {
         const statements = policy.Properties?.PolicyDocument?.Statement as any[];
         statements?.forEach((statement) => {
-          if (statement.Sid === 'AllowWriteToPeerBucket') {
-            // Should only have minimal S3 actions
-            expect(statement.Action).toHaveLength(4);
-          }
-          if (statement.Sid === 'AllowReadPeerBucketParam') {
-            // CDK generates Action as a string when there's only one action
-            expect(statement.Action).toBe('ssm:GetParameter');
+          if (statement.Effect === 'Allow') {
+            // Resources should not be wildcards for Allow statements
+            if (statement.Resource) {
+              const resources = Array.isArray(statement.Resource) 
+                ? statement.Resource 
+                : [statement.Resource];
+              resources.forEach((resource: any) => {
+                if (typeof resource === 'string') {
+                  expect(resource).not.toBe('*');
+                }
+              });
+            }
           }
         });
       });
     });
-  });
 
-  describe('Auto-Delete Resources', () => {
-    test('creates auto-delete Lambda for S3 bucket', () => {
-      const lambdas = template.findResources('AWS::Lambda::Function');
-      const autoDeleteLambda = Object.values(lambdas).find(
-        (lambda) => {
-          // Check for auto-delete Lambda by its handler and runtime
-          const handler = lambda.Properties?.Handler;
-          const runtime = lambda.Properties?.Runtime;
-          return (
-            handler === 'index.handler' &&
-            runtime?.toString().includes('nodejs') &&
-            // Auto-delete lambdas typically have specific timeout
-            lambda.Properties?.Timeout === 900
-          );
-        }
-      );
-      // Since autoDeleteObjects is true, there should be an auto-delete Lambda
-      expect(autoDeleteLambda).toBeDefined();
+    test('deny statements require MFA for destructive actions', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      Object.values(policies).forEach((policy) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement as any[];
+        statements?.forEach((statement) => {
+          if (statement.Effect === 'Deny' && 
+              statement.Action?.includes('iam:DeleteRole')) {
+            expect(statement.Conditions).toBeDefined();
+            expect(statement.Conditions?.Bool?.['aws:MultiFactorAuthPresent']).toBe('false');
+          }
+        });
+      });
     });
 
-    test('auto-delete Lambda has appropriate timeout', () => {
-      const lambdas = template.findResources('AWS::Lambda::Function');
-      const autoDeleteLambda = Object.values(lambdas).find(
-        (lambda) => lambda.Properties?.Timeout === 900
-      );
-      expect(autoDeleteLambda).toBeDefined();
-      expect(autoDeleteLambda?.Properties?.Timeout).toBe(900);
+    test('log group has short retention period', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 7,
+      });
+    });
+  });
+
+  describe('Policy Scope Validation', () => {
+    test('SSM policies are scoped to specific parameter paths', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      Object.values(policies).forEach((policy) => {
+        if (policy.Properties?.PolicyName?.includes('ssm-read')) {
+          const statements = policy.Properties?.PolicyDocument?.Statement as any[];
+          const ssmStatement = statements?.find((s: any) => s.Sid === 'ReadScopedParameters');
+          expect(ssmStatement?.Resource).toMatch(/parameter\/corp\/iam\//);
+        }
+      });
+    });
+
+    test('log policies are scoped to specific log groups', () => {
+      const policies = template.findResources('AWS::IAM::Policy');
+      Object.values(policies).forEach((policy) => {
+        if (policy.Properties?.PolicyName?.includes('-logs-')) {
+          const statements = policy.Properties?.PolicyDocument?.Statement as any[];
+          statements?.forEach((statement: any) => {
+            if (statement.Sid === 'WriteToAuditLogGroup') {
+              expect(statement.Resource).toMatch(/log-group:\/corp\/iam\/audit\//);
+            }
+          });
+        }
+      });
+    });
+  });
+
+  describe('Resource Count Validation', () => {
+    test('creates exactly 2 IAM roles', () => {
+      template.resourceCountIs('AWS::IAM::Role', 2);
+    });
+
+    test('creates exactly 5 IAM policies', () => {
+      // 2 logs policies + 2 SSM policies + 1 self-protection
+      template.resourceCountIs('AWS::IAM::Policy', 5);
+    });
+
+    test('creates exactly 1 log group', () => {
+      template.resourceCountIs('AWS::Logs::LogGroup', 1);
+    });
+
+    test('creates exactly 3 outputs', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(Object.keys(outputs).length).toBe(3);
     });
   });
 });

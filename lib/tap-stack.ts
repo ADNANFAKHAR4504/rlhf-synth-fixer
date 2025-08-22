@@ -1,8 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import {
-  aws_iam as iam,
-  aws_logs as logs,
-} from 'aws-cdk-lib';
+import { aws_iam as iam, aws_logs as logs } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -52,10 +49,7 @@ export class TapStack extends cdk.Stack {
           new iam.PolicyStatement({
             sid: 'WriteToAuditLogGroup',
             effect: iam.Effect.ALLOW,
-            actions: [
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ],
+            actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
             resources: [logsStreamArn],
           }),
           new iam.PolicyStatement({
@@ -99,10 +93,7 @@ export class TapStack extends cdk.Stack {
           new iam.PolicyStatement({
             sid: 'WriteToAuditLogGroup',
             effect: iam.Effect.ALLOW,
-            actions: [
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ],
+            actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
             resources: [logsStreamArn],
           }),
           new iam.PolicyStatement({
@@ -153,22 +144,15 @@ export class TapStack extends cdk.Stack {
     });
     appServiceRole.attachInlinePolicy(selfProtection);
     lambdaExecRole.attachInlinePolicy(selfProtection);
-
-    // === Stack-level: enable termination protection (safe rollback guard) ===
-    const cfnStack = this.node.defaultChild as cdk.CfnStack;
-   
-
     // === Outputs ===
     new cdk.CfnOutput(this, 'AuditLogGroupName', {
       value: auditLogGroup.logGroupName,
       exportName: `corp-iam-audit-loggroup-${environmentSuffix}-${currentRegion}`,
     });
-
     new cdk.CfnOutput(this, 'AppServiceRoleArn', {
       value: appServiceRole.roleArn,
       exportName: `corp-app-role-${environmentSuffix}-${currentRegion}`,
     });
-
     new cdk.CfnOutput(this, 'LambdaExecutionRoleArn', {
       value: lambdaExecRole.roleArn,
       exportName: `corp-lambda-role-${environmentSuffix}-${currentRegion}`,
