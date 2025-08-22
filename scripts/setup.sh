@@ -100,10 +100,12 @@ if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
     exit 1
   fi
 
-  # Enforce single-module layout: use root go.mod only. Remove stray lib/go.mod if present.
+  # Enforce single-module layout
   if [ -f "lib/go.mod" ] || [ -f "lib/go.sum" ]; then
     echo "⚠️ Found lib/go.mod or lib/go.sum. Removing to avoid multi-module conflicts."
     rm -f lib/go.mod lib/go.sum || true
+  fi
+fi 
 
 # Check metadata to see if Java is needed
 if [ -f "metadata.json" ]; then
