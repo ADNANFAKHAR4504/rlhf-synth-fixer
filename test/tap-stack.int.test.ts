@@ -16,9 +16,9 @@ const outputs = JSON.parse(
 
 const templatePathYaml = path.resolve(__dirname, '../lib/TapStack.yml');
 
-let template;
+let template: Record<string, any>;
 if (fs.existsSync(templatePathYaml)) {
-  template = yaml.load(fs.readFileSync(templatePathYaml, 'utf8'));
+  template = yaml.load(fs.readFileSync(templatePathYaml, 'utf8'))  as Record<string, any>;
 } else {
   throw new Error('CloudFormation template not found in JSON or YAML format.');
 }
