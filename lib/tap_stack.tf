@@ -355,7 +355,6 @@ resource "aws_db_instance" "main" {
   identifier = lower("${local.name_prefix}-db")
 
   engine         = var.db_engine
-  engine_version = var.db_engine_version
   instance_class = var.db_instance_class
   port           = var.db_port
 
