@@ -264,17 +264,10 @@ describe("TapStack Unit Tests", () => {
   });
 
   describe("EC2 Instances and Key Pair", () => {
-    it("should create EC2 key pair with auto-generated key", () => {
-      new TapStack("test-keypair", { environmentSuffix: "test" });
-      expect(aws.ec2.KeyPair).toHaveBeenCalledWith(
-        expect.stringContaining("keypair"),
-        expect.objectContaining({
-          tags: expect.objectContaining({
-            Name: expect.stringContaining("myapp-test-keypair")
-          })
-        }),
-        expect.any(Object)
-      );
+    it("should create EC2 instances without key pairs for demo purposes", () => {
+      new TapStack("test-no-keypair", { environmentSuffix: "test" });
+      // KeyPair creation is removed - instances launch without SSH access
+      expect(aws.ec2.KeyPair).not.toHaveBeenCalled();
     });
 
     it("should create two EC2 instances", () => {
@@ -487,8 +480,7 @@ describe("TapStack Unit Tests", () => {
           elasticIp1: expect.any(Object),
           elasticIp2: expect.any(Object),
           instance1Id: expect.any(Object),
-          instance2Id: expect.any(Object),
-          keyPairName: expect.any(Object)
+          instance2Id: expect.any(Object)
         })
       );
     });
@@ -502,7 +494,6 @@ describe("TapStack Unit Tests", () => {
       expect(stack.eip2Address).toBeDefined();
       expect(stack.instance1Id).toBeDefined();
       expect(stack.instance2Id).toBeDefined();
-      expect(stack.keyPairName).toBeDefined();
     });
   });
 

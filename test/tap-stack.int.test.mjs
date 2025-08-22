@@ -52,14 +52,13 @@ describe('TapStack Integration Tests', () => {
     } else {
       console.warn('No outputs file found. Using test defaults.');
       outputs = {
-        LoadBalancerDNS: 'test-alb.elb.amazonaws.com',
-        S3BucketName: 'test-bucket',
-        ElasticIPAddress1: '1.2.3.4',
-        ElasticIPAddress2: '5.6.7.8',
-        Instance1Id: 'i-test1',
-        Instance2Id: 'i-test2',
-        KeyPairName: 'test-keypair',
-        VPCId: 'vpc-test'
+        albDnsName: 'test-alb.elb.amazonaws.com',
+        bucketName: 'test-bucket',
+        elasticIp1: '1.2.3.4',
+        elasticIp2: '5.6.7.8',
+        instance1Id: 'i-test1',
+        instance2Id: 'i-test2',
+        vpcId: 'vpc-test'
       };
     }
 
@@ -73,13 +72,13 @@ describe('TapStack Integration Tests', () => {
 
   describe('VPC and Networking', () => {
     it('should have created VPC with correct configuration', async () => {
-      if (!outputs.VPCId || outputs.VPCId === 'vpc-test') {
+      if (!outputs.vpcId || outputs.vpcId === 'vpc-test') {
         console.log('Skipping VPC test - using test outputs');
         return;
       }
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
 
       try {
@@ -98,13 +97,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have DNS support and hostnames enabled', async () => {
-      if (!outputs.VPCId || outputs.VPCId === 'vpc-test') {
+      if (!outputs.vpcId || outputs.vpcId === 'vpc-test') {
         console.log('Skipping DNS test - using test outputs');
         return;
       }
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
 
       try {
@@ -122,13 +121,13 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket', () => {
     it('should have versioning enabled', async () => {
-      if (!outputs.S3BucketName || outputs.S3BucketName === 'test-bucket') {
+      if (!outputs.bucketName || outputs.bucketName === 'test-bucket') {
         console.log('Skipping S3 versioning test - using test outputs');
         return;
       }
 
       const command = new GetBucketVersioningCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.bucketName
       });
 
       try {
@@ -144,13 +143,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have encryption enabled', async () => {
-      if (!outputs.S3BucketName || outputs.S3BucketName === 'test-bucket') {
+      if (!outputs.bucketName || outputs.bucketName === 'test-bucket') {
         console.log('Skipping S3 encryption test - using test outputs');
         return;
       }
 
       const command = new GetBucketEncryptionCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.bucketName
       });
 
       try {
@@ -168,13 +167,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should block public access', async () => {
-      if (!outputs.S3BucketName || outputs.S3BucketName === 'test-bucket') {
+      if (!outputs.bucketName || outputs.bucketName === 'test-bucket') {
         console.log('Skipping S3 public access test - using test outputs');
         return;
       }
 
       const command = new GetPublicAccessBlockCommand({
-        Bucket: outputs.S3BucketName
+        Bucket: outputs.bucketName
       });
 
       try {
@@ -195,13 +194,13 @@ describe('TapStack Integration Tests', () => {
 
   describe('EC2 Instances', () => {
     it('should have created two EC2 instances', async () => {
-      if (!outputs.Instance1Id || outputs.Instance1Id === 'i-test1') {
+      if (!outputs.instance1Id || outputs.instance1Id === 'i-test1') {
         console.log('Skipping EC2 instances test - using test outputs');
         return;
       }
 
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.Instance1Id, outputs.Instance2Id]
+        InstanceIds: [outputs.instance1Id, outputs.instance2Id]
       });
 
       try {
@@ -228,13 +227,13 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have Elastic IPs associated', async () => {
-      if (!outputs.ElasticIPAddress1 || outputs.ElasticIPAddress1 === '1.2.3.4') {
+      if (!outputs.elasticIp1 || outputs.elasticIp1 === '1.2.3.4') {
         console.log('Skipping Elastic IP test - using test outputs');
         return;
       }
 
       const command = new DescribeAddressesCommand({
-        PublicIps: [outputs.ElasticIPAddress1, outputs.ElasticIPAddress2]
+        PublicIps: [outputs.elasticIp1, outputs.elasticIp2]
       });
 
       try {
@@ -245,7 +244,7 @@ describe('TapStack Integration Tests', () => {
           expect(address.Domain).toBe('vpc');
           // Check if associated with an instance (may be disassociated if instance is stopped)
           if (address.InstanceId) {
-            expect([outputs.Instance1Id, outputs.Instance2Id]).toContain(address.InstanceId);
+            expect([outputs.instance1Id, outputs.instance2Id]).toContain(address.InstanceId);
           }
         });
       } catch (error) {
@@ -260,20 +259,20 @@ describe('TapStack Integration Tests', () => {
 
   describe('Load Balancer', () => {
     it('should have created Application Load Balancer', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS === 'test-alb.elb.amazonaws.com') {
+      if (!outputs.albDnsName || outputs.albDnsName === 'test-alb.elb.amazonaws.com') {
         console.log('Skipping ALB test - using test outputs');
         return;
       }
 
       // Extract load balancer name from DNS
-      const lbArn = outputs.LoadBalancerDNS.split('-')[0] + '-' + outputs.LoadBalancerDNS.split('-')[1];
+      const lbArn = outputs.albDnsName.split('-')[0] + '-' + outputs.albDnsName.split('-')[1];
       
       const command = new DescribeLoadBalancersCommand({});
 
       try {
         const response = await elbClient.send(command);
         const alb = response.LoadBalancers.find(lb => 
-          lb.DNSName === outputs.LoadBalancerDNS
+          lb.DNSName === outputs.albDnsName
         );
         
         if (alb) {
@@ -292,7 +291,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have listener configured on port 80', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS === 'test-alb.elb.amazonaws.com') {
+      if (!outputs.albDnsName || outputs.albDnsName === 'test-alb.elb.amazonaws.com') {
         console.log('Skipping listener test - using test outputs');
         return;
       }
@@ -302,7 +301,7 @@ describe('TapStack Integration Tests', () => {
       try {
         const lbResponse = await elbClient.send(lbCommand);
         const alb = lbResponse.LoadBalancers.find(lb => 
-          lb.DNSName === outputs.LoadBalancerDNS
+          lb.DNSName === outputs.albDnsName
         );
         
         if (alb) {
@@ -324,7 +323,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have target group with health checks', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS === 'test-alb.elb.amazonaws.com') {
+      if (!outputs.albDnsName || outputs.albDnsName === 'test-alb.elb.amazonaws.com') {
         console.log('Skipping target group test - using test outputs');
         return;
       }
@@ -359,7 +358,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Configuration', () => {
     it('should have security groups configured correctly', async () => {
-      if (!outputs.VPCId || outputs.VPCId === 'vpc-test') {
+      if (!outputs.vpcId || outputs.vpcId === 'vpc-test') {
         console.log('Skipping security groups test - using test outputs');
         return;
       }
@@ -368,7 +367,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           }
         ]
       });
@@ -434,7 +433,6 @@ describe('TapStack Integration Tests', () => {
       expect(outputs.instance1Id).toBeDefined();
       expect(outputs.instance2Id).toBeDefined();
       expect(outputs.vpcId).toBeDefined();
-      expect(outputs.keyPairName).toBeDefined();
     });
 
     it('should have valid DNS name for load balancer', () => {
