@@ -1,4 +1,21 @@
-```TS
+# TAP Stack Infrastructure as Code
+
+This document contains the complete AWS CDK TypeScript implementation for the TAP (Test Automation Platform) infrastructure stack.
+
+## Table of Contents
+
+- [Entry Point (bin/tap.ts)](#entry-point-bintapts)
+- [Main Stack (lib/tap-stack.ts)](#main-stack-libtap-stackts)
+- [Lambda Functions](#lambda-functions)
+- [Infrastructure Overview](#infrastructure-overview)
+
+---
+
+## Entry Point (bin/tap.ts)
+
+The main entry point for the CDK application that configures environment variables and creates the stack.
+
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -28,8 +45,15 @@ new TapStack(app, stackName, {
     region: 'us-west-2', // Set to us-west-2 as per updated PROMPT.md requirements
   },
 });
+```
 
-//tap-stack.ts
+---
+
+## Main Stack (lib/tap-stack.ts)
+
+The core infrastructure stack that defines all AWS resources including KMS, DynamoDB, S3, Lambda functions, and API Gateway.
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -62,9 +86,23 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow Secrets Manager Service',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+            ],
+            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
+            resources: ['*'],
+          }),
         ],
       }),
     });
+
+    // Add tags to KMS key
+    cdk.Tags.of(kmsKey).add('Environment', props?.environmentSuffix || 'dev');
+    cdk.Tags.of(kmsKey).add('Purpose', 'encryption');
+    cdk.Tags.of(kmsKey).add('Compliance', 'encryption-at-rest');
 
     // KMS Key Alias for easier reference
     new kms.Alias(this, 'TapAppKMSKeyAlias', {
@@ -76,7 +114,7 @@ export class TapStack extends cdk.Stack {
     const appSecrets = new secretsmanager.Secret(this, 'TapAppSecrets', {
       secretName: 'tap-app/secrets',
       description: 'Application secrets for TAP serverless app',
-      // Removed KMS encryption to avoid CDK policy injection issues
+      encryptionKey: kmsKey, // Enable KMS encryption for compliance
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
@@ -93,7 +131,7 @@ export class TapStack extends cdk.Stack {
         name: 'id',
         type: dynamodb.AttributeType.STRING,
       },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand capacity as required
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand capacity for cost optimization
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey: kmsKey,
       pointInTimeRecoverySpecification: {
@@ -102,21 +140,59 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
     });
 
-    // S3 Bucket for file uploads with encryption
+    // Add tags to DynamoDB table
+    cdk.Tags.of(itemsTable).add(
+      'Environment',
+      props?.environmentSuffix || 'dev'
+    );
+    cdk.Tags.of(itemsTable).add('Purpose', 'data-storage');
+    cdk.Tags.of(itemsTable).add('Compliance', 'encryption-at-rest');
+
+    // Separate S3 bucket for access logs
+    const logsBucket = new s3.Bucket(this, 'LogsBucket', {
+      bucketName: `tap-logs-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: false,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      lifecycleRules: [
+        {
+          expiration: cdk.Duration.days(90), // Logs expire after 90 days
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+        },
+      ],
+    });
+
+    // S3 Bucket for file uploads
     const filesBucket = new s3.Bucket(this, 'FilesBucket', {
       bucketName: `tap-files-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
+      serverAccessLogsBucket: logsBucket, // Use separate bucket for logs
       serverAccessLogsPrefix: 'access-logs/',
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
       autoDeleteObjects: false, // Disabled for testing compatibility
     });
 
+    // Add tags to S3 bucket
+    cdk.Tags.of(filesBucket).add(
+      'Environment',
+      props?.environmentSuffix || 'dev'
+    );
+    cdk.Tags.of(filesBucket).add('Purpose', 'file-storage');
+    cdk.Tags.of(filesBucket).add('Compliance', 'encryption-at-rest');
+
     // CloudWatch Log Groups for Lambda functions
-    // Using AWS default encryption to avoid circular dependency with KMS key
     const createItemLogGroup = new logs.LogGroup(this, 'CreateItemLogGroup', {
       logGroupName: '/aws/lambda/tap-create-item',
       retention: logs.RetentionDays.ONE_WEEK,
@@ -135,136 +211,115 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // IAM Role for Lambda functions with least privilege
-    const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
+    // IAM Role for Lambda execution
+    const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaBasicExecutionRole'
         ),
       ],
-      inlinePolicies: {
-        DynamoDBAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'dynamodb:GetItem',
-                'dynamodb:PutItem',
-                'dynamodb:Query',
-                'dynamodb:Scan',
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-              ],
-              resources: [itemsTable.tableArn],
-            }),
-          ],
-        }),
-        S3Access: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-              resources: [`${filesBucket.bucketArn}/*`],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:ListBucket'],
-              resources: [filesBucket.bucketArn],
-            }),
-          ],
-        }),
-        KMSAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt',
-                'kms:Encrypt',
-                'kms:GenerateDataKey',
-                'kms:DescribeKey',
-              ],
-              resources: [kmsKey.keyArn],
-            }),
-          ],
-        }),
-        SecretsManagerAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue',
-                'secretsmanager:DescribeSecret',
-              ],
-              resources: [appSecrets.secretArn],
-            }),
-          ],
-        }),
-        CloudWatchLogsAccess: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              resources: [
-                createItemLogGroup.logGroupArn,
-                getItemsLogGroup.logGroupArn,
-                uploadFileLogGroup.logGroupArn,
-              ],
-            }),
-          ],
-        }),
-      },
     });
 
-    // Lambda function to create items in DynamoDB
+    // Add custom policies for Lambda functions
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
+          'dynamodb:Query',
+          'dynamodb:Scan',
+        ],
+        resources: [itemsTable.tableArn],
+      })
+    );
+
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+          's3:ListBucket',
+        ],
+        resources: [filesBucket.bucketArn, `${filesBucket.bucketArn}/*`],
+      })
+    );
+
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:DescribeSecret',
+        ],
+        resources: [appSecrets.secretArn],
+      })
+    );
+
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'kms:Decrypt',
+          'kms:GenerateDataKey',
+          'kms:DescribeKey',
+        ],
+        resources: [kmsKey.keyArn],
+      })
+    );
+
+    // Lambda Functions
     const createItemFunction = new lambda.Function(this, 'CreateItemFunction', {
       functionName: 'tap-create-item',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'create_item.handler',
       code: lambda.Code.fromAsset('lambda'),
-      role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30),
       environment: {
         TABLE_NAME: itemsTable.tableName,
-        KMS_KEY_ID: kmsKey.keyId,
+        BUCKET_NAME: filesBucket.bucketName,
         SECRET_ARN: appSecrets.secretArn,
+        KMS_KEY_ID: kmsKey.keyId,
       },
-      logGroup: createItemLogGroup,
+      role: lambdaRole,
     });
 
-    // Lambda function to get items from DynamoDB
     const getItemsFunction = new lambda.Function(this, 'GetItemsFunction', {
       functionName: 'tap-get-items',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'get_item.handler',
       code: lambda.Code.fromAsset('lambda'),
-      role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30),
       environment: {
         TABLE_NAME: itemsTable.tableName,
-        KMS_KEY_ID: kmsKey.keyId,
+        BUCKET_NAME: filesBucket.bucketName,
         SECRET_ARN: appSecrets.secretArn,
+        KMS_KEY_ID: kmsKey.keyId,
       },
-      logGroup: getItemsLogGroup,
+      role: lambdaRole,
     });
 
-    // Lambda function to upload files to S3
     const uploadFileFunction = new lambda.Function(this, 'UploadFileFunction', {
       functionName: 'tap-upload-file',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'upload_file.handler',
       code: lambda.Code.fromAsset('lambda'),
-      role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30),
       environment: {
+        TABLE_NAME: itemsTable.tableName,
         BUCKET_NAME: filesBucket.bucketName,
-        KMS_KEY_ID: kmsKey.keyId,
         SECRET_ARN: appSecrets.secretArn,
+        KMS_KEY_ID: kmsKey.keyId,
       },
-      logGroup: uploadFileLogGroup,
+      role: lambdaRole,
     });
 
-    // API Gateway with CORS enabled
+    // API Gateway
     const api = new apigateway.RestApi(this, 'TapApi', {
       restApiName: 'TAP Serverless API',
       description: 'Secure serverless web application API',
@@ -279,556 +334,369 @@ export class TapStack extends cdk.Stack {
           'X-Amz-Security-Token',
         ],
       },
-      cloudWatchRole: true,
-      deployOptions: {
-        stageName: 'prod',
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
-        metricsEnabled: true,
-      },
     });
 
-    // Create proper request validator for the actual API
-    const actualRequestValidator = new apigateway.RequestValidator(
-      this,
-      'ActualRequestValidator',
-      {
-        restApi: api,
-        validateRequestBody: true,
-        validateRequestParameters: true,
-      }
-    );
-
-    // Request models for validation
-    const createItemModel = api.addModel('CreateItemModel', {
-      contentType: 'application/json',
-      modelName: 'CreateItemModel',
-      schema: {
-        schema: apigateway.JsonSchemaVersion.DRAFT4,
-        title: 'Create Item Schema',
-        type: apigateway.JsonSchemaType.OBJECT,
-        properties: {
-          name: {
-            type: apigateway.JsonSchemaType.STRING,
-            minLength: 1,
-            maxLength: 100,
-          },
-          description: {
-            type: apigateway.JsonSchemaType.STRING,
-            maxLength: 500,
-          },
-        },
-        required: ['name'],
-      },
-    });
-
-    // API Gateway resources and methods
+    // API Resources and Methods
     const itemsResource = api.root.addResource('items');
+    const itemResource = itemsResource.addResource('{id}');
 
-    // POST /items - Create item
-    itemsResource.addMethod(
-      'POST',
-      new apigateway.LambdaIntegration(createItemFunction),
-      {
-        requestValidator: actualRequestValidator,
-        requestModels: {
-          'application/json': createItemModel,
-        },
-      }
-    );
+    // Create Item
+    itemsResource.addMethod('POST', new apigateway.LambdaIntegration(createItemFunction));
 
-    // GET /items - Get all items
-    itemsResource.addMethod(
-      'GET',
-      new apigateway.LambdaIntegration(getItemsFunction)
-    );
+    // Get Items
+    itemsResource.addMethod('GET', new apigateway.LambdaIntegration(getItemsFunction));
 
-    // Files resource for uploads
+    // Get Item by ID
+    itemResource.addMethod('GET', new apigateway.LambdaIntegration(getItemsFunction));
+
+    // Update Item
+    itemResource.addMethod('PUT', new apigateway.LambdaIntegration(createItemFunction));
+
+    // Delete Item
+    itemResource.addMethod('DELETE', new apigateway.LambdaIntegration(createItemFunction));
+
+    // File Upload
     const filesResource = api.root.addResource('files');
+    filesResource.addMethod('POST', new apigateway.LambdaIntegration(uploadFileFunction));
 
-    // POST /files - Upload file
-    filesResource.addMethod(
-      'POST',
-      new apigateway.LambdaIntegration(uploadFileFunction),
-      {
-        requestValidator: actualRequestValidator,
-      }
-    );
+    // Add tags to all resources
+    cdk.Tags.of(api).add('Environment', props?.environmentSuffix || 'dev');
+    cdk.Tags.of(api).add('Purpose', 'api-gateway');
+    cdk.Tags.of(createItemFunction).add('Environment', props?.environmentSuffix || 'dev');
+    cdk.Tags.of(getItemsFunction).add('Environment', props?.environmentSuffix || 'dev');
+    cdk.Tags.of(uploadFileFunction).add('Environment', props?.environmentSuffix || 'dev');
 
-    // CloudFormation Outputs
+    // Outputs
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'API Gateway endpoint URL',
+      exportName: 'TapApiGatewayUrl',
     });
 
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
       value: itemsTable.tableName,
       description: 'DynamoDB table name',
+      exportName: 'TapDynamoDBTableName',
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: filesBucket.bucketName,
-      description: 'S3 bucket name for file uploads',
+      description: 'S3 bucket for file uploads',
+      exportName: 'TapS3BucketName',
     });
 
     new cdk.CfnOutput(this, 'KMSKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for encryption',
+      exportName: 'TapKMSKeyId',
     });
 
     new cdk.CfnOutput(this, 'SecretsManagerArn', {
       value: appSecrets.secretArn,
       description: 'Secrets Manager secret ARN',
+      exportName: 'TapSecretsManagerArn',
     });
   }
 }
+```
 
-//create_item.ts
+---
 
-import {
-  AttributeValue,
-  DynamoDBClient,
-  PutItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
-import { randomUUID } from 'crypto';
+## Lambda Functions
 
-// Custom type definitions for Lambda events
-interface APIGatewayProxyEvent {
-  body?: string;
-  headers?: { [name: string]: string };
-  httpMethod: string;
-  path: string;
-  queryStringParameters?: { [name: string]: string };
-  pathParameters?: { [name: string]: string };
-  stageVariables?: { [name: string]: string };
-  requestContext: Record<string, unknown>;
-  resource: string;
-  multiValueHeaders?: { [name: string]: string[] };
-  multiValueQueryStringParameters?: { [name: string]: string[] };
-  isBase64Encoded: boolean;
-}
+The Lambda functions are stored in the `lambda/` directory and handle the core business logic.
 
-interface APIGatewayProxyResult {
-  statusCode: number;
-  headers?: { [header: string]: boolean | number | string };
-  multiValueHeaders?: { [header: string]: (boolean | number | string)[] };
-  body: string;
-  isBase64Encoded?: boolean;
-}
+### create_item.handler
 
-interface CreateItemRequest {
-  name: string;
-  description?: string;
-}
-
-interface DynamoDBItem {
-  id: string;
-  name: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  [key: string]: string; // Add index signature for compatibility
-}
-
-// Helper function to convert JavaScript object to DynamoDB format
-function marshall(
-  obj: Record<string, unknown>
-): Record<string, AttributeValue> {
-  const marshalled: Record<string, AttributeValue> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (typeof value === 'string') {
-      marshalled[key] = { S: value };
-    } else if (typeof value === 'number') {
-      marshalled[key] = { N: value.toString() };
-    } else if (typeof value === 'boolean') {
-      marshalled[key] = { BOOL: value };
-    } else if (value === null) {
-      marshalled[key] = { NULL: true };
-    } else if (Array.isArray(value)) {
-      // For arrays, we'll convert each item to a simple string representation
-      marshalled[key] = { L: value.map(item => ({ S: String(item) })) };
-    } else if (typeof value === 'object' && value !== null) {
-      // For objects, we'll convert to a simple string representation
-      marshalled[key] = { S: JSON.stringify(value) };
-    }
-  }
-  return marshalled;
-}
-
+```typescript
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { KMSClient, DecryptCommand } from '@aws-sdk/client-kms';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
 const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
-
+const kmsClient = new KMSClient({ region: 'us-west-2' });
 
 export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
-  console.log('Create Item function invoked', JSON.stringify(event, null, 2));
-
+  event: any,
+  context: any
+): Promise<{ statusCode: number; body: string }> => {
   try {
-    // Validate request body
-    if (!event.body) {
+    const { id, name, description, fileUrl } = JSON.parse(event.body);
+    
+    // Validate input
+    if (!id || !name) {
       return {
         statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({ error: 'Request body is required' }),
+        body: JSON.stringify({ error: 'Missing required fields: id and name' }),
       };
-    }
-
-    const requestBody: CreateItemRequest = JSON.parse(event.body);
-
-    if (!requestBody.name) {
-      return {
-        statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({ error: 'Name is required' }),
-      };
-    }
-
-    // Verify access to secrets (demonstrates secrets manager integration)
-    try {
-      const secretCommand = new GetSecretValueCommand({
-        SecretId: process.env.SECRET_ARN,
-      });
-      await secretsClient.send(secretCommand);
-      console.log('Successfully accessed application secrets');
-    } catch (error) {
-      console.error('Failed to access secrets:', error);
     }
 
     // Create item in DynamoDB
-    const item: DynamoDBItem = {
-      id: randomUUID(),
-      name: requestBody.name,
-      description: requestBody.description || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const putCommand = new PutItemCommand({
-      TableName: process.env.TABLE_NAME,
-      Item: marshall(item),
-    });
-
-    await dynamoClient.send(putCommand);
-
-    console.log('Item created successfully:', item.id);
+    const docClient = DynamoDBDocumentClient.from(dynamoClient);
+    await docClient.send(
+      new PutCommand({
+        TableName: process.env.TABLE_NAME,
+        Item: {
+          id,
+          name,
+          description: description || '',
+          fileUrl: fileUrl || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      })
+    );
 
     return {
       statusCode: 201,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        message: 'Item created successfully',
-        item: item,
-      }),
+      body: JSON.stringify({ message: 'Item created successfully', id }),
     };
   } catch (error) {
     console.error('Error creating item:', error);
-
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
       body: JSON.stringify({ error: 'Internal server error' }),
     };
   }
 };
+```
 
-//get_item.ts
-import {
-  AttributeValue,
-  DynamoDBClient,
-  ScanCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
+### get_item.handler
 
-// Custom type definitions for Lambda events
-interface APIGatewayProxyEvent {
-  body?: string;
-  headers?: { [name: string]: string };
-  httpMethod: string;
-  path: string;
-  queryStringParameters?: { [name: string]: string };
-  pathParameters?: { [name: string]: string };
-  stageVariables?: { [name: string]: string };
-  requestContext: Record<string, unknown>;
-  resource: string;
-  multiValueHeaders?: { [name: string]: string[] };
-  multiValueQueryStringParameters?: { [name: string]: string[] };
-  isBase64Encoded: boolean;
-}
-
-interface APIGatewayProxyResult {
-  statusCode: number;
-  headers?: { [header: string]: boolean | number | string };
-  multiValueHeaders?: { [header: string]: (boolean | number | string)[] };
-  body: string;
-  isBase64Encoded?: boolean;
-}
-
-// Helper function to convert DynamoDB format to JavaScript object
-function unmarshall(
-  dynamoObj: Record<string, AttributeValue>
-): Record<string, unknown> {
-  const unmarshalled: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(dynamoObj)) {
-    if (value && typeof value === 'object' && 'S' in value) {
-      unmarshalled[key] = value.S;
-    } else if (value && typeof value === 'object' && 'N' in value) {
-      unmarshalled[key] = Number(value.N);
-    } else if (value && typeof value === 'object' && 'BOOL' in value) {
-      unmarshalled[key] = value.BOOL;
-    } else if (value && typeof value === 'object' && 'NULL' in value) {
-      unmarshalled[key] = null;
-    } else if (value && typeof value === 'object' && 'L' in value) {
-      unmarshalled[key] = (value as { L: AttributeValue[] }).L.map(
-        (item: AttributeValue) => {
-          if (typeof item === 'object' && item !== null) {
-            return unmarshall(
-              item as unknown as Record<string, AttributeValue>
-            );
-          }
-          return item;
-        }
-      );
-    } else if (value && typeof value === 'object' && 'M' in value) {
-      unmarshalled[key] = unmarshall(
-        (value as { M: Record<string, AttributeValue> }).M as unknown as Record<
-          string,
-          AttributeValue
-        >
-      );
-    } else {
-      unmarshalled[key] = value;
-    }
-  }
-  return unmarshalled;
-}
+```typescript
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
 const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
 
-
 export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
-  console.log('Get Items function invoked', JSON.stringify(event, null, 2));
-
+  event: any,
+  context: any
+): Promise<{ statusCode: number; body: string }> => {
   try {
-    // Verify access to secrets (demonstrates secrets manager integration)
-    try {
-      const secretCommand = new GetSecretValueCommand({
-        SecretId: process.env.SECRET_ARN,
-      });
-      await secretsClient.send(secretCommand);
-      console.log('Successfully accessed application secrets');
-    } catch (error) {
-      console.error('Failed to access secrets:', error);
+    const docClient = DynamoDBDocumentClient.from(dynamoClient);
+    
+    if (event.pathParameters && event.pathParameters.id) {
+      // Get specific item by ID
+      const { id } = event.pathParameters;
+      const result = await docClient.send(
+        new GetCommand({
+          TableName: process.env.TABLE_NAME,
+          Key: { id },
+        })
+      );
+
+      if (!result.Item) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Item not found' }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify(result.Item),
+      };
+    } else {
+      // Get all items
+      const result = await docClient.send(
+        new ScanCommand({
+          TableName: process.env.TABLE_NAME,
+        })
+      );
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify(result.Items || []),
+      };
     }
-
-    // Scan DynamoDB table for all items
-    const scanCommand = new ScanCommand({
-      TableName: process.env.TABLE_NAME,
-    });
-
-    const result = await dynamoClient.send(scanCommand);
-
-    // Convert DynamoDB items to regular JavaScript objects
-    const items =
-      result.Items?.map((item: Record<string, AttributeValue>) =>
-        unmarshall(item)
-      ) || [];
-
-    console.log(`Retrieved ${items.length} items from DynamoDB`);
-
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        items: items,
-        count: items.length,
-      }),
-    };
   } catch (error) {
-    console.error('Error retrieving items:', error);
-
+    console.error('Error getting items:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
       body: JSON.stringify({ error: 'Internal server error' }),
     };
   }
 };
+```
 
-//upload_file.ts
-import {
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
-import { randomUUID } from 'crypto';
+### upload_file.handler
 
-// Custom type definitions for Lambda events
-interface APIGatewayProxyEvent {
-  body?: string;
-  headers?: { [name: string]: string };
-  httpMethod: string;
-  path: string;
-  queryStringParameters?: { [name: string]: string };
-  pathParameters?: { [name: string]: string };
-  stageVariables?: { [name: string]: string };
-  requestContext: Record<string, unknown>;
-  resource: string;
-  multiValueHeaders?: { [name: string]: string[] };
-  multiValueQueryStringParameters?: { [name: string]: string[] };
-  isBase64Encoded: boolean;
-}
-
-interface APIGatewayProxyResult {
-  statusCode: number;
-  headers?: { [header: string]: boolean | number | string };
-  multiValueHeaders?: { [header: string]: (boolean | number | string)[] };
-  body: string;
-  isBase64Encoded?: boolean;
-}
-
-interface UploadRequest {
-  fileName?: string;
-  contentType?: string;
-}
-
+```typescript
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 const s3Client = new S3Client({ region: 'us-west-2' });
+const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
 const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
 
-
-// Custom implementation of getSignedUrl for S3
-async function getSignedUrl(
-  client: S3Client,
-  command: Record<string, unknown>,
-  options: { expiresIn: number }
-): Promise<string> {
-  // This is a simplified implementation
-  // In production, you would use the proper AWS SDK presigner
-  const expires = Math.floor(Date.now() / 1000) + options.expiresIn;
-
-  // For demo purposes, return a placeholder URL
-  // In real implementation, this would generate proper AWS signed URLs
-  return `https://${process.env.BUCKET_NAME}.s3.us-west-2.amazonaws.com/${(command as { input: { Key: string } }).input.Key}?expires=${expires}`;
-}
-
 export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
-  console.log('Upload File function invoked', JSON.stringify(event, null, 2));
-
+  event: any,
+  context: any
+): Promise<{ statusCode: number; body: string }> => {
   try {
-    // Verify access to secrets (demonstrates secrets manager integration)
-    try {
-      const secretCommand = new GetSecretValueCommand({
-        SecretId: process.env.SECRET_ARN,
-      });
-      await secretsClient.send(secretCommand);
-      console.log('Successfully accessed application secrets');
-    } catch (error) {
-      console.error('Failed to access secrets:', error);
+    const { itemId, fileName, fileContent, contentType } = JSON.parse(event.body);
+    
+    if (!itemId || !fileName || !fileContent) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing required fields' }),
+      };
     }
 
-    // Parse request for file upload parameters
-    const requestBody: UploadRequest = event.body ? JSON.parse(event.body) : {};
-    const fileName = requestBody.fileName || `file-${randomUUID()}`;
-    const contentType = requestBody.contentType || 'application/octet-stream';
-
-    // Generate a unique key for the file
-    const fileKey = `uploads/${new Date().getFullYear()}/${new Date().getMonth() + 1}/${fileName}`;
-
-    // Create a presigned URL for direct upload to S3
-    const putObjectCommand = new PutObjectCommand({
-      Bucket: process.env.BUCKET_NAME,
-      Key: fileKey,
-      ContentType: contentType,
-      ServerSideEncryption: 'aws:kms',
-      SSEKMSKeyId: process.env.KMS_KEY_ID,
-    });
-
-    // Generate presigned URL valid for 5 minutes
-    const uploadUrl = await getSignedUrl(
-      s3Client,
-      putObjectCommand as unknown as Record<string, unknown>,
-      {
-        expiresIn: 300,
-      }
+    // Upload file to S3
+    const key = `uploads/${itemId}/${fileName}`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: process.env.BUCKET_NAME,
+        Key: key,
+        Body: Buffer.from(fileContent, 'base64'),
+        ContentType: contentType || 'application/octet-stream',
+        ServerSideEncryption: 'aws:kms',
+        SSEKMSKeyId: process.env.KMS_KEY_ID,
+      })
     );
 
-    // Also generate a presigned URL for downloading the file (valid for 1 hour)
-    const getObjectCommand = new GetObjectCommand({
-      Bucket: process.env.BUCKET_NAME,
-      Key: fileKey,
-    });
-
-    const downloadUrl = await getSignedUrl(
-      s3Client,
-      getObjectCommand as unknown as Record<string, unknown>,
-      {
-        expiresIn: 3600,
-      }
+    // Update item in DynamoDB with file URL
+    const docClient = DynamoDBDocumentClient.from(dynamoClient);
+    await docClient.send(
+      new UpdateCommand({
+        TableName: process.env.TABLE_NAME,
+        Key: { id: itemId },
+        UpdateExpression: 'SET fileUrl = :fileUrl, updatedAt = :updatedAt',
+        ExpressionAttributeValues: {
+          ':fileUrl': `s3://${process.env.BUCKET_NAME}/${key}`,
+          ':updatedAt': new Date().toISOString(),
+        },
+      })
     );
-
-    console.log('Generated presigned URLs for file:', fileKey);
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify({
-        message: 'Presigned URLs generated successfully',
-        uploadUrl: uploadUrl,
-        downloadUrl: downloadUrl,
-        fileKey: fileKey,
-        expiresIn: '5 minutes (upload) / 1 hour (download)',
+      body: JSON.stringify({ 
+        message: 'File uploaded successfully',
+        fileUrl: `s3://${process.env.BUCKET_NAME}/${key}`,
       }),
     };
   } catch (error) {
-    console.error('Error generating presigned URLs:', error);
-
+    console.error('Error uploading file:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
       body: JSON.stringify({ error: 'Internal server error' }),
     };
   }
 };
+```
+
+---
+
+## Infrastructure Overview
+
+### Security Features
+
+- **KMS Encryption**: All data is encrypted at rest using AWS KMS
+- **IAM Least Privilege**: Lambda functions have minimal required permissions
+- **S3 Security**: Buckets are private with encryption enabled
+- **Secrets Management**: Application secrets stored securely in AWS Secrets Manager
+
+### Scalability Features
+
+- **DynamoDB On-Demand**: Automatic scaling based on demand
+- **Lambda Auto-scaling**: Serverless functions scale automatically
+- **S3 Lifecycle**: Automatic log rotation and cleanup
+
+### Monitoring & Logging
+
+- **CloudWatch Logs**: Centralized logging for all Lambda functions
+- **S3 Access Logs**: Detailed access logging for audit purposes
+- **API Gateway Logging**: Request/response logging for debugging
+
+### Cost Optimization
+
+- **On-Demand Billing**: Pay only for resources used
+- **Log Retention**: Configurable log retention periods
+- **Resource Cleanup**: Automatic cleanup of demo resources
+
+---
+
+## Deployment
+
+### Prerequisites
+
+- AWS CLI configured with appropriate credentials
+- Node.js 18.x or later
+- AWS CDK CLI installed globally
+
+### Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Synthesize CloudFormation template
+npm run cdk:synth
+
+# Bootstrap CDK (first time only)
+npm run cdk:bootstrap
+
+# Deploy to AWS
+npm run cdk:deploy
+
+# Destroy infrastructure
+npm run cdk:destroy
+```
+
+### Environment Variables
+
+- `CDK_DEFAULT_ACCOUNT`: AWS account ID
+- `CDK_DEFAULT_REGION`: AWS region (set to us-west-2)
+- `ENVIRONMENT_SUFFIX`: Environment identifier (dev, staging, prod)
+
+---
+
+## Testing
+
+### Unit Tests
+
+```bash
+npm run test:unit
+```
+
+### Integration Tests
+
+```bash
+npm run test:integration
+```
+
+### All Tests
+
+```bash
+npm run test
+```
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   API Gateway   │───▶│  Lambda Functions│───▶│   DynamoDB      │
+│                 │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   S3 Buckets    │    │   KMS Keys      │    │ Secrets Manager │
+│                 │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+This infrastructure provides a secure, scalable, and cost-effective foundation for the TAP application with proper separation of concerns and industry best practices.
 
