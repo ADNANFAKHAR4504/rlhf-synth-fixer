@@ -531,7 +531,7 @@ Resources:
             Action:
               - iam:ChangePassword
               - iam:GetUser
-            Resource: !Sub "arn:aws:iam::*:user/${!aws:username}"
+            Resource: "arn:aws:iam::*:user/${!aws:username}"
           - Sid: AllowManageOwnMFA
             Effect: Allow
             Action:
@@ -541,8 +541,8 @@ Resources:
               - iam:EnableMFADevice
               - iam:ResyncMFADevice
             Resource:
-              - !Sub "arn:aws:iam::*:mfa/${!aws:username}"
-              - !Sub "arn:aws:iam::*:user/${!aws:username}"
+              - "arn:aws:iam::*:mfa/${!aws:username}"
+              - "arn:aws:iam::*:user/${!aws:username}"
           - Sid: DenyAllExceptUnlessSignedInWithMFA
             Effect: Deny
             NotAction:
@@ -634,9 +634,9 @@ Resources:
       DBInstanceIdentifier: !Sub "${AWS::StackName}-database-${EnvironmentSuffix}"
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: "8.0.35"
+  EngineVersion: "8.0.43"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+  MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -662,7 +662,15 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub "${AWS::StackName}-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+      BucketName:
+        Fn::Join:
+          - "-"
+          - [
+              { "Ref": "AWS::StackName" },
+              "secure-bucket",
+              { "Ref": "EnvironmentSuffix" },
+              { "Ref": "AWS::AccountId" }
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -689,14 +697,16 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+  # Ensure EnvironmentSuffix is lowercase before deployment
       BucketName:
-        Fn::Sub:
-          - "${stack}-logging-bucket-${env}-${account}"
-          - {
-              stack: { "Fn::Lower": { "Ref": "AWS::StackName" } },
-              env: { "Fn::Lower": { "Ref": "EnvironmentSuffix" } },
-              account: { "Fn::Lower": { "Ref": "AWS::AccountId" } },
-            }
+        Fn::Join:
+          - "-"
+          - [
+              { "Ref": "AWS::StackName" },
+              "logging-bucket",
+              { "Ref": "EnvironmentSuffix" },
+              { "Ref": "AWS::AccountId" }
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -812,7 +822,15 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub "${AWS::StackName}-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
+      BucketName:
+        Fn::Join:
+          - "-"
+          - [
+              { "Ref": "AWS::StackName" },
+              "cloudtrail",
+              { "Ref": "EnvironmentSuffix" },
+              { "Ref": "AWS::AccountId" }
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -868,6 +886,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
+      IsLogging: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
