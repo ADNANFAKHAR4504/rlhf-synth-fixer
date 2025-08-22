@@ -1,4 +1,24 @@
-```yml
+# Secure AWS Infrastructure Documentation
+
+This document provides comprehensive documentation for the secure AWS infrastructure components deployed using CloudFormation templates.
+
+## Overview
+
+The infrastructure implements a secure, scalable web application environment with the following key features:
+
+- **Encrypted Storage**: All data is encrypted using AWS KMS
+- **Least-Privilege Access**: IAM roles and policies follow the principle of least privilege
+- **Comprehensive Logging**: S3 access logs and CloudWatch monitoring
+- **Network Security**: VPC with public/private subnets and security groups
+- **Compliance**: GDPR-compliant data handling and retention policies
+
+## Infrastructure Components
+
+### 1. CloudFormation Template (YAML)
+
+The primary infrastructure template in YAML format:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure with encrypted storage, least-privilege access, and comprehensive logging'
 
@@ -49,7 +69,7 @@ Resources:
             Resource: '*'
 
           # 2) Allow any principal in THIS account to administer the key policy
-          #    (this covers your CI/deploy role so KMS won’t reject creation)
+          #    (this covers your CI/deploy role so KMS won't reject creation)
           - Sid: AllowAccountAdminsToManageKey
             Effect: Allow
             Principal: '*'
@@ -69,22 +89,6 @@ Resources:
             Condition:
               StringEquals:
                 kms:CallerAccount: !Ref AWS::AccountId
-
-          # 3) (Optional) Allow in-account use via CFN-only path if you want to be stricter
-          # - Sid: AllowUseViaCloudFormation
-          #   Effect: Allow
-          #   Principal: "*"
-          #   Action:
-          #     - kms:Encrypt
-          #     - kms:Decrypt
-          #     - kms:ReEncrypt*
-          #     - kms:GenerateDataKey*
-          #     - kms:DescribeKey
-          #   Resource: "*"
-          #   Condition:
-          #     StringEquals:
-          #       kms:CallerAccount: !Ref AWS::AccountId
-          #       kms:ViaService: !Sub cloudformation.${AWS::Region}.amazonaws.com
 
   SecureVPC:
     Type: AWS::EC2::VPC
@@ -472,5 +476,219 @@ Outputs:
     Value: !GetAtt EC2InstanceRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-EC2InstanceRoleArn'
-
 ```
+
+### 2. CloudFormation Template (JSON)
+
+The comprehensive infrastructure template in JSON format with enhanced features:
+
+```json
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure, scalable web application infrastructure with multi-region deployment, GDPR compliance, and comprehensive security controls.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "ProjectName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration (Primary Region)"
+                    },
+                    "Parameters": [
+                        "VpcCidr",
+                        "PublicSubnetCidr",
+                        "PrivateSubnetCidr",
+                        "BastionSshCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "WebServerAmiId",
+                        "InstanceType",
+                        "MinInstances",
+                        "MaxInstances",
+                        "WebAppPort"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "DataRetentionDays",
+                        "AdminMfaRequired",
+                        "AdminUserEmail"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "secure-web-app",
+            "Description": "Project name for resource naming",
+            "AllowedPattern": "^[a-zA-Z0-9-]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC in the primary region (us-east-1)",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
+        },
+        "PublicSubnetCidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for the first public subnet in primary region"
+        },
+        "PrivateSubnetCidr": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for the first private subnet in primary region"
+        },
+        "BastionSshCidr": {
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "Description": "CIDR block for SSH access to Bastion Host (MUST be restricted in production)",
+            "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(\\/([0-9]|[1-2][0-9]|3[0-2]))?$"
+        },
+        "WebServerAmiId": {
+            "Type": "AWS::EC2::Image::Id",
+            "Description": "AMI ID for web servers (e.g., ami-0abcdef1234567890 for Amazon Linux 2)",
+            "Default": "ami-0abcdef1234567890"
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.medium",
+            "Description": "EC2 instance type for web servers"
+        },
+        "MinInstances": {
+            "Type": "Number",
+            "Default": 2,
+            "Description": "Minimum number of instances in the Auto Scaling Group",
+            "MinValue": 1,
+            "MaxValue": 10
+        },
+        "MaxInstances": {
+            "Type": "Number",
+            "Default": 10,
+            "Description": "Maximum number of instances in the Auto Scaling Group",
+            "MinValue": 1,
+            "MaxValue": 20
+        },
+        "WebAppPort": {
+            "Type": "Number",
+            "Default": 80,
+            "Description": "Port for the web application",
+            "MinValue": 1,
+            "MaxValue": 65535
+        },
+        "DataRetentionDays": {
+            "Type": "Number",
+            "Default": 90,
+            "Description": "Number of days to retain application logs and data",
+            "MinValue": 1,
+            "MaxValue": 2555
+        },
+        "AdminMfaRequired": {
+            "Type": "String",
+            "Default": "true",
+            "Description": "Whether MFA is required for admin access",
+            "AllowedValues": ["true", "false"]
+        },
+        "AdminUserEmail": {
+            "Type": "String",
+            "Description": "Email address for admin user notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        }
+    }
+}
+```
+
+## Security Features
+
+### Encryption
+
+- **KMS Key Management**: Custom KMS key with automatic rotation
+- **S3 Encryption**: Server-side encryption with KMS keys
+- **EBS Encryption**: Encrypted EBS volumes for EC2 instances
+- **In-Transit Encryption**: TLS/SSL for all data transmission
+
+### Access Control
+
+- **IAM Roles**: Least-privilege IAM roles for EC2 instances
+- **Security Groups**: Restrictive security groups with minimal required access
+- **S3 Bucket Policies**: Secure bucket policies with proper access controls
+- **Public Access Block**: All S3 buckets block public access
+
+### Monitoring and Logging
+
+- **S3 Access Logs**: Comprehensive logging for all S3 bucket access
+- **CloudWatch Integration**: Monitoring and alerting capabilities
+- **VPC Flow Logs**: Network traffic monitoring
+- **Lifecycle Policies**: Automated data retention and cleanup
+
+## Deployment Instructions
+
+1. **Prerequisites**:
+   - AWS CLI configured with appropriate permissions
+   - CloudFormation stack creation permissions
+   - Valid public IP address for SSH access
+
+2. **Deploy YAML Template**:
+
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name secure-infrastructure \
+     --template-body file://TapStack.yml \
+     --parameters ParameterKey=YourPublicIP,ParameterValue=YOUR_IP/32
+   ```
+
+3. **Deploy JSON Template**:
+
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name comprehensive-infrastructure \
+     --template-body file://TapStack.json \
+     --capabilities CAPABILITY_NAMED_IAM
+   ```
+
+## Resource Naming Convention
+
+All resources follow a consistent naming pattern:
+
+- `{StackName}-{ResourceType}-{Environment}`
+- Example: `secure-infrastructure-vpc-prod`
+
+## Compliance and Best Practices
+
+- **GDPR Compliance**: Data retention policies and encryption
+- **AWS Well-Architected Framework**: Follows security, reliability, and performance pillars
+- **CIS Benchmarks**: Implements security best practices
+- **Least Privilege**: Minimal required permissions for all resources
+
+## Cost Optimization
+
+- **Auto Scaling**: Dynamic scaling based on demand
+- **Lifecycle Policies**: Automatic cleanup of old logs
+- **Instance Types**: Appropriate sizing for workloads
+- **Storage Classes**: Cost-effective S3 storage options
