@@ -418,7 +418,7 @@
             "Properties": {
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": 8.0,
+                "EngineVersion": "8.0.37",
                 "MultiAZ": true,
                 "MasterUsername": {
                     "Ref": "DBUsername"
