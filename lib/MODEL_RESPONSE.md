@@ -1,6 +1,6 @@
 AWS Multi-Region Web Application Deployment with Pulumi TypeScript
 
-```ts
+
 
 Project Structure
 aws-govcloud-webapp/
@@ -15,7 +15,7 @@ aws-govcloud-webapp/
 │   └── monitoring.ts
 └── README.md
 
-
+```yml
 1. Pulumi.yaml
 name: aws-govcloud-webapp
 runtime: nodejs
@@ -46,6 +46,9 @@ template:
     aws-govcloud-webapp:cpuThreshold:
       description: CPU utilization threshold for scaling
       default: 70
+```
+
+```json
 2. package.json
 {
   "name": "aws-govcloud-webapp",
@@ -68,6 +71,7 @@ template:
     "typescript": "^5.0.0"
   }
 }
+
 3. tsconfig.json
 {
   "compilerOptions": {
@@ -87,6 +91,7 @@ template:
     "index.ts"
   ]
 }
+```
 
 ```ts
 4. src/networking.ts
@@ -851,3 +856,4 @@ const primaryApplication = new Application("primary", {
 
 const primaryMonitoring = new Monitoring("primary", {
   applicationName: applicationName,
+```

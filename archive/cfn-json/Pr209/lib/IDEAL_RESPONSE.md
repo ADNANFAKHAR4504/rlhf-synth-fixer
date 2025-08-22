@@ -1,4 +1,4 @@
-```
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "AWS CloudFormation template to provision a secure development environment with networking, EC2, RDS PostgreSQL, and S3.",
@@ -589,9 +589,6 @@
     "EC2InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${EnvironmentSuffix}-EC2-Role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -659,6 +656,12 @@
         ],
         "Tags": [
           {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentSuffix}-EC2-Role"
+            }
+          },
+          {
             "Key": "Environment",
             "Value": {
               "Ref": "EnvironmentSuffix"
@@ -670,9 +673,6 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${EnvironmentSuffix}-EC2-InstanceProfile"
-        },
         "Roles": [
           {
             "Ref": "EC2InstanceRole"

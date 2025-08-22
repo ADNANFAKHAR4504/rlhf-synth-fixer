@@ -33,10 +33,10 @@ Deploy a serverless document processing infrastructure in AWS using CDK TypeScri
 ### 2. **Compute Services**
 
 - **AWS Lambda Functions** (minimum 2):
-  - **Document Processor**: Triggered by S3 events, processes documents
-  - **API Handler**: Handles API Gateway requests for document operations
-  - Runtime: Node.js (latest supported version)
-  - Environment variables for configuration
+- **Document Processor**: Triggered by S3 events, processes documents
+- **API Handler**: Handles API Gateway requests for document operations
+- Runtime: Node.js (latest supported version)
+- Environment variables for configuration
 
 ### 3. **API Layer**
 
@@ -49,9 +49,9 @@ Deploy a serverless document processing infrastructure in AWS using CDK TypeScri
 
 - **VPC Configuration**: Private subnets for Lambda functions
 - **VPC Endpoints**: For secure AWS service communication:
-  - S3 VPC Endpoint (Gateway type)
-  - DynamoDB VPC Endpoint (Gateway type) 
-  - API Gateway VPC Endpoint (Interface type)
+- S3 VPC Endpoint (Gateway type)
+- DynamoDB VPC Endpoint (Gateway type) 
+- API Gateway VPC Endpoint (Interface type)
 - **Security Groups**: Minimal required access for Lambda functions
 
 ## Security & Best Practices
@@ -74,15 +74,15 @@ Deploy a serverless document processing infrastructure in AWS using CDK TypeScri
 
 ### 1. **Document Upload Flow**
 
-- **API Gateway** → **Lambda Authorizer** (validates API key)
-- **API Handler Lambda** → **S3** (stores document)
-- **S3 Event** → **Document Processor Lambda** (triggers processing)
+- **API Gateway** **Lambda Authorizer** (validates API key)
+- **API Handler Lambda** **S3** (stores document)
+- **S3 Event** **Document Processor Lambda** (triggers processing)
 
 ### 2. **Processing Flow**
 
 - **Document Processor** extracts metadata and validates format
 - **DynamoDB** stores document metadata and status
-- **DynamoDB Streams** → **Notification Lambda** (status updates)
+- **DynamoDB Streams** **Notification Lambda** (status updates)
 
 ## Serverless Best Practices
 
@@ -131,16 +131,16 @@ Deploy a serverless document processing infrastructure in AWS using CDK TypeScri
 
 The solution must demonstrate:
 
-1. ✅ **Complete CDK TypeScript implementation** with proper imports and stack structure
-2. ✅ **Secure API Gateway with Lambda authorizers** validating API keys and permissions
-3. ✅ **Event-driven document processing** connecting S3, Lambda, and DynamoDB
-4. ✅ **Enterprise-grade security** with strictest least privilege IAM and complete encryption
-5. ✅ **KMS encryption at rest** for S3, DynamoDB, Lambda, and CloudWatch Logs
-6. ✅ **HTTPS/TLS encryption in transit** for all service communications
-7. ✅ **Comprehensive audit logging** with CloudTrail, CloudWatch, and access monitoring
-8. ✅ **Error handling and resilience** with DLQ and retry mechanisms
-9. ✅ **Security monitoring** with CloudWatch alarms for unauthorized access attempts
-10. ✅ **Financial services compliance** with complete traceability and data protection
+1. **Complete CDK TypeScript implementation** with proper imports and stack structure
+2. **Secure API Gateway with Lambda authorizers** validating API keys and permissions
+3. **Event-driven document processing** connecting S3, Lambda, and DynamoDB
+4. **Enterprise-grade security** with strictest least privilege IAM and complete encryption
+5. **KMS encryption at rest** for S3, DynamoDB, Lambda, and CloudWatch Logs
+6. **HTTPS/TLS encryption in transit** for all service communications
+7. **Comprehensive audit logging** with CloudTrail, CloudWatch, and access monitoring
+8. **Error handling and resilience** with DLQ and retry mechanisms
+9. **Security monitoring** with CloudWatch alarms for unauthorized access attempts
+10. **Financial services compliance** with complete traceability and data protection
 
 ## Critical Implementation Requirements
 
@@ -148,9 +148,9 @@ The solution must demonstrate:
 
 - Create API Gateway with usage plans and API keys
 - Implement Lambda authorizer that:
-  - Validates API key against DynamoDB permissions table
-  - Returns IAM policy allowing/denying specific API operations
-  - Logs all authorization attempts to CloudWatch
+- Validates API key against DynamoDB permissions table
+- Returns IAM policy allowing/denying specific API operations
+- Logs all authorization attempts to CloudWatch
 - Configure different permission levels (read-only, read-write, admin)
 
 ## Implementation Focus Areas
@@ -172,7 +172,7 @@ The solution must demonstrate:
 ### **VPC Endpoint Integration**
 
 - **S3 VPC Endpoint**: Gateway endpoint for S3 access
-- **DynamoDB VPC Endpoint**: Gateway endpoint for DynamoDB access  
+- **DynamoDB VPC Endpoint**: Gateway endpoint for DynamoDB access 
 - **API Gateway VPC Endpoint**: Interface endpoint for private API access
 - **Lambda in Private Subnets**: All functions deployed in private subnets
 
