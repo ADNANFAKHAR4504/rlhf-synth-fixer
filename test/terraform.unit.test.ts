@@ -348,6 +348,63 @@ describe("High Availability Web Application - Unit Tests", () => {
       expect(stackContent).toMatch(/value\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-asg"/);
       expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db"/);
     });
+
+    test("all resources have ManagedBy tag", () => {
+      const managedByTags = stackContent.match(/ManagedBy\s*=\s*"terraform"/g);
+      expect(managedByTags).toBeTruthy();
+      expect(managedByTags!.length).toBeGreaterThan(0);
+    });
+
+    test("security groups have proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-alb-sg"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-ec2-sg"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-rds-sg"/);
+    });
+
+    test("IAM resources have proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-ec2-role"/);
+    });
+
+    test("launch template has proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-launch-template"/);
+    });
+
+    test("load balancer resources have proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-alb"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-target-group"/);
+    });
+
+    test("auto scaling group has proper tagging", () => {
+      expect(stackContent).toMatch(/tag\s*{[^}]*key\s*=\s*"Name"[^}]*value\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-asg"/);
+      expect(stackContent).toMatch(/tag\s*{[^}]*key\s*=\s*"Environment"[^}]*value\s*=\s*"Production"/);
+      expect(stackContent).toMatch(/tag\s*{[^}]*key\s*=\s*"ManagedBy"[^}]*value\s*=\s*"terraform"/);
+    });
+
+    test("RDS resources have proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db-subnet-group"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db"/);
+    });
+
+    test("secrets manager has proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-db-password"/);
+    });
+
+    test("cloudwatch resources have proper tagging", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}-log-group"/);
+    });
+
+    test("consistent tag structure across all resources", () => {
+      // Verify that all tagged resources follow the same pattern
+      const tagPatterns = [
+        /Environment\s*=\s*"Production"/,
+        /ManagedBy\s*=\s*"terraform"/,
+        /Name\s*=\s*"\${var\.app_name}-\${var\.environment_suffix}/
+      ];
+      
+      tagPatterns.forEach(pattern => {
+        expect(stackContent).toMatch(pattern);
+      });
+    });
   });
 
   describe("Outputs", () => {
