@@ -1,4 +1,4 @@
-We’re building this in AWS CDK with TypeScript, running in us-east-1. Keep it as a three-file project:
+We're building this in AWS CDK with TypeScript, running in us-west-2. Keep it as a three-file project:
 
 bin/tap.ts (app + region)
 
