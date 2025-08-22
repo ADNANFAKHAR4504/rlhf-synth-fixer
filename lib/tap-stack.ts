@@ -82,11 +82,12 @@ export class TapStack extends TerraformStack {
     });
 
     // Get database credentials from AWS Secrets Manager (optional - you might want to handle this differently)
+    // Configuration parameters
     const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
       this,
       'db-password-secret',
       {
-        secretId: `${project}-${environmentSuffix}-db-password`,
+        secretId: 'my-db-password',
       }
     );
 
@@ -231,7 +232,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id,
       securityGroupIds: [privateEc2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'your-key-pair-name', // Replace with your key pair name
+      keyName: 'turing-key', // Replace with your key pair name
     });
 
     // Create RDS instance

@@ -310,7 +310,7 @@ describe('TapStack Unit Tests', () => {
         instanceProfile: expect.objectContaining({
           name: 'iam-instance-profile'
         }),
-        keyName: 'your-key-pair-name',
+        keyName: 'turing-key',
         userData: expect.stringContaining('#!/bin/bash')
       })
     );
@@ -328,7 +328,7 @@ describe('TapStack Unit Tests', () => {
         instanceProfile: expect.objectContaining({
           name: 'iam-instance-profile'
         }),
-        keyName: 'your-key-pair-name'
+        keyName: 'turing-key'
       })
     );
   });
