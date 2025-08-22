@@ -14,7 +14,7 @@ Parameters:
 
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
-    Default: TapStack-KeyPair
+    Default: nova-key-291295
     Description: Name of an existing EC2 KeyPair to enable SSH access
 
   VpcCIDR:
