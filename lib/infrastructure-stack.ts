@@ -69,26 +69,8 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                   Principal: {
                     AWS: `arn:aws:iam::${currentAccount.accountId}:root`,
                   },
-                  Action: [
-                    'kms:Create*',
-                    'kms:Describe*',
-                    'kms:Enable*',
-                    'kms:List*',
-                    'kms:Put*',
-                    'kms:Update*',
-                    'kms:Revoke*',
-                    'kms:Disable*',
-                    'kms:Get*',
-                    'kms:Delete*',
-                    'kms:ScheduleKeyDeletion',
-                    'kms:CancelKeyDeletion',
-                  ],
+                  Action: 'kms:*',
                   Resource: '*',
-                  Condition: {
-                    StringEquals: {
-                      'kms:ViaService': `s3.${currentRegion.name}.amazonaws.com`,
-                    },
-                  },
                 },
                 {
                   Sid: 'Allow CloudWatch Logs',
