@@ -1,80 +1,17 @@
-Hey there! We need your expertise as an AWS infrastructure engineer to help us build a secure and production-ready infrastructure using Terraform. Our main goal is to ensure our setup follows the best security practices.
+Hi, We need some help setting up a secure and production-ready infrastructure on AWS using Terraform. Security is our top priority, so we want to make sure we're following all the best practices.
 
-**Project Overview:**
+We're looking to build out a full environment that can be used for both staging and production, and it needs to be deployable in both `us-east-1` and `eu-west-1`.
 
-- **Our Goal:** Create a secure, multi-region AWS infrastructure.
-- **Tool:** We're using Terraform (HCL).
-- **Environments:** We need this to work for both our production and staging environments.
+Here's a rundown of what we need:
 
-**What We Need to Build:**
+We need a solid network foundation with a VPC that has both public and private subnets spread across a couple of availability zones. Our application servers will be EC2 instances, and we need to make sure their EBS volumes are encrypted. For our database, we're thinking of using RDS (either MySQL or PostgreSQL), and that needs to be encrypted as well.
 
-We're looking to set up a complete infrastructure with the following components:
+We'll also be using S3 for data storage, so those buckets need to be locked down and private. We're also planning on running some Lambda functions, and they'll need to be able to run inside our VPC and connect to the database.
 
-- **Networking:** A solid VPC with public and private subnets across multiple availability zones.
-- **Servers:** EC2 instances for our applications, with their storage encrypted.
-- **Database:** A reliable RDS database (MySQL or PostgreSQL) that's also encrypted.
-- **Storage:** S3 buckets for our data, locked down and secure.
-- **Serverless:** Lambda functions that run within our VPC.
-- **Permissions:** IAM roles and policies that grant only the necessary access.
-- **Encryption:** KMS keys to manage our encryption.
-- **Monitoring:** CloudWatch for logs, alerts, and monitoring.
-- **Firewalls:** Security groups to control network traffic.
+On the security front, we need to make sure we're using IAM roles and policies that follow the principle of least privilege. All our encryption should be managed with customer-managed KMS keys, and we need to have key rotation enabled. For network security, we'll need separate security groups for each part of the infrastructure (ALB, EC2, RDS), and they should be chained together correctly. For example, the ALB should be able to talk to the EC2 instances, and the EC2 instances should be able to talk to the RDS database. We also need to restrict SSH access to our EC2 instances to a specific set of IP addresses.
 
-**Key Security Rules:**
+For monitoring, we'd like to have CloudWatch set up to collect logs and send alerts. We'll need an alarm for high CPU usage on our EC2 instances that sends a notification to an SNS topic. And, of course, we need to make sure all our resources are tagged properly so we can keep track of everything.
 
-We're serious about security, so please make sure to:
+We're looking for a complete Terraform configuration, so we'll need the `modules/data.tf`,`modules/security.tf`,`modules/monitoring.tf`, `vars.tf`, `outputs.tf`,`tap_stack.tf` and any other files you think are necessary to keep the code organized.
 
-- **Networking:**
-  - Name security groups clearly.
-  - Restrict access to our EC2 instances to specific IP ranges.
-  - Chain security groups correctly (e.g., ALB talks to EC2, EC2 talks to RDS).
-- **Data Protection:**
-  - Encrypt our RDS database and EBS volumes with our own KMS keys.
-  - Make sure our S3 buckets are private.
-  - Enable key rotation for our KMS keys.
-- **Access Control:**
-  - Follow the principle of least privilege for all IAM roles.
-  - Use key-based SSH access for our EC2 instances (no passwords).
-  - Enforce MFA for all IAM users.
-- **Monitoring:**
-  - Tag all our resources so we know what's what.
-  - Set up CloudWatch alarms for high CPU usage on our EC2 instances.
-  - Use trusted AMIs from official sources.
-
-**How Everything Should Connect:**
-
-- The Application Load Balancer should be able to send traffic to the EC2 instances.
-- The EC2 instances should be able to connect to the RDS database.
-- The EC2 instances should have access to the necessary S3 buckets.
-- Our Lambda functions should be able to connect to the database.
-- CloudWatch alarms should send notifications to an SNS topic.
-
-**What We Expect from You:**
-
-Please provide a complete Terraform configuration, including:
-
-- `main.tf`: The core infrastructure.
-- `variables.tf`: All the configurable options.
-- `outputs.tf`: The important outputs we'll need.
-- `security.tf`: All the security-related configurations.
-- `monitoring.tf`: The monitoring and alerting setup.
-- `data.tf`: Data sources for things like AMIs and availability zones.
-
-**A Few Guidelines:**
-
-- Use a consistent naming convention for all resources.
-- Tag everything properly.
-- Use data sources for dynamic values.
-- Use customer-managed KMS keys.
-- Create separate security groups for each part of the infrastructure.
-
-**Final Checks:**
-
-Before you're done, please make sure that:
-
-- `terraform validate` and `terraform plan` run without any errors.
-- All the security requirements are met.
-- The configuration can be deployed in both `us-east-1` and `eu-west-1`.
-- The setup works for both production and staging environments.
-
-We're looking for a solution that's secure, well-architected, and ready for production. Thanks for your help!
+Many thanks for your help!
