@@ -10,7 +10,7 @@
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "us-west-1"
+  default     = "eu-west-1"
 }
 
 variable "allowed_ssh_cidr" {
@@ -49,12 +49,12 @@ locals {
     primary = {
       name = var.aws_region
       cidr = "10.0.0.0/16"
-      azs  = ["us-west-1a", "us-west-1b"]
+      azs  = ["eu-west-1a", "eu-west-1b"]
     }
     secondary = {
-      name = "us-west-2"
+      name = "eu-west-2"
       cidr = "10.1.0.0/16"
-      azs  = ["us-west-2a", "us-west-2b"]
+      azs  = ["eu-west-2a", "eu-west-2b"]
     }
   }
 
@@ -116,7 +116,7 @@ data "aws_ami" "amazon_linux_primary" {
 
 # Get latest Amazon Linux 2 AMI for secondary region
 data "aws_ami" "amazon_linux_secondary" {
-  provider    = aws.us_west_2
+  provider    = aws.eu_west_2
   most_recent = true
   owners      = ["amazon"]
 
@@ -160,7 +160,7 @@ resource "aws_kms_alias" "primary" {
 
 # KMS key for secondary region
 resource "aws_kms_key" "secondary" {
-  provider                = aws.us_west_2
+  provider                = aws.eu_west_2
   description             = "KMS key for ${var.project_name} secondary region encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
@@ -173,7 +173,7 @@ resource "aws_kms_key" "secondary" {
 
 # KMS key alias for secondary region
 resource "aws_kms_alias" "secondary" {
-  provider      = aws.us_west_2
+  provider      = aws.eu_west_2
   name          = "alias/${var.project_name}-secondary-${var.environment}"
   target_key_id = aws_kms_key.secondary.key_id
 }
@@ -342,7 +342,7 @@ resource "aws_cloudwatch_log_group" "primary_vpc_flow_logs" {
 
 # Secondary VPC
 resource "aws_vpc" "secondary" {
-  provider             = aws.us_west_2
+  provider             = aws.eu_west_2
   cidr_block           = local.regions.secondary.cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -355,7 +355,7 @@ resource "aws_vpc" "secondary" {
 
 # Internet Gateway for secondary VPC
 resource "aws_internet_gateway" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   tags = merge(local.common_tags, {
@@ -366,7 +366,7 @@ resource "aws_internet_gateway" "secondary" {
 
 # Public subnets for secondary VPC
 resource "aws_subnet" "secondary_public" {
-  provider                = aws.us_west_2
+  provider                = aws.eu_west_2
   count                   = length(local.regions.secondary.azs)
   vpc_id                  = aws_vpc.secondary.id
   cidr_block              = cidrsubnet(local.regions.secondary.cidr, 8, count.index)
@@ -382,7 +382,7 @@ resource "aws_subnet" "secondary_public" {
 
 # Private subnets for secondary VPC
 resource "aws_subnet" "secondary_private" {
-  provider          = aws.us_west_2
+  provider          = aws.eu_west_2
   count             = length(local.regions.secondary.azs)
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = cidrsubnet(local.regions.secondary.cidr, 8, count.index + 10)
@@ -397,7 +397,7 @@ resource "aws_subnet" "secondary_private" {
 
 # NAT Gateway for secondary VPC
 resource "aws_eip" "secondary_nat" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
@@ -409,7 +409,7 @@ resource "aws_eip" "secondary_nat" {
 }
 
 resource "aws_nat_gateway" "secondary" {
-  provider      = aws.us_west_2
+  provider      = aws.eu_west_2
   allocation_id = aws_eip.secondary_nat.id
   subnet_id     = aws_subnet.secondary_public[0].id
 
@@ -423,7 +423,7 @@ resource "aws_nat_gateway" "secondary" {
 
 # Route tables for secondary VPC
 resource "aws_route_table" "secondary_public" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   route {
@@ -438,7 +438,7 @@ resource "aws_route_table" "secondary_public" {
 }
 
 resource "aws_route_table" "secondary_private" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   vpc_id   = aws_vpc.secondary.id
 
   route {
@@ -454,14 +454,14 @@ resource "aws_route_table" "secondary_private" {
 
 # Route table associations for secondary VPC
 resource "aws_route_table_association" "secondary_public" {
-  provider       = aws.us_west_2
+  provider       = aws.eu_west_2
   count          = length(aws_subnet.secondary_public)
   subnet_id      = aws_subnet.secondary_public[count.index].id
   route_table_id = aws_route_table.secondary_public.id
 }
 
 resource "aws_route_table_association" "secondary_private" {
-  provider       = aws.us_west_2
+  provider       = aws.eu_west_2
   count          = length(aws_subnet.secondary_private)
   subnet_id      = aws_subnet.secondary_private[count.index].id
   route_table_id = aws_route_table.secondary_private.id
@@ -469,7 +469,7 @@ resource "aws_route_table_association" "secondary_private" {
 
 # VPC Flow Logs for secondary VPC
 resource "aws_flow_log" "secondary" {
-  provider        = aws.us_west_2
+  provider        = aws.eu_west_2
   iam_role_arn    = aws_iam_role.flow_logs_secondary.arn
   log_destination = aws_cloudwatch_log_group.secondary_vpc_flow_logs.arn
   traffic_type    = "ALL"
@@ -483,7 +483,7 @@ resource "aws_flow_log" "secondary" {
 
 # CloudWatch Log Group for secondary VPC flow logs
 resource "aws_cloudwatch_log_group" "secondary_vpc_flow_logs" {
-  provider          = aws.us_west_2
+  provider          = aws.eu_west_2
   name              = "/aws/vpc/flowlogs/${local.naming.vpc_secondary}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.secondary.arn
@@ -551,7 +551,7 @@ resource "aws_iam_role_policy" "flow_logs" {
 
 # IAM role for VPC Flow Logs (Secondary Region)
 resource "aws_iam_role" "flow_logs_secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   name     = "${var.project_name}-flow-logs-role-secondary-${var.environment}"
 
   assume_role_policy = jsonencode({
@@ -575,7 +575,7 @@ resource "aws_iam_role" "flow_logs_secondary" {
 
 # IAM policy for VPC Flow Logs (Secondary Region)
 resource "aws_iam_role_policy" "flow_logs_secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   name     = "${var.project_name}-flow-logs-policy-secondary-${var.environment}"
   role     = aws_iam_role.flow_logs_secondary.id
 
@@ -691,7 +691,7 @@ resource "aws_security_group" "ec2_primary" {
 
 # Security group for EC2 instances in secondary region
 resource "aws_security_group" "ec2_secondary" {
-  provider    = aws.us_west_2
+  provider    = aws.eu_west_2
   name        = "${local.naming.ec2_secondary}-sg"
   description = "Security group for EC2 instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
@@ -749,7 +749,7 @@ resource "aws_security_group" "rds_primary" {
 
 # Security group for RDS in secondary region
 resource "aws_security_group" "rds_secondary" {
-  provider    = aws.us_west_2
+  provider    = aws.eu_west_2
   name        = "${local.naming.rds_secondary}-sg"
   description = "Security group for RDS instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
@@ -812,7 +812,7 @@ resource "aws_instance" "primary" {
 
 # EC2 instance in secondary region
 resource "aws_instance" "secondary" {
-  provider                    = aws.us_west_2
+  provider                    = aws.eu_west_2
   ami                         = data.aws_ami.amazon_linux_secondary.id
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.secondary_public[0].id
@@ -890,7 +890,7 @@ resource "aws_s3_bucket_public_access_block" "primary" {
 
 # S3 bucket in secondary region
 resource "aws_s3_bucket" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = local.naming.s3_secondary
 
   tags = merge(local.common_tags, {
@@ -901,7 +901,7 @@ resource "aws_s3_bucket" "secondary" {
 
 # S3 bucket encryption for secondary region
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   rule {
@@ -914,7 +914,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
 
 # S3 bucket versioning for secondary region
 resource "aws_s3_bucket_versioning" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   versioning_configuration {
@@ -924,7 +924,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 
 # S3 bucket public access block for secondary region
 resource "aws_s3_bucket_public_access_block" "secondary" {
-  provider = aws.us_west_2
+  provider = aws.eu_west_2
   bucket   = aws_s3_bucket.secondary.id
 
   block_public_acls       = true
