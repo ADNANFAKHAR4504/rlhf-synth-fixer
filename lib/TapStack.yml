@@ -330,7 +330,7 @@ Resources:
   DevDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub tapstack-dev-data-${AWS::AccountId}
+      BucketName: !Sub tapstack-dev-data-${AWS::AccountId}-tapstack
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -351,7 +351,7 @@ Resources:
             DeleteMarkerReplication:
               Status: Disabled
             Destination:
-              Bucket: !Sub arn:aws:s3:::tapstack-staging-data-${AWS::AccountId}
+              Bucket: !Sub arn:aws:s3:::tapstack-staging-data-${AWS::AccountId}-tapstack
               StorageClass: STANDARD
             Filter:
               Prefix: ""
@@ -729,7 +729,7 @@ Resources:
   StagingDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub tapstack-staging-data-${AWS::AccountId}
+      BucketName: !Sub tapstack-staging-data-${AWS::AccountId}-tapstack
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -750,7 +750,7 @@ Resources:
             DeleteMarkerReplication:
               Status: Disabled
             Destination:
-              Bucket: !Sub arn:aws:s3:::tapstack-prod-data-${AWS::AccountId}
+              Bucket: !Sub arn:aws:s3:::tapstack-prod-data-${AWS::AccountId}-tapstack
               StorageClass: STANDARD
             Filter:
               Prefix: ""
@@ -1128,7 +1128,7 @@ Resources:
   ProdDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub tapstack-prod-data-${AWS::AccountId}
+      BucketName: !Sub tapstack-prod-data-${AWS::AccountId}-tapstack
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
