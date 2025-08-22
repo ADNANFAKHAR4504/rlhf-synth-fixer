@@ -505,7 +505,7 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${S3BucketName}/*'
+                - !Sub 'arn:aws:s3:::${S3BucketName}/*'
 
   # AWS Config Service Role
   ConfigServiceRole:
