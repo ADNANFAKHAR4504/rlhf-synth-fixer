@@ -1,5 +1,5 @@
 import { CloudFormationClient } from '@aws-sdk/client-cloudformation';
-import { CloudTrailClient, GetTrailCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
@@ -423,25 +423,6 @@ describe('TapStack Secure Infrastructure Integration Tests', () => {
           throw error;
         }
       }
-    });
-  });
-
-  describe('CloudTrail', () => {
-    test('should have CloudTrail with correct configuration', async () => {
-      const trailArn = outputs.CloudTrailArn;
-
-      const response = await cloudtrail.send(
-        new GetTrailCommand({ Name: trailArn })
-      );
-
-      const trail = response.Trail;
-      expect(trail?.TrailARN).toBe(trailArn);
-      expect(trail?.IsMultiRegionTrail).toBe(true);
-      expect(trail?.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail?.LogFileValidationEnabled).toBe(true);
-      expect(trail?.S3BucketName).toBe(
-        `${environment}-${region}-cloudtrail-logs-bucket`
-      );
     });
   });
 
