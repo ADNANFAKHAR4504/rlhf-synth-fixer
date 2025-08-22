@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291551",
+  "team": "1",
+  "startedAt": "2025-08-22T15:14:09.558Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Serverless Architecture",
+    "API Gateway Configuration", 
+    "Lambda Function Development",
+    "DynamoDB Management",
+    "IAM Security Configuration",
+    "CloudWatch Monitoring Setup",
+    "CORS Configuration",
+    "Infrastructure Provisioning"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Lambda",
+    "API Gateway", 
+    "DynamoDB",
+    "IAM",
+    "CloudWatch Logs",
+    "Route53"
+  ]
+}
