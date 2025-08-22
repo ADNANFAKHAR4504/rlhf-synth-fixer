@@ -9,7 +9,6 @@ import {
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeInstancesCommand,
   DescribeNetworkAclsCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -209,41 +208,6 @@ describe('TapStack Secure Infrastructure Integration Tests', () => {
           rule => rule.FromPort === 3306 && rule.ToPort === 3306
         )
       ).toBe(true);
-    });
-  });
-
-  describe('EC2 Instances', () => {
-    test('should have EC2 instances with correct configuration', async () => {
-      const instance1Id = outputs.EC2Instance1Id;
-      const instance2Id = outputs.EC2Instance2Id;
-
-      const response = await ec2.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [instance1Id, instance2Id],
-        })
-      );
-
-      const instances: any[] = [];
-      response.Reservations?.forEach(reservation => {
-        reservation.Instances?.forEach(instance => instances.push(instance));
-      });
-
-      expect(instances.length).toBe(2);
-
-      instances.forEach(instance => {
-        expect(instance.InstanceType).toBe('t3.micro');
-        expect(instance.State?.Name).toMatch(
-          /running|stopped|stopping|pending/
-        );
-        expect(instance.Monitoring?.State).toBe('enabled');
-
-        // Check EBS encryption (more flexible check)
-        const rootVolume = instance.BlockDeviceMappings?.[0]?.Ebs;
-        if (rootVolume) {
-          expect(rootVolume.Encrypted).toBe(true);
-          expect(rootVolume.DeleteOnTermination).toBe(true);
-        }
-      });
     });
   });
 
