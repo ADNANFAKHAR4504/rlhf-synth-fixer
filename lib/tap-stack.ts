@@ -113,7 +113,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.webAclArn = infrastructureStack.webAclArn;
     this.logGroupName = infrastructureStack.logGroupName;
     this.albLogsBucketName = infrastructureStack.albLogsBucketName;
-    this.cloudFrontLogsBucketName = infrastructureStack.cloudFrontLogsBucketName;
+    this.cloudFrontLogsBucketName =
+      infrastructureStack.cloudFrontLogsBucketName;
 
     // Register the outputs of this component.
     this.registerOutputs({
