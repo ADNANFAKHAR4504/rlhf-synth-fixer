@@ -1,11 +1,6 @@
 
-```
 
-## Core Implementation
-
-### 1. Environment Configuration
-
-```typescript
+``` typescript
 // lib/config/environments.ts
 export interface EnvironmentConfig {
   account: string;
@@ -216,7 +211,7 @@ export class SecureIamRole extends Construct {
 }
 ```
 
-### 3. Rollback Protection Construct
+
 
 ```typescript
 // lib/constructs/rollback-protection.ts
@@ -313,7 +308,6 @@ export class RollbackProtection extends Construct {
 }
 ```
 
-### 4. Regional Stack Implementation
 
 ```typescript
 // lib/stacks/iam-regional-stack.ts
@@ -433,7 +427,6 @@ export class IamRegionalStack extends Stack {
 }
 ```
 
-### 5. Main Application Entry Point
 
 ```typescript
 // bin/iam-app.ts
@@ -466,9 +459,7 @@ Object.entries(environments).forEach(([envName, config]) => {
 });
 ```
 
-## Testing and Validation
 
-### 6. Validation Script
 
 ```bash
 #!/bin/bash
@@ -505,7 +496,6 @@ done
 echo "All templates validated successfully!"
 ```
 
-### 7. Integration Tests
 
 ```typescript
 // test/integration/rollback.test.ts
@@ -571,9 +561,8 @@ describe('Rollback Protection Integration', () => {
 });
 ```
 
-## Deployment and Best Practices
 
-### 8. CDK Configuration
+
 
 ```json
 {
@@ -589,19 +578,4 @@ describe('Rollback Protection Integration', () => {
 }
 ```
 
-### 9. Deployment Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Run security validation
-./scripts/validate-templates.sh
-
-# Deploy with rollback protection
-npx cdk deploy --all --require-approval broadening --rollback
-
-# Test rollback scenario (in non-prod)
-npx cdk deploy TestStack --parameters FailureSimulation=true
-```
 
