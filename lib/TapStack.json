@@ -286,7 +286,7 @@
                 {
                     "Ref": "ExistingConfigRecorderName"
                 },
-                ""
+                "use-existing"
             ]
         },
         "CreateConfigDeliveryChannelAndRecorder": {

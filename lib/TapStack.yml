@@ -145,7 +145,7 @@ Conditions:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
     !Equals [!Ref ExistingConfigDeliveryChannelName, '']
-  CreateConfigRecorder: !Equals [!Ref ExistingConfigRecorderName, '']
+  CreateConfigRecorder: !Equals [!Ref ExistingConfigRecorderName, 'use-existing']
   CreateConfigDeliveryChannelAndRecorder:
     !And [
       !Condition CreateConfigDeliveryChannel,
