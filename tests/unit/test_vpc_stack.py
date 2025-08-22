@@ -85,10 +85,12 @@ class TestVpcStack(unittest.TestCase):
     def test_exports_vpc_id(self):
         """Test that VPC ID is exported"""
         outputs = self.template.find_outputs("*")
+        # Check if any output has the correct export name
         vpc_output_exists = any(
-            f"webapp-vpc-id-{self.env_suffix}" in key for key in outputs.keys()
+            output.get('Export', {}).get('Name') == f"webapp-vpc-id-{self.env_suffix}"
+            for output in outputs.values()
         )
-        self.assertTrue(vpc_output_exists, "VPC ID should be exported")
+        self.assertTrue(vpc_output_exists, "VPC ID should be exported with correct export name")
 
     @mark.it("provides access to vpc and security groups")
     def test_provides_access_to_resources(self):
