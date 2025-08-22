@@ -1,26 +1,7 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - AWS CloudFormation template with security best practices and compliance for TAP environment'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-      - Label:
-          default: 'Security Configuration'
-        Parameters:
-          - AllowedSSHCIDR
-          - DBUsername
-
+Description: 'AWS CloudFormation template with security best practices and compliance for production environment'
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
   AllowedSSHCIDR:
     Type: String
     Default: '10.0.0.0/8'
@@ -30,13 +11,12 @@ Parameters:
     Default: 'admin'
     Description: 'Database administrator username'
     NoEcho: true
-
 Resources:
   # KMS Key for encryption
-  TAPKMSKey:
+  ProductionKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'Customer-managed KMS key for TAP environment'
+      Description: 'Customer-managed KMS key for production environment'
       KeyPolicy:
         Statement:
           - Sid: Enable IAM User Permissions
@@ -91,33 +71,33 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPKMSKey${EnvironmentSuffix}'
+          Value: 'ProductionKMSKey'
         - Key: AutoTerminate
           Value: '30'
-  TAPKMSKeyAlias:
+  ProductionKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/tap-key-${EnvironmentSuffix}'
-      TargetKeyId: !Ref TAPKMSKey
+      AliasName: alias/production-key
+      TargetKeyId: !Ref ProductionKMSKey
   # Database Secret
-  TAPDatabaseSecret:
+  DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${AWS::StackName}-tap-db-credentials-${EnvironmentSuffix}'
-      Description: 'Database credentials for TAP RDS instance'
+      Name: !Sub '${AWS::StackName}-db-credentials'
+      Description: 'Database credentials for production RDS instance'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
-      KmsKeyId: !Ref TAPKMSKey
+      KmsKeyId: !Ref ProductionKMSKey
       Tags:
         - Key: Name
-          Value: !Sub 'TAPDatabaseSecret${EnvironmentSuffix}'
+          Value: 'DatabaseSecret'
         - Key: AutoTerminate
           Value: '30'
   # VPC and Networking
-  TAPVPC:
+  ProductionVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: '10.0.0.0/16'
@@ -125,100 +105,100 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'TAPVPC${EnvironmentSuffix}'
+          Value: 'ProductionVPC'
         - Key: AutoTerminate
           Value: '30'
-  TAPPublicSubnet1:
+  PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       CidrBlock: '10.0.1.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'TAPPublicSubnet1${EnvironmentSuffix}'
+          Value: 'PublicSubnet1'
         - Key: AutoTerminate
           Value: '30'
-  TAPPublicSubnet2:
+  PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       CidrBlock: '10.0.2.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'TAPPublicSubnet2${EnvironmentSuffix}'
+          Value: 'PublicSubnet2'
         - Key: AutoTerminate
           Value: '30'
-  TAPPrivateSubnet1:
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       CidrBlock: '10.0.3.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'TAPPrivateSubnet1${EnvironmentSuffix}'
+          Value: 'PrivateSubnet1'
         - Key: AutoTerminate
           Value: '30'
-  TAPPrivateSubnet2:
+  PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       CidrBlock: '10.0.4.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'TAPPrivateSubnet2${EnvironmentSuffix}'
+          Value: 'PrivateSubnet2'
         - Key: AutoTerminate
           Value: '30'
-  TAPInternetGateway:
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'TAPIGW${EnvironmentSuffix}'
+          Value: 'ProductionIGW'
         - Key: AutoTerminate
           Value: '30'
-  TAPAttachGateway:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref TAPVPC
-      InternetGatewayId: !Ref TAPInternetGateway
-  TAPPublicRouteTable:
+      VpcId: !Ref ProductionVPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       Tags:
         - Key: Name
-          Value: !Sub 'TAPPublicRouteTable${EnvironmentSuffix}'
+          Value: 'PublicRouteTable'
         - Key: AutoTerminate
           Value: '30'
-  TAPPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: TAPAttachGateway
+    DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref TAPPublicRouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
-      GatewayId: !Ref TAPInternetGateway
-  TAPPublicSubnet1RouteTableAssociation:
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref TAPPublicSubnet1
-      RouteTableId: !Ref TAPPublicRouteTable
-  TAPPublicSubnet2RouteTableAssociation:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref TAPPublicSubnet2
-      RouteTableId: !Ref TAPPublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
   # Security Groups
-  TAPALBSecurityGroup:
+  ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for TAP Application Load Balancer'
-      VpcId: !Ref TAPVPC
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref ProductionVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
@@ -230,14 +210,14 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPALBSecurityGroup${EnvironmentSuffix}'
+          Value: 'ALBSecurityGroup'
         - Key: AutoTerminate
           Value: '30'
-  TAPEC2SecurityGroup:
+  EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for TAP EC2 instances'
-      VpcId: !Ref TAPVPC
+      GroupDescription: 'Security group for EC2 instances'
+      VpcId: !Ref ProductionVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -246,33 +226,33 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref TAPALBSecurityGroup
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          SourceSecurityGroupId: !Ref TAPALBSecurityGroup
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub 'TAPEC2SecurityGroup${EnvironmentSuffix}'
+          Value: 'EC2SecurityGroup'
         - Key: AutoTerminate
           Value: '30'
-  TAPDBSecurityGroup:
+  DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for TAP RDS database'
-      VpcId: !Ref TAPVPC
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref ProductionVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref TAPEC2SecurityGroup
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub 'TAPDBSecurityGroup${EnvironmentSuffix}'
+          Value: 'DBSecurityGroup'
         - Key: AutoTerminate
           Value: '30'
   # IAM Roles
-  TAPEC2Role:
+  EC2Role:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -293,11 +273,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${TAPS3Bucket}/*'
+                Resource: !Sub '${ProductionS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref TAPS3Bucket
+                Resource: !Ref ProductionS3Bucket
         - PolicyName: SecretsManagerPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -305,44 +285,44 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref TAPDatabaseSecret
+                Resource: !Ref DatabaseSecret
       Tags:
         - Key: Name
-          Value: !Sub 'TAPEC2Role${EnvironmentSuffix}'
+          Value: 'EC2Role'
         - Key: AutoTerminate
           Value: '30'
-  TAPEC2InstanceProfile:
+  EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - !Ref TAPEC2Role
+        - !Ref EC2Role
   # S3 Bucket
-  TAPS3Bucket:
+  ProductionS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+      BucketName: !Sub 'production-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TAPKMSKey
+              KMSMasterKeyID: !Ref ProductionKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       LoggingConfiguration:
-        DestinationBucketName: !Ref TAPLoggingBucket
+        DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: 'access-logs/'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPS3Bucket${EnvironmentSuffix}'
+          Value: 'ProductionS3Bucket'
         - Key: AutoTerminate
           Value: '30'
-  TAPS3BucketPolicy:
+  ProductionS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref TAPS3Bucket
+      Bucket: !Ref ProductionS3Bucket
       PolicyDocument:
         Statement:
           - Sid: DenyPublicAccess
@@ -350,30 +330,31 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${TAPS3Bucket}/*'
-              - !Ref TAPS3Bucket
+              - !Sub '${ProductionS3Bucket}/*'
+              - !Ref ProductionS3Bucket
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              StringNotEquals:
+                'aws:PrincipalServiceName':
+                  - s3.amazonaws.com
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${TAPS3Bucket}/*'
-              - !Ref TAPS3Bucket
+              - !Sub '${ProductionS3Bucket}/*'
+              - !Ref ProductionS3Bucket
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-  TAPLoggingBucket:
+  LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-logging-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+      BucketName: !Sub 'logging-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TAPKMSKey
+              KMSMasterKeyID: !Ref ProductionKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -381,46 +362,46 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub 'TAPLoggingBucket${EnvironmentSuffix}'
+          Value: 'LoggingBucket'
         - Key: AutoTerminate
           Value: '30'
   # CloudWatch Log Groups
-  TAPEC2LogGroup:
+  EC2LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/tap-${EnvironmentSuffix}'
+      LogGroupName: '/aws/ec2/production'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt TAPKMSKey.Arn
-  TAPALBLogGroup:
+      KmsKeyId: !GetAtt ProductionKMSKey.Arn
+  ALBLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/alb/tap-${EnvironmentSuffix}'
+      LogGroupName: '/aws/alb/production'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt TAPKMSKey.Arn
-  TAPRDSLogGroup:
+      KmsKeyId: !GetAtt ProductionKMSKey.Arn
+  RDSLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/rds/tap-${EnvironmentSuffix}'
+      LogGroupName: '/aws/rds/production'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt TAPKMSKey.Arn
-  TAPS3LogGroup:
+      KmsKeyId: !GetAtt ProductionKMSKey.Arn
+  S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/tap-${EnvironmentSuffix}'
+      LogGroupName: '/aws/s3/production'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt TAPKMSKey.Arn
+      KmsKeyId: !GetAtt ProductionKMSKey.Arn
   # Launch Template
-  TAPEC2LaunchTemplate:
+  EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'TAPLaunchTemplate${EnvironmentSuffix}'
+      LaunchTemplateName: 'ProductionLaunchTemplate'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: 't3.micro'
         IamInstanceProfile:
-          Arn: !GetAtt TAPEC2InstanceProfile.Arn
+          Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
-          - !Ref TAPEC2SecurityGroup
+          - !Ref EC2SecurityGroup
         UserData:
           Fn::Base64: |
             #!/bin/bash
@@ -432,65 +413,65 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub 'TAPInstance${EnvironmentSuffix}'
+                Value: 'ProductionInstance'
               - Key: AutoTerminate
                 Value: '30'
   # Auto Scaling Group
-  TAPAutoScalingGroup:
+  AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'TAPASG${EnvironmentSuffix}'
+      AutoScalingGroupName: 'ProductionASG'
       LaunchTemplate:
-        LaunchTemplateId: !Ref TAPEC2LaunchTemplate
-        Version: !GetAtt TAPEC2LaunchTemplate.LatestVersionNumber
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 2
       VPCZoneIdentifier:
-        - !Ref TAPPrivateSubnet1
-        - !Ref TAPPrivateSubnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       TargetGroupARNs:
-        - !Ref TAPALBTargetGroup
+        - !Ref ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub 'TAPASG${EnvironmentSuffix}'
+          Value: 'ProductionASG'
           PropagateAtLaunch: true
         - Key: AutoTerminate
           Value: '30'
           PropagateAtLaunch: true
   # Application Load Balancer
-  TAPApplicationLoadBalancer:
+  ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'TAPALB${EnvironmentSuffix}'
+      Name: 'ProductionALB'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
-        - !Ref TAPALBSecurityGroup
+        - !Ref ALBSecurityGroup
       Subnets:
-        - !Ref TAPPublicSubnet1
-        - !Ref TAPPublicSubnet2
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
           Value: 'true'
         - Key: access_logs.s3.bucket
-          Value: !Ref TAPLoggingBucket
+          Value: !Ref LoggingBucket
         - Key: access_logs.s3.prefix
           Value: 'alb-logs'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPALB${EnvironmentSuffix}'
+          Value: 'ProductionALB'
         - Key: AutoTerminate
           Value: '30'
-  TAPALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  ALBTargetGroup:
+    Type: AWS::EC2::TargetGroup
     Properties:
-      Name: !Sub 'TAPTargetGroup${EnvironmentSuffix}'
+      Name: 'ProductionTargetGroup'
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref TAPVPC
+      VpcId: !Ref ProductionVPC
       HealthCheckPath: '/'
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
@@ -499,10 +480,10 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub 'TAPTargetGroup${EnvironmentSuffix}'
+          Value: 'ProductionTargetGroup'
         - Key: AutoTerminate
           Value: '30'
-  TAPALBListener:
+  ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -511,32 +492,45 @@ Resources:
             Protocol: HTTPS
             Port: 443
             StatusCode: HTTP_301
-      LoadBalancerArn: !Ref TAPApplicationLoadBalancer
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-  TAPALBListenerHTTPS:
+  ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TAPALBTargetGroup
-      LoadBalancerArn: !Ref TAPApplicationLoadBalancer
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref TAPSSLCertificate
+        - CertificateArn: !Ref SSLCertificate
       SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
-  TAPSSLCertificate:
+  SSLCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !Sub '${AWS::StackName}.example.com'
       ValidationMethod: DNS
       Tags:
         - Key: Name
-          Value: !Sub 'TAPSSLCert${EnvironmentSuffix}'
+          Value: 'ProductionSSLCert'
         - Key: AutoTerminate
           Value: '30'
-  TAPRDSMonitoringRole:
+  # RDS Database
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: 'ProductionDBSubnetGroup'
+        - Key: AutoTerminate
+          Value: '30'
+  RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -550,38 +544,25 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
       Tags:
         - Key: Name
-          Value: !Sub 'TAPRDSMonitoringRole${EnvironmentSuffix}'
+          Value: 'RDSMonitoringRole'
         - Key: AutoTerminate
           Value: '30'
-  # RDS Database
-  TAPDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: 'Subnet group for TAP RDS database'
-      SubnetIds:
-        - !Ref TAPPrivateSubnet1
-        - !Ref TAPPrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'TAPDBSubnetGroup${EnvironmentSuffix}'
-        - Key: AutoTerminate
-          Value: '30'
-  TAPRDSInstance:
+  RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'tap-database-${EnvironmentSuffix}'
+      DBInstanceIdentifier: 'production-database'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.43'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
-      KmsKeyId: !Ref TAPKMSKey
-      MasterUsername: !Sub '{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:password}}'
+      KmsKeyId: !Ref ProductionKMSKey
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
-        - !Ref TAPDBSecurityGroup
-      DBSubnetGroupName: !Ref TAPDBSubnetGroup
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
@@ -590,18 +571,18 @@ Resources:
         - general
         - slow-query
       MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt TAPRDSMonitoringRole.Arn
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub 'TAPRDS${EnvironmentSuffix}'
+          Value: 'ProductionRDS'
         - Key: AutoTerminate
           Value: '30'
   # CloudWatch Alarms
-  TAPCPUAlarmHigh:
+  CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'TAPCPUHigh${EnvironmentSuffix}'
+      AlarmName: 'ProductionCPUHigh'
       AlarmDescription: 'Alarm when CPU exceeds 80%'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -612,13 +593,13 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
-          Value: !Ref TAPAutoScalingGroup
+          Value: !Ref AutoScalingGroup
       AlarmActions:
-        - !Ref TAPSNSTopic
-  TAPMemoryAlarmHigh:
+        - !Ref SNSTopic
+  MemoryAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'TAPMemoryHigh${EnvironmentSuffix}'
+      AlarmName: 'ProductionMemoryHigh'
       AlarmDescription: 'Alarm when Memory exceeds 80%'
       MetricName: MemoryUtilization
       Namespace: CWAgent
@@ -629,29 +610,29 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: AutoScalingGroupName
-          Value: !Ref TAPAutoScalingGroup
+          Value: !Ref AutoScalingGroup
       AlarmActions:
-        - !Ref TAPSNSTopic
-  TAPSNSTopic:
+        - !Ref SNSTopic
+  SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'TAPAlerts${EnvironmentSuffix}'
-      KmsMasterKeyId: !Ref TAPKMSKey
+      TopicName: 'ProductionAlerts'
+      KmsMasterKeyId: !Ref ProductionKMSKey
       Tags:
         - Key: Name
-          Value: !Sub 'TAPSNSTopic${EnvironmentSuffix}'
+          Value: 'ProductionSNSTopic'
         - Key: AutoTerminate
           Value: '30'
   # AWS Config
-  TAPConfigBucket:
+  ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tap-config-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}'
+      BucketName: !Sub 'config-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TAPKMSKey
+              KMSMasterKeyID: !Ref ProductionKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -659,10 +640,10 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub 'TAPConfigBucket${EnvironmentSuffix}'
+          Value: 'ConfigBucket'
         - Key: AutoTerminate
           Value: '30'
-  TAPConfigRole:
+  ConfigRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -684,32 +665,32 @@ Resources:
                   - s3:GetBucketAcl
                   - s3:GetBucketLocation
                   - s3:ListBucket
-                Resource: !Ref TAPConfigBucket
+                Resource: !Ref ConfigBucket
               - Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub '${TAPConfigBucket}/*'
+                Resource: !Sub '${ConfigBucket}/*'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPConfigRole${EnvironmentSuffix}'
+          Value: 'ConfigRole'
         - Key: AutoTerminate
           Value: '30'
-  TAPConfigurationRecorder:
+  ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub 'TAPConfigRecorder${EnvironmentSuffix}'
-      RoleARN: !GetAtt TAPConfigRole.Arn
+      Name: 'ProductionConfigRecorder'
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-  TAPConfigDeliveryChannel:
+  ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub 'TAPConfigDeliveryChannel${EnvironmentSuffix}'
-      S3BucketName: !Ref TAPConfigBucket
+      Name: 'ProductionConfigDeliveryChannel'
+      S3BucketName: !Ref ConfigBucket
   # Lambda function for auto-termination
-  TAPAutoTerminationRole:
+  AutoTerminationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -739,16 +720,16 @@ Resources:
                 Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub 'TAPAutoTerminationRole${EnvironmentSuffix}'
+          Value: 'AutoTerminationRole'
         - Key: AutoTerminate
           Value: '30'
-  TAPAutoTerminationFunction:
+  AutoTerminationFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'TAPAutoTerminationFunction${EnvironmentSuffix}'
+      FunctionName: 'AutoTerminationFunction'
       Runtime: python3.9
       Handler: index.lambda_handler
-      Role: !GetAtt TAPAutoTerminationRole.Arn
+      Role: !GetAtt AutoTerminationRole.Arn
       Code:
         ZipFile: |
           import boto3
@@ -778,54 +759,85 @@ Resources:
               }
       Tags:
         - Key: Name
-          Value: !Sub 'TAPAutoTerminationFunction${EnvironmentSuffix}'
+          Value: 'AutoTerminationFunction'
         - Key: AutoTerminate
           Value: '30'
-  TAPAutoTerminationSchedule:
+  AutoTerminationSchedule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub 'TAPAutoTerminationSchedule${EnvironmentSuffix}'
-      Description: !Sub 'Daily check for TAP ${EnvironmentSuffix} resources to auto-terminate'
+      Name: 'AutoTerminationSchedule'
+      Description: 'Daily check for resources to auto-terminate'
       ScheduleExpression: 'rate(1 day)'
       State: ENABLED
       Targets:
-        - Arn: !GetAtt TAPAutoTerminationFunction.Arn
-          Id: !Sub 'TAPAutoTerminationTarget${EnvironmentSuffix}'
-  TAPAutoTerminationPermission:
+        - Arn: !GetAtt AutoTerminationFunction.Arn
+          Id: 'AutoTerminationTarget'
+  AutoTerminationPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref TAPAutoTerminationFunction
+      FunctionName: !Ref AutoTerminationFunction
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt TAPAutoTerminationSchedule.Arn
+      SourceArn: !GetAtt AutoTerminationSchedule.Arn
 Outputs:
   VPCId:
     Description: 'VPC ID'
-    Value: !Ref TAPVPC
+    Value: !Ref ProductionVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
   LoadBalancerDNS:
     Description: 'Application Load Balancer DNS Name'
-    Value: !GetAtt TAPApplicationLoadBalancer.DNSName
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
   S3BucketName:
-    Description: 'TAP S3 Bucket Name'
-    Value: !Ref TAPS3Bucket
+    Description: 'Production S3 Bucket Name'
+    Value: !Ref ProductionS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
   KMSKeyId:
     Description: 'KMS Key ID'
-    Value: !Ref TAPKMSKey
+    Value: !Ref ProductionKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key'
   DatabaseSecretArn:
     Description: 'Database Secret ARN'
-    Value: !Ref TAPDatabaseSecret
+    Value: !Ref DatabaseSecret
     Export:
       Name: !Sub '${AWS::StackName}-DB-Secret'
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+```
+
+## Key Fixes and Improvements Made:
+
+### 1. **Dynamic Availability Zones**
+
+- Replaced hardcoded `us-east-1a` and `us-east-1b` with `!Select [0, !GetAZs '']` and `!Select [1, !GetAZs '']`
+- Template now works in any AWS region
+
+### 2. **Removed Invalid S3 Properties**
+
+- Removed `CloudWatchConfigurations` and `NotificationConfiguration` from S3 bucket
+- These properties don't exist in CloudFormation S3 resource specification
+
+### 3. **Simplified UserData**
+
+- Removed unnecessary `!Sub` function from UserData
+- Used plain `Fn::Base64` with literal string
+
+### 4. **Updated MySQL Version**
+
+- Changed from `8.0.35` to `8.0.43` (supported version)
+- Added proper RDS monitoring role
+
+### 5. **AWS Secrets Manager Integration**
+
+- Replaced password parameter with `AWS::SecretsManager::Secret`
+- Auto-generates secure 32-character password
+- KMS encrypted with customer-managed key
+- RDS instance references secret using dynamic references
+
+### 6. **Enhanced Security**
+
+- Added Secrets Manager permissions to KMS key policy
+- Added RDS service permissions to KMS key policy
+- Improved S3 bucket policy conditions
