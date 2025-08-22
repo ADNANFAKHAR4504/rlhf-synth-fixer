@@ -5,34 +5,13 @@ import { S3Client, GetBucketVersioningCommand, GetBucketReplicationCommand } fro
 import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+
 let outputsRaw: Record<string, any>;
 let outputs: Record<string, any>;
 
-const commonTags = (() => {
-  try {
-    return JSON.parse(outputsRaw["common_tags"]);
-  } catch {
-    return {};
-  }
-})();
-
+// Utility functions
 const isNonEmptyString = (val: any): boolean => typeof val === "string" && val.trim().length > 0;
-
-// Using regex for arn validity, can be enhanced if needed.
 const isValidArn = (val: any): boolean => typeof val === "string" && val.startsWith("arn:aws:");
-
-const parseJsonIfNeeded = (val: any) => {
-  if (!val) return null;
-  if (typeof val === "object") return val;
-  if (typeof val === "string") {
-    try {
-      return JSON.parse(val);
-    } catch {
-      return val;
-    }
-  }
-  return val;
-};
 
 beforeAll(() => {
   outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
@@ -50,27 +29,30 @@ beforeAll(() => {
   }
 });
 
-describe("Live AWS Integration Tests from deployment outputs", () => {
-  const ec2Client = new EC2Client({ region: outputs.primary_region || "us-east-1" });
-  const s3Client = new S3Client({ region: outputs.primary_region || "us-east-1" });
+describe("Live AWS Integration Tests from Deployment Outputs", () => {
+  const primaryRegion = "us-east-1";
+  const secondaryRegion = "us-west-2";
+
+  const ec2ClientPrimary = new EC2Client({ region: primaryRegion });
+  const ec2ClientSecondary = new EC2Client({ region: secondaryRegion });
+  const s3ClientPrimary = new S3Client({ region: primaryRegion });
+  const s3ClientSecondary = new S3Client({ region: secondaryRegion });
   const iamClient = new IAMClient({ region: "us-east-1" }); // IAM is global
 
-  // 1. Validate EC2 instances exist and are running with correct tags and types
-  it("Primary EC2 instance exists and in running state with correct instance type", async () => {
+  // 1. EC2 Instance Checks
+  it("Primary EC2 instance exists and is running with correct instance type and tags", async () => {
     const instanceId = outputs.primary_ec2_instance_id;
     expect(isNonEmptyString(instanceId)).toBe(true);
 
-    const params = { InstanceIds: [instanceId] };
-    const cmd = new DescribeInstancesCommand(params);
-    const response = await ec2Client.send(cmd);
-
+    const response = await ec2ClientPrimary.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
     const instance = response.Reservations?.[0]?.Instances?.;
     expect(instance).toBeDefined();
-    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.InstanceId).toEqual(instanceId);
     expect(instance?.State?.Name).toBe("running");
     expect(instance?.InstanceType).toBe(outputs.primary_ec2_instance_type);
 
-    // Validate tags include your common_tags from outputs 
+    // Validate tags contain expected common tags
+    const commonTags = JSON.parse(outputs.common_tags);
     const tagMap = new Map<string, string>();
     (instance?.Tags ?? []).forEach(t => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
@@ -80,23 +62,22 @@ describe("Live AWS Integration Tests from deployment outputs", () => {
     }
   });
 
-  it("Secondary EC2 instance exists and in running state with correct instance type", async () => {
+  it("Secondary EC2 instance exists and is running with correct instance type and tags", async () => {
     if (!outputs.secondary_ec2_instance_id) {
-      return; // skip if not present
+      return; // Skip if not present
     }
+
     const instanceId = outputs.secondary_ec2_instance_id;
     expect(isNonEmptyString(instanceId)).toBe(true);
 
-    const params = { InstanceIds: [instanceId] };
-    const cmd = new DescribeInstancesCommand(params);
-    const response = await ec2Client.send(cmd);
-
+    const response = await ec2ClientSecondary.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
     const instance = response.Reservations?.[0]?.Instances?.;
     expect(instance).toBeDefined();
-    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.InstanceId).toEqual(instanceId);
     expect(instance?.State?.Name).toBe("running");
     expect(instance?.InstanceType).toBe(outputs.secondary_ec2_instance_type);
 
+    const commonTags = JSON.parse(outputs.common_tags);
     const tagMap = new Map<string, string>();
     (instance?.Tags ?? []).forEach(t => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
@@ -106,72 +87,57 @@ describe("Live AWS Integration Tests from deployment outputs", () => {
     }
   });
 
-  // 2. Validate S3 buckets exist with versioning and replication enabled
-
-  it("Primary S3 bucket exists with versioning enabled and correct replication", async () => {
+  // 2. S3 Bucket Checks - Versioning and Replication
+  it("Primary S3 bucket has versioning enabled and replication configuration", async () => {
     const bucketName = outputs.primary_s3_bucket_name;
     expect(isNonEmptyString(bucketName)).toBe(true);
 
-    // Check bucket versioning
-    const versioningCmd = new GetBucketVersioningCommand({ Bucket: bucketName });
-    const versioning = await s3Client.send(versioningCmd);
+    const versioning = await s3ClientPrimary.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
     expect(versioning.Status).toBe("Enabled");
 
-    // Check bucket replication config
-    const replicationCmd = new GetBucketReplicationCommand({ Bucket: bucketName });
-    const replication = await s3Client.send(replicationCmd);
+    const replication = await s3ClientPrimary.send(new GetBucketReplicationCommand({ Bucket: bucketName }));
     expect(replication.ReplicationConfiguration).toBeDefined();
     expect(replication.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
-    // Optionally check destination bucket ARNs in the rules
   });
 
-  it("Secondary S3 bucket exists with versioning enabled and correct replication", async () => {
+  it("Secondary S3 bucket has versioning enabled and replication configuration", async () => {
     const bucketName = outputs.secondary_s3_bucket_name;
     expect(isNonEmptyString(bucketName)).toBe(true);
 
-    const versioningCmd = new GetBucketVersioningCommand({ Bucket: bucketName });
-    const versioning = await s3Client.send(versioningCmd);
+    const versioning = await s3ClientSecondary.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
     expect(versioning.Status).toBe("Enabled");
 
-    const replicationCmd = new GetBucketReplicationCommand({ Bucket: bucketName });
-    const replication = await s3Client.send(replicationCmd);
+    const replication = await s3ClientSecondary.send(new GetBucketReplicationCommand({ Bucket: bucketName }));
     expect(replication.ReplicationConfiguration).toBeDefined();
     expect(replication.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
   });
 
-  // 3. Validate IAM roles exist and their paths
-  it("EC2 IAM role exists with correct name and ARN", async () => {
+  // 3. IAM Role Checks
+  it("EC2 IAM role exists and matches ARN and name", async () => {
     const roleName = outputs.ec2_iam_role_name;
-    expect(isNonEmptyString(roleName)).toBe(true);
-
     const roleArn = outputs.ec2_iam_role_arn;
-    expect(isValidArn(roleArn)).toBe(true);
 
-    const cmd = new GetRoleCommand({ RoleName: roleName });
-    const resp = await iamClient.send(cmd);
-    expect(resp.Role).toBeDefined();
-    expect(resp.Role.RoleName).toBe(roleName);
-    expect(resp.Role.Arn).toBe(roleArn);
-  });
-
-  it("S3 replication IAM role exists with correct name and ARN", async () => {
-    const roleName = outputs.s3_replication_iam_role_name;
     expect(isNonEmptyString(roleName)).toBe(true);
-
-    const roleArn = outputs.s3_replication_iam_role_arn;
     expect(isValidArn(roleArn)).toBe(true);
 
-    const cmd = new GetRoleCommand({ RoleName: roleName });
-    const resp = await iamClient.send(cmd);
-    expect(resp.Role).toBeDefined();
-    expect(resp.Role.RoleName).toBe(roleName);
-    expect(resp.Role.Arn).toBe(roleArn);
+    const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+    expect(response.Role).toBeDefined();
+    expect(response.Role.Arn).toBe(roleArn);
+    expect(response.Role.RoleName).toBe(roleName);
   });
 
-  // Additional resource checks can be similarly added as needed, e.g.:
-  // - VPCs exist by querying EC2 describeVpcs with the returned VPC id.
-  // - Subnets exist and correct CIDRs.
-  // - Security groups attached to EC2 instances.
-  // - NAT gateways exist and associated public IP matches.
+  it("S3 replication IAM role exists and matches ARN and name", async () => {
+    const roleName = outputs.s3_replication_iam_role_name;
+    const roleArn = outputs.s3_replication_iam_role_arn;
 
+    expect(isNonEmptyString(roleName)).toBe(true);
+    expect(isValidArn(roleArn)).toBe(true);
+
+    const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+    expect(response.Role).toBeDefined();
+    expect(response.Role.Arn).toBe(roleArn);
+    expect(response.Role.RoleName).toBe(roleName);
+  });
+
+  // Additional tests can be added for VPCs, Subnets, NAT Gateway, Security Groups, etc.   
 });
