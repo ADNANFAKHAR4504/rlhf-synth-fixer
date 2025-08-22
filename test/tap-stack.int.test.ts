@@ -1,14 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import path from 'path';
-import { CloudFormationClient, DescribeStacksCommand, ListStackResourcesCommand } from '@aws-sdk/client-cloudformation';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { LambdaClient, GetFunctionCommand, GetFunctionConfigurationCommand } from '@aws-sdk/client-lambda';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { CloudTrailClient, GetTrailCommand } from '@aws-sdk/client-cloudtrail';
-import { IAMClient, GetRoleCommand, GetUserCommand, GetPolicyCommand } from '@aws-sdk/client-iam';
 
 // Load deployment outputs
 let outputs: any;
@@ -27,12 +19,13 @@ if (fs.existsSync(outputsPath)) {
     SecureS3BucketName: 'secure-bucket-mock',
     LoggingBucketName: 'logging-bucket-mock',
     CloudTrailBucketName: 'cloudtrail-bucket-mock',
-    LambdaFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:security-monitor',
+    LambdaFunctionArn:
+      'arn:aws:lambda:us-east-1:123456789012:function:security-monitor',
     SNSTopicArn: 'arn:aws:sns:us-east-1:123456789012:security-alerts',
     PublicEC2InstanceId: 'i-public123',
     PrivateEC2InstanceId: 'i-private123',
     StackName: 'TapStackpr1982',
-    EnvironmentSuffix: 'pr1982'
+    EnvironmentSuffix: 'pr1982',
   };
 }
 
@@ -62,7 +55,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         'PublicEC2InstanceId',
         'PrivateEC2InstanceId',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       requiredOutputs.forEach(output => {
@@ -92,7 +85,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         outputs.PublicSubnet1Id,
         outputs.PublicSubnet2Id,
         outputs.PrivateSubnet1Id,
-        outputs.PrivateSubnet2Id
+        outputs.PrivateSubnet2Id,
       ];
 
       subnetIds.forEach(subnetId => {
@@ -105,7 +98,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         outputs.PublicSubnet1Id,
         outputs.PublicSubnet2Id,
         outputs.PrivateSubnet1Id,
-        outputs.PrivateSubnet2Id
+        outputs.PrivateSubnet2Id,
       ];
 
       const uniqueSubnets = new Set(allSubnets);
@@ -120,7 +113,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('Public and private instances should be different', () => {
-      expect(outputs.PublicEC2InstanceId).not.toBe(outputs.PrivateEC2InstanceId);
+      expect(outputs.PublicEC2InstanceId).not.toBe(
+        outputs.PrivateEC2InstanceId
+      );
     });
   });
 
@@ -128,9 +123,13 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('Database endpoint should be valid', () => {
       expect(outputs.DatabaseEndpoint).toBeDefined();
       // Database endpoint should contain the environment suffix
-      expect(outputs.DatabaseEndpoint.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(outputs.DatabaseEndpoint.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
       // Should be a valid RDS endpoint format
-      expect(outputs.DatabaseEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
+      expect(outputs.DatabaseEndpoint).toMatch(
+        /^[a-z0-9-]+\.[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/
+      );
     });
   });
 
@@ -139,7 +138,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const buckets = [
         outputs.SecureS3BucketName,
         outputs.LoggingBucketName,
-        outputs.CloudTrailBucketName
+        outputs.CloudTrailBucketName,
       ];
 
       buckets.forEach(bucketName => {
@@ -173,7 +172,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
     test('Lambda function name should contain environment suffix', () => {
       const functionName = outputs.LambdaFunctionArn.split(':').pop();
-      expect(functionName.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(functionName.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
     });
   });
 
@@ -186,23 +187,25 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
     test('SNS topic name should contain environment suffix', () => {
       const topicName = outputs.SNSTopicArn.split(':').pop();
-      expect(topicName.toLowerCase()).toContain(outputs.EnvironmentSuffix.toLowerCase());
+      expect(topicName.toLowerCase()).toContain(
+        outputs.EnvironmentSuffix.toLowerCase()
+      );
     });
   });
 
   describe('Resource Naming Consistency', () => {
     test('All resources should follow consistent naming pattern', () => {
       const envSuffix = outputs.EnvironmentSuffix.toLowerCase();
-      
+
       // Check S3 buckets
       expect(outputs.SecureS3BucketName.toLowerCase()).toContain(envSuffix);
       expect(outputs.LoggingBucketName.toLowerCase()).toContain(envSuffix);
       expect(outputs.CloudTrailBucketName.toLowerCase()).toContain(envSuffix);
-      
+
       // Check Lambda and SNS
       expect(outputs.LambdaFunctionArn.toLowerCase()).toContain(envSuffix);
       expect(outputs.SNSTopicArn.toLowerCase()).toContain(envSuffix);
-      
+
       // Check database endpoint
       expect(outputs.DatabaseEndpoint.toLowerCase()).toContain(envSuffix);
     });
@@ -245,23 +248,25 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
     test('All resources should be in the expected region', () => {
       const expectedRegion = region;
-      
+
       // Check Lambda ARN
       const lambdaRegion = outputs.LambdaFunctionArn.split(':')[3];
       expect(lambdaRegion).toBe(expectedRegion);
-      
+
       // Check SNS ARN
       const snsRegion = outputs.SNSTopicArn.split(':')[3];
       expect(snsRegion).toBe(expectedRegion);
-      
+
       // Check RDS endpoint
-      expect(outputs.DatabaseEndpoint).toContain(`${expectedRegion}.rds.amazonaws.com`);
+      expect(outputs.DatabaseEndpoint).toContain(
+        `${expectedRegion}.rds.amazonaws.com`
+      );
     });
 
     test('All ARNs should belong to the same AWS account', () => {
       const lambdaAccount = outputs.LambdaFunctionArn.split(':')[4];
       const snsAccount = outputs.SNSTopicArn.split(':')[4];
-      
+
       expect(lambdaAccount).toBe(snsAccount);
       expect(lambdaAccount).toMatch(/^\d{12}$/);
     });
@@ -275,20 +280,20 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(outputs.PublicSubnet2Id).toBeDefined();
       expect(outputs.PrivateSubnet1Id).toBeDefined();
       expect(outputs.PrivateSubnet2Id).toBeDefined();
-      
+
       // Compute
       expect(outputs.PublicEC2InstanceId).toBeDefined();
       expect(outputs.PrivateEC2InstanceId).toBeDefined();
       expect(outputs.LambdaFunctionArn).toBeDefined();
-      
+
       // Storage
       expect(outputs.SecureS3BucketName).toBeDefined();
       expect(outputs.LoggingBucketName).toBeDefined();
       expect(outputs.CloudTrailBucketName).toBeDefined();
-      
+
       // Database
       expect(outputs.DatabaseEndpoint).toBeDefined();
-      
+
       // Monitoring & Alerting
       expect(outputs.SNSTopicArn).toBeDefined();
     });
@@ -296,22 +301,27 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('Should have proper separation of public and private resources', () => {
       // Should have both public and private subnets
       const publicSubnets = [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id];
-      const privateSubnets = [outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id];
-      
+      const privateSubnets = [
+        outputs.PrivateSubnet1Id,
+        outputs.PrivateSubnet2Id,
+      ];
+
       publicSubnets.forEach(subnet => {
         expect(subnet).toBeDefined();
         expect(subnet).toMatch(/^subnet-/);
       });
-      
+
       privateSubnets.forEach(subnet => {
         expect(subnet).toBeDefined();
         expect(subnet).toMatch(/^subnet-/);
       });
-      
+
       // Should have both public and private EC2 instances
       expect(outputs.PublicEC2InstanceId).toBeDefined();
       expect(outputs.PrivateEC2InstanceId).toBeDefined();
-      expect(outputs.PublicEC2InstanceId).not.toBe(outputs.PrivateEC2InstanceId);
+      expect(outputs.PublicEC2InstanceId).not.toBe(
+        outputs.PrivateEC2InstanceId
+      );
     });
   });
 });
