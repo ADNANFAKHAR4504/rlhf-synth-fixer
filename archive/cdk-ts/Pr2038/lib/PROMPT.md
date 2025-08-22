@@ -1,0 +1,9 @@
+We’re doing this one in AWS CDK with TypeScript, in us-east-1. Keep it to three files only: bin/tap.ts (app + region), lib/tap-stack.ts (all resources and security), and cdk.json (project config). When the model replies, it must return only the code for those three files—no explanations, no comments, nothing extra.
+
+We need a locked-down baseline for a financial services app. Everything at rest is KMS-encrypted (S3, RDS, EBS) and traffic in transit is over TLS wherever applicable. Build a VPC across at least two AZs with public and private subnets. EC2 lives in private subnets; attach least-privilege instance roles and KMS-encrypted EBS by default. Security groups should deny by default and only allow known CIDR ranges for SSH and whatever application ports are actually required—nothing else. RDS must be in private subnets, encrypted, and reachable only from the allowed security groups (no public access). S3 buckets need versioning on and SSE-KMS; block public access entirely. Lambda functions should log to CloudWatch and follow least-privilege IAM.
+
+For monitoring, use CloudWatch metrics/logs across the stack. Do not include AWS Config or CloudTrail in this build (we’re intentionally leaving them out per direction). Protect the edge with CloudFront + WAF: attach a WebACL to the CloudFront distribution to mitigate common web attacks. Use the default CloudFront domain and AWS-managed TLS—don’t pull in ACM or custom certs here.
+
+IAM should be tight across the board. Roles and policies must be least-privilege. If you include user policies, attach them to groups rather than individual users. No hard-coded secrets.
+
+The result should deploy cleanly with cdk deploy in us-east-1. Return only the code for bin/tap.ts, lib/tap-stack.ts, and cdk.json.
