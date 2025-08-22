@@ -28,6 +28,23 @@ resource "aws_kms_key" "main" {
   })
 }
 
+########################
+# EC2 Key Pair
+########################
+resource "tls_private_key" "bastion" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "bastion" {
+  key_name   = var.bastion_key_name
+  public_key = tls_private_key.bastion.public_key_openssh
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-bastion-key"
+  })
+}
+
 resource "aws_kms_alias" "main" {
   name          = "alias/${var.project_name}-${var.environment_suffix}-key"
   target_key_id = aws_kms_key.main.key_id
@@ -441,8 +458,9 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "random_password" "db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
