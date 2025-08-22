@@ -1,44 +1,47 @@
 import fs from 'fs';
 import net from 'net';
 import axios from 'axios';
+import { lookup } from 'dns/promises';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-describe('WebAppStack Integration Tests', () => {
-  const lbDns = outputs.LoadBalancerDNS;
-  const rdsEndpoint = outputs.RDSEndpoint;
-  const cloudWatchAlarmName = outputs.CloudWatchAlarmName;
-  const elasticIP1 = outputs.ElasticIP1;
-  const elasticIP2 = outputs.ElasticIP2;
+// Use non-suffixed keys based on your CloudFormation output structure
+const lbDns = outputs.LoadBalancerDNS;
+const rdsEndpoint = outputs.RDSEndpoint;
+const cloudWatchAlarmName = outputs.CloudWatchAlarmName;
+const elasticIP1 = outputs.ElasticIP1;
+const elasticIP2 = outputs.ElasticIP2;
 
-  function checkTcpPort(host: string, port: number, timeout = 3000): Promise<boolean> {
-    return new Promise((resolve) => {
-      const socket = new net.Socket();
-      let isConnected = false;
+function checkTcpPort(host: string, port: number, timeout = 3000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isConnected = false;
 
-      socket.setTimeout(timeout);
-
-      socket.on('connect', () => {
-        isConnected = true;
-        socket.destroy();
-      });
-
-      socket.on('timeout', () => socket.destroy());
-      socket.on('error', () => {});
-      socket.on('close', () => resolve(isConnected));
-
-      socket.connect(port, host);
+    socket.setTimeout(timeout);
+    socket.once('connect', () => {
+      isConnected = true;
+      socket.destroy();
     });
-  }
+    socket.once('timeout', () => socket.destroy());
+    socket.once('error', () => socket.destroy());
+    socket.once('close', () => resolve(isConnected));
 
-  async function resolveDNS(hostname: string): Promise<string> {
-    const { lookup } = await import('node:dns/promises');
-    const result = await lookup(hostname);
-    return result.address;
-  }
+    socket.connect(port, host);
+  });
+}
 
+async function resolveDNS(hostname: string): Promise<string> {
+  const result = await lookup(hostname);
+  return result.address;
+}
+
+describe('WebAppStack Integration Tests', () => {
   describe('Load Balancer / Web Application', () => {
     test('should have Load Balancer DNS defined', () => {
       expect(lbDns).toBeDefined();
@@ -46,11 +49,16 @@ describe('WebAppStack Integration Tests', () => {
 
     test('should respond with HTTP 200 on / (root) path', async () => {
       expect(lbDns).toBeDefined();
-
       const url = `http://${lbDns}/`;
-      const response = await axios.get(url, { timeout: 5000 });
-      expect(response.status).toBe(200);
-      expect(typeof response.data).toBe('string');
+
+      try {
+        const response = await axios.get(url, { timeout: 5000 });
+        expect(response.status).toBe(200);
+        expect(typeof response.data).toBe('string');
+      } catch (err: any) {
+        console.error(`❌ HTTP request to ${url} failed:`, err.message);
+        throw err;
+      }
     });
 
     test('should respond with TCP port 80 open on Load Balancer DNS', async () => {
@@ -80,10 +88,9 @@ describe('WebAppStack Integration Tests', () => {
     test('alarm should exist and be in OK state', async () => {
       expect(cloudWatchAlarmName).toBeDefined();
 
-      const cloudwatch = await import('@aws-sdk/client-cloudwatch');
-      const { CloudWatchClient, DescribeAlarmsCommand } = cloudwatch;
-
-      const cwClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
+      const cwClient = new CloudWatchClient({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
 
       const result = await cwClient.send(
         new DescribeAlarmsCommand({
@@ -91,13 +98,12 @@ describe('WebAppStack Integration Tests', () => {
         })
       );
 
-      if (!result.MetricAlarms || result.MetricAlarms.length === 0) {
-        throw new Error('No MetricAlarms found');
-      }
+      const alarms = result.MetricAlarms ?? [];
+      expect(alarms.length).toBeGreaterThan(0);
 
-      const alarm = result.MetricAlarms[0];
+      const alarm = alarms[0];
       expect(alarm.AlarmName).toBe(cloudWatchAlarmName);
-      expect(alarm.StateValue).toBe('OK');
+      expect(alarm.StateValue).toBe('OK'); // Could also be 'ALARM' depending on expected test state
     });
   });
 
