@@ -28,8 +28,7 @@ jest.mock("@pulumi/aws", () => ({
     Route: jest.fn().mockImplementation((name) => ({ id: `route-${name}` })),
     RouteTableAssociation: jest.fn().mockImplementation((name) => ({ id: `rta-${name}` })),
     SecurityGroup: jest.fn().mockImplementation((name) => ({ id: `sg-${name}` })),
-    FlowLog: jest.fn().mockImplementation((name) => ({ id: `fl-${name}` })),
-    VpcAttribute: jest.fn().mockImplementation((name) => ({ id: `vpc-attr-${name}` }))
+    FlowLog: jest.fn().mockImplementation((name) => ({ id: `fl-${name}` }))
   },
   s3: {
     Bucket: jest.fn().mockImplementation((name) => ({ 
