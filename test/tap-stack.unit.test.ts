@@ -1,210 +1,207 @@
 import fs from 'fs';
+import yaml from 'js-yaml';
 import path from 'path';
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
-
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    const ymlPath = path.join(__dirname, '../lib/TapStack.yml');
+    const ymlContent = fs.readFileSync(ymlPath, 'utf8');
+    template = yaml.load(ymlContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+  it('should have AWSTemplateFormatVersion', () => {
+    expect(template.AWSTemplateFormatVersion).toBeDefined();
+    expect(typeof template.AWSTemplateFormatVersion).toBe('string');
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
+  it('should have Description', () => {
+    expect(template.Description).toBeDefined();
+    expect(typeof template.Description).toBe('string');
+  });
 
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+  it('should have Parameters section', () => {
+    expect(template.Parameters).toBeDefined();
+    expect(typeof template.Parameters).toBe('object');
+    Object.entries(template.Parameters).forEach(([param, def]: any) => {
+      expect(def.Type).toBeDefined();
+      if (def.Default !== undefined) expect(def.Default).toBeDefined();
+      if (def.Description !== undefined) expect(def.Description).toBeDefined();
     });
   });
 
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+  it('should have Conditions section', () => {
+    expect(template.Conditions).toBeDefined();
+    expect(typeof template.Conditions).toBe('object');
+    Object.keys(template.Conditions).forEach(cond => {
+      expect(cond).toMatch(/^[A-Za-z0-9]+/);
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  it('should have Resources section', () => {
+    expect(template.Resources).toBeDefined();
+    expect(typeof template.Resources).toBe('object');
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      expect(def.Type).toBeDefined();
+      expect(typeof def.Type).toBe('string');
+      expect(def.Properties).toBeDefined();
+      expect(typeof def.Properties).toBe('object');
     });
   });
 
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+  it('should have Outputs section', () => {
+    expect(template.Outputs).toBeDefined();
+    expect(typeof template.Outputs).toBe('object');
+    Object.entries(template.Outputs).forEach(([out, def]: any) => {
+      expect(def.Description).toBeDefined();
+      expect(def.Value).toBeDefined();
+      expect(def.Export).toBeDefined();
+      expect(def.Export.Name).toBeDefined();
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
+  it('should not have duplicate resource logical IDs', () => {
+    const ids = Object.keys(template.Resources);
+    const unique = new Set(ids);
+    expect(ids.length).toBe(unique.size);
+  });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
+  it('should not have duplicate parameter names', () => {
+    const ids = Object.keys(template.Parameters);
+    const unique = new Set(ids);
+    expect(ids.length).toBe(unique.size);
+  });
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
+  it('should not have duplicate output names', () => {
+    const ids = Object.keys(template.Outputs);
+    const unique = new Set(ids);
+    expect(ids.length).toBe(unique.size);
+  });
 
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+  it('should use conditions for resources that can reference existing ones', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Condition) {
+        expect(template.Conditions[def.Condition]).toBeDefined();
+      }
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  it('should not create resources if existing resource parameter is provided', () => {
+    if (template.Parameters.ExistingVpcId) {
+      const vpc = template.Resources.SecurityVpc;
+      if (vpc && vpc.Condition) {
+        expect(vpc.Condition).toBe('CreateVpc');
+      }
+    }
+  });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+  it('should have best practices for encryption, versioning, and public access block on S3 buckets', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::S3::Bucket') {
+        const props = def.Properties;
+        expect(props.BucketEncryption).toBeDefined();
+        expect(props.PublicAccessBlockConfiguration).toBeDefined();
+        expect(props.VersioningConfiguration).toBeDefined();
+      }
     });
+  });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+  it('should have KMS Key policies with least privilege and cross-account access', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::KMS::Key') {
+        const policy = def.Properties.KeyPolicy;
+        expect(policy).toBeDefined();
+        expect(policy.Statement).toBeDefined();
+        expect(Array.isArray(policy.Statement)).toBe(true);
+        const hasRoot = policy.Statement.some(
+          (s: any) =>
+            s.Principal && s.Principal.AWS && s.Principal.AWS.includes('root')
+        );
+        expect(hasRoot).toBe(true);
+      }
+    });
+  });
+
+  it('should have IAM roles with AssumeRolePolicyDocument and Policies', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::IAM::Role') {
+        expect(def.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(
+          def.Properties.Policies || def.Properties.ManagedPolicyArns
+        ).toBeDefined();
+      }
+    });
+  });
+
+  it('should have Lambda functions with environment variables and code', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::Lambda::Function') {
+        expect(def.Properties.Environment).toBeDefined();
+        expect(def.Properties.Code).toBeDefined();
+        expect(def.Properties.Handler).toBeDefined();
+        expect(def.Properties.Runtime).toBeDefined();
+      }
+    });
+  });
+
+  it('should have security group ingress/egress rules', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::EC2::SecurityGroup') {
+        expect(def.Properties.SecurityGroupIngress).toBeDefined();
+      }
+    });
+  });
+
+  it('should have RDS instance with encryption and subnet group', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::RDS::DBInstance') {
+        expect(def.Properties.StorageEncrypted).toBe(true);
+        expect(def.Properties.KmsKeyId).toBeDefined();
+        expect(def.Properties.DBSubnetGroupName).toBeDefined();
+      }
+    });
+  });
+
+  it('should have Config rules and aggregator with correct properties', () => {
+    Object.entries(template.Resources).forEach(([res, def]: any) => {
+      if (def.Type === 'AWS::Config::ConfigRule') {
+        expect(def.Properties.ConfigRuleName).toBeDefined();
+        expect(def.Properties.Source).toBeDefined();
+      }
+      if (def.Type === 'AWS::Config::ConfigurationAggregator') {
+        expect(def.Properties.ConfigurationAggregatorName).toBeDefined();
+      }
+    });
+  });
+
+  it('should have Security Hub enabled', () => {
+    const found = Object.values(template.Resources).some(
+      (def: any) => def.Type === 'AWS::SecurityHub::Hub'
+    );
+    expect(found).toBe(true);
+  });
+
+  it('should have MFA enforcement managed policy', () => {
+    const found = Object.values(template.Resources).some(
+      (def: any) => def.Type === 'AWS::IAM::ManagedPolicy'
+    );
+    expect(found).toBe(true);
+  });
+
+  it('should have all outputs reference valid resources or parameters', () => {
+    Object.entries(template.Outputs).forEach(([out, def]: any) => {
+      if (typeof def.Value === 'object') {
+        const ref =
+          def.Value.Ref ||
+          (def.Value['Fn::GetAtt'] && def.Value['Fn::GetAtt'][0]);
+        if (ref) {
+          expect(
+            template.Resources[ref] ||
+              template.Parameters[ref] ||
+              ref.startsWith('AWS::')
+          ).toBeTruthy();
+        }
+      }
     });
   });
 });

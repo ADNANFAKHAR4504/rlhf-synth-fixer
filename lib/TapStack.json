@@ -1,12 +1,17 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Comprehensive multi-account security-focused CloudFormation template with advanced AWS security measures",
+    "Description": "Production-grade multi-account security CloudFormation template with advanced AWS security measures",
     "Parameters": {
         "VpcCidr": {
             "Type": "String",
             "Default": "10.0.0.0/16",
             "Description": "CIDR block for the VPC",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "ExistingVpcId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "ID of an existing VPC to use (leave blank to create a new one)"
         },
         "PublicSubnetCidr": {
             "Type": "String",
@@ -23,6 +28,11 @@
             "Default": "10.0.2.0/24",
             "Description": "CIDR block for the private subnet"
         },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.3.0/24",
+            "Description": "CIDR block for the second private subnet"
+        },
         "Environment": {
             "Type": "String",
             "Default": "production",
@@ -37,6 +47,75 @@
             "Type": "String",
             "Description": "KMS Key ID for encryption (optional - will create new if not provided)",
             "Default": ""
+        },
+        "MasterAccountId": {
+            "Type": "String",
+            "Description": "The master account ID for centralized monitoring",
+            "Default": "123456789012",
+            "AllowedPattern": "^\\d{12}$",
+            "ConstraintDescription": "Must be a 12-digit AWS account ID"
+        },
+        "CreateSecurityHub": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to false if the account is already subscribed to Security Hub."
+        },
+        "OrganizationalId": {
+            "Type": "String",
+            "Description": "The organizational ID if AWS Organizations is enabled",
+            "Default": ""
+        },
+        "MemberAccountIds": {
+            "Type": "CommaDelimitedList",
+            "Description": "List of member account IDs for AWS Config aggregator",
+            "Default": ""
+        },
+        "CertificateArn": {
+            "Type": "String",
+            "Description": "ARN of the SSL certificate for the load balancer",
+            "Default": ""
+        },
+        "DBInstanceIdentifier": {
+            "Type": "String",
+            "Default": "security-db",
+            "Description": "RDS instance identifier"
+        },
+        "DBEngine": {
+            "Type": "String",
+            "Default": "mysql",
+            "AllowedValues": [
+                "mysql",
+                "postgres",
+                "oracle-ee",
+                "sqlserver-ee"
+            ],
+            "Description": "RDS engine type"
+        },
+        "DBEngineVersion": {
+            "Type": "String",
+            "Default": "8.0",
+            "Description": "RDS engine version"
+        },
+        "DBInstanceClass": {
+            "Type": "String",
+            "Default": "db.t3.micro",
+            "Description": "RDS instance class"
+        },
+        "DBAllocatedStorage": {
+            "Type": "Number",
+            "Default": 20,
+            "Description": "RDS allocated storage in GB"
+        },
+        "DBBackupRetentionPeriod": {
+            "Type": "Number",
+            "Default": 7,
+            "Description": "RDS backup retention period in days",
+            "MinValue": 7,
+            "MaxValue": 35
         }
     },
     "Conditions": {
@@ -47,6 +126,88 @@
                 },
                 ""
             ]
+        },
+        "IsMasterAccount": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::AccountId"
+                },
+                {
+                    "Ref": "MasterAccountId"
+                }
+            ]
+        },
+        "HasOrganizationalId": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "OrganizationalId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasMemberAccounts": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Join": [
+                                "",
+                                {
+                                    "Ref": "MemberAccountIds"
+                                }
+                            ]
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseOrganizationalConfig": {
+            "Fn::And": [
+                {
+                    "Condition": "IsMasterAccount"
+                },
+                {
+                    "Condition": "HasOrganizationalId"
+                }
+            ]
+        },
+        "UseAccountBasedConfig": {
+            "Fn::And": [
+                {
+                    "Condition": "IsMasterAccount"
+                },
+                {
+                    "Condition": "HasMemberAccounts"
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Condition": "HasOrganizationalId"
+                        }
+                    ]
+                }
+            ]
+        },
+        "CreateVpc": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingVpcId"
+                },
+                ""
+            ]
+        },
+        "CreateSecurityHubCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateSecurityHub"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -54,7 +215,9 @@
             "Type": "AWS::KMS::Key",
             "Condition": "CreateKmsKey",
             "Properties": {
-                "Description": "KMS Key for security services encryption",
+                "Description": {
+                    "Fn::Sub": "KMS Key for security services encryption in ${Environment}"
+                },
                 "KeyPolicy": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -70,7 +233,7 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "Allow CloudTrail to encrypt logs",
+                            "Sid": "AllowCloudTrailToEncryptLogs",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
@@ -82,7 +245,7 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "Allow Config to use the key",
+                            "Sid": "AllowConfigToUseTheKey",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "config.amazonaws.com"
@@ -92,6 +255,26 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowMasterAccountAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::123456789012:root"
+                            },
+                            "Action": [
+                                "kms:DescribeKey",
+                                "kms:GenerateDataKey*",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:CallerAccount": {
+                                        "Ref": "MasterAccountId"
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -111,6 +294,7 @@
         },
         "SecurityVpc": {
             "Type": "AWS::EC2::VPC",
+            "Condition": "CreateVpc",
             "Properties": {
                 "CidrBlock": {
                     "Ref": "VpcCidr"
@@ -137,7 +321,15 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "CidrBlock": {
                     "Ref": "PublicSubnetCidr"
@@ -169,7 +361,15 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "CidrBlock": {
                     "Ref": "PublicSubnet2Cidr"
@@ -201,7 +401,15 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "CidrBlock": {
                     "Ref": "PrivateSubnetCidr"
@@ -232,9 +440,19 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
-                "CidrBlock": "10.0.3.0/24",
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2Cidr"
+                },
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -259,6 +477,7 @@
         },
         "InternetGateway": {
             "Type": "AWS::EC2::InternetGateway",
+            "Condition": "CreateVpc",
             "Properties": {
                 "Tags": [
                     {
@@ -272,6 +491,7 @@
         },
         "AttachGateway": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "CreateVpc",
             "Properties": {
                 "VpcId": {
                     "Ref": "SecurityVpc"
@@ -285,7 +505,15 @@
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "Tags": [
                     {
@@ -299,6 +527,7 @@
         },
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
+            "Condition": "CreateVpc",
             "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
@@ -312,6 +541,7 @@
         },
         "PublicSubnetRouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateVpc",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet"
@@ -323,6 +553,7 @@
         },
         "PublicSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateVpc",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
@@ -354,8 +585,7 @@
                                         }
                                     ]
                                 }
-                            },
-                            "BucketKeyEnabled": true
+                            }
                         }
                     ]
                 },
@@ -418,6 +648,35 @@
                                     "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
+                        },
+                        {
+                            "Sid": "AllowMasterAccountRead",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::123456789012:root"
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "CloudTrailLogsBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:PrincipalAccount": {
+                                        "Ref": "MasterAccountId"
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -451,17 +710,18 @@
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::Lambda::Function",
-                                "Values": [
-                                    "arn:aws:lambda:*"
-                                ]
-                            }
-                        ]
+                        "IncludeManagementEvents": true
                     }
-                ]
+                ],
+                "IsOrganizationTrail": {
+                    "Fn::If": [
+                        "HasOrganizationalId",
+                        true,
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
             }
         },
         "EC2InstanceRole": {
@@ -482,12 +742,9 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-                ],
                 "Policies": [
                     {
-                        "PolicyName": "EC2SecurityPolicy",
+                        "PolicyName": "EC2LeastPrivilegePolicy",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -510,6 +767,16 @@
                                     "Resource": {
                                         "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -545,9 +812,6 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
                 "Policies": [
                     {
                         "PolicyName": "AccessKeyRotationPolicy",
@@ -561,8 +825,7 @@
                                         "iam:ListAccessKeys",
                                         "iam:GetAccessKeyLastUsed",
                                         "iam:UpdateAccessKey",
-                                        "iam:DeleteAccessKey",
-                                        "iam:CreateAccessKey"
+                                        "iam:DeleteAccessKey"
                                     ],
                                     "Resource": "*"
                                 },
@@ -574,6 +837,23 @@
                                     "Resource": {
                                         "Ref": "SecurityNotificationTopic"
                                     }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "LambdaBasicExecution",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -614,6 +894,7 @@
                         "Arn"
                     ]
                 },
+                "Timeout": 300,
                 "Environment": {
                     "Variables": {
                         "SNS_TOPIC_ARN": {
@@ -622,7 +903,7 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import boto3\nimport json\nimport os\nfrom datetime import datetime, timedelta\n\ndef lambda_handler(event, context):\n    iam = boto3.client('iam')\n    sns = boto3.client('sns')\n    \n    # Get all users\n    paginator = iam.get_paginator('list_users')\n    \n    for page in paginator.paginate():\n        for user in page['Users']:\n            username = user['UserName']\n            \n            # Get access keys for user\n            keys = iam.list_access_keys(UserName=username)\n            \n            for key in keys['AccessKeyMetadata']:\n                key_id = key['AccessKeyId']\n                created_date = key['CreateDate'].replace(tzinfo=None)\n                \n                # Check if key is older than 90 days\n                if (datetime.utcnow() - created_date).days > 90:\n                    # Disable the key\n                    iam.update_access_key(\n                        UserName=username,\n                        AccessKeyId=key_id,\n                        Status='Inactive'\n                    )\n                    \n                    # Send notification\n                    message = f\"Access key {key_id} for user {username} has been disabled due to age (>90 days)\"\n                    sns.publish(\n                        TopicArn=os.environ['SNS_TOPIC_ARN'],\n                        Message=message,\n                        Subject='Access Key Rotation Alert'\n                    )\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps('Access key rotation check completed')\n    }\n"
+                    "ZipFile": "import boto3\nimport json\nimport os\nfrom datetime import datetime, timedelta\n\ndef lambda_handler(event, context):\n    iam = boto3.client('iam')\n    sns = boto3.client('sns')\n    \n    # Get all users\n    paginator = iam.get_paginator('list_users')\n    \n    for page in paginator.paginate():\n        for user in page['Users']:\n            username = user['UserName']\n            \n            # Get access keys for user\n            keys = iam.list_access_keys(UserName=username)\n            \n            for key in keys['AccessKeyMetadata']:\n                key_id = key['AccessKeyId']\n                created_date = key['CreateDate'].replace(tzinfo=None)\n                \n                # Check if key is older than 90 days\n                if (datetime.utcnow() - created_date).days > 90:\n                    # Disable the key\n                    iam.update_access_key(\n                        UserName=username,\n                        AccessKeyId=key_id,\n                        Status='Inactive'\n                    )\n                    \n                    # Check if user has no active keys\n                    active_keys = [k for k in keys['AccessKeyMetadata'] if k['Status'] == 'Active' and k['AccessKeyId'] != key_id]\n                    if not active_keys:\n                        # Create a new access key\n                        new_key = iam.create_access_key(UserName=username)\n                        message = f\"Access key {key_id} for user {username} has been disabled due to age (>90 days). A new access key has been created. Please retrieve it from the IAM console.\"\n                    else:\n                        message = f\"Access key {key_id} for user {username} has been disabled due to age (>90 days). Please ensure you have active keys.\"\n                    \n                    # Send notification\n                    sns.publish(\n                        TopicArn=os.environ['SNS_TOPIC_ARN'],\n                        Message=message,\n                        Subject='Access Key Rotation Alert'\n                    )\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps('Access key rotation check completed')\n    }\n"
                 }
             }
         },
@@ -632,8 +913,8 @@
                 "Name": {
                     "Fn::Sub": "AccessKeyRotationSchedule-${Environment}"
                 },
-                "Description": "Trigger access key rotation check weekly",
-                "ScheduleExpression": "rate(7 days)",
+                "Description": "Trigger access key rotation check daily",
+                "ScheduleExpression": "rate(1 day)",
                 "State": "ENABLED",
                 "Targets": [
                     {
@@ -847,6 +1128,116 @@
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "INCOMING_SSH_DISABLED"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::SecurityGroup"
+                    ]
+                }
+            }
+        },
+        "EBSEncryptionConfigRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "ebs-encryption-by-default-${Environment}"
+                },
+                "Description": "Checks whether EBS encryption is enabled by default for the account",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "EC2_EBS_ENCRYPTION_BY_DEFAULT"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::Volume"
+                    ]
+                }
+            }
+        },
+        "ConfigAggregatorRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "UseOrganizationalConfig",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigAggregatorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:PutConfigurationAggregator",
+                                        "config:DescribeConfigurationAggregators",
+                                        "config:DeleteConfigurationAggregator"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "organizations:DescribeOrganization"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigAggregator": {
+            "Type": "AWS::Config::ConfigurationAggregator",
+            "Condition": "IsMasterAccount",
+            "Properties": {
+                "ConfigurationAggregatorName": {
+                    "Fn::Sub": "SecurityAggregator-${Environment}"
+                },
+                "OrganizationAggregationSource": {
+                    "Fn::If": [
+                        "HasOrganizationalId",
+                        {
+                            "RoleArn": {
+                                "Fn::GetAtt": [
+                                    "ConfigAggregatorRole",
+                                    "Arn"
+                                ]
+                            },
+                            "AllAwsRegions": true
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "AccountAggregationSources": {
+                    "Fn::If": [
+                        "UseAccountBasedConfig",
+                        [
+                            {
+                                "AccountIds": {
+                                    "Ref": "MemberAccountIds"
+                                },
+                                "AllAwsRegions": true
+                            }
+                        ],
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 }
             }
         },
@@ -884,17 +1275,14 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "DenyAllExceptUnlessSignedInWithMFA",
+                            "Sid": "DenyAccessWithoutMFA",
                             "Effect": "Deny",
-                            "NotAction": [
-                                "iam:CreateVirtualMFADevice",
-                                "iam:EnableMFADevice",
-                                "iam:GetUser",
-                                "iam:ListMFADevices",
-                                "iam:ListVirtualMFADevices",
-                                "iam:ResyncMFADevice",
-                                "sts:GetSessionToken",
-                                "iam:ChangePassword"
+                            "Action": [
+                                "ec2:*",
+                                "s3:*",
+                                "rds:*",
+                                "lambda:*",
+                                "cloudformation:*"
                             ],
                             "Resource": "*",
                             "Condition": {
@@ -908,7 +1296,11 @@
             }
         },
         "SecurityHub": {
-            "Type": "AWS::SecurityHub::Hub"
+            "Type": "AWS::SecurityHub::Hub",
+            "Condition": "CreateSecurityHubCondition",
+            "Properties": {
+                "EnableDefaultStandards": true
+            }
         },
         "DatabasePasswordParameter": {
             "Type": "AWS::SSM::Parameter",
@@ -932,7 +1324,7 @@
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
                     "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\"
+                    "ExcludeCharacters": "\"@/\\\\"
                 },
                 "KmsKeyId": {
                     "Fn::If": [
@@ -980,7 +1372,15 @@
                 },
                 "GroupDescription": "Security group for RDS instances",
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "SecurityGroupIngress": [
                     {
@@ -1002,6 +1402,63 @@
                 ]
             }
         },
+        "RDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Ref": "DBInstanceIdentifier"
+                },
+                "Engine": {
+                    "Ref": "DBEngine"
+                },
+                "EngineVersion": {
+                    "Ref": "DBEngineVersion"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "BackupRetentionPeriod": {
+                    "Ref": "DBBackupRetentionPeriod"
+                },
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "RDSSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateKmsKey",
+                        {
+                            "Ref": "SecurityKmsKey"
+                        },
+                        {
+                            "Ref": "KmsKeyId"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "RDS-Instance-${Environment}"
+                        }
+                    }
+                ]
+            }
+        },
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -1010,7 +1467,15 @@
                 },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "SecurityGroupIngress": [
                     {
@@ -1076,7 +1541,15 @@
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "SecurityGroupIngress": [
                     {
@@ -1097,23 +1570,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "ALB-SG-${Environment}"
-                        }
-                    }
-                ]
-            }
-        },
-        "SSLCertificate": {
-            "Type": "AWS::CertificateManager::Certificate",
-            "Properties": {
-                "DomainName": {
-                    "Fn::Sub": "${Environment}.example.com"
-                },
-                "ValidationMethod": "DNS",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "SSL-Cert-${Environment}"
                         }
                     }
                 ]
@@ -1140,7 +1596,7 @@
                 "Certificates": [
                     {
                         "CertificateArn": {
-                            "Ref": "SSLCertificate"
+                            "Ref": "CertificateArn"
                         }
                     }
                 ]
@@ -1171,7 +1627,15 @@
         "VpcId": {
             "Description": "VPC ID",
             "Value": {
-                "Ref": "SecurityVpc"
+                "Fn::If": [
+                    "CreateVpc",
+                    {
+                        "Ref": "SecurityVpc"
+                    },
+                    {
+                        "Ref": "ExistingVpcId"
+                    }
+                ]
             },
             "Export": {
                 "Name": {
@@ -1237,7 +1701,13 @@
         "SecurityHubArn": {
             "Description": "Security Hub ARN",
             "Value": {
-                "Ref": "SecurityHub"
+                "Fn::If": [
+                    "CreateSecurityHubCondition",
+                    {
+                        "Ref": "SecurityHub"
+                    },
+                    "Already subscribed"
+                ]
             },
             "Export": {
                 "Name": {
@@ -1325,14 +1795,34 @@
                 }
             }
         },
-        "RDSSubnetGroupName": {
-            "Description": "RDS Subnet Group Name",
+        "RDSInstanceEndpoint": {
+            "Description": "RDS instance endpoint",
             "Value": {
-                "Ref": "RDSSubnetGroup"
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Address"
+                ]
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-RDS-SubnetGroup"
+                    "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
+                }
+            }
+        },
+        "ConfigAggregatorName": {
+            "Description": "AWS Config Aggregator Name",
+            "Value": {
+                "Fn::If": [
+                    "IsMasterAccount",
+                    {
+                        "Ref": "ConfigAggregator"
+                    },
+                    "Not applicable"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Aggregator"
                 }
             }
         },
