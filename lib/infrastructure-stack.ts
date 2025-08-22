@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 export interface InfrastructureStackArgs {
   environmentSuffix?: string;
@@ -290,7 +291,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const albLogsBucket = new aws.s3.Bucket(
       `${environment}-alb-access-logs`,
       {
-        bucket: `${environment}-${projectName}-alb-logs-${pulumi.getStack()}`,
+        bucket: `${environment}-${projectName}-alb-logs-${stackName}`.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
         forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
@@ -683,6 +684,25 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
+    // Random values for secrets
+    const apiKey = new random.RandomPassword(
+      `${environment}-api-key`,
+      {
+        length: 32,
+        special: true,
+      },
+      { parent: this }
+    );
+
+    const jwtSecret = new random.RandomPassword(
+      `${environment}-jwt-secret`,
+      {
+        length: 64,
+        special: false,
+      },
+      { parent: this }
+    );
+
     // Secrets Manager Secret
     const appSecret = new aws.secretsmanager.Secret(
       `${environment}-app-secret`,
@@ -702,11 +722,13 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       `${environment}-app-secret-version`,
       {
         secretId: appSecret.id,
-        secretString: JSON.stringify({
-          database_url: pulumi.interpolate`dynamodb://${dynamoTable.name}`,
-          api_key: 'your-api-key-here',
-          jwt_secret: 'your-jwt-secret-here',
-        }),
+        secretString: pulumi.all([dynamoTable.name, apiKey.result, jwtSecret.result]).apply(([tableName, apiKeyValue, jwtSecretValue]) =>
+          JSON.stringify({
+            database_url: `dynamodb://${tableName}`,
+            api_key: apiKeyValue,
+            jwt_secret: jwtSecretValue,
+          })
+        ),
       },
       { parent: this, provider: awsProvider }
     );
@@ -730,7 +752,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const cloudFrontLogsBucket = new aws.s3.Bucket(
       `${environment}-cloudfront-logs`,
       {
-        bucket: `${environment}-${projectName}-cloudfront-logs-${pulumi.getStack()}`,
+        bucket: `${environment}-${projectName}-cloudfront-logs-${stackName}`.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
         forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
