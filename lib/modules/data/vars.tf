@@ -22,13 +22,3 @@ variable "region" {
   description = "AWS region for the deployment"
   type        = string
 }
-
-variable "name_prefix" {
-  description = "A consistent prefix for resource naming"
-  type        = string
-}
-
-variable "random_suffix" {
-  description = "A random string to ensure resource name uniqueness"
-  type        = string
-}
