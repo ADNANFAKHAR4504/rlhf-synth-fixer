@@ -1,3 +1,5 @@
+# Secure AWS Infrastructure CloudFormation Template
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure with VPC, EC2, RDS, S3, CloudWatch, and CloudTrail'
