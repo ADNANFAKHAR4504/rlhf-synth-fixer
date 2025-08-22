@@ -9,7 +9,6 @@ Metadata:
         Parameters:
           - EnvironmentSuffix
           - DBUsername
-          - DBPassword
 
 Parameters:
   EnvironmentSuffix:
@@ -26,15 +25,6 @@ Parameters:
     MinLength: '1'
     MaxLength: '16'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    
-  DBPassword:
-    Type: String
-    Description: 'Database administrator password'
-    NoEcho: true
-    MinLength: '8'
-    MaxLength: '128'
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]*'
-    ConstraintDescription: 'Must be at least 8 characters'
 
 Resources:
   # VPC and Network Infrastructure
