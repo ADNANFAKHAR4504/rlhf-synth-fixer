@@ -1,3 +1,8 @@
+I'll fix the CloudTrail error and add the Lambda function code. The issue is that IsLogging is a required property for CloudTrail, and I'll also create the Lambda deployment package.
+
+Here's the corrected CloudFormation template:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS environment with comprehensive security controls and best practices'
 
@@ -789,3 +794,34 @@ Outputs:
     Value: !GetAtt SecureLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-Lambda-Function-ARN'
+```
+
+Key Fixes Made:
+
+1. CloudTrail Fix
+   Added the required IsLogging: true property to the CloudTrail resource
+   Added proper S3 bucket policy for CloudTrail access
+   Added DependsOn to ensure bucket policy is created before CloudTrail
+2. Lambda Code Deployment
+   Created a custom resource (LambdaZipCreator) that automatically creates and uploads the Lambda function zip file
+   Added a helper Lambda function that creates the zip file programmatically
+   The main Lambda function now properly depends on the zip file creation
+3. Additional Improvements
+   Added proper KMS permissions for S3 service
+   Fixed resource dependencies to ensure proper creation order
+   Added comprehensive error handling in the Lambda function code
+   Deployment Steps:
+   Delete the failed stack first:
+   aws cloudformation delete-stack --stack-name your-failed-stack-name --region us-east-1
+   Wait for deletion to complete, then deploy the fixed template:
+   aws cloudformation create-stack \
+    --stack-name secure-environment-dev \
+    --template-body file://secure-cloudformation-template.yaml \
+    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+    --capabilities CAPABILITY_NAMED_IAM \
+    --stack-policy-body file://stack-policy.json \
+    --region us-east-1
+   The template now includes:
+
+✅ Fixed CloudTrail with required IsLogging property
+✅ Automatic Lambda
