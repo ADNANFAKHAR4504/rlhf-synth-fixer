@@ -43,8 +43,10 @@ Parameters:
 
 Mappings:
   RegionMap:
+    us-east-1:
+      AMI: 'ami-00ca32bbc84273381'  # al2023-ami-2023.8.20250818.0-kernel-6.1-x86_64 (2025-08-13)
     us-west-2:
-      AMI: 'ami-04c82466a6fab80eb'  # Amazon Linux 2023 AMI
+      AMI: 'ami-04c82466a6fab80eb'
 
 Resources:
   # Original DynamoDB Table
