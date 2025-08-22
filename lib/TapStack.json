@@ -92,6 +92,20 @@
             "Type": "String",
             "Default": "",
             "Description": "S3 bucket name for application data. Leave empty to auto-generate."
+        },
+        "ExistingDBParameterGroupName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional: Use an existing DB parameter group instead of creating a new one."
+        },
+        "IsEphemeral": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, ephemeral stacks skip creating DBParameterGroup to avoid hitting quota."
         }
     },
     "Mappings": {
@@ -224,6 +238,37 @@
                     "Fn::Not": [
                         {
                             "Condition": "HasVpcId"
+                        }
+                    ]
+                }
+            ]
+        },
+        "HasExistingDBParameterGroup": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingDBParameterGroupName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDBParameterGroup": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "IsEphemeral"
+                        },
+                        "false"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Condition": "HasExistingDBParameterGroup"
                         }
                     ]
                 }
@@ -943,7 +988,31 @@
                 ]
             }
         },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${NamePrefix}-db-password-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Database password for ${NamePrefix} RDS instance"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
         "DBParameterGroup": {
+            "Condition": "CreateDBParameterGroup",
             "Type": "AWS::RDS::DBParameterGroup",
             "Properties": {
                 "Description": {
@@ -968,29 +1037,6 @@
                             "require_secure_transport": "ON"
                         }
                     ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "DBPasswordSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${NamePrefix}-db-password-${EnvironmentSuffix}"
-                },
-                "Description": {
-                    "Fn::Sub": "Database password for ${NamePrefix} RDS instance"
-                },
-                "GenerateSecretString": {
-                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\"
                 },
                 "Tags": [
                     {
@@ -1049,7 +1095,23 @@
                     ]
                 },
                 "DBParameterGroupName": {
-                    "Ref": "DBParameterGroup"
+                    "Fn::If": [
+                        "HasExistingDBParameterGroup",
+                        {
+                            "Ref": "ExistingDBParameterGroupName"
+                        },
+                        {
+                            "Fn::If": [
+                                "CreateDBParameterGroup",
+                                {
+                                    "Ref": "DBParameterGroup"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
+                        }
+                    ]
                 },
                 "DeletionProtection": false,
                 "CopyTagsToSnapshot": true,

@@ -78,6 +78,15 @@ Parameters:
     Type: String
     Default: ""
     Description: S3 bucket name for application data. Leave empty to auto-generate.
+  ExistingDBParameterGroupName:
+    Type: String
+    Default: ""
+    Description: "Optional: Use an existing DB parameter group instead of creating a new one."
+  IsEphemeral:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: "If true, ephemeral stacks skip creating DBParameterGroup to avoid hitting quota."
 
 Mappings:
   EngineFamily:
@@ -104,6 +113,10 @@ Conditions:
   HasAppBucket: !Not [!Equals [!Ref AppBucketName, ""]]
   UseDefaultVpc: !Not [!Condition HasVpcId]
   UseDefaultSubnets: !And [!Not [!Condition HasPrivateSubnets], !Not [!Condition HasVpcId]]
+  HasExistingDBParameterGroup: !Not [!Equals [!Ref ExistingDBParameterGroupName, ""]]
+  CreateDBParameterGroup: !And 
+    - !Equals [!Ref IsEphemeral, "false"]
+    - !Not [!Condition HasExistingDBParameterGroup]
 
 Resources:
   # Get default VPC info - only when we need it
@@ -476,19 +489,6 @@ Resources:
         - Key: Environment
           Value: Production
 
-  DBParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      Description: !Sub '${NamePrefix} parameter group to enforce TLS'
-      Family: !FindInMap [EngineFamily, !Ref DBEngine, Family]
-      Parameters: !If
-        - IsPostgres
-        - rds.force_ssl: '1'
-        - require_secure_transport: 'ON'
-      Tags:
-        - Key: Environment
-          Value: Production
-
   # Create a secret for the database password
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
@@ -500,6 +500,20 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  DBParameterGroup:
+    Condition: CreateDBParameterGroup
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !Sub '${NamePrefix} parameter group to enforce TLS'
+      Family: !FindInMap [EngineFamily, !Ref DBEngine, Family]
+      Parameters: !If
+        - IsPostgres
+        - rds.force_ssl: '1'
+        - require_secure_transport: 'ON'
       Tags:
         - Key: Environment
           Value: Production
@@ -524,8 +538,14 @@ Resources:
           - UseDefaultSubnets
           - !Ref DefaultDBSubnetGroup
           - !Ref "AWS::NoValue"
-      DBParameterGroupName: !Ref DBParameterGroup
-      DeletionProtection: false  # Set to false for dev environments
+      DBParameterGroupName: !If
+        - HasExistingDBParameterGroup
+        - !Ref ExistingDBParameterGroupName
+        - !If
+          - CreateDBParameterGroup
+          - !Ref DBParameterGroup
+          - !Ref "AWS::NoValue"
+      DeletionProtection: false
       CopyTagsToSnapshot: true
       MultiAZ: false
       Tags:
