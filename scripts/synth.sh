@@ -19,6 +19,11 @@ if [ "$PLATFORM" = "cdk" ]; then
   npm run cdk:synth
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
+    # Handle CDKTF multi-stack state naming
+  if [ -f "terraform.tfstate" ]; then
+    echo "⚠️ Found legacy terraform.tfstate. Renaming to TapStack.tfstate..."
+    mv terraform.tfstate TapStack.tfstate
+  fi
   # Pre-fetch Go modules to ensure go.sum is populated before any go run steps
   echo "Pre-fetching Go modules (go mod download)"
   export GOPROXY=${GOPROXY:-direct}
