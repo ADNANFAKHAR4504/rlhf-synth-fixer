@@ -31,6 +31,11 @@ Parameters:
     MinLength: 4
     MaxLength: 16
 
+  EnvironmentSuffix:
+    Type: String
+    Description: Suffix to append to resource names for unique identification
+    Default: dev
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -45,7 +50,7 @@ Resources:
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub '${Environment}-${Project}-encryption-key'
+      Description: !Sub '${Environment}-${Project}-encryption-key-${EnvironmentSuffix}'
       KeyPolicy:
         Statement:
           - Sid: Enable IAM User Permissions
@@ -62,6 +67,34 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
+          - Sid: Allow CloudWatch Logs to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
+          - Sid: Allow CloudWatch Logs CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -73,7 +106,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${Environment}-${Project}-key'
+      AliasName: !Sub 'alias/${Environment}-${Project}-key-${EnvironmentSuffix}'
       TargetKeyId: !Ref KMSKey
 
   # VPC Configuration
@@ -85,7 +118,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc-main'
+          Value: !Sub '${Environment}-vpc-main-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -296,7 +329,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-appdata-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-appdata-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -322,7 +355,7 @@ Resources:
   S3LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-accesslogs-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-accesslogs-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -345,7 +378,7 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${Environment}-application'
+      LogGroupName: !Sub '/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
       RetentionInDays: 30
       KmsKeyId: !GetAtt KMSKey.Arn
 
@@ -462,7 +495,7 @@ Resources:
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${Environment}-rds-password'
+      Name: !Sub '${Environment}-rds-password-${EnvironmentSuffix}'
       Description: 'RDS Database Password'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -483,7 +516,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-rds-main'
+      DBInstanceIdentifier: !Sub '${Environment}-rds-main-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -514,7 +547,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-audit'
+      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
       RetentionInDays: 90
       KmsKeyId: !GetAtt KMSKey.Arn
 
@@ -571,7 +604,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
