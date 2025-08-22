@@ -1,24 +1,17 @@
-I got this error in the above prompt
----
 
+# Deployment Error Report
 
-│ Error: waiting for ACM Certificate (arn:aws:acm:us-west-2:***:certificate/5ed32028-b8c0-41dd-8eee-44211ca2a066) to be issued: timeout while waiting for state to become 'true' (last state: 'false', timeout: 5m0s)
-│ 
-│   with aws_acm_certificate.main,
-│   on tap_stack.tf line 491, in resource "aws_acm_certificate" "main":
-│  491: resource "aws_acm_certificate" "main" {
-│ 
-╵
-╷
-│ Error: creating Auto Scaling Group (Prod-SecureApp-asg): operation error Auto Scaling: CreateAutoScalingGroup, https response error StatusCode: 400, RequestID: 7255ab79-d6f2-4a6e-b719-e78778cff0af, api error InvalidQueryParameter: Invalid launch template: When a network interface is provided, the security groups must be a part of it.
-│ 
-│   with aws_autoscaling_group.main,
-│   on tap_stack.tf line 679, in resource "aws_autoscaling_group" "main":
-│  679: resource "aws_autoscaling_group" "main" {
-│ 
-╵
+While deploying the Terraform code, I encountered the following errors:
+
+- ACM certificate creation timed out.
+- Auto Scaling Group failed due to a launch template/network interface security group issue.
+
+Here’s the error output:
+
+```
+Error: waiting for ACM Certificate ... to be issued: timeout while waiting for state to become 'true' (last state: 'false', timeout: 5m0s)
+Error: creating Auto Scaling Group ... Invalid launch template: When a network interface is provided, the security groups must be a part of it.
 Error: Terraform exited with code 1.
-Error: Process completed with exit code 1.
+```
 
-
-Please fix the errors
+Can you help me resolve these issues in the Terraform configuration?
