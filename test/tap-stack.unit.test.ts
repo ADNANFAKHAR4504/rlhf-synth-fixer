@@ -58,7 +58,7 @@ describe('Unified WebApp Stack Unit Tests', () => {
     const prodRoleName = synthesized.resource.aws_iam_role['Role-prod'].name;
 
     expect(devRoleName).not.toEqual(prodRoleName);
-    expect(devRoleName).toMatch(/^tap-dev-/);
-    expect(prodRoleName).toMatch(/^tap-prod-/);
+    expect(devRoleName).toMatch(/^webapp-dev-/);
+    expect(prodRoleName).toMatch(/^webapp-prod-/);
   });
 });

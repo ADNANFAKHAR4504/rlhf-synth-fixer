@@ -45,7 +45,11 @@ export class TapStack extends TerraformStack {
       region: 'us-west-2',
     });
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'CallerIdentity', {});
+    const callerIdentity = new DataAwsCallerIdentity(
+      this,
+      'CallerIdentity',
+      {}
+    );
 
     for (const config of props.environments) {
       const constructIdSuffix = `-${config.envName}`;
@@ -118,11 +122,15 @@ export class TapStack extends TerraformStack {
         tags: config.tags,
       });
 
-      const routeTable = new RouteTable(this, `RouteTable${constructIdSuffix}`, {
-        vpcId: vpc.id,
-        route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
-        tags: config.tags,
-      });
+      const routeTable = new RouteTable(
+        this,
+        `RouteTable${constructIdSuffix}`,
+        {
+          vpcId: vpc.id,
+          route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
+          tags: config.tags,
+        }
+      );
 
       new RouteTableAssociation(this, `RtaA${constructIdSuffix}`, {
         subnetId: subnetA.id,
@@ -139,7 +147,12 @@ export class TapStack extends TerraformStack {
         name: `${resourceNamePrefix}-sg`,
         vpcId: vpc.id,
         ingress: [
-          { protocol: 'tcp', fromPort: 80, toPort: 80, cidrBlocks: ['0.0.0.0/0'] },
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
         ],
         egress: [
           { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] },
@@ -148,23 +161,29 @@ export class TapStack extends TerraformStack {
       });
 
       // --- Logging (Encrypted) ---
-      const logGroup = new CloudwatchLogGroup(this, `LogGroup${constructIdSuffix}`, {
-        name: `/aws/ec2/${resourceNamePrefix}`,
-        retentionInDays: 14,
-        kmsKeyId: kmsKey.arn,
-        tags: config.tags,
-      });
+      const logGroup = new CloudwatchLogGroup(
+        this,
+        `LogGroup${constructIdSuffix}`,
+        {
+          name: `/aws/ec2/${resourceNamePrefix}`,
+          retentionInDays: 14,
+          kmsKeyId: kmsKey.arn,
+          tags: config.tags,
+        }
+      );
 
       // --- IAM Role (Least Privilege) ---
       const instanceRole = new IamRole(this, `Role${constructIdSuffix}`, {
         name: `${resourceNamePrefix}-role`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [{
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: { Service: 'ec2.amazonaws.com' },
-          }],
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'ec2.amazonaws.com' },
+            },
+          ],
         }),
         tags: config.tags,
       });
@@ -173,11 +192,13 @@ export class TapStack extends TerraformStack {
         name: `${resourceNamePrefix}-log-policy`,
         policy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [{
-            Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-            Effect: 'Allow',
-            Resource: logGroup.arn,
-          }],
+          Statement: [
+            {
+              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+              Effect: 'Allow',
+              Resource: logGroup.arn,
+            },
+          ],
         }),
       });
 
@@ -186,18 +207,20 @@ export class TapStack extends TerraformStack {
         policyArn: logPolicy.arn,
       });
 
-      const instanceProfile = new IamInstanceProfile(this, `Profile${constructIdSuffix}`, {
-        name: `${resourceNamePrefix}-profile`,
-        role: instanceRole.name,
-      });
+      const instanceProfile = new IamInstanceProfile(
+        this,
+        `Profile${constructIdSuffix}`,
+        {
+          name: `${resourceNamePrefix}-profile`,
+          role: instanceRole.name,
+        }
+      );
 
       // --- Compute (Encrypted EBS) ---
       const ami = new DataAwsAmi(this, `Ami${constructIdSuffix}`, {
         mostRecent: true,
         owners: ['amazon'],
-        filter: [
-          { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
-        ],
+        filter: [{ name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] }],
       });
 
       const instance = new Instance(this, `Instance${constructIdSuffix}`, {
@@ -217,15 +240,19 @@ echo "<h1>Deployed in ${config.envName}</h1>" > /var/www/html/index.html`,
       });
 
       // --- Health Check ---
-      const healthCheck = new Route53HealthCheck(this, `HealthCheck${constructIdSuffix}`, {
-        ipAddress: instance.publicIp,
-        port: 80,
-        type: 'HTTP',
-        failureThreshold: 3,
-        requestInterval: 30,
-        resourcePath: '/',
-        tags: config.tags,
-      });
+      const healthCheck = new Route53HealthCheck(
+        this,
+        `HealthCheck${constructIdSuffix}`,
+        {
+          ipAddress: instance.publicIp,
+          port: 80,
+          type: 'HTTP',
+          failureThreshold: 3,
+          requestInterval: 30,
+          resourcePath: '/',
+          tags: config.tags,
+        }
+      );
 
       // --- Outputs ---
       new TerraformOutput(this, `InstancePublicIp${constructIdSuffix}`, {
