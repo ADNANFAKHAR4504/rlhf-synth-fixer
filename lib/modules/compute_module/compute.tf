@@ -41,6 +41,12 @@ resource "aws_launch_template" "main" {
     }
   }
 
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+    http_put_response_hop_limit = 2
+  }
+
   monitoring {
     enabled = true
   }
@@ -70,7 +76,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment}-asg-turing"
+  name                = "${var.environment}-asg"
   vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
@@ -132,7 +138,7 @@ resource "aws_lb_target_group" "main" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/health"
+    path                = "/"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
