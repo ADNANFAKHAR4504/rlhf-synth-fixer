@@ -53,11 +53,54 @@ import * as fs from 'fs';
 // Configuration - These outputs come from cfn-outputs after terraform apply
 let outputs: any = {};
 try {
-  outputs = JSON.parse(
+  const rawOutputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
+
+  // Parse array outputs that might be JSON strings
+  outputs = {
+    ...rawOutputs
+  };
+
+  // Handle public_subnet_ids
+  if (typeof rawOutputs.public_subnet_ids === 'string') {
+    try {
+      outputs.public_subnet_ids = JSON.parse(rawOutputs.public_subnet_ids);
+    } catch {
+      // If it's not valid JSON, split by comma and clean up
+      outputs.public_subnet_ids = rawOutputs.public_subnet_ids
+        .replace(/[\[\]"]/g, '')
+        .split(',')
+        .map((id: string) => id.trim())
+        .filter((id: string) => id.length > 0);
+    }
+  } else if (Array.isArray(rawOutputs.public_subnet_ids)) {
+    outputs.public_subnet_ids = rawOutputs.public_subnet_ids;
+  } else {
+    outputs.public_subnet_ids = [];
+  }
+
+  // Handle private_subnet_ids
+  if (typeof rawOutputs.private_subnet_ids === 'string') {
+    try {
+      outputs.private_subnet_ids = JSON.parse(rawOutputs.private_subnet_ids);
+    } catch {
+      // If it's not valid JSON, split by comma and clean up
+      outputs.private_subnet_ids = rawOutputs.private_subnet_ids
+        .replace(/[\[\]"]/g, '')
+        .split(',')
+        .map((id: string) => id.trim())
+        .filter((id: string) => id.length > 0);
+    }
+  } else if (Array.isArray(rawOutputs.private_subnet_ids)) {
+    outputs.private_subnet_ids = rawOutputs.private_subnet_ids;
+  } else {
+    outputs.private_subnet_ids = [];
+  }
+
 } catch (err) {
   console.warn('Warning: Outputs file not found or invalid. Integration tests will be skipped.');
+  console.error('Error details:', err);
 }
 
 // AWS clients - set region explicitly
@@ -78,6 +121,8 @@ describe('Terraform Web Application Infrastructure Integration Tests', () => {
     if (!outputs.vpc_id) {
       console.warn('Required outputs not found. Ensure terraform apply has been run and outputs are available.');
     }
+    // Debug log to see the actual output structure
+    console.log('Parsed outputs:', JSON.stringify(outputs, null, 2));
   });
 
   describe('Basic Output Validation', () => {
@@ -92,16 +137,21 @@ describe('Terraform Web Application Infrastructure Integration Tests', () => {
 
     test('output formats are correct', () => {
       expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
+
+      // Ensure subnet IDs are arrays
       expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
       expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
       expect(outputs.public_subnet_ids.length).toBeGreaterThanOrEqual(2);
       expect(outputs.private_subnet_ids.length).toBeGreaterThanOrEqual(2);
 
+      // Check each subnet ID format
       outputs.public_subnet_ids.forEach((id: string) => {
+        expect(typeof id).toBe('string');
         expect(id).toMatch(/^subnet-[a-f0-9]+$/);
       });
 
       outputs.private_subnet_ids.forEach((id: string) => {
+        expect(typeof id).toBe('string');
         expect(id).toMatch(/^subnet-[a-f0-9]+$/);
       });
     });
@@ -582,9 +632,10 @@ describe('Terraform Web Application Infrastructure Integration Tests', () => {
       });
 
       const policyResponse = await iamClient.send(policyCommand);
-      expect(policyResponse.PolicyDocument).toContain('ssm:GetParameter');
-      expect(policyResponse.PolicyDocument).toContain('logs:CreateLogGroup');
-      expect(policyResponse.PolicyDocument).toContain('logs:PutLogEvents');
+      const decodedPolicy = decodeURIComponent(policyResponse.PolicyDocument || '');
+      expect(decodedPolicy).toContain('ssm:GetParameter');
+      expect(decodedPolicy).toContain('logs:CreateLogGroup');
+      expect(decodedPolicy).toContain('logs:PutLogEvents');
     }, 30000);
 
     test('EC2 instance profile exists', async () => {
@@ -701,8 +752,9 @@ describe('Terraform Web Application Infrastructure Integration Tests', () => {
   describe('High Availability Verification', () => {
     test('resources are distributed across multiple AZs', async () => {
       // Check subnet distribution
+      const allSubnetIds = [...outputs.public_subnet_ids, ...outputs.private_subnet_ids];
       const subnetCommand = new DescribeSubnetsCommand({
-        SubnetIds: [...outputs.public_subnet_ids, ...outputs.private_subnet_ids]
+        SubnetIds: allSubnetIds
       });
 
       const subnetResponse = await ec2Client.send(subnetCommand);
