@@ -730,7 +730,7 @@
                                 "StorageClass": "STANDARD"
                             },
                             "Filter": {
-                                "Prefix": ""non-sensitive/"
+                                "Prefix": "non-sensitive/"
                             }
                         }
                     ]
@@ -1555,7 +1555,7 @@
                                 "StorageClass": "STANDARD"
                             },
                             "Filter": {
-                                "Prefix": ""
+                                "Prefix": "non-sensitive/"
                             }
                         }
                     ]

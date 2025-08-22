@@ -45,20 +45,20 @@ if (!existsSync(outputsPath)) {
 let stackOutputs: Record<string, string> = {};
 if (existsSync(outputsPath)) {
   const rawOutputs = JSON.parse(readFileSync(outputsPath, 'utf8'));
-  // Handle both flat and nested structures
-  let outputsArray: { OutputKey: string; OutputValue: string }[];
-  if (Array.isArray(rawOutputs)) {
-    outputsArray = rawOutputs; // flat-outputs.json
+  // Handle flat object format
+  if (typeof rawOutputs === 'object' && !Array.isArray(rawOutputs) && rawOutputs !== null && Object.keys(rawOutputs).some(key => key.endsWith('VPCId') || key.endsWith('Subnets'))) {
+    stackOutputs = rawOutputs;
   } else {
-    outputsArray = Object.values(rawOutputs)[0] as { OutputKey: string; OutputValue: string }[]; // all-outputs.json
-  }
-  if (Array.isArray(outputsArray)) {
-    stackOutputs = outputsArray.reduce((acc: Record<string, string>, output: { OutputKey: string; OutputValue: string }) => {
-      acc[output.OutputKey] = output.OutputValue; // Fixed: Changed 'Value' to 'OutputValue'
-      return acc;
-    }, {});
-  } else {
-    console.warn('Unexpected outputs format in:', outputsPath);
+    // Handle nested array format
+    const outputsArray = Object.values(rawOutputs)[0] as { OutputKey: string; OutputValue: string }[];
+    if (Array.isArray(outputsArray)) {
+      stackOutputs = outputsArray.reduce((acc: Record<string, string>, output: { OutputKey: string; OutputValue: string }) => {
+        acc[output.OutputKey] = output.OutputValue;
+        return acc;
+      }, {});
+    } else {
+      console.warn('Unexpected outputs format in:', outputsPath);
+    }
   }
 } else {
   console.warn('Outputs file not found at:', outputsPath);
