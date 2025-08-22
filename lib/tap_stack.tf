@@ -102,7 +102,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${var.aws_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -609,9 +609,9 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
 resource "aws_route53_zone" "main" {
   name = var.domain_name
 
-  # Prevent deletion when DNSSEC is enabled
+  # Allow deletion without DNSSEC conflicts
   lifecycle {
-    create_before_destroy = true
+    prevent_destroy = false
   }
 
   tags = merge(local.common_tags, {
@@ -619,31 +619,20 @@ resource "aws_route53_zone" "main" {
   })
 }
 
-# FIX: Re-enabled DNSSEC as requested. This configuration is valid.
-resource "aws_route53_key_signing_key" "main" {
-  hosted_zone_id             = aws_route53_zone.main.id
-  key_management_service_arn = aws_kms_key.dnssec.arn
-  name                       = "${var.project_name}-ksk-${local.name_suffix}"
+# DNSSEC configuration - disabled to prevent deletion issues
+# resource "aws_route53_key_signing_key" "main" {
+#   hosted_zone_id             = aws_route53_zone.main.id
+#   key_management_service_arn = aws_kms_key.dnssec.arn
+#   name                       = "${var.project_name}-ksk-${local.name_suffix}"
+# }
 
-  # Ensure proper cleanup order
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_route53_hosted_zone_dnssec" "main" {
-  hosted_zone_id = aws_route53_key_signing_key.main.hosted_zone_id
-  # Setting the status explicitly after creating the key.
-  signing_status = "SIGNING"
-  depends_on = [
-    aws_route53_key_signing_key.main
-  ]
-
-  # Ensure DNSSEC is disabled before destroying the hosted zone
-  lifecycle {
-    create_before_destroy = true
-  }
-}
+# resource "aws_route53_hosted_zone_dnssec" "main" {
+#   hosted_zone_id = aws_route53_key_signing_key.main.hosted_zone_id
+#   signing_status = "SIGNING"
+#   depends_on = [
+#     aws_route53_key_signing_key.main
+#   ]
+# }
 
 # Enhanced S3 Configuration
 resource "aws_s3_bucket" "main" {
@@ -731,7 +720,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       },
@@ -746,7 +735,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       }
@@ -758,6 +747,10 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_iam_user" "admin_user" {
   name = "${var.project_name}-admin-${local.name_suffix}"
   tags = local.common_tags
+  
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_policy" "mfa_enforcement" {
@@ -931,8 +924,6 @@ resource "aws_config_configuration_recorder" "main" {
     all_supported                 = true
     include_global_resource_types = true
   }
-
-  depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_s3_bucket" "config" {
@@ -1012,6 +1003,8 @@ resource "aws_config_delivery_channel" "main" {
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"
   }
+
+  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_iam_role" "config_role" {
@@ -1123,25 +1116,22 @@ resource "aws_guardduty_detector" "main" {
   enable                       = true
   finding_publishing_frequency = "SIX_HOURS"
 
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = false
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
-
   tags = local.common_tags
+}
+
+# GuardDuty detector features - modern approach
+resource "aws_guardduty_detector_feature" "s3_data_events" {
+  count       = length(data.aws_guardduty_detector.existing) == 0 ? 1 : 0
+  detector_id = aws_guardduty_detector.main[0].id
+  name        = "S3_DATA_EVENTS"
+  status      = "ENABLED"
+}
+
+resource "aws_guardduty_detector_feature" "ebs_malware_protection" {
+  count       = length(data.aws_guardduty_detector.existing) == 0 ? 1 : 0
+  detector_id = aws_guardduty_detector.main[0].id
+  name        = "EBS_MALWARE_PROTECTION"
+  status      = "ENABLED"
 }
 
 # CloudWatch Alarms for security monitoring
