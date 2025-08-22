@@ -923,19 +923,17 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
   })
 }
 
-# AWS Config for compliance monitoring
-# Config Recorder - SKIPPED DUE TO QUOTA
-# resource "aws_config_configuration_recorder" "main" {
-#   name     = "${var.project_name}-config-recorder-${local.name_suffix}"
-#   role_arn = aws_iam_role.config_role.arn
+resource "aws_config_configuration_recorder" "main" {
+  name     = "${var.project_name}-config-recorder-${local.name_suffix}"
+  role_arn = aws_iam_role.config_role.arn
 
-#   recording_group {
-#     all_supported                 = true
-#     include_global_resource_types = true
-#   }
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = true
+  }
 
-#   depends_on = [aws_config_delivery_channel.main]
-# }
+  depends_on = [aws_config_delivery_channel.main]
+}
 
 resource "aws_s3_bucket" "config" {
   bucket        = "${var.project_name}-config-${local.name_suffix}"
@@ -1006,15 +1004,15 @@ resource "aws_s3_bucket_policy" "config" {
   })
 }
 
-# Config Delivery Channel - SKIPPED DUE TO QUOTA: 1 delivery channel limit reached
-# resource "aws_config_delivery_channel" "main" {
-#   name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
-#   s3_bucket_name = aws_s3_bucket.config.bucket
+# Config Delivery Channel
+resource "aws_config_delivery_channel" "main" {
+  name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
+  s3_bucket_name = aws_s3_bucket.config.bucket
 
-#   snapshot_delivery_properties {
-#     delivery_frequency = "TwentyFour_Hours"
-#   }
-# }
+  snapshot_delivery_properties {
+    delivery_frequency = "TwentyFour_Hours"
+  }
+}
 
 resource "aws_iam_role" "config_role" {
   name = "${var.project_name}-config-role-${local.name_suffix}"
@@ -1072,13 +1070,13 @@ resource "aws_iam_role_policy" "config_bucket_access" {
   })
 }
 
-# Config Recorder Status - SKIPPED DUE TO QUOTA
-# resource "aws_config_configuration_recorder_status" "main" {
-#   name       = aws_config_configuration_recorder.main.name
-#   is_enabled = true
+# Config Recorder Status
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
 
-#   depends_on = [aws_config_delivery_channel.main]
-# }
+  depends_on = [aws_config_delivery_channel.main]
+}
 
 # Config Rules for NIST/CIS compliance
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
@@ -1089,7 +1087,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
     source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 
-  # depends_on = [aws_config_configuration_recorder.main]
+  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
@@ -1100,7 +1098,7 @@ resource "aws_config_config_rule" "encrypted_volumes" {
     source_identifier = "ENCRYPTED_VOLUMES"
   }
 
-  # depends_on = [aws_config_configuration_recorder.main]
+  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_config_rule" "iam_password_policy" {
@@ -1111,7 +1109,7 @@ resource "aws_config_config_rule" "iam_password_policy" {
     source_identifier = "IAM_PASSWORD_POLICY"
   }
 
-  # depends_on = [aws_config_configuration_recorder.main]
+  depends_on = [aws_config_configuration_recorder.main]
 }
 
 # GuardDuty for threat detection
