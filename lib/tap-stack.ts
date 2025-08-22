@@ -211,8 +211,12 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
 
     try {
       fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
-      console.log(`Stack outputs written to ${outputsFile}`);
+      // Suppress log output during tests to avoid "Cannot log after tests are done" warnings
+      if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+        console.log(`Stack outputs written to ${outputsFile}`);
+      }
     } catch (error) {
+      // Always show errors, even during tests
       console.error(`Failed to write outputs file: ${error}`);
     }
 
