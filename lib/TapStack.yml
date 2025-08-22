@@ -295,8 +295,8 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::*'
-                  - !Sub 'arn:aws:s3:::*/*'
+                  - 'arn:aws:s3:::*'
+                  - 'arn:aws:s3:::*/*'
       Tags:
         - Key: Name
           Value: !Sub 'CloudEnvironment-EC2-Role-${EnvironmentSuffix}'
@@ -325,7 +325,7 @@ Resources:
         - !Ref EC2SecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -353,7 +353,7 @@ Resources:
         - !Ref EC2SecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
