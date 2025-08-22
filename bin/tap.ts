@@ -27,7 +27,7 @@ const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
   },
 });
 
-// Secondary region stack (us-east-2)
+// Secondary region stack (us-west-1)
 const secondaryStack = new TapStack(
   app,
   `TapStackSecondary${environmentSuffix}`,
@@ -39,7 +39,7 @@ const secondaryStack = new TapStack(
     primaryBucketArn: primaryStack.primaryBucketArn,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: 'us-east-2',
+      region: 'us-west-1',
     },
   }
 );
