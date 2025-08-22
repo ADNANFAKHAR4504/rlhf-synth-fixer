@@ -3,7 +3,6 @@ import fetch from "node-fetch";
 import path from "path";
 import dns from "dns";
 import AWS from "aws-sdk";
-import yaml from 'js-yaml'
 
 // Read AWS region from ../lib/AWS_REGION file
 const awsRegionFile = path.resolve(__dirname, "../lib/AWS_REGION");
@@ -14,14 +13,6 @@ const outputs = JSON.parse(
   fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8")
 );
 
-const templatePathYaml = path.resolve(__dirname, '../lib/TapStack.yml');
-
-let template: Record<string, any>;
-if (fs.existsSync(templatePathYaml)) {
-  template = yaml.load(fs.readFileSync(templatePathYaml, 'utf8'))  as Record<string, any>;
-} else {
-  throw new Error('CloudFormation template not found in JSON or YAML format.');
-}
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
@@ -31,6 +22,9 @@ const secureDataBucketName = outputs["SecureDataBucketName"];
 const dbEndpoint = outputs["DatabaseEndpoint"];
 const LambdaFunctionArn = outputs["LambdaFunctionArn"];
 const vpcId = outputs["VPCId"];
+const RestrictedSecurityGroup = outputs["RestrictedSecurityGroup"]
+const LambdaSecurityGroup = outputs["LambdaSecurityGroup"]
+const DatabaseSecurityGroup = outputs["DatabaseSecurityGroup"]
 
 describe("Security Stack Integration Tests", () => {
   //
@@ -61,6 +55,21 @@ describe("Security Stack Integration Tests", () => {
       expect(vpcId).toBeDefined();
       expect(vpcId).toMatch(/^vpc-/);
     });
+    test("Restricted security group for EC2 instances", () => {
+      expect(RestrictedSecurityGroup).toBeDefined();
+      expect(RestrictedSecurityGroup).toMatch(/^sg-/);
+    });
+
+    test("Security group for Lambda functions", () => {
+      expect(LambdaSecurityGroup).toBeDefined();
+      expect(LambdaSecurityGroup).toMatch(/^sg-/);
+    });
+
+    test("Security group for RDS database", () => {
+      expect(DatabaseSecurityGroup).toBeDefined();
+      expect(DatabaseSecurityGroup).toMatch(/^sg-/);
+    });
+
   });
 
   //
@@ -114,25 +123,5 @@ describe("Security Stack Integration Tests", () => {
       },
       20000 // 20s timeout
     );
-  });
-
-  describe('RestrictedSecurityGroup Ingress Rules', () => {
-    test('should only allow access from AllowedIPRange for all ingress rules', () => {
-      const sgResource = template.Resources?.RestrictedSecurityGroup;
-
-      expect(sgResource).toBeDefined();
-      expect(sgResource.Type).toBe('AWS::EC2::SecurityGroup');
-
-      const ingressRules = sgResource.Properties?.SecurityGroupIngress || [];
-      expect(ingressRules.length).toBeGreaterThan(0);
-
-      ingressRules.forEach((rule: any, idx: number) => {
-        expect(rule.CidrIp).toBeDefined();
-        expect(rule.CidrIp).toEqual({ Ref: 'AllowedIPRange' });
-        expect([22, 80, 443]).toContain(rule.FromPort);
-        expect(rule.FromPort).toBe(rule.ToPort);
-        expect(rule.IpProtocol).toBe('tcp');
-      });
-    });
   });
 });

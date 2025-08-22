@@ -360,6 +360,7 @@ Resources:
   RestrictedSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${Project}-Restricted-sg'
       GroupDescription: 'Restricted security group for EC2 instances'
       VpcId: !Ref SecurityVPC
       SecurityGroupIngress:
@@ -851,6 +852,24 @@ Outputs:
 #    Value: !GetAtt SecurityCloudTrail.Arn
 #    Export:
 #      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+
+  RestrictedSecurityGroup:
+    Description: 'Restricted security group for EC2 instances'
+    Value: !GetAtt RestrictedSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-RestrictedSecurityGroup'
+
+  LambdaSecurityGroup:
+    Description: 'Security group for Lambda functions'
+    Value: !GetAtt LambdaSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroup'
+
+  DatabaseSecurityGroup:
+    Description: 'Security group for RDS database'
+    Value: !GetAtt DatabaseSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseSecurityGroup'
 
   VPCId:
     Description: 'VPC ID'
