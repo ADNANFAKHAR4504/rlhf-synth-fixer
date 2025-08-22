@@ -73,7 +73,23 @@ function safeParseArray(val: any): string[] {
   return [val];
 }
 
-const outputs = {
+interface Outputs {
+  albDnsName?: any;
+  albHttpsUrl?: any;
+  autoscalingGroupName?: any;
+  dbSubnets?: string[];
+  deploymentId?: any;
+  privateSubnets?: string[];
+  publicSubnets?: string[];
+  rdsEndpoint?: any;
+  resourceSummary?: any;
+  s3AppBucket?: any;
+  s3LogsBucket?: any;
+  vpcId?: any;
+  [key: string]: any; // <-- Add this line
+}
+
+const outputs: Outputs = {
   albDnsName: getOutput("alb_dns_name"),
   albHttpsUrl: getOutput("alb_https_url"),
   autoscalingGroupName: getOutput("autoscaling_group_name"),
