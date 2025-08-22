@@ -12,7 +12,7 @@ Metadata:
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev-v2'
+    Default: 'dev'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9-]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
