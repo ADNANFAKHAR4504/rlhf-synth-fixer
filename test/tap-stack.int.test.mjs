@@ -228,7 +228,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.GroupDescription).toContain('Application Load Balancer');
+        expect(sg?.groupDescription).toContain('Application Load Balancer');
 
         // Check ingress rules
         const httpRule = sg?.IpPermissions?.find(rule => rule.FromPort === 80);
@@ -261,7 +261,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.GroupDescription).toContain('EC2 instances');
+        expect(sg?.groupDescription).toContain('EC2 instances');
 
         // Check that ALB can access EC2 on port 80
         const albAccessRule = sg?.IpPermissions?.find(
@@ -294,7 +294,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.GroupDescription).toContain('RDS PostgreSQL');
+        expect(sg?.groupDescription).toContain('RDS PostgreSQL');
 
         // Check PostgreSQL port access from EC2
         const postgresRule = sg?.IpPermissions?.find(
