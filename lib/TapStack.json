@@ -273,7 +273,7 @@
                 {
                     "Ref": "ExistingConfigDeliveryChannelName"
                 },
-                ""
+                "use-existing"
             ]
         }
     },
@@ -1157,7 +1157,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
                 ],
                 "Policies": [
                     {
