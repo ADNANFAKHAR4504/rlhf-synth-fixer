@@ -1,5 +1,13 @@
-Ideal response after changes is as below
-```
+# Secure Production Web Server Infrastructure
+
+## Overview
+This CloudFormation template provisions a secure production web server infrastructure in AWS. It creates an EC2 instance with Apache web server, secured with proper IAM roles and security groups with restricted HTTP/HTTPS access.
+
+## Infrastructure Components
+
+### TapStack.yml
+
+```yaml
 # Note: The AWS region for deployment (e.g., 'us-east-1') is specified at the time
 # of stack creation via the AWS Management Console, CLI, or SDK, not within the template itself.
 
@@ -108,3 +116,13 @@ Outputs:
     Description: The ID of the web server's security group.
     Value: !Ref WebServerSecurityGroup
 ```
+
+## Key Features
+
+- **Security**: IAM role for EC2 instance with principle of least privilege
+- **Access Control**: Security group restricting HTTP/HTTPS traffic to specific CIDR block (203.0.113.0/24)
+- **Web Server**: Apache HTTP server automatically installed and configured via UserData
+- **Latest AMI**: Uses AWS Systems Manager Parameter Store to fetch the latest Amazon Linux 2 AMI
+- **Tagging**: Comprehensive tagging for resource management with Environment and Project tags
+- **Instance Configuration**: t2.micro instance type for cost efficiency
+- **Outputs**: Provides Instance ID, Public IP, and Security Group ID for reference

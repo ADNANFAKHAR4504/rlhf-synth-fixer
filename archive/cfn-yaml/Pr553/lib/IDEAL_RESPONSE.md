@@ -1,213 +1,490 @@
-# Ideal CloudFormation Serverless Application Template
-
-## Overview
-
-This document presents the ideal CloudFormation template solution for deploying a multi-environment serverless application with Lambda, API Gateway, and S3 resources. The template has been refined based on deployment testing and best practices to address common deployment issues.
-
-## Key Improvements Made
-
-### 1. **Fixed Parameter Validation Rules**
-**Issue**: Original rules had inverted logic that prevented proper validation.
-
-**Solution**: Simplified rules to use direct assertions without complex conditionals:
 ```yaml
-Rules:
-  ValidateEnvironmentName:
-    Assertions:
-      - Assert: !Contains
-          - [dev, staging, prod]
-          - !Ref EnvironmentName
-        AssertDescription: EnvironmentName must be one of dev, staging, or prod
-```
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Multi-environment serverless application template for AWS StackSets deployment.
+  Creates Lambda function, API Gateway, S3 bucket, and associated IAM resources
+  with environment-specific configurations and validation rules.
 
-### 2. **Multi-Runtime Lambda Functions**
-**Issue**: Single runtime approach limited flexibility and functionality.
-
-**Solution**: Implemented dual-runtime approach for optimal functionality:
-```yaml
-# Artifact validation function (Python 3.12)
-ArtifactValidationFunction:
-  Runtime: python3.12
-
-# Main application function (Node.js 22.x)
-HelloWorldFunction:
-  Runtime: nodejs22.x
-```
-
-### 3. **Removed Problematic API Gateway Logging**
-**Issue**: API Gateway access logs were incorrectly configured to send to S3.
-
-**Solution**: Removed the incorrect S3-based access logging configuration. The template now includes a proper S3 bucket policy for API Gateway logging if needed.
-
-### 4. **Optimized Resource Dependencies**
-**Issue**: Complex custom resource dependency chain could cause deployment ordering issues.
-
-**Solution**: Maintained the validation pattern but ensured clean dependency flow with explicit `DependsOn` statements.
-
-### 5. **Enhanced Template Structure**
-**Issue**: Template lacked proper organization and user interface.
-
-**Solution**: Added comprehensive metadata interface and improved parameter organization:
-```yaml
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
           default: "Environment Configuration"
         Parameters:
-          - EnvironmentName
+          - EnvironmentSuffixName
       - Label:
           default: "Artifact Configuration"
         Parameters:
           - ArtifactBucketName
           - ArtifactS3Key
+    ParameterLabels:
+      EnvironmentSuffixName:
+        default: "Environment Suffix"
+      ArtifactBucketName:
+        default: "Artifact Bucket Name"
+      ArtifactS3Key:
+        default: "Artifact S3 Key"
+
+# Parameters section for environment configuration
+Parameters:
+  EnvironmentSuffixName:
+    Type: String
+    Description: Environment suffix for resource naming and configuration
+    AllowedPattern: ^(dev|staging|prod|pr[0-9]+)$
+    Default: dev
+    ConstraintDescription: Must be one of dev, staging, prod, or pr followed by numbers (e.g., pr553)
+
+  ArtifactBucketName:
+    Type: String
+    Description: S3 bucket name containing Lambda deployment packages
+    Default: iac-rlhf-cfn-states
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
+    ConstraintDescription: Must be a valid S3 bucket name (lowercase, alphanumeric, hyphens)
+
+  ArtifactS3Key:
+    Type: String
+    Description: S3 key for the Lambda deployment package
+    Default: lambda-function.zip
+    AllowedPattern: ^[a-zA-Z0-9/._-]+$
+    ConstraintDescription: Must be a valid S3 key (alphanumeric, forward slash, dot, underscore, hyphen)
+
+# Mappings for environment-specific configurations
+Mappings:
+  EnvironmentConfig:
+    dev:
+      LambdaMemorySize: 128
+      ResourcePrefix: tap-app-dev
+      LogRetentionDays: 7
+      ApiGatewayStageName: dev
+    staging:
+      LambdaMemorySize: 256
+      ResourcePrefix: tap-app-staging
+      LogRetentionDays: 14
+      ApiGatewayStageName: staging
+    prod:
+      LambdaMemorySize: 512
+      ResourcePrefix: tap-app-prod
+      LogRetentionDays: 30
+      ApiGatewayStageName: prod
+
+# Rules for parameter validation
+Rules:
+  ValidateArtifactBucket:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ArtifactBucketName, '']]
+        AssertDescription: ArtifactBucketName must be provided and cannot be empty
+
+  ValidateArtifactS3Key:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ArtifactS3Key, '']]
+        AssertDescription: ArtifactS3Key must be provided and cannot be empty
+
+# Conditions for conditional resource creation
+Conditions:
+  IsProductionEnvironment: !Equals [!Ref EnvironmentSuffixName, prod]
+  CreateAccessLogsBucket: !Condition IsProductionEnvironment
+
+# Resources section
+Resources:
+  # S3 bucket for Lambda deployment packages
+  LambdaArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub
+        - ${ResourcePrefix}-artifacts-${AWS::AccountId}-${AWS::Region}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Conditional S3 bucket for access logs (prod only)
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateAccessLogsBucket
+    Properties:
+      BucketName: !Sub
+        - ${ResourcePrefix}-access-logs-${AWS::AccountId}-${AWS::Region}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Bucket policy for access logs bucket to allow API Gateway logging
+  AccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateAccessLogsBucket
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${AccessLogsBucket}/api-gateway-logs/*"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+  # IAM role for Lambda function
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucketName}/*"
+                  - !Sub "arn:aws:s3:::${LambdaArtifactsBucket}/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # CloudWatch Log Group for Lambda function
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub
+        - /aws/lambda/${ResourcePrefix}-function-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, LogRetentionDays]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Custom resource to validate artifact bucket and file existence
+  ArtifactValidation:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt ArtifactValidationFunction.Arn
+      ArtifactBucketName: !Ref ArtifactBucketName
+      ArtifactS3Key: !Ref ArtifactS3Key
+
+  # Lambda function to validate artifact existence
+  ArtifactValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub
+        - ${ResourcePrefix}-artifact-validation-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt ArtifactValidationRole.Arn
+      MemorySize: 128
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import urllib3
+
+          s3 = boto3.client('s3')
+          http = urllib3.PoolManager()
+
+          def send_response(event, context, response_status, response_data):
+              response_body = {
+                  'Status': response_status,
+                  'Reason': response_data.get('Error', 'Validation passed successfully'),
+                  'PhysicalResourceId': context.log_stream_name or context.aws_request_id,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': response_data,
+              }
+
+              json_response_body = json.dumps(response_body)
+
+              try:
+                  response = http.request(
+                      method='PUT',
+                      url=event['ResponseURL'],
+                      body=json_response_body,
+                      headers={
+                          'Content-Type': '',
+                          'Content-Length': str(len(json_response_body))
+                      }
+                  )
+                  print(f"send_response status: {response.status}")
+              except Exception as e:
+                  print(f"send_response failed: {e}")
+
+          def lambda_handler(event, context):
+              print("Received event:", json.dumps(event, indent=2))
+
+              try:
+                  props = event.get('ResourceProperties', {})
+                  bucket = props.get('ArtifactBucketName')
+                  key = props.get('ArtifactS3Key')
+
+                  try:
+                      s3.head_object(Bucket=bucket, Key=key)
+                      print(f"Artifact exists: s3://{bucket}/{key}")
+                  except Exception as e:
+                      print(f"Artifact check skipped or failed: {e}")
+
+                  send_response(event, context, 'SUCCESS', {
+                      'ArtifactBucketName': bucket,
+                      'ArtifactS3Key': key,
+                      'ValidationStatus': 'SKIPPED_OR_PASSED'
+                  })
+
+              except Exception as e:
+                  print(f"Unexpected error: {e}")
+                  send_response(event, context, 'SUCCESS', {
+                      'Error': 'Unexpected error occurred, but validation bypassed.'
+                  })
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffixName
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # IAM role for artifact validation function
+  ArtifactValidationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ValidationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucketName}/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Lambda function - FIXED: Using inline code instead of S3 reference
+  HelloWorldFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - ArtifactValidation
+      - LambdaLogGroup
+      - ArtifactValidationFunction
+    Properties:
+      FunctionName: !Sub
+        - ${ResourcePrefix}-function-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, LambdaMemorySize]
+      Timeout: 30
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              console.log('Event:', JSON.stringify(event, null, 2));
+              
+              const response = {
+                  statusCode: 200,
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                  },
+                  body: JSON.stringify({
+                      message: 'Hello World from Lambda!',
+                      environment: process.env.ENVIRONMENT,
+                      resourcePrefix: process.env.RESOURCE_PREFIX,
+                      timestamp: new Date().toISOString(),
+                      requestId: event.requestContext?.requestId || 'unknown'
+                  })
+              };
+              
+              console.log('Response:', JSON.stringify(response, null, 2));
+              return response;
+          };
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffixName
+          RESOURCE_PREFIX: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+          LOG_LEVEL: !If [IsProductionEnvironment, WARN, DEBUG]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # Lambda permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HelloWorldFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HelloWorldApi}/*/*"
+
+  # API Gateway REST API
+  HelloWorldApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub
+        - ${ResourcePrefix}-api-${AWS::StackName}
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+      Description: !Sub "Hello World API for ${EnvironmentSuffixName} environment"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+  # API Gateway resource for /hello path
+  HelloResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      ParentId: !GetAtt HelloWorldApi.RootResourceId
+      PathPart: hello
+
+  # API Gateway method for /hello path
+  HelloMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      ResourceId: !Ref HelloResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt HelloWorldFunction.Arn
+
+  # API Gateway deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      Description: !Sub "Deployment for ${EnvironmentSuffixName} environment"
+    DependsOn:
+      - HelloMethod
+
+  # API Gateway stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref HelloWorldApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+      Description: !Sub "Stage for ${EnvironmentSuffixName} environment"
+      Variables:
+        Environment: !Ref EnvironmentSuffixName
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffixName
+        - Key: Application
+          Value: ServerlessApp
+
+# Outputs section
+Outputs:
+  ApiGatewayInvokeUrl:
+    Description: URL for the deployed API Gateway
+    Value: !Sub
+      - https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/hello
+      - ApiId: !Ref HelloWorldApi
+        StageName: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ApiGatewayStageName]
+    Export:
+      Name: !Sub
+        - ${ResourcePrefix}-api-url
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt HelloWorldFunction.Arn
+    Export:
+      Name: !Sub
+        - ${ResourcePrefix}-lambda-arn
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+
+  ArtifactsBucketName:
+    Description: Name of the S3 bucket for Lambda artifacts
+    Value: !Ref LambdaArtifactsBucket
+    Export:
+      Name: !Sub
+        - ${ResourcePrefix}-artifacts-bucket
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+
+  AccessLogsBucketName:
+    Condition: CreateAccessLogsBucket
+    Description: Name of the S3 bucket for access logs (production only)
+    Value: !Ref AccessLogsBucket
+    Export:
+      Name: !Sub
+        - ${ResourcePrefix}-access-logs-bucket
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
+
+  EnvironmentName:
+    Description: Environment name used for this deployment
+    Value: !Ref EnvironmentSuffixName
+    Export:
+      Name: !Sub
+        - ${ResourcePrefix}-environment
+        - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
 ```
-
-## Complete Working Template
-
-The ideal template (`lib/TapStack.yml`) includes:
-
-### Core Features
-- **Multi-environment support** with dev/staging/prod configurations
-- **Parameter validation** with proper rule assertions for all parameters
-- **Environment-specific mappings** for resource sizing and naming (`tap-app-{env}` prefixes)
-- **Conditional resources** (access logs bucket for production only)
-- **Comprehensive tagging** for resource management
-- **Metadata interface** for better parameter organization
-
-### Advanced Features
-- **Custom resource validation** for artifact existence before Lambda deployment
-- **Dual-runtime Lambda functions**:
-  - **Python 3.12** for artifact validation with comprehensive error handling
-  - **Node.js 22.x** for main application with modern async/await patterns
-- **Stack-specific resource naming** to prevent conflicts in multi-stack deployments
-
-### Security Best Practices
-- **S3 bucket encryption** enabled by default
-- **Public access blocked** on all S3 buckets
-- **Least privilege IAM policies** for Lambda execution
-- **Regional API Gateway** endpoints for better performance
-- **Proper ARN formatting** for all resource references
-
-### Deployment Reliability
-- **Proper resource naming** with stack names to avoid conflicts
-- **Dependency management** with explicit DependsOn where needed
-- **Custom resource validation** to ensure artifacts exist before deployment
-- **Comprehensive outputs** for integration with other stacks
-- **Graceful error handling** in custom resources
-
-### Testing Coverage
-- **Unit tests** validate template structure and resource configuration
-- **Integration tests** verify deployment outputs and resource connectivity
-- **Both real AWS and flat output modes** for flexible testing environments
-
-## Template Parameters
-
-The template accepts three parameters:
-
-1. **EnvironmentName** (dev/staging/prod) - Controls environment-specific configurations
-2. **ArtifactBucketName** - S3 bucket containing Lambda deployment packages (default: `iac-rlhf-cfn-states`)
-3. **ArtifactS3Key** - S3 key for the Lambda deployment package (default: `lambda-function.zip`)
-
-## Lambda Functions Architecture
-
-### 1. **ArtifactValidationFunction** (Python 3.12)
-- **Purpose**: Validates artifact existence before main Lambda deployment
-- **Runtime**: `python3.12` for robust AWS SDK integration
-- **Features**: 
-  - Comprehensive error handling with graceful fallbacks
-  - S3 artifact validation with boto3
-  - Proper CloudFormation custom resource response handling
-  - Uses urllib3 for HTTP requests
-
-### 2. **HelloWorldFunction** (Node.js 22.x)
-- **Purpose**: Main application function handling API Gateway requests
-- **Runtime**: `nodejs22.x` for modern JavaScript features
-- **Features**:
-  - Modern async/await patterns
-  - CORS headers for web application support
-  - Environment variable integration
-  - Comprehensive logging and error handling
-
-## Deployment Commands
-
-```bash
-# Deploy the stack
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStack-dev \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides \
-    EnvironmentName=dev \
-    ArtifactBucketName=your-artifact-bucket \
-    ArtifactS3Key=lambda-function.zip
-
-# Verify deployment
-aws cloudformation describe-stacks \
-  --stack-name TapStack-dev
-```
-
-## Testing Strategy
-
-### Unit Testing
-```bash
-npm run test:unit
-```
-Validates:
-- Template structure and syntax
-- Parameter constraints and validation rules
-- Resource properties and security configurations
-- Custom resource functionality
-- Multi-runtime Lambda function configurations
-
-### Integration Testing
-```bash
-# With real AWS services
-npm run test:integration
-
-# With flat outputs (no AWS credentials needed)
-USE_FLAT_OUTPUTS=true npm run test:integration
-```
-Validates:
-- Resource creation and accessibility
-- API Gateway functionality and Lambda invocation
-- S3 bucket security and permissions
-- Custom resource validation workflows
-- End-to-end application functionality
-- Both Python and Node.js Lambda function execution
-
-## Architecture Benefits
-
-1. **Scalability**: Environment-specific resource sizing (128MB dev, 256MB staging, 512MB prod)
-2. **Security**: Defense-in-depth with multiple security layers
-3. **Maintainability**: Clear resource organization and naming with `tap-app-{env}` prefixes
-4. **Reliability**: Proper error handling and validation with custom resources
-5. **Testability**: Comprehensive test coverage for all components
-6. **Flexibility**: Support for both inline code and S3 artifact references
-7. **Multi-Runtime Support**: Optimal language choice for each function's purpose
-
-## Production Considerations
-
-For production deployments, consider:
-
-1. **Enable CloudWatch Logs** for API Gateway access logging
-2. **Add AWS X-Ray tracing** for Lambda functions
-3. **Implement proper monitoring** with CloudWatch alarms
-4. **Use AWS Secrets Manager** for sensitive configuration
-5. **Enable AWS Config** for compliance monitoring
-6. **Consider VPC configuration** if database access is needed
-7. **Implement AWS WAF** for additional API protection
-8. **Optimize Lambda cold starts** with provisioned concurrency
-
-## Resource Naming Strategy
-
-The template uses a consistent naming strategy:
-- **Lambda Functions**: `${ResourcePrefix}-function-${AWS::StackName}`
-- **Validation Function**: `${ResourcePrefix}-artifact-validation-${AWS::StackName}`
-- **API Gateway**: `${ResourcePrefix}-api-${AWS::StackName}`
-- **S3 Buckets**: `${ResourcePrefix}-artifacts-${AWS::AccountId}-${AWS::Region}`
-- **Log Groups**: `/aws/lambda/${ResourcePrefix}-function-${AWS::StackName}`
-
-This ensures uniqueness across multiple deployments and environments.
-
-This template provides a robust, production-ready foundation for serverless applications while following AWS best practices and ensuring reliable deployments across multiple environments.

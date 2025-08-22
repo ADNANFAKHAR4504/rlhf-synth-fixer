@@ -2,7 +2,7 @@ Here's a prompt designed to align with Claude's Sonnet best practices, offering 
 
 ---
 
-## 📝 Secure AWS Environment with Terraform
+## Secure AWS Environment with Terraform
 
 ---
 
@@ -28,16 +28,16 @@ The Terraform configuration must define and configure the following AWS services
 - **Infrastructure as Code (IaC)**: The entire infrastructure must be defined using **Terraform version 1.0 or higher** in the **HCL** syntax.
 - **Configuration Directory**: All configuration files (`.tf`) **must reside within a directory named `secure_env/`**.
 - **Network Security**:
-  - The created **security group** must contain **ingress rules for HTTP (port 80) and HTTPS (port 443) only**.
-  - These rules must restrict access to a **predefined list of IP ranges** (e.g., your office network's CIDR blocks) and **deny all other inbound traffic** on these ports.
-  - No other ports should be open to the internet.
+- The created **security group** must contain **ingress rules for HTTP (port 80) and HTTPS (port 443) only**.
+- These rules must restrict access to a **predefined list of IP ranges** (e.g., your office network's CIDR blocks) and **deny all other inbound traffic** on these ports.
+- No other ports should be open to the internet.
 - **IAM Cross-Account Access**:
-  - Implement an **IAM role** with a trust policy that allows a principal from a different AWS account (the "trusted" account) to assume it.
-  - The permissions policy attached to this role must strictly adhere to the **principle of least privilege**, granting only the minimum necessary permissions to the trusted account to manage resources in this environment.
+- Implement an **IAM role** with a trust policy that allows a principal from a different AWS account (the "trusted" account) to assume it.
+- The permissions policy attached to this role must strictly adhere to the **principle of least privilege**, granting only the minimum necessary permissions to the trusted account to manage resources in this environment.
 - **Resource Tagging**:
-  - All resources deployed by the Terraform configuration **must be tagged** with the following key-value pairs:
-    - `Environment: Production`
-    - `Owner: SecurityTeam`
+- All resources deployed by the Terraform configuration **must be tagged** with the following key-value pairs:
+- `Environment: Production`
+- `Owner: SecurityTeam`
 
 ---
 

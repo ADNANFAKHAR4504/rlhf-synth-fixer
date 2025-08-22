@@ -1,4 +1,8 @@
-```
+# TAP Stack - AWS CDK Infrastructure
+
+## `tap_stack.py` - Complete CDK Implementation
+
+```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.

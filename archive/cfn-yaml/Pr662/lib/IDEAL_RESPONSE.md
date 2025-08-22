@@ -1,4 +1,14 @@
-```
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Serverless Infrastructure Deployment with API Gateway, Lambda, and DynamoDB"
 
@@ -9,7 +19,7 @@ Parameters:
     Description: "Environment suffix for resource naming"
 
 Resources:
-  # 1. DynamoDB Table (no dependencies)
+  # DynamoDB Table
   UserDataTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -29,7 +39,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # 2. IAM Role for Lambda (no dependencies)
+  # IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -59,7 +69,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/*"
 
-  # 3. Lambda Function (depends on IAM role)
+  # Lambda Function
   UserDataLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -191,14 +201,14 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # 4. CloudWatch Log Group for Lambda (depends on Lambda function)
+  # CloudWatch Log Group for Lambda
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/UserDataHandler${EnvironmentSuffix}"
       RetentionInDays: 7
 
-  # 5. API Gateway REST API (no dependencies)
+  # API Gateway REST API
   UserDataApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -211,7 +221,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # 6. API Gateway Resource (depends on API)
+  # API Gateway Resource
   UserDataResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -219,7 +229,7 @@ Resources:
       ParentId: !GetAtt UserDataApi.RootResourceId
       PathPart: "userdata"
 
-  # 7. API Gateway GET Method (depends on resource)
+  # API Gateway GET Method
   GetMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -243,7 +253,7 @@ Resources:
           ResponseModels:
             application/json: Empty
 
-  # 8. API Gateway POST Method (depends on resource)
+  # API Gateway POST Method
   PostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -264,7 +274,7 @@ Resources:
           ResponseModels:
             application/json: Empty
 
-  # 9. Lambda Permission for API Gateway (depends on Lambda and API)
+  # Lambda Permission for API Gateway
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -273,7 +283,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserDataApi}/*/*"
 
-  # 10. API Gateway Deployment (depends on methods)
+  # API Gateway Deployment
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -290,20 +300,20 @@ Resources:
         DataTraceEnabled: true
         MetricsEnabled: true
 
-  # 11. CloudWatch Log Group for API Gateway (no dependencies)
+  # CloudWatch Log Group for API Gateway
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/apigateway/UserDataAPI${EnvironmentSuffix}"
       RetentionInDays: 7
 
-  # 12. API Gateway Account Configuration (depends on role)
+  # API Gateway Account Configuration for CloudWatch Logs
   ApiGatewayAccount:
     Type: AWS::ApiGateway::Account
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
-  # 13. IAM Role for API Gateway CloudWatch Logs (no dependencies)
+  # IAM Role for API Gateway CloudWatch Logs
   ApiGatewayCloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
@@ -317,7 +327,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
-  # 14. API Key (no dependencies)
+  # API Key
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
     Properties:
@@ -325,7 +335,7 @@ Resources:
       Description: "API Key for User Data API"
       Enabled: true
 
-  # 15. Usage Plan (depends on deployment)
+  # Usage Plan
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     DependsOn: ApiDeployment
@@ -342,7 +352,7 @@ Resources:
         - ApiId: !Ref UserDataApi
           Stage: prod
 
-  # 16. Usage Plan Key (depends on usage plan and API key)
+  # Usage Plan Key
   UsagePlanKey:
     Type: AWS::ApiGateway::UsagePlanKey
     Properties:
@@ -376,243 +386,22 @@ Outputs:
       Name: !Sub "${AWS::StackName}-LambdaFunctionName"
 
 ```
-   - Server-side encryption for DynamoDB
-   - VPC-free architecture for enhanced security
 
-2. **Monitoring & Logging**
-   - CloudWatch logs for Lambda function
-   - API Gateway execution and access logging
-   - DynamoDB point-in-time recovery
-   - Proper log group configuration
+## Key Features
 
-3. **Cost Optimization**
-   - DynamoDB on-demand pricing
-   - Usage plan limiting API calls to 1000/month
-   - Efficient Lambda memory allocation (128 MB)
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
 
-4. **Regional Compliance**
-   - All resources deployed in us-east-1 region
-   - No cross-region dependencies
+## Deployment
 
-## QA Pipeline Results
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
 
-### 1. CloudFormation Validation
-- ✅ **cfn-lint validation passed**: Template syntax and best practices verified
-- ✅ **AWS CloudFormation validate-template**: Template structure validated
-- ✅ **YAML syntax**: Proper YAML formatting confirmed
-
-### 2. Unit Testing (32 tests passed)
-Comprehensive unit tests validate:
-- Template structure and syntax
-- Resource definitions and properties
-- IAM permissions and policies
-- Parameter and output configurations
-- Security configurations
-- Regional deployment constraints
-
-### 3. Integration Testing (14 tests prepared)
-Integration tests prepared for:
-- End-to-end API functionality testing
-- DynamoDB operations validation
-- Lambda function execution
-- CloudWatch logging verification
-- API Gateway throttling validation
-
-### 4. Code Quality
-- ✅ **ESLint**: TypeScript code standards enforced
-- ✅ **Prettier**: Code formatting standardized
-- ✅ **Type checking**: Full TypeScript type safety
-
-## Lambda Function Implementation
-
-The Lambda function includes:
-
-```python
-import json
-import boto3
-import logging
-from datetime import datetime
-
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# Initialize DynamoDB client
-dynamodb = boto3.resource('dynamodb')
-
-def lambda_handler(event, context):
-    try:
-        table_name = os.environ['TABLE_NAME']
-        table = dynamodb.Table(table_name)
-        
-        http_method = event['httpMethod']
-        
-        if http_method == 'POST':
-            # Store user data
-            body = json.loads(event['body'])
-            user_id = body.get('userId')
-            
-            if not user_id:
-                return {
-                    'statusCode': 400,
-                    'body': json.dumps({'error': 'userId is required'})
-                }
-            
-            # Store data with timestamp
-            table.put_item(
-                Item={
-                    'userId': user_id,
-                    'data': body.get('data', {}),
-                    'timestamp': datetime.utcnow().isoformat()
-                }
-            )
-            
-            return {
-                'statusCode': 201,
-                'body': json.dumps({'message': 'Data stored successfully'})
-            }
-            
-        elif http_method == 'GET':
-            # Retrieve user data
-            user_id = event['queryStringParameters'].get('userId')
-            
-            if not user_id:
-                return {
-                    'statusCode': 400,
-                    'body': json.dumps({'error': 'userId parameter is required'})
-                }
-            
-            response = table.get_item(Key={'userId': user_id})
-            
-            if 'Item' in response:
-                return {
-                    'statusCode': 200,
-                    'body': json.dumps(response['Item'])
-                }
-            else:
-                return {
-                    'statusCode': 404,
-                    'body': json.dumps({'error': 'User not found'})
-                }
-        
-    except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': 'Internal server error'})
-        }
-```
-
-## API Usage Examples
-
-### Store User Data (POST)
 ```bash
-curl -X POST \
-  https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/users \
-  -H 'x-api-key: your-api-key' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "userId": "user123",
-    "data": {
-      "name": "John Doe",
-      "email": "john@example.com"
-    }
-  }'
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```
-
-### Retrieve User Data (GET)
-```bash
-curl -X GET \
-  'https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/users?userId=user123' \
-  -H 'x-api-key: your-api-key'
-```
-
-## Deployment Instructions
-
-1. **Prerequisites**
-   - AWS CLI configured with appropriate permissions
-   - CloudFormation deployment permissions in us-east-1
-
-2. **Deploy the Stack**
-   ```bash
-   aws cloudformation deploy \
-     --template-file lib/TapStack.yml \
-     --stack-name serverless-app \
-     --parameter-overrides Environment=prod \
-     --capabilities CAPABILITY_IAM \
-     --region us-east-1
-   ```
-
-3. **Retrieve Outputs**
-   ```bash
-   aws cloudformation describe-stacks \
-     --stack-name serverless-app \
-     --region us-east-1 \
-     --query 'Stacks[0].Outputs'
-   ```
-
-## Monitoring and Observability
-
-### CloudWatch Dashboards
-Monitor the application through:
-- Lambda function metrics (invocations, errors, duration)
-- API Gateway metrics (requests, latency, errors)
-- DynamoDB metrics (read/write capacity, throttles)
-
-### Logging Strategy
-- **Lambda Logs**: Function execution details and errors
-- **API Gateway Logs**: Request/response logging with correlation IDs
-- **CloudWatch Alarms**: Automated alerting on error thresholds
-
-## Cost Analysis
-
-Estimated monthly costs (assuming moderate usage):
-- **DynamoDB**: $1-5 (depending on read/write operations)
-- **Lambda**: $0.20-1.00 (1M requests/month free tier)
-- **API Gateway**: $3.50 (1M API calls/month)
-- **CloudWatch**: $0.50-2.00 (logging and monitoring)
-
-**Total estimated cost**: $5-10 per month for production workload
-
-## Security Considerations
-
-1. **IAM Policies**: Minimal permissions granted to each service
-2. **API Security**: API key authentication required for all requests
-3. **Data Encryption**: DynamoDB encryption at rest enabled
-4. **Network Security**: No VPC requirements, using AWS managed services
-5. **Audit Trail**: CloudWatch logs provide complete audit trail
-
-## Scalability Features
-
-1. **Auto-scaling**: DynamoDB on-demand scaling
-2. **Concurrency**: Lambda automatic scaling up to account limits
-3. **Rate Limiting**: API Gateway usage plan prevents abuse
-4. **Regional**: Single region deployment for low latency
-
-## Compliance and Best Practices
-
-✅ **AWS Well-Architected Framework**
-- Security: IAM least privilege, encryption enabled
-- Reliability: Error handling, monitoring, dead letter queues
-- Performance: Optimized Lambda configuration
-- Cost Optimization: On-demand pricing, usage limits
-- Operational Excellence: CloudWatch logging, infrastructure as code
-
-✅ **CloudFormation Best Practices**
-- Parameterized template for reusability
-- Proper resource naming conventions
-- Complete output definitions
-- IAM capabilities explicitly declared
-
-## Conclusion
-
-This solution provides a robust, secure, and scalable serverless infrastructure that fully meets all specified requirements. The comprehensive QA pipeline ensures production readiness, and the modular design allows for easy maintenance and future enhancements.
-
-The implementation demonstrates expertise in:
-- AWS CloudFormation template design
-- Serverless architecture patterns
-- Security best practices
-- Infrastructure testing methodologies
-- Cost optimization strategies
-
-The solution is ready for immediate deployment and can handle production workloads with appropriate monitoring and maintenance procedures in place.

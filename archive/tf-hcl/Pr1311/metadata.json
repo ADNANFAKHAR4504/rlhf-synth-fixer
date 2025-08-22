@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr876",
+  "team": "synth",
+  "startedAt": "2025-08-15T13:03:23+05:30",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "CI/CD Pipeline Infrastructure",
+    "Serverless Architecture Implementation",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "CloudWatch",
+    "X-Ray",
+    "SNS",
+    "KMS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

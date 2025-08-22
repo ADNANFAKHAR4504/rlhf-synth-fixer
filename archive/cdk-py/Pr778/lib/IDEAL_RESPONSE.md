@@ -9,6 +9,12 @@ This solution provides a production-ready AWS CDK infrastructure with dual VPCs,
 ### 1. **lib/tap_stack.py** - Main Infrastructure Stack
 
 ```python
+"""TapStack module for AWS CDK infrastructure deployment.
+
+This module contains the TapStack class that creates a comprehensive
+AWS infrastructure with VPCs, ALBs, Auto Scaling Groups, and related resources.
+"""
+
 from aws_cdk import (
   Stack,
   aws_ec2 as ec2,
@@ -38,6 +44,12 @@ class TapStackProps(StackProps):
 
 
 class TapStack(Stack):
+  """AWS CDK stack for creating comprehensive infrastructure.
+  
+  This stack creates a multi-VPC infrastructure with Application Load Balancers,
+  Auto Scaling Groups, and all necessary supporting resources for high availability.
+  """
+  
   def __init__(self, scope: Construct, construct_id: str, props: TapStackProps = None) -> None:
     if props is None:
       props = TapStackProps()
@@ -99,12 +111,270 @@ class TapStack(Stack):
     
     # Create outputs
     self._create_outputs()
+  
+  def _create_vpc(self, name: str, cidr: str) -> ec2.Vpc:
+    """Create a VPC with public and private subnets across multiple AZs"""
+    vpc = ec2.Vpc(
+      self, name,
+      ip_addresses=ec2.IpAddresses.cidr(cidr),
+      max_azs=2,  # Use 2 AZs for high availability
+      subnet_configuration=[
+        # Public subnets for ALB and NAT Gateways
+        ec2.SubnetConfiguration(
+          name=f"{name}-Public",
+          subnet_type=ec2.SubnetType.PUBLIC,
+          cidr_mask=24
+        ),
+        # Private subnets for EC2 instances
+        ec2.SubnetConfiguration(
+          name=f"{name}-Private",
+          subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidr_mask=24
+        )
+      ],
+      nat_gateways=2,  # One NAT Gateway per AZ for high availability
+      enable_dns_hostnames=True,
+      enable_dns_support=True
+    )
+    
+    # Tag the VPC
+    Tags.of(vpc).add("Name", name)
+    
+    return vpc
+  
+  def _create_alb_security_group(self, vpc: ec2.Vpc, name: str) -> ec2.SecurityGroup:
+    """Create security group for Application Load Balancer"""
+    sg = ec2.SecurityGroup(
+      self, name,
+      vpc=vpc,
+      description=f"Security group for {name}",
+      allow_all_outbound=True
+    )
+    
+    # Allow HTTP traffic from anywhere
+    sg.add_ingress_rule(
+      peer=ec2.Peer.any_ipv4(),
+      connection=ec2.Port.tcp(80),
+      description="Allow HTTP traffic from anywhere"
+    )
+    
+    # Allow HTTPS traffic from anywhere
+    sg.add_ingress_rule(
+      peer=ec2.Peer.any_ipv4(),
+      connection=ec2.Port.tcp(443),
+      description="Allow HTTPS traffic from anywhere"
+    )
+    
+    Tags.of(sg).add("Name", name)
+    return sg
+  
+  def _create_ec2_security_group(
+    self, vpc: ec2.Vpc, name: str, alb_sg: ec2.SecurityGroup
+  ) -> ec2.SecurityGroup:
+    """Create security group for EC2 instances"""
+    sg = ec2.SecurityGroup(
+      self, name,
+      vpc=vpc,
+      description=f"Security group for {name}",
+      allow_all_outbound=True
+    )
+    
+    # Allow HTTP traffic from ALB security group only
+    sg.add_ingress_rule(
+      peer=ec2.Peer.security_group_id(alb_sg.security_group_id),
+      connection=ec2.Port.tcp(80),
+      description="Allow HTTP traffic from ALB"
+    )
+    
+    # Allow SSH from within VPC only (private access)
+    sg.add_ingress_rule(
+      peer=ec2.Peer.ipv4(vpc.vpc_cidr_block),
+      connection=ec2.Port.tcp(22),
+      description="Allow SSH from within VPC"
+    )
+    
+    Tags.of(sg).add("Name", name)
+    return sg
+  
+  def _create_ec2_role(self) -> iam.Role:
+    """Create IAM role for EC2 instances"""
+    role = iam.Role(
+      self, f"EC2Role-{self.environment_suffix}",
+      assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+      description="IAM role for EC2 instances in Auto Scaling Groups"
+    )
+    
+    # Add SSM managed policy for Systems Manager access
+    role.add_managed_policy(
+      iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
+    )
+    
+    # Add CloudWatch agent policy
+    role.add_managed_policy(
+      iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+    )
+    
+    Tags.of(role).add("Name", f"EC2-AutoScaling-Role-{self.environment_suffix}")
+    return role
+  
+  def _create_alb(
+    self, vpc: ec2.Vpc, security_group: ec2.SecurityGroup, name: str
+  ) -> elbv2.ApplicationLoadBalancer:
+    """Create Application Load Balancer"""
+    alb = elbv2.ApplicationLoadBalancer(
+      self, name,
+      vpc=vpc,
+      internet_facing=True,
+      security_group=security_group,
+      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
+    )
+    
+    Tags.of(alb).add("Name", name)
+    return alb
+  
+  def _create_auto_scaling_group(
+    self, 
+    vpc: ec2.Vpc, 
+    security_group: ec2.SecurityGroup, 
+    alb: elbv2.ApplicationLoadBalancer,
+    name: str
+  ) -> autoscaling.AutoScalingGroup:
+    """Create Auto Scaling Group with EC2 instances"""
+    
+    # User data script to install and start a simple web server
+    user_data = ec2.UserData.for_linux()
+    user_data.add_commands(
+      "yum update -y",
+      "yum install -y httpd",
+      "systemctl start httpd",
+      "systemctl enable httpd",
+      f"echo '<h1>Hello from {name}</h1><p>Instance ID: ' > /var/www/html/index.html",
+      "curl -s http://169.254.169.254/latest/meta-data/instance-id >> /var/www/html/index.html",
+      "echo '</p>' >> /var/www/html/index.html"
+    )
+    
+    # Launch template
+    launch_template = ec2.LaunchTemplate(
+      self, f"{name}-LaunchTemplate",
+      instance_type=ec2.InstanceType.of(
+        ec2.InstanceClass.T3, 
+        ec2.InstanceSize.MICRO
+      ),
+      machine_image=ec2.AmazonLinuxImage(
+        generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
+      ),
+      security_group=security_group,
+      user_data=user_data,
+      role=self.ec2_role
+    )
+    
+    Tags.of(launch_template).add("Name", f"{name}-LaunchTemplate")
+    
+    # Auto Scaling Group
+    asg = autoscaling.AutoScalingGroup(
+      self, name,
+      vpc=vpc,
+      launch_template=launch_template,
+      min_capacity=2,  # Minimum 2 instances as required
+      max_capacity=6,  # Maximum 6 instances for scaling
+      desired_capacity=2,  # Start with 2 instances
+      vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+      health_check=autoscaling.HealthCheck.elb(grace=Duration.seconds(300))
+    )
+    
+    # Create target group
+    target_group = elbv2.ApplicationTargetGroup(
+      self, f"{name}-TargetGroup",
+      vpc=vpc,
+      port=80,
+      protocol=elbv2.ApplicationProtocol.HTTP,
+      target_type=elbv2.TargetType.INSTANCE,
+      health_check=elbv2.HealthCheck(
+        enabled=True,
+        healthy_http_codes="200",
+        interval=Duration.seconds(30),
+        path="/",
+        timeout=Duration.seconds(5),
+        unhealthy_threshold_count=3
+      )
+    )
+    
+    # Attach ASG to target group
+    asg.attach_to_application_target_group(target_group)
+    
+    # Add listener to ALB
+    alb.add_listener(
+      f"{name}-Listener",
+      port=80,
+      protocol=elbv2.ApplicationProtocol.HTTP,
+      default_target_groups=[target_group]
+    )
+    
+    # Add scaling policies
+    asg.scale_on_cpu_utilization(
+      f"{name}-CPUScaling",
+      target_utilization_percent=70,
+      cooldown=Duration.seconds(300)
+    )
+    
+    Tags.of(asg).add("Name", name)
+    Tags.of(target_group).add("Name", f"{name}-TargetGroup")
+    
+    return asg
+  
+  def _create_outputs(self):
+    """Create CloudFormation outputs"""
+    CfnOutput(
+      self, "VPC1-ID",
+      value=self.vpc1.vpc_id,
+      description="VPC1 ID"
+    )
+    
+    CfnOutput(
+      self, "VPC2-ID",
+      value=self.vpc2.vpc_id,
+      description="VPC2 ID"
+    )
+    
+    CfnOutput(
+      self, "ALB1-DNS",
+      value=self.alb_vpc1.load_balancer_dns_name,
+      description="DNS name of ALB in VPC1"
+    )
+    
+    CfnOutput(
+      self, "ALB2-DNS",
+      value=self.alb_vpc2.load_balancer_dns_name,
+      description="DNS name of ALB in VPC2"
+    )
+    
+    CfnOutput(
+      self, "ALB1-URL",
+      value=f"http://{self.alb_vpc1.load_balancer_dns_name}",
+      description="URL for ALB in VPC1"
+    )
+    
+    CfnOutput(
+      self, "ALB2-URL",
+      value=f"http://{self.alb_vpc2.load_balancer_dns_name}",
+      description="URL for ALB in VPC2"
+    )
 ```
 
 ### 2. **tap.py** - Application Entry Point
 
 ```python
 #!/usr/bin/env python3
+"""
+CDK application entry point for the TAP (Test Automation Platform) infrastructure.
+
+This module defines the core CDK application and instantiates the TapStack with appropriate
+configuration based on the deployment environment. It handles environment-specific settings,
+tagging, and deployment configuration for AWS resources.
+
+The stack created by this module uses environment suffixes to distinguish between
+different deployment environments (development, staging, production, etc.).
+"""
 import os
 
 import aws_cdk as cdk
@@ -113,30 +383,38 @@ from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
 
-# Get environment suffix from context or use 'dev' as default
+# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
-# Apply tags to all stacks
+# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environment_suffix)
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
 
-# Create stack with properties
+# Create a TapStackProps object to pass environment_suffix
+
 props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION', 'us-west-2')
+        region=os.getenv('CDK_DEFAULT_REGION')
     )
 )
 
-TapStack(app, STACK_NAME, props)
+# Initialize the stack with proper parameters
+TapStack(app, STACK_NAME, props=props)
 
 app.synth()
+```
+
+### 3. **lib/__init__.py** - Package Initialization
+
+```python
+# Empty file to make lib a Python package
 ```
 
 ## Key Architecture Components
@@ -177,75 +455,19 @@ app.synth()
 ## Production-Ready Features
 
 ### 1. **Environment Isolation**
-```python
-# All resources include environment suffix
-f"VPC1-{self.environment_suffix}"
-f"ALB-SG-VPC1-{self.environment_suffix}"
-f"ASG-VPC1-{self.environment_suffix}"
-```
+All resources include environment suffix to prevent naming conflicts and enable multiple deployments.
 
 ### 2. **Resource Tagging**
-```python
-self.common_tags = {
-  "Environment": self.environment_suffix,
-  "Owner": "DevOps-Team",
-  "Project": "TapInfrastructure",
-  "ManagedBy": "AWS-CDK"
-}
-```
+Comprehensive tagging strategy for resource management, cost tracking, and compliance.
 
 ### 3. **Health Monitoring**
-```python
-health_check=elbv2.HealthCheck(
-  enabled=True,
-  healthy_http_codes="200",
-  interval=Duration.seconds(30),
-  path="/",
-  timeout=Duration.seconds(5),
-  unhealthy_threshold_count=3
-)
-```
+Configured health checks at both ALB and Auto Scaling Group levels with appropriate thresholds.
 
 ### 4. **Auto Scaling Policies**
-```python
-asg.scale_on_cpu_utilization(
-  f"{name}-CPUScaling",
-  target_utilization_percent=70,
-  cooldown=Duration.seconds(300)
-)
-```
+CPU-based scaling with cooldown periods to prevent flapping and ensure stable scaling behavior.
 
 ### 5. **CloudFormation Outputs**
-```python
-CfnOutput(
-  self, "VPC1-ID",
-  value=self.vpc1.vpc_id,
-  description="VPC1 ID"
-)
-CfnOutput(
-  self, "ALB1-URL",
-  value=f"http://{self.alb_vpc1.load_balancer_dns_name}",
-  description="URL for ALB in VPC1"
-)
-```
-
-## Testing Strategy
-
-### Unit Tests (100% Coverage)
-- VPC creation and configuration
-- Security group rules validation
-- Auto Scaling Group settings
-- IAM role permissions
-- CloudFormation output verification
-- Environment suffix application
-
-### Integration Tests
-- VPC availability verification
-- ALB accessibility checks
-- Auto Scaling Group instance counts
-- Security group rule validation
-- NAT Gateway functionality
-- Cross-AZ subnet distribution
+Essential infrastructure information exported for integration testing and external reference.
 
 ## Deployment Process
 
@@ -260,7 +482,7 @@ pipenv run lint
 pipenv run test-py-unit
 
 # 4. Synthesize CDK
-export ENVIRONMENT_SUFFIX=pr693
+export ENVIRONMENT_SUFFIX=pr778
 npm run cdk:synth
 
 # 5. Deploy infrastructure

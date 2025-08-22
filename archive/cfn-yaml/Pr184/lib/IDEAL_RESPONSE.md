@@ -2,297 +2,641 @@
 
 ## Overview
 
-I've designed a comprehensive, modular, and secure AWS infrastructure-as-code solution using CloudFormation to manage development (dev), testing (test), and production (prod) environments with consistency, compliance, and scalability.
+This comprehensive, modular, and secure AWS infrastructure-as-code solution uses CloudFormation to manage development (dev), testing (test), and production (prod) environments with consistency, compliance, and scalability.
 
-## Solution Architecture
+## Complete CloudFormation Template
 
-The solution provides a single, comprehensive CloudFormation template that creates a complete multi-environment infrastructure with:
-
-- **Multi-AZ VPC** with public and private subnets
-- **High availability** with redundant NAT gateways 
-- **Auto Scaling Groups** with environment-specific configurations
-- **Application Load Balancer** for fault-tolerant traffic distribution
-- **IAM roles** with least privilege access
-- **CloudWatch monitoring** with environment-specific thresholds
-- **AWS Config** for production compliance
-- **Comprehensive tagging strategy** for cost management
-- **DynamoDB table** with environment-specific features
-
-## File Structure
-
-```
-lib/
-├── TapStack.yml          # Main CloudFormation template (612 lines)
-├── TapStack.json         # JSON version for unit testing
-└── IDEAL_RESPONSE.md     # This documentation
-
-test/
-├── tap-stack.unit.test.ts    # 38 comprehensive unit tests
-└── tap-stack.int.test.ts     # 15 integration tests
-
-cfn-outputs/
-└── flat-outputs.json        # Sample outputs for testing
-```
-
-## CloudFormation Template Details
-
-### lib/TapStack.yml
-
-The main CloudFormation template (612 lines) includes:
-
-#### Parameters
-- `EnvironmentSuffix`: Resource naming suffix (dev, test, prod)
-- `Environment`: Deployment environment with allowed values validation
-- `Owner`: Resource owner for tagging
-- `CostCenter`: Cost center for billing allocation
-
-#### Mappings
 ```yaml
-EnvironmentConfig:
-  dev:
-    InstanceType: t3.micro
-    MinSize: 1
-    MaxSize: 2
-    CPUAlarmThreshold: 80
-  test:
-    InstanceType: t3.small
-    MinSize: 1
-    MaxSize: 3
-    CPUAlarmThreshold: 70
-  prod:
-    InstanceType: m5.large
-    MinSize: 2
-    MaxSize: 10
-    CPUAlarmThreshold: 60
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Multi-Environment CloudFormation Template for Dev, Test, and Production Infrastructure"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+          - Environment
+      - Label:
+          default: "Tagging"
+        Parameters:
+          - Owner
+          - CostCenter
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, test, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
+  Environment:
+    Type: String
+    Default: "dev"
+    AllowedValues: [dev, test, prod]
+    Description: "Deployment environment"
+
+  Owner:
+    Type: String
+    Default: "DevOps Team"
+    Description: "Owner tag for resources"
+
+  CostCenter:
+    Type: String
+    Default: "Engineering"
+    Description: "Cost center tag for resources"
+
+Mappings:
+  EnvironmentConfig:
+    dev:
+      InstanceType: t3.micro
+      MinSize: 1
+      MaxSize: 2
+      CPUAlarmThreshold: 80
+    test:
+      InstanceType: t3.small
+      MinSize: 1
+      MaxSize: 3
+      CPUAlarmThreshold: 70
+    prod:
+      InstanceType: m5.large
+      MinSize: 2
+      MaxSize: 10
+      CPUAlarmThreshold: 60
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, "prod"]
+Resources:
+  # VPC and Networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-VPC"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-IGW"
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public-Subnet-AZ1"
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public-Subnet-AZ2"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Subnet-AZ1"
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.12.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Subnet-AZ2"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # NAT Gateways
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NatGateway1-EIP"
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NatGateway2-EIP"
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NatGateway-AZ1"
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NatGateway-AZ2"
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public-Routes"
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Routes-AZ1"
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private-Routes-AZ2"
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # IAM Roles and Policies
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-EC2Role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !If
+          - IsProduction
+          - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+          - !Ref AWS::NoValue
+      Policies:
+        - PolicyName: EC2BasicPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "cloudwatch:namespace": !Sub "${AWS::StackName}/Application"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-ALB-SG"
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ALB-SG"
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-WebServer-SG"
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !If [IsProduction, "10.0.0.0/16", "0.0.0.0/0"]
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-WebServer-SG"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-ALB"
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-TG"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Launch Template and Auto Scaling
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-LaunchTemplate"
+      LaunchTemplateData:
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+        InstanceType:
+          !FindInMap [EnvironmentConfig, !Ref Environment, InstanceType]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Environment: ${Environment}</h1>" > /var/www/html/index.html
+            echo "<h2>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h2>" >> /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub "${AWS::StackName}-WebServer"
+              - Key: Environment
+                Value: !Ref Environment
+              - Key: Owner
+                Value: !Ref Owner
+              - Key: CostCenter
+                Value: !Ref CostCenter
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${AWS::StackName}-ASG"
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !FindInMap [EnvironmentConfig, !Ref Environment, MinSize]
+      MaxSize: !FindInMap [EnvironmentConfig, !Ref Environment, MaxSize]
+      DesiredCapacity: !FindInMap [EnvironmentConfig, !Ref Environment, MinSize]
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ASG"
+          PropagateAtLaunch: false
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: Owner
+          Value: !Ref Owner
+          PropagateAtLaunch: true
+
+  # CloudWatch Alarms
+  CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HighCPU"
+      AlarmDescription: "Alarm when CPU exceeds threshold"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold:
+        !FindInMap [EnvironmentConfig, !Ref Environment, CPUAlarmThreshold]
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # SNS Topic for Notifications
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-Alerts"
+      DisplayName: !Sub "${AWS::StackName} Infrastructure Alerts"
+
+  # AWS Config Configuration Recorder (for compliance)
+  ConfigConfigurationRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: IsProduction
+    Properties:
+      Name: !Sub "${AWS::StackName}-ConfigRecorder"
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Condition: IsProduction
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
+
+  # DynamoDB Table (keeping original requirement)
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProduction, true, false]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+Outputs:
+  VPCId:
+    Description: "VPC ID"
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+
+  PublicSubnets:
+    Description: "Public Subnets"
+    Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnets"
+
+  PrivateSubnets:
+    Description: "Private Subnets"
+    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnets"
+
+  ApplicationLoadBalancerDNS:
+    Description: "Application Load Balancer DNS name"
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-DNS"
+
+  ApplicationLoadBalancerArn:
+    Description: "Application Load Balancer ARN"
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub "${AWS::StackName}-ALB-ARN"
+
+  TurnAroundPromptTableName:
+    Description: "Name of the DynamoDB table"
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
+
+  TurnAroundPromptTableArn:
+    Description: "ARN of the DynamoDB table"
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
+
+  AutoScalingGroupName:
+    Description: "Auto Scaling Group Name"
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ASG-Name"
+
+  SNSTopicArn:
+    Description: "SNS Topic ARN for alerts"
+    Value: !Ref SNSTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-SNS-Topic"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
 ```
 
-#### Networking Resources
-- **VPC**: 10.0.0.0/16 CIDR with DNS support
-- **Public Subnets**: 10.0.1.0/24, 10.0.2.0/24 (Multi-AZ)
-- **Private Subnets**: 10.0.11.0/24, 10.0.12.0/24 (Multi-AZ)
+## Key Features
+
+### Environment-Specific Configuration
+- **Dev Environment**: t3.micro instances, 1-2 instances, 80% CPU threshold
+- **Test Environment**: t3.small instances, 1-3 instances, 70% CPU threshold  
+- **Prod Environment**: m5.large instances, 2-10 instances, 60% CPU threshold
+
+### Networking Architecture
+- **Multi-AZ VPC**: 10.0.0.0/16 CIDR with DNS support
+- **Public Subnets**: 10.0.1.0/24, 10.0.2.0/24 across 2 AZs
+- **Private Subnets**: 10.0.11.0/24, 10.0.12.0/24 across 2 AZs
+- **Redundant NAT Gateways**: One in each AZ for high availability
 - **Internet Gateway**: For public subnet internet access
-- **NAT Gateways**: Redundant NAT gateways in each AZ for private subnet outbound access
-- **Route Tables**: Proper routing for public and private subnets
 
-#### Security & IAM
-- **EC2 IAM Role**: Least privilege with CloudWatch logging permissions
-- **ALB Security Group**: HTTP/HTTPS access from internet
-- **WebServer Security Group**: 
-  - HTTP access only from ALB
-  - SSH access: 0.0.0.0/0 for dev/test, 10.0.0.0/16 for prod (conditional)
+### Security & Compliance
+- **IAM Roles**: Least privilege access with CloudWatch permissions
+- **Security Groups**: 
+  - ALB allows HTTP/HTTPS from internet
+  - Web servers allow HTTP only from ALB
+  - SSH access: Open for dev/test, VPC-only for production
+- **AWS Config**: Enabled for production compliance monitoring
+- **Conditional Resources**: Production-only features using CloudFormation conditions
 
-#### Compute & Load Balancing
-- **Launch Template**: Uses latest Amazon Linux 2 AMI via SSM parameter
-- **Auto Scaling Group**: Environment-specific sizing in private subnets
+### Application Infrastructure
 - **Application Load Balancer**: Internet-facing with health checks
+- **Auto Scaling Group**: Environment-specific sizing in private subnets
+- **Launch Template**: Latest Amazon Linux 2 AMI via SSM parameter
 - **Target Group**: HTTP health checks on root path
 
-#### Monitoring & Compliance
-- **CloudWatch Alarm**: Environment-specific CPU thresholds
-- **SNS Topic**: Alert notifications
-- **AWS Config**: Production-only compliance recording
+### Monitoring & Alerting
+- **CloudWatch Alarms**: Environment-specific CPU thresholds
+- **SNS Topic**: Infrastructure alert notifications
+- **Comprehensive Tagging**: Environment, Owner, and CostCenter tags
 
-#### Data Storage
+### Data Storage
 - **DynamoDB Table**: 
-  - Pay-per-request billing
-  - Point-in-time recovery for production only
-  - Proper tagging strategy
+  - Pay-per-request billing mode
+  - Point-in-time recovery for production
+  - Environment-specific naming with suffix
 
-## Deployment Instructions
+## Deployment
 
-### Prerequisites
-1. AWS CLI configured with appropriate permissions
-2. CloudFormation deployment permissions
-3. Region set to us-east-1 (as specified in requirements)
-
-### Deploy to Development
-```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStackdev \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    EnvironmentSuffix=dev \
-    Environment=dev \
-    Owner="Development Team" \
-    CostCenter="Engineering"
-```
-
-### Deploy to Test
-```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStacktest \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    EnvironmentSuffix=test \
-    Environment=test \
-    Owner="QA Team" \
-    CostCenter="Engineering"
-```
-
-### Deploy to Production
-```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStackprod \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --parameter-overrides \
-    EnvironmentSuffix=prod \
-    Environment=prod \
-    Owner="Operations Team" \
-    CostCenter="Production"
-```
-
-## Multi-Environment Configuration
-
-The solution uses CloudFormation mappings and conditions to customize behavior per environment:
-
-### Instance Sizing
-- **Development**: t3.micro instances, 1-2 instances
-- **Test**: t3.small instances, 1-3 instances  
-- **Production**: m5.large instances, 2-10 instances
-
-### Security Restrictions
-- **Development/Test**: SSH access from anywhere (0.0.0.0/0)
-- **Production**: SSH access only from VPC CIDR (10.0.0.0/16)
-
-### Compliance Features
-- **Production Only**: AWS Config configuration recorder enabled
-- **Production Only**: DynamoDB Point-in-Time Recovery enabled
-
-### Monitoring Thresholds
-- **Development**: CPU alarm at 80%
-- **Test**: CPU alarm at 70%
-- **Production**: CPU alarm at 60%
-
-## Compliance & Security Features
-
-### AWS Config Rules (Production)
-- Configuration recorder captures all resource changes
-- Supports compliance auditing and governance
-
-### IAM Least Privilege
-- EC2 instances have minimal permissions for logging and metrics
-- Cross-environment access restrictions through resource naming
-
-### Network Security
-- Private subnet deployment for compute resources
-- Load balancer in public subnets only
-- Security group restrictions based on environment
-
-### Tagging Strategy
-All resources include mandatory tags:
-- `Environment`: dev/test/prod
-- `Owner`: Team responsible for resources
-- `CostCenter`: Billing allocation
-
-## Monitoring & Alerting
-
-### CloudWatch Integration
-- CPU utilization monitoring per environment
-- Custom metrics namespace for application data
-- Environment-specific alarm thresholds
-
-### SNS Notifications
-- Centralized topic for infrastructure alerts
-- Configurable for email, SMS, or webhook notifications
-
-## Testing Strategy
-
-### Unit Tests (38 tests)
-Comprehensive validation of:
-- Template structure and syntax
-- Parameter validation
-- Resource configuration
-- Security group rules
-- Multi-environment mappings
-- Tagging compliance
-- Output definitions
-
-### Integration Tests (15 test suites)
-End-to-end validation of:
-- VPC and networking configuration
-- Load balancer health and accessibility
-- Auto Scaling Group proper operation
-- DynamoDB table functionality
-- Security group restrictions
-- Resource tagging compliance
-- Environment-specific configurations
-
-## Outputs
-
-The template provides 11 comprehensive outputs for integration with other stacks:
-
-- `VPCId`: VPC identifier for cross-stack references
-- `PublicSubnets`: Comma-separated public subnet IDs
-- `PrivateSubnets`: Comma-separated private subnet IDs
-- `ApplicationLoadBalancerDNS`: ALB endpoint for application access
-- `ApplicationLoadBalancerArn`: ALB ARN for additional configuration
-- `TurnAroundPromptTableName`: DynamoDB table name
-- `TurnAroundPromptTableArn`: DynamoDB table ARN
-- `AutoScalingGroupName`: ASG name for scaling operations
-- `SNSTopicArn`: SNS topic for additional subscriptions
-- `StackName`: Stack name for resource identification
-- `EnvironmentSuffix`: Environment suffix for naming consistency
-
-## Scalability & High Availability
-
-### Multi-AZ Design
-- Resources distributed across 2+ availability zones
-- Redundant NAT gateways prevent single points of failure
-- Auto Scaling Group spans multiple AZs
-
-### Auto Scaling
-- Environment-specific min/max instance counts
-- ELB health checks for instance replacement
-- CloudWatch metrics-based scaling triggers
-
-### Load Balancing
-- Application Load Balancer with health checks
-- Cross-AZ load distribution
-- Automatic unhealthy instance replacement
-
-## Cost Optimization
-
-### Resource Sizing
-- Environment-appropriate instance types
-- DynamoDB pay-per-request billing
-- Conditional resource creation (Config only in prod)
-
-### Tagging for Cost Allocation
-- Comprehensive tagging strategy
-- Cost center allocation
-- Environment-based cost tracking
-
-## Validation Results
-
-### CloudFormation Lint
-- ✅ Template passes cfn-lint validation
-- ✅ No warnings or errors
-- ✅ Best practices compliance
-
-### Unit Testing
-- ✅ 38/38 tests passed
-- ✅ 100% template coverage
-- ✅ All resource validations successful
-
-### Integration Testing
-- ✅ Ready for deployment validation
-- ✅ Comprehensive AWS service testing
-- ✅ End-to-end workflow validation
-
-## Best Practices Implemented
-
-1. **Infrastructure as Code**: Complete infrastructure defined in version-controlled CloudFormation
-2. **Immutable Infrastructure**: Stack replacement for major changes
-3. **Least Privilege Access**: Minimal IAM permissions per resource
-4. **Defense in Depth**: Multiple security layers (network, application, resource-level)
-5. **Monitoring & Observability**: Comprehensive logging and alerting
-6. **Cost Optimization**: Right-sized resources per environment
-7. **High Availability**: Multi-AZ deployment with redundancy
-8. **Scalability**: Auto Scaling with load balancing
-9. **Compliance**: AWS Config integration for governance
-10. **Standardization**: Consistent naming and tagging across environments
-
-This solution provides a production-ready, scalable, and secure multi-environment AWS infrastructure that meets all specified requirements while following AWS Well-Architected Framework principles.
+This template can be deployed to any AWS region and will automatically configure resources based on the selected environment (dev, test, or prod). The template uses CloudFormation conditions and mappings to ensure environment-appropriate configurations while maintaining consistency across deployments.
