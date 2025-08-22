@@ -400,7 +400,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail_logs" {
     }
 
     expiration {
-      days = 2555 # 7 years
+      days = 2557 # 7 years
     }
   }
 }
@@ -665,7 +665,7 @@ resource "aws_iam_role_policy_attachment" "business_billing" {
 ########################
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.project_name}-${var.environment}"
-  retention_in_days = 2555 # 7 years
+  retention_in_days = 2557 # 7 years
   kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
