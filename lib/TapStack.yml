@@ -25,20 +25,12 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters.'
 
-  DBPassword:
-    Type: String
-    Description: 'Database administrator password'
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: 'Must contain only alphanumeric characters.'
-
   NotificationEmail:
     Type: String
     Description: 'Email address for security alerts'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: 'Must be a valid email address.'
+    Default: 'admin@example.com'
 
 Resources:
   # VPC and Network Infrastructure
@@ -346,6 +338,18 @@ Resources:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
 
+  # Secrets Manager Secret for RDS Password
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-DBPassword'
+      Description: 'Database password for RDS MySQL instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -372,7 +376,7 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -481,3 +485,9 @@ Outputs:
     Value: !Ref SecurityAlertsTopic
     Export:
       Name: !Sub '${AWS::StackName}-SecurityAlerts-Topic'
+
+  DBPasswordSecretArn:
+    Description: 'ARN of the database password secret in Secrets Manager'
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPassword-Secret'
