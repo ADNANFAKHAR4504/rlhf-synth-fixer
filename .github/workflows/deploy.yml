@@ -1,0 +1,115 @@
+name: Deploy to AWS Fargate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: webapp
+  ECS_SERVICE: webapp-service-dev
+  ECS_CLUSTER: webapp-cluster-dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run unit tests
+      run: |
+        pytest tests/unit/ -v
+
+    - name: Run CDK synth
+      run: |
+        npx cdk synth
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install CDK CLI
+      run: npm install -g aws-cdk
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: CDK Bootstrap
+      run: cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }}
+
+    - name: CDK Deploy
+      run: cdk deploy --all --require-approval never
+
+    - name: Run integration tests
+      run: |
+        pytest tests/integration/ -v
+      env:
+        AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+
+  validate-deployment:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Validate ECS Service
+      run: |
+        aws ecs describe-services \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --query 'services[0].runningCount' \
+          --output text
+
+    - name: Check Application Health
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names webapp-alb-dev \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "Testing application at: http://$ALB_DNS"
+        curl -f "http://$ALB_DNS/health" || exit 1
