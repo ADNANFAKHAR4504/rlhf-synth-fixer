@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -66,7 +65,6 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(vpc).add('Project', commonTags.Project);
     cdk.Tags.of(vpc).add('Owner', commonTags.Owner);
 
-
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
       vpc,
       description: 'Security group for EC2 instances',
@@ -84,7 +82,6 @@ export class TapStack extends cdk.Stack {
       ec2.Port.tcp(80),
       'HTTP outbound'
     );
-
 
     cdk.Tags.of(ec2SecurityGroup).add('Environment', commonTags.Environment);
     cdk.Tags.of(ec2SecurityGroup).add('Project', commonTags.Project);
@@ -122,7 +119,6 @@ export class TapStack extends cdk.Stack {
       'HTTPS outbound'
     );
 
-
     cdk.Tags.of(lambdaSecurityGroup).add('Environment', commonTags.Environment);
     cdk.Tags.of(lambdaSecurityGroup).add('Project', commonTags.Project);
     cdk.Tags.of(lambdaSecurityGroup).add('Owner', commonTags.Owner);
@@ -151,7 +147,6 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(ec2Role).add('Project', commonTags.Project);
     cdk.Tags.of(ec2Role).add('Owner', commonTags.Owner);
 
-
     const ec2Instance = new ec2.Instance(this, 'TapInstance', {
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -179,7 +174,6 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(ec2Instance).add('Project', commonTags.Project);
     cdk.Tags.of(ec2Instance).add('Owner', commonTags.Owner);
 
-
     const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
       vpc,
       description: 'Subnet group for RDS database',
@@ -196,7 +190,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       credentials: rds.Credentials.fromGeneratedSecret('admin'),
       vpc,
       vpcSubnets: {
