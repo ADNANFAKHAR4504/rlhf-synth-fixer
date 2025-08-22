@@ -81,8 +81,8 @@ describe("TapStack CloudFormation Template", () => {
       expect(sgRDS.Type).toBe("AWS::EC2::SecurityGroup");
 
       expect(sgALB.Properties.SecurityGroupIngress[0]).toMatchObject({
-        FromPort: 443,
-        ToPort: 443,
+        FromPort: 80,
+        ToPort: 80,
         CidrIp: "0.0.0.0/0",
       });
       expect(sgEC2.Properties.SecurityGroupIngress[0].SourceSecurityGroupId).toBeDefined();
@@ -124,6 +124,11 @@ describe("TapStack CloudFormation Template", () => {
         IgnorePublicAcls: true,
         RestrictPublicBuckets: true,
       });
+
+      const oc =
+        template.Resources.SecureLogsBucketOwnershipControls ||
+        bucket.Properties.OwnershipControls;
+      expect(oc).toBeDefined();
     });
 
     test("should create one EC2 instance with IAM profile", () => {
@@ -141,13 +146,15 @@ describe("TapStack CloudFormation Template", () => {
 
     test("should define RDS Instance with SecretsManager", () => {
       const secret = template.Resources.RDSMasterSecret;
-      const rds = template.Resources.RDSInstance;
+      const rds = template.Resources.RDSInstanceProd || template.Resources.RDSInstanceNonProd;
       const subnetGroup = template.Resources.RDSSubnetGroup;
 
       expect(secret.Type).toBe("AWS::SecretsManager::Secret");
+      expect(rds).toBeDefined();
       expect(rds.Type).toBe("AWS::RDS::DBInstance");
       expect(rds.DeletionPolicy).toBe("Snapshot");
       expect(rds.UpdateReplacePolicy).toBe("Snapshot");
+
       expect(subnetGroup.Type).toBe("AWS::RDS::DBSubnetGroup");
     });
 
@@ -166,7 +173,7 @@ describe("TapStack CloudFormation Template", () => {
       expect(fn).toBeDefined();
       expect(fn.Type).toBe("AWS::Lambda::Function");
       expect(fn.Properties.VpcConfig).toBeDefined();
-      expect(fn.Properties.Runtime).toBe("python3.9");
+      expect(fn.Properties.Runtime).toBe("python3.12");
     });
 
     test("should define DynamoDB table with PITR enabled", () => {
@@ -175,6 +182,62 @@ describe("TapStack CloudFormation Template", () => {
       expect(table.Type).toBe("AWS::DynamoDB::Table");
       expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
     });
+
+    test("should define RDS DeletionPolicy based on Environment", () => {
+      const rds = template.Resources.RDSInstanceProd && template.Resources.RDSInstanceNonProd;;
+      expect(rds).toBeDefined();
+
+      // In production we expect Snapshot
+      if (template.Parameters.Environment.Default === "prod") {
+        expect(rds.DeletionPolicy).toBe("Snapshot");
+        expect(rds.UpdateReplacePolicy).toBe("Snapshot");
+      } else {
+        // In dev/test we expect Delete
+        expect(rds.DeletionPolicy).toBe("Delete");
+        expect(rds.UpdateReplacePolicy).toBe("Delete");
+      }
+    });
+
+    test("should define CloudFront distribution with logging to SecureLogsBucket", () => {
+      const cf = template.Resources.CloudFrontDistribution;
+      expect(cf).toBeDefined();
+      expect(cf.Type).toBe("AWS::CloudFront::Distribution");
+
+      // Verify logging config points to SecureLogsBucket
+      const logging = cf.Properties.DistributionConfig.Logging;
+      if (logging) {
+        expect(logging.Bucket).toHaveProperty("Fn::Sub");
+        const bucketSub = logging.Bucket["Fn::Sub"];
+        expect(bucketSub).toContain("${SecureLogsBucket}");
+        expect(bucketSub).toContain(".s3.amazonaws.com");
+      }
+    });
+
+    test("should define S3 OwnershipControls for SecureLogsBucket", () => {
+      const bucket = template.Resources.SecureLogsBucket;
+      expect(bucket).toBeDefined();
+
+      const oc =
+        template.Resources.SecureLogsBucketOwnershipControls ||
+        bucket.Properties.OwnershipControls;
+
+      expect(oc).toBeDefined();
+
+      const ownership =
+        oc.Properties?.OwnershipControls?.Rules?.[0]?.ObjectOwnership ||
+        oc.Rules?.[0]?.ObjectOwnership;
+
+      expect(["BucketOwnerEnforced", "BucketOwnerPreferred"]).toContain(ownership);
+    });
+
+    test("should define EC2 CPU CloudWatch Alarm", () => {
+      const alarm = template.Resources.EC2CPUAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Type).toBe("AWS::CloudWatch::Alarm");
+      expect(alarm.Properties.MetricName).toBe("CPUUtilization");
+      expect(alarm.Properties.Threshold).toBe(70);
+    });
+
   });
 
   describe("Outputs", () => {

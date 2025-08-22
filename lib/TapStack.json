@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM, Lambda, DynamoDB, SNS)",
+    "Description": "Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM, Lambda, DynamoDB, SNS, CloudFront)",
     "Parameters": {
         "Environment": {
             "Type": "String",
@@ -22,6 +22,28 @@
             ]
         }
     },
+    "Conditions": {
+        "IsProd": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        },
+        "IsNotProd": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "Environment"
+                        },
+                        "prod"
+                    ]
+                }
+            ]
+        }
+    },
     "Resources": {
         "VPC": {
             "Type": "AWS::EC2::VPC",
@@ -35,12 +57,34 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-vpc"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
         },
         "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway"
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
         },
         "VPCGatewayAttachment": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
@@ -75,6 +119,12 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-public-1"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -100,6 +150,12 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-public-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     }
                 ]
@@ -127,6 +183,12 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-private-1"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -153,6 +215,12 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-private-2"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -160,7 +228,21 @@
         "NatEIP": {
             "Type": "AWS::EC2::EIP",
             "Properties": {
-                "Domain": "vpc"
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-eip"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "NatGateway": {
@@ -174,7 +256,21 @@
                         "NatEIP",
                         "AllocationId"
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "PublicRouteTable": {
@@ -182,7 +278,21 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "PublicRoute": {
@@ -203,7 +313,21 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "PrivateRoute": {
@@ -272,9 +396,23 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
+                        "FromPort": 80,
+                        "ToPort": 80,
                         "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-alb-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -289,10 +427,24 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
+                        "FromPort": 80,
+                        "ToPort": 80,
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ec2-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     }
                 ]
@@ -314,6 +466,20 @@
                             "Ref": "EC2SecurityGroup"
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-rds-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
                 ]
             }
         },
@@ -328,6 +494,20 @@
                     {
                         "IpProtocol": -1,
                         "CidrIp": "10.0.0.0/16"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-lambda-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -364,6 +544,14 @@
                                     }
                                 }
                             ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     }
                 ]
@@ -414,6 +602,14 @@
                             ]
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
                 ]
             }
         },
@@ -434,6 +630,56 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-secure-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontLogs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureLogsBucket.Arn}/cloudfront-logs/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -457,7 +703,21 @@
                 },
                 "UserData": {
                     "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ec2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "ApplicationLoadBalancer": {
@@ -475,6 +735,20 @@
                     {
                         "Ref": "ALBSecurityGroup"
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-alb"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
                 ]
             }
         },
@@ -484,13 +758,27 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "Protocol": "HTTPS",
-                "Port": 443,
+                "Protocol": "HTTP",
+                "Port": 80,
                 "TargetType": "instance",
                 "Targets": [
                     {
                         "Id": {
                             "Ref": "EC2Instance"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-tg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
                         }
                     }
                 ]
@@ -502,7 +790,7 @@
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
                 },
-                "Port": 443,
+                "Port": 80,
                 "Protocol": "HTTP",
                 "DefaultActions": [
                     {
@@ -522,10 +810,47 @@
                     "GenerateStringKey": "password",
                     "ExcludeCharacters": "\"@/'",
                     "PasswordLength": 16
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
-        "RDSInstance": {
+        "RDSSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-rds-subnets"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstanceProd": {
+            "Condition": "IsProd",
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
@@ -564,19 +889,78 @@
                 ],
                 "DBSubnetGroupName": {
                     "Ref": "RDSSubnetGroup"
-                }
-            }
-        },
-        "RDSSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Subnet group for RDS",
-                "SubnetIds": [
+                },
+                "DeletionProtection": true,
+                "Tags": [
                     {
-                        "Ref": "PrivateSubnet1"
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-rds"
+                        }
                     },
                     {
-                        "Ref": "PrivateSubnet2"
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstanceNonProd": {
+            "Condition": "IsNotProd",
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSMasterSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "RDSMasterSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
+                },
+                "AllocatedStorage": 20,
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "RDSSubnetGroup"
+                },
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-rds"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
                     }
                 ]
             }
@@ -604,6 +988,14 @@
                     {
                         "Ref": "NotificationTopic"
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
                 ]
             }
         },
@@ -626,7 +1018,15 @@
                             "Resource": "*"
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "NotificationTopic": {
@@ -635,7 +1035,21 @@
                 "KmsMasterKeyId": {
                     "Ref": "NotificationKey"
                 },
-                "Subscription": []
+                "Subscription": [],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-notifications"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "MyLambdaFunction": {
@@ -645,7 +1059,7 @@
                     "Fn::Sub": "${Environment}-lambda"
                 },
                 "Handler": "index.handler",
-                "Runtime": "python3.9",
+                "Runtime": "python3.12",
                 "Role": {
                     "Fn::GetAtt": [
                         "LambdaExecutionRole",
@@ -670,7 +1084,15 @@
                 },
                 "Code": {
                     "ZipFile": "def handler(event, context):\n    print(\"Hello from Lambda in VPC\")\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
             }
         },
         "MyDynamoTable": {
@@ -694,7 +1116,99 @@
                 "BillingMode": "PAY_PER_REQUEST",
                 "PointInTimeRecoverySpecification": {
                     "PointInTimeRecoveryEnabled": true
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Comment": {
+                        "Fn::Sub": "${Environment} CloudFront distribution in front of ALB"
+                    },
+                    "Enabled": true,
+                    "DefaultRootObject": "/",
+                    "Origins": [
+                        {
+                            "Id": {
+                                "Fn::Sub": "${Environment}-alb-origin"
+                            },
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "ApplicationLoadBalancer",
+                                    "DNSName"
+                                ]
+                            },
+                            "CustomOriginConfig": {
+                                "OriginProtocolPolicy": "https-only",
+                                "HTTPSPort": 443,
+                                "OriginSSLProtocols": [
+                                    "TLSv1.2"
+                                ]
+                            }
+                        }
+                    ],
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": {
+                            "Fn::Sub": "${Environment}-alb-origin"
+                        },
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS",
+                            "PUT",
+                            "POST",
+                            "PATCH",
+                            "DELETE"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "Compress": true,
+                        "ForwardedValues": {
+                            "QueryString": true,
+                            "Cookies": {
+                                "Forward": "all"
+                            }
+                        }
+                    },
+                    "PriceClass": "PriceClass_100",
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    },
+                    "Logging": {
+                        "Bucket": {
+                            "Fn::Sub": "${SecureLogsBucket}.s3.amazonaws.com"
+                        },
+                        "Prefix": "cloudfront-logs/",
+                        "IncludeCookies": true
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-cloudfront"
+                        }
+                    }
+                ]
             }
         }
     },
@@ -719,9 +1233,20 @@
         },
         "RDSInstanceEndpoint": {
             "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
+                "Fn::If": [
+                    "IsProd",
+                    {
+                        "Fn::GetAtt": [
+                            "RDSInstanceProd",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    {
+                        "Fn::GetAtt": [
+                            "RDSInstanceNonProd",
+                            "Endpoint.Address"
+                        ]
+                    }
                 ]
             }
         },
@@ -738,6 +1263,19 @@
         "SNSTopic": {
             "Value": {
                 "Ref": "NotificationTopic"
+            }
+        },
+        "CloudFrontDomainName": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudFrontDistribution",
+                    "DomainName"
+                ]
+            }
+        },
+        "CloudFrontDistributionId": {
+            "Value": {
+                "Ref": "CloudFrontDistribution"
             }
         }
     }

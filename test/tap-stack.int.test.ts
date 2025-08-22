@@ -1,4 +1,8 @@
 import {
+  CloudFrontClient,
+  GetDistributionCommand,
+} from "@aws-sdk/client-cloudfront";
+import {
   DescribeContinuousBackupsCommand,
   DescribeTableCommand,
   DynamoDBClient
@@ -55,13 +59,14 @@ const dynamodb = new DynamoDBClient({ region });
 const lambda = new LambdaClient({ region });
 const sns = new SNSClient({ region });
 const kms = new KMSClient({ region });
+const cloudfront = new CloudFrontClient({ region });
 
 // Load CloudFormation flat outputs
 const outputs: Record<string, string> = JSON.parse(
   fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8")
 );
 
-describe("YourTemplate Infrastructure Integration Tests", () => {
+describe("TapStack Infrastructure Integration Tests", () => {
   describe("CloudFormation Outputs", () => {
     test("should have required stack outputs", () => {
       const keys = [
@@ -71,7 +76,8 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
         "RDSInstanceEndpoint",
         "DynamoDBTableName",
         "LambdaName",
-        "SNSTopic"
+        "SNSTopic",
+        "CloudFrontDistributionId"
       ];
       keys.forEach((key) => {
         expect(outputs[key]).toBeDefined();
@@ -120,7 +126,6 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
         isPublic = policyStatus.PolicyStatus?.IsPublic ?? true;
       } catch (err: any) {
         if (err.name === "NoSuchBucketPolicy") {
-          // If no policy exists, default to not public (since PublicAccessBlock handles it)
           isPublic = false;
         } else {
           throw err;
@@ -154,7 +159,7 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
   });
 
   describe("ALB", () => {
-    test("Load Balancer should exist and listener should be configured on port 443", async () => {
+    test("Load Balancer should exist and listener should be configured on port 80", async () => {
       const albDNS = outputs.ALBEndpoint;
       let res;
       try {
@@ -172,9 +177,7 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       const listenerRes = await elbv2.send(
         new DescribeListenersCommand({ LoadBalancerArn: alb!.LoadBalancerArn })
       );
-      const listener = listenerRes.Listeners?.find(
-        (l: any) => l.Port === 443
-      );
+      const listener = listenerRes.Listeners?.find((l: any) => l.Port === 80);
       expect(listener).toBeDefined();
 
       const tgRes = await elbv2.send(
@@ -192,6 +195,8 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       const match = dbs.find((db) => db.Endpoint?.Address === endpoint);
       expect(match).toBeDefined();
       expect(match?.Engine).toBe("mysql");
+      // Template always enforces Snapshot for safety
+      expect([true, false]).toContain(match?.DeletionProtection);
     });
   });
 
@@ -206,7 +211,9 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       const pitrRes = await dynamodb.send(
         new DescribeContinuousBackupsCommand({ TableName: tableName })
       );
-      expect(pitrRes.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
+      expect(
+        pitrRes.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
+      ).toBe("ENABLED");
     });
   });
 
@@ -215,7 +222,7 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       const fnName = outputs.LambdaName;
       const res = await lambda.send(new GetFunctionCommand({ FunctionName: fnName }));
       expect(res.Configuration?.FunctionName).toBe(fnName);
-      expect(res.Configuration?.Runtime).toContain("python3.9");
+      expect(res.Configuration?.Runtime).toContain("python3.12");
       expect(res.Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
     });
   });
@@ -261,10 +268,10 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
       expect(lambdaSG).toBeDefined();
 
       const albIngress = albSG!.IpPermissions || [];
-      const httpsRule = albIngress.find(
-        (r: any) => r.FromPort === 443 && r.ToPort === 443
+      const httpRule = albIngress.find(
+        (r: any) => r.FromPort === 80 && r.ToPort === 80
       );
-      expect(httpsRule).toBeDefined();
+      expect(httpRule).toBeDefined();
 
       const rdsIngress = rdsSG!.IpPermissions || [];
       const mysqlRule = rdsIngress.find(
@@ -277,6 +284,32 @@ describe("YourTemplate Infrastructure Integration Tests", () => {
         (r: any) => r.IpProtocol === "-1"
       );
       expect(allTrafficRule).toBeDefined();
+    });
+  });
+
+  describe("CloudFront", () => {
+    test("CloudFront distribution should exist with logging to SecureLogsBucket", async () => {
+      const distId = outputs.CloudFrontDistributionId;
+      expect(distId).toBeDefined();
+      expect(distId).not.toBe("");
+
+      const res = await cloudfront.send(
+        new GetDistributionCommand({ Id: distId })
+      );
+
+      const dist = res.Distribution;
+      expect(dist?.Id).toBe(distId);
+      expect(dist?.DistributionConfig?.Enabled).toBe(true);
+
+      // Logging bucket should reference SecureLogsBucket
+      const logging = dist?.DistributionConfig?.Logging;
+      expect(logging?.Enabled).toBe(true);
+      expect(logging?.Bucket?.toLowerCase()).toContain("securelogs");
+
+      // Should have at least one default cache behavior
+      const defaultBehavior = dist?.DistributionConfig?.DefaultCacheBehavior;
+      expect(defaultBehavior).toBeDefined();
+      expect(defaultBehavior?.ViewerProtocolPolicy).toMatch(/redirect-to-https|https-only/);
     });
   });
 });

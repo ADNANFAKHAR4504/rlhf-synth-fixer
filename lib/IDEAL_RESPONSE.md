@@ -4,7 +4,7 @@ Here's the complete secure_infrastructure.yml CloudFormation template that meets
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM, Lambda, DynamoDB, SNS)'
+Description: 'Secure, fully self-contained production environment (VPC, EC2, ALB, RDS, S3, CloudWatch, IAM, Lambda, DynamoDB, SNS, CloudFront)'
 
 Parameters:
   Environment:
@@ -15,6 +15,10 @@ Parameters:
     Type: String
     Default: t3.micro
     AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  IsNotProd: !Not [!Equals [!Ref Environment, prod]]
 
 Resources:
   ### VPC ###
@@ -27,9 +31,18 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-igw'
+        - Key: Environment
+          Value: !Ref Environment
+
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -47,6 +60,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-public-1'
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -58,6 +73,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-public-2'
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -69,6 +86,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-1'
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -80,24 +99,42 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-2'
+        - Key: Environment
+          Value: !Ref Environment
 
   ### NAT for private subnet egress ###
   NatEIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-eip'
+        - Key: Environment
+          Value: !Ref Environment
 
   NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
       SubnetId: !Ref PublicSubnet1
       AllocationId: !GetAtt NatEIP.AllocationId
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat'
+        - Key: Environment
+          Value: !Ref Environment
 
   ### Route Tables ###
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-rt'
+        - Key: Environment
+          Value: !Ref Environment
+
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: VPCGatewayAttachment
@@ -110,6 +147,12 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-rt'
+        - Key: Environment
+          Value: !Ref Environment
+
   PrivateRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -123,16 +166,19 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
+
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
+
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
+
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -147,9 +193,14 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb-sg'
+        - Key: Environment
+          Value: !Ref Environment
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -158,9 +209,14 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ec2-sg'
+        - Key: Environment
+          Value: !Ref Environment
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -172,6 +228,11 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-rds-sg'
+        - Key: Environment
+          Value: !Ref Environment
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -181,6 +242,11 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: -1
           CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda-sg'
+        - Key: Environment
+          Value: !Ref Environment
 
   ### IAM Roles ###
   EC2InstanceRole:
@@ -202,6 +268,9 @@ Resources:
               - Effect: Allow
                 Action: s3:PutObject
                 Resource: !Sub '${SecureLogsBucket.Arn}/ec2-logs/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -228,8 +297,11 @@ Resources:
               - Effect: Allow
                 Action: s3:PutObject
                 Resource: !Sub '${SecureLogsBucket.Arn}/lambda-logs/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  ### S3 Secure Logs Bucket ###
+  ### S3 Secure Logs Bucket (also used by CloudFront logs) ###
   SecureLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -241,13 +313,39 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-secure-logs'
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecureLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Allow CloudFront log delivery to write objects (with bucket-owner-full-control)
+          - Sid: AllowCloudFrontLogs
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureLogsBucket.Arn}/cloudfront-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
   ### EC2 Instance ###
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2
+      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 (example AMI - verify in your region)
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds: [!Ref EC2SecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -256,6 +354,11 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ec2'
+        - Key: Environment
+          Value: !Ref Environment
 
   ### Application Load Balancer ###
   ApplicationLoadBalancer:
@@ -263,22 +366,32 @@ Resources:
     Properties:
       Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
       SecurityGroups: [!Ref ALBSecurityGroup]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb'
+        - Key: Environment
+          Value: !Ref Environment
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       VpcId: !Ref VPC
-      Protocol: HTTPS
-      Port: 443
+      Protocol: HTTP
+      Port: 80
       TargetType: instance
       Targets:
         - Id: !Ref EC2Instance
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-tg'
+        - Key: Environment
+          Value: !Ref Environment
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
+      Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
@@ -292,9 +405,25 @@ Resources:
         GenerateStringKey: "password"
         ExcludeCharacters: "\"@/'"
         PasswordLength: 16
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  ### RDS Database ###
-  RDSInstance:
+  ### RDS Subnet Group ###
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-rds-subnets'
+        - Key: Environment
+          Value: !Ref Environment
+
+  ### RDS Database (conditional by environment) ###
+  RDSInstanceProd:
+    Condition: IsProd
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
@@ -306,12 +435,32 @@ Resources:
       AllocatedStorage: 20
       VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBSubnetGroupName: !Ref RDSSubnetGroup
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-rds'
+        - Key: Environment
+          Value: !Ref Environment
 
-  RDSSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  RDSInstanceNonProd:
+    Condition: IsNotProd
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      DBSubnetGroupDescription: Subnet group for RDS
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSMasterSecret, ':SecretString:username}}']]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSMasterSecret, ':SecretString:password}}']]
+      AllocatedStorage: 20
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-rds'
+        - Key: Environment
+          Value: !Ref Environment
 
   EC2CPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -328,8 +477,11 @@ Resources:
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       AlarmActions: [!Ref NotificationTopic]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  ### --- NEW: Encrypted SNS Topic --- ###
+  ### Encrypted SNS Topic ###
   NotificationKey:
     Type: AWS::KMS::Key
     Properties:
@@ -343,20 +495,28 @@ Resources:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: "kms:*"
             Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
   NotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
       KmsMasterKeyId: !Ref NotificationKey
-      Subscription: [] # Add email subscriptions later if needed
+      Subscription: []
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-notifications'
+        - Key: Environment
+          Value: !Ref Environment
 
-  ### --- NEW: Lambda Function in VPC --- ###
+  ### Lambda in VPC ###
   MyLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-lambda'
       Handler: index.handler
-      Runtime: python3.9
+      Runtime: python3.12
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       VpcConfig:
@@ -366,8 +526,11 @@ Resources:
         ZipFile: |
           def handler(event, context):
               print("Hello from Lambda in VPC")
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  ### --- NEW: DynamoDB with PITR --- ###
+  ### DynamoDB with PITR ###
   MyDynamoTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -381,6 +544,47 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ### CloudFront Distribution (fronts the ALB) ###
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${Environment} CloudFront distribution in front of ALB'
+        Enabled: true
+        DefaultRootObject: '/'
+        Origins:
+          - Id: !Sub '${Environment}-alb-origin'
+            DomainName: !GetAtt ApplicationLoadBalancer.DNSName
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              HTTPSPort: 443
+              OriginSSLProtocols: ['TLSv1.2']
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub '${Environment}-alb-origin'
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Logging:
+          Bucket: !Sub '${SecureLogsBucket}.s3.amazonaws.com'
+          Prefix: 'cloudfront-logs/'
+          IncludeCookies: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub '${Environment}-cloudfront'
 
 Outputs:
   VpcId:
@@ -390,13 +594,20 @@ Outputs:
   S3Bucket:
     Value: !Ref SecureLogsBucket
   RDSInstanceEndpoint:
-    Value: !GetAtt RDSInstance.Endpoint.Address
+    Value: !If
+      - IsProd
+      - !GetAtt RDSInstanceProd.Endpoint.Address
+      - !GetAtt RDSInstanceNonProd.Endpoint.Address
   DynamoDBTableName:
     Value: !Ref MyDynamoTable
   LambdaName:
     Value: !Ref MyLambdaFunction
   SNSTopic:
     Value: !Ref NotificationTopic
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+  CloudFrontDistributionId:
+    Value: !Ref CloudFrontDistribution
 
 ```
 
