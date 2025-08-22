@@ -109,7 +109,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // expect(ruleUsw2?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(deploymentOutputs.kms_key_ids_usw2);
 
       // us-east-1 enabled
-      const bucketNameUse1 = "iac-291323-secureapp-prod-app-data-use1";
+      const bucketNameUse1 = "iac-291323-secureapp-app-data-use1";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
 
       const encryptionUse1 = await s3ClientUse1.getBucketEncryption({
@@ -122,7 +122,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     });
 
     test("CloudTrail S3 bucket (us-east-1) has proper encryption", async () => {
-      const cloudtrailBucket = "iac-291323-secureapp-prod-cloudtrail-logs";
+      const cloudtrailBucket = "iac-291323-secureappcloudtrail-logs";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
 
       const encryption = await s3ClientUse1.getBucketEncryption({
@@ -151,7 +151,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // expect(ruleUsw2?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
 
       // us-east-1 enabled
-      const configBucketUse1 = "iac-291323-secureapp-prod-config-use1";
+      const configBucketUse1 = "iac-291323-secureapp-config-use1";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       const encryptionUse1 = await s3ClientUse1.getBucketEncryption({
         Bucket: configBucketUse1
@@ -282,7 +282,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // us-east-1 enabled
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-db-use1"
       }).promise();
 
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -303,7 +303,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // us-east-1 enabled
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-db-use1"
       }).promise();
 
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -329,7 +329,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       const ec2ClientUse1 = new AWS.EC2({ region: "us-east-1" });
 
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-db-use1"
       }).promise();
 
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -351,7 +351,9 @@ describe("SecureApp Infrastructure Integration Tests", () => {
   describe("CloudTrail Logging", () => {
     test("CloudTrail is active and configured correctly (multi-region trail)", async () => {
       const trails = await cloudTrailClient.describeTrails().promise();
-      const secureAppTrail = trails.trailList?.find(trail => trail.Name?.includes("iac-291323-secureapp-prod-cloudtrail"));
+      const secureAppTrail = trails.trailList?.find(trail =>
+        trail.Name?.includes("iac-291323-secureapp-cloudtrail")
+      );
 
       expect(secureAppTrail).toBeDefined();
       expect(secureAppTrail?.IsMultiRegionTrail).toBe(true);
@@ -382,24 +384,15 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     //   expect(recorderStatusUsw2?.recording).toBe(true);
     // });
 
-    test("Config delivery channel is configured in us-east-1", async () => {
-      // --- us-west-2 commented ---
-      // const channelsUsw2 = await configClient.describeDeliveryChannels().promise();
-      // const secureAppChannelUsw2 = channelsUsw2.DeliveryChannels?.find(c =>
-      //   c.name?.includes("iac-291323-secureapp-prod-config-delivery-usw2")
-      // );
-      // expect(secureAppChannelUsw2).toBeDefined();
-      // expect(secureAppChannelUsw2?.s3BucketName).toBe("iac-291323-secureapp-prod-config-usw2");
-
-      // us-east-1 enabled
-      const configClientUse1 = new AWS.ConfigService({ region: "us-east-1" });
-      const channelsUse1 = await configClientUse1.describeDeliveryChannels().promise();
-      const secureAppChannelUse1 = channelsUse1.DeliveryChannels?.find(c =>
-        c.name?.includes("iac-291323-secureapp-prod-config-delivery-use1")
+    test("Config delivery channel is configured in us-west-2", async () => {
+      const configClientUsw2 = new AWS.ConfigService({ region: "us-west-2" });
+      const channelsUsw2 = await configClientUsw2.describeDeliveryChannels().promise();
+      const secureAppChannelUsw2 = channelsUsw2.DeliveryChannels?.find(c =>
+        c.name?.includes("iac-291323-secureapp-config-delivery-usw2")
       );
 
-      expect(secureAppChannelUse1).toBeDefined();
-      expect(secureAppChannelUse1?.s3BucketName).toBe("iac-291323-secureapp-prod-config-use1");
+      expect(secureAppChannelUsw2).toBeDefined();
+      expect(secureAppChannelUsw2?.s3BucketName).toBe("iac-291323-secureapp-config-usw2");
     });
   });
 
