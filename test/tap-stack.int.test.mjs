@@ -24,13 +24,27 @@ const s3Client = new S3Client({ region: 'us-east-1' });
 const lambdaClient = new LambdaClient({ region: 'us-east-1' });
 
 describe('Serverless Infrastructure Integration Tests', () => {
-  const testBucketName = outputs.S3BucketName;
-  const apiUrl = outputs.ApiUrl;
-  const lambdaArns = {
-    dataValidator: outputs.LambdaDataValidatorArn,
-    imageProcessor: outputs.LambdaImageProcessorArn,
-    notificationHandler: outputs.LambdaNotificationHandlerArn
-  };
+  // Handle both CI format and direct format
+  const testBucketName = outputs.S3BucketName || outputs.bucketName;
+  const apiUrl = outputs.ApiUrl || outputs.apiUrl;
+  
+  // Handle lambdaArns - could be object or JSON string
+  let lambdaArns = {};
+  if (outputs.LambdaDataValidatorArn) {
+    // Direct format
+    lambdaArns = {
+      dataValidator: outputs.LambdaDataValidatorArn,
+      imageProcessor: outputs.LambdaImageProcessorArn,
+      notificationHandler: outputs.LambdaNotificationHandlerArn
+    };
+  } else if (outputs.lambdaArns) {
+    // CI format - could be string or object
+    if (typeof outputs.lambdaArns === 'string') {
+      lambdaArns = JSON.parse(outputs.lambdaArns);
+    } else {
+      lambdaArns = outputs.lambdaArns;
+    }
+  }
 
   beforeAll(() => {
     // Validate that all required outputs are available
