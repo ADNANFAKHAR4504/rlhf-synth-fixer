@@ -1,5 +1,4 @@
 import fs from 'fs';
-import axios from 'axios';
 import net from 'net';
 
 const outputs = JSON.parse(
@@ -15,7 +14,6 @@ describe('WebAppStack Integration Tests', () => {
   const elasticIP1 = outputs[`ElasticIP1${environmentSuffix}`];
   const elasticIP2 = outputs[`ElasticIP2${environmentSuffix}`];
 
-  // Utility to check TCP port connectivity
   function checkTcpPort(host: string, port: number, timeout = 3000): Promise<boolean> {
     return new Promise((resolve) => {
       const socket = new net.Socket();
@@ -44,7 +42,6 @@ describe('WebAppStack Integration Tests', () => {
     });
   }
 
-  // Utility: DNS Resolver
   async function resolveDNS(hostname: string): Promise<string> {
     const { lookup } = await import('node:dns/promises');
     const result = await lookup(hostname);
@@ -61,7 +58,6 @@ describe('WebAppStack Integration Tests', () => {
         console.warn('⚠️ LoadBalancerDNS output missing. Skipping TCP port test.');
         return;
       }
-
       const isOpen = await checkTcpPort(lbDns, 80, 5000);
       expect(isOpen).toBe(true);
     });
@@ -104,9 +100,10 @@ describe('WebAppStack Integration Tests', () => {
         })
       );
 
-      expect(result.MetricAlarms).toBeDefined();
-      expect(Array.isArray(result.MetricAlarms)).toBe(true);
-      expect(result.MetricAlarms.length).toBeGreaterThan(0);
+      // TypeScript safe check
+      if (!result.MetricAlarms || result.MetricAlarms.length === 0) {
+        throw new Error('No MetricAlarms found');
+      }
 
       const alarm = result.MetricAlarms[0];
       expect(alarm.AlarmName).toBe(cloudWatchAlarmName);
@@ -120,7 +117,6 @@ describe('WebAppStack Integration Tests', () => {
         console.warn('⚠️ RDSEndpoint output missing. Skipping RDS DNS test.');
         return;
       }
-
       const ip = await resolveDNS(rdsEndpoint);
       expect(ip).toMatch(/(\d{1,3}\.){3}\d{1,3}/);
     });
