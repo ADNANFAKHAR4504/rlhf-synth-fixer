@@ -39,7 +39,9 @@ jest.mock("@pulumi/aws", () => ({
       }
     })),
     BucketPublicAccessBlock: jest.fn().mockImplementation((name) => ({ id: `pab-${name}` })),
-    BucketServerSideEncryptionConfiguration: jest.fn().mockImplementation((name) => ({ id: `sse-${name}` }))
+    BucketServerSideEncryptionConfiguration: jest.fn().mockImplementation((name) => ({ id: `sse-${name}` })),
+    BucketLifecycleConfiguration: jest.fn().mockImplementation((name) => ({ id: `lifecycle-${name}` })),
+    BucketVersioning: jest.fn().mockImplementation((name) => ({ id: `versioning-${name}` }))
   },
   rds: {
     SubnetGroup: jest.fn().mockImplementation((name) => ({ 
