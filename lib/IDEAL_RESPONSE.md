@@ -1,9 +1,26 @@
-# Terraform configuration for High Availability Web Application
-# This configuration creates a production-ready infrastructure on AWS
+# Terraform Infrastructure Documentation
 
-########################
-# Variables
-########################
+## Overview
+This document provides the complete Terraform configuration for a high-availability web application infrastructure on AWS. The infrastructure includes an Application Load Balancer, Auto Scaling Group, RDS database, and comprehensive monitoring with CloudWatch.
+
+## Architecture Components
+
+### High Availability Features
+- Multi-AZ deployment across availability zones
+- Application Load Balancer for traffic distribution
+- Auto Scaling Group with CPU-based scaling policies
+- RDS database with multi-AZ enabled
+- Comprehensive monitoring and alerting
+
+### Security Features
+- IAM roles with least privilege access
+- Security groups with restricted access
+- AWS Secrets Manager for database password
+- Encrypted storage for RDS
+
+## Variables
+
+```hcl
 variable "aws_region" {
   description = "AWS region for the infrastructure"
   type        = string
@@ -39,10 +56,11 @@ variable "db_instance_class" {
   type        = string
   default     = "db.t3.micro"
 }
+```
 
-########################
-# Data Sources
-########################
+## Data Sources
+
+```hcl
 data "aws_vpc" "default" {
   default = true
 }
@@ -75,12 +93,13 @@ data "aws_subnets" "public" {
 data "aws_availability_zones" "available" {
   state = "available"
 }
+```
 
-# Database password will be retrieved from the secret version resource
+## Security Groups
 
-########################
-# Security Groups
-########################
+### Application Load Balancer Security Group
+
+```hcl
 resource "aws_security_group" "alb" {
   name        = "${var.app_name}-${var.environment_suffix}-alb-sg"
   description = "Security group for Application Load Balancer"
@@ -116,7 +135,11 @@ resource "aws_security_group" "alb" {
     ManagedBy   = "terraform"
   }
 }
+```
 
+### EC2 Instances Security Group
+
+```hcl
 resource "aws_security_group" "ec2" {
   name        = "${var.app_name}-${var.environment_suffix}-ec2-sg"
   description = "Security group for EC2 instances"
@@ -144,7 +167,11 @@ resource "aws_security_group" "ec2" {
     ManagedBy   = "terraform"
   }
 }
+```
 
+### RDS Database Security Group
+
+```hcl
 resource "aws_security_group" "rds" {
   name        = "${var.app_name}-${var.environment_suffix}-rds-sg"
   description = "Security group for RDS database"
@@ -164,10 +191,13 @@ resource "aws_security_group" "rds" {
     ManagedBy   = "terraform"
   }
 }
+```
 
-########################
-# IAM Roles and Policies
-########################
+## IAM Roles and Policies
+
+### EC2 Instance Role
+
+```hcl
 resource "aws_iam_role" "ec2_role" {
   name = "${var.app_name}-${var.environment_suffix}-ec2-role"
 
@@ -195,7 +225,11 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.app_name}-${var.environment_suffix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
+```
 
+### CloudWatch Policy
+
+```hcl
 resource "aws_iam_role_policy" "cloudwatch_policy" {
   name = "${var.app_name}-${var.environment_suffix}-cloudwatch-policy"
   role = aws_iam_role.ec2_role.id
@@ -218,10 +252,11 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
     ]
   })
 }
+```
 
-########################
-# Launch Template
-########################
+## Launch Template
+
+```hcl
 resource "aws_launch_template" "app" {
   name_prefix   = "${var.app_name}-${var.environment_suffix}-template-"
   image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1
@@ -296,10 +331,13 @@ resource "aws_launch_template" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
-########################
-# Application Load Balancer
-########################
+## Application Load Balancer
+
+### Load Balancer
+
+```hcl
 resource "aws_lb" "app" {
   name               = "${var.app_name}-${var.environment_suffix}-alb"
   internal           = false
@@ -315,7 +353,11 @@ resource "aws_lb" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
+### Target Group
+
+```hcl
 resource "aws_lb_target_group" "app" {
   name     = "${var.app_name}-${var.environment_suffix}-tg"
   port     = 80
@@ -340,7 +382,11 @@ resource "aws_lb_target_group" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
+### Listener
+
+```hcl
 resource "aws_lb_listener" "app" {
   load_balancer_arn = aws_lb.app.arn
   port              = "80"
@@ -351,10 +397,11 @@ resource "aws_lb_listener" "app" {
     target_group_arn = aws_lb_target_group.app.arn
   }
 }
+```
 
-########################
-# Auto Scaling Group
-########################
+## Auto Scaling Group
+
+```hcl
 resource "aws_autoscaling_group" "app" {
   name                      = "${var.app_name}-${var.environment_suffix}-asg"
   desired_capacity          = 2
@@ -388,10 +435,13 @@ resource "aws_autoscaling_group" "app" {
     propagate_at_launch = true
   }
 }
+```
 
-########################
-# Auto Scaling Policies
-########################
+## Auto Scaling Policies
+
+### Scale Up Policy
+
+```hcl
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.app_name}-${var.environment_suffix}-scale-up"
   scaling_adjustment     = 1
@@ -399,7 +449,11 @@ resource "aws_autoscaling_policy" "scale_up" {
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.app.name
 }
+```
 
+### Scale Down Policy
+
+```hcl
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.app_name}-${var.environment_suffix}-scale-down"
   scaling_adjustment     = -1
@@ -407,10 +461,13 @@ resource "aws_autoscaling_policy" "scale_down" {
   cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.app.name
 }
+```
 
-########################
-# CloudWatch Alarms
-########################
+## CloudWatch Alarms
+
+### CPU High Alarm
+
+```hcl
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -427,7 +484,11 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 }
+```
 
+### CPU Low Alarm
+
+```hcl
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-cpu-low"
   comparison_operator = "LessThanThreshold"
@@ -444,7 +505,11 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 }
+```
 
+### Memory High Alarm
+
+```hcl
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-memory-high"
   comparison_operator = "GreaterThanThreshold"
@@ -460,7 +525,11 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
     AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 }
+```
 
+### ALB 5XX Errors Alarm
+
+```hcl
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_name          = "${var.app_name}-${var.environment_suffix}-alb-5xx"
   comparison_operator = "GreaterThanThreshold"
@@ -476,10 +545,13 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
     LoadBalancer = aws_lb.app.arn_suffix
   }
 }
+```
 
-########################
-# RDS Database
-########################
+## RDS Database
+
+### DB Subnet Group
+
+```hcl
 resource "aws_db_subnet_group" "app" {
   name       = "${var.app_name}-${var.environment_suffix}-db-subnet-group"
   subnet_ids = slice(data.aws_subnets.default.ids, 0, 2)
@@ -490,7 +562,11 @@ resource "aws_db_subnet_group" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
+### RDS Instance
+
+```hcl
 resource "aws_db_instance" "app" {
   identifier = "${var.app_name}-${var.environment_suffix}-db"
 
@@ -525,10 +601,13 @@ resource "aws_db_instance" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
-########################
-# AWS Secrets Manager
-########################
+## AWS Secrets Manager
+
+### Database Password Secret
+
+```hcl
 resource "aws_secretsmanager_secret" "db_password" {
   name        = "${var.app_name}-${var.environment_suffix}-db-password"
   description = "Database password for ${var.app_name} application"
@@ -550,10 +629,11 @@ resource "random_password" "db_password" {
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
+```
 
-########################
-# CloudWatch Logs
-########################
+## CloudWatch Logs
+
+```hcl
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/aws/ec2/${var.app_name}-${var.environment_suffix}"
   retention_in_days = 7
@@ -564,10 +644,11 @@ resource "aws_cloudwatch_log_group" "app" {
     ManagedBy   = "terraform"
   }
 }
+```
 
-########################
-# Outputs
-########################
+## Outputs
+
+```hcl
 output "aws_region" {
   description = "AWS region used for the infrastructure"
   value       = var.aws_region
@@ -612,3 +693,49 @@ output "subnet_ids" {
   description = "Subnet IDs"
   value       = data.aws_subnets.default.ids
 }
+```
+
+## Deployment Instructions
+
+1. **Initialize Terraform**:
+   ```bash
+   terraform init
+   ```
+
+2. **Plan the deployment**:
+   ```bash
+   terraform plan
+   ```
+
+3. **Apply the configuration**:
+   ```bash
+   terraform apply
+   ```
+
+4. **Verify the deployment**:
+   ```bash
+   terraform output
+   ```
+
+## Security Considerations
+
+- All resources are properly tagged for cost tracking and management
+- Security groups follow the principle of least privilege
+- Database password is stored securely in AWS Secrets Manager
+- RDS instance is encrypted and not publicly accessible
+- IAM roles have minimal required permissions
+
+## Monitoring and Alerting
+
+The infrastructure includes comprehensive monitoring with CloudWatch alarms for:
+- CPU utilization (scale up/down triggers)
+- Memory utilization
+- ALB 5XX errors
+- Auto Scaling Group health
+
+## Cost Optimization
+
+- Uses t3.micro instances for development/testing
+- RDS instance can be scaled based on demand
+- Auto Scaling Group helps optimize costs during low traffic periods
+- All resources are properly tagged for cost allocation
