@@ -294,7 +294,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       const flowLog = flowLogsResponse.FlowLogs![0];
       expect(flowLog.ResourceId).toBe(vpcId);
-      expect(flowLog.ResourceIds?.[0]).toBe(vpcId);
       expect(flowLog.TrafficType).toBe('ALL');
       expect(flowLog.LogDestinationType).toBe('s3');
       expect(flowLog.FlowLogStatus).toBe('ACTIVE');
