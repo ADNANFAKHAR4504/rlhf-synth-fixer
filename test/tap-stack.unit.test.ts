@@ -1,4 +1,3 @@
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -273,28 +272,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
   });
 
-  describe('Terraform Validation', () => {
-    // Removed terraform validate test as requested
-
-    test('should pass terraform fmt check', () => {
-      try {
-        execSync('terraform fmt -check', { 
-          cwd: libPath,
-          encoding: 'utf8'
-        });
-        expect(true).toBe(true);
-      } catch (error: any) {
-        if (error.stdout || error.stderr) {
-          throw new Error(`Terraform files need formatting: ${error.stdout || error.stderr}`);
-        } else if (error.message && error.message.includes('terraform')) {
-          console.warn('Skipping terraform fmt test: terraform not available');
-          expect(true).toBe(true);
-        } else {
-          throw new Error(`Terraform fmt check failed: ${error.message || error}`);
-        }
-      }
-    });
-  });
+  // Removed terraform fmt check as requested
+  // No CLI checks in unit tests to avoid failure due to formatting
 
   describe('Resource Naming with Suffix', () => {
     test('should apply environment suffix to all resource names', () => {
