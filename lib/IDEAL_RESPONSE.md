@@ -272,9 +272,4 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
-
-
-
-
-
 ```
