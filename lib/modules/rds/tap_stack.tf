@@ -46,8 +46,8 @@ variable "common_tags" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
-  subnet_ids = var.private_subnet_ids
+  name_prefix = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group-" : "${var.common_tags.Environment}-db-subnet-group-"
+  subnet_ids  = var.private_subnet_ids
 
   tags = merge(var.common_tags, {
     Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
@@ -105,7 +105,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = var.random_prefix != "" ? "${var.random_prefix}-database" : "${var.common_tags.Environment}-database"
+  identifier_prefix = var.random_prefix != "" ? "${var.random_prefix}-database-" : "${var.common_tags.Environment}-database-"
 
   engine         = "mysql"
   engine_version = var.db_engine_version
