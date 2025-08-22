@@ -1,59 +1,84 @@
-You are tasked with generating an AWS CDK application in TypeScript with the following folder structure:
+I’m putting together a small AWS CDK project in TypeScript and I’d like the initial skeleton + stack code generated. Nothing fancy, just clean and idiomatic CDK.
 
-bin/tap.ts → entry point for the CDK app.
+What I’m building
 
-lib/tapstack.ts → defines the main infrastructure stack.
+Single-account, single-region app that lives entirely in one VPC in us-west-2. It includes a couple of EC2 instances, one RDS instance, a few Lambda functions, and some S3 buckets. Please wire things so they can talk to each other safely inside the VPC and keep public access locked down.
 
-test/ → contains CDK tests.
+Project layout (please stick to this)
 
-The project must implement the following requirements:
+bin/tap.ts – app entry point
 
-All resources should reside within a single VPC in the us-west-2 region.
+lib/tapstack.ts – main stack definition
 
-EC2 instances must:
+test/ – CDK tests (basic assertions are fine)
 
-Be launched inside the VPC.
+Naming
 
-Use IAM roles for access instead of embedding credentials.
+We use a simple convention: corp-<projectName>-<resourceType>.
+Examples: corp-nova-ec2, corp-nova-s3, etc. Please apply this consistently across everything you create.
 
-Restrict SSH access only to a specific IP CIDR range using security groups.
+VPC / networking
 
-RDS instance must:
+All resources live in one VPC in us-west-2.
 
-Be inside the VPC in private subnets.
+EC2 and Lambda go into that VPC.
 
-Use security groups to allow inbound access only from specified IP addresses.
+RDS goes into private subnets only.
 
-Be encrypted at rest.
+Use security groups (not NACLs) to control access.
 
-Lambda functions must:
+EC2
 
-Be deployed in the same VPC.
+Launch inside the VPC.
 
-Have CloudWatch logging enabled.
+No embedded credentials; use IAM roles.
 
-Retrieve sensitive values (e.g., database credentials) from AWS Secrets Manager instead of hardcoding.
+SSH must be restricted to a specific CIDR (make this a prop/parameter so it’s easy to change). Security group should only allow port 22 from that CIDR.
 
-S3 buckets must:
+RDS
 
-Use the company naming convention (corp-<project>-<resource-type>).
+The database runs in the VPC’s private subnets.
 
-Have server-side encryption enabled.
+Encrypt at rest.
 
-Block all public access.
+Inbound allowed only from the approved sources via security groups (EC2/Lambda SGs and/or a list of IPs). Don’t open to the world.
 
-IAM policies & roles must:
+Lambda
 
-Follow the least privilege principle.
+Deploy the functions into the same VPC.
 
-Be attached to EC2, RDS, and Lambda as needed.
+Enable CloudWatch logging.
 
-MFA enforcement must be applied for the AWS Management Console.
+Sensitive values (DB creds, etc.) should come from AWS Secrets Manager—no hardcoded secrets.
 
-All resources should follow the company naming convention:
+S3
 
-Prefix with "corp" followed by projectName & the resource type (e.g., corp-nova-ec2, corp-nova-s3).
+Bucket names must follow the company naming convention above: corp-<project>-<resource-type>.
 
-Do not include AWS Config Rules or CloudTrail in this stack.
+Turn on server-side encryption.
 
-Generate TypeScript CDK code that fully implements these requirements. The main stack should be defined in lib/tapstack.ts, and the app entry point in bin/tap.ts.
+Block all public access settings.
+
+IAM
+
+Keep to least privilege.
+
+Attach only what EC2, RDS, and Lambda actually need.
+
+Enforce MFA for AWS Management Console access (an IAM account-level policy or equivalent is fine).
+
+Out of scope
+
+Do not add AWS Config Rules or CloudTrail to this stack.
+
+What I’d like back
+
+TypeScript CDK code that implements the above:
+
+bin/tap.ts creates the app and instantiates the stack with reasonable props (project name, sshCidr, etc.).
+
+lib/tapstack.ts defines the VPC, EC2, RDS, Lambda, S3, IAM pieces and wires them together.
+
+Minimal tests in test/ proving key bits are set (encryption, public access block, RDS in private subnets, etc.).
+
+Please keep things readable with brief comments where choices might be non-obvious.
