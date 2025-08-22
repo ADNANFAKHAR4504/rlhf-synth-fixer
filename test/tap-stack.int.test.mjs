@@ -4,9 +4,21 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 
-// Load deployment outputs
-const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+// Load deployment outputs with error handling
+let outputs = {};
+try {
+  const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+  
+  if (fs.existsSync(outputsPath)) {
+    const content = fs.readFileSync(outputsPath, 'utf8');
+    outputs = JSON.parse(content);
+  } else {
+    throw new Error(`flat-outputs.json not found at: ${outputsPath}`);
+  }
+} catch (error) {
+  console.error('Error loading deployment outputs:', error.message);
+  console.error('Make sure the infrastructure is deployed and outputs are generated.');
+}
 
 const s3Client = new S3Client({ region: 'us-east-1' });
 const lambdaClient = new LambdaClient({ region: 'us-east-1' });
@@ -19,6 +31,13 @@ describe('Serverless Infrastructure Integration Tests', () => {
     imageProcessor: outputs.LambdaImageProcessorArn,
     notificationHandler: outputs.LambdaNotificationHandlerArn
   };
+
+  beforeAll(() => {
+    // Validate that all required outputs are available
+    if (!testBucketName || !apiUrl || !lambdaArns.dataValidator || !lambdaArns.imageProcessor || !lambdaArns.notificationHandler) {
+      throw new Error('Required deployment outputs are missing. Please ensure infrastructure is properly deployed.');
+    }
+  });
 
   describe('S3 Bucket Tests', () => {
     test('should be able to upload and retrieve objects from S3 bucket', async () => {
