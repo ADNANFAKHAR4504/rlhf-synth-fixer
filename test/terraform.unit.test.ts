@@ -2,12 +2,12 @@ import { execSync } from "child_process";
 
 describe("Terraform Unit Tests", () => {
   it("should validate Terraform configuration", () => {
-    const result = execSync("terraform validate", { encoding: "utf-8" });
-    expect(result).toContain("Success");
+    execSync("terraform validate -no-color -chdir=.", { stdio: "inherit" });
   });
 
   it("should plan without errors", () => {
-    const result = execSync("terraform plan -input=false -no-color", { encoding: "utf-8" });
+    execSync("terraform init -input=false -no-color -chdir=.", { stdio: "inherit" });
+    const result = execSync("terraform plan -input=false -no-color -chdir=.", { encoding: "utf-8" });
     expect(result).toMatch(/Plan:/);
   });
 });
