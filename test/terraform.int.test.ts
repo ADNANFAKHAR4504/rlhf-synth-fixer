@@ -130,7 +130,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       }).promise();
 
       const rule = encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
-      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
     });
 
     // --- us-west-2 only tags test commented ---
@@ -158,7 +158,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       }).promise();
 
       const ruleUse1 = encryptionUse1.ServerSideEncryptionConfiguration?.Rules?.[0];
-      expect(ruleUse1?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      expect(ruleUse1?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
     });
   });
 
@@ -365,8 +365,6 @@ describe("SecureApp Infrastructure Integration Tests", () => {
 
       expect(status.IsLogging).toBe(true);
     });
-
-    // (Mantido sem alteração pois é genérico; o teste específico de bucket já está em S3 Storage Security para us-east-1)
   });
 
   describe("AWS Config Compliance", () => {
@@ -445,7 +443,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       // us-east-1 enabled
       const rdsClientUse1 = new AWS.RDS({ region: "us-east-1" });
       const dbInstancesUse1 = await rdsClientUse1.describeDBInstances({
-        DBInstanceIdentifier: "iac-291323-secureapp-prod-db-use1"
+        DBInstanceIdentifier: "iac-291323-secureapp-db-use1"
       }).promise();
 
       const dbInstanceUse1 = dbInstancesUse1.DBInstances?.[0];
@@ -466,7 +464,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
       try {
         await s3ClientUse1.headBucket({
-          Bucket: "iac-291323-secureapp-prod-app-data-use1"
+          Bucket: "iac-291323-secureapp-app-data-use1"
         }).promise();
       } catch (error: any) {
         if (error.statusCode !== 403) {
