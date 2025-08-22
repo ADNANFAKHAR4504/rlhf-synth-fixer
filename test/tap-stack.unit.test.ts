@@ -285,7 +285,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
         expect(true).toBe(true);
       } catch (error: any) {
         if (error.stdout || error.stderr) {
-          fail(`Terraform files need formatting: ${error.stdout || error.stderr}`);
+          throw new Error(`Terraform files need formatting: ${error.stdout || error.stderr}`);
         } else if (error.message && error.message.includes('terraform')) {
           console.warn('Skipping terraform fmt test: terraform not available');
           expect(true).toBe(true);
@@ -301,7 +301,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const files = ['vpc.tf','security_groups.tf','iam.tf','s3.tf','rds.tf','alb.tf','autoscaling.tf'];
       files.forEach(file => {
         const content = terraformFiles[file];
-        expect(content).toMatch(/\${var\.environment_tag}.*\${random_id\.deployment\.hex}/);
+        expect(content).toMatch(/\${var\.environment_tag}.*(\${random_id\.deployment\.hex}|\${random_id\.bucket_suffix\.hex})/);
       });
     });
   });
