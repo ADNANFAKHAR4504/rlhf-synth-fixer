@@ -15,7 +15,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients for different regions
 const primaryRegion = 'us-east-1';
-const secondaryRegion = 'eu-west-1';
+const secondaryRegion = 'us-east-2';
 
 const s3Primary = new AWS.S3({ region: primaryRegion });
 const s3Secondary = new AWS.S3({ region: secondaryRegion });
@@ -45,7 +45,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
 
   describe('S3 Cross-Region Replication', () => {
     const primaryBucketName = `tap-bucket-useast1-${environmentSuffix}`;
-    const secondaryBucketName = `tap-bucket-euwest1-${environmentSuffix}`;
+    const secondaryBucketName = `tap-bucket-useast2-${environmentSuffix}`;
     const testObjectKey = `integration-test-${Date.now()}.txt`;
     const testContent = 'Integration test content for cross-region replication';
 
@@ -447,7 +447,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
 
         const secondaryTapTopic = secondaryTopics.Topics?.find(topic =>
           topic.TopicArn?.includes(
-            `tap-replication-alerts-euwest1-${environmentSuffix}`
+            `tap-replication-alerts-useast2-${environmentSuffix}`
           )
         );
 
@@ -589,7 +589,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
           ]);
 
         const secondaryTapBucket = secondaryBuckets.Buckets?.find(bucket =>
-          bucket.Name?.includes(`tap-bucket-euwest1-${environmentSuffix}`)
+          bucket.Name?.includes(`tap-bucket-useast2-${environmentSuffix}`)
         );
 
         const secondaryTapRDS = secondaryRDS.DBInstances?.find(db =>

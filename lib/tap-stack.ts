@@ -170,7 +170,7 @@ export class TapStack extends cdk.Stack {
             's3:ReplicateDelete',
             's3:ReplicateTags',
           ],
-          resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
+          resources: [`arn:aws:s3:::tap-bucket-useast2-${environmentSuffix}/*`],
         })
       );
 

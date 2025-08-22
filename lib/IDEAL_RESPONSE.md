@@ -1,6 +1,6 @@
 # TAP Multi-Region Infrastructure - Ideal Response
 
-This document contains the perfect Infrastructure as Code solution for a multi-region AWS setup with failover capabilities between us-east-1 and eu-west-1.
+This document contains the perfect Infrastructure as Code solution for a multi-region AWS setup with failover capabilities between us-east-1 and us-east-2.
 
 ## Architecture Overview
 
@@ -57,7 +57,7 @@ const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
   },
 });
 
-// Secondary region stack (eu-west-1)
+// Secondary region stack (us-east-2)
 const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`, {
   stackName: `TapStackSecondary${environmentSuffix}`,
   environmentSuffix: environmentSuffix,
@@ -66,7 +66,7 @@ const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`
   primaryBucketArn: primaryStack.primaryBucketArn,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'eu-west-1',
+    region: 'us-east-2',
   },
 });
 
@@ -254,7 +254,7 @@ export class TapStack extends cdk.Stack {
             's3:ReplicateDelete',
             's3:ReplicateTags',
           ],
-          resources: [`arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}/*`],
+          resources: [`arn:aws:s3:::tap-bucket-useast2-${environmentSuffix}/*`],
         })
       );
 
@@ -276,7 +276,7 @@ export class TapStack extends cdk.Stack {
             status: 'Enabled',
             prefix: '',
             destination: {
-              bucket: `arn:aws:s3:::tap-bucket-euwest1-${environmentSuffix}`,
+              bucket: `arn:aws:s3:::tap-bucket-useast2-${environmentSuffix}`,
               storageClass: 'STANDARD_IA',
             },
           },
@@ -548,7 +548,7 @@ def handler(event, context):
 
 ### Multi-Region Architecture
 - **Primary Region (us-east-1)**: Full infrastructure with RDS Multi-AZ, CloudFront distribution, and S3 replication source
-- **Secondary Region (eu-west-1)**: Failover infrastructure with RDS read replica and S3 replication destination
+- **Secondary Region (us-east-2)**: Failover infrastructure with RDS read replica and S3 replication destination
 - **Cross-stack dependencies**: Ensures proper deployment order
 
 ### Security & Compliance

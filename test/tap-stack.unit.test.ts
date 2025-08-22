@@ -22,7 +22,7 @@ describe('TapStack', () => {
       isPrimary: false,
       primaryRegion: 'us-east-1',
       primaryBucketArn: 'arn:aws:s3:::mock-primary-bucket',
-      env: { region: 'eu-west-1' },
+      env: { region: 'us-east-2' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -362,8 +362,8 @@ describe('TapStack', () => {
     test('creates SNS topic in secondary region', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `tap-replication-alerts-euwest1-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - eu-west-1',
+        TopicName: `tap-replication-alerts-useast2-${environmentSuffix}`,
+        DisplayName: 'TAP Replication Alerts - us-east-2',
       });
     });
 
