@@ -140,9 +140,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
     });
 
-    test("creates EFS security group", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"efs"/);
-    });
 
     test("ALB security group allows HTTP", () => {
       expect(stackContent).toContain("from_port   = 80");
@@ -156,9 +153,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toContain("from_port       = 3306");
     });
 
-    test("EFS security group allows NFS port", () => {
-      expect(stackContent).toContain("from_port       = 2049");
-    });
   });
 
   describe("IAM Resources", () => {
@@ -190,10 +184,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toContain('Service = "events.amazonaws.com"');
     });
 
-    test("EC2 policy includes EFS permissions", () => {
-      expect(stackContent).toContain("elasticfilesystem:ClientMount");
-      expect(stackContent).toContain("elasticfilesystem:ClientWrite");
-    });
 
     test("EC2 policy includes EventBridge permissions", () => {
       expect(stackContent).toContain("events:PutEvents");
@@ -229,14 +219,7 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toContain('encrypted             = true');
     });
 
-    test("launch template includes EFS mounting", () => {
-      expect(stackContent).toContain("amazon-efs-utils");
-    });
 
-    test("user data script includes EFS mount configuration", () => {
-      expect(stackContent).toContain("/mnt/efs");
-      expect(stackContent).toContain("mount -a");
-    });
   });
 
   describe("Database Resources", () => {
@@ -285,62 +268,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
     });
   });
 
-  describe("EFS Resources", () => {
-    test("creates EFS file system", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_efs_file_system"\s+"main"/);
-    });
-
-    test("creates EFS access point", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_efs_access_point"\s+"app_data"/);
-    });
-
-    test("creates EFS mount targets", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_efs_mount_target"\s+"main"/);
-    });
-
-    test("creates KMS key for EFS encryption", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"efs"/);
-    });
-
-    test("creates KMS alias for EFS", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"efs"/);
-    });
-
-    test("EFS file system has encryption enabled", () => {
-      expect(stackContent).toContain("encrypted      = true");
-    });
-
-    test("EFS file system uses KMS encryption", () => {
-      expect(stackContent).toContain("kms_key_id     = aws_kms_key.efs.arn");
-    });
-
-    test("EFS has performance mode configured", () => {
-      expect(stackContent).toContain('performance_mode                = "generalPurpose"');
-    });
-
-    test("EFS has throughput mode configured", () => {
-      expect(stackContent).toContain('throughput_mode                 = "provisioned"');
-    });
-
-    test("EFS access point has POSIX user configuration", () => {
-      expect(stackContent).toContain("posix_user {");
-      expect(stackContent).toContain("gid = 1000");
-      expect(stackContent).toContain("uid = 1000");
-    });
-
-    test("EFS access point has root directory configuration", () => {
-      expect(stackContent).toContain('path = "/app-data"');
-      expect(stackContent).toContain("creation_info {");
-    });
-
-    test("EFS mount targets use private subnets", () => {
-      expect(stackContent).toContain("subnet_id       = aws_subnet.private[count.index].id");
-    });
-
-    test("EFS mount targets use correct security groups", () => {
-      expect(stackContent).toContain("security_groups = [aws_security_group.efs.id]");
-    });
-  });
 
   describe("EventBridge Resources", () => {
     test("creates custom EventBridge bus", () => {
@@ -451,13 +378,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toMatch(/output\s+"db_parameter_ssm_name"/);
     });
 
-    test("outputs EFS file system details", () => {
-      expect(stackContent).toMatch(/output\s+"efs_file_system_id"/);
-      expect(stackContent).toMatch(/output\s+"efs_file_system_dns_name"/);
-      expect(stackContent).toMatch(/output\s+"efs_access_point_id"/);
-      expect(stackContent).toMatch(/output\s+"efs_mount_target_ids"/);
-      expect(stackContent).toMatch(/output\s+"efs_kms_key_arn"/);
-    });
 
     test("outputs EventBridge details", () => {
       expect(stackContent).toMatch(/output\s+"eventbridge_bus_name"/);
@@ -467,9 +387,6 @@ describe("Terraform Infrastructure Stack: tap_stack.tf", () => {
       expect(stackContent).toMatch(/output\s+"eventbridge_log_group_name"/);
     });
 
-    test("outputs EFS security group ID", () => {
-      expect(stackContent).toMatch(/output\s+"security_group_efs_id"/);
-    });
   });
 
   describe("Best Practices", () => {

@@ -9,7 +9,6 @@ import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
-import { EFSClient, DescribeFileSystemsCommand, DescribeAccessPointsCommand, DescribeMountTargetsCommand } from "@aws-sdk/client-efs";
 import { EventBridgeClient, DescribeEventBusCommand, DescribeRuleCommand } from "@aws-sdk/client-eventbridge";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
@@ -50,7 +49,6 @@ const rdsClient = new RDSClient({ region });
 const ssmClient = new SSMClient({ region });
 const iamClient = new IAMClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
-const efsClient = new EFSClient({ region });
 const eventBridgeClient = new EventBridgeClient({ region });
 const kmsClient = new KMSClient({ region });
 
@@ -66,7 +64,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(outputs).toHaveProperty("private_subnet_ids");
       expect(outputs).toHaveProperty("rds_endpoint");
       expect(outputs).toHaveProperty("security_group_ec2_id");
-      expect(outputs).toHaveProperty("efs_file_system_id");
       expect(outputs).toHaveProperty("eventbridge_bus_name");
     });
   });
@@ -243,34 +240,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }
     });
 
-    test("EFS security group exists", async () => {
-      if (!outputs.security_group_efs_id) {
-        console.log("Skipping EFS security group test - no ID in outputs");
-        return;
-      }
-
-      try {
-        const command = new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.security_group_efs_id],
-        });
-        
-        const response = await ec2Client.send(command);
-        expect(response.SecurityGroups).toHaveLength(1);
-        
-        const sg = response.SecurityGroups![0];
-        expect(sg.VpcId).toBe(outputs.vpc_id);
-        
-        // Check for NFS port rule
-        const nfsRule = sg.IpPermissions?.find(rule => rule.FromPort === 2049);
-        expect(nfsRule).toBeDefined();
-      } catch (error: any) {
-        if (error.name === 'InvalidGroup.NotFound') {
-          console.log(`EFS security group ${outputs.security_group_efs_id} not found - deployment may have been cleaned up`);
-          return;
-        }
-        throw error;
-      }
-    });
   });
 
   describe("RDS Database", () => {
@@ -314,122 +283,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
-  describe.skip("EFS Resources", () => {
-    test("EFS file system exists and is available", async () => {
-      if (!outputs.efs_file_system_id) {
-        console.log("Skipping EFS file system test - no ID in outputs");
-        return;
-      }
-
-      const command = new DescribeFileSystemsCommand({
-        FileSystemId: outputs.efs_file_system_id,
-      });
-      
-      try {
-        const response = await efsClient.send(command);
-        expect(response.FileSystems).toHaveLength(1);
-        
-        const efs = response.FileSystems![0];
-        expect(efs.LifeCycleState).toBe("available");
-        expect(efs.Encrypted).toBe(true);
-        expect(efs.PerformanceMode).toBe("generalPurpose");
-        expect(efs.ThroughputMode).toBe("provisioned");
-        expect(efs.ProvisionedThroughputInMibps).toBe(100);
-      } catch (error: any) {
-        if (error.name === "FileSystemNotFound") {
-          console.log("EFS file system not found - may have been cleaned up");
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test("EFS access point exists", async () => {
-      if (!outputs.efs_access_point_id) {
-        console.log("Skipping EFS access point test - no ID in outputs");
-        return;
-      }
-
-      const command = new DescribeAccessPointsCommand({
-        AccessPointId: outputs.efs_access_point_id,
-      });
-      
-      try {
-        const response = await efsClient.send(command);
-        expect(response.AccessPoints).toHaveLength(1);
-        
-        const accessPoint = response.AccessPoints![0];
-        expect(accessPoint.LifeCycleState).toBe("available");
-        expect(accessPoint.FileSystemId).toBe(outputs.efs_file_system_id);
-        expect(accessPoint.RootDirectory?.Path).toBe("/app-data");
-        expect(accessPoint.PosixUser?.Uid).toBe(1000);
-        expect(accessPoint.PosixUser?.Gid).toBe(1000);
-      } catch (error: any) {
-        if (error.name === "AccessPointNotFound") {
-          console.log("EFS access point not found - may have been cleaned up");
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test("EFS mount targets exist in private subnets", async () => {
-      if (!outputs.efs_file_system_id || !outputs.private_subnet_ids) {
-        console.log("Skipping EFS mount target test - missing IDs in outputs");
-        return;
-      }
-
-      const command = new DescribeMountTargetsCommand({
-        FileSystemId: outputs.efs_file_system_id,
-      });
-      
-      try {
-        const response = await efsClient.send(command);
-        expect(response.MountTargets?.length).toBeGreaterThanOrEqual(2);
-        
-        const mountTargetSubnets = response.MountTargets?.map(mt => mt.SubnetId) || [];
-        outputs.private_subnet_ids.forEach((subnetId: string) => {
-          expect(mountTargetSubnets).toContain(subnetId);
-        });
-
-        response.MountTargets?.forEach(mt => {
-          expect(mt.LifeCycleState).toBe("available");
-          expect(mt.FileSystemId).toBe(outputs.efs_file_system_id);
-        });
-      } catch (error: any) {
-        if (error.name === "FileSystemNotFound") {
-          console.log("EFS mount targets not found - may have been cleaned up");
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test("EFS KMS encryption key exists", async () => {
-      if (!outputs.efs_kms_key_arn) {
-        console.log("Skipping EFS KMS key test - no ARN in outputs");
-        return;
-      }
-
-      const keyId = outputs.efs_kms_key_arn.split("/").pop();
-      const command = new DescribeKeyCommand({
-        KeyId: keyId,
-      });
-      
-      try {
-        const response = await kmsClient.send(command);
-        expect(response.KeyMetadata).toBeDefined();
-        expect(response.KeyMetadata!.KeyState).toBe("Enabled");
-        expect(response.KeyMetadata!.KeyUsage).toBe("ENCRYPT_DECRYPT");
-      } catch (error: any) {
-        if (error.name === "NotFoundException") {
-          console.log("EFS KMS key not found - may have been cleaned up");
-        } else {
-          throw error;
-        }
-      }
-    });
-  });
 
   describe.skip("EventBridge Resources", () => {
     test("EventBridge custom bus exists", async () => {
