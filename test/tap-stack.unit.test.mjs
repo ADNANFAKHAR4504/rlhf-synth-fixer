@@ -247,7 +247,7 @@ describe('InfrastructureStack', () => {
       // Verify it has the expected properties
       const paramGroup = Object.values(paramGroups)[0];
       expect(paramGroup.Properties.Description).toContain('PostgreSQL');
-      expect(paramGroup.Properties.Family).toBe('postgres15');
+      expect(paramGroup.Properties.Family).toBe('postgres16');
     });
 
     test('should create database secret', () => {
