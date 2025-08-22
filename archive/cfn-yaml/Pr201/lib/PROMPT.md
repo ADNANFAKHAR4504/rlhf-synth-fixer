@@ -18,7 +18,7 @@ Attach this policy to a specific IAM user.
 
 ### Least Privilege Enforcement
 
-Ensure that all permissions granted (roles and policies) follow the principle of least privilege—only the necessary actions and resources should be specified.
+Ensure that all permissions granted (roles and policies) follow the principle of least privilegeonly the necessary actions and resources should be specified.
 
 ### YAML Format Requirement
 

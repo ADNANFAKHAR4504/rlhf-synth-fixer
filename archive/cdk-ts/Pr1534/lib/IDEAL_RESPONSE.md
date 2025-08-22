@@ -1,4 +1,5 @@
-```
+```typescript
+// tap-stack.ts
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as backup from 'aws-cdk-lib/aws-backup';

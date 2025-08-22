@@ -1,3 +1,34 @@
+# Terraform Infrastructure Code
+
+## provider.tf
+
+```hcl
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+
+```
+
+## tap_stack.tf
+
+```hcl
 # ./lib/tap_stack.tf
 # Complete Terraform configuration for a secure web application infrastructure in AWS
 # This file provisions VPC, compute, database, storage, and auditing resources
@@ -731,4 +762,6 @@ output "web_security_group_id" {
 output "database_security_group_id" {
   description = "ID of the database security group"
   value       = aws_security_group.rds.id
-}Insert here the ideal response
+}
+
+```

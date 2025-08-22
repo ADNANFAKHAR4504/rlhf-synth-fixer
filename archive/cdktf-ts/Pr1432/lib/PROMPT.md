@@ -10,7 +10,7 @@ Main goals:
 
 - One EC2 instance per region (t2.micro, Amazon Linux 2 AMI)
 
-- IAM roles so EC2 → S3 read/write access in same region
+- IAM roles so EC2 to S3 read/write access in same region
 
 - Security groups only allow inbound HTTP + SSH from 203.0.113.0/24
 

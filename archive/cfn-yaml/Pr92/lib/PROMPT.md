@@ -36,7 +36,7 @@ Each region has scoped roles using dynamic conditions (aws:RequestedRegion, aws:
 
 No wildcard "*" permissions allowed
 
-No IAM user creation — only roles and assumed identities
+No IAM user creation only roles and assumed identities
 
 Set up Route53 latency-based failover routing:
 
@@ -68,7 +68,7 @@ Use Conditionals, Mappings, and CrossRegion References where needed (CloudFormat
 
 File must be directly deployable via aws cloudformation deploy in us-east-1, with StackSets to replicate
 
-Bonus Edge Cases (to break models): Handle asynchronous dependency where CloudFront origin points to a regional ALB whose DNS isn’t known until deployment
+Bonus Edge Cases (to break models): Handle asynchronous dependency where CloudFront origin points to a regional ALB whose DNS isnt known until deployment
 
 Configure ALB listener rules to inspect headers from CloudFront and route requests to region-specific target groups
 

@@ -2,7 +2,7 @@ Here's a prompt designed to align with Claude's Sonnet best practices, providing
 
 ---
 
-## 📝 Serverless Web Application Deployment on AWS
+## Serverless Web Application Deployment on AWS
 
 ---
 

@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292053",
+  "team": "1",
+  "startedAt": "2025-08-18T17:14:26.587Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 3,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "IAM",
+    "EventBridge",
+    "Auto Scaling",
+    "NAT Gateway",
+    "Internet Gateway",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}
