@@ -531,7 +531,7 @@ Resources:
             Action:
               - iam:ChangePassword
               - iam:GetUser
-            Resource: !Sub 'arn:aws:iam::*:user/${aws:username}'
+            Resource: !Sub 'arn:aws:iam::*:user/${!aws:username}'
           - Sid: AllowManageOwnMFA
             Effect: Allow
             Action:
@@ -541,8 +541,8 @@ Resources:
               - iam:EnableMFADevice
               - iam:ResyncMFADevice
             Resource:
-              - !Sub 'arn:aws:iam::*:mfa/${aws:username}'
-              - !Sub 'arn:aws:iam::*:user/${aws:username}'
+              - !Sub 'arn:aws:iam::*:mfa/${!aws:username}'
+              - !Sub 'arn:aws:iam::*:user/${!aws:username}'
           - Sid: DenyAllExceptUnlessSignedInWithMFA
             Effect: Deny
             NotAction:
