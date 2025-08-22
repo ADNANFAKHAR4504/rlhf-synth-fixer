@@ -1,53 +1,52 @@
-Create a complete CloudFormation YAML template for a serverless infrastructure that includes the following components:
+I need a CloudFormation template for a serverless data processing system. This is for a production environment so it needs to be robust and secure.
 
-**Requirements:**
+Main components I need:
+- Lambda function to handle incoming HTTP requests and store data in DynamoDB
+- API Gateway to expose HTTP endpoints
+- DynamoDB table with encryption and streams
+- Another Lambda function to process DynamoDB stream events
+- Proper IAM roles for security
 
-1. **AWS Lambda Function**
-   - Runtime: Python 3.12 or Node.js 20.x
-   - Process HTTP requests from API Gateway
-   - Environment variables for table name and region
-   - CloudWatch logging permissions
-   - DynamoDB read/write access permissions
-   - Lambda versioning enabled for rollbacks
-   - Enable Lambda response streaming for better performance
+Lambda requirements:
+- Use Python 3.12 runtime
+- 512 MB memory, 30 second timeout
+- Environment variables for table name and region
+- Enable X-Ray tracing
+- Set up versioning and alias for rollback capability
+- Include response streaming support for performance
 
-2. **API Gateway HTTP API**
-   - Trigger the Lambda function
-   - Proper Lambda integration configuration
-   - CORS enabled for web applications
+API Gateway setup:
+- HTTP API (not REST API)  
+- CORS enabled for web client access
+- Integrate with the main Lambda function
+- Handle all HTTP methods on default route
 
-3. **DynamoDB Table**
-   - Store processed request data
-   - KMS encryption at rest using AWS managed key
-   - DynamoDB streams enabled to trigger Lambda on data changes
-   - Point-in-time recovery enabled with custom 7-day retention period
-   - On-demand billing mode for automatic scaling
+DynamoDB configuration:
+- On-demand billing for variable workload
+- KMS encryption using AWS managed key
+- Enable streams with NEW_AND_OLD_IMAGES
+- Point-in-time recovery enabled
+- Set up proper attribute definitions and key schema
 
-4. **IAM Roles and Policies**
-   - Lambda execution role with least privilege permissions
-   - CloudWatch Logs access for Lambda
-   - DynamoDB read/write permissions for Lambda
-   - KMS decrypt permissions for DynamoDB encryption
+Security and access:
+- Lambda execution roles with minimal required permissions
+- DynamoDB read/write access scoped to specific table
+- KMS decrypt permissions for encrypted data
+- CloudWatch logging access
+- X-Ray daemon write access
 
-5. **Configuration Requirements**
-   - Deploy in us-east-1 region
-   - Add Environment=dev and Project=trainr929 tags to all taggable resources
-   - CloudFormation outputs for API Gateway URL, Lambda function ARN, and DynamoDB table name
-   - Lambda environment variables for DynamoDB table name and AWS region
-   - Lambda function versioning with alias pointing to latest version
+Deployment specifications:
+- Target region: us-east-1
+- Tag all resources with Environment=dev and Project=trainr929
+- Include CloudFormation outputs for integration
+- Use EnvironmentSuffix parameter for multi-environment deployments
+- Follow consistent naming convention across resources
 
-**Additional Constraints:**
-1. Use descriptive resource names with consistent naming convention
-2. Include proper dependencies between resources using DependsOn where needed
-3. Set appropriate timeout values for Lambda function (30 seconds)
-4. Configure DynamoDB table with appropriate read/write capacity if needed
-5. Ensure all resources are properly tagged
-6. Use AWS managed KMS key for DynamoDB encryption
-7. Enable X-Ray tracing for Lambda function
-8. Set Lambda memory size to 512 MB
-9. Configure proper error handling and retry policies
-10. Use latest CloudFormation features where applicable
-11. Include proper descriptions for all resources
-12. Ensure template passes CloudFormation validation
+Additional requirements:
+- All resources should have deletion policies for cleanup
+- Export values should use stack name for uniqueness
+- Include descriptions for all resources
+- Template must pass CloudFormation validation
+- Set up event source mapping for DynamoDB streams
 
-Generate the infrastructure code as a complete CloudFormation YAML template. Provide the template in a single code block.
+Please generate the complete template in YAML format with all these components configured correctly.
