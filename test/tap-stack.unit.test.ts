@@ -24,11 +24,7 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have Environment parameter', () => {
-      expect(template.Parameters.Environment).toBeDefined();
-      expect(template.Parameters.Environment.Type).toBe('String');
-      expect(template.Parameters.Environment.Default).toBe('dev');
-    });
+  // Environment parameter removed from TapStack.json and TapStack.yml
 
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
@@ -330,9 +326,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly 2 parameters', () => {
+    test('should have exactly 1 parameter', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(1);
     });
 
     test('should have exactly 8 resources', () => {

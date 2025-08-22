@@ -2,11 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Serverless infrastructure with API Gateway, Lambda, and S3",
     "Parameters": {
-        "Environment": {
-            "Type": "String",
-            "Default": "dev",
-            "Description": "Environment name"
-        },
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "dev",

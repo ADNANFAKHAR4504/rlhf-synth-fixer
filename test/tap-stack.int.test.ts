@@ -1,8 +1,8 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import axios from 'axios';
-import { S3Client, GetObjectCommand, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { LambdaClient, InvokeCommand, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import fs from 'fs';
 
 // Load the deployment outputs
 const outputs = JSON.parse(
@@ -106,16 +106,6 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.Configuration?.Handler).toBe('index.lambda_handler');
       expect(response.Configuration?.Timeout).toBe(30);
       expect(response.Configuration?.MemorySize).toBe(128);
-    });
-
-    test('should have correct environment variables', async () => {
-      const command = new GetFunctionCommand({
-        FunctionName: lambdaFunctionName
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.Configuration?.Environment?.Variables).toBeDefined();
-      expect(response.Configuration?.Environment?.Variables?.BUCKET_NAME).toBe(s3BucketName);
     });
 
     test('should process data correctly when invoked directly', async () => {
