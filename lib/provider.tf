@@ -19,9 +19,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy = "terraform"
-      Project   = "iac-aws-nova-model"
-      Environment = var.environment
+      ManagedBy         = "terraform"
+      Project           = var.project_name
+      Environment       = var.environment
       EnvironmentSuffix = var.environment_suffix
     }
   }
@@ -34,9 +34,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy = "terraform"
-      Project   = "iac-aws-nova-model"
-      Environment = var.environment
+      ManagedBy         = "terraform"
+      Project           = var.project_name
+      Environment       = var.environment
       EnvironmentSuffix = var.environment_suffix
     }
   }
@@ -48,9 +48,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy = "terraform"
-      Project   = "iac-aws-nova-model"
-      Environment = var.environment
+      ManagedBy         = "terraform"
+      Project           = var.project_name
+      Environment       = var.environment
       EnvironmentSuffix = var.environment_suffix
     }
   }
@@ -62,9 +62,9 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy = "terraform"
-      Project   = "iac-aws-nova-model"
-      Environment = var.environment
+      ManagedBy         = "terraform"
+      Project           = var.project_name
+      Environment       = var.environment
       EnvironmentSuffix = var.environment_suffix
     }
   }

@@ -61,9 +61,9 @@ import {
 // Interface for CI/CD outputs
 interface InfrastructureOutputs {
   vpc_id?: string;
-  public_subnet_ids?: string[];
-  private_subnet_ids?: string[];
-  database_subnet_ids?: string[];
+  public_subnet_ids?: string[] | string;
+  private_subnet_ids?: string[] | string;
+  database_subnet_ids?: string[] | string;
   security_group_web_id?: string;
   security_group_app_id?: string;
   security_group_database_id?: string;
@@ -94,8 +94,8 @@ interface SecurityReport {
 }
 
 // Test configuration
-const AWS_REGION = process.env.AWS_REGION || 'us-west-2';
-const PROJECT_NAME = 'iac-aws-nova-model';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const PROJECT_NAME = 'cucumber-pineapple';
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
@@ -116,6 +116,7 @@ const snsClient = new SNSClient({ region: AWS_REGION });
 function loadInfrastructureOutputs(): InfrastructureOutputs {
   // Try multiple possible output file locations for different deployment methods
   const possiblePaths = [
+    path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json"),
     path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
     path.resolve(process.cwd(), "terraform-outputs.json"),
     path.resolve(process.cwd(), "lib/terraform.tfstate"),
@@ -237,14 +238,25 @@ describe('IaC AWS Nova Model - Integration Tests', () => {
           Filters: [{ Name: 'vpc-id', Values: [outputs.vpc_id!] }]
         }));
         
+        // Handle both string and array format for subnet IDs
+        const publicIds = Array.isArray(outputs.public_subnet_ids) 
+          ? outputs.public_subnet_ids 
+          : typeof outputs.public_subnet_ids === 'string' ? outputs.public_subnet_ids.split(',') : [];
+        const privateIds = Array.isArray(outputs.private_subnet_ids)
+          ? outputs.private_subnet_ids
+          : typeof outputs.private_subnet_ids === 'string' ? outputs.private_subnet_ids.split(',') : [];
+        const dbIds = Array.isArray(outputs.database_subnet_ids)
+          ? outputs.database_subnet_ids
+          : typeof outputs.database_subnet_ids === 'string' ? outputs.database_subnet_ids.split(',') : [];
+          
         const publicSubnets = subnetResponse.Subnets!.filter(s => 
-          outputs.public_subnet_ids?.includes(s.SubnetId!)
+          publicIds.includes(s.SubnetId!)
         );
         const privateSubnets = subnetResponse.Subnets!.filter(s => 
-          outputs.private_subnet_ids?.includes(s.SubnetId!)
+          privateIds.includes(s.SubnetId!)
         );
         const dbSubnets = subnetResponse.Subnets!.filter(s => 
-          outputs.database_subnet_ids?.includes(s.SubnetId!)
+          dbIds.includes(s.SubnetId!)
         );
         
         console.log(`Found subnets - Public: ${publicSubnets.length}, Private: ${privateSubnets.length}, DB: ${dbSubnets.length}`);
@@ -801,9 +813,13 @@ describe('IaC AWS Nova Model - Integration Tests', () => {
 
     test('should validate security boundaries', async () => {
       // Test that database subnets are truly private
-      if (outputs.database_subnet_ids && outputs.database_subnet_ids.length > 0) {
+      const dbIds = Array.isArray(outputs.database_subnet_ids)
+        ? outputs.database_subnet_ids
+        : typeof outputs.database_subnet_ids === 'string' ? outputs.database_subnet_ids.split(',') : [];
+        
+      if (dbIds.length > 0) {
         const dbSubnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-          SubnetIds: outputs.database_subnet_ids
+          SubnetIds: dbIds
         }));
         
         dbSubnetResponse.Subnets!.forEach(subnet => {

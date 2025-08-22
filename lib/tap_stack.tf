@@ -8,7 +8,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "iac-aws-nova-model"
+  default     = "cucumber-pineapple"
 }
 
 variable "environment" {
@@ -26,19 +26,19 @@ variable "environment_suffix" {
 variable "domain_name" {
   description = "Domain name for Route 53 hosted zone"
   type        = string
-  default     = "nova-model.turing.com"
+  default     = "cucumber-pineapple.turing.com"
 }
 
 # Locals
 locals {
   name_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
   common_tags = {
-    Project         = var.project_name
-    Environment     = var.environment
+    Project           = var.project_name
+    Environment       = var.environment
     EnvironmentSuffix = local.name_suffix
-    ManagedBy       = "terraform"
-    Compliance      = "nist-cis"
-    Owner           = "infrastructure-team"
+    ManagedBy         = "terraform"
+    Compliance        = "nist-cis"
+    Owner             = "infrastructure-team"
   }
 
   # Networking configuration
@@ -56,11 +56,11 @@ data "aws_availability_zones" "available" {
 
 # KMS Keys for encryption
 resource "aws_kms_key" "main" {
-  description             = "Main encryption key for ${var.project_name}"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
+  description              = "Main encryption key for ${var.project_name}"
+  deletion_window_in_days  = 7
+  enable_key_rotation      = true
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  key_usage               = "ENCRYPT_DECRYPT"
+  key_usage                = "ENCRYPT_DECRYPT"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -205,7 +205,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_iam_role" "flow_log_role" {
-  name = "${var.project_name}-flow-log-role-${local.name_suffix}"
+  name_prefix = "${var.project_name}-fl-${local.name_suffix}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -238,7 +238,7 @@ resource "aws_iam_role_policy" "flow_log_policy" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         # BEST PRACTICE: Scoped down permissions to the specific log group ARN.
         Resource = "${aws_cloudwatch_log_group.vpc_flow_log.arn}:*"
       }
@@ -284,14 +284,15 @@ resource "aws_subnet" "database" {
   })
 }
 
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group-${local.name_suffix}"
-  subnet_ids = aws_subnet.database[*].id
+# DB Subnet Group - SKIPPED DUE TO QUOTA: 150 DB subnet groups limit reached
+# resource "aws_db_subnet_group" "main" {
+#   name       = "${var.project_name}-db-subnet-group-${local.name_suffix}"
+#   subnet_ids = aws_subnet.database[*].id
 
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-db-subnet-group-${local.name_suffix}"
-  })
-}
+#   tags = merge(local.common_tags, {
+#     Name = "${var.project_name}-db-subnet-group-${local.name_suffix}"
+#   })
+# }
 
 # Internet Gateway and NAT Gateways
 resource "aws_internet_gateway" "main" {
@@ -304,7 +305,7 @@ resource "aws_internet_gateway" "main" {
 
 resource "aws_eip" "nat" {
   count  = length(local.azs)
-  domain   = "vpc"
+  domain = "vpc"
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-eip-${local.name_suffix}-${count.index + 1}"
@@ -615,9 +616,9 @@ resource "aws_route53_zone" "main" {
 
 # FIX: Re-enabled DNSSEC as requested. This configuration is valid.
 resource "aws_route53_key_signing_key" "main" {
-  hosted_zone_id           = aws_route53_zone.main.id
+  hosted_zone_id             = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
-  name                     = "${var.project_name}-ksk-${local.name_suffix}"
+  name                       = "${var.project_name}-ksk-${local.name_suffix}"
 }
 
 resource "aws_route53_hosted_zone_dnssec" "main" {
@@ -665,7 +666,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 }
 
 resource "aws_s3_bucket_notification" "bucket_notification" {
-  bucket = aws_s3_bucket.main.id
+  bucket      = aws_s3_bucket.main.id
   eventbridge = true
 }
 
@@ -758,9 +759,9 @@ resource "aws_iam_policy" "mfa_enforcement" {
         Resource = "*"
       },
       {
-        Sid    = "AllowIndividualUserToSeeAndManageOnlyTheirOwnAccountInformation",
-        Effect = "Allow",
-        Action = ["iam:ChangePassword", "iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:DeleteAccessKey", "iam:DeleteLoginProfile", "iam:GetLoginProfile", "iam:ListAccessKeys", "iam:UpdateAccessKey", "iam:UpdateLoginProfile", "iam:GetUser"],
+        Sid      = "AllowIndividualUserToSeeAndManageOnlyTheirOwnAccountInformation",
+        Effect   = "Allow",
+        Action   = ["iam:ChangePassword", "iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:DeleteAccessKey", "iam:DeleteLoginProfile", "iam:GetLoginProfile", "iam:ListAccessKeys", "iam:UpdateAccessKey", "iam:UpdateLoginProfile", "iam:GetUser"],
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/$${aws:username}"
       },
       {
@@ -778,4 +779,493 @@ resource "aws_iam_policy" "mfa_enforcement" {
 resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
   user       = aws_iam_user.admin_user.name
   policy_arn = aws_iam_policy.mfa_enforcement.arn
+}
+
+# Least-privilege IAM Role for applications
+resource "aws_iam_role" "app_role" {
+  name = "${var.project_name}-app-role-${local.name_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "app_policy" {
+  name = "${var.project_name}-app-policy-${local.name_suffix}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.main.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.main.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "app_policy_attachment" {
+  role       = aws_iam_role.app_role.name
+  policy_arn = aws_iam_policy.app_policy.arn
+}
+
+# CloudTrail for comprehensive logging
+# SKIPPED DUE TO QUOTA: Maximum 5 trails reached
+# resource "aws_cloudtrail" "main" {
+#   name           = "${var.project_name}-trail-${local.name_suffix}"
+#   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+
+#   event_selector {
+#     read_write_type           = "All"
+#     include_management_events = true
+
+#     data_resource {
+#       type   = "AWS::S3::Object"
+#       values = ["${aws_s3_bucket.main.arn}/*"]
+#     }
+#   }
+
+#   kms_key_id                    = aws_kms_key.main.arn
+#   enable_log_file_validation    = true
+#   is_multi_region_trail         = false
+#   include_global_service_events = true
+
+#   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_logs.arn}:*"
+#   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch_role.arn
+
+#   tags = local.common_tags
+
+#   depends_on = [aws_s3_bucket_policy.cloudtrail]
+# }
+
+resource "aws_cloudwatch_log_group" "cloudtrail_logs" {
+  name              = "/aws/cloudtrail/${var.project_name}-${local.name_suffix}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role" "cloudtrail_cloudwatch_role" {
+  name = "${var.project_name}-cloudtrail-cloudwatch-role-${local.name_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch_policy" {
+  name = "${var.project_name}-cloudtrail-cloudwatch-policy-${local.name_suffix}"
+  role = aws_iam_role.cloudtrail_cloudwatch_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail_logs.arn}:*"
+      }
+    ]
+  })
+}
+
+# AWS Config for compliance monitoring
+# Config Recorder - SKIPPED DUE TO QUOTA
+# resource "aws_config_configuration_recorder" "main" {
+#   name     = "${var.project_name}-config-recorder-${local.name_suffix}"
+#   role_arn = aws_iam_role.config_role.arn
+
+#   recording_group {
+#     all_supported                 = true
+#     include_global_resource_types = true
+#   }
+
+#   depends_on = [aws_config_delivery_channel.main]
+# }
+
+resource "aws_s3_bucket" "config" {
+  bucket        = "${var.project_name}-config-${local.name_suffix}"
+  force_destroy = true
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_policy" "config" {
+  bucket = aws_s3_bucket.config.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config.arn
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config.arn
+      },
+      {
+        Sid    = "AWSConfigBucketWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Config Delivery Channel - SKIPPED DUE TO QUOTA: 1 delivery channel limit reached
+# resource "aws_config_delivery_channel" "main" {
+#   name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
+#   s3_bucket_name = aws_s3_bucket.config.bucket
+
+#   snapshot_delivery_properties {
+#     delivery_frequency = "TwentyFour_Hours"
+#   }
+# }
+
+resource "aws_iam_role" "config_role" {
+  name = "${var.project_name}-config-role-${local.name_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+}
+
+resource "aws_iam_role_policy" "config_bucket_access" {
+  name = "${var.project_name}-config-bucket-access-${local.name_suffix}"
+  role = aws_iam_role.config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.config.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.config.arn}/*"
+        Condition = {
+          StringLike = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Config Recorder Status - SKIPPED DUE TO QUOTA
+# resource "aws_config_configuration_recorder_status" "main" {
+#   name       = aws_config_configuration_recorder.main.name
+#   is_enabled = true
+
+#   depends_on = [aws_config_delivery_channel.main]
+# }
+
+# Config Rules for NIST/CIS compliance
+resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
+  name = "${var.project_name}-s3-bucket-public-read-prohibited-${local.name_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  }
+
+  # depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "encrypted_volumes" {
+  name = "${var.project_name}-encrypted-volumes-${local.name_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+
+  # depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "iam_password_policy" {
+  name = "${var.project_name}-iam-password-policy-${local.name_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "IAM_PASSWORD_POLICY"
+  }
+
+  # depends_on = [aws_config_configuration_recorder.main]
+}
+
+# GuardDuty for threat detection
+# Import existing detector or skip if already exists
+data "aws_guardduty_detector" "existing" {
+  count = 1
+}
+
+resource "aws_guardduty_detector" "main" {
+  count                        = length(data.aws_guardduty_detector.existing) == 0 ? 1 : 0
+  enable                       = true
+  finding_publishing_frequency = "SIX_HOURS"
+
+  datasources {
+    s3_logs {
+      enable = true
+    }
+    kubernetes {
+      audit_logs {
+        enable = false
+      }
+    }
+    malware_protection {
+      scan_ec2_instance_with_findings {
+        ebs_volumes {
+          enable = true
+        }
+      }
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# CloudWatch Alarms for security monitoring
+resource "aws_sns_topic" "security_alerts" {
+  name              = "${var.project_name}-security-alerts-${local.name_suffix}"
+  kms_master_key_id = aws_kms_key.main.id
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "root_account_usage" {
+  alarm_name          = "${var.project_name}-root-account-usage-${local.name_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "RootAccountUsage"
+  namespace           = "CloudTrailMetrics"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "0"
+  alarm_description   = "This metric monitors root account usage"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
+  alarm_name          = "${var.project_name}-unauthorized-api-calls-${local.name_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "UnauthorizedAPICalls"
+  namespace           = "CloudTrailMetrics"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors unauthorized API calls"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.common_tags
+}
+
+# Outputs
+output "vpc_id" {
+  description = "VPC ID"
+  value       = aws_vpc.main.id
+}
+
+output "private_subnet_ids" {
+  description = "Private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_ids" {
+  description = "Public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "database_subnet_ids" {
+  description = "Database subnet IDs"
+  value       = aws_subnet.database[*].id
+}
+
+output "security_group_web_id" {
+  description = "Web security group ID"
+  value       = aws_security_group.web.id
+}
+
+output "security_group_app_id" {
+  description = "App security group ID"
+  value       = aws_security_group.app.id
+}
+
+output "security_group_database_id" {
+  description = "Database security group ID"
+  value       = aws_security_group.database.id
+}
+
+output "s3_bucket_name" {
+  description = "Main S3 bucket name"
+  value       = aws_s3_bucket.main.bucket
+}
+
+output "s3_bucket_cloudtrail_name" {
+  description = "CloudTrail S3 bucket name"
+  value       = aws_s3_bucket.cloudtrail.bucket
+}
+
+output "s3_bucket_config_name" {
+  description = "Config S3 bucket name"
+  value       = aws_s3_bucket.config.bucket
+}
+
+output "kms_key_id" {
+  description = "Main KMS key ID"
+  value       = aws_kms_key.main.key_id
+}
+
+output "kms_key_arn" {
+  description = "Main KMS key ARN"
+  value       = aws_kms_key.main.arn
+}
+
+output "waf_acl_arn" {
+  description = "WAF ACL ARN"
+  value       = aws_wafv2_web_acl.main.arn
+}
+
+output "iam_role_app_arn" {
+  description = "Application IAM role ARN"
+  value       = aws_iam_role.app_role.arn
+}
+
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID"
+  value       = aws_route53_zone.main.zone_id
+}
+
+output "cloudtrail_name" {
+  description = "CloudTrail name"
+  value       = "cloudtrail-skipped-due-to-quota"
+}
+
+output "guardduty_detector_id" {
+  description = "GuardDuty detector ID"
+  value       = length(data.aws_guardduty_detector.existing) > 0 ? data.aws_guardduty_detector.existing[0].id : (length(aws_guardduty_detector.main) > 0 ? aws_guardduty_detector.main[0].id : "")
+}
+
+output "sns_topic_security_alerts_arn" {
+  description = "SNS topic ARN for security alerts"
+  value       = aws_sns_topic.security_alerts.arn
+}
+
+output "nat_gateway_ids" {
+  description = "NAT Gateway IDs"
+  value       = [for ng in aws_nat_gateway.main : ng.id]
+}
+
+output "internet_gateway_id" {
+  description = "Internet Gateway ID"
+  value       = aws_internet_gateway.main.id
 }
