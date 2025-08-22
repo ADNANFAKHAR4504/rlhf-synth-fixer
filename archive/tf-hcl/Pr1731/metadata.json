@@ -26,5 +26,11 @@
     "AWS CloudTrail",
     "AWS EC2",
     "AWS SNS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
