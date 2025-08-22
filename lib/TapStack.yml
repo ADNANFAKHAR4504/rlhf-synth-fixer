@@ -140,7 +140,7 @@ Conditions:
   CreateAccessKeyRotationRole:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
-    !Equals [!Ref ExistingConfigDeliveryChannelName, '']
+    !Equals [!Ref ExistingConfigDeliveryChannelName, 'use-existing']
 
 Resources:
   # KMS Key for Encryption with cross-account access
