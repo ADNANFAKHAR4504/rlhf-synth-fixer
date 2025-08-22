@@ -31,5 +31,5 @@ Deploy a secure, scalable, and production-ready web application infrastructure o
    - The infrastructure must be **easily scalable** and manage resource access through **IAM roles**.
 
 ## Deliverables
-Give all the infra in a single file tap_stakck.tf.
+Give all the infra in a single file tap_stack.tf.
 Remember to assign a prefix 274789 to all the resources so that it will be unique
