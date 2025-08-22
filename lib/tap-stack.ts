@@ -344,5 +344,12 @@ export class TapStack extends cdk.Stack {
       resourceArn: api.deploymentStage.stageArn,
       webAclArn: webAcl.attrArn,
     });
+
+    // Output API endpoint for integration tests
+    new cdk.CfnOutput(this, 'TapApiEndpoint', {
+      value: api.url,
+      description: 'TAP API Gateway endpoint URL',
+      exportName: `TapApiEndpoint${props?.environmentSuffix || ''}`,
+    });
   }
 }
