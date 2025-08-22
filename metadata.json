@@ -1,10 +1,14 @@
 {
   "task_id": "trainr148-new",
-  "team": "iac-test-automations",
+  "team": "synth",
   "startedat": "2025-08-22T16:15:00Z",
-  "platform": "pulumi+js",
+  "startedAt": "2025-08-22T16:15:00Z",
+  "platform": "pulumi",
+  "language": "js",
+  "po_id": "trainr148-new",
   "region": "us-east-1",
   "difficulty": "hard",
+  "complexity": "hard",
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "Web Application Deployment",
