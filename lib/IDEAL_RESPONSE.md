@@ -278,8 +278,15 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MultiAZ: true
-      MasterUsername: !Sub '{{resolve:secretsmanager:${MyRDSSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MyRDSSecret}::password}}'
+      MasterUsername:
+        !Sub
+          - '{{resolve:secretsmanager:${SecretArn}::username}}'
+          - { SecretArn: !Ref MyRDSSecret }
+
+      MasterUserPassword:
+        !Sub
+          - '{{resolve:secretsmanager:${SecretArn}::password}}'
+          - { SecretArn: !Ref MyRDSSecret }
       AllocatedStorage: 20
       DBInstanceIdentifier: WebAppDB
       VPCSecurityGroups:

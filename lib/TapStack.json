@@ -466,10 +466,24 @@
                 "EngineVersion": "8.0.43",
                 "MultiAZ": true,
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${MyRDSSecret}::username}}"
+                    "Fn::Sub": [
+                        "{{resolve:secretsmanager:${SecretArn}::username}}",
+                        {
+                            "SecretArn": {
+                                "Ref": "MyRDSSecret"
+                            }
+                        }
+                    ]
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${MyRDSSecret}::password}}"
+                    "Fn::Sub": [
+                        "{{resolve:secretsmanager:${SecretArn}::password}}",
+                        {
+                            "SecretArn": {
+                                "Ref": "MyRDSSecret"
+                            }
+                        }
+                    ]
                 },
                 "AllocatedStorage": 20,
                 "DBInstanceIdentifier": "WebAppDB",
