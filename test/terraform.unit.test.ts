@@ -220,7 +220,7 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("ASG has health checks", () => {
-      expect(stackContent).toMatch(/health_check_grace_period\s*=\s*300/);
+      expect(stackContent).toMatch(/health_check_grace_period\s*=\s*600/);
       expect(stackContent).toMatch(/health_check_type\s*=\s*"ELB"/);
     });
 
