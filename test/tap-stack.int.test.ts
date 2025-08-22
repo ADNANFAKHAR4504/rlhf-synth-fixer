@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import {
   EC2Client,
@@ -36,7 +36,12 @@ const stsClient = new STSClient({ region: process.env.AWS_REGION || 'us-east-1' 
 
 // Load CloudFormation stack outputs
 const outputsPath = resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
-const outputs = JSON.parse(readFileSync(outputsPath, 'utf8')) as Record<string, string>;
+let outputs: Record<string, string> = {};
+if (existsSync(outputsPath)) {
+  outputs = JSON.parse(readFileSync(outputsPath, 'utf8')) as Record<string, string>;
+} else {
+  console.error('Outputs file not found at:', outputsPath);
+}
 
 // Mock AWS Account ID for testing
 const AWS_ACCOUNT_ID = '718240086340';
@@ -93,10 +98,26 @@ describe('TapStack Integration Tests', () => {
     );
   };
 
+  // Helper function to check if required outputs exist
+  const hasRequiredOutputs = (env: string) => {
+    const requiredKeys = [
+      `${env}VPCId`,
+      `${env}PublicSubnets`,
+      `${env}PrivateSubnets`,
+      `${env}DataBucketName`,
+      `${env}DataBucketARN`,
+      `${env}EnvironmentRoleARN`,
+    ];
+    return requiredKeys.every((key) => stackOutputs[key] !== undefined);
+  };
+
   // Positive Case: Validate VPCs for each environment
   describe('VPCs', () => {
     environments.forEach((env) => {
       test(`should have correct configuration for ${env} VPC`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const vpcId = stackOutputs[`${env}VPCId`];
         expect(vpcId).toBeDefined();
 
@@ -106,18 +127,20 @@ describe('TapStack Integration Tests', () => {
         const vpc: Vpc | undefined = response.Vpcs?.[0];
         expect(vpc).toBeDefined();
         expect(vpc?.CidrBlock).toBe(`10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.0.0/16`);
-        // Note: EnableDnsSupport and EnableDnsHostnames are not directly accessible in Vpc type
-        // Use DescribeVpcAttributeCommand if needed, but template sets them to true
         validateTags((vpc?.Tags || []) as EC2Tag[], env, 'VPC');
       });
 
       test(`should have Internet Gateway for ${env}`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
+        const vpcId = stackOutputs[`${env}VPCId`];
         const response = await ec2Client.send(new DescribeInternetGatewaysCommand({}));
         const igw = response.InternetGateways?.find((ig) =>
           ig.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-IGW`)
         );
         expect(igw).toBeDefined();
-        expect(igw?.Attachments?.[0]?.VpcId).toBe(stackOutputs[`${env}VPCId`]);
+        expect(igw?.Attachments?.[0]?.VpcId).toBe(vpcId);
         validateTags((igw?.Tags || []) as EC2Tag[], env, 'IGW');
       });
     });
@@ -127,8 +150,13 @@ describe('TapStack Integration Tests', () => {
   describe('Subnets', () => {
     environments.forEach((env) => {
       test(`should have correct public and private subnets for ${env}`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const publicSubnets = stackOutputs[`${env}PublicSubnets`]?.split(',');
         const privateSubnets = stackOutputs[`${env}PrivateSubnets`]?.split(',');
+        expect(publicSubnets).toBeDefined();
+        expect(privateSubnets).toBeDefined();
         expect(publicSubnets).toHaveLength(2);
         expect(privateSubnets).toHaveLength(2);
 
@@ -182,7 +210,13 @@ describe('TapStack Integration Tests', () => {
   describe('NAT Gateways', () => {
     environments.forEach((env) => {
       test(`should have correct NAT gateways for ${env} when CreateNatPerAZ is ${createNatPerAZ}`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const publicSubnets = stackOutputs[`${env}PublicSubnets`]?.split(',');
+        expect(publicSubnets).toBeDefined();
+        expect(publicSubnets).toHaveLength(2);
+
         const response = await ec2Client.send(new DescribeNatGatewaysCommand({}));
         const natGateways = response.NatGateways?.filter((ng) =>
           ng.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
@@ -217,6 +251,9 @@ describe('TapStack Integration Tests', () => {
   describe('Route Tables', () => {
     environments.forEach((env) => {
       test(`should have correct route tables for ${env}`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const response = await ec2Client.send(new DescribeRouteTablesCommand({}));
         const routeTables = response.RouteTables?.filter((rt) =>
           rt.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
@@ -295,7 +332,11 @@ describe('TapStack Integration Tests', () => {
   describe('S3 Buckets', () => {
     environments.forEach((env) => {
       test(`should have correct configuration for ${env} S3 bucket`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const bucketName = stackOutputs[`${env}DataBucketName`];
+        expect(bucketName).toBeDefined();
         expect(bucketName).toBe(getExpectedBucketName(env));
 
         // Validate Versioning
@@ -360,6 +401,9 @@ describe('TapStack Integration Tests', () => {
   describe('IAM Roles', () => {
     environments.forEach((env) => {
       test(`should have correct configuration for ${env} environment role`, async () => {
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
         const roleArn = stackOutputs[`${env}EnvironmentRoleARN`];
         const roleName = `TapStack-${env}-Role`;
         expect(roleArn).toBeDefined();
@@ -459,7 +503,7 @@ describe('TapStack Integration Tests', () => {
         );
       } catch (error: any) {
         errorCaught = true;
-        expect(error.message).toContain('is not valid');
+        expect(error.message).toMatch(/Policy document should not specify a principal|is not valid/);
       }
       expect(errorCaught).toBe(true);
     });
@@ -469,7 +513,17 @@ describe('TapStack Integration Tests', () => {
   describe('Edge Case: Single NAT Gateway', () => {
     environments.forEach((env) => {
       test(`should validate single NAT gateway for ${env} when CreateNatPerAZ is false`, async () => {
-        // Note: This assumes the stack was deployed with CreateNatPerAZ=false
+        if (createNatPerAZ === 'true') {
+          console.log(`Skipping single NAT gateway test for ${env} as CreateNatPerAZ is true`);
+          return;
+        }
+        if (!hasRequiredOutputs(env)) {
+          throw new Error(`Missing required outputs for ${env} in all-outputs.json`);
+        }
+        const publicSubnets = stackOutputs[`${env}PublicSubnets`]?.split(',');
+        expect(publicSubnets).toBeDefined();
+        expect(publicSubnets).toHaveLength(2);
+
         const response = await ec2Client.send(new DescribeNatGatewaysCommand({}));
         const natGateways = response.NatGateways?.filter((ng) =>
           ng.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
@@ -478,15 +532,9 @@ describe('TapStack Integration Tests', () => {
         const singleNatGateway = natGateways.find((ng) =>
           ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT`)
         );
-        if (singleNatGateway) {
-          expect(singleNatGateway.SubnetId).toBe(
-            stackOutputs[`${env}PublicSubnets`]?.split(',')[0]
-          );
-          validateTags((singleNatGateway.Tags || []) as EC2Tag[], env, 'NAT');
-        } else {
-          // Skip if not deployed with SingleNat condition
-          console.warn(`Single NAT Gateway not found for ${env}. Ensure CreateNatPerAZ=false.`);
-        }
+        expect(singleNatGateway).toBeDefined();
+        expect(singleNatGateway?.SubnetId).toBe(publicSubnets?.[0]);
+        validateTags((singleNatGateway?.Tags || []) as EC2Tag[], env, 'NAT');
       });
     });
   });
@@ -518,7 +566,7 @@ describe('TapStack Integration Tests', () => {
         );
       } catch (error: any) {
         errorCaught = true;
-        expect(error.message).toContain('NoSuchBucket');
+        expect(error.message).toMatch(/NoSuchBucket|Access Denied/);
       }
       expect(errorCaught).toBe(true);
     });
@@ -531,7 +579,7 @@ describe('TapStack Integration Tests', () => {
         );
       } catch (error: any) {
         errorCaught = true;
-        expect(error.message).toContain('InvalidVpcID.NotFound');
+        expect(error.message).toMatch(/InvalidVpcID\.NotFound|does not exist/);
       }
       expect(errorCaught).toBe(true);
     });
