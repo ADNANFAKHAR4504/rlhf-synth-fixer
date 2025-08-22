@@ -1,3 +1,6 @@
+The errors indicate that resources from a previous deployment still exist. I'll fix this by adding random suffixes to resource names and implementing proper resource management. Here's the corrected Terraform configuration:
+
+```hcl
 # terraform/main.tf
 # Terraform configuration for secure, multi-region AWS infrastructure
 # Compliant with enterprise security requirements
@@ -8,6 +11,14 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
     }
   }
 }
@@ -64,6 +75,11 @@ variable "domain_name" {
   default     = "example.com"
 }
 
+# Random suffix for unique resource names
+resource "random_id" "deployment" {
+  byte_length = 4
+}
+
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
@@ -81,7 +97,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "${var.environment_tag}-vpc"
+    Name        = "${var.environment_tag}-vpc-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -91,7 +107,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "${var.environment_tag}-igw"
+    Name        = "${var.environment_tag}-igw-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -106,7 +122,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = false # Requirement 1: No public IP by default
 
   tags = {
-    Name        = "${var.environment_tag}-public-subnet-${count.index + 1}"
+    Name        = "${var.environment_tag}-public-subnet-${count.index + 1}-${random_id.deployment.hex}"
     Environment = var.environment_tag
     Type        = "Public"
   }
@@ -121,7 +137,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "${var.environment_tag}-private-subnet-${count.index + 1}"
+    Name        = "${var.environment_tag}-private-subnet-${count.index + 1}-${random_id.deployment.hex}"
     Environment = var.environment_tag
     Type        = "Private"
   }
@@ -136,7 +152,7 @@ resource "aws_subnet" "database" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "${var.environment_tag}-db-subnet-${count.index + 1}"
+    Name        = "${var.environment_tag}-db-subnet-${count.index + 1}-${random_id.deployment.hex}"
     Environment = var.environment_tag
     Type        = "Database"
   }
@@ -147,7 +163,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name        = "${var.environment_tag}-nat-eip"
+    Name        = "${var.environment_tag}-nat-eip-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 
@@ -159,7 +175,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name        = "${var.environment_tag}-nat-gateway"
+    Name        = "${var.environment_tag}-nat-gateway-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 
@@ -176,7 +192,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-public-rt"
+    Name        = "${var.environment_tag}-public-rt-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -190,7 +206,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-private-rt"
+    Name        = "${var.environment_tag}-private-rt-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -213,7 +229,7 @@ resource "aws_route_table_association" "private" {
 # Security Groups
 # ALB Security Group - Requirement 7: Enforce SSL/TLS
 resource "aws_security_group" "alb" {
-  name_prefix = "${var.environment_tag}-alb-"
+  name_prefix = "${var.environment_tag}-alb-${random_id.deployment.hex}-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -240,14 +256,14 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-alb-sg"
+    Name        = "${var.environment_tag}-alb-sg-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # Application Security Group - Requirement 8: No SSH from 0.0.0.0/0
 resource "aws_security_group" "app" {
-  name_prefix = "${var.environment_tag}-app-"
+  name_prefix = "${var.environment_tag}-app-${random_id.deployment.hex}-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -275,14 +291,14 @@ resource "aws_security_group" "app" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-app-sg"
+    Name        = "${var.environment_tag}-app-sg-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # Database Security Group
 resource "aws_security_group" "db" {
-  name_prefix = "${var.environment_tag}-db-"
+  name_prefix = "${var.environment_tag}-db-${random_id.deployment.hex}-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -294,7 +310,7 @@ resource "aws_security_group" "db" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-db-sg"
+    Name        = "${var.environment_tag}-db-sg-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -302,12 +318,12 @@ resource "aws_security_group" "db" {
 # S3 Buckets
 # Random suffix for unique bucket names
 resource "random_id" "bucket_suffix" {
-  byte_length = 4
+  byte_length = 8
 }
 
 # Dedicated logging bucket for access logs - Requirement 6
 resource "aws_s3_bucket" "access_logs" {
-  bucket = "${lower(var.environment_tag)}-access-logs-${random_id.bucket_suffix.hex}"
+  bucket = "${lower(replace(var.environment_tag, "-", ""))}-access-logs-${random_id.bucket_suffix.hex}"
 
   tags = {
     Name        = "${var.environment_tag}-access-logs-bucket"
@@ -318,7 +334,7 @@ resource "aws_s3_bucket" "access_logs" {
 
 # Main application bucket
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${lower(var.environment_tag)}-app-data-${random_id.bucket_suffix.hex}"
+  bucket = "${lower(replace(var.environment_tag, "-", ""))}-app-data-${random_id.bucket_suffix.hex}"
 
   tags = {
     Name        = "${var.environment_tag}-app-data-bucket"
@@ -391,9 +407,9 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 }
 
 # IAM Roles - Requirement 3 & 4: Use IAM roles with least privilege
-# EC2 Instance Role
+# EC2 Instance Role (FIXED: Added random suffix)
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.environment_tag}-ec2-role"
+  name = "${var.environment_tag}-ec2-role-${random_id.deployment.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -409,25 +425,25 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = {
-    Name        = "${var.environment_tag}-ec2-role"
+    Name        = "${var.environment_tag}-ec2-role-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # EC2 Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment_tag}-ec2-profile"
+  name = "${var.environment_tag}-ec2-profile-${random_id.deployment.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = {
-    Name        = "${var.environment_tag}-ec2-profile"
+    Name        = "${var.environment_tag}-ec2-profile-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # S3 Access Policy for EC2 (least privilege)
 resource "aws_iam_role_policy" "ec2_s3_policy" {
-  name = "${var.environment_tag}-ec2-s3-policy"
+  name = "${var.environment_tag}-ec2-s3-policy-${random_id.deployment.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -453,20 +469,20 @@ resource "aws_iam_role_policy" "ec2_s3_policy" {
   })
 }
 
-# RDS Subnet Group
+# RDS Subnet Group (FIXED: Added random suffix)
 resource "aws_db_subnet_group" "main" {
-  name       = "${lower(var.environment_tag)}-db-subnet-group"
+  name       = "${lower(var.environment_tag)}-db-subnet-group-${random_id.deployment.hex}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = {
-    Name        = "${var.environment_tag}-db-subnet-group"
+    Name        = "${var.environment_tag}-db-subnet-group-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${lower(var.environment_tag)}-database"
+  identifier = "${lower(var.environment_tag)}-database-${random_id.deployment.hex}"
 
   allocated_storage     = 20
   max_allocated_storage = 100
@@ -492,12 +508,12 @@ resource "aws_db_instance" "main" {
   deletion_protection = false
 
   tags = {
-    Name        = "${var.environment_tag}-database"
+    Name        = "${var.environment_tag}-database-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
-# Self-signed certificate for ALB (FIXED: No DNS validation timeout)
+# Self-signed certificate for ALB
 resource "tls_private_key" "main" {
   algorithm = "RSA"
   rsa_bits  = 2048
@@ -525,7 +541,7 @@ resource "aws_acm_certificate" "main" {
   certificate_body = tls_self_signed_cert.main.cert_pem
 
   tags = {
-    Name        = "${var.environment_tag}-ssl-cert"
+    Name        = "${var.environment_tag}-ssl-cert-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 
@@ -534,7 +550,7 @@ resource "aws_acm_certificate" "main" {
   }
 }
 
-# S3 Bucket Policy for ALB Access Logs (FIXED: Use data source for ELB service account)
+# S3 Bucket Policy for ALB Access Logs
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.access_logs.id
 
@@ -574,9 +590,9 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   })
 }
 
-# Application Load Balancer - Requirement 7: Enforce SSL/TLS
+# Application Load Balancer (FIXED: Added random suffix)
 resource "aws_lb" "main" {
-  name               = "${lower(var.environment_tag)}-alb"
+  name               = "${lower(var.environment_tag)}-alb-${random_id.deployment.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -591,16 +607,16 @@ resource "aws_lb" "main" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-alb"
+    Name        = "${var.environment_tag}-alb-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 
   depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
-# ALB Target Group
+# ALB Target Group (FIXED: Added random suffix)
 resource "aws_lb_target_group" "main" {
-  name     = "${lower(var.environment_tag)}-tg"
+  name     = "${lower(var.environment_tag)}-tg-${random_id.deployment.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -618,7 +634,7 @@ resource "aws_lb_target_group" "main" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-target-group"
+    Name        = "${var.environment_tag}-target-group-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -637,7 +653,7 @@ resource "aws_lb_listener" "https" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-https-listener"
+    Name        = "${var.environment_tag}-https-listener-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
@@ -659,14 +675,14 @@ resource "aws_lb_listener" "http" {
   }
 
   tags = {
-    Name        = "${var.environment_tag}-http-listener"
+    Name        = "${var.environment_tag}-http-listener-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
-# Launch Template for Auto Scaling (FIXED: Security groups in network interface)
+# Launch Template for Auto Scaling
 resource "aws_launch_template" "main" {
-  name_prefix   = "${var.environment_tag}-lt-"
+  name_prefix   = "${var.environment_tag}-lt-${random_id.deployment.hex}-"
   image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI (update for your region)
   instance_type = "t3.micro"
 
@@ -674,7 +690,6 @@ resource "aws_launch_template" "main" {
     name = aws_iam_instance_profile.ec2_profile.name
   }
 
-  # FIXED: Security groups must be part of network interface, not separate
   network_interfaces {
     associate_public_ip_address = false # Requirement 1: No public IP by default
     security_groups             = [aws_security_group.app.id]
@@ -689,26 +704,27 @@ resource "aws_launch_template" "main" {
               systemctl start httpd
               systemctl enable httpd
               echo "<h1>Secure Application - ${var.environment_tag}</h1>" > /var/www/html/index.html
+              echo "<p>Deployment ID: ${random_id.deployment.hex}</p>" >> /var/www/html/index.html
               EOF
   )
 
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name        = "${var.environment_tag}-instance"
+      Name        = "${var.environment_tag}-instance-${random_id.deployment.hex}"
       Environment = var.environment_tag
     }
   }
 
   tags = {
-    Name        = "${var.environment_tag}-launch-template"
+    Name        = "${var.environment_tag}-launch-template-${random_id.deployment.hex}"
     Environment = var.environment_tag
   }
 }
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment_tag}-asg"
+  name                = "${var.environment_tag}-asg-${random_id.deployment.hex}"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
@@ -724,7 +740,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${var.environment_tag}-asg-instance"
+    value               = "${var.environment_tag}-asg-instance-${random_id.deployment.hex}"
     propagate_at_launch = true
   }
 
@@ -736,6 +752,11 @@ resource "aws_autoscaling_group" "main" {
 }
 
 # Outputs
+output "deployment_id" {
+  description = "Unique deployment identifier"
+  value       = random_id.deployment.hex
+}
+
 output "vpc_id" {
   description = "ID of the VPC"
   value       = aws_vpc.main.id
@@ -766,3 +787,75 @@ output "s3_logs_bucket" {
   description = "Name of the access logs S3 bucket"
   value       = aws_s3_bucket.access_logs.id
 }
+
+output "resource_summary" {
+  description = "Summary of created resources"
+  value = {
+    vpc_id           = aws_vpc.main.id
+    alb_name         = aws_lb.main.name
+    target_group     = aws_lb_target_group.main.name
+    iam_role         = aws_iam_role.ec2_role.name
+    db_subnet_group  = aws_db_subnet_group.main.name
+    rds_identifier   = aws_db_instance.main.identifier
+  }
+}
+```
+
+## Key Fixes Applied:
+
+### 1. **Resource Name Conflicts Fixed**
+- **Added `random_id.deployment`**: Creates unique 4-byte hex suffix for all resource names
+- **IAM Role**: `Prod-SecureApp-ec2-role-${random_id.deployment.hex}`
+- **DB Subnet Group**: `prod-secureapp-db-subnet-group-${random_id.deployment.hex}`
+- **Load Balancer**: `prod-secureapp-alb-${random_id.deployment.hex}`
+- **Target Group**: `prod-secureapp-tg-${random_id.deployment.hex}`
+
+### 2. **Enhanced S3 Bucket Naming**
+- **Longer random suffix**: Using 8-byte hex for S3 buckets to ensure global uniqueness
+- **Character cleanup**: Removed hyphens from environment tag for bucket names
+
+### 3. **Provider Requirements**
+- **Added required providers**: `random` and `tls` providers explicitly declared
+
+### 4. **Improved Resource Management**
+- **Consistent naming**: All resources now use the same deployment ID
+- **Better tracking**: Added deployment ID output for reference
+
+## Clean Deployment Process:
+
+If you still have existing resources, you have two options:
+
+### Option 1: Clean Slate (Recommended)
+```bash
+# Destroy existing resources first
+terraform destroy
+
+# Then deploy fresh
+terraform init
+terraform plan
+terraform apply
+```
+
+### Option 2: Import Existing Resources
+```bash
+# Import existing resources into state (if you want to keep them)
+terraform import aws_iam_role.ec2_role Prod-SecureApp-ec2-role
+terraform import aws_db_subnet_group.main prod-secureapp-db-subnet-group
+# ... etc for other resources
+```
+
+## Compliance Verification:
+
+**All 9 security requirements remain 100% compliant**:
+
+1.  No public IP by default
+2.  Environment-Name tagging format  
+3.  IAM roles for service access
+4.  Least privilege IAM
+5.  S3 AES-256 encryption
+6.  S3 access logging
+7.  ALB SSL/TLS enforcement
+8.  No SSH from 0.0.0.0/0
+9.  S3 versioning enabled
+
+The fixes only address naming conflicts while maintaining all security constraints. Each deployment will now have a unique identifier, preventing resource conflicts.
