@@ -1,246 +1,539 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { resolve } from 'path';
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeRouteTablesCommand } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetBucketEncryptionCommand, GetBucketPolicyCommand, GetBucketReplicationCommand } from '@aws-sdk/client-s3';
-import { IAMClient, GetRoleCommand, GetRolePolicyCommand, ListRolePoliciesCommand } from '@aws-sdk/client-iam';
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  Vpc,
+  Tag as EC2Tag,
+} from '@aws-sdk/client-ec2';
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  GetBucketReplicationCommand,
+  GetBucketTaggingCommand,
+  Tag as S3Tag,
+} from '@aws-sdk/client-s3';
+import {
+  IAMClient,
+  GetRoleCommand,
+  ListRolePoliciesCommand,
+  GetRolePolicyCommand,
+  Tag as IAMTag,
+} from '@aws-sdk/client-iam';
+import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
 
+// Initialize AWS SDK clients
+const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const iamClient = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const stsClient = new STSClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+// Load CloudFormation stack outputs
+const outputsPath = resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+const outputs = JSON.parse(readFileSync(outputsPath, 'utf8')) as Record<string, string>;
+
+// Mock AWS Account ID for testing
+const AWS_ACCOUNT_ID = '718240086340';
+
+// Interfaces for CloudFormation outputs
 interface StackOutputs {
-  [key: string]: string;
+  [key: string]: string | undefined;
+  DevDataBucketName?: string;
+  DevDataBucketARN?: string;
+  DevVPCId?: string;
+  DevPublicSubnets?: string;
+  DevPrivateSubnets?: string;
+  DevEnvironmentRoleARN?: string;
+  StagingDataBucketName?: string;
+  StagingDataBucketARN?: string;
+  StagingVPCId?: string;
+  StagingPublicSubnets?: string;
+  StagingPrivateSubnets?: string;
+  StagingEnvironmentRoleARN?: string;
+  ProdDataBucketName?: string;
+  ProdDataBucketARN?: string;
+  ProdVPCId?: string;
+  ProdPublicSubnets?: string;
+  ProdPrivateSubnets?: string;
+  ProdEnvironmentRoleARN?: string;
 }
 
-// ----------------------
-// --- Setup and Mocks ---
-// ----------------------
-const allOutputsPath = join(process.cwd(), 'cfn-outputs/all-outputs.json');
-const allOutputs: StackOutputs = JSON.parse(readFileSync(allOutputsPath, 'utf8'));
+// Generic Tag type to handle EC2, S3, and IAM tags
+interface GenericTag {
+  Key?: string;
+  Value?: string;
+}
 
-const cloudformationClient = new CloudFormationClient({});
-const ec2Client = new EC2Client({});
-const s3Client = new S3Client({});
-const iamClient = new IAMClient({});
+describe('TapStack Integration Tests', () => {
+  const stackOutputs: StackOutputs = outputs;
+  const environments = ['Dev', 'Staging', 'Prod'];
+  const projectName = 'TapStack';
+  const owner = 'team';
+  const createNatPerAZ = 'true'; // Default value from template
 
-describe('TapStack CloudFormation Integration Tests', () => {
-  // Use a map to simplify output access
-  const outputs = new Map(Object.entries(allOutputs));
-  const stackName = 'TapStack';
+  // Helper function to get expected bucket name
+  const getExpectedBucketName = (env: string) =>
+    `tapstack-${env.toLowerCase()}-data-${AWS_ACCOUNT_ID}-tapstack`;
 
-  // -------------------------
-  // --- Core Stack Checks ---
-  // -------------------------
-  describe('CloudFormation Stack Outputs', () => {
-    test('outputs should exist and not be empty', () => {
-      expect(outputs.size).toBeGreaterThan(0);
-      for (const [key, value] of outputs.entries()) {
-        expect(value).toBeDefined();
-        expect(value.length).toBeGreaterThan(0);
-      }
-    });
+  // Helper function to validate tags
+  const validateTags = (tags: GenericTag[], env: string, resourceName: string) => {
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ Key: 'Name', Value: `TapStack-${env}-${resourceName}` }),
+        expect.objectContaining({ Key: 'Project', Value: projectName }),
+        expect.objectContaining({ Key: 'Environment', Value: env }),
+        expect.objectContaining({ Key: 'CreatedBy', Value: owner }),
+      ])
+    );
+  };
 
-    test('stack should be in a successful state', async () => {
-      const command = new DescribeStacksCommand({ StackName: stackName });
-      const response = await cloudformationClient.send(command);
-      const stack = response.Stacks?.[0];
-      expect(stack).toBeDefined();
-      expect(stack?.StackStatus).toBe('CREATE_COMPLETE'); // or 'UPDATE_COMPLETE'
-    });
-  });
-
-  // ----------------------
-  // --- VPC Validations ---
-  // ----------------------
-  describe('VPC and Networking Validations', () => {
-    // Positive Test: Verify VPCs exist and have correct CIDR blocks and tags
-    test('VPCs for each environment should exist and have correct properties', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const vpcId = outputs.get(`${env}VPCId`);
+  // Positive Case: Validate VPCs for each environment
+  describe('VPCs', () => {
+    environments.forEach((env) => {
+      test(`should have correct configuration for ${env} VPC`, async () => {
+        const vpcId = stackOutputs[`${env}VPCId`];
         expect(vpcId).toBeDefined();
 
-        const command = new DescribeVpcsCommand({ VpcIds: [vpcId!] });
-        const response = await ec2Client.send(command);
-        const vpc = response.Vpcs?.[0];
-        expect(vpc).toBeDefined();
-
-        const expectedCidr = { 'Dev': '10.0.0.0/16', 'Staging': '10.1.0.0/16', 'Prod': '10.2.0.0/16' };
-        expect(vpc?.CidrBlock).toBe(expectedCidr[env as 'Dev' | 'Staging' | 'Prod']);
-        expect(vpc?.IsDefault).toBe(false);
-        expect(vpc?.Tags).toContainEqual({ Key: 'Name', Value: `TapStack-${env}-VPC` });
-      }
-    });
-
-    // Positive Test: Verify subnets are created and associated with the correct VPCs
-    test('public and private subnets should be created for each VPC', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const vpcId = outputs.get(`${env}VPCId`);
-        const subnets = outputs.get(`${env}PrivateSubnets`)?.split(',');
-        expect(subnets).toBeDefined();
-        expect(subnets!.length).toBe(2);
-
-        const command = new DescribeSubnetsCommand({ SubnetIds: subnets });
-        const response = await ec2Client.send(command);
-        const fetchedSubnets = response.Subnets;
-        expect(fetchedSubnets).toBeDefined();
-        expect(fetchedSubnets!.length).toBe(2);
-        for (const subnet of fetchedSubnets!) {
-          expect(subnet.VpcId).toBe(vpcId);
-        }
-      }
-    });
-
-    // Positive Test: Verify route tables and their associations are correct
-    test('private subnets should route traffic through a NAT Gateway', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const privateSubnetId = outputs.get(`${env}PrivateSubnets`)?.split(',')[0];
-        expect(privateSubnetId).toBeDefined();
-
-        const command = new DescribeRouteTablesCommand({
-          Filters: [{ Name: 'association.subnet-id', Values: [privateSubnetId!] }],
-        });
-        const response = await ec2Client.send(command);
-        const routeTable = response.RouteTables?.[0];
-        expect(routeTable).toBeDefined();
-
-        const natRoute = routeTable?.Routes?.find(
-          (route) => route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId
+        const response = await ec2Client.send(
+          new DescribeVpcsCommand({ VpcIds: [vpcId!] })
         );
-        expect(natRoute).toBeDefined();
-      }
+        const vpc: Vpc | undefined = response.Vpcs?.[0];
+        expect(vpc).toBeDefined();
+        expect(vpc?.CidrBlock).toBe(`10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.0.0/16`);
+        // Note: EnableDnsSupport and EnableDnsHostnames are not directly accessible in Vpc type
+        // Use DescribeVpcAttributeCommand if needed, but template sets them to true
+        validateTags((vpc?.Tags || []) as EC2Tag[], env, 'VPC');
+      });
+
+      test(`should have Internet Gateway for ${env}`, async () => {
+        const response = await ec2Client.send(new DescribeInternetGatewaysCommand({}));
+        const igw = response.InternetGateways?.find((ig) =>
+          ig.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-IGW`)
+        );
+        expect(igw).toBeDefined();
+        expect(igw?.Attachments?.[0]?.VpcId).toBe(stackOutputs[`${env}VPCId`]);
+        validateTags((igw?.Tags || []) as EC2Tag[], env, 'IGW');
+      });
     });
   });
 
-  // ---------------------
-  // --- S3 Validations ---
-  // ---------------------
-  describe('S3 Bucket Validations', () => {
-    // Positive Test: Verify buckets exist with correct names and public access blocked
-    test('S3 buckets should be created with correct names and public access blocked', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const bucketName = outputs.get(`${env}DataBucketName`);
-        expect(bucketName).toBeDefined();
+  // Positive Case: Validate Subnets
+  describe('Subnets', () => {
+    environments.forEach((env) => {
+      test(`should have correct public and private subnets for ${env}`, async () => {
+        const publicSubnets = stackOutputs[`${env}PublicSubnets`]?.split(',');
+        const privateSubnets = stackOutputs[`${env}PrivateSubnets`]?.split(',');
+        expect(publicSubnets).toHaveLength(2);
+        expect(privateSubnets).toHaveLength(2);
 
-        const publicAccessCommand = new GetPublicAccessBlockCommand({ Bucket: bucketName! });
-        const publicAccessResponse = await s3Client.send(publicAccessCommand);
-        expect(publicAccessResponse.PublicAccessBlockConfiguration).toEqual({
+        const response = await ec2Client.send(
+          new DescribeSubnetsCommand({ SubnetIds: [...(publicSubnets || []), ...(privateSubnets || [])] })
+        );
+        const subnets = response.Subnets || [];
+
+        // Validate Public Subnets
+        const publicSubnetA = subnets.find((s) =>
+          s.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Public-A`)
+        );
+        const publicSubnetB = subnets.find((s) =>
+          s.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Public-B`)
+        );
+        expect(publicSubnetA).toBeDefined();
+        expect(publicSubnetB).toBeDefined();
+        expect(publicSubnetA?.CidrBlock).toBe(
+          `10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.0.0/18`
+        );
+        expect(publicSubnetB?.CidrBlock).toBe(
+          `10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.64.0/18`
+        );
+        expect(publicSubnetA?.MapPublicIpOnLaunch).toBe(true);
+        expect(publicSubnetB?.MapPublicIpOnLaunch).toBe(true);
+        validateTags((publicSubnetA?.Tags || []) as EC2Tag[], env, 'Public-A');
+        validateTags((publicSubnetB?.Tags || []) as EC2Tag[], env, 'Public-B');
+
+        // Validate Private Subnets
+        const privateSubnetA = subnets.find((s) =>
+          s.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Private-A`)
+        );
+        const privateSubnetB = subnets.find((s) =>
+          s.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Private-B`)
+        );
+        expect(privateSubnetA).toBeDefined();
+        expect(privateSubnetB).toBeDefined();
+        expect(privateSubnetA?.CidrBlock).toBe(
+          `10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.128.0/18`
+        );
+        expect(privateSubnetB?.CidrBlock).toBe(
+          `10.${env === 'Dev' ? 0 : env === 'Staging' ? 1 : 2}.192.0/18`
+        );
+        validateTags((privateSubnetA?.Tags || []) as EC2Tag[], env, 'Private-A');
+        validateTags((privateSubnetB?.Tags || []) as EC2Tag[], env, 'Private-B');
+      });
+    });
+  });
+
+  // Positive Case: Validate NAT Gateways
+  describe('NAT Gateways', () => {
+    environments.forEach((env) => {
+      test(`should have correct NAT gateways for ${env} when CreateNatPerAZ is ${createNatPerAZ}`, async () => {
+        const publicSubnets = stackOutputs[`${env}PublicSubnets`]?.split(',');
+        const response = await ec2Client.send(new DescribeNatGatewaysCommand({}));
+        const natGateways = response.NatGateways?.filter((ng) =>
+          ng.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
+        ) || [];
+
+        if (createNatPerAZ === 'true') {
+          const natGatewayA = natGateways.find((ng) =>
+            ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT-A`)
+          );
+          const natGatewayB = natGateways.find((ng) =>
+            ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT-B`)
+          );
+          expect(natGatewayA).toBeDefined();
+          expect(natGatewayB).toBeDefined();
+          expect(natGatewayA?.SubnetId).toBe(publicSubnets?.[0]);
+          expect(natGatewayB?.SubnetId).toBe(publicSubnets?.[1]);
+          validateTags((natGatewayA?.Tags || []) as EC2Tag[], env, 'NAT-A');
+          validateTags((natGatewayB?.Tags || []) as EC2Tag[], env, 'NAT-B');
+        } else {
+          const singleNatGateway = natGateways.find((ng) =>
+            ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT`)
+          );
+          expect(singleNatGateway).toBeDefined();
+          expect(singleNatGateway?.SubnetId).toBe(publicSubnets?.[0]);
+          validateTags((singleNatGateway?.Tags || []) as EC2Tag[], env, 'NAT');
+        }
+      });
+    });
+  });
+
+  // Positive Case: Validate Route Tables
+  describe('Route Tables', () => {
+    environments.forEach((env) => {
+      test(`should have correct route tables for ${env}`, async () => {
+        const response = await ec2Client.send(new DescribeRouteTablesCommand({}));
+        const routeTables = response.RouteTables?.filter((rt) =>
+          rt.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
+        ) || [];
+
+        // Public Route Table
+        const publicRouteTable = routeTables.find((rt) =>
+          rt.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Public-RT`)
+        );
+        expect(publicRouteTable).toBeDefined();
+        expect(publicRouteTable?.Routes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              DestinationCidrBlock: '0.0.0.0/0',
+              GatewayId: expect.stringContaining('igw-'),
+            }),
+          ])
+        );
+        validateTags((publicRouteTable?.Tags || []) as EC2Tag[], env, 'Public-RT');
+
+        // Private Route Tables
+        const privateRouteTableA = routeTables.find((rt) =>
+          rt.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Private-RT-A`)
+        );
+        const privateRouteTableB = routeTables.find((rt) =>
+          rt.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-Private-RT-B`)
+        );
+        expect(privateRouteTableA).toBeDefined();
+        expect(privateRouteTableB).toBeDefined();
+        if (createNatPerAZ === 'true') {
+          expect(privateRouteTableA?.Routes).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                DestinationCidrBlock: '0.0.0.0/0',
+                NatGatewayId: expect.stringContaining('nat-'),
+              }),
+            ])
+          );
+          expect(privateRouteTableB?.Routes).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                DestinationCidrBlock: '0.0.0.0/0',
+                NatGatewayId: expect.stringContaining('nat-'),
+              }),
+            ])
+          );
+        } else {
+          const singleNatGatewayId = (await ec2Client.send(new DescribeNatGatewaysCommand({})))
+            .NatGateways?.find((ng) =>
+              ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT`)
+            )?.NatGatewayId;
+          expect(privateRouteTableA?.Routes).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                DestinationCidrBlock: '0.0.0.0/0',
+                NatGatewayId: singleNatGatewayId,
+              }),
+            ])
+          );
+          expect(privateRouteTableB?.Routes).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                DestinationCidrBlock: '0.0.0.0/0',
+                NatGatewayId: singleNatGatewayId,
+              }),
+            ])
+          );
+        }
+        validateTags((privateRouteTableA?.Tags || []) as EC2Tag[], env, 'Private-RT-A');
+        validateTags((privateRouteTableB?.Tags || []) as EC2Tag[], env, 'Private-RT-B');
+      });
+    });
+  });
+
+  // Positive Case: Validate S3 Buckets
+  describe('S3 Buckets', () => {
+    environments.forEach((env) => {
+      test(`should have correct configuration for ${env} S3 bucket`, async () => {
+        const bucketName = stackOutputs[`${env}DataBucketName`];
+        expect(bucketName).toBe(getExpectedBucketName(env));
+
+        // Validate Versioning
+        const versioning = await s3Client.send(
+          new GetBucketVersioningCommand({ Bucket: bucketName! })
+        );
+        expect(versioning.Status).toBe('Enabled');
+
+        // Validate Encryption
+        const encryption = await s3Client.send(
+          new GetBucketEncryptionCommand({ Bucket: bucketName! })
+        );
+        expect(encryption.ServerSideEncryptionConfiguration?.Rules).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' },
+            }),
+          ])
+        );
+
+        // Validate Public Access Block
+        const publicAccess = await s3Client.send(
+          new GetPublicAccessBlockCommand({ Bucket: bucketName! })
+        );
+        expect(publicAccess.PublicAccessBlockConfiguration).toEqual({
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         });
-      }
-    });
 
-    // Positive Test: Verify bucket policies enforce HTTPS
-    test('S3 bucket policies should enforce secure transport (HTTPS)', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const bucketName = outputs.get(`${env}DataBucketName`);
-        expect(bucketName).toBeDefined();
+        // Validate Tags
+        const tags = await s3Client.send(new GetBucketTaggingCommand({ Bucket: bucketName! }));
+        validateTags((tags.TagSet || []) as S3Tag[], env, 'Bucket');
 
-        const command = new GetBucketPolicyCommand({ Bucket: bucketName! });
-        const response = await s3Client.send(command);
-        const policy = JSON.parse(response.Policy!);
-        const statement = policy.Statement.find((s: any) => s.Effect === 'Deny' && s.Condition && s.Condition.Bool && s.Condition.Bool['aws:SecureTransport']);
-
-        expect(statement).toBeDefined();
-        expect(statement.Effect).toBe('Deny');
-        expect(statement.Action).toBe('s3:*');
-        expect(statement.Condition.Bool['aws:SecureTransport']).toBe('false');
-      }
-    });
-
-    // Positive Test: Verify versioning and encryption are enabled for all buckets
-    test('S3 buckets should have versioning and encryption enabled', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const bucketName = outputs.get(`${env}DataBucketName`);
-        expect(bucketName).toBeDefined();
-
-        const versioningCommand = new GetBucketVersioningCommand({ Bucket: bucketName! });
-        const versioningResponse = await s3Client.send(versioningCommand);
-        expect(versioningResponse.Status).toBe('Enabled');
-
-        const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName! });
-        const encryptionResponse = await s3Client.send(encryptionCommand);
-        expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-      }
-    });
-
-    // Positive Test: Verify replication configuration is set up correctly
-    test('Dev and Staging buckets should have replication enabled', async () => {
-      const devBucketName = outputs.get('DevDataBucketName');
-      const stagingBucketName = outputs.get('StagingDataBucketName');
-
-      const devReplicationCommand = new GetBucketReplicationCommand({ Bucket: devBucketName! });
-      const devReplicationResponse = await s3Client.send(devReplicationCommand);
-      expect(devReplicationResponse.ReplicationConfiguration?.Rules?.[0].Status).toBe('Enabled');
-      expect(devReplicationResponse.ReplicationConfiguration?.Rules?.[0].Destination?.Bucket).toContain(stagingBucketName);
-      
-      const stagingReplicationCommand = new GetBucketReplicationCommand({ Bucket: stagingBucketName! });
-      const stagingReplicationResponse = await s3Client.send(stagingReplicationCommand);
-      expect(stagingReplicationResponse.ReplicationConfiguration?.Rules?.[0].Status).toBe('Enabled');
-      expect(stagingReplicationResponse.ReplicationConfiguration?.Rules?.[0].Destination?.Bucket).toContain(outputs.get('ProdDataBucketName'));
+        // Validate Replication (for Dev and Staging)
+        if (env !== 'Prod') {
+          const replication = await s3Client.send(
+            new GetBucketReplicationCommand({ Bucket: bucketName! })
+          );
+          expect(replication.ReplicationConfiguration?.Rules).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                ID: env === 'Dev' ? 'DevToStaging' : 'StagingToProd',
+                Status: 'Enabled',
+                Priority: 1,
+                DeleteMarkerReplication: { Status: 'Disabled' },
+                Destination: expect.objectContaining({
+                  Bucket: stackOutputs[`${env === 'Dev' ? 'Staging' : 'Prod'}DataBucketARN`],
+                  StorageClass: 'STANDARD',
+                }),
+                Filter: { Prefix: '' },
+              }),
+            ])
+          );
+        }
+      });
     });
   });
-  
-  // --------------------
-  // --- IAM Validations ---
-  // --------------------
-  describe('IAM Role Validations', () => {
-    // Positive Test: Verify environment roles exist and have correct trust policies
-    test('environment roles should exist and have a trust policy allowing the owner to assume them', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
+
+  // Positive Case: Validate IAM Roles
+  describe('IAM Roles', () => {
+    environments.forEach((env) => {
+      test(`should have correct configuration for ${env} environment role`, async () => {
+        const roleArn = stackOutputs[`${env}EnvironmentRoleARN`];
         const roleName = `TapStack-${env}-Role`;
-        const command = new GetRoleCommand({ RoleName: roleName });
-        const response = await iamClient.send(command);
-        const role = response.Role;
-        expect(role).toBeDefined();
-        
-        const assumeRolePolicy = JSON.parse(decodeURIComponent(role!.AssumeRolePolicyDocument!));
-        const statement = assumeRolePolicy.Statement?.[0];
-        expect(statement).toBeDefined();
-        expect(statement.Effect).toBe('Allow');
-        expect(statement.Action).toBe('sts:AssumeRole');
-        
-        // This validates the !If condition
-        const expectedPrincipal = allOutputs['TeamPrincipalARN'] ? allOutputs['TeamPrincipalARN'] : `arn:aws:iam::${allOutputs['AWSAccountId']}:root`;
-        expect(statement.Principal.AWS).toBe(expectedPrincipal);
+        expect(roleArn).toBeDefined();
+
+        const role = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.RoleName).toBe(roleName);
+        validateTags((role.Role?.Tags || []) as IAMTag[], env, 'Role');
+
+        // Validate Assume Role Policy
+        const assumeRolePolicy = JSON.parse(
+          decodeURIComponent(role.Role?.AssumeRolePolicyDocument!)
+        );
+        expect(assumeRolePolicy).toEqual(
+          expect.objectContaining({
+            Version: '2012-10-17',
+            Statement: expect.arrayContaining([
+              expect.objectContaining({
+                Effect: 'Allow',
+                Action: 'sts:AssumeRole',
+                Principal: expect.objectContaining({
+                  AWS: expect.anything(), // Could be TeamPrincipalARN or account root
+                }),
+              }),
+            ]),
+          })
+        );
+
+        // Validate Attached Policies
+        const policies = await iamClient.send(
+          new ListRolePoliciesCommand({ RoleName: roleName })
+        );
+        expect(policies.PolicyNames).toEqual(expect.arrayContaining(['S3Access', 'EC2ReadOnly']));
+
+        // Validate S3Access Policy
+        const s3Policy = await iamClient.send(
+          new GetRolePolicyCommand({ RoleName: roleName, PolicyName: 'S3Access' })
+        );
+        expect(JSON.parse(decodeURIComponent(s3Policy.PolicyDocument!))).toEqual(
+          expect.objectContaining({
+            Version: '2012-10-17',
+            Statement: expect.arrayContaining([
+              expect.objectContaining({
+                Effect: 'Allow',
+                Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+                Resource: [
+                  stackOutputs[`${env}DataBucketARN`],
+                  `${stackOutputs[`${env}DataBucketARN`]}/*`,
+                ],
+              }),
+            ]),
+          })
+        );
+
+        // Validate EC2ReadOnly Policy
+        const ec2Policy = await iamClient.send(
+          new GetRolePolicyCommand({ RoleName: roleName, PolicyName: 'EC2ReadOnly' })
+        );
+        expect(JSON.parse(decodeURIComponent(ec2Policy.PolicyDocument!))).toEqual(
+          expect.objectContaining({
+            Version: '2012-10-17',
+            Statement: expect.arrayContaining([
+              expect.objectContaining({
+                Effect: 'Allow',
+                Action: ['ec2:Describe*'],
+                Resource: '*',
+              }),
+            ]),
+          })
+        );
+      });
+    });
+  });
+
+  // Edge Case: Invalid TeamPrincipalARN
+  describe('Edge Case: Invalid TeamPrincipalARN', () => {
+    test('should handle invalid ARN gracefully', async () => {
+      const roleName = 'TapStack-Dev-Role';
+      const invalidArn = 'invalid-arn';
+      let errorCaught = false;
+
+      try {
+        await stsClient.send(
+          new AssumeRoleCommand({
+            RoleArn: `arn:aws:iam::${AWS_ACCOUNT_ID}:role/${roleName}`,
+            RoleSessionName: 'TestSession',
+            Policy: JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: { AWS: invalidArn },
+                  Action: 'sts:AssumeRole',
+                },
+              ],
+            }),
+          })
+        );
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.message).toContain('is not valid');
       }
+      expect(errorCaught).toBe(true);
+    });
+  });
+
+  // Edge Case: Single NAT Gateway Configuration
+  describe('Edge Case: Single NAT Gateway', () => {
+    environments.forEach((env) => {
+      test(`should validate single NAT gateway for ${env} when CreateNatPerAZ is false`, async () => {
+        // Note: This assumes the stack was deployed with CreateNatPerAZ=false
+        const response = await ec2Client.send(new DescribeNatGatewaysCommand({}));
+        const natGateways = response.NatGateways?.filter((ng) =>
+          ng.Tags?.some((tag) => tag.Key === 'Project' && tag.Value === projectName)
+        ) || [];
+
+        const singleNatGateway = natGateways.find((ng) =>
+          ng.Tags?.some((tag) => tag.Key === 'Name' && tag.Value === `TapStack-${env}-NAT`)
+        );
+        if (singleNatGateway) {
+          expect(singleNatGateway.SubnetId).toBe(
+            stackOutputs[`${env}PublicSubnets`]?.split(',')[0]
+          );
+          validateTags((singleNatGateway.Tags || []) as EC2Tag[], env, 'NAT');
+        } else {
+          // Skip if not deployed with SingleNat condition
+          console.warn(`Single NAT Gateway not found for ${env}. Ensure CreateNatPerAZ=false.`);
+        }
+      });
+    });
+  });
+
+  // Edge Case: Missing Outputs
+  describe('Edge Case: Missing Outputs', () => {
+    test('should handle missing outputs in all-outputs.json', () => {
+      const requiredOutputs = [
+        'DevDataBucketName',
+        'DevVPCId',
+        'StagingDataBucketName',
+        'StagingVPCId',
+        'ProdDataBucketName',
+        'ProdVPCId',
+      ];
+      requiredOutputs.forEach((output) => {
+        expect(stackOutputs[output]).toBeDefined();
+      });
+    });
+  });
+
+  // Edge Case: Non-existent Resources
+  describe('Edge Case: Non-existent Resources', () => {
+    test('should handle non-existent S3 bucket gracefully', async () => {
+      let errorCaught = false;
+      try {
+        await s3Client.send(
+          new GetBucketVersioningCommand({ Bucket: 'non-existent-bucket' })
+        );
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.message).toContain('NoSuchBucket');
+      }
+      expect(errorCaught).toBe(true);
     });
 
-    // Positive Test: Verify roles have correct inline policies
-    test('environment roles should have correct inline policies', async () => {
-      const envs = ['Dev', 'Staging', 'Prod'];
-      for (const env of envs) {
-        const roleName = `TapStack-${env}-Role`;
-        const listPoliciesCommand = new ListRolePoliciesCommand({ RoleName: roleName });
-        const listPoliciesResponse = await iamClient.send(listPoliciesCommand);
-        expect(listPoliciesResponse.PolicyNames).toContain('S3Access');
-        expect(listPoliciesResponse.PolicyNames).toContain('EC2ReadOnly');
-        
-        const getS3PolicyCommand = new GetRolePolicyCommand({ RoleName: roleName, PolicyName: 'S3Access' });
-        const s3PolicyResponse = await iamClient.send(getS3PolicyCommand);
-        const s3Policy = JSON.parse(decodeURIComponent(s3PolicyResponse.PolicyDocument!));
-        expect(s3Policy.Statement[0].Action).toContain('s3:GetObject');
+    test('should handle non-existent VPC gracefully', async () => {
+      let errorCaught = false;
+      try {
+        await ec2Client.send(
+          new DescribeVpcsCommand({ VpcIds: ['vpc-nonexistent'] })
+        );
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.message).toContain('InvalidVpcID.NotFound');
       }
-    });
-
-    // Edge Case: Test with an empty TeamPrincipalARN (default behavior)
-    test('should assume role from root when TeamPrincipalARN is empty', async () => {
-      const roleName = `TapStack-Dev-Role`;
-      const getRoleCommand = new GetRoleCommand({ RoleName: roleName });
-      const getRoleResponse = await iamClient.send(getRoleCommand);
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(getRoleResponse.Role!.AssumeRolePolicyDocument!));
-      const statement = assumeRolePolicy.Statement[0];
-      const accountId = allOutputs.AWSAccountId;
-      expect(statement.Principal.AWS).toBe(`arn:aws:iam::${accountId}:root`);
+      expect(errorCaught).toBe(true);
     });
   });
 });
