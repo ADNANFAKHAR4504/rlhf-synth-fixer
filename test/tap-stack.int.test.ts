@@ -1,18 +1,17 @@
 import fs from 'fs';
 import net from 'net';
+import axios from 'axios';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('WebAppStack Integration Tests', () => {
-  const lbDns = outputs[`LoadBalancerDNS${environmentSuffix}`];
-  const rdsEndpoint = outputs[`RDSEndpoint${environmentSuffix}`];
-  const cloudWatchAlarmName = outputs[`CloudWatchAlarmName${environmentSuffix}`];
-  const elasticIP1 = outputs[`ElasticIP1${environmentSuffix}`];
-  const elasticIP2 = outputs[`ElasticIP2${environmentSuffix}`];
+  const lbDns = outputs.LoadBalancerDNS;
+  const rdsEndpoint = outputs.RDSEndpoint;
+  const cloudWatchAlarmName = outputs.CloudWatchAlarmName;
+  const elasticIP1 = outputs.ElasticIP1;
+  const elasticIP2 = outputs.ElasticIP2;
 
   function checkTcpPort(host: string, port: number, timeout = 3000): Promise<boolean> {
     return new Promise((resolve) => {
@@ -26,17 +25,9 @@ describe('WebAppStack Integration Tests', () => {
         socket.destroy();
       });
 
-      socket.on('timeout', () => {
-        socket.destroy();
-      });
-
-      socket.on('error', () => {
-        // ignore errors
-      });
-
-      socket.on('close', () => {
-        resolve(isConnected);
-      });
+      socket.on('timeout', () => socket.destroy());
+      socket.on('error', () => {});
+      socket.on('close', () => resolve(isConnected));
 
       socket.connect(port, host);
     });
@@ -53,20 +44,23 @@ describe('WebAppStack Integration Tests', () => {
       expect(lbDns).toBeDefined();
     });
 
+    test('should respond with HTTP 200 on / (root) path', async () => {
+      expect(lbDns).toBeDefined();
+
+      const url = `http://${lbDns}/`;
+      const response = await axios.get(url, { timeout: 5000 });
+      expect(response.status).toBe(200);
+      expect(typeof response.data).toBe('string');
+    });
+
     test('should respond with TCP port 80 open on Load Balancer DNS', async () => {
-      if (!lbDns) {
-        console.warn('⚠️ LoadBalancerDNS output missing. Skipping TCP port test.');
-        return;
-      }
+      expect(lbDns).toBeDefined();
       const isOpen = await checkTcpPort(lbDns, 80, 5000);
       expect(isOpen).toBe(true);
     });
 
     test('should resolve Load Balancer DNS to a valid IP address', async () => {
-      if (!lbDns) {
-        console.warn('⚠️ LoadBalancerDNS output missing. Skipping DNS resolution test.');
-        return;
-      }
+      expect(lbDns).toBeDefined();
       const ip = await resolveDNS(lbDns);
       expect(ip).toMatch(/(\d{1,3}\.){3}\d{1,3}/);
     });
@@ -84,10 +78,7 @@ describe('WebAppStack Integration Tests', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('alarm should exist and be in OK state', async () => {
-      if (!cloudWatchAlarmName) {
-        console.warn('⚠️ CloudWatchAlarmName output missing. Skipping alarm test.');
-        return;
-      }
+      expect(cloudWatchAlarmName).toBeDefined();
 
       const cloudwatch = await import('@aws-sdk/client-cloudwatch');
       const { CloudWatchClient, DescribeAlarmsCommand } = cloudwatch;
@@ -100,7 +91,6 @@ describe('WebAppStack Integration Tests', () => {
         })
       );
 
-      // TypeScript safe check
       if (!result.MetricAlarms || result.MetricAlarms.length === 0) {
         throw new Error('No MetricAlarms found');
       }
@@ -113,10 +103,7 @@ describe('WebAppStack Integration Tests', () => {
 
   describe('RDS Endpoint Check', () => {
     test('should resolve DNS for RDS endpoint', async () => {
-      if (!rdsEndpoint) {
-        console.warn('⚠️ RDSEndpoint output missing. Skipping RDS DNS test.');
-        return;
-      }
+      expect(rdsEndpoint).toBeDefined();
       const ip = await resolveDNS(rdsEndpoint);
       expect(ip).toMatch(/(\d{1,3}\.){3}\d{1,3}/);
     });
