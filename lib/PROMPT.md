@@ -8,9 +8,8 @@ Please create the resources as per below requirements -
 4. Create s3 bucket in each region  Ensure all S3 buckets are encrypted using Amazon S3-managed keys (SSE-S3).
 5. . IAM roles should not have wildcard permissions to prevent privilege escalation.
 6. Create RDS in each region with RDS specific security groups. Create security group specific for RDS. and use random username and random password for RDS.
-7. CloudTrail should be enabled in all AWS regions for logging API calls across all the AWS resources being created in this stack.
-8. Encrypt all EBS volumes and sensitive data at rest using AWS KMS with an AWS-managed key.
-9. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
+7. Encrypt all EBS volumes and sensitive data at rest using AWS KMS with an AWS-managed key.
+8. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
 
 Declare all necessary input variables, locals, resources, and outputs within this single file, excluding sensitive outputs, and referencing the AWS region only via variable (assume AWS providers handled elsewhere).
 
