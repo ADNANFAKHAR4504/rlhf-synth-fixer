@@ -28,5 +28,11 @@
     "VPC Endpoints",
     "Security Groups",
     "Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "caiof-turing",
+  "dockerS3Location": ""
 }
