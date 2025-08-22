@@ -22,10 +22,6 @@ We need to build a secure, production-ready AWS infrastructure using Terraform. 
 - Complete audit trail of all API calls
 - Consistent tagging for cost tracking and management
 
-## Regional Setup
-
-Deploy everything in **us-west-2** region.
-
 ## Security Standards
 
 We're following CIS AWS Foundations Benchmark guidelines here. This means:

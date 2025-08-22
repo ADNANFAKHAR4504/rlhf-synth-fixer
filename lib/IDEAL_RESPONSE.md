@@ -639,10 +639,10 @@ Statement = [
 Sid = "Enable IAM User Permissions"
 Effect = "Allow"
 Principal = {
-AWS = "arn:aws:iam::${data.aws*caller_identity.current.account_id}:root"
+AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
 }
-Action = "kms:*"
-Resource = "\_"
+Action = "kms:_"
+Resource = "_"
 },
 {
 Sid = "Allow CloudTrail to encrypt logs"
@@ -734,7 +734,7 @@ Action = "s3:GetBucketAcl"
 Resource = aws_s3_bucket.cloudtrail_logs.arn
 Condition = {
 StringEquals = {
-"AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+"AWS:SourceArn" = "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
 }
 }
 },
@@ -749,7 +749,7 @@ Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
 Condition = {
 StringEquals = {
 "s3:x-amz-acl" = "bucket-owner-full-control"
-"AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+"AWS:SourceArn" = "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
 }
 }
 }
@@ -1001,7 +1001,7 @@ default = "10.0.0.0/16"
 variable "availability_zones" {
 description = "Availability zones"
 type = list(string)
-default = ["us-west-2a", "us-west-2b"]
+default = ["us-east-1a", "us-east-1b"]
 }
 
 variable "public_subnet_cidrs" {
@@ -1067,7 +1067,7 @@ default = false
 variable "aws_region" {
 description = "AWS region for resources"
 type = string
-default = "us-west-2"
+default = "us-east-1"
 }
 
 variable "enable_cloudtrail" {

@@ -66,12 +66,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
     });
 
-    test('aws_region variable defaults to us-west-2', () => {
+    test('aws_region variable defaults to us-east-1', () => {
       const regionMatch = stackContent.match(
         /variable\s+"aws_region"\s*{[\s\S]*?default\s*=\s*"([^"]+)"/
       );
       expect(regionMatch).toBeTruthy();
-      expect(regionMatch![1]).toBe('us-west-2');
+      expect(regionMatch![1]).toBe('us-east-1');
     });
 
     test('declares required tagging variables (environment, owner, purpose)', () => {
@@ -198,13 +198,13 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Resource Configuration', () => {
-    test('availability zones are in us-west-2', () => {
+    test('availability zones are in us-east-1', () => {
       const azMatch = stackContent.match(
         /default\s*=\s*\[\s*"([^"]+)",\s*"([^"]+)"\s*\]/
       );
       expect(azMatch).toBeTruthy();
-      expect(azMatch![1]).toMatch(/^us-west-2[a-z]$/);
-      expect(azMatch![2]).toMatch(/^us-west-2[a-z]$/);
+      expect(azMatch![1]).toMatch(/^us-east-1[a-z]$/);
+      expect(azMatch![2]).toMatch(/^us-east-1[a-z]$/);
     });
 
     test('uses appropriate CIDR blocks for VPC and subnets', () => {

@@ -111,7 +111,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
         Resource = aws_s3_bucket.cloudtrail_logs.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
           }
         }
       },
@@ -126,7 +126,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
           }
         }
       }
