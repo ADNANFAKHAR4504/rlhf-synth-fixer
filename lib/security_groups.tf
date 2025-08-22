@@ -82,6 +82,7 @@ resource "aws_security_group" "private_ec2_primary" {
     to_port         = 22
     protocol        = "tcp"
     security_groups = [aws_security_group.public_ec2_primary.id]
+    cidr_blocks     = var.allowed_ssh_cidr
   }
 
   # Allow all outbound traffic
@@ -112,6 +113,7 @@ resource "aws_security_group" "private_ec2_secondary" {
     to_port         = 22
     protocol        = "tcp"
     security_groups = [aws_security_group.public_ec2_secondary.id]
+    cidr_blocks     = var.allowed_ssh_cidr
   }
   
   # Allow all outbound traffic
