@@ -32,7 +32,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.TrustedCidrBlock).toBeDefined();
       expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
       expect(template.Parameters.NotificationEmail).toBeDefined();
     });
 

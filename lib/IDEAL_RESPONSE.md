@@ -42,20 +42,12 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters.'
 
-  DBPassword:
-    Type: String
-    Description: 'Database administrator password'
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: 'Must contain only alphanumeric characters.'
-
   NotificationEmail:
     Type: String
     Description: 'Email address for security alerts'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: 'Must be a valid email address.'
+    Default: 'admin@example.com'
 
 Resources:
   # ========================================
@@ -73,8 +65,6 @@ Resources:
           Value: !Sub '${AWS::StackName}-VPC'
         - Key: Security
           Value: 'High'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -286,11 +276,6 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2-Role'
-        - Key: Security
-          Value: 'LeastPrivilege'
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -390,6 +375,21 @@ Resources:
                 's3:x-amz-server-side-encryption': 'AES256'
 
   # ========================================
+  # SECRETS MANAGER
+  # ========================================
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-DBPassword'
+      Description: 'Database password for RDS MySQL instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  # ========================================
   # RDS DATABASE
   # ========================================
 
@@ -417,7 +417,7 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -521,6 +521,12 @@ Outputs:
     Value: !Ref SecurityAlertsTopic
     Export:
       Name: !Sub '${AWS::StackName}-SecurityAlerts-Topic'
+
+  DBPasswordSecretArn:
+    Description: 'ARN of the database password secret in Secrets Manager'
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPassword-Secret'
 ```
 
 ## Key Security Features
@@ -564,7 +570,6 @@ Outputs:
      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
      --parameter-overrides \
        EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
-       DBPassword=<secure-password> \
        NotificationEmail=<your-email> \
      --region us-east-1
    ```

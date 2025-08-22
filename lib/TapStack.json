@@ -25,20 +25,12 @@
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
     },
-    "DBPassword": {
-      "Type": "String",
-      "Description": "Database administrator password",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "AllowedPattern": "[a-zA-Z0-9]*",
-      "ConstraintDescription": "Must contain only alphanumeric characters."
-    },
     "NotificationEmail": {
       "Type": "String",
       "Description": "Email address for security alerts",
       "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
-      "ConstraintDescription": "Must be a valid email address."
+      "ConstraintDescription": "Must be a valid email address.",
+      "Default": "admin@example.com"
     }
   },
   "Resources": {
@@ -52,7 +44,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-VPC"
+              "Fn::Sub": "${AWS::StackName}-VPC"
             }
           },
           {
@@ -69,7 +61,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-IGW"
+              "Fn::Sub": "${AWS::StackName}-IGW"
             }
           }
         ]
@@ -93,10 +85,10 @@
           "Ref": "VPC"
         },
         "AvailabilityZone": {
-          "Select": [
+          "Fn::Select": [
             0,
             {
-              "GetAZs": ""
+              "Fn::GetAZs": ""
             }
           ]
         },
@@ -106,7 +98,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Public-Subnet-AZ1"
+              "Fn::Sub": "${AWS::StackName}-Public-Subnet-AZ1"
             }
           }
         ]
@@ -119,10 +111,10 @@
           "Ref": "VPC"
         },
         "AvailabilityZone": {
-          "Select": [
+          "Fn::Select": [
             1,
             {
-              "GetAZs": ""
+              "Fn::GetAZs": ""
             }
           ]
         },
@@ -132,7 +124,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Public-Subnet-AZ2"
+              "Fn::Sub": "${AWS::StackName}-Public-Subnet-AZ2"
             }
           }
         ]
@@ -145,10 +137,10 @@
           "Ref": "VPC"
         },
         "AvailabilityZone": {
-          "Select": [
+          "Fn::Select": [
             0,
             {
-              "GetAZs": ""
+              "Fn::GetAZs": ""
             }
           ]
         },
@@ -157,7 +149,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Private-Subnet-AZ1"
+              "Fn::Sub": "${AWS::StackName}-Private-Subnet-AZ1"
             }
           }
         ]
@@ -170,10 +162,10 @@
           "Ref": "VPC"
         },
         "AvailabilityZone": {
-          "Select": [
+          "Fn::Select": [
             1,
             {
-              "GetAZs": ""
+              "Fn::GetAZs": ""
             }
           ]
         },
@@ -182,7 +174,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Private-Subnet-AZ2"
+              "Fn::Sub": "${AWS::StackName}-Private-Subnet-AZ2"
             }
           }
         ]
@@ -198,7 +190,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Public-Routes"
+              "Fn::Sub": "${AWS::StackName}-Public-Routes"
             }
           }
         ]
@@ -249,7 +241,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-Private-Routes"
+              "Fn::Sub": "${AWS::StackName}-Private-Routes"
             }
           }
         ]
@@ -281,7 +273,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Sub": "${AWS::StackName}-EC2-SecurityGroup-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for EC2 instances - SSH access from trusted CIDR only",
         "VpcId": {
@@ -325,7 +317,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-EC2-SecurityGroup"
+              "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup"
             }
           },
           {
@@ -339,7 +331,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Sub": "${AWS::StackName}-RDS-SecurityGroup-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-RDS-SecurityGroup-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for RDS - access from EC2 instances only",
         "VpcId": {
@@ -360,7 +352,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-RDS-SecurityGroup"
+              "Fn::Sub": "${AWS::StackName}-RDS-SecurityGroup"
             }
           },
           {
@@ -374,7 +366,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Sub": "${AWS::StackName}-EC2-Role-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-EC2-Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -405,10 +397,10 @@
                   ],
                   "Resource": [
                     {
-                      "Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
+                      "Fn::Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
                     },
                     {
-                      "Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
+                      "Fn::Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
                     }
                   ]
                 }
@@ -429,7 +421,7 @@
                     "logs:DescribeLogStreams"
                   ],
                   "Resource": {
-                    "Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
                   }
                 }
               ]
@@ -442,7 +434,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Sub": "${AWS::StackName}-EC2-InstanceProfile-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-EC2-InstanceProfile-${EnvironmentSuffix}"
         },
         "Roles": [
           {
@@ -456,7 +448,7 @@
       "DependsOn": "SecurityAlertsTopicPolicy",
       "Properties": {
         "BucketName": {
-          "Sub": "tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
+          "Fn::Sub": "tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -497,7 +489,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-SecureBucket"
+              "Fn::Sub": "${AWS::StackName}-SecureBucket"
             }
           },
           {
@@ -511,7 +503,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Sub": "tap-${EnvironmentSuffix}-logs-${AWS::AccountId}"
+          "Fn::Sub": "tap-${EnvironmentSuffix}-logs-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -552,7 +544,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-LoggingBucket"
+              "Fn::Sub": "${AWS::StackName}-LoggingBucket"
             }
           },
           {
@@ -578,10 +570,10 @@
               "Action": "s3:*",
               "Resource": [
                 {
-                  "Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
+                  "Fn::Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
                 },
                 {
-                  "Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
+                  "Fn::Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}"
                 }
               ],
               "Condition": {
@@ -596,7 +588,7 @@
               "Principal": "*",
               "Action": "s3:PutObject",
               "Resource": {
-                "Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
+                "Fn::Sub": "arn:aws:s3:::tap-${EnvironmentSuffix}-secure-${AWS::AccountId}/*"
               },
               "Condition": {
                 "StringNotEquals": {
@@ -608,12 +600,29 @@
         }
       }
     },
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBPassword"
+        },
+        "Description": "Database password for RDS MySQL instance",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "DBSubnetGroupName": {
-          "Sub": "${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}"
         },
         "SubnetIds": [
           {
@@ -627,7 +636,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-DBSubnetGroup"
+              "Fn::Sub": "${AWS::StackName}-DBSubnetGroup"
             }
           }
         ]
@@ -638,7 +647,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Sub": "${AWS::StackName}-mysql-db-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-mysql-db-${EnvironmentSuffix}"
         },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
@@ -650,7 +659,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
         },
         "VPCSecurityGroups": [
           {
@@ -665,7 +674,10 @@
         "PubliclyAccessible": false,
         "MonitoringInterval": 60,
         "MonitoringRoleArn": {
-          "GetAtt": "RDSMonitoringRole.Arn"
+          "Fn::GetAtt": [
+            "RDSMonitoringRole",
+            "Arn"
+          ]
         },
         "EnablePerformanceInsights": false,
         "DeletionProtection": false,
@@ -673,7 +685,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${AWS::StackName}-MySQL-Database"
+              "Fn::Sub": "${AWS::StackName}-MySQL-Database"
             }
           },
           {
@@ -687,7 +699,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Sub": "${AWS::StackName}-RDS-Monitoring-Role-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-RDS-Monitoring-Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -710,7 +722,7 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Sub": "${AWS::StackName}-SecurityAlerts-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-SecurityAlerts-${EnvironmentSuffix}"
         },
         "DisplayName": "Security Compliance Alerts",
         "KmsMasterKeyId": "alias/aws/sns"
@@ -767,7 +779,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Sub": "/aws/security/${AWS::StackName}"
+          "Fn::Sub": "/aws/security/${AWS::StackName}"
         },
         "RetentionInDays": 365
       }
@@ -781,7 +793,7 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-VPCID"
+          "Fn::Sub": "${AWS::StackName}-VPCID"
         }
       }
     },
@@ -792,7 +804,7 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-EC2-SecurityGroup"
+          "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup"
         }
       }
     },
@@ -803,18 +815,21 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-SecureS3Bucket"
+          "Fn::Sub": "${AWS::StackName}-SecureS3Bucket"
         }
       }
     },
     "RDSEndpoint": {
       "Description": "RDS instance endpoint",
       "Value": {
-        "GetAtt": "RDSInstance.Endpoint.Address"
+        "Fn::GetAtt": [
+          "RDSInstance",
+          "Endpoint.Address"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-RDS-Endpoint"
+          "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
         }
       }
     },
@@ -825,7 +840,18 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-SecurityAlerts-Topic"
+          "Fn::Sub": "${AWS::StackName}-SecurityAlerts-Topic"
+        }
+      }
+    },
+    "DBPasswordSecretArn": {
+      "Description": "ARN of the database password secret in Secrets Manager",
+      "Value": {
+        "Ref": "DBPasswordSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBPassword-Secret"
         }
       }
     }
