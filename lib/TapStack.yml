@@ -123,6 +123,10 @@ Parameters:
     Type: String
     Default: 'use-existing'
     Description: 'Name of an existing RDS DBSubnetGroup. To create a new one, set this to blank (""), otherwise the template will NOT create a DBSubnetGroup.'
+  ExistingCloudTrailLogsBucketName:
+    Type: String
+    Default: 'use-existing'
+    Description: 'Name of an existing S3 bucket for CloudTrail logs. To create a new one, set this to blank (""), otherwise the template will NOT create a new bucket.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -163,6 +167,8 @@ Conditions:
       !Not [!Equals [!Ref CertificateArn, 'use-existing']],
     ]
   CreateRDSSubnetGroup: !Equals [!Ref ExistingRDSSubnetGroupName, '']
+  CreateCloudTrailLogsBucket:
+    !Equals [!Ref ExistingCloudTrailLogsBucketName, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -332,6 +338,7 @@ Resources:
   # S3 Bucket for CloudTrail Logs with cross-account policies
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateCloudTrailLogsBucket
     Properties:
       BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${Environment}'
       BucketEncryption:
@@ -361,7 +368,12 @@ Resources:
   CloudTrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref CloudTrailLogsBucket
+      Bucket:
+        !If [
+          CreateCloudTrailLogsBucket,
+          !Ref CloudTrailLogsBucket,
+          !Ref ExistingCloudTrailLogsBucketName,
+        ]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -370,32 +382,54 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailLogsBucket.Arn
+            Resource:
+              !If [
+                CreateCloudTrailLogsBucket,
+                !GetAtt CloudTrailLogsBucket.Arn,
+                !Sub 'arn:aws:s3:::${ExistingCloudTrailLogsBucketName}',
+              ]
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailLogsBucket.Arn}/*'
+            Resource:
+              !If [
+                CreateCloudTrailLogsBucket,
+                !Sub '${CloudTrailLogsBucket.Arn}/*',
+                !Sub 'arn:aws:s3:::${ExistingCloudTrailLogsBucketName}/*',
+              ]
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-          - !If
-            - HasValidMasterAccountId
-            - Sid: AllowMasterAccountRead
-              Effect: Allow
-              Principal:
-                AWS: !Sub 'arn:aws:iam::${MasterAccountId}:root'
-              Action:
-                - s3:GetObject
-                - s3:ListBucket
-              Resource:
-                - !GetAtt CloudTrailLogsBucket.Arn
-                - !Sub '${CloudTrailLogsBucket.Arn}/*'
-              Condition:
-                StringEquals:
-                  aws:PrincipalAccount: !Ref MasterAccountId
-            - !Ref 'AWS::NoValue'
+          - !If [
+              HasValidMasterAccountId,
+              {
+                Sid: AllowMasterAccountRead,
+                Effect: Allow,
+                Principal: { AWS: !Sub 'arn:aws:iam::${MasterAccountId}:root' },
+                Action: [s3:GetObject, s3:ListBucket],
+                Resource:
+                  [
+                    !If [
+                      CreateCloudTrailLogsBucket,
+                      !GetAtt CloudTrailLogsBucket.Arn,
+                      !Sub 'arn:aws:s3:::${ExistingCloudTrailLogsBucketName}',
+                    ],
+                    !If [
+                      CreateCloudTrailLogsBucket,
+                      !Sub '${CloudTrailLogsBucket.Arn}/*',
+                      !Sub 'arn:aws:s3:::${ExistingCloudTrailLogsBucketName}/*',
+                    ],
+                  ],
+                Condition:
+                  {
+                    StringEquals:
+                      { aws:PrincipalAccount: !Ref MasterAccountId },
+                  },
+              },
+              !Ref 'AWS::NoValue',
+            ]
 
   # CloudTrail Configuration with organization trail support
   SecurityCloudTrail:
@@ -403,7 +437,12 @@ Resources:
     DependsOn: CloudTrailLogsBucketPolicy
     Properties:
       TrailName: !Sub 'SecurityTrail-${Environment}'
-      S3BucketName: !Ref CloudTrailLogsBucket
+      S3BucketName:
+        !If [
+          CreateCloudTrailLogsBucket,
+          !Ref CloudTrailLogsBucket,
+          !Ref ExistingCloudTrailLogsBucketName,
+        ]
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
@@ -1016,7 +1055,12 @@ Outputs:
 
   CloudTrailBucketName:
     Description: 'CloudTrail S3 Bucket Name'
-    Value: !Ref CloudTrailLogsBucket
+    Value:
+      !If [
+        CreateCloudTrailLogsBucket,
+        !Ref CloudTrailLogsBucket,
+        !Ref ExistingCloudTrailLogsBucketName,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Bucket'
 
