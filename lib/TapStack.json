@@ -725,10 +725,16 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${LoggingBucket}"
+                                            "Fn::GetAtt": [
+                                                "LoggingBucket",
+                                                "Arn"
+                                            ]
                                         },
                                         {
-                                            "Fn::Sub": "${LambdaDeploymentBucket}"
+                                            "Fn::GetAtt": [
+                                                "LambdaDeploymentBucket",
+                                                "Arn"
+                                            ]
                                         }
                                     ]
                                 },
@@ -740,10 +746,10 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${LoggingBucket}/*"
+                                            "Fn::Sub": "${LoggingBucket.Arn}/*"
                                         },
                                         {
-                                            "Fn::Sub": "${LambdaDeploymentBucket}/*"
+                                            "Fn::Sub": "${LambdaDeploymentBucket.Arn}/*"
                                         }
                                     ]
                                 },
