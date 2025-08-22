@@ -51,6 +51,8 @@ module "data" {
   app_data_s3_bucket_arn = aws_s3_bucket.app_data.arn
   s3_kms_key_arn         = aws_kms_key.s3_key.arn
   region                 = var.region
+  name_prefix            = local.name_prefix
+  random_suffix          = random_string.suffix.result
 }
 
 module "security" {

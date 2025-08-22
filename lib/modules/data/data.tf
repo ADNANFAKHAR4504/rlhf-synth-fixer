@@ -138,7 +138,7 @@ data "aws_iam_policy_document" "cloudwatch_logs_policy" {
     ]
 
     resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/*",
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.name_prefix}-${var.random_suffix}",
       "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
     ]
   }
