@@ -39,39 +39,24 @@ data "aws_partition" "current" {}
 
 data "aws_caller_identity" "current" {}
 
-#######################
-# Modules
-#######################
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
 
-module "data" {
-  source = "./modules/data"
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 
-  project_name           = var.project_name
-  environment            = var.environment
-  app_data_s3_bucket_arn = aws_s3_bucket.app_data.arn
-  s3_kms_key_arn         = aws_kms_key.s3_key.arn
-  region                 = var.region
-}
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 
-module "security" {
-  source = "./modules/security"
-
-  project_name        = var.project_name
-  environment         = var.environment
-  vpc_id              = aws_vpc.main.id
-  allowed_cidr_blocks = var.allowed_cidr_blocks
-  common_tags         = local.common_tags
-}
-
-module "monitoring" {
-  source = "./modules/monitoring"
-
-  project_name       = var.project_name
-  environment        = var.environment
-  notification_email = var.notification_email
-  asg_name           = aws_autoscaling_group.app.name
-  common_tags        = local.common_tags
-  random_suffix      = random_string.suffix.result
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
 }
 
 #######################
@@ -340,6 +325,147 @@ resource "aws_kms_key" "ebs_key" {
 }
 
 #######################
+# Security
+#######################
+
+# Security group for the Application Load Balancer
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb-sg"
+  description = "Security group for the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "Allow HTTP from anywhere"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
+  ingress {
+    description = "Allow HTTPS from anywhere"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+    Type = "security"
+  })
+}
+
+# Security group for the EC2 instances
+resource "aws_security_group" "ec2" {
+  name        = "${local.name_prefix}-ec2-sg"
+  description = "Security group for the EC2 instances"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Allow HTTP from the ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-sg"
+    Type = "security"
+  })
+}
+
+# Security group for the RDS database
+resource "aws_security_group" "rds" {
+  name        = "${local.name_prefix}-rds-sg"
+  description = "Security group for the RDS database"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Allow MySQL from the EC2 instances"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2.id]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-sg"
+    Type = "security"
+  })
+}
+
+#######################
+# Monitoring
+#######################
+
+# SNS topic for alarm notifications
+resource "aws_sns_topic" "alarms" {
+  name = "${local.name_prefix}-alarms-topic"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alarms-topic"
+    Type = "monitoring"
+  })
+}
+
+# SNS topic subscription for email notifications
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alarms.arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
+# CloudWatch log group for EC2 instances
+resource "aws_cloudwatch_log_group" "ec2_logs" {
+  name = "/aws/ec2/${local.name_prefix}-${random_string.suffix.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-log-group"
+    Type = "monitoring"
+  })
+}
+
+# CloudWatch alarm for high CPU utilization on EC2 instances
+resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
+  alarm_name          = "${local.name_prefix}-ec2-high-cpu"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  ok_actions          = [aws_sns_topic.alarms.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-cpu-alarm"
+    Type = "monitoring"
+  })
+}
+
+#######################
 # Application Load Balancer
 #######################
 
@@ -347,7 +473,7 @@ resource "aws_lb" "main" {
   name_prefix        = "${local.name_prefix}-alb-"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [module.security.alb_sg_id]
+  security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
@@ -429,11 +555,62 @@ resource "aws_iam_role" "ec2_role" {
   })
 }
 
+data "aws_iam_policy_document" "ec2_s3_access" {
+  statement {
+    sid    = "AllowS3Access"
+    effect = "Allow"
+
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      aws_s3_bucket.app_data.arn,
+      "${aws_s3_bucket.app_data.arn}/*"
+    ]
+  }
+
+  statement {
+    sid    = "AllowKMSAccess"
+    effect = "Allow"
+
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey"
+    ]
+
+    resources = [aws_kms_key.s3_key.arn]
+  }
+}
+
 # IAM policy for EC2 S3 access
 resource "aws_iam_role_policy" "ec2_s3_policy" {
   name   = "${local.name_prefix}-ec2-s3-policy"
   role   = aws_iam_role.ec2_role.id
-  policy = module.data.ec2_s3_access_policy
+  policy = data.aws_iam_policy_document.ec2_s3_access.json
+}
+
+data "aws_iam_policy_document" "cloudwatch_logs_policy" {
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams",
+      "logs:DescribeLogGroups"
+    ]
+
+    resources = [
+      aws_cloudwatch_log_group.ec2_logs.arn,
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
+    ]
+  }
 }
 
 # IAM policy for CloudWatch logs
@@ -475,27 +652,7 @@ resource "aws_iam_role" "lambda_role" {
 # Attach VPC execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:${module.data.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-data "aws_iam_policy_document" "cloudwatch_logs_policy" {
-  statement {
-    sid    = "AllowCloudWatchLogs"
-    effect = "Allow"
-
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-      "logs:DescribeLogStreams",
-      "logs:DescribeLogGroups"
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:${module.monitoring.ec2_log_group_name}",
-      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
-    ]
-  }
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 #######################
@@ -505,10 +662,10 @@ data "aws_iam_policy_document" "cloudwatch_logs_policy" {
 # Launch template for EC2 instances with security hardening
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-app-"
-  image_id      = module.data.amazon_linux_ami_id
+  image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
 
-  vpc_security_group_ids = [module.security.ec2_sg_id]
+  vpc_security_group_ids = [aws_security_group.ec2.id]
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -548,7 +705,7 @@ cat <<EOT > /opt/aws/amazon-cloudwatch-agent/bin/config.json
         "collect_list": [
           {
             "file_path": "/var/log/user-data.log",
-            "log_group_name": "${module.monitoring.ec2_log_group_name}",
+            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
             "log_stream_name": "{instance_id}"
           }
         ]
@@ -648,7 +805,7 @@ resource "aws_db_instance" "main" {
   username               = var.db_username
   password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [module.security.rds_sg_id]
+  vpc_security_group_ids = [aws_security_group.rds.id]
   skip_final_snapshot    = true
   multi_az               = false
   storage_encrypted      = true
