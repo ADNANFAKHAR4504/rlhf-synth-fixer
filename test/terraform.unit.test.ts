@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const STACK_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
+const STACK_PATH = path.resolve(__dirname, '../lib/main.tf');
 const PROVIDER_PATH = path.resolve(__dirname, '../lib/provider.tf');
 const VARS_PATH = path.resolve(__dirname, '../lib/vars.tf');
 
@@ -25,7 +25,7 @@ describe('Terraform Infrastructure Unit Tests (IAM Stack)', () => {
   });
 
   describe('File Structure', () => {
-    test('tap_stack.tf exists', () => {
+    test('main.tf exists', () => {
       expect(fs.existsSync(STACK_PATH)).toBe(true);
     });
 
@@ -90,8 +90,9 @@ describe('Terraform Infrastructure Unit Tests (IAM Stack)', () => {
   });
 
   describe('S3 Backend and Random ID', () => {
-    test('module "s3_backend" configured with module path', () => {
-      expect(stackContent).toMatch(/module\s+"s3_backend"\s*{[\s\S]*source\s*=\s*"\.\/modules\/s3-backend"/);
+    test('S3 backend resources inlined (bucket and dynamodb lock table)', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"terraform_state"/);
+      expect(stackContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"terraform_state_lock"/);
     });
 
     test('random_id bucket_suffix resource defined', () => {
@@ -124,9 +125,9 @@ describe('Terraform Infrastructure Unit Tests (IAM Stack)', () => {
   });
 
   describe('IAM Modules, Groups, and Attachments', () => {
-    test('IAM users and roles modules present', () => {
-      expect(stackContent).toMatch(/module\s+"iam_users"/);
-      expect(stackContent).toMatch(/module\s+"iam_roles"/);
+    test('IAM users and roles resources present', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_iam_user"\s+"users"/);
+      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"roles"/);
     });
 
     test('IAM groups for developers and administrators exist', () => {

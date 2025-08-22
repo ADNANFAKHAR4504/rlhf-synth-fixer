@@ -1,5 +1,6 @@
 # Main Terraform configuration file
 
+
 # Data source to get current AWS account ID
 data "aws_caller_identity" "current" {}
 
@@ -7,11 +8,55 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # Create S3 bucket for Terraform state (if not exists)
-module "s3_backend" {
-  source = "./modules/s3-backend"
+# modules/s3-backend/vars.tf (inlined via root variables: bucket_name, aws_region)
+# modules/s3-backend/main.tf (inlined)
+# S3 backend module for Terraform state management
+# This inlines the original module implementation to avoid separate module usage.
+# It creates an encrypted, versioned S3 bucket and a DynamoDB table for state locking.
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "${var.project_name}-terraform-state-${random_id.bucket_suffix.hex}"
+}
 
-  bucket_name = "${var.project_name}-terraform-state-${random_id.bucket_suffix.hex}"
-  aws_region  = var.aws_region
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_dynamodb_table" "terraform_state_lock" {
+  name         = "${var.project_name}-terraform-state-${random_id.bucket_suffix.hex}-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  tags = {
+    Name = "Terraform State Lock Table"
+  }
 }
 
 # Random ID for unique bucket naming
@@ -123,25 +168,116 @@ resource "aws_iam_policy" "force_mfa" {
 }
 
 # Create IAM users using the module
-module "iam_users" {
-  source = "./modules/iam-users"
+# modules/iam-users/main.tf (inlined)
+# IAM Users module with MFA enforcement
+resource "aws_iam_user" "users" {
+  for_each = { for user in var.iam_users : user.username => user }
 
-  users                     = var.iam_users
-  project_name              = var.project_name
-  environment               = terraform.workspace
-  force_mfa                 = var.force_mfa
-  ip_restriction_policy_arn = aws_iam_policy.ip_restriction.arn
-  mfa_policy_arn            = var.force_mfa ? aws_iam_policy.force_mfa[0].arn : null
+  name          = each.value.username
+  force_destroy = true
+
+  tags = {
+    Name        = each.value.username
+    Environment = terraform.workspace
+    Project     = var.project_name
+  }
+}
+
+# Add users to their respective groups
+resource "aws_iam_user_group_membership" "user_groups" {
+  for_each = { for user in var.iam_users : user.username => user }
+
+  user   = aws_iam_user.users[each.key].name
+  groups = [for group in each.value.groups : "${var.project_name}-${group}-${terraform.workspace}"]
+}
+
+# Create access keys for users (optional)
+resource "aws_iam_access_key" "user_keys" {
+  for_each = { for user in var.iam_users : user.username => user }
+
+  user = aws_iam_user.users[each.key].name
+}
+
+# Attach IP restriction policy to users
+resource "aws_iam_user_policy_attachment" "ip_restriction" {
+  for_each = { for user in var.iam_users : user.username => user }
+
+  user       = aws_iam_user.users[each.key].name
+  policy_arn = aws_iam_policy.ip_restriction.arn
+}
+
+# Attach MFA policy to users if enabled
+resource "aws_iam_user_policy_attachment" "mfa_policy" {
+  for_each = var.force_mfa ? { for user in var.iam_users : user.username => user } : {}
+
+  user       = aws_iam_user.users[each.key].name
+  policy_arn = aws_iam_policy.force_mfa[0].arn
 }
 
 # Create IAM roles using the module
-module "iam_roles" {
-  source = "./modules/iam-roles"
+# modules/iam-roles/main.tf (inlined)
+# Data source for assume role policies
+data "aws_iam_policy_document" "assume_role" {
+  for_each = { for role in var.iam_roles : role.name => role }
 
-  roles        = var.iam_roles
-  project_name = var.project_name
-  environment  = terraform.workspace
-  account_id   = data.aws_caller_identity.current.account_id
+  statement {
+    effect = "Allow"
+
+    principals {
+      type = each.value.assume_role_policy == "ec2" ? "Service" : "AWS"
+      identifiers = each.value.assume_role_policy == "ec2" ? [
+        "ec2.amazonaws.com"
+        ] : [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+      ]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+# Create IAM roles
+resource "aws_iam_role" "roles" {
+  for_each = { for role in var.iam_roles : role.name => role }
+
+  name               = "${var.project_name}-${each.value.name}-${terraform.workspace}"
+  description        = each.value.description
+  assume_role_policy = data.aws_iam_policy_document.assume_role[each.key].json
+
+  tags = {
+    Name        = each.value.name
+    Environment = terraform.workspace
+    Project     = var.project_name
+  }
+}
+
+# Attach managed policies to roles
+resource "aws_iam_role_policy_attachment" "role_policies" {
+  for_each = {
+    for pair in flatten([
+      for role_key, role in { for r in var.iam_roles : r.name => r } : [
+        for policy in role.managed_policies : {
+          role_key   = role_key
+          policy_arn = policy
+          key        = "${role_key}-${policy}"
+        }
+      ]
+    ]) : pair.key => pair
+  }
+
+  role       = aws_iam_role.roles[each.value.role_key].name
+  policy_arn = each.value.policy_arn
+}
+
+# Create instance profiles for EC2 roles
+resource "aws_iam_instance_profile" "role_profiles" {
+  for_each = {
+    for role in var.iam_roles : role.name => role
+    if role.assume_role_policy == "ec2"
+  }
+
+  name = "${var.project_name}-${each.value.name}-profile-${terraform.workspace}"
+  role = aws_iam_role.roles[each.key].name
 }
 
 # Create IAM groups with appropriate policies
@@ -210,12 +346,14 @@ output "environment" {
 
 output "created_users" {
   description = "List of created IAM users"
-  value       = module.iam_users.user_names
+  # modules/iam-users/outputs.tf -> user_names
+  value = [for user in aws_iam_user.users : user.name]
 }
 
 output "created_roles" {
   description = "List of created IAM roles"
-  value       = module.iam_roles.role_names
+  # modules/iam-roles/outputs.tf -> role_names
+  value = [for role in aws_iam_role.roles : role.name]
 }
 
 output "ip_restriction_policy_arn" {
@@ -230,5 +368,6 @@ output "mfa_policy_arn" {
 
 output "s3_backend_bucket" {
   description = "S3 bucket for Terraform state"
-  value       = module.s3_backend.bucket_name
+  # modules/s3-backend/outputs.tf -> bucket_name
+  value = aws_s3_bucket.terraform_state.bucket
 }
