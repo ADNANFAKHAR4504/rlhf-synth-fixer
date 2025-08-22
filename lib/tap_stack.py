@@ -7,6 +7,9 @@ the CI/CD pipeline implementing a complete microservices platform on AWS.
 
 from typing import Optional, Dict
 import json
+import os
+import subprocess
+import time
 import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
@@ -30,6 +33,9 @@ class TapStack(pulumi.ComponentResource):
   """
 
   def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
+    # FIRST: Clean up any existing Pulumi locks before proceeding
+    self._cleanup_pulumi_locks(args.environment_suffix)
+    
     super().__init__("custom:TapStack", name, None, opts)
 
     self.environment_suffix = args.environment_suffix
@@ -896,4 +902,60 @@ class TapStack(pulumi.ComponentResource):
       tags={**self.common_tags, "Name": f"microservices-cloudtrail-{self.environment_suffix}"},
       opts=ResourceOptions(parent=self, depends_on=[cloudtrail_policy])
     )
+
+  def _cleanup_pulumi_locks(self, environment_suffix):
+    """
+    Clean up any existing Pulumi locks before deployment.
+    This handles the common CI/CD issue where interrupted deployments leave locks.
+    """
+    max_retries = 3
+    retry_delay = 5
+    
+    # Use provided suffix or get from environment
+    if not environment_suffix:
+      environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', os.getenv('PR_NUMBER', 'dev'))
+    
+    # Construct stack name - must match the actual stack naming convention
+    if environment_suffix.isdigit():
+      stack_name = f"TapStackpr{environment_suffix}"
+    else:
+      stack_name = f"TapStack{environment_suffix}"
+    
+    pulumi.log.info(f"Checking for Pulumi locks on stack: {stack_name}")
+    
+    for attempt in range(max_retries):
+      try:
+        # Attempt to cancel any existing locks
+        cancel_result = subprocess.run(
+          ['pulumi', 'cancel', '--stack', stack_name, '--yes'],
+          capture_output=True,
+          text=True,
+          timeout=30,
+          env={**os.environ}
+        )
+        
+        if cancel_result.returncode == 0:
+          pulumi.log.info(f"Successfully cleaned up locks for stack {stack_name}")
+          return
+        elif "no stack operations are currently running" in cancel_result.stderr.lower():
+          pulumi.log.info(f"No locks to clean for stack {stack_name}")
+          return
+        else:
+          pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} - {cancel_result.stderr}")
+          
+      except subprocess.TimeoutExpired:
+        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} timed out")
+      except FileNotFoundError:
+        # Pulumi CLI not found, skip lock cleanup
+        pulumi.log.warn("Pulumi CLI not found, skipping lock cleanup")
+        return
+      except Exception as e:
+        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+      
+      if attempt < max_retries - 1:
+        pulumi.log.info(f"Retrying lock cleanup in {retry_delay} seconds...")
+        time.sleep(retry_delay)
+    
+    # If all retries failed, log a warning but continue
+    pulumi.log.warn("Could not clean up Pulumi locks after all retries, proceeding anyway")
 # Updated for testing deployment pipeline - analyzing CI/CD behavior
