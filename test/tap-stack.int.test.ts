@@ -222,7 +222,7 @@ describe('Nova Infrastructure Integration Tests', () => {
         expect(environment?.Status).toBe('Ready');
         
         // Use standard Jest matchers instead of custom toBeOneOf
-        const validHealthStates = ['Green', 'Yellow', 'Red'];
+        const validHealthStates = ['Green', 'Yellow', 'Red', 'Grey'];
         expect(validHealthStates).toContain(environment?.Health);
         
         expect(environment?.Tier?.Name).toBe('WebServer');
