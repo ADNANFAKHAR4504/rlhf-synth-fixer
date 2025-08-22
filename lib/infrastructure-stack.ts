@@ -7,6 +7,21 @@ export interface InfrastructureStackArgs {
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
+// Function to get ELB service account for the region
+export function getELBServiceAccount(region: string): string {
+  const elbServiceAccounts: { [key: string]: string } = {
+    'us-east-1': '127311923021',
+    'us-east-2': '033677994240',
+    'us-west-1': '027434742980',
+    'us-west-2': '797873946194',
+    'eu-west-1': '156460612806',
+    'eu-central-1': '054676820928',
+    'ap-southeast-1': '114774131450',
+    'ap-northeast-1': '582318560864',
+  };
+  return elbServiceAccounts[region] || '127311923021'; // Default to us-east-1
+}
+
 export class InfrastructureStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string[]>;
@@ -22,6 +37,16 @@ export class InfrastructureStack extends pulumi.ComponentResource {
   public readonly logGroupName: pulumi.Output<string>;
   public readonly albLogsBucketName: pulumi.Output<string>;
   public readonly cloudFrontLogsBucketName: pulumi.Output<string>;
+  public readonly albArn: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly launchTemplateName: pulumi.Output<string>;
+  public readonly ec2RoleArn: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly ec2SecurityGroupId: pulumi.Output<string>;
+  public readonly cloudFrontDistributionId: pulumi.Output<string>;
+  public readonly environment: pulumi.Output<string>;
+  public readonly sanitizedName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -365,21 +390,6 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Function to get ELB service account for the region
-    function getELBServiceAccount(region: string): string {
-      const elbServiceAccounts: { [key: string]: string } = {
-        'us-east-1': '127311923021',
-        'us-east-2': '033677994240',
-        'us-west-1': '027434742980',
-        'us-west-2': '797873946194',
-        'eu-west-1': '156460612806',
-        'eu-central-1': '054676820928',
-        'ap-southeast-1': '114774131450',
-        'ap-northeast-1': '582318560864',
-      };
-      return elbServiceAccounts[region] || '127311923021'; // Default to us-east-1
-    }
-
     // S3 Bucket Policy for ALB Access Logs
     new aws.s3.BucketPolicy(
       `${sanitizedName}-alb-logs-bucket-policy`,
@@ -665,7 +675,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     );
 
     // Auto Scaling Group
-    new aws.autoscaling.Group(
+    const autoScalingGroup = new aws.autoscaling.Group(
       `${sanitizedName}-main-asg`,
       {
         name: `${sanitizedName}-asg`,
@@ -1065,6 +1075,17 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     this.logGroupName = logGroup.name;
     this.albLogsBucketName = albLogsBucket.bucket;
     this.cloudFrontLogsBucketName = cloudFrontLogsBucket.bucket;
+    // Additional outputs for testing
+    this.albArn = alb.arn;
+    this.targetGroupArn = targetGroup.arn;
+    this.autoScalingGroupName = autoScalingGroup.name;
+    this.launchTemplateName = launchTemplate.name;
+    this.ec2RoleArn = ec2Role.arn;
+    this.albSecurityGroupId = albSecurityGroup.id;
+    this.ec2SecurityGroupId = ec2SecurityGroup.id;
+    this.cloudFrontDistributionId = cloudFrontDistribution.id;
+    this.environment = pulumi.output(environment);
+    this.sanitizedName = pulumi.output(sanitizedName);
 
     this.registerOutputs({
       vpcId: this.vpcId,
@@ -1081,6 +1102,17 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       logGroupName: this.logGroupName,
       albLogsBucketName: this.albLogsBucketName,
       cloudFrontLogsBucketName: this.cloudFrontLogsBucketName,
+      // Additional outputs for testing
+      albArn: alb.arn,
+      targetGroupArn: targetGroup.arn,
+      autoScalingGroupName: autoScalingGroup.name,
+      launchTemplateName: launchTemplate.name,
+      ec2RoleArn: ec2Role.arn,
+      albSecurityGroupId: albSecurityGroup.id,
+      ec2SecurityGroupId: ec2SecurityGroup.id,
+      cloudFrontDistributionId: cloudFrontDistribution.id,
+      environment: environment,
+      sanitizedName: sanitizedName,
     });
   }
 }

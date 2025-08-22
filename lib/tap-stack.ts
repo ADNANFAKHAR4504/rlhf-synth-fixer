@@ -58,6 +58,18 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly logGroupName: pulumi.Output<string>;
   public readonly albLogsBucketName: pulumi.Output<string>;
   public readonly cloudFrontLogsBucketName: pulumi.Output<string>;
+  // Additional outputs for testing
+  public readonly albArn: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly launchTemplateName: pulumi.Output<string>;
+  public readonly ec2RoleArn: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly ec2SecurityGroupId: pulumi.Output<string>;
+  public readonly cloudFrontDistributionId: pulumi.Output<string>;
+  public readonly environment: pulumi.Output<string>;
+  public readonly sanitizedName: pulumi.Output<string>;
+  public readonly infrastructureStack: InfrastructureStack;
 
   /**
    * Creates a new TapStack component.
@@ -88,7 +100,7 @@ export class TapStack extends pulumi.ComponentResource {
     //   tags: tags,
     // }, { parent: this });
 
-    const infrastructureStack = new InfrastructureStack(
+    this.infrastructureStack = new InfrastructureStack(
       'tap-infrastructure',
       {
         environmentSuffix: environmentSuffix,
@@ -100,21 +112,33 @@ export class TapStack extends pulumi.ComponentResource {
     // --- Expose Outputs from Infrastructure ---
     // Make outputs from infrastructure available as outputs of this main stack.
     // this.table = dynamoDBStack.table;
-    this.vpcId = infrastructureStack.vpcId;
-    this.publicSubnetIds = infrastructureStack.publicSubnetIds;
-    this.privateSubnetIds = infrastructureStack.privateSubnetIds;
-    this.albDnsName = infrastructureStack.albDnsName;
-    this.albZoneId = infrastructureStack.albZoneId;
-    this.cloudFrontDomainName = infrastructureStack.cloudFrontDomainName;
-    this.dynamoTableName = infrastructureStack.dynamoTableName;
-    this.secretArn = infrastructureStack.secretArn;
-    this.kmsKeyId = infrastructureStack.kmsKeyId;
-    this.kmsKeyArn = infrastructureStack.kmsKeyArn;
-    this.webAclArn = infrastructureStack.webAclArn;
-    this.logGroupName = infrastructureStack.logGroupName;
-    this.albLogsBucketName = infrastructureStack.albLogsBucketName;
+    this.vpcId = this.infrastructureStack.vpcId;
+    this.publicSubnetIds = this.infrastructureStack.publicSubnetIds;
+    this.privateSubnetIds = this.infrastructureStack.privateSubnetIds;
+    this.albDnsName = this.infrastructureStack.albDnsName;
+    this.albZoneId = this.infrastructureStack.albZoneId;
+    this.cloudFrontDomainName = this.infrastructureStack.cloudFrontDomainName;
+    this.dynamoTableName = this.infrastructureStack.dynamoTableName;
+    this.secretArn = this.infrastructureStack.secretArn;
+    this.kmsKeyId = this.infrastructureStack.kmsKeyId;
+    this.kmsKeyArn = this.infrastructureStack.kmsKeyArn;
+    this.webAclArn = this.infrastructureStack.webAclArn;
+    this.logGroupName = this.infrastructureStack.logGroupName;
+    this.albLogsBucketName = this.infrastructureStack.albLogsBucketName;
     this.cloudFrontLogsBucketName =
-      infrastructureStack.cloudFrontLogsBucketName;
+      this.infrastructureStack.cloudFrontLogsBucketName;
+    // Additional outputs for testing
+    this.albArn = this.infrastructureStack.albArn;
+    this.targetGroupArn = this.infrastructureStack.targetGroupArn;
+    this.autoScalingGroupName = this.infrastructureStack.autoScalingGroupName;
+    this.launchTemplateName = this.infrastructureStack.launchTemplateName;
+    this.ec2RoleArn = this.infrastructureStack.ec2RoleArn;
+    this.albSecurityGroupId = this.infrastructureStack.albSecurityGroupId;
+    this.ec2SecurityGroupId = this.infrastructureStack.ec2SecurityGroupId;
+    this.cloudFrontDistributionId =
+      this.infrastructureStack.cloudFrontDistributionId;
+    this.environment = this.infrastructureStack.environment;
+    this.sanitizedName = this.infrastructureStack.sanitizedName;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -133,6 +157,17 @@ export class TapStack extends pulumi.ComponentResource {
       logGroupName: this.logGroupName,
       albLogsBucketName: this.albLogsBucketName,
       cloudFrontLogsBucketName: this.cloudFrontLogsBucketName,
+      // Additional outputs for testing
+      albArn: this.albArn,
+      targetGroupArn: this.targetGroupArn,
+      autoScalingGroupName: this.autoScalingGroupName,
+      launchTemplateName: this.launchTemplateName,
+      ec2RoleArn: this.ec2RoleArn,
+      albSecurityGroupId: this.albSecurityGroupId,
+      ec2SecurityGroupId: this.ec2SecurityGroupId,
+      cloudFrontDistributionId: this.cloudFrontDistributionId,
+      environment: this.environment,
+      sanitizedName: this.sanitizedName,
     });
   }
 }
