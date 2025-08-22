@@ -367,11 +367,6 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                   },
                   Action: 's3:PutObject',
                   Resource: `${bucketArn}/AWSLogs/${currentAccount.accountId}/*`,
-                  Condition: {
-                    StringEquals: {
-                      's3:x-amz-acl': 'bucket-owner-full-control',
-                    },
-                  },
                 },
                 {
                   Effect: 'Allow',
