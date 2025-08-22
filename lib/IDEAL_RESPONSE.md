@@ -792,27 +792,27 @@ Resources:
   # ===========================
   # CloudTrail
   # ===========================
-  SecureCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub '${Project}-${Environment}-cloudtrail'
-      S3BucketName: !Ref CloudTrailBucket
-      S3KeyPrefix: 'cloudtrail-logs/'
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: false
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref SecureKMSKey
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      IsLogging: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${Project}-${Environment}-cloudtrail'
-        - Key: Project
-          Value: !Ref Project
-        - Key: Environment
-          Value: !Ref Environment
+#  SecureCloudTrail:
+#    Type: AWS::CloudTrail::Trail
+#    DependsOn: CloudTrailBucketPolicy
+#    Properties:
+#      TrailName: !Sub '${Project}-${Environment}-cloudtrail'
+#      S3BucketName: !Ref CloudTrailBucket
+#      S3KeyPrefix: 'cloudtrail-logs/'
+#      IncludeGlobalServiceEvents: true
+#      IsMultiRegionTrail: false
+#      EnableLogFileValidation: true
+#      KMSKeyId: !Ref SecureKMSKey
+#      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+#      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+#      IsLogging: true
+#      Tags:
+#        - Key: Name
+#          Value: !Sub '${Project}-${Environment}-cloudtrail'
+#        - Key: Project
+#          Value: !Ref Project
+#        - Key: Environment
+#          Value: !Ref Environment
 Outputs:
   # Networking
   VPCId:
@@ -991,10 +991,10 @@ Outputs:
       Name: !Sub '${AWS::StackName}-CloudTrailLogGroup'
 
   # CloudTrail
-  CloudTrailArn:
-    Description: 'CloudTrail ARN'
-    Value: !GetAtt SecureCloudTrail.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+#  CloudTrailArn:
+#    Description: 'CloudTrail ARN'
+#    Value: !GetAtt SecureCloudTrail.Arn
+#    Export:
+#      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
 
 ```
