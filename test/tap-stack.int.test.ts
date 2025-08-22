@@ -1,21 +1,17 @@
 import fs from 'fs';
 import axios from 'axios';
-import { lookup } from 'node:dns/promises';
-
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 describe('WebAppStack Integration Tests', () => {
-  const lbDns = outputs.LoadBalancerDNS;
-  const rdsEndpoint = outputs.RDSEndpoint;
-  const cloudWatchAlarmName = outputs.CloudWatchAlarmName;
-  const elasticIp = outputs.ElasticIPAddress;
+  const lbDns = outputs[`LoadBalancerDNS${environmentSuffix}`];
+  const rdsEndpoint = outputs[`RDSEndpoint${environmentSuffix}`];
+  const cloudWatchAlarmName = outputs[`CloudWatchAlarmName${environmentSuffix}`];
+  const elasticIp = outputs[`ElasticIPAddress${environmentSuffix}`];
 
   describe('Load Balancer / Web Application', () => {
     test('should respond with HTTP 200 on / (root) path', async () => {
@@ -29,18 +25,20 @@ describe('WebAppStack Integration Tests', () => {
     });
 
     test('should return a consistent static EIP from DNS', async () => {
-      expect(lbDns).toBeDefined();
       expect(lbDns).toMatch(/\.elb\.amazonaws\.com$/);
 
       const ipAddress = await resolveDNS(lbDns);
       expect(ipAddress).toMatch(/(\d{1,3}\.){3}\d{1,3}/);
+
+      expect(elasticIp).toBeDefined();
       expect(ipAddress).toBe(elasticIp);
     });
   });
 
   describe('CloudWatch Monitoring', () => {
     test('alarm should exist and be in OK state', async () => {
-      expect(cloudWatchAlarmName).toBeDefined();
+      const cloudwatch = await import('@aws-sdk/client-cloudwatch');
+      const { CloudWatchClient, DescribeAlarmsCommand } = cloudwatch;
 
       const cwClient = new CloudWatchClient({
         region: process.env.AWS_REGION || 'us-east-1',
@@ -52,12 +50,12 @@ describe('WebAppStack Integration Tests', () => {
         })
       );
 
-      expect(result.MetricAlarms).toBeDefined();
-      expect(result.MetricAlarms.length).toBeGreaterThan(0);
+      expect(result).toBeDefined();
+      expect(result.MetricAlarms?.length).toBeGreaterThan(0);
 
-      const alarm = result.MetricAlarms[0];
+      const alarm = result.MetricAlarms![0];
       expect(alarm.AlarmName).toBe(cloudWatchAlarmName);
-      expect(alarm.StateValue).toBe('OK');
+      expect(alarm.StateValue).toBe('OK'); // Could also test for "ALARM" if appropriate
     });
   });
 
@@ -66,13 +64,14 @@ describe('WebAppStack Integration Tests', () => {
       expect(rdsEndpoint).toBeDefined();
 
       const ip = await resolveDNS(rdsEndpoint);
-      expect(ip).toMatch(/(\d{1,3}\.){3}\d{1,3}/);
+      expect(ip).toMatch(/(\d{1,3}\.){3}\d{1,3}/); // Basic IPv4 format
     });
   });
 });
 
-// Utility function
+// Utility: DNS Resolver
 async function resolveDNS(hostname: string): Promise<string> {
+  const { lookup } = await import('node:dns/promises');
   const result = await lookup(hostname);
   return result.address;
 }
