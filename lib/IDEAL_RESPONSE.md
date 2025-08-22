@@ -36,14 +36,6 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
 
-  DBUsername:
-    NoEcho: true
-    Type: String
-
-  DBPassword:
-    NoEcho: true
-    Type: String
-
 Resources:
 
   VPC:
@@ -274,8 +266,8 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MultiAZ: true
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:MyRDSSecret:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:MyRDSSecret:SecretString:password}}'
       AllocatedStorage: 20
       DBInstanceIdentifier: WebAppDB
       VPCSecurityGroups:
