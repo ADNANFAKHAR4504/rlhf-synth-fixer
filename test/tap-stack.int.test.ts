@@ -5,7 +5,8 @@ import {
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeRouteTablesCommand,
-  DescribeInternetGatewaysCommand
+  DescribeInternetGatewaysCommand,
+  DescribeVpcAttributeCommand
 } from '@aws-sdk/client-ec2';
 import {
   IAMClient,
@@ -13,7 +14,8 @@ import {
   GetInstanceProfileCommand,
   ListAttachedRolePoliciesCommand,
   GetPolicyCommand,
-  GetPolicyVersionCommand
+  GetPolicyVersionCommand,
+  ListPoliciesCommand
 } from '@aws-sdk/client-iam';
 import {
   S3Client,
@@ -56,7 +58,7 @@ import {
   DescribeHubCommand
 } from '@aws-sdk/client-securityhub';
 import {
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeListenersCommand
 } from '@aws-sdk/client-elastic-load-balancing-v2';
@@ -87,7 +89,7 @@ const rdsClient = new RDSClient({ region });
 const secretsClient = new SecretsManagerClient({ region });
 const kmsClient = new KMSClient({ region });
 const securityHubClient = new SecurityHubClient({ region });
-const elbClient = new ELBv2Client({ region });
+const elbClient = new ElasticLoadBalancingV2Client({ region });
 const ssmClient = new SSMClient({ region });
 
 describe('Security Stack Integration Tests', () => {
@@ -101,8 +103,19 @@ describe('Security Stack Integration Tests', () => {
       
       expect(response.Vpcs?.[0]).toBeDefined();
       expect(response.Vpcs?.[0]?.CidrBlock).toBe('10.0.0.0/16');
-      expect(response.Vpcs?.[0]?.EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs?.[0]?.EnableDnsSupport).toBe(true);
+      
+      // Check DNS attributes using DescribeVpcAttributeCommand
+      const dnsHostnamesResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsHostnames'
+      }));
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      
+      const dnsSupportResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport'
+      }));
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('All subnets should be created in correct AZs', async () => {
@@ -167,8 +180,8 @@ describe('Security Stack Integration Tests', () => {
 
     test('MFA Enforcement Policy should be created', async () => {
       const policyName = `MFAEnforcement-${environmentSuffix}`;
-      const policies = await iamClient.send(new ListAttachedRolePoliciesCommand({}));
-      const mfaPolicy = policies.AttachedPolicies?.find(p => p.PolicyName === policyName);
+      const policiesResponse = await iamClient.send(new ListPoliciesCommand({}));
+      const mfaPolicy = policiesResponse.Policies?.find(p => p.PolicyName === policyName);
       
       expect(mfaPolicy).toBeDefined();
     });
@@ -327,13 +340,20 @@ describe('Security Stack Integration Tests', () => {
     });
 
     test('HTTPS listener should be configured', async () => {
-      const albArn = outputs.LoadBalancerDNS; // This should be ARN in real implementation
-      const response = await elbClient.send(new DescribeListenersCommand({
-        LoadBalancerArn: albArn
-      }));
+      const albName = `ALB-${environmentSuffix}`;
+      const albResponse = await elbClient.send(new DescribeLoadBalancersCommand({}));
+      const alb = albResponse.LoadBalancers?.find(lb => lb.LoadBalancerName === albName);
       
-      const httpsListener = response.Listeners?.find(l => l.Port === 443);
-      expect(httpsListener).toBeDefined();
+      if (alb) {
+        const response = await elbClient.send(new DescribeListenersCommand({
+          LoadBalancerArn: alb.LoadBalancerArn
+        }));
+        
+        const httpsListener = response.Listeners?.find(l => l.Port === 443);
+        expect(httpsListener).toBeDefined();
+      } else {
+        fail('ALB not found');
+      }
     });
   });
 
