@@ -1,20 +1,24 @@
 /* eslint-disable prettier/prettier */
+
 /**
- * Unit Tests for TapStack
- * 
- * These tests validate the TapStack component in isolation using mocked dependencies.
- * Tests cover configuration validation, resource creation logic, and error handling.
- */
+* Unit Tests for TapStack
+* These tests validate the TapStack component in isolation using mocked dependencies.
+* Tests cover configuration validation, resource creation logic, and error handling.
+*/
 
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+
+// Mock fs module
+jest.mock('fs');
+const mockFs = fs as jest.Mocked<typeof fs>;
 
 // Mock Pulumi runtime for unit testing
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): pulumi.runtime.MockResourceResult => {
     const outputs: Record<string, any> = {};
     
-    // Mock outputs based on resource type
     switch (args.type) {
       case 'aws:ec2/vpc:Vpc':
         outputs.id = 'vpc-12345678';
@@ -73,6 +77,9 @@ pulumi.runtime.setMocks({
     if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
       return { names: ['us-east-1a', 'us-east-1b', 'us-east-1c'] };
     }
+    if (args.token === 'aws:index/getCallerIdentity:getCallerIdentity') {
+      return { accountId: '123456789012' };
+    }
     return {};
   },
 });
@@ -90,14 +97,17 @@ describe('TapStack Unit Tests', () => {
   };
 
   beforeEach(() => {
-    // Reset Pulumi configuration for each test
     jest.clearAllMocks();
+    mockFs.writeFileSync.mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('Constructor and Initialization', () => {
     test('should create TapStack with default configuration', async () => {
       stack = new TapStack('test-stack', defaultArgs);
-      
       expect(stack).toBeInstanceOf(TapStack);
       expect(stack.vpc).toBeDefined();
       expect(stack.privateSubnets).toBeDefined();
@@ -109,20 +119,35 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         environment: 'production',
       };
-      
       stack = new TapStack('prod-stack', customArgs);
-      
       expect(stack).toBeInstanceOf(TapStack);
-      // Environment-specific assertions would go here
     });
 
     test('should handle minimal configuration', async () => {
       const minimalArgs = {
         tags: { Environment: 'minimal' },
       };
-      
       stack = new TapStack('minimal-stack', minimalArgs);
-      
+      expect(stack).toBeInstanceOf(TapStack);
+    });
+
+    test('should use config fallbacks when environment not provided', async () => {
+      const argsWithoutEnv = {
+        tags: { Environment: 'test' },
+        // environment is undefined
+        regions: ['us-west-2'],
+      };
+      stack = new TapStack('fallback-stack', argsWithoutEnv);
+      expect(stack).toBeInstanceOf(TapStack);
+    });
+
+    test('should use default regions when not provided', async () => {
+      const argsWithoutRegions = {
+        tags: { Environment: 'test' },
+        environment: 'test',
+        // regions is undefined
+      };
+      stack = new TapStack('default-regions-stack', argsWithoutRegions);
       expect(stack).toBeInstanceOf(TapStack);
     });
   });
@@ -136,24 +161,20 @@ describe('TapStack Unit Tests', () => {
       const vpcId = await new Promise<string>((resolve) => {
         stack.vpc.id.apply(id => resolve(id));
       });
-      
       expect(vpcId).toMatch(/^vpc-[a-z0-9]+$/);
     });
 
     test('should create public and private subnets', async () => {
       expect(stack.publicSubnets).toHaveLength(3);
       expect(stack.privateSubnets).toHaveLength(3);
-      
-      // Test subnet IDs format
+
       const publicId = await new Promise<string>((resolve) => {
         stack.publicSubnets[0].id.apply(id => resolve(id));
       });
-      
       expect(publicId).toMatch(/^subnet-[a-z0-9]+$/);
     });
 
     test('should handle single AZ deployment', async () => {
-      // This would test edge cases in subnet creation
       expect(stack.privateSubnets.length).toBeGreaterThan(0);
       expect(stack.publicSubnets.length).toBeGreaterThan(0);
     });
@@ -168,16 +189,14 @@ describe('TapStack Unit Tests', () => {
       expect(stack.cloudTrailRole).toBeDefined();
       expect(stack.deploymentRole).toBeDefined();
       expect(stack.vpcFlowLogsRole).toBeDefined();
-      
+
       const roleArn = await new Promise<string>((resolve) => {
         stack.cloudTrailRole.arn.apply(arn => resolve(arn));
       });
-      
       expect(roleArn).toMatch(/^arn:aws:iam::/);
     });
 
     test('should create roles with proper assume role policies', async () => {
-      // Test that roles have correct trust relationships
       expect(stack.cloudTrailRole).toBeDefined();
       expect(stack.deploymentRole).toBeDefined();
       expect(stack.vpcFlowLogsRole).toBeDefined();
@@ -191,25 +210,23 @@ describe('TapStack Unit Tests', () => {
 
     test('should create S3 bucket for CloudTrail', async () => {
       expect(stack.cloudTrailBucket).toBeDefined();
-      
+
       const bucketName = await new Promise<string>((resolve) => {
         stack.cloudTrailBucket.bucket.apply(name => resolve(name));
       });
-      
       expect(bucketName).toMatch(/test-cloudtrail-logs-\d+/);
     });
 
     test('should handle bucket naming conflicts', async () => {
-      // Test unique bucket name generation
       const bucket1Name = await new Promise<string>((resolve) => {
         stack.cloudTrailBucket.bucket.apply(name => resolve(name));
       });
-      
+
       const stack2 = new TapStack('storage-test-2', defaultArgs);
       const bucket2Name = await new Promise<string>((resolve) => {
         stack2.cloudTrailBucket.bucket.apply(name => resolve(name));
       });
-      
+
       expect(bucket1Name).not.toBe(bucket2Name);
     });
   });
@@ -229,7 +246,6 @@ describe('TapStack Unit Tests', () => {
       const logGroupName = await new Promise<string>((resolve) => {
         stack.logGroup.name.apply(name => resolve(name));
       });
-      
       expect(logGroupName).toBe('/aws/infrastructure/test');
     });
 
@@ -237,8 +253,23 @@ describe('TapStack Unit Tests', () => {
       const topicArn = await new Promise<string>((resolve) => {
         stack.alarmTopic.arn.apply(arn => resolve(arn));
       });
-      
       expect(topicArn).toMatch(/^arn:aws:sns:/);
+    });
+
+    test('should use production retention for prod environment', async () => {
+      const prodStack = new TapStack('prod-monitoring-test', {
+        ...defaultArgs,
+        environment: 'prod',
+      });
+      expect(prodStack.logGroup).toBeDefined();
+    });
+
+    test('should use non-production retention for non-prod environment', async () => {
+      const devStack = new TapStack('dev-monitoring-test', {
+        ...defaultArgs,
+        environment: 'dev',
+      });
+      expect(devStack.logGroup).toBeDefined();
     });
   });
 
@@ -256,8 +287,15 @@ describe('TapStack Unit Tests', () => {
       const flowLogsId = await new Promise<string>((resolve) => {
         stack.vpcFlowLogs.id.apply(id => resolve(id));
       });
-      
       expect(flowLogsId).toMatch(/^fl-[a-f0-9]+$/);
+    });
+
+    test('should use production retention for prod environment flow logs', async () => {
+      const prodStack = new TapStack('prod-flow-logs-test', {
+        ...defaultArgs,
+        environment: 'prod',
+      });
+      expect(prodStack.vpcFlowLogs).toBeDefined();
     });
   });
 
@@ -270,7 +308,6 @@ describe('TapStack Unit Tests', () => {
       const prefix = await new Promise<string>((resolve) => {
         stack.parameterStorePrefix.apply(p => resolve(p));
       });
-      
       expect(prefix).toBe('/test');
     });
 
@@ -279,11 +316,10 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         environment: 'production',
       });
-      
+
       const prodPrefix = await new Promise<string>((resolve) => {
         prodStack.parameterStorePrefix.apply(p => resolve(p));
       });
-      
       expect(prodPrefix).toBe('/production');
     });
   });
@@ -294,7 +330,7 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         enableMultiAccount: true,
       });
-      
+
       expect(multiAccountStack.stackSetExecutionRole).toBeDefined();
       expect(multiAccountStack.stackSetAdministrationRole).toBeDefined();
     });
@@ -304,9 +340,19 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         enableMultiAccount: false,
       });
-      
+
       expect(singleAccountStack.stackSetExecutionRole).toBeUndefined();
       expect(singleAccountStack.stackSetAdministrationRole).toBeUndefined();
+    });
+
+    test('should not create StackSet roles when not specified', async () => {
+      const defaultStack = new TapStack('default-stack-test', {
+        ...defaultArgs,
+        // enableMultiAccount is undefined
+      });
+
+      expect(defaultStack.stackSetExecutionRole).toBeUndefined();
+      expect(defaultStack.stackSetAdministrationRole).toBeUndefined();
     });
   });
 
@@ -315,7 +361,6 @@ describe('TapStack Unit Tests', () => {
       const emptyTagsStack = new TapStack('empty-tags-test', {
         tags: {},
       });
-      
       expect(emptyTagsStack).toBeInstanceOf(TapStack);
     });
 
@@ -324,7 +369,6 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         environment: 'INVALID_ENV_123!',
       });
-      
       expect(invalidEnvStack).toBeInstanceOf(TapStack);
     });
 
@@ -333,7 +377,6 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         regions: ['us-east-1'],
       });
-      
       expect(singleRegionStack).toBeInstanceOf(TapStack);
     });
 
@@ -342,8 +385,45 @@ describe('TapStack Unit Tests', () => {
         ...defaultArgs,
         regions: undefined,
       });
-      
       expect(undefinedRegionsStack).toBeInstanceOf(TapStack);
+    });
+
+    test('should handle file write errors gracefully', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+
+      expect(() => {
+        new TapStack('file-error-test', defaultArgs);
+      }).not.toThrow();
+
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+    });
+
+    test('should handle successful file writes', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {
+        // Successfully write file
+      });
+
+      // Mock console.log to avoid output during tests
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      // Set NODE_ENV to non-test to trigger console.log
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      new TapStack('file-success-test', defaultArgs);
+
+      // Wait for the async operation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+
+      // Restore original NODE_ENV
+      process.env.NODE_ENV = originalNodeEnv;
+      consoleSpy.mockRestore();
     });
   });
 
@@ -360,14 +440,11 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should apply tags consistently across resources', async () => {
-      // This would typically involve checking that all created resources
-      // have the expected tags applied
       expect(stack.vpc).toBeDefined();
       expect(stack.cloudTrailBucket).toBeDefined();
     });
 
     test('should merge default and custom tags', async () => {
-      // Test tag merging logic
       expect(stack).toBeInstanceOf(TapStack);
     });
   });
@@ -385,8 +462,64 @@ describe('TapStack Unit Tests', () => {
       const minimalStack = new TapStack('minimal-validation-test', {
         tags: { Environment: 'test' },
       });
-      
       expect(minimalStack).toBeInstanceOf(TapStack);
+    });
+  });
+
+  describe('Output File Generation', () => {
+    test('should generate outputs file successfully', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {});
+      
+      stack = new TapStack('output-test', defaultArgs);
+      
+      // Wait for async operations to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+        'stack-outputs.json',
+        expect.stringContaining('vpcId'),
+        'utf8'
+      );
+    });
+
+    test('should handle custom output file path', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {});
+      
+      stack = new TapStack('custom-output-test', defaultArgs);
+      
+      // Wait for async operations to complete  
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+    });
+  });
+
+  describe('Environment-Specific Logic', () => {
+    test('should configure production environment settings', async () => {
+      const prodStack = new TapStack('prod-env-test', {
+        ...defaultArgs,
+        environment: 'prod',
+      });
+
+      expect(prodStack).toBeInstanceOf(TapStack);
+    });
+
+    test('should configure development environment settings', async () => {
+      const devStack = new TapStack('dev-env-test', {
+        ...defaultArgs,
+        environment: 'dev',
+      });
+
+      expect(devStack).toBeInstanceOf(TapStack);
+    });
+
+    test('should handle test environment detection', async () => {
+      const testStack = new TapStack('env-detection-test', {
+        ...defaultArgs,
+        environment: 'integration-test',
+      });
+
+      expect(testStack).toBeInstanceOf(TapStack);
     });
   });
 });

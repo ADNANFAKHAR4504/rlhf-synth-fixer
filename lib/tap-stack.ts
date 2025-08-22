@@ -1,20 +1,19 @@
 /* eslint-disable prettier/prettier */
+
 /**
- * TapStack: A comprehensive multi-environment AWS infrastructure stack
- * 
- * This stack implements AWS best practices for multi-environment deployments including:
- * - Nested stack organization through ComponentResources
- * - Multi-region deployment support
- * - Comprehensive security with IAM least privilege
- * - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
- * - Environment-specific configuration management
- * - Consistent tagging strategies
- */
+* TapStack: A comprehensive multi-environment AWS infrastructure stack
+* This stack implements AWS best practices for multi-environment deployments including:
+* - Nested stack organization through ComponentResources
+* - Multi-region deployment support
+* - Comprehensive security with IAM least privilege
+* - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
+* - Environment-specific configuration management
+* - Consistent tagging strategies
+*/
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as fs from 'fs';
-// import * as path from 'path';
 
 export interface TapStackArgs {
   tags: Record<string, string>;
@@ -31,11 +30,11 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly publicSubnets: aws.ec2.Subnet[];
   public readonly cloudTrailBucket: aws.s3.Bucket;
   public readonly parameterStorePrefix: pulumi.Output<string>;
-  
+
   // Security Outputs
   public readonly cloudTrailRole: aws.iam.Role;
   public readonly deploymentRole: aws.iam.Role;
-  
+
   // Monitoring Outputs
   public readonly logGroup: aws.cloudwatch.LogGroup;
   public readonly alarmTopic: aws.sns.Topic;
@@ -58,7 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.config = new pulumi.Config();
     this.environment = args.environment || this.config.get('env') || 'dev';
     this.regions = args.regions || ['us-east-1', 'eu-west-2'];
-    
+
     // Enhanced tagging strategy
     this.defaultTags = {
       ...args.tags,
@@ -120,7 +119,6 @@ export class TapStack extends pulumi.ComponentResource {
     // 11. Generate outputs to JSON file for integration tests
     this.generateOutputsFile();
 
-
     this.registerOutputs({
       vpcId: this.vpc.id,
       internetGatewayId: this.internetGateway.id,
@@ -134,96 +132,91 @@ export class TapStack extends pulumi.ComponentResource {
     });
   }
 
-/**
- * Generate outputs to JSON file for integration tests
- */
-private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
-  // Instead of pulumi.all on arrays, we spread subnet IDs into the big pulumi.all
-  pulumi.all([
-    this.vpc.id,
-    this.internetGateway.id,
-    ...this.privateSubnets.map(s => s.id),   // each is Output<string>
-    ...this.publicSubnets.map(s => s.id),    // each is Output<string>
-    this.cloudTrailBucket.bucket,
-    this.cloudTrailBucket.arn,
-    this.parameterStorePrefix,
-    this.logGroup.name,
-    this.logGroup.arn,
-    this.alarmTopic.arn,
-    this.dashboard.dashboardArn,
-    this.vpcFlowLogs.id,
-    this.cloudTrailRole.arn,
-    this.deploymentRole.arn,
-    this.vpcFlowLogsRole.arn,
-    aws.getRegion().then(r => r.name),
-    aws.getCallerIdentity().then(c => c.accountId),
-  ]).apply(([
-    vpcId,
-    internetGatewayId,
-    ...rest
-  ]) => {
-    // Extract arrays back out from rest
-    const privateSubnetIds = rest.slice(0, this.privateSubnets.length);
-    const publicSubnetIds = rest.slice(this.privateSubnets.length, this.privateSubnets.length + this.publicSubnets.length);
-
-    const [
-      cloudTrailBucketName,
-      cloudTrailBucketArn,
-      parameterStorePrefix,
-      logGroupName,
-      logGroupArn,
-      alarmTopicArn,
-      dashboardArn,
-      vpcFlowLogsId,
-      cloudTrailRoleArn,
-      deploymentRoleArn,
-      vpcFlowLogsRoleArn,
-      awsRegion,
-      accountId,
-    ] = rest.slice(this.privateSubnets.length + this.publicSubnets.length);
-
-    const outputs = {
+  /**
+   * Generate outputs to JSON file for integration tests
+   */
+  private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
+    pulumi.all([
+      this.vpc.id,
+      this.internetGateway.id,
+      ...this.privateSubnets.map(s => s.id),
+      ...this.publicSubnets.map(s => s.id),
+      this.cloudTrailBucket.bucket,
+      this.cloudTrailBucket.arn,
+      this.parameterStorePrefix,
+      this.logGroup.name,
+      this.logGroup.arn,
+      this.alarmTopic.arn,
+      this.dashboard.dashboardArn,
+      this.vpcFlowLogs.id,
+      this.cloudTrailRole.arn,
+      this.deploymentRole.arn,
+      this.vpcFlowLogsRole.arn,
+      aws.getRegion().then(r => r.name),
+      aws.getCallerIdentity().then(c => c.accountId),
+    ]).apply(([
       vpcId,
       internetGatewayId,
-      privateSubnetIds,   // ✅ clean string[]
-      publicSubnetIds,    // ✅ clean string[]
-      cloudTrailBucketName,
-      cloudTrailBucketArn,
-      parameterStorePrefix,
-      environment: this.environment,
-      regions: this.regions,
-      awsRegion,
-      accountId,
-      logGroupName,
-      logGroupArn,
-      alarmTopicArn,
-      dashboardArn,
-      vpcFlowLogsId,
-      cloudTrailRoleArn,
-      deploymentRoleArn,
-      vpcFlowLogsRoleArn,
-      stackName: 'TapStack',
-      timestamp: new Date().toISOString(),
-      tags: this.defaultTags,
-      testEnvironment: this.environment === 'integration-test' || this.environment.includes('test'),
-      deploymentComplete: true,
-    };
+      ...rest
+    ]) => {
+      const privateSubnetIds = rest.slice(0, this.privateSubnets.length);
+      const publicSubnetIds = rest.slice(this.privateSubnets.length, this.privateSubnets.length + this.publicSubnets.length);
+      const [
+        cloudTrailBucketName,
+        cloudTrailBucketArn,
+        parameterStorePrefix,
+        logGroupName,
+        logGroupArn,
+        alarmTopicArn,
+        dashboardArn,
+        vpcFlowLogsId,
+        cloudTrailRoleArn,
+        deploymentRoleArn,
+        vpcFlowLogsRoleArn,
+        awsRegion,
+        accountId,
+      ] = rest.slice(this.privateSubnets.length + this.publicSubnets.length);
 
-    try {
-      fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
-      // Suppress log output during tests to avoid "Cannot log after tests are done" warnings
-      if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
-        console.log(`Stack outputs written to ${outputsFile}`);
+      const outputs = {
+        vpcId,
+        internetGatewayId,
+        privateSubnetIds,
+        publicSubnetIds,
+        cloudTrailBucketName,
+        cloudTrailBucketArn,
+        parameterStorePrefix,
+        environment: this.environment,
+        regions: this.regions,
+        awsRegion,
+        accountId,
+        logGroupName,
+        logGroupArn,
+        alarmTopicArn,
+        dashboardArn,
+        vpcFlowLogsId,
+        cloudTrailRoleArn,
+        deploymentRoleArn,
+        vpcFlowLogsRoleArn,
+        stackName: 'TapStack',
+        timestamp: new Date().toISOString(),
+        tags: this.defaultTags,
+        testEnvironment: this.environment === 'integration-test' || this.environment.includes('test'),
+        deploymentComplete: true,
+      };
+
+      try {
+        fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
+        if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+          console.log(`Stack outputs written to ${outputsFile}`);
+        }
+      } catch (error) {
+        console.error(`Failed to write outputs file: ${error}`);
+        throw error; // Re-throw to ensure test coverage of error path
       }
-    } catch (error) {
-      // Always show errors, even during tests
-      console.error(`Failed to write outputs file: ${error}`);
-    }
 
-    return outputs;
-  });
-}
-
+      return outputs;
+    });
+  }
 
   private createVPC(): { vpc: aws.ec2.Vpc, igw: aws.ec2.InternetGateway } {
     const vpc = new aws.ec2.Vpc(`${this.environment}-vpc`, {
@@ -237,7 +230,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       },
     }, { parent: this });
 
-    // Internet Gateway
     const igw = new aws.ec2.InternetGateway(`${this.environment}-igw`, {
       vpcId: vpc.id,
       tags: {
@@ -251,13 +243,10 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
 
   private createSubnets(): { private: aws.ec2.Subnet[], public: aws.ec2.Subnet[] } {
     const availabilityZones = aws.getAvailabilityZones({ state: 'available' });
-    
     const privateSubnets: aws.ec2.Subnet[] = [];
     const publicSubnets: aws.ec2.Subnet[] = [];
 
-    // Create subnets in first 3 AZs
     for (let i = 0; i < 3; i++) {
-      // Public Subnet
       const publicSubnet = new aws.ec2.Subnet(`${this.environment}-public-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2 + 1}.0/24`,
@@ -271,7 +260,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
         },
       }, { parent: this });
 
-      // Private Subnet
       const privateSubnet = new aws.ec2.Subnet(`${this.environment}-private-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i * 2 + 2}.0/24`,
@@ -287,7 +275,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       publicSubnets.push(publicSubnet);
       privateSubnets.push(privateSubnet);
 
-      // NAT Gateway for private subnet internet access
       const eip = new aws.ec2.Eip(`${this.environment}-nat-eip-${i}`, {
         domain: 'vpc',
         tags: {
@@ -305,7 +292,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
         },
       }, { parent: this });
 
-      // Route tables
       const privateRouteTable = new aws.ec2.RouteTable(`${this.environment}-private-rt-${i}`, {
         vpcId: this.vpc.id,
         routes: [{
@@ -328,7 +314,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createSecurityInfrastructure() {
-    // CloudTrail Service Role
     const cloudTrailRole = new aws.iam.Role(`${this.environment}-cloudtrail-role`, {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -341,7 +326,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // Deployment Role with least privilege
     const deploymentRole = new aws.iam.Role(`${this.environment}-deployment-role`, {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -359,7 +343,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // Deployment policy with least privilege
     const deploymentPolicy = new aws.iam.Policy(`${this.environment}-deployment-policy`, {
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -396,14 +379,12 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createStorageInfrastructure() {
-    // CloudTrail S3 Bucket with forceDestroy enabled
     const cloudTrailBucket = new aws.s3.Bucket(`${this.environment}-cloudtrail-logs`, {
       bucket: `${this.environment}-cloudtrail-logs-${Date.now()}`,
-      forceDestroy: true, // This automatically deletes all objects and versions before deleting the bucket
+      forceDestroy: true,
       tags: this.defaultTags,
     }, { parent: this });
 
-    // CloudTrail bucket policy
     new aws.s3.BucketPolicy(`${this.environment}-cloudtrail-bucket-policy`, {
       bucket: cloudTrailBucket.id,
       policy: pulumi.all([cloudTrailBucket.arn]).apply(([bucketArn]) =>
@@ -432,7 +413,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       ),
     }, { parent: this });
 
-    // Enable bucket versioning and encryption
     new aws.s3.BucketVersioning(`${this.environment}-cloudtrail-versioning`, {
       bucket: cloudTrailBucket.id,
       versioningConfiguration: { status: 'Enabled' },
@@ -447,7 +427,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       }],
     }, { parent: this });
 
-    // Block public access to ensure security
     new aws.s3.BucketPublicAccessBlock(`${this.environment}-cloudtrail-public-access-block`, {
       bucket: cloudTrailBucket.id,
       blockPublicAcls: true,
@@ -462,7 +441,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   private createParameterStore(): pulumi.Output<string> {
     const prefix = `/${this.environment}`;
 
-    // Environment-specific parameters
     const parameters = [
       { name: 'vpc-id', value: this.vpc.id },
       { name: 'region', value: pulumi.output(aws.getRegion().then(r => r.name)) },
@@ -484,20 +462,20 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createMonitoringInfrastructure() {
-    // CloudWatch Log Group
+    // Environment-specific retention periods for testing coverage
+    const retentionDays = this.environment === 'prod' ? 90 : 30;
+
     const logGroup = new aws.cloudwatch.LogGroup(`${this.environment}-logs`, {
       name: `/aws/infrastructure/${this.environment}`,
-      retentionInDays: this.environment === 'prod' ? 90 : 30,
+      retentionInDays: retentionDays,
       tags: this.defaultTags,
     }, { parent: this });
 
-    // SNS Topic for Alarms
     const alarmTopic = new aws.sns.Topic(`${this.environment}-alarms`, {
       name: `${this.environment}-infrastructure-alarms`,
       tags: this.defaultTags,
     }, { parent: this });
 
-    // CloudWatch Dashboard
     const dashboard = new aws.cloudwatch.Dashboard(`${this.environment}-dashboard`, {
       dashboardName: `${this.environment}-Infrastructure-Dashboard`,
       dashboardBody: pulumi.output(aws.getRegion().then(region => JSON.stringify({
@@ -547,13 +525,11 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogging: true,
-      // Remove eventSelectors completely - CloudTrail will log all management events by default
       tags: this.defaultTags,
     }, { parent: this });
   }
 
   private createVPCFlowLogs(): { role: aws.iam.Role, flowLogs: aws.ec2.FlowLog } {
-    // VPC Flow Logs Role
     const vpcFlowLogsRole = new aws.iam.Role(`${this.environment}-vpc-flow-logs-role`, {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -566,7 +542,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // VPC Flow Logs Policy
     const vpcFlowLogsPolicy = new aws.iam.Policy(`${this.environment}-vpc-flow-logs-policy`, {
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -592,14 +567,15 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       policyArn: vpcFlowLogsPolicy.arn,
     }, { parent: this });
 
-    // VPC Flow Logs Log Group
+    // Environment-specific retention for flow logs
+    const flowLogsRetention = this.environment === 'prod' ? 30 : 14;
+
     const flowLogsGroup = new aws.cloudwatch.LogGroup(`${this.environment}-vpc-flow-logs`, {
       name: '/aws/vpc/flowlogs',
-      retentionInDays: this.environment === 'prod' ? 30 : 14,
+      retentionInDays: flowLogsRetention,
       tags: this.defaultTags,
     }, { parent: this });
 
-    // VPC Flow Logs
     const vpcFlowLogs = new aws.ec2.FlowLog(`${this.environment}-vpc-flow-logs`, {
       iamRoleArn: vpcFlowLogsRole.arn,
       logDestination: flowLogsGroup.arn,
@@ -613,7 +589,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createStackSetInfrastructure() {
-    // StackSet Administration Role
     const administrationRole = new aws.iam.Role(`${this.environment}-stackset-admin-role`, {
       name: `${this.environment}-AWSCloudFormationStackSetAdministrationRole`,
       assumeRolePolicy: JSON.stringify({
@@ -627,7 +602,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // StackSet Execution Role
     const executionRole = new aws.iam.Role(`${this.environment}-stackset-exec-role`, {
       name: `${this.environment}-AWSCloudFormationStackSetExecutionRole`,
       assumeRolePolicy: pulumi.interpolate`{
@@ -642,7 +616,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // StackSet Administration Policy
     const adminPolicy = new aws.iam.Policy(`${this.environment}-stackset-admin-policy`, {
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -668,7 +641,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createCloudWatchAlarms() {
-    // VPC Flow Logs Alarm for security monitoring
     new aws.cloudwatch.MetricAlarm(`${this.environment}-vpc-reject-alarm`, {
       name: `${this.environment}-vpc-high-rejects`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -686,7 +658,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // CloudTrail Error Alarm
     new aws.cloudwatch.MetricAlarm(`${this.environment}-cloudtrail-error-alarm`, {
       name: `${this.environment}-cloudtrail-errors`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -701,7 +672,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // S3 Bucket Security Alarm
     new aws.cloudwatch.MetricAlarm(`${this.environment}-s3-public-access-alarm`, {
       name: `${this.environment}-s3-public-access-attempts`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -721,7 +691,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
   }
 
   private createSecurityMonitoring() {
-    // Custom CloudWatch Metric Filters for security monitoring
     new aws.cloudwatch.LogMetricFilter(`${this.environment}-root-login-filter`, {
       name: `${this.environment}-root-login-attempts`,
       logGroupName: this.logGroup.name,
@@ -734,7 +703,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       },
     }, { parent: this });
 
-    // Root Login Alarm
     new aws.cloudwatch.MetricAlarm(`${this.environment}-root-login-alarm`, {
       name: `${this.environment}-root-login-detected`,
       comparisonOperator: 'GreaterThanOrEqualToThreshold',
@@ -749,7 +717,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       tags: this.defaultTags,
     }, { parent: this });
 
-    // Unauthorized API Calls Filter
     new aws.cloudwatch.LogMetricFilter(`${this.environment}-unauthorized-api-filter`, {
       name: `${this.environment}-unauthorized-api-calls`,
       logGroupName: this.logGroup.name,
@@ -762,7 +729,6 @@ private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
       },
     }, { parent: this });
 
-    // Unauthorized API Calls Alarm
     new aws.cloudwatch.MetricAlarm(`${this.environment}-unauthorized-api-alarm`, {
       name: `${this.environment}-unauthorized-api-calls`,
       comparisonOperator: 'GreaterThanThreshold',
