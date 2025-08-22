@@ -2,8 +2,8 @@
 // Validates Terraform configuration against enterprise security requirements
 // Tests infrastructure components without executing Terraform commands
 
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 
 interface TerraformResource {
   type: string;
