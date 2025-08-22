@@ -433,8 +433,8 @@ describe('Infrastructure Integration Tests', () => {
 
       // Validate formats
       expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
-      // Handle masked account ID in SNS ARN - use a more flexible pattern
-      expect(outputs.sns_topic_arn).toMatch(/^arn:aws:sns:us-east-2:[*]+:prod-alerts$/);
+      // Handle masked account ID in SNS ARN - match exactly three asterisks
+      expect(outputs.sns_topic_arn).toMatch(/^arn:aws:sns:us-east-2:\*\*\*:prod-alerts$/);
     });
   });
 });
