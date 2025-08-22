@@ -724,27 +724,17 @@ Resources:
       Name: !Sub '${Environment}-config-delivery-channel'
       S3BucketName: !Ref ConfigBucket
 
-  ConfigurationRecorderStatus:
-    Type: AWS::Config::ConfigurationRecorderStatus
-    DependsOn: DeliveryChannel
-    Properties:
-      ConfigurationRecorderName: !Ref ConfigurationRecorder
-      IsEnabled: true
-
   SecurityGroupConfigRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorderStatus
+    DependsOn: 
+      - ConfigurationRecorder
+      - DeliveryChannel
     Properties:
       ConfigRuleName: !Sub '${Environment}-sg-ssh-restricted'
       Description: 'Checks whether security groups allow unrestricted incoming SSH traffic'
       Source:
         Owner: AWS
         SourceIdentifier: INCOMING_SSH_DISABLED
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
 
 Outputs:
   VPCId:

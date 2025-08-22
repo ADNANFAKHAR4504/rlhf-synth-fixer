@@ -1372,19 +1372,12 @@
                 }
             }
         },
-        "ConfigurationRecorderStatus": {
-            "Type": "AWS::Config::ConfigurationRecorderStatus",
-            "DependsOn": "DeliveryChannel",
-            "Properties": {
-                "ConfigurationRecorderName": {
-                    "Ref": "ConfigurationRecorder"
-                },
-                "IsEnabled": true
-            }
-        },
         "SecurityGroupConfigRule": {
             "Type": "AWS::Config::ConfigRule",
-            "DependsOn": "ConfigurationRecorderStatus",
+            "DependsOn": [
+                "ConfigurationRecorder",
+                "DeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "${Environment}-sg-ssh-restricted"
@@ -1393,21 +1386,7 @@
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "INCOMING_SSH_DISABLED"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    }
-                ]
+                }
             }
         }
     },
