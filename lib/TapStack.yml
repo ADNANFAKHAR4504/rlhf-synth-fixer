@@ -351,7 +351,7 @@ Resources:
             DeleteMarkerReplication:
               Status: Disabled
             Destination:
-              Bucket: !Sub arn:aws:s3:::tapstack-staging-data-${AWS::AccountId}-tapstack
+              Bucket: !GetAtt StagingDataBucket.Arn
               StorageClass: STANDARD
             Filter:
               Prefix: ""
@@ -750,7 +750,7 @@ Resources:
             DeleteMarkerReplication:
               Status: Disabled
             Destination:
-              Bucket: !Sub arn:aws:s3:::tapstack-prod-data-${AWS::AccountId}-tapstack
+              Bucket: !GetAtt ProdDataBucket.Arn
               StorageClass: STANDARD
             Filter:
               Prefix: ""
