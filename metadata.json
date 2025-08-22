@@ -5,5 +5,9 @@
   "turn_type": "single",
   "po_id": "291697",
   "team": "6",
-  "startedAt": "2025-08-22T11:34:58.953Z"
+  "startedAt": "2025-08-22T11:34:58.953Z",
+  "subtask": "multi-region-aws-infrastructure",
+  "subject_labels": ["iam", "cloudwatch", "kms", "multi-region", "terraform"],
+  "training_quality": "high",
+  "aws_services": ["iam", "cloudwatch", "kms"]
 }

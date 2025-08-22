@@ -2,8 +2,16 @@
 ########################
 # Providers (primary + secondary)
 ########################
-# Keep your existing provider blocks if present; these defaults are safe.
 # Primary AWS provider for general resources (e.g., us-east-1)
+provider "aws" {
+  region = var.primary_region
+}
+
+# Secondary AWS provider for multi-region resources (e.g., us-west-2)
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
+}
 
 
 ########################
