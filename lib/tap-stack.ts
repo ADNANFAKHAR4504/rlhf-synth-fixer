@@ -9,21 +9,16 @@ export interface TapStackArgs {
 
 export class TapStack extends pulumi.ComponentResource {
   public readonly vpcs: { [region: string]: aws.ec2.Vpc } = {};
-  public readonly securityGroups: { [region: string]: aws.ec2.SecurityGroup } =
-    {};
+  public readonly securityGroups: { [region: string]: aws.ec2.SecurityGroup } = {};
   public readonly kmsKeys: { [region: string]: aws.kms.Key } = {};
-  public readonly apiGateways: { [region: string]: aws.apigateway.RestApi } =
-    {};
+  public readonly kmsAliases: { [region: string]: aws.kms.Alias } = {};
+  public readonly apiGateways: { [region: string]: aws.apigateway.RestApi } = {};
   public readonly vpcEndpoints: { [region: string]: aws.ec2.VpcEndpoint } = {};
   public readonly iamRoles: { [region: string]: aws.iam.Role } = {};
-  public readonly cloudWatchLogGroups: {
-    [region: string]: aws.cloudwatch.LogGroup;
-  } = {};
+  public readonly cloudWatchLogGroups: { [region: string]: aws.cloudwatch.LogGroup } = {};
   public readonly subnets: { [region: string]: aws.ec2.Subnet[] } = {};
   public readonly routeTables: { [region: string]: aws.ec2.RouteTable } = {};
-  public readonly internetGateways: {
-    [region: string]: aws.ec2.InternetGateway;
-  } = {};
+  public readonly internetGateways: { [region: string]: aws.ec2.InternetGateway } = {};
   public readonly s3Buckets: { [region: string]: aws.s3.Bucket } = {};
 
   private readonly regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
@@ -166,7 +161,7 @@ export class TapStack extends pulumi.ComponentResource {
       );
       this.securityGroups[region] = sg;
 
-      // FIXED: KMS Key with CloudTrail permissions
+      // KMS Key (COMPLIANT: Only root and CloudWatch Logs permissions)
       const kmsKey = new aws.kms.Key(
         `${prefix}-kms`,
         {
@@ -207,26 +202,6 @@ export class TapStack extends pulumi.ComponentResource {
                     },
                   },
                 },
-                {
-                  Sid: 'Allow CloudTrail to encrypt logs',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'cloudtrail.amazonaws.com',
-                  },
-                  Action: [
-                    'kms:GenerateDataKey*',
-                    'kms:DescribeKey',
-                    'kms:Encrypt',
-                    'kms:ReEncrypt*',
-                    'kms:Decrypt',
-                  ],
-                  Resource: '*',
-                  Condition: {
-                    StringEquals: {
-                      'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${region}:${id.accountId}:trail/${prefix}-cloudtrail`,
-                    },
-                  },
-                },
               ],
             })
           ),
@@ -240,7 +215,8 @@ export class TapStack extends pulumi.ComponentResource {
       );
       this.kmsKeys[region] = kmsKey;
 
-      new aws.kms.Alias(
+      // KMS Alias
+      const kmsAlias = new aws.kms.Alias(
         `${prefix}-kms-alias`,
         {
           name: `alias/${prefix}-key`,
@@ -248,6 +224,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         { provider }
       );
+      this.kmsAliases[region] = kmsAlias;
 
       // IAM Role for API Gateway (least privilege)
       const apiGatewayRole = new aws.iam.Role(
@@ -276,12 +253,10 @@ export class TapStack extends pulumi.ComponentResource {
         `${prefix}-apigateway-policy`,
         {
           role: apiGatewayRole.name,
-          policyArn:
-            'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
+          policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
         },
         { provider }
       );
-
       this.iamRoles[region] = apiGatewayRole;
 
       // VPC Endpoint for API Gateway
@@ -368,94 +343,50 @@ export class TapStack extends pulumi.ComponentResource {
       );
       this.cloudWatchLogGroups[region] = logGroup;
 
-      // S3 Bucket for CloudTrail logs
-      // S3 Bucket for CloudTrail logs - Step 2: Use consistent naming
+      // S3 Bucket for secure storage (COMPLIANT: secure-bucket naming, HTTPS-only policy)
       const s3Bucket = new aws.s3.Bucket(
-        `${prefix}-cloudtrail-bucket`,
+        `${prefix}-secure-bucket`,
         {
-          bucket: `${prefix}-cloudtrail-bucket`.toLowerCase(), // Remove Date.now()
+          bucket: `${prefix}-secure-bucket`,
           forceDestroy: true,
           tags: {
             ...tags,
             Environment: 'Production',
-            Name: `${prefix}-cloudtrail-bucket`,
+            Name: `${prefix}-secure-bucket`,
           },
         },
         { provider }
       );
 
-      // FIXED: Comprehensive S3 Bucket Policy for CloudTrail with all required permissions
+      // S3 Bucket Policy - HTTPS only (COMPLIANT: No CloudTrail permissions)
+      const bucketPolicy = s3Bucket.arn.apply(arn =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [
+                arn,
+                `${arn}/*`,
+              ],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            },
+          ],
+        })
+      );
+
       new aws.s3.BucketPolicy(
-        `${prefix}-cloudtrail-bucket-policy`,
+        `${prefix}-secure-bucket-policy`,
         {
           bucket: s3Bucket.id,
-          policy: pulumi
-            .all([s3Bucket.bucket, aws.getCallerIdentityOutput()])
-            .apply(([bucketName, identity]) =>
-              JSON.stringify({
-                Version: '2012-10-17',
-                Statement: [
-                  {
-                    Sid: 'AWSCloudTrailAclCheck',
-                    Effect: 'Allow',
-                    Principal: {
-                      Service: 'cloudtrail.amazonaws.com',
-                    },
-                    Action: 's3:GetBucketAcl',
-                    Resource: `arn:aws:s3:::${bucketName}`,
-                    Condition: {
-                      StringEquals: {
-                        'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`,
-                      },
-                    },
-                  },
-                  {
-                    Sid: 'AWSCloudTrailWrite',
-                    Effect: 'Allow',
-                    Principal: {
-                      Service: 'cloudtrail.amazonaws.com',
-                    },
-                    Action: 's3:PutObject',
-                    Resource: `arn:aws:s3:::${bucketName}/AWSLogs/${identity.accountId}/*`,
-                    Condition: {
-                      StringEquals: {
-                        's3:x-amz-acl': 'bucket-owner-full-control',
-                        'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`,
-                      },
-                    },
-                  },
-                  {
-                    Sid: 'AWSCloudTrailGetBucketLocation',
-                    Effect: 'Allow',
-                    Principal: {
-                      Service: 'cloudtrail.amazonaws.com',
-                    },
-                    Action: 's3:GetBucketLocation',
-                    Resource: `arn:aws:s3:::${bucketName}`,
-                    Condition: {
-                      StringEquals: {
-                        'AWS:SourceArn': `arn:aws:cloudtrail:${region}:${identity.accountId}:trail/${prefix}-cloudtrail`,
-                      },
-                    },
-                  },
-                  {
-                    Sid: 'DenyInsecureConnections',
-                    Effect: 'Deny',
-                    Principal: '*',
-                    Action: 's3:*',
-                    Resource: [
-                      `arn:aws:s3:::${bucketName}`,
-                      `arn:aws:s3:::${bucketName}/*`,
-                    ],
-                    Condition: {
-                      Bool: {
-                        'aws:SecureTransport': 'false',
-                      },
-                    },
-                  },
-                ],
-              })
-            ),
+          policy: bucketPolicy,
         },
         { provider }
       );
@@ -490,25 +421,6 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.s3Buckets[region] = s3Bucket;
 
-      // CloudTrail for security auditing
-      new aws.cloudtrail.Trail(
-        `${prefix}-cloudtrail`,
-        {
-          name: `${prefix}-cloudtrail`,
-          s3BucketName: s3Bucket.bucket,
-          includeGlobalServiceEvents: region === 'us-east-1',
-          isMultiRegionTrail: region === 'us-east-1',
-          enableLogging: true,
-          kmsKeyId: kmsKey.arn,
-          tags: {
-            ...tags,
-            Environment: 'Production',
-            Name: `${prefix}-cloudtrail`,
-          },
-        },
-        { provider, dependsOn: [kmsKey, s3Bucket] }
-      );
-
       // Password Policy (only once per account, us-east-1)
       if (region === 'us-east-1') {
         new aws.iam.AccountPasswordPolicy(
@@ -533,6 +445,7 @@ export class TapStack extends pulumi.ComponentResource {
       vpcs: this.vpcs,
       securityGroups: this.securityGroups,
       kmsKeys: this.kmsKeys,
+      kmsAliases: this.kmsAliases,
       apiGateways: this.apiGateways,
       vpcEndpoints: this.vpcEndpoints,
       iamRoles: this.iamRoles,
