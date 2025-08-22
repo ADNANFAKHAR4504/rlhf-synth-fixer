@@ -5,5 +5,27 @@
   "turn_type": "single",
   "po_id": "292083",
   "team": "2",
-  "startedAt": "2025-08-21T02:36:21.600Z"
+  "startedAt": "2025-08-21T02:36:21.600Z",
+  "subtask": "secure_infrastructure_deployment",
+  "subject_labels": [
+    "cloudformation",
+    "security",
+    "s3",
+    "dynamodb",
+    "iam",
+    "kms",
+    "encryption",
+    "access_control",
+    "logging",
+    "monitoring"
+  ],
+  "training_quality": "high",
+  "aws_services": [
+    "s3",
+    "dynamodb",
+    "iam",
+    "kms",
+    "cloudwatch",
+    "logs"
+  ]
 }
