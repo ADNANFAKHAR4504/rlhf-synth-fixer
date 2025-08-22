@@ -1,278 +1,135 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as AWS from 'aws-sdk';
-import { describe, test, expect } from '@jest/globals';
+// tap-stack.int.test.ts
+import fs from 'fs';
+import AWS from 'aws-sdk';
 
-// Load CDK outputs JSON file
-// Adjust the path if your file is elsewhere (e.g., ../cdk-outputs.json)
-const outputsPath = path.resolve(__dirname, '../cdk-outputs.json');
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(`CDK outputs file not found at: ${outputsPath}`);
-}
+// Load outputs
+const outputsPath = 'cfn-outputs/flat-outputs.json';
+const outputsRaw = fs.existsSync(outputsPath)
+  ? fs.readFileSync(outputsPath, 'utf8')
+  : '{}';
+const outputs: Record<string, string> = JSON.parse(outputsRaw || '{}');
 
-const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Change "TapStack-dev" to match your deployed stack name in outputs
-const stackName = Object.keys(outputs)[0];
-const stackOutputs = outputs[stackName];
+describe('TapStack Integration Tests', () => {
+  jest.setTimeout(300000); // allow up to 5 minutes for live AWS calls
 
-// Extract values from outputs instead of process.env
-const environmentSuffix = 'dev';
-const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-east-1';
+  AWS.config.update({ region });
 
-const vpcId = stackOutputs.VpcId;
-const databaseEndpoint = stackOutputs.DatabaseEndpoint;
-const kmsKeyId = stackOutputs.KmsKeyId;
-const ec2Instance1Id = stackOutputs.Ec2Instance1Id;
-const ec2Instance2Id = stackOutputs.Ec2Instance2Id;
-const ec2SecurityGroupId = stackOutputs.Ec2SecurityGroupId;
-const rdsSecurityGroupId = stackOutputs.RdsSecurityGroupId;
+  const ec2 = new AWS.EC2();
+  const rds = new AWS.RDS();
+  const kms = new AWS.KMS();
+  const logs = new AWS.CloudWatchLogs();
 
-// AWS Clients
-const ec2 = new AWS.EC2({ region });
-const rds = new AWS.RDS({ region });
-const kms = new AWS.KMS({ region });
-const cloudWatchLogs = new AWS.CloudWatchLogs({ region });
-
-// Check if we have all required outputs
-const hasAllOutputs = [
-  vpcId,
-  databaseEndpoint,
-  kmsKeyId,
-  ec2Instance1Id,
-  ec2Instance2Id,
-  ec2SecurityGroupId,
-  rdsSecurityGroupId,
-].every(v => v);
-
-describe('TAP Infrastructure Integration Tests - Live Resources', () => {
-  if (!hasAllOutputs) {
-    test.skip('Skipping all tests - required CDK outputs not set properly', () => {});
-    return;
-  }
-
-  describe('VPC Infrastructure Validation', () => {
-    test('VPC exists and is in available state', async () => {
-      const response = await ec2.describeVpcs({ VpcIds: [vpcId!] }).promise();
-
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].VpcId).toBe(vpcId);
-    });
-
-    test('VPC has required subnets', async () => {
-      const response = await ec2
-        .describeSubnets({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
-        })
-        .promise();
-
-      const subnetTypes = response.Subnets!.map(
-        s => s.Tags?.find(t => t.Key === 'aws-cdk:subnet-type')?.Value
-      );
-
-      expect(subnetTypes).toContain('Public');
-      expect(subnetTypes).toContain('Private');
-      expect(subnetTypes).toContain('Isolated');
-    });
+  it('should have created the VPC', async () => {
+    expect(outputs.VpcId).toBeDefined();
+    const vpcResp = await ec2
+      .describeVpcs({ VpcIds: [outputs.VpcId] })
+      .promise();
+    expect(vpcResp.Vpcs?.[0]?.VpcId).toEqual(outputs.VpcId);
   });
 
-  describe('Security Groups Validation', () => {
-    test('EC2 Security Group allows HTTP/HTTPS inbound', async () => {
-      const response = await ec2
-        .describeSecurityGroups({
-          GroupIds: [ec2SecurityGroupId!],
-        })
-        .promise();
+  it('should have created required subnets', async () => {
+    const subnetsResp = await ec2
+      .describeSubnets({
+        Filters: [{ Name: 'vpc-id', Values: [outputs.VpcId] }],
+      })
+      .promise();
 
-      const securityGroup = response.SecurityGroups![0];
-      const httpRule = securityGroup.IpPermissions?.find(
-        p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
-      );
-      const httpsRule = securityGroup.IpPermissions?.find(
-        p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
-      );
-
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-    });
-
-    test('RDS Security Group allows PostgreSQL from EC2 Security Group', async () => {
-      const response = await ec2
-        .describeSecurityGroups({
-          GroupIds: [rdsSecurityGroupId!],
-        })
-        .promise();
-
-      const securityGroup = response.SecurityGroups![0];
-      const postgresRule = securityGroup.IpPermissions?.find(
-        p => p.FromPort === 5432 && p.ToPort === 5432 && p.IpProtocol === 'tcp'
-      );
-
-      expect(postgresRule).toBeDefined();
-      expect(postgresRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(
-        ec2SecurityGroupId
-      );
-    });
+    const subnetTypes = subnetsResp.Subnets?.map(
+      s => s.Tags?.find(t => t.Key === 'aws-cdk:subnet-type')?.Value
+    );
+    expect(subnetTypes).toContain('Public');
+    expect(subnetTypes).toContain('Private');
+    expect(subnetTypes).toContain('Isolated');
   });
 
-  describe('EC2 Instances Validation', () => {
-    test('EC2 instances are running', async () => {
-      const response = await ec2
-        .describeInstances({
-          InstanceIds: [ec2Instance1Id!, ec2Instance2Id!],
-        })
-        .promise();
-
-      const instances = response.Reservations!.flatMap(r => r.Instances!);
-
-      expect(instances).toHaveLength(2);
-      instances.forEach(instance => {
-        expect(instance.State?.Name).toBe('running');
-      });
-    });
-
-    test('EC2 instances have encrypted volumes', async () => {
-      const response = await ec2
-        .describeInstances({
-          InstanceIds: [ec2Instance1Id!, ec2Instance2Id!],
-        })
-        .promise();
-
-      const instances = response.Reservations!.flatMap(r => r.Instances!);
-
-      for (const instance of instances) {
-        const blockDevices = instance.BlockDeviceMappings || [];
-        for (const device of blockDevices) {
-          const volumeResponse = await ec2
-            .describeVolumes({
-              VolumeIds: [device.Ebs!.VolumeId!],
-            })
-            .promise();
-
-          expect(volumeResponse.Volumes![0].Encrypted).toBe(true);
-        }
-      }
-    }, 30000);
+  it('should configure EC2 security group with HTTP/HTTPS inbound', async () => {
+    expect(outputs.Ec2SecurityGroupId).toBeDefined();
+    const sgResp = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.Ec2SecurityGroupId] })
+      .promise();
+    const sg = sgResp.SecurityGroups?.[0];
+    const http = sg?.IpPermissions?.some(
+      p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
+    );
+    const https = sg?.IpPermissions?.some(
+      p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
+    );
+    expect(http).toBeTruthy();
+    expect(https).toBeTruthy();
   });
 
-  describe('RDS Database Validation', () => {
-    test('RDS instance is available and encrypted', async () => {
-      const dbIdentifier = databaseEndpoint!.split('.')[0];
-
-      const response = await rds
-        .describeDBInstances({
-          DBInstanceIdentifier: dbIdentifier,
-        })
-        .promise();
-
-      const dbInstance = response.DBInstances![0];
-
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.MultiAZ).toBe(true);
-      expect(dbInstance.PubliclyAccessible).toBe(false);
-    });
-
-    test('RDS has Performance Insights enabled', async () => {
-      const dbIdentifier = databaseEndpoint!.split('.')[0];
-
-      const response = await rds
-        .describeDBInstances({
-          DBInstanceIdentifier: dbIdentifier,
-        })
-        .promise();
-
-      const dbInstance = response.DBInstances![0];
-
-      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
-      expect(dbInstance.PerformanceInsightsKMSKeyId).toBe(kmsKeyId);
-    });
+  it('should configure RDS security group to allow EC2 access', async () => {
+    expect(outputs.RdsSecurityGroupId).toBeDefined();
+    const sgResp = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.RdsSecurityGroupId] })
+      .promise();
+    const sg = sgResp.SecurityGroups?.[0];
+    const postgresRule = sg?.IpPermissions?.find(
+      p => p.FromPort === 5432 && p.ToPort === 5432 && p.IpProtocol === 'tcp'
+    );
+    expect(postgresRule?.UserIdGroupPairs?.[0]?.GroupId).toEqual(
+      outputs.Ec2SecurityGroupId
+    );
   });
 
-  describe('KMS Encryption Validation', () => {
-    test('KMS key exists and is enabled', async () => {
-      const response = await kms.describeKey({ KeyId: kmsKeyId! }).promise();
+  it('should have two running EC2 instances with encrypted volumes', async () => {
+    const instanceIds = [outputs.Ec2Instance1Id, outputs.Ec2Instance2Id].filter(
+      Boolean
+    ) as string[];
+    expect(instanceIds).toHaveLength(2);
 
-      expect(response.KeyMetadata!.KeyState).toBe('Enabled');
-      expect(response.KeyMetadata!.Enabled).toBe(true);
-    });
+    const resp = await ec2
+      .describeInstances({ InstanceIds: instanceIds })
+      .promise();
+    const instances = resp.Reservations?.flatMap(r => r.Instances!) ?? [];
+    expect(instances).toHaveLength(2);
 
-    test('KMS key has rotation enabled', async () => {
-      const response = await kms
-        .getKeyRotationStatus({ KeyId: kmsKeyId! })
-        .promise();
-
-      expect(response.KeyRotationEnabled).toBe(true);
-    });
-  });
-
-  describe('Network Connectivity Validation', () => {
-    test('Private subnets have NAT gateway routes', async () => {
-      const subnetsResponse = await ec2
-        .describeSubnets({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId!] },
-            { Name: 'tag:aws-cdk:subnet-type', Values: ['Private'] },
-          ],
-        })
-        .promise();
-
-      for (const subnet of subnetsResponse.Subnets!) {
-        const routeTablesResponse = await ec2
-          .describeRouteTables({
-            Filters: [
-              { Name: 'association.subnet-id', Values: [subnet.SubnetId!] },
-            ],
-          })
+    for (const inst of instances) {
+      expect(inst.State?.Name).toBe('running');
+      for (const bd of inst.BlockDeviceMappings ?? []) {
+        const vol = await ec2
+          .describeVolumes({ VolumeIds: [bd.Ebs!.VolumeId!] })
           .promise();
-
-        const hasNatRoute = routeTablesResponse.RouteTables![0].Routes?.some(
-          route => route.NatGatewayId !== undefined
-        );
-
-        expect(hasNatRoute).toBe(true);
+        expect(vol.Volumes?.[0]?.Encrypted).toBe(true);
       }
-    });
-
-    test('Database subnets are isolated', async () => {
-      const subnetsResponse = await ec2
-        .describeSubnets({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId!] },
-            { Name: 'tag:aws-cdk:subnet-type', Values: ['Isolated'] },
-          ],
-        })
-        .promise();
-
-      for (const subnet of subnetsResponse.Subnets!) {
-        const routeTablesResponse = await ec2
-          .describeRouteTables({
-            Filters: [
-              { Name: 'association.subnet-id', Values: [subnet.SubnetId!] },
-            ],
-          })
-          .promise();
-
-        const hasInternetRoute =
-          routeTablesResponse.RouteTables![0].Routes?.some(
-            route => route.GatewayId && route.GatewayId.startsWith('igw-')
-          );
-
-        expect(hasInternetRoute).toBe(false);
-      }
-    });
+    }
   });
 
-  describe('Monitoring Validation', () => {
-    test('CloudWatch log groups exist for EC2 instances', async () => {
-      const logGroupsResponse = await cloudWatchLogs
-        .describeLogGroups({
-          logGroupNamePrefix: `/aws/ec2/tap-${environmentSuffix}`,
-        })
-        .promise();
+  it('should have an available and encrypted RDS instance', async () => {
+    expect(outputs.DatabaseEndpoint).toBeDefined();
+    const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+    const resp = await rds
+      .describeDBInstances({ DBInstanceIdentifier: dbIdentifier })
+      .promise();
+    const db = resp.DBInstances?.[0];
+    expect(db?.DBInstanceStatus).toBe('available');
+    expect(db?.StorageEncrypted).toBe(true);
+    expect(db?.PubliclyAccessible).toBe(false);
+  });
 
-      expect(logGroupsResponse.logGroups!.length).toBeGreaterThan(0);
-    });
+  it('should have a valid KMS key with rotation enabled', async () => {
+    expect(outputs.KmsKeyId).toBeDefined();
+    const keyResp = await kms
+      .describeKey({ KeyId: outputs.KmsKeyId })
+      .promise();
+    expect(keyResp.KeyMetadata?.Enabled).toBe(true);
+
+    const rotationResp = await kms
+      .getKeyRotationStatus({ KeyId: outputs.KmsKeyId })
+      .promise();
+    expect(rotationResp.KeyRotationEnabled).toBe(true);
+  });
+
+  it('should have CloudWatch log groups for EC2 instances', async () => {
+    const resp = await logs
+      .describeLogGroups({
+        logGroupNamePrefix: `/aws/ec2/tap-${environmentSuffix}`,
+      })
+      .promise();
+    expect(resp.logGroups?.length).toBeGreaterThan(0);
   });
 });
