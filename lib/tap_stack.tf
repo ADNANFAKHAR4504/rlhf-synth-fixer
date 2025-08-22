@@ -224,7 +224,7 @@ resource "aws_iam_role_policy" "cloudwatch_policy" {
 ########################
 resource "aws_launch_template" "app" {
   name_prefix   = "${var.app_name}-${var.environment_suffix}-template-"
-  image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1
+  image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-east-1 (keeping same for now)
   instance_type = var.instance_type
 
   network_interfaces {
@@ -238,6 +238,10 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              # Enable debugging
+              set -x
+              
+              # Update system
               yum update -y
               yum install -y httpd
               systemctl start httpd
@@ -278,6 +282,15 @@ resource "aws_launch_template" "app" {
               yum install -y amazon-cloudwatch-agent
               systemctl enable amazon-cloudwatch-agent
               systemctl start amazon-cloudwatch-agent
+              
+              # Create a simple health check endpoint
+              cat > /var/www/html/health << 'HEALTH_EOF'
+              OK
+              HEALTH_EOF
+              
+              # Verify Apache is running
+              systemctl status httpd
+              curl -f http://localhost/ || echo "Apache health check failed"
               EOF
   )
 
@@ -327,11 +340,11 @@ resource "aws_lb_target_group" "app" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/"
+    path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = {
@@ -357,12 +370,12 @@ resource "aws_lb_listener" "app" {
 ########################
 resource "aws_autoscaling_group" "app" {
   name                      = "${var.app_name}-${var.environment_suffix}-asg"
-  desired_capacity          = 2
+  desired_capacity          = 1
   max_size                  = 4
   min_size                  = 1
   target_group_arns         = [aws_lb_target_group.app.arn]
   vpc_zone_identifier       = slice(data.aws_subnets.public.ids, 0, 2)
-  health_check_grace_period = 300
+  health_check_grace_period = 600
   health_check_type         = "ELB"
 
   launch_template {
