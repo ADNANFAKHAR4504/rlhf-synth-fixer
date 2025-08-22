@@ -301,7 +301,7 @@ resource "aws_lambda_function" "app_function" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.app_table.name
-      AWS_REGION     = data.aws_region.current.name
+      AWS_REGION     = data.aws_region.current.id
     }
   }
 
@@ -424,7 +424,6 @@ resource "aws_lambda_permission" "api_gateway_invoke" {
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "app_deployment" {
   rest_api_id = aws_api_gateway_rest_api.app_api.id
-  stage_name  = "prod"
 
   depends_on = [
     aws_api_gateway_integration.proxy_integration,
@@ -436,17 +435,38 @@ resource "aws_api_gateway_deployment" "app_deployment" {
   lifecycle {
     create_before_destroy = true
   }
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.proxy.id,
+      aws_api_gateway_method.proxy_method.id,
+      aws_api_gateway_method.root_method.id,
+      aws_api_gateway_integration.proxy_integration.id,
+      aws_api_gateway_integration.root_integration.id,
+    ]))
+  }
+}
+
+# API Gateway Stage
+resource "aws_api_gateway_stage" "app_stage" {
+  deployment_id = aws_api_gateway_deployment.app_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.app_api.id
+  stage_name    = "prod"
+
+  tags = merge(local.common_tags, {
+    Name = "ServerlessAppAPIStage-${local.suffix_hex}"
+  })
 }
 
 # Outputs
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = "https://${aws_api_gateway_rest_api.app_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/prod"
+  value       = "https://${aws_api_gateway_rest_api.app_api.id}.execute-api.${data.aws_region.current.id}.amazonaws.com/prod"
 }
 
 output "api_gateway_invoke_url" {
   description = "Invoke URL of the API Gateway"
-  value       = aws_api_gateway_deployment.app_deployment.invoke_url
+  value       = aws_api_gateway_stage.app_stage.invoke_url
 }
 
 output "api_gateway_id" {
@@ -476,7 +496,7 @@ output "dynamodb_table_arn" {
 
 output "aws_region" {
   description = "AWS region where resources are deployed"
-  value       = data.aws_region.current.name
+  value       = data.aws_region.current.id
 }
 
 output "aws_account_id" {
