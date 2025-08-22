@@ -1,0 +1,29 @@
+{
+  "task_id": "trainr148-new",
+  "platform": "pulumi+js",
+  "region": "us-east-1",
+  "difficulty": "hard",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Resource Scaling",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Route53"
+  ]
+}
