@@ -163,7 +163,7 @@ class TestTapStackIntegration:
         for base_name in expected_functions:
             # Try with and without suffix
             function_names = [
-                f"{base_name}-synthtrainr129cdkpy",
+                f"{base_name}-pr2067",
                 base_name
             ]
 
@@ -206,7 +206,7 @@ class TestTapStackIntegration:
     def _find_and_verify_log_group(self, base_name):
         """Helper method to find and verify log group configuration."""
         log_group_names = [
-            f"{base_name}-synthtrainr129cdkpy",
+            f"{base_name}-pr2067",
             base_name
         ]
 
