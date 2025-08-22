@@ -94,6 +94,9 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     exit 1
   fi
   
+  # Ensure passphrase is set to empty string if not provided (for CI/CD compatibility)
+  export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE:-}"
+  
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   export PYTHONPATH=.:bin
