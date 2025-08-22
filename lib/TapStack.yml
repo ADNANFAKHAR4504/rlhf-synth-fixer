@@ -10,7 +10,7 @@ Parameters:
   ExistingVpcId:
     Type: String
     Default: ''
-    Description: 'ID of an existing VPC to use (leave blank to create a new one)'
+    Description: 'ID of an existing VPC to use (leave blank to create a new one). Note: If you set this to an existing VPC, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually.'
 
   PublicSubnetCidr:
     Type: String
@@ -133,7 +133,7 @@ Parameters:
   ExistingInternetGatewayId:
     Type: String
     Default: ''
-    Description: 'ID of an existing Internet Gateway to attach to the VPC. Leave blank to create a new one.'
+    Description: 'ID of an existing Internet Gateway to attach to the VPC. Leave blank to create a new one. Note: If you set this to an existing IGW, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -246,6 +246,8 @@ Resources:
           Value: !Sub 'Security-VPC-${Environment}'
         - Key: Environment
           Value: !Ref Environment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -304,6 +306,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'IGW-${Environment}'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
