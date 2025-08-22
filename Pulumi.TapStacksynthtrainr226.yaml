@@ -1,0 +1,4 @@
+encryptionsalt: v1:PsnkXOx/ENE=:v1:VuzI5g6E5yuJ0och:hCFFXk1spvtbu9MgJpcOCJ4RjkJScw==
+config:
+  TapStack:env: synthtrainr226
+  aws:region: us-west-2
