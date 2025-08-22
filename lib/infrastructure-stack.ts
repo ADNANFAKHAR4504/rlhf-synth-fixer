@@ -927,11 +927,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         viewerCertificate: {
           cloudfrontDefaultCertificate: true,
         },
-        loggingConfig: {
-          bucket: cloudFrontLogsBucket.bucketDomainName,
-          includeCookies: false,
-          prefix: 'cloudfront-logs/',
-        },
+
         webAclId: webAcl.arn,
         tags: {
           Name: `${environment}-${projectName}-cloudfront`,
