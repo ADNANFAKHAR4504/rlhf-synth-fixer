@@ -16,7 +16,7 @@ const config = new pulumi.Config();
 
 // Get the environment suffix from the Pulumi config, defaulting to 'dev'.
 // You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.

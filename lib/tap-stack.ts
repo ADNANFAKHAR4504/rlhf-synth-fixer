@@ -81,18 +81,22 @@ export class TapStack extends pulumi.ComponentResource {
     //   tags: tags,
     // }, { parent: this });
 
-    const infrastructureStack = new InfrastructureStack("tap-infrastructure", {
-      environmentSuffix: environmentSuffix,
-      tags: tags,
-    }, { parent: this });
-
     // Example of creating a resource directly (for truly global resources only):
     // const bucket = new aws.s3.Bucket(`tap-global-bucket-${environmentSuffix}`, {
     //   tags: tags,
     // }, { parent: this });
 
-    // --- Expose Outputs from Nested Components ---
-    // Make outputs from your nested components available as outputs of this main stack.
+    const infrastructureStack = new InfrastructureStack(
+      'tap-infrastructure',
+      {
+        environmentSuffix: environmentSuffix,
+        tags: tags,
+      },
+      { parent: this }
+    );
+
+    // --- Expose Outputs from Infrastructure ---
+    // Make outputs from infrastructure available as outputs of this main stack.
     // this.table = dynamoDBStack.table;
     this.vpcId = infrastructureStack.vpcId;
     this.publicSubnetIds = infrastructureStack.publicSubnetIds;
