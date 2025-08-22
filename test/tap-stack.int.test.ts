@@ -1,28 +1,41 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as AWS from 'aws-sdk';
-import { describe, beforeAll, afterAll, test, expect } from '@jest/globals';
+import { describe, test, expect } from '@jest/globals';
 
-// Configuration from environment variables
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Load CDK outputs JSON file
+// Adjust the path if your file is elsewhere (e.g., ../cdk-outputs.json)
+const outputsPath = path.resolve(__dirname, '../cdk-outputs.json');
+if (!fs.existsSync(outputsPath)) {
+  throw new Error(`CDK outputs file not found at: ${outputsPath}`);
+}
+
+const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+// Change "TapStack-dev" to match your deployed stack name in outputs
+const stackName = Object.keys(outputs)[0];
+const stackOutputs = outputs[stackName];
+
+// Extract values from outputs instead of process.env
+const environmentSuffix = 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
+
+const vpcId = stackOutputs.VpcId;
+const databaseEndpoint = stackOutputs.DatabaseEndpoint;
+const kmsKeyId = stackOutputs.KmsKeyId;
+const ec2Instance1Id = stackOutputs.Ec2Instance1Id;
+const ec2Instance2Id = stackOutputs.Ec2Instance2Id;
+const ec2SecurityGroupId = stackOutputs.Ec2SecurityGroupId;
+const rdsSecurityGroupId = stackOutputs.RdsSecurityGroupId;
 
 // AWS Clients
 const ec2 = new AWS.EC2({ region });
 const rds = new AWS.RDS({ region });
 const kms = new AWS.KMS({ region });
-const ssm = new AWS.SSM({ region });
 const cloudWatchLogs = new AWS.CloudWatchLogs({ region });
 
-// These should be set as environment variables from your CDK deployment outputs
-const vpcId = process.env.VPC_ID;
-const databaseEndpoint = process.env.DATABASE_ENDPOINT;
-const kmsKeyId = process.env.KMS_KEY_ID;
-const ec2Instance1Id = process.env.EC2_INSTANCE_1_ID;
-const ec2Instance2Id = process.env.EC2_INSTANCE_2_ID;
-const ec2SecurityGroupId = process.env.EC2_SECURITY_GROUP_ID;
-const rdsSecurityGroupId = process.env.RDS_SECURITY_GROUP_ID;
-
-// Check if we have all required environment variables
-const hasAllEnvVars = [
+// Check if we have all required outputs
+const hasAllOutputs = [
   vpcId,
   databaseEndpoint,
   kmsKeyId,
@@ -33,9 +46,8 @@ const hasAllEnvVars = [
 ].every(v => v);
 
 describe('TAP Infrastructure Integration Tests - Live Resources', () => {
-  // Skip all tests if required environment variables are not set
-  if (!hasAllEnvVars) {
-    test.skip('Skipping all tests - required environment variables not set', () => {});
+  if (!hasAllOutputs) {
+    test.skip('Skipping all tests - required CDK outputs not set properly', () => {});
     return;
   }
 
@@ -65,7 +77,6 @@ describe('TAP Infrastructure Integration Tests - Live Resources', () => {
     });
   });
 
-  // ... rest of your test cases remain the same
   describe('Security Groups Validation', () => {
     test('EC2 Security Group allows HTTP/HTTPS inbound', async () => {
       const response = await ec2
@@ -142,12 +153,11 @@ describe('TAP Infrastructure Integration Tests - Live Resources', () => {
           expect(volumeResponse.Volumes![0].Encrypted).toBe(true);
         }
       }
-    }, 30000); // Longer timeout for volume checks
+    }, 30000);
   });
 
   describe('RDS Database Validation', () => {
     test('RDS instance is available and encrypted', async () => {
-      // Extract DB identifier from endpoint
       const dbIdentifier = databaseEndpoint!.split('.')[0];
 
       const response = await rds
