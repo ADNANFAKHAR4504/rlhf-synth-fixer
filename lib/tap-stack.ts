@@ -22,6 +22,7 @@ export class TapStack extends cdk.Stack {
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
       enableKeyRotation: true,
       description: 'KMS key for TAP financial services app',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const vpc = new ec2.Vpc(this, 'TapVpc', {
@@ -138,7 +139,7 @@ export class TapStack extends cdk.Stack {
 
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_15_8,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc,
@@ -147,13 +148,14 @@ export class TapStack extends cdk.Stack {
       storageEncrypted: true,
       storageEncryptionKey: kmsKey,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false,
       publiclyAccessible: false,
       multiAz: false,
       allocatedStorage: 20,
       credentials: rds.Credentials.fromGeneratedSecret('tapdbuser', {
         encryptionKey: kmsKey,
       }),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const s3Bucket = new s3.Bucket(this, 'TapBucket', {
@@ -162,7 +164,8 @@ export class TapStack extends cdk.Stack {
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
@@ -213,12 +216,8 @@ def handler(event, context):
       },
     });
 
-    const logGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/${lambdaFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // Lambda function will create its own log group automatically
+    // We'll set retention via Lambda function properties instead
 
     const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
       scope: 'CLOUDFRONT',
