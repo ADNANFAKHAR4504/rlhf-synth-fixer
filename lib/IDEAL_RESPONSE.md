@@ -1,5 +1,5 @@
 ```hcl
-# tap_stack.tf
+# lib/tap_stack.tf (excerpt)
 
 terraform {
   required_version = ">= 1.5.0"
@@ -318,4 +318,57 @@ resource "aws_security_group" "rds" {
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds-sg" })
 }
+```
+
+```hcl
+# lib/provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+```markdown
+# lib/PROMPT.md (excerpt)
+
+# Project brief
+
+We need a single Terraform file named `tap_stack.tf` that provisions a small, production‑ready stack on AWS using ECS Fargate behind an ALB, with a Postgres RDS instance and basic monitoring. Keep it straightforward, secure by default, and ready for zero‑downtime deploys via CodeDeploy blue/green.
+
+# ... full prompt continues in repository ...
+```
+
+```markdown
+# lib/MODEL_FAILURES.md (excerpt)
+
+### Compile issues detected in `lib/MODEL_RESPONSE.md`
+
+- Incorrect argument names on `aws_db_instance`: use `backup_window` and `maintenance_window`.
+- Numeric fields provided as strings in CloudWatch alarms and listeners.
+- Unsupported `tags` on `aws_lb_listener`.
+- CodeDeploy ECS Blue/Green misconfiguration: needs `target_group_pair_info` and valid `deployment_config_name`.
+
+# ... additional details continue in repository ...
+```
+
+```python
+# lib/MODEL_RESPONSE.md (represented)
+# Large file containing a CDKTF Python program.
+# Content omitted here to avoid nested code fences.
+# Refer to the repository file for the full source.
 ```
