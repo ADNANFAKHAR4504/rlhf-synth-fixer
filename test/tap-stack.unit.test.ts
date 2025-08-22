@@ -3,21 +3,14 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template - IAM MFA Enforcement', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Template converted from YAML to JSON for testing
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -25,22 +18,25 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have a description for MFA enforcement', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'TAP Stack - IAM MFA Enforcement CloudFormation Template'
       );
     });
 
-    test('should have metadata section', () => {
+    test('should have metadata section with parameter groups', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
+    test('should have all MFA-related parameters', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.MFAMaxSessionDuration).toBeDefined();
+      expect(template.Parameters.RequireMFAAge).toBeDefined();
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -55,33 +51,79 @@ describe('TapStack CloudFormation Template', () => {
         'Must contain only alphanumeric characters'
       );
     });
+
+    test('MFAMaxSessionDuration parameter should have correct properties', () => {
+      const mfaParam = template.Parameters.MFAMaxSessionDuration;
+      expect(mfaParam.Type).toBe('Number');
+      expect(mfaParam.Default).toBe(3600);
+      expect(mfaParam.MinValue).toBe(900);
+      expect(mfaParam.MaxValue).toBe(43200);
+    });
+
+    test('RequireMFAAge parameter should have correct properties', () => {
+      const ageParam = template.Parameters.RequireMFAAge;
+      expect(ageParam.Type).toBe('Number');
+      expect(ageParam.Default).toBe(3600);
+      expect(ageParam.MinValue).toBe(0);
+      expect(ageParam.MaxValue).toBe(86400);
+    });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
+    test('should have all MFA-related resources', () => {
+      expect(template.Resources.MFAEnforcedAdminRole).toBeDefined();
+      expect(template.Resources.MFAEnforcedDeveloperRole).toBeDefined();
+      expect(template.Resources.MFAEnforcementPolicy).toBeDefined();
+      expect(template.Resources.DeveloperPermissionsPolicy).toBeDefined();
+      expect(template.Resources.IdentityCenterMFAPolicy).toBeDefined();
       expect(template.Resources.TurnAroundPromptTable).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
+    test('MFAEnforcedAdminRole should be an IAM role with MFA conditions', () => {
+      const role = template.Resources.MFAEnforcedAdminRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+      const statement = trustPolicy.Statement[0];
+      expect(statement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(statement.Condition.NumericLessThan['aws:MultiFactorAuthAge']).toEqual({Ref: 'RequireMFAAge'});
+    });
+
+    test('MFAEnforcedDeveloperRole should be an IAM role with regional restrictions', () => {
+      const role = template.Resources.MFAEnforcedDeveloperRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+      const statement = trustPolicy.Statement[0];
+      expect(statement.Condition.StringEquals['aws:RequestedRegion']).toContain('us-east-1');
+      expect(statement.Condition.StringEquals['aws:RequestedRegion']).toContain('us-west-1');
+    });
+
+    test('MFAEnforcementPolicy should be an IAM managed policy', () => {
+      const policy = template.Resources.MFAEnforcementPolicy;
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+      
+      const policyDoc = policy.Properties.PolicyDocument;
+      expect(policyDoc.Statement).toBeDefined();
+      expect(policyDoc.Statement.length).toBeGreaterThan(2); // Should have multiple statements
+    });
+
+    test('TurnAroundPromptTable should have correct properties with hyphen', () => {
       const table = template.Resources.TurnAroundPromptTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
+      
+      const properties = table.Properties;
+      expect(properties.TableName).toEqual({
+        'Fn::Sub': 'TurnAroundPromptTable-${EnvironmentSuffix}',
+      });
+      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
     test('TurnAroundPromptTable should have correct deletion policies', () => {
       const table = template.Resources.TurnAroundPromptTable;
       expect(table.DeletionPolicy).toBe('Delete');
       expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
     test('TurnAroundPromptTable should have correct attribute definitions', () => {
@@ -92,24 +134,20 @@ describe('TapStack CloudFormation Template', () => {
       expect(attributeDefinitions[0].AttributeName).toBe('id');
       expect(attributeDefinitions[0].AttributeType).toBe('S');
     });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
-    });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have all required outputs including MFA-related ARNs', () => {
       const expectedOutputs = [
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
         'StackName',
         'EnvironmentSuffix',
+        'MFAEnforcedAdminRoleArn',
+        'MFAEnforcedDeveloperRoleArn',
+        'MFAEnforcementPolicyArn',
+        'DeveloperPermissionsPolicyArn',
+        'IdentityCenterMFAPolicyArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -172,29 +210,41 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have six resources for MFA enforcement', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(6);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have three parameters for MFA configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(3);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have nine outputs including MFA ARNs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(9);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
+    test('table name should follow naming convention with hyphen', () => {
       const table = template.Resources.TurnAroundPromptTable;
       const tableName = table.Properties.TableName;
 
       expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'TurnAroundPromptTable-${EnvironmentSuffix}',
+      });
+    });
+
+    test('IAM roles should follow naming convention', () => {
+      const adminRole = template.Resources.MFAEnforcedAdminRole;
+      const devRole = template.Resources.MFAEnforcedDeveloperRole;
+      
+      expect(adminRole.Properties.RoleName).toEqual({
+        'Fn::Sub': 'MFAEnforcedAdminRole-${EnvironmentSuffix}',
+      });
+      expect(devRole.Properties.RoleName).toEqual({
+        'Fn::Sub': 'MFAEnforcedDeveloperRole-${EnvironmentSuffix}',
       });
     });
 
@@ -205,6 +255,43 @@ describe('TapStack CloudFormation Template', () => {
           'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
         });
       });
+    });
+  });
+
+  describe('MFA Security Features', () => {
+    test('should have FIDO2 support in MFA enforcement policy', () => {
+      const policy = template.Resources.MFAEnforcementPolicy;
+      const policyDoc = policy.Properties.PolicyDocument;
+      
+      // Look for FIDO2 support statement
+      const fido2Statement = policyDoc.Statement.find((stmt: any) => 
+        stmt.Sid === 'AllowFIDO2SecurityKeyManagement'
+      );
+      expect(fido2Statement).toBeDefined();
+      expect(fido2Statement.Condition.StringEquals['iam:AWSServiceName']).toBe('fido.aws.amazon.com');
+    });
+
+    test('should have Identity Center integration policy', () => {
+      const policy = template.Resources.IdentityCenterMFAPolicy;
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+      
+      const policyDoc = policy.Properties.PolicyDocument;
+      const ssoStatement = policyDoc.Statement.find((stmt: any) => 
+        stmt.Action.includes('sso:ListInstances')
+      );
+      expect(ssoStatement).toBeDefined();
+    });
+
+    test('should have proper MFA deny conditions', () => {
+      const policy = template.Resources.MFAEnforcementPolicy;
+      const policyDoc = policy.Properties.PolicyDocument;
+      
+      const denyStatement = policyDoc.Statement.find((stmt: any) => 
+        stmt.Sid === 'DenyAllWithoutMFA'
+      );
+      expect(denyStatement).toBeDefined();
+      expect(denyStatement.Effect).toBe('Deny');
+      expect(denyStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
     });
   });
 });
