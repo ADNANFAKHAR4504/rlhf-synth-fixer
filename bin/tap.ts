@@ -37,6 +37,7 @@ const secondaryStack = new TapStack(
     isPrimary: false,
     primaryRegion: 'us-east-1',
     primaryBucketArn: primaryStack.primaryBucketArn,
+    primaryDatabaseIdentifier: primaryStack.databaseInstanceIdentifier,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
       region: 'us-west-1',

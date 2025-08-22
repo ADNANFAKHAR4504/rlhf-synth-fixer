@@ -17,10 +17,12 @@ interface TapStackProps extends cdk.StackProps {
   isPrimary?: boolean;
   primaryRegion?: string;
   primaryBucketArn?: string;
+  primaryDatabaseIdentifier?: string;
 }
 
 export class TapStack extends cdk.Stack {
   public readonly primaryBucketArn: string;
+  public readonly databaseInstanceIdentifier?: string;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -263,14 +265,21 @@ export class TapStack extends cdk.Stack {
 
       const cfnDbInstance = dbInstance.node.defaultChild as rds.CfnDBInstance;
       cfnDbInstance.backupRetentionPeriod = 7;
+      
+      // Store the database identifier for cross-stack reference
+      this.databaseInstanceIdentifier = dbInstance.instanceIdentifier;
     } else {
+      if (!props?.primaryDatabaseIdentifier) {
+        throw new Error('primaryDatabaseIdentifier is required for secondary stack');
+      }
+      
       new rds.DatabaseInstanceReadReplica(this, 'TapDatabaseReplica', {
         sourceDatabaseInstance:
           rds.DatabaseInstance.fromDatabaseInstanceAttributes(
             this,
             'SourceDb',
             {
-              instanceIdentifier: `tapstackprimary${environmentSuffix}-tapdatabase`,
+              instanceIdentifier: props.primaryDatabaseIdentifier,
               instanceEndpointAddress: 'placeholder',
               port: 5432,
               securityGroups: [],
@@ -456,5 +465,13 @@ def handler(event, context):
       value: vpc.vpcId,
       description: 'VPC ID',
     });
+    
+    // Output database identifier for primary stack
+    if (isPrimary && this.databaseInstanceIdentifier) {
+      new cdk.CfnOutput(this, 'DatabaseInstanceIdentifier', {
+        value: this.databaseInstanceIdentifier,
+        description: 'RDS Database Instance Identifier',
+      });
+    }
   }
 }
