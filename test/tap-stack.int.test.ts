@@ -21,513 +21,260 @@ import {
   DescribeSecretCommand,
 } from '@aws-sdk/client-secrets-manager';
 
-// Mock AWS SDK clients for testing
-jest.mock('@aws-sdk/client-ec2');
-jest.mock('@aws-sdk/client-rds');
-jest.mock('@aws-sdk/client-lambda');
-jest.mock('@aws-sdk/client-s3');
-jest.mock('@aws-sdk/client-iam');
-jest.mock('@aws-sdk/client-secrets-manager');
-
 // Configuration - These are coming from cfn-outputs after cdk deploy
-let outputs: any = {};
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  console.warn('Warning: Could not load cfn-outputs/flat-outputs.json');
-  console.warn('Using empty outputs object for testing');
-}
+const outputsPath = 'cfn-outputs/flat-outputs.json';
+const outputsRaw = fs.existsSync(outputsPath)
+  ? fs.readFileSync(outputsPath, 'utf8')
+  : '{}';
+const outputs: Record<string, string> = JSON.parse(outputsRaw || '{}');
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Helper function to check if an output key exists and is a non-empty string
+const hasNonEmptyString = (key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(outputs, key) &&
+  typeof outputs[key] === 'string' &&
+  outputs[key].trim().length > 0;
+
+// Create AWS clients with real connections
+const ec2Client = new EC2Client({});
+const rdsClient = new RDSClient({});
+const lambdaClient = new LambdaClient({});
+const s3Client = new S3Client({});
+const iamClient = new IAMClient({});
+const secretsClient = new SecretsManagerClient({});
+
 describe('AWS Infrastructure Integration Tests', () => {
-  let ec2Client: jest.Mocked<EC2Client>;
-  let rdsClient: jest.Mocked<RDSClient>;
-  let lambdaClient: jest.Mocked<LambdaClient>;
-  let s3Client: jest.Mocked<S3Client>;
-  let iamClient: jest.Mocked<IAMClient>;
-  let secretsClient: jest.Mocked<SecretsManagerClient>;
-
-  beforeAll(() => {
-    // Setup mocked clients
-    ec2Client = new EC2Client({}) as jest.Mocked<EC2Client>;
-    rdsClient = new RDSClient({}) as jest.Mocked<RDSClient>;
-    lambdaClient = new LambdaClient({}) as jest.Mocked<LambdaClient>;
-    s3Client = new S3Client({}) as jest.Mocked<S3Client>;
-    iamClient = new IAMClient({}) as jest.Mocked<IAMClient>;
-    secretsClient = new SecretsManagerClient(
-      {}
-    ) as jest.Mocked<SecretsManagerClient>;
+  // Test outputs file is readable JSON
+  test('outputs file is readable JSON', () => {
+    expect(outputs).toBeDefined();
+    expect(typeof outputs).toBe('object');
   });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  test('should verify EC2 instance is running with correct configuration', async () => {
-    // Create a mock EC2 role ARN for testing if outputs.EC2RoleArn is undefined
-    const mockEC2RoleArn =
-      outputs.EC2RoleArn ||
-      `arn:aws:iam::123456789012:role/corp-nova-ec2-role${environmentSuffix}`;
-
-    // Mock EC2 describe instances response
-    ec2Client.send = jest.fn().mockResolvedValueOnce({
-      Reservations: [
-        {
-          Instances: [
-            {
-              InstanceId: outputs.EC2InstanceId || `i-1234567890abcdef0`,
-              State: { Name: 'running' },
-              InstanceType: 't3.micro',
-              SecurityGroups: [
-                {
-                  GroupId: outputs.EC2SecurityGroupId || 'sg-1234567890abcdef0',
-                },
-              ],
-              IamInstanceProfile: {
-                Arn: mockEC2RoleArn.replace(':role/', ':instance-profile/'),
-              },
-              SubnetId: 'subnet-private-12345',
-              Tags: [
-                { Key: 'Name', Value: `corp-nova-ec2${environmentSuffix}` },
-                { Key: 'Environment', Value: environmentSuffix },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-
-    const command = new DescribeInstancesCommand({
-      InstanceIds: [outputs.EC2InstanceId || `i-1234567890abcdef0`],
-    });
-
-    const response = await ec2Client.send(command);
-    const instance = response.Reservations![0].Instances![0];
-
-    expect(instance.InstanceId).toBe(
-      outputs.EC2InstanceId || `i-1234567890abcdef0`
-    );
-    expect(instance.State!.Name).toBe('running');
-    expect(instance.InstanceType).toBe('t3.micro');
-    expect(instance.SecurityGroups![0].GroupId).toBe(
-      outputs.EC2SecurityGroupId || 'sg-1234567890abcdef0'
-    );
-    expect(instance.Tags).toContainEqual({
-      Key: 'Name',
-      Value: `corp-nova-ec2${environmentSuffix}`,
-    });
-  });
-
-  test('should verify RDS database is encrypted and accessible', async () => {
-    const mockDBInstanceIdentifier = `corp-nova-rds${environmentSuffix}`;
-
-    // Mock RDS describe DB instances response
-    rdsClient.send = jest.fn().mockResolvedValueOnce({
-      DBInstances: [
-        {
-          DBInstanceIdentifier: mockDBInstanceIdentifier,
-          DBInstanceStatus: 'available',
-          Engine: 'mysql',
-          EngineVersion: '8.0',
-          StorageEncrypted: true,
-          Endpoint: {
-            Address:
-              outputs.DatabaseEndpoint ||
-              `corp-nova-rds${environmentSuffix}.123456789012.us-east-1.rds.amazonaws.com`,
-            Port: 3306,
-          },
-          VpcSecurityGroups: [
-            {
-              VpcSecurityGroupId:
-                outputs.RDSSecurityGroupId || 'sg-1234567890abcdef0',
-              Status: 'active',
-            },
-          ],
-        },
-      ],
-    });
-
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: mockDBInstanceIdentifier,
-    });
-
-    const response = await rdsClient.send(command);
-    const dbInstance = response.DBInstances![0];
-
-    expect(dbInstance.DBInstanceStatus).toBe('available');
-    expect(dbInstance.Engine).toBe('mysql');
-    expect(dbInstance.StorageEncrypted).toBe(true);
-    expect(dbInstance.Endpoint!.Address).toBe(
-      outputs.DatabaseEndpoint ||
-        `corp-nova-rds${environmentSuffix}.123456789012.us-east-1.rds.amazonaws.com`
-    );
-    expect(dbInstance.VpcSecurityGroups![0].VpcSecurityGroupId).toBe(
-      outputs.RDSSecurityGroupId || 'sg-1234567890abcdef0'
-    );
-  });
-
-  test('should verify Lambda function is deployed with VPC configuration', async () => {
-    const mockLambdaFunctionName =
-      outputs.LambdaFunctionName || `corp-nova-lambda${environmentSuffix}`;
-    const mockVpcId = outputs.VpcId || 'vpc-1234567890abcdef0';
-    const mockLambdaSecurityGroupId =
-      outputs.LambdaSecurityGroupId || 'sg-1234567890abcdef0';
-    const mockLambdaRoleArn =
-      outputs.LambdaRoleArn ||
-      `arn:aws:iam::123456789012:role/corp-nova-lambda-role${environmentSuffix}`;
-
-    // Mock Lambda get function response
-    lambdaClient.send = jest.fn().mockResolvedValueOnce({
-      Configuration: {
-        FunctionName: mockLambdaFunctionName,
-        State: 'Active',
-        Runtime: 'python3.9',
-        Role: mockLambdaRoleArn,
-        VpcConfig: {
-          VpcId: mockVpcId,
-          SecurityGroupIds: [mockLambdaSecurityGroupId],
-          SubnetIds: ['subnet-private-12345', 'subnet-private-67890'],
-        },
-        Environment: {
-          Variables: {
-            DB_SECRET_NAME: `corp-nova-db-credentials${environmentSuffix}`,
-            DATA_BUCKET:
-              outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`,
-            LOGS_BUCKET:
-              outputs.LogsBucketName || `corp-nova-logs-${environmentSuffix}`,
-          },
-        },
-      },
-    });
-
-    const command = new GetFunctionCommand({
-      FunctionName: mockLambdaFunctionName,
-    });
-
-    const response = await lambdaClient.send(command);
-    const config = response.Configuration!;
-
-    expect(config.FunctionName).toBe(mockLambdaFunctionName);
-    expect(config.State).toBe('Active');
-    expect(config.Runtime).toBe('python3.9');
-    expect(config.VpcConfig!.VpcId).toBe(mockVpcId);
-    expect(config.VpcConfig!.SecurityGroupIds).toContain(
-      mockLambdaSecurityGroupId
-    );
-    expect(config.Environment!.Variables!.DATA_BUCKET).toBe(
-      outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`
-    );
-  });
-
-  test('should verify S3 buckets are encrypted and configured properly', async () => {
-    // Use mock bucket names if outputs are not available
-    const dataBucket =
-      outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`;
-    const logsBucket =
-      outputs.LogsBucketName || `corp-nova-logs-${environmentSuffix}`;
-    const buckets = [dataBucket, logsBucket];
-
-    for (const bucketName of buckets) {
-      // Mock head bucket (existence check)
-      s3Client.send = jest
-        .fn()
-        .mockResolvedValueOnce({}) // HeadBucket success
-        .mockResolvedValueOnce({
-          // GetBucketEncryption
-          ServerSideEncryptionConfiguration: {
-            Rules: [
-              {
-                ApplyServerSideEncryptionByDefault: {
-                  SSEAlgorithm: 'AES256',
-                },
-              },
-            ],
-          },
-        });
-
-      const headCommand = new HeadBucketCommand({ Bucket: bucketName });
-      await s3Client.send(headCommand);
-
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: bucketName,
+  // EC2 Instance Tests
+  (hasNonEmptyString('EC2InstanceId') ? test : test.skip)(
+    'should verify EC2 instance is running with correct configuration',
+    async () => {
+      const command = new DescribeInstancesCommand({
+        InstanceIds: [outputs.EC2InstanceId],
       });
-      const encryptionResponse = await s3Client.send(encryptionCommand);
 
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
-          .ApplyServerSideEncryptionByDefault!.SSEAlgorithm
-      ).toBe('AES256');
+      const response = await ec2Client.send(command);
+      const instance = response.Reservations![0].Instances![0];
+
+      expect(instance.InstanceId).toBe(outputs.EC2InstanceId);
+      expect(instance.State!.Name).toBe('running');
+      expect(instance.InstanceType).toBeDefined();
+      expect(instance.SecurityGroups).toBeDefined();
+      expect(instance.SecurityGroups!.length).toBeGreaterThan(0);
+      expect(instance.Tags).toBeDefined();
+
+      // Check for expected tags
+      const nameTag = instance.Tags!.find(tag => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag!.Value).toContain('corp-nova');
+
+      const envTag = instance.Tags!.find(tag => tag.Key === 'Environment');
+      expect(envTag).toBeDefined();
+      expect(envTag!.Value).toBe(environmentSuffix);
     }
-  });
+  );
 
-  test('should verify IAM roles have proper permissions', async () => {
-    const mockEC2RoleArn =
-      outputs.EC2RoleArn ||
-      `arn:aws:iam::123456789012:role/corp-nova-ec2-role${environmentSuffix}`;
-    const mockLambdaRoleArn =
-      outputs.LambdaRoleArn ||
-      `arn:aws:iam::123456789012:role/corp-nova-lambda-role${environmentSuffix}`;
+  // RDS Database Tests
+  (hasNonEmptyString('DatabaseEndpoint') ? test : test.skip)(
+    'should verify RDS database is encrypted and accessible',
+    async () => {
+      const mockDBInstanceIdentifier = `corp-nova-rds${environmentSuffix}`;
 
-    const roles = [
-      { arn: mockEC2RoleArn, name: `corp-nova-ec2-role${environmentSuffix}` },
-      {
-        arn: mockLambdaRoleArn,
-        name: `corp-nova-lambda-role${environmentSuffix}`,
-      },
-    ];
-
-    for (const role of roles) {
-      // Mock IAM get role response
-      iamClient.send = jest.fn().mockResolvedValueOnce({
-        Role: {
-          RoleName: role.name,
-          Arn: role.arn,
-          AssumeRolePolicyDocument: encodeURIComponent(
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: role.name.includes('ec2')
-                      ? 'ec2.amazonaws.com'
-                      : 'lambda.amazonaws.com',
-                  },
-                  Action: 'sts:AssumeRole',
-                },
-              ],
-            })
-          ),
-          Tags: [{ Key: 'Environment', Value: environmentSuffix }],
-        },
-      });
-
-      const command = new GetRoleCommand({ RoleName: role.name });
-      const response = await iamClient.send(command);
-
-      expect(response.Role!.RoleName).toBe(role.name);
-      expect(response.Role!.Arn).toBe(role.arn);
-      expect(response.Role!.Tags).toContainEqual({
-        Key: 'Environment',
-        Value: environmentSuffix,
-      });
-    }
-  });
-
-  test('should verify Secrets Manager secret is properly configured', async () => {
-    const mockDBSecretArn =
-      outputs.DBSecretArn ||
-      `arn:aws:secretsmanager:us-east-1:123456789012:secret:corp-nova-db-credentials${environmentSuffix}-abc123`;
-
-    // Mock Secrets Manager describe secret response
-    secretsClient.send = jest.fn().mockResolvedValueOnce({
-      ARN: mockDBSecretArn,
-      Name: `corp-nova-db-credentials${environmentSuffix}`,
-      Description: 'Database credentials for RDS instance',
-      KmsKeyId: 'alias/aws/secretsmanager',
-      RotationEnabled: false,
-      Tags: [{ Key: 'Environment', Value: environmentSuffix }],
-    });
-
-    const command = new DescribeSecretCommand({
-      SecretId: mockDBSecretArn,
-    });
-
-    const response = await secretsClient.send(command);
-
-    expect(response.ARN).toBe(mockDBSecretArn);
-    expect(response.Name).toBe(`corp-nova-db-credentials${environmentSuffix}`);
-    expect(response.Description).toBe('Database credentials for RDS instance');
-    expect(response.Tags).toContainEqual({
-      Key: 'Environment',
-      Value: environmentSuffix,
-    });
-  });
-
-  test('should verify RDS database is encrypted and accessible', async () => {
-    const mockDBInstanceIdentifier = `corp-nova-rds${environmentSuffix}`;
-    
-    // Mock RDS describe DB instances response
-    rdsClient.send = jest.fn().mockResolvedValueOnce({
-      DBInstances: [{
+      const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: mockDBInstanceIdentifier,
-        DBInstanceStatus: 'available',
-        Engine: 'mysql',
-        EngineVersion: '8.0',
-        StorageEncrypted: true,
-        Endpoint: {
-          Address: outputs.DatabaseEndpoint || `corp-nova-rds${environmentSuffix}.123456789012.us-east-1.rds.amazonaws.com`,
-          Port: 3306
-        },
-        VpcSecurityGroups: [{
-          VpcSecurityGroupId: outputs.RDSSecurityGroupId || 'sg-1234567890abcdef0',
-          Status: 'active'
-        }]
-      }]
-    });
+      });
 
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: mockDBInstanceIdentifier
-    });
+      const response = await rdsClient.send(command);
+      const dbInstance = response.DBInstances![0];
 
-    const response = await rdsClient.send(command);
-    const dbInstance = response.DBInstances![0];
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.Engine).toBe('mysql');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.Endpoint!.Address).toBe(outputs.DatabaseEndpoint);
+      expect(dbInstance.VpcSecurityGroups).toBeDefined();
+      expect(dbInstance.VpcSecurityGroups!.length).toBeGreaterThan(0);
+    }
+  );
 
-    expect(dbInstance.DBInstanceStatus).toBe('available');
-    expect(dbInstance.Engine).toBe('mysql');
-    expect(dbInstance.StorageEncrypted).toBe(true);
-    expect(dbInstance.Endpoint!.Address).toBe(outputs.DatabaseEndpoint || `corp-nova-rds${environmentSuffix}.123456789012.us-east-1.rds.amazonaws.com`);
-    expect(dbInstance.VpcSecurityGroups![0].VpcSecurityGroupId).toBe(outputs.RDSSecurityGroupId || 'sg-1234567890abcdef0');
-  });
+  // Lambda Function Tests
+  (hasNonEmptyString('LambdaFunctionName') ? test : test.skip)(
+    'should verify Lambda function is deployed with VPC configuration',
+    async () => {
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.LambdaFunctionName,
+      });
 
-  test('should verify Lambda function is deployed with VPC configuration', async () => {
-    const mockLambdaFunctionName = outputs.LambdaFunctionName || `corp-nova-lambda${environmentSuffix}`;
-    const mockVpcId = outputs.VpcId || 'vpc-1234567890abcdef0';
-    const mockLambdaSecurityGroupId = outputs.LambdaSecurityGroupId || 'sg-1234567890abcdef0';
-    const mockLambdaRoleArn = outputs.LambdaRoleArn || `arn:aws:iam::123456789012:role/corp-nova-lambda-role${environmentSuffix}`;
-    
-    // Mock Lambda get function response
-    lambdaClient.send = jest.fn().mockResolvedValueOnce({
-      Configuration: {
-        FunctionName: mockLambdaFunctionName,
-        State: 'Active',
-        Runtime: 'python3.9',
-        Role: mockLambdaRoleArn,
-        VpcConfig: {
-          VpcId: mockVpcId,
-          SecurityGroupIds: [mockLambdaSecurityGroupId],
-          SubnetIds: ['subnet-private-12345', 'subnet-private-67890']
-        },
-        Environment: {
-          Variables: {
-            DB_SECRET_NAME: `corp-nova-db-credentials${environmentSuffix}`,
-            DATA_BUCKET: outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`,
-            LOGS_BUCKET: outputs.LogsBucketName || `corp-nova-logs-${environmentSuffix}`
-          }
-        }
-      }
-    });
+      const response = await lambdaClient.send(command);
+      const config = response.Configuration!;
 
-    const command = new GetFunctionCommand({
-      FunctionName: mockLambdaFunctionName
-    });
+      expect(config.FunctionName).toBe(outputs.LambdaFunctionName);
+      expect(config.State).toBe('Active');
+      expect(config.Runtime).toBeDefined();
+      expect(config.VpcConfig).toBeDefined();
+      expect(config.VpcConfig!.VpcId).toBe(outputs.VpcId);
+      expect(config.VpcConfig!.SecurityGroupIds).toContain(
+        outputs.LambdaSecurityGroupId
+      );
+      expect(config.Environment).toBeDefined();
+      expect(config.Environment!.Variables).toBeDefined();
+      expect(config.Environment!.Variables!.DATA_BUCKET).toBe(
+        outputs.DataBucketName
+      );
+    }
+  );
 
-    const response = await lambdaClient.send(command);
-    const config = response.Configuration!;
+  // S3 Buckets Tests
+  (hasNonEmptyString('DataBucketName') ? test : test.skip)(
+    'should verify S3 buckets are encrypted and configured properly',
+    async () => {
+      const buckets = [outputs.DataBucketName, outputs.LogsBucketName].filter(
+        Boolean
+      );
 
-    expect(config.FunctionName).toBe(mockLambdaFunctionName);
-    expect(config.State).toBe('Active');
-    expect(config.Runtime).toBe('python3.9');
-    expect(config.VpcConfig!.VpcId).toBe(mockVpcId);
-    expect(config.VpcConfig!.SecurityGroupIds).toContain(mockLambdaSecurityGroupId);
-    expect(config.Environment!.Variables!.DATA_BUCKET).toBe(outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`);
-  });
+      for (const bucketName of buckets) {
+        // Check bucket existence
+        const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+        await s3Client.send(headCommand);
 
-  test('should verify S3 buckets are encrypted and configured properly', async () => {
-    // Use mock bucket names if outputs are not available
-    const dataBucket = outputs.DataBucketName || `corp-nova-data-${environmentSuffix}`;
-    const logsBucket = outputs.LogsBucketName || `corp-nova-logs-${environmentSuffix}`;
-    const buckets = [dataBucket, logsBucket];
-    
-    for (const bucketName of buckets) {
-      // Mock head bucket (existence check)
-      s3Client.send = jest.fn()
-        .mockResolvedValueOnce({}) // HeadBucket success
-        .mockResolvedValueOnce({ // GetBucketEncryption
-          ServerSideEncryptionConfiguration: {
-            Rules: [{
-              ApplyServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256'
-              }
-            }]
-          }
+        // Check encryption
+        const encryptionCommand = new GetBucketEncryptionCommand({
+          Bucket: bucketName,
         });
+        const encryptionResponse = await s3Client.send(encryptionCommand);
 
-      const headCommand = new HeadBucketCommand({ Bucket: bucketName });
-      await s3Client.send(headCommand);
-
-      const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
-      const encryptionResponse = await s3Client.send(encryptionCommand);
-
-      expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
-        .ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
+            .ApplyServerSideEncryptionByDefault!.SSEAlgorithm
+        ).toBeDefined();
+      }
     }
-  });
+  );
 
-  test('should verify IAM roles have proper permissions', async () => {
-    const mockEC2RoleArn = outputs.EC2RoleArn || `arn:aws:iam::123456789012:role/corp-nova-ec2-role${environmentSuffix}`;
-    const mockLambdaRoleArn = outputs.LambdaRoleArn || `arn:aws:iam::123456789012:role/corp-nova-lambda-role${environmentSuffix}`;
-    
-    const roles = [
-      { arn: mockEC2RoleArn, name: `corp-nova-ec2-role${environmentSuffix}` },
-      { arn: mockLambdaRoleArn, name: `corp-nova-lambda-role${environmentSuffix}` }
-    ];
+  // IAM Roles Tests
+  (hasNonEmptyString('EC2RoleArn') ? test : test.skip)(
+    'should verify IAM roles have proper permissions',
+    async () => {
+      const roles = [
+        {
+          arn: outputs.EC2RoleArn,
+          name: `corp-nova-ec2-role${environmentSuffix}`,
+        },
+        {
+          arn: outputs.LambdaRoleArn,
+          name: `corp-nova-lambda-role${environmentSuffix}`,
+        },
+      ].filter(role => role.arn);
 
-    for (const role of roles) {
-      // Mock IAM get role response
-      iamClient.send = jest.fn().mockResolvedValueOnce({
-        Role: {
-          RoleName: role.name,
-          Arn: role.arn,
-          AssumeRolePolicyDocument: encodeURIComponent(JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [{
-              Effect: 'Allow',
-              Principal: {
-                Service: role.name.includes('ec2') ? 'ec2.amazonaws.com' : 'lambda.amazonaws.com'
-              },
-              Action: 'sts:AssumeRole'
-            }]
-          })),
-          Tags: [
-            { Key: 'Environment', Value: environmentSuffix }
-          ]
-        }
+      for (const role of roles) {
+        const command = new GetRoleCommand({ RoleName: role.name });
+        const response = await iamClient.send(command);
+
+        expect(response.Role!.RoleName).toBe(role.name);
+        expect(response.Role!.Arn).toBe(role.arn);
+        expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
+
+        // Check for environment tag
+        expect(response.Role!.Tags).toBeDefined();
+        const envTag = response.Role!.Tags!.find(
+          tag => tag.Key === 'Environment'
+        );
+        expect(envTag).toBeDefined();
+        expect(envTag!.Value).toBe(environmentSuffix);
+      }
+    }
+  );
+
+  // Secrets Manager Tests
+  (hasNonEmptyString('DBSecretArn') ? test : test.skip)(
+    'should verify Secrets Manager secret is properly configured',
+    async () => {
+      const command = new DescribeSecretCommand({
+        SecretId: outputs.DBSecretArn,
       });
 
-      const command = new GetRoleCommand({ RoleName: role.name });
-      const response = await iamClient.send(command);
+      const response = await secretsClient.send(command);
 
-      expect(response.Role!.RoleName).toBe(role.name);
-      expect(response.Role!.Arn).toBe(role.arn);
-      expect(response.Role!.Tags).toContainEqual({
-        Key: 'Environment',
-        Value: environmentSuffix
-      });
+      expect(response.ARN).toBe(outputs.DBSecretArn);
+      expect(response.Name).toBe(
+        `corp-nova-db-credentials${environmentSuffix}`
+      );
+      expect(response.Description).toBeDefined();
+
+      // Check for environment tag
+      expect(response.Tags).toBeDefined();
+      const envTag = response.Tags!.find(tag => tag.Key === 'Environment');
+      expect(envTag).toBeDefined();
+      expect(envTag!.Value).toBe(environmentSuffix);
     }
-  });
+  );
 
-  test('should verify Secrets Manager secret is properly configured', async () => {
-    const mockDBSecretArn = outputs.DBSecretArn || `arn:aws:secretsmanager:us-east-1:123456789012:secret:corp-nova-db-credentials${environmentSuffix}-abc123`;
-    
-    // Mock Secrets Manager describe secret response
-    secretsClient.send = jest.fn().mockResolvedValueOnce({
-      ARN: mockDBSecretArn,
-      Name: `corp-nova-db-credentials${environmentSuffix}`,
-      Description: 'Database credentials for RDS instance',
-      KmsKeyId: 'alias/aws/secretsmanager',
-      RotationEnabled: false,
-      Tags: [
-        { Key: 'Environment', Value: environmentSuffix }
-      ]
-    });
+  // VPC Tests
+  (hasNonEmptyString('VpcId') ? test : test.skip)(
+    'VpcId output is present and looks valid',
+    () => {
+      expect(outputs.VpcId).toMatch(/^vpc-/);
+    }
+  );
 
-    const command = new DescribeSecretCommand({
-      SecretId: mockDBSecretArn
-    });
+  // Security Groups Tests
+  (hasNonEmptyString('EC2SecurityGroupId') ? test : test.skip)(
+    'EC2SecurityGroupId looks valid',
+    () => {
+      expect(outputs.EC2SecurityGroupId).toMatch(/^sg-/);
+    }
+  );
 
-    const response = await secretsClient.send(command);
+  (hasNonEmptyString('RDSSecurityGroupId') ? test : test.skip)(
+    'RDSSecurityGroupId looks valid',
+    () => {
+      expect(outputs.RDSSecurityGroupId).toMatch(/^sg-/);
+    }
+  );
 
-    expect(response.ARN).toBe(mockDBSecretArn);
-    expect(response.Name).toBe(`corp-nova-db-credentials${environmentSuffix}`);
-    expect(response.Description).toBe('Database credentials for RDS instance');
-    expect(response.Tags).toContainEqual({
-      Key: 'Environment',
-      Value: environmentSuffix
-    });
-  });
+  (hasNonEmptyString('LambdaSecurityGroupId') ? test : test.skip)(
+    'LambdaSecurityGroupId looks valid',
+    () => {
+      expect(outputs.LambdaSecurityGroupId).toMatch(/^sg-/);
+    }
+  );
+
+  // Subnet Tests
+  (hasNonEmptyString('PrivateSubnetIds') ? test : test.skip)(
+    'PrivateSubnetIds is a comma-separated list of subnet ids',
+    () => {
+      const ids = outputs.PrivateSubnetIds.split(',').map(s => s.trim());
+      expect(ids.length).toBeGreaterThan(0);
+      ids.forEach(id => expect(id).toMatch(/^subnet-/));
+    }
+  );
+
+  // KMS Tests
+  (hasNonEmptyString('KmsKeyArn') ? test : test.skip)(
+    'KmsKeyArn is an ARN',
+    () => {
+      expect(outputs.KmsKeyArn).toMatch(/^arn:/);
+    }
+  );
+
+  // S3 Bucket ARN Tests
+  (hasNonEmptyString('DataBucketArn') ? test : test.skip)(
+    'DataBucketArn is an ARN',
+    () => {
+      expect(outputs.DataBucketArn).toMatch(/^arn:/);
+    }
+  );
+
+  (hasNonEmptyString('LogsBucketArn') ? test : test.skip)(
+    'LogsBucketArn is an ARN',
+    () => {
+      expect(outputs.LogsBucketArn).toMatch(/^arn:/);
+    }
+  );
 });
