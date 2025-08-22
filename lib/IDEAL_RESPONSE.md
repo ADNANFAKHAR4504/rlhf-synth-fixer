@@ -120,8 +120,15 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  EIP:
+  EIP1:
     Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  EIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
 
   NLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -129,22 +136,15 @@ Resources:
       Name: HA-NLB
       Type: network
       Scheme: internet-facing
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+      IpAddressType: ipv4
+      SubnetMappings:
+        - SubnetId: !Ref PublicSubnet1
+          AllocationId: !GetAtt EIP1.AllocationId
+        - SubnetId: !Ref PublicSubnet2
+          AllocationId: !GetAtt EIP2.AllocationId
       LoadBalancerAttributes:
         - Key: load_balancing.cross_zone.enabled
           Value: true
-
-  NLBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref NLB
-      Port: 80
-      Protocol: TCP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref NLBTargetGroup
 
   NLBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -155,11 +155,15 @@ Resources:
       TargetType: instance
       HealthCheckProtocol: TCP
 
-  EIPAssociation:
-    Type: AWS::EC2::EIPAssociation
+  NLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      AllocationId: !GetAtt EIP.AllocationId
-      NetworkInterfaceId: !Select [ 0, !GetAtt NLB.NetworkInterfaces ]
+      LoadBalancerArn: !Ref NLB
+      Port: 80
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTargetGroup
 
   WebAppRole:
     Type: AWS::IAM::Role
@@ -179,7 +183,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:*
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: '*'
 
   WebAppInstanceProfile:
@@ -187,26 +193,6 @@ Resources:
     Properties:
       Roles:
         - !Ref WebAppRole
-
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: WebAppTemplate
-      LaunchTemplateData:
-        InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
-        IamInstanceProfile:
-          Arn: !GetAtt WebAppInstanceProfile.Arn
-        ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (Update with latest)
-        SecurityGroupIds:
-          - !Ref InstanceSecurityGroup
-        UserData:
-          Fn::Base64: |
-            #!/bin/bash
-            yum install -y httpd
-            systemctl enable httpd
-            systemctl start httpd
-            echo "Healthy" > /var/www/html/index.html
 
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -218,6 +204,26 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: WebAppTemplate
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Arn: !GetAtt WebAppInstanceProfile.Arn
+        ImageId: ami-0c55b159cbfafe1f0 # Update this to the latest Amazon Linux 2 AMI for your region
+        SecurityGroupIds:
+          - !Ref InstanceSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum install -y httpd
+            systemctl enable httpd
+            systemctl start httpd
+            echo "Healthy" > /var/www/html/index.html
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -242,29 +248,6 @@ Resources:
           Value: WebApp
           PropagateAtLaunch: true
 
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: 8.0.37
-      MultiAZ: true
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: 20
-      DBInstanceIdentifier: WebAppDB
-      VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: RDS Subnet Group
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -275,6 +258,37 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref InstanceSecurityGroup
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS Subnet Group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: 8.0.43
+      MultiAZ: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: 20
+      DBInstanceIdentifier: WebAppDB
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: your-email@example.com
+          Protocol: email
+      TopicName: AlarmNotifications
 
   CloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -295,16 +309,7 @@ Resources:
       OKActions:
         - !Ref AlarmTopic
 
-  AlarmTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Subscription:
-        - Endpoint: your-email@example.com
-          Protocol: email
-      TopicName: AlarmNotifications
-
 Outputs:
-
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
@@ -325,20 +330,24 @@ Outputs:
     Description: Private Subnet 2 ID
     Value: !Ref PrivateSubnet2
 
-  ElasticIPAddress:
-    Description: Elastic IP associated with Load Balancer
-    Value: !Ref EIP
+  ElasticIP1:
+    Description: Elastic IP for Subnet 1
+    Value: !Ref EIP1
+
+  ElasticIP2:
+    Description: Elastic IP for Subnet 2
+    Value: !Ref EIP2
 
   LoadBalancerDNS:
-    Description: Network Load Balancer DNS Name
+    Description: NLB DNS
     Value: !GetAtt NLB.DNSName
 
   LoadBalancerArn:
-    Description: ARN of the Network Load Balancer
+    Description: ARN of the NLB
     Value: !Ref NLB
 
   TargetGroupArn:
-    Description: Target Group ARN for EC2 instances
+    Description: Target Group ARN
     Value: !Ref NLBTargetGroup
 
   AutoScalingGroupName:
@@ -346,19 +355,19 @@ Outputs:
     Value: !Ref AutoScalingGroup
 
   LaunchTemplateId:
-    Description: ID of the EC2 Launch Template
+    Description: EC2 Launch Template ID
     Value: !Ref LaunchTemplate
 
   LaunchTemplateLatestVersion:
-    Description: Latest version of the Launch Template
+    Description: Latest Version of Launch Template
     Value: !GetAtt LaunchTemplate.LatestVersionNumber
 
   IAMRoleName:
-    Description: Name of IAM Role assigned to EC2 instances
+    Description: EC2 IAM Role Name
     Value: !Ref WebAppRole
 
   InstanceProfileArn:
-    Description: ARN of the EC2 Instance Profile
+    Description: EC2 Instance Profile ARN
     Value: !GetAtt WebAppInstanceProfile.Arn
 
   RDSEndpoint:
@@ -370,7 +379,7 @@ Outputs:
     Value: !Ref RDSInstance
 
   RDSSubnetGroupName:
-    Description: Name of the RDS Subnet Group
+    Description: RDS Subnet Group
     Value: !Ref DBSubnetGroup
 
   RDSSecurityGroupId:
@@ -378,15 +387,15 @@ Outputs:
     Value: !Ref RDSSecurityGroup
 
   InstanceSecurityGroupId:
-    Description: EC2 Instance Security Group ID
+    Description: EC2 Security Group ID
     Value: !Ref InstanceSecurityGroup
 
   CloudWatchAlarmName:
-    Description: Name of the CPU Alarm
+    Description: Name of CloudWatch Alarm
     Value: !Ref CloudWatchAlarm
 
   AlarmSNSTopicArn:
-    Description: SNS Topic for Alarm Notifications
+    Description: SNS Topic for Alarm
     Value: !Ref AlarmTopic
 
 ```

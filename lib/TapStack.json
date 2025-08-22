@@ -197,8 +197,17 @@
                 }
             }
         },
-        "EIP": {
-            "Type": "AWS::EC2::EIP"
+        "EIP1": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
+        },
+        "EIP2": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc"
+            }
         },
         "NLB": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
@@ -206,12 +215,29 @@
                 "Name": "HA-NLB",
                 "Type": "network",
                 "Scheme": "internet-facing",
-                "Subnets": [
+                "IpAddressType": "ipv4",
+                "SubnetMappings": [
                     {
-                        "Ref": "PublicSubnet1"
+                        "SubnetId": {
+                            "Ref": "PublicSubnet1"
+                        },
+                        "AllocationId": {
+                            "Fn::GetAtt": [
+                                "EIP1",
+                                "AllocationId"
+                            ]
+                        }
                     },
                     {
-                        "Ref": "PublicSubnet2"
+                        "SubnetId": {
+                            "Ref": "PublicSubnet2"
+                        },
+                        "AllocationId": {
+                            "Fn::GetAtt": [
+                                "EIP2",
+                                "AllocationId"
+                            ]
+                        }
                     }
                 ],
                 "LoadBalancerAttributes": [
@@ -220,6 +246,18 @@
                         "Value": true
                     }
                 ]
+            }
+        },
+        "NLBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Port": 80,
+                "Protocol": "TCP",
+                "TargetType": "instance",
+                "HealthCheckProtocol": "TCP"
             }
         },
         "NLBListener": {
@@ -238,40 +276,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "NLBTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Port": 80,
-                "Protocol": "TCP",
-                "TargetType": "instance",
-                "HealthCheckProtocol": "TCP"
-            }
-        },
-        "EIPAssociation": {
-            "Type": "AWS::EC2::EIPAssociation",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "EIP",
-                        "AllocationId"
-                    ]
-                },
-                "NetworkInterfaceId": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAtt": [
-                                "NLB",
-                                "NetworkInterfaces"
-                            ]
-                        }
-                    ]
-                }
             }
         },
         "WebAppRole": {
@@ -299,7 +303,9 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:*"
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
                                     ],
                                     "Resource": "*"
                                 }
@@ -315,6 +321,23 @@
                 "Roles": [
                     {
                         "Ref": "WebAppRole"
+                    }
+                ]
+            }
+        },
+        "InstanceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ]
             }
@@ -348,23 +371,6 @@
                         "Fn::Base64": "#!/bin/bash\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Healthy\" > /var/www/html/index.html\n"
                     }
                 }
-            }
-        },
-        "InstanceSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Enable HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ]
             }
         },
         "AutoScalingGroup": {
@@ -413,12 +419,45 @@
                 ]
             }
         },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "RDS Access",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "InstanceSecurityGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "RDS Subnet Group",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ]
+            }
+        },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.37",
+                "EngineVersion": "8.0.43",
                 "MultiAZ": true,
                 "MasterUsername": {
                     "Ref": "DBUsername"
@@ -438,37 +477,16 @@
                 }
             }
         },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
+        "AlarmTopic": {
+            "Type": "AWS::SNS::Topic",
             "Properties": {
-                "DBSubnetGroupDescription": "RDS Subnet Group",
-                "SubnetIds": [
+                "Subscription": [
                     {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
+                        "Endpoint": "your-email@example.com",
+                        "Protocol": "email"
                     }
-                ]
-            }
-        },
-        "RDSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "RDS Access",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "SourceSecurityGroupId": {
-                            "Ref": "InstanceSecurityGroup"
-                        }
-                    }
-                ]
+                ],
+                "TopicName": "AlarmNotifications"
             }
         },
         "CloudWatchAlarm": {
@@ -500,18 +518,6 @@
                         "Ref": "AlarmTopic"
                     }
                 ]
-            }
-        },
-        "AlarmTopic": {
-            "Type": "AWS::SNS::Topic",
-            "Properties": {
-                "Subscription": [
-                    {
-                        "Endpoint": "your-email@example.com",
-                        "Protocol": "email"
-                    }
-                ],
-                "TopicName": "AlarmNotifications"
             }
         }
     },
@@ -546,14 +552,20 @@
                 "Ref": "PrivateSubnet2"
             }
         },
-        "ElasticIPAddress": {
-            "Description": "Elastic IP associated with Load Balancer",
+        "ElasticIP1": {
+            "Description": "Elastic IP for Subnet 1",
             "Value": {
-                "Ref": "EIP"
+                "Ref": "EIP1"
+            }
+        },
+        "ElasticIP2": {
+            "Description": "Elastic IP for Subnet 2",
+            "Value": {
+                "Ref": "EIP2"
             }
         },
         "LoadBalancerDNS": {
-            "Description": "Network Load Balancer DNS Name",
+            "Description": "NLB DNS",
             "Value": {
                 "Fn::GetAtt": [
                     "NLB",
@@ -562,13 +574,13 @@
             }
         },
         "LoadBalancerArn": {
-            "Description": "ARN of the Network Load Balancer",
+            "Description": "ARN of the NLB",
             "Value": {
                 "Ref": "NLB"
             }
         },
         "TargetGroupArn": {
-            "Description": "Target Group ARN for EC2 instances",
+            "Description": "Target Group ARN",
             "Value": {
                 "Ref": "NLBTargetGroup"
             }
@@ -580,13 +592,13 @@
             }
         },
         "LaunchTemplateId": {
-            "Description": "ID of the EC2 Launch Template",
+            "Description": "EC2 Launch Template ID",
             "Value": {
                 "Ref": "LaunchTemplate"
             }
         },
         "LaunchTemplateLatestVersion": {
-            "Description": "Latest version of the Launch Template",
+            "Description": "Latest Version of Launch Template",
             "Value": {
                 "Fn::GetAtt": [
                     "LaunchTemplate",
@@ -595,13 +607,13 @@
             }
         },
         "IAMRoleName": {
-            "Description": "Name of IAM Role assigned to EC2 instances",
+            "Description": "EC2 IAM Role Name",
             "Value": {
                 "Ref": "WebAppRole"
             }
         },
         "InstanceProfileArn": {
-            "Description": "ARN of the EC2 Instance Profile",
+            "Description": "EC2 Instance Profile ARN",
             "Value": {
                 "Fn::GetAtt": [
                     "WebAppInstanceProfile",
@@ -625,7 +637,7 @@
             }
         },
         "RDSSubnetGroupName": {
-            "Description": "Name of the RDS Subnet Group",
+            "Description": "RDS Subnet Group",
             "Value": {
                 "Ref": "DBSubnetGroup"
             }
@@ -637,19 +649,19 @@
             }
         },
         "InstanceSecurityGroupId": {
-            "Description": "EC2 Instance Security Group ID",
+            "Description": "EC2 Security Group ID",
             "Value": {
                 "Ref": "InstanceSecurityGroup"
             }
         },
         "CloudWatchAlarmName": {
-            "Description": "Name of the CPU Alarm",
+            "Description": "Name of CloudWatch Alarm",
             "Value": {
                 "Ref": "CloudWatchAlarm"
             }
         },
         "AlarmSNSTopicArn": {
-            "Description": "SNS Topic for Alarm Notifications",
+            "Description": "SNS Topic for Alarm",
             "Value": {
                 "Ref": "AlarmTopic"
             }
