@@ -713,7 +713,9 @@
                         }
                     ]
                 }
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailLogsBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -1589,7 +1591,9 @@
                         }
                     }
                 ]
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
