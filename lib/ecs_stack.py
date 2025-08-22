@@ -119,13 +119,13 @@ class EcsStack(Stack):
                 "API_KEY": ecs.Secret.from_ssm_parameter(
                     ssm.StringParameter.from_string_parameter_name(
                         self, f"ApiKeyParam{environment_suffix}",
-                        string_parameter_name=f"/webapp/{environment_suffix.lower()}/api-key"
+                        string_parameter_name=f"/webapp/{environment_suffix.lower()}/api-key-primary-1"
                     )
                 ),
                 "DB_PASSWORD": ecs.Secret.from_ssm_parameter(
                     ssm.StringParameter.from_string_parameter_name(
                         self, f"DbPasswordParam{environment_suffix}",
-                        string_parameter_name=f"/webapp/{environment_suffix.lower()}/db-password"
+                        string_parameter_name=f"/webapp/{environment_suffix.lower()}/db-password-primary-1"
                     )
                 )
             },
