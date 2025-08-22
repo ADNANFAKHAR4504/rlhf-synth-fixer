@@ -1,6 +1,21 @@
+data "aws_ami" "amazon_linux2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.environment_tag}-lt-${random_id.deployment.hex}-"
-  image_id      = "ami-0c02fb55956c7d316"
+  image_id      = data.aws_ami.amazon_linux2.id
   instance_type = "t3.micro"
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
