@@ -179,7 +179,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("creates RDS instance with proper configuration", () => {
       expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"main"\s*{/);
       expect(stackContent).toMatch(/engine\s*=\s*"postgres"/);
-      expect(stackContent).toMatch(/engine_version\s*=\s*"15\.4"/);
+      expect(stackContent).toMatch(/engine_version\s*=\s*"15\.7"/);
       expect(stackContent).toMatch(/storage_encrypted\s*=\s*true/);
       expect(stackContent).toMatch(/backup_retention_period\s*=\s*7/);
       expect(stackContent).toMatch(/skip_final_snapshot\s*=\s*true/);
