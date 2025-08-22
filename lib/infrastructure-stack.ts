@@ -371,7 +371,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                   Principal: {
                     AWS: `arn:aws:iam::${elbAccount.id}:root`,
                   },
-                  Action: ['s3:PutObject', 's3:GetBucketAcl'],
+                  Action: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
                   Resource: [`${bucketArn}/*`, bucketArn],
                 },
               ],
