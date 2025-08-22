@@ -562,7 +562,8 @@ resource "aws_db_instance" "main" {
 
 # S3 bucket for application data
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
+  bucket        = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
+  force_destroy = true
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-data-bucket"
@@ -572,7 +573,8 @@ resource "aws_s3_bucket" "app_data" {
 
 # S3 bucket for ALB access logs
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
+  bucket        = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
+  force_destroy = true
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-logs-bucket"
