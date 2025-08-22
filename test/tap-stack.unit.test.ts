@@ -14,9 +14,53 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Additional Template Tests', () => {
+    test('should have proper template structure consistency', () => {
+      expect(template).toHaveProperty('AWSTemplateFormatVersion');
+      expect(template).toHaveProperty('Description');
+      expect(template).toHaveProperty('Metadata');
+      expect(template).toHaveProperty('Parameters');
+      expect(template).toHaveProperty('Resources');
+      expect(template).toHaveProperty('Outputs');
+    });
+
+    test('should have proper DynamoDB table configuration for production use', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBe('Delete');
+    });
+
+    test('should have proper tagging for resource management', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      const tags = table.Properties.Tags;
+      
+      const environmentTag = tags.find(tag => tag.Key === 'Environment');
+      const applicationTag = tags.find(tag => tag.Key === 'Application');
+      const purposeTag = tags.find(tag => tag.Key === 'Purpose');
+      
+      expect(environmentTag).toBeDefined();
+      expect(environmentTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      expect(applicationTag.Value).toBe('TAP');
+      expect(purposeTag.Value).toBe('TurnAroundPrompt');
+    });
+
+    test('should support environment-specific deployments', () => {
+      const environmentSuffixParam = template.Parameters.EnvironmentSuffix;
+      expect(environmentSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      
+      const tableName = template.Resources.TurnAroundPromptTable.Properties.TableName;
+      expect(tableName).toEqual({
+        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      });
+    });
+
+    test('should have complete CloudFormation Interface metadata', () => {
+      const cfnInterface = template.Metadata['AWS::CloudFormation::Interface'];
+      expect(cfnInterface.ParameterGroups).toHaveLength(1);
+      expect(cfnInterface.ParameterGroups[0].Parameters).toContain('EnvironmentSuffix');
+      expect(cfnInterface.ParameterLabels.EnvironmentSuffix.default).toBe('Environment Suffix');
     });
   });
 
