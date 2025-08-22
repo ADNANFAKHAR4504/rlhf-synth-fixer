@@ -1,3 +1,29 @@
+The error is caused by invalid field names in the VPC Flow Logs `LogFormat`. The field names `windowstart` and `windowend` don't exist. I'll fix this by using the correct field names.
+
+Here's the corrected VPC Flow Logs section:
+
+```yaml
+# VPC Flow Logs
+VpcFlowLogs:
+  Type: 'AWS::EC2::FlowLog'
+  Properties:
+    ResourceType: 'VPC'
+    ResourceId: !Ref SecureVpc
+    TrafficType: 'ALL'
+    LogDestinationType: 's3'
+    LogDestination: !Sub '${VpcFlowLogsBucket.Arn}/vpc-flow-logs/'
+    LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}'
+    MaxAggregationInterval: 60
+    Tags:
+      - Key: Name
+        Value: !Sub '${ProjectName}-${Environment}-flowlogs-${RandomString.RandomString}'
+```
+
+## Complete Fixed Template
+
+Here's the complete corrected CloudFormation template:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS infrastructure with S3 encryption, IAM least privilege, CloudTrail, and VPC Flow Logs'
 
@@ -372,3 +398,58 @@ Outputs:
   RandomString:
     Description: 'Generated random string for resource naming'
     Value: !GetAtt RandomString.RandomString
+```
+
+## What Was Fixed
+
+### VPC Flow Logs LogFormat Field Names
+
+**❌ Before (Invalid field names):**
+
+```yaml
+LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}'
+```
+
+**✅ After (Correct field names):**
+
+```yaml
+LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}'
+```
+
+## Valid VPC Flow Logs Field Names
+
+Here are the correct field names you can use in VPC Flow Logs:
+
+| Field Name        | Description               |
+| ----------------- | ------------------------- |
+| `${version}`      | VPC Flow Logs version     |
+| `${account-id}`   | AWS account ID            |
+| `${interface-id}` | Network interface ID      |
+| `${srcaddr}`      | Source IP address         |
+| `${dstaddr}`      | Destination IP address    |
+| `${srcport}`      | Source port               |
+| `${dstport}`      | Destination port          |
+| `${protocol}`     | IANA protocol number      |
+| `${packets}`      | Number of packets         |
+| `${bytes}`        | Number of bytes           |
+| `${start}`        | Start time (Unix seconds) |
+| `${end}`          | End time (Unix seconds)   |
+| `${action}`       | ACCEPT or REJECT          |
+| `${log-status}`   | Logging status            |
+
+## Alternative LogFormat Options
+
+If you want more comprehensive logging, you can use:
+
+```yaml
+# Standard format (default)
+LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'
+
+# Custom format (what we're using)
+LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}'
+
+# Minimal format
+LogFormat: '${srcaddr} ${dstaddr} ${action}'
+```
+
+The template should now deploy successfully without the VPC Flow Logs field name error.
