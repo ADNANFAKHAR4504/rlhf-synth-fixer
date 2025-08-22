@@ -46,15 +46,21 @@ variable "common_tags" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name_prefix = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group-" : "${var.common_tags.Environment}-db-subnet-group-"
-  subnet_ids  = var.private_subnet_ids
+  # Use a stable name for the DB subnet group to avoid Terraform creating
+  # a new group during updates which can trigger AWS errors when modifying
+  # the DB instance's subnet group. RDS subnet groups are tied to a VPC
+  # and moving instances is not allowed in this workflow.
+  name       = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
+  subnet_ids = var.private_subnet_ids
 
   tags = merge(var.common_tags, {
     Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
   })
 
   lifecycle {
-    create_before_destroy = true
+    # Do not create a replacement subnet group before destroying the old one
+    # — keep operations in-place to avoid AWS rejecting moves between groups.
+    create_before_destroy = false
   }
 }
 
@@ -139,7 +145,8 @@ resource "aws_db_instance" "main" {
   lifecycle {
     prevent_destroy = false
     ignore_changes = [
-      password # Ignore password changes to prevent unnecessary updates
+      password,            # Ignore password changes to prevent unnecessary updates
+      db_subnet_group_name # Prevent Terraform from attempting to change subnet group on the DB instance
     ]
   }
 
