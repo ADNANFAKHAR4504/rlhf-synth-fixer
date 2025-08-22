@@ -11,7 +11,7 @@
     "General Infrastructure Tooling QA",
     "Network Configuration",
     "Web Application Deployment",
-    "Database Management", 
+    "Database Management",
     "Security Configuration",
     "Performance Optimization",
     "Access Control",
@@ -20,12 +20,18 @@
   "training_quality": 8,
   "aws_services": [
     "EC2",
-    "VPC", 
+    "VPC",
     "Route53",
     "DynamoDB",
     "S3",
     "ElasticLoadBalancingV2",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
