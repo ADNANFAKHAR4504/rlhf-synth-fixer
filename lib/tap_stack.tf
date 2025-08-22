@@ -3,7 +3,7 @@
 # Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
 
 terraform {
-  backend "local" {}
+  backend "s3" {}
 }
 
 
