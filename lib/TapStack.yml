@@ -34,9 +34,11 @@ Parameters:
     Description: Create NAT Gateway per Availability Zone
   AvailabilityZoneA:
     Type: String
+    Default: us-east-1a
     Description: The first Availability Zone (e.g., us-east-1a)
   AvailabilityZoneB:
     Type: String
+    Default: us-east-1b
     Description: The second Availability Zone (e.g., us-east-1b)
 
 Mappings:
