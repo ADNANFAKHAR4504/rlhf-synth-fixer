@@ -8,21 +8,17 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: 'Existing VPC ID where resources will be deployed'
-    
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
-    
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: 'Public subnet ID for Network ACL demonstration'
-    
   SecurityTeamEmail:
     Type: String
     Description: 'Email address for security team notifications'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: 'Must be a valid email address'
-    
   EnvironmentName:
     Type: String
     Default: 'production'
@@ -843,4 +839,42 @@ Outputs:
 
   ApplicationSecurityGroupId:
     Description: 'Security Group ID for application instances'
-    Value: !Ref Application
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-application-sg'
+
+  DatabaseSecurityGroupId:
+    Description: 'Security Group ID for RDS instances'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-database-sg'
+
+  VPCFlowLogsGroupName:
+    Description: 'Name of the CloudWatch Log Group for VPC Flow Logs'
+    Value: !Ref VPCFlowLogsGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-vpc-flow-logs-group'
+
+  S3AccessLogGroupName:
+    Description: 'Name of the CloudWatch Log Group for S3 access logs'
+    Value: !Ref S3AccessLogGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-s3-access-log-group'
+
+  SecurityCloudTrailArn:
+    Description: 'ARN of the CloudTrail trail for security auditing'
+    Value: !Ref SecurityCloudTrail
+    Export:
+      Name: !Sub '${EnvironmentName}-security-cloudtrail'
+
+  ConfigBucketName:
+    Description: 'Name of the S3 bucket for AWS Config'
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-config-bucket'
+
+  ConfigRoleArn:
+    Description: 'ARN of the IAM Role for AWS Config'
+    Value: !GetAtt ConfigRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-config-role'
