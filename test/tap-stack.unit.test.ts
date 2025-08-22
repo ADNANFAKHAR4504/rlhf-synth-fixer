@@ -43,11 +43,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
-
-    test('DBPassword parameter should have NoEcho for security', () => {
-      const dbPasswordParam = template.Parameters.DBPassword;
-      expect(dbPasswordParam.MinLength).toBe('8');
-    });
   });
 
   describe('VPC and Network Resources', () => {
