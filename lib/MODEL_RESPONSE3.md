@@ -1,12 +1,6 @@
-########################
-# Variables
-########################
-variable "aws_region" {
-  description = "AWS provider region"
-  type        = string
-  default     = "us-east-1"
-}
+The error occurs because Terraform is trying to interpret `${region}` as a Terraform interpolation syntax instead of a literal string that should be replaced later. We need to escape the `$` character in the user data script. Here's the corrected `tap-stack.tf` file:
 
+```hcl
 # tap-stack.tf
 
 # Local values for configuration
@@ -827,3 +821,20 @@ output "application_urls" {
     secondary = "http://${aws_lb.secondary.dns_name}"
   }
 }
+```
+
+## Key Changes Made:
+
+1. **Fixed Template Variable**: Changed `${region}` to `REGION_PLACEHOLDER` in the HTML content to avoid Terraform interpolation conflicts.
+
+2. **Updated Replace Function**: Modified the `replace()` function calls in the launch templates to substitute `REGION_PLACEHOLDER` with the actual region names.
+
+The issue was that Terraform was interpreting `${region}` as a Terraform variable reference instead of a literal string. By using a placeholder like `REGION_PLACEHOLDER`, we avoid this conflict and can safely replace it with the actual region name when creating the user data for each launch template.
+
+Now you should be able to run:
+
+```bash
+terraform plan
+```
+
+Without any interpolation errors. The plan should show all the resources that will be created across both regions.
