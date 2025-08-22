@@ -6,8 +6,9 @@
   "po_id": "292004",
   "team": "2",
   "startedAt": "2025-08-21T13:19:54.414Z",
-  "subtask": "Network Infrastructure Design",
+  "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
+    "General Infrastructure Tooling QA",
     "Network Configuration",
     "Security Configuration",
     "Database Management",
@@ -15,10 +16,10 @@
     "Monitoring Setup",
     "IaC Optimization"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "aws_services": [
-    "EC2",
     "VPC",
+    "EC2",
     "RDS",
     "KMS",
     "Auto Scaling",
@@ -26,7 +27,16 @@
     "IAM",
     "CloudWatch",
     "CloudWatch Logs",
+    "CloudTrail",
+    "S3",
+    "SNS",
     "WAF",
-    "Shield"
-  ]
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
 }
