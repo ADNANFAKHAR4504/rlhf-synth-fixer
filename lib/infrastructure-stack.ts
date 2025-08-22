@@ -472,7 +472,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         securityGroups: [albSecurityGroup.id],
         accessLogs: {
           bucket: albLogsBucket.bucket,
-          enabled: true,
+          enabled: false,
         },
         tags: {
           Name: `${environment}-${projectName}-alb`,
