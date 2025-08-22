@@ -40,5 +40,16 @@ const stack = new TapStack('pulumi-infra', {
   tags: defaultTags,
 });
 
-// Export the stack outputs for verification
+// Export all stack outputs for verification and integration tests
 export const bucketName = stack.bucketName;
+export const VPCId = stack.vpcId;
+export const PublicSubnet1Id = stack.publicSubnet1Id;
+export const PublicSubnet2Id = stack.publicSubnet2Id;
+export const PrivateSubnet1Id = stack.privateSubnet1Id;
+export const PrivateSubnet2Id = stack.privateSubnet2Id;
+export const WebSecurityGroupId = stack.webSecurityGroupId;
+export const DBSecurityGroupId = stack.dbSecurityGroupId;
+export const LogsBucketName = stack.logsBucketName;
+export const ApplicationBucketName = stack.applicationBucketName;
+export const S3KmsKeyId = stack.s3KmsKeyId;
+export const RDSKmsKeyId = stack.rdsKmsKeyId;
