@@ -121,3 +121,15 @@ variable "enable_deletion_protection" {
   type        = bool
   default     = true
 }
+
+variable "owner" {
+  description = "The owner of the resources."
+  type        = string
+  default     = "default-owner"
+}
+
+variable "cost_center" {
+  description = "The cost center for the resources."
+  type        = string
+  default     = "default-cost-center"
+}
