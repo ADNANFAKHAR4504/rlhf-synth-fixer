@@ -112,7 +112,6 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'webserver-${ProjectName}-${EnvironmentSuffix}'
       GroupDescription: 'Security group for web server allowing HTTP and SSH access'
       VpcId: !Ref VPC
       SecurityGroupIngress:

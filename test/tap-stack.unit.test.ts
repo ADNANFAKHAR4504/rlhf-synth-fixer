@@ -311,10 +311,12 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('Security Group name should follow naming convention', () => {
+    test('Security Group should have proper tags for naming convention', () => {
       const sg = template.Resources.WebServerSecurityGroup;
-      expect(sg.Properties.GroupName).toEqual({
-        'Fn::Sub': 'webserver-${ProjectName}-${EnvironmentSuffix}'
+      const nameTag = sg.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag.Value).toEqual({
+        'Fn::Sub': 'sg-webserver-${ProjectName}-${EnvironmentSuffix}'
       });
     });
 
