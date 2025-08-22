@@ -38,5 +38,11 @@
   "turn_type": "single",
   "po_id": "trainr949",
   "team": "synth",
-  "startedAt": "2025-08-22T00:00:00Z"
+  "startedAt": "2025-08-22T00:00:00Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
