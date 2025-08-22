@@ -3,12 +3,19 @@ Parameters:
   DBUsername:
     Type: String
     Default: admin
+  TimestampSuffix:
+    Type: String
+    Description: Unique timestamp for resource names
+    Default: 'manual-20250822'
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
       Tags:
+        - Key: Name
+          Value: !Sub 'vpc-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -16,14 +23,10 @@ Resources:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
+        - Key: Name
+          Value: !Sub 'igw-${TimestampSuffix}'
         - Key: Environment
           Value: Production
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -33,6 +36,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}a'
       MapPublicIpOnLaunch: true
       Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -44,6 +49,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}b'
       MapPublicIpOnLaunch: true
       Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-2-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -55,6 +62,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}a'
       MapPublicIpOnLaunch: false
       Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-1-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -66,6 +75,8 @@ Resources:
       AvailabilityZone: !Sub '${AWS::Region}b'
       MapPublicIpOnLaunch: false
       Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-2-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -74,33 +85,38 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Sub 'public-rt-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
-  PublicRoute:
-    Type: AWS::EC2::Route
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
 
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
     Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
 
   NatEIP1:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
+        - Key: Name
+          Value: !Sub 'eip-nat-1-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -109,6 +125,8 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
+        - Key: Name
+          Value: !Sub 'eip-nat-2-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -119,6 +137,8 @@ Resources:
       AllocationId: !GetAtt NatEIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
+        - Key: Name
+          Value: !Sub 'nat-1-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -129,50 +149,10 @@ Resources:
       AllocationId: !GetAtt NatEIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
+        - Key: Name
+          Value: !Sub 'nat-2-${TimestampSuffix}'
         - Key: Environment
           Value: Production
-
-  PrivateRouteTable1:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  PrivateRoute1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway1
-
-  PrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
-
-  PrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable1
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable2
 
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -187,7 +167,10 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'alb-sg-${TimestampSuffix}'
       Tags:
+        - Key: Name
+          Value: !Sub 'alb-sg-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -204,7 +187,10 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'ec2-sg-${TimestampSuffix}'
       Tags:
+        - Key: Name
+          Value: !Sub 'ec2-sg-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -221,14 +207,17 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'rds-sg-${TimestampSuffix}'
       Tags:
+        - Key: Name
+          Value: !Sub 'rds-sg-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: 'ALB-StackName'
+      Name: !Sub 'alb-${TimestampSuffix}'
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
@@ -237,12 +226,15 @@ Resources:
       Scheme: internet-facing
       Type: application
       Tags:
+        - Key: Name
+          Value: !Sub 'alb-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: !Sub 'tg-${TimestampSuffix}'
       VpcId: !Ref VPC
       Port: 80
       Protocol: HTTP
@@ -253,6 +245,8 @@ Resources:
       Matcher:
         HttpCode: 200
       Tags:
+        - Key: Name
+          Value: !Sub 'tg-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
@@ -269,6 +263,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
+      LaunchTemplateName: !Sub 'launch-template-${TimestampSuffix}'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
@@ -281,12 +276,15 @@ Resources:
         TagSpecifications:
           - ResourceType: instance
             Tags:
+              - Key: Name
+                Value: !Sub 'ec2-instance-${TimestampSuffix}'
               - Key: Environment
                 Value: Production
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      AutoScalingGroupName: !Sub 'asg-${TimestampSuffix}'
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -299,6 +297,9 @@ Resources:
       TargetGroupARNs:
         - !Ref TargetGroup
       Tags:
+        - Key: Name
+          Value: !Sub 'asg-instance-${TimestampSuffix}'
+          PropagateAtLaunch: true
         - Key: Environment
           Value: Production
           PropagateAtLaunch: true
@@ -306,18 +307,21 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
+      DBSubnetGroupName: !Sub 'db-subnet-group-${TimestampSuffix}'
       DBSubnetGroupDescription: DB subnet group
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-group-${TimestampSuffix}'
         - Key: Environment
           Value: Production
 
   MyDB:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-db'
+      DBInstanceIdentifier: !Sub 'db-${TimestampSuffix}'
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: mysql
@@ -330,35 +334,43 @@ Resources:
       MultiAZ: false
       StorageEncrypted: true
       Tags:
+        - Key: Name
+          Value: !Sub 'db-${TimestampSuffix}'
         - Key: Environment
           Value: Production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
 Outputs:
   ALBDNSName:
     Value: !GetAtt ALB.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALBDNSName'
+      Name: !Sub 'alb-dns-${TimestampSuffix}'
   VPCId:
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub 'vpc-id-${TimestampSuffix}'
   PublicSubnet1Id:
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
+      Name: !Sub 'public-subnet-1-id-${TimestampSuffix}'
   PublicSubnet2Id:
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+      Name: !Sub 'public-subnet-2-id-${TimestampSuffix}'
   PrivateSubnet1Id:
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+      Name: !Sub 'private-subnet-1-id-${TimestampSuffix}'
   PrivateSubnet2Id:
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+      Name: !Sub 'private-subnet-2-id-${TimestampSuffix}'
   RDSEndpoint:
     Value: !GetAtt MyDB.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+      Name: !Sub 'rds-endpoint-${TimestampSuffix}'
