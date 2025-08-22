@@ -472,7 +472,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         securityGroups: [albSecurityGroup.id],
         accessLogs: {
           bucket: albLogsBucket.bucket,
-          enabled: false,
+          enabled: true,
         },
         tags: {
           Name: `${environment}-${projectName}-alb`,
@@ -777,14 +777,24 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
+    // S3 Bucket ACL for CloudFront logs
+    new aws.s3.BucketAcl(
+      `${environment}-cloudfront-logs-acl`,
+      {
+        bucket: cloudFrontLogsBucket.id,
+        acl: 'private',
+      },
+      { parent: this, provider: awsProvider }
+    );
+
     // S3 Bucket Public Access Block for CloudFront logs
     new aws.s3.BucketPublicAccessBlock(
       `${environment}-cloudfront-logs-pab`,
       {
         bucket: cloudFrontLogsBucket.id,
-        blockPublicAcls: true,
+        blockPublicAcls: false,
         blockPublicPolicy: true,
-        ignorePublicAcls: true,
+        ignorePublicAcls: false,
         restrictPublicBuckets: true,
       },
       { parent: this, provider: awsProvider }
@@ -928,6 +938,11 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           cloudfrontDefaultCertificate: true,
         },
 
+        loggingConfig: {
+          bucket: cloudFrontLogsBucket.bucketDomainName,
+          includeCookies: false,
+          prefix: 'cloudfront-logs/',
+        },
         webAclId: webAcl.arn,
         tags: {
           Name: `${environment}-${projectName}-cloudfront`,
