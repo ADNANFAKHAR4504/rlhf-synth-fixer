@@ -68,13 +68,12 @@ export class SecureInfrastructureModules extends Construct {
     this.kmsKey = new kmsKey.KmsKey(this, 'SecProject-KMS-Key', {
       description: 'KMS key for SecProject encryption at rest',
       keyUsage: 'ENCRYPT_DECRYPT',
-      enableKeyRotation: true, // Security best practice: automatic key rotation
-      deletionWindowInDays: 30, // Allow recovery if accidentally deleted
+      enableKeyRotation: true,
+      deletionWindowInDays: 30,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
-            // Allow root account full access to prevent lockout
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
@@ -84,7 +83,27 @@ export class SecureInfrastructureModules extends Construct {
             Resource: '*',
           },
           {
-            // Allow CloudTrail to use the key for log encryption
+            // Allow CloudWatch Logs to use the key
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${region.name}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region.name}:${current.accountId}:log-group:/aws/cloudtrail/secproject`,
+              },
+            },
+          },
+          {
             Sid: 'Allow CloudTrail to encrypt logs',
             Effect: 'Allow',
             Principal: {
@@ -100,7 +119,6 @@ export class SecureInfrastructureModules extends Construct {
             Resource: '*',
           },
           {
-            // Allow S3 service to use the key for bucket encryption
             Sid: 'Allow S3 Service',
             Effect: 'Allow',
             Principal: {
@@ -148,7 +166,7 @@ export class SecureInfrastructureModules extends Construct {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
       availabilityZone: 'us-east-1a',
-      mapPublicIpOnLaunch: false, // Security: Don't auto-assign public IPs
+      mapPublicIpOnLaunch: false,
       tags: {
         Name: 'SecProject-PublicSubnet',
         Type: 'Public',
@@ -298,7 +316,7 @@ export class SecureInfrastructureModules extends Construct {
               sseAlgorithm: 'aws:kms',
               kmsMasterKeyId: this.kmsKey.arn,
             },
-            bucketKeyEnabled: true, // Reduce KMS API calls for cost optimization
+            bucketKeyEnabled: true,
           },
         ],
       }
@@ -393,19 +411,54 @@ export class SecureInfrastructureModules extends Construct {
       }
     );
 
+    // Create backup provider for cross-region resources
+    const backupProvider = new provider.AwsProvider(this, 'backup-provider', {
+      region: config.backupRegion,
+      alias: 'backup',
+    });
+
     // Cross-region backup bucket
     this.backupBucket = new s3Bucket.S3Bucket(this, 'SecProject-BackupBucket', {
       bucket: `secproject-backup-${current.accountId}-${config.backupRegion}`,
-      provider: new provider.AwsProvider(this, 'backup-provider', {
-        region: config.backupRegion,
-        alias: 'backup',
-      }),
+      provider: backupProvider,
       tags: {
         Name: 'SecProject-BackupBucket',
         Environment: config.environment,
         Purpose: 'Cross-region backup storage',
       },
     });
+
+    // Enable versioning on backup bucket (required for replication)
+    new s3BucketVersioning.S3BucketVersioningA(
+      this,
+      'SecProject-BackupBucket-Versioning',
+      {
+        bucket: this.backupBucket.id,
+        provider: backupProvider,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
+
+    // Encrypt backup bucket
+    new s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'SecProject-BackupBucket-Encryption',
+      {
+        bucket: this.backupBucket.id,
+        provider: backupProvider,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: this.kmsKey.arn,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      }
+    );
 
     // Cross-region replication for disaster recovery
     new s3BucketReplicationConfiguration.S3BucketReplicationConfigurationA(
@@ -426,6 +479,8 @@ export class SecureInfrastructureModules extends Construct {
             },
           },
         ],
+        // Ensure this runs after versioning is enabled
+        dependsOn: [this.backupBucket],
       }
     );
 
@@ -442,7 +497,7 @@ export class SecureInfrastructureModules extends Construct {
             Action: 'sts:AssumeRole',
             Effect: 'Allow',
             Principal: {
-              Service: 'ec2.amazonaws.com', // Adjust based on your compute service
+              Service: 'ec2.amazonaws.com',
             },
           },
         ],
@@ -461,7 +516,6 @@ export class SecureInfrastructureModules extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            // Allow read/write to main bucket only
             Effect: 'Allow',
             Action: [
               's3:GetObject',
@@ -472,13 +526,11 @@ export class SecureInfrastructureModules extends Construct {
             Resource: `${this.mainBucket.arn}/*`,
           },
           {
-            // Allow listing main bucket contents
             Effect: 'Allow',
             Action: ['s3:ListBucket', 's3:GetBucketLocation'],
             Resource: this.mainBucket.arn,
           },
           {
-            // Allow KMS operations for encryption/decryption
             Effect: 'Allow',
             Action: [
               'kms:Decrypt',
@@ -545,7 +597,7 @@ export class SecureInfrastructureModules extends Construct {
       'SecProject-CloudTrailLogs',
       {
         name: '/aws/cloudtrail/secproject',
-        retentionInDays: 90, // Retain logs for compliance
+        retentionInDays: 90,
         kmsKeyId: this.kmsKey.arn,
         tags: {
           Name: 'SecProject-CloudTrailLogs',
@@ -598,7 +650,7 @@ export class SecureInfrastructureModules extends Construct {
       }
     );
 
-    const backupPlanResource: backupPlan.BackupPlan = new backupPlan.BackupPlan(
+    const backupPlanResource = new backupPlan.BackupPlan(
       this,
       'SecProject-BackupPlan',
       {
@@ -607,7 +659,7 @@ export class SecureInfrastructureModules extends Construct {
           {
             ruleName: 'DailyBackups',
             targetVaultName: this.backupVault.name,
-            schedule: 'cron(0 5 ? * * *)', // Daily at 5 AM UTC
+            schedule: 'cron(0 5 ? * * *)',
             lifecycle: {
               coldStorageAfter: 30,
               deleteAfter: 365,
@@ -631,7 +683,7 @@ export class SecureInfrastructureModules extends Construct {
     );
 
     new backupSelection.BackupSelection(this, 'SecProject-BackupSelection', {
-      iamRoleArn: this.createBackupRole(current.accountId).arn,
+      iamRoleArn: this.createBackupRole().arn,
       name: 'SecProject-BackupSelection',
       planId: backupPlanResource.id,
       resources: [this.mainBucket.arn],
@@ -766,7 +818,7 @@ export class SecureInfrastructureModules extends Construct {
   }
 
   // Helper method to create S3 replication role
-  private createReplicationRole(_accountId: string): iamRole.IamRole {
+  private createReplicationRole(accountId: string): iamRole.IamRole {
     const role = new iamRole.IamRole(this, 'SecProject-ReplicationRole', {
       name: 'SecProject-ReplicationRole',
       assumeRolePolicy: JSON.stringify({
@@ -809,6 +861,17 @@ export class SecureInfrastructureModules extends Construct {
               Action: ['s3:ReplicateObject', 's3:ReplicateDelete'],
               Resource: `${this.backupBucket.arn}/*`,
             },
+            {
+              Effect: 'Allow',
+              Action: [
+                'kms:Decrypt',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:GenerateDataKey*',
+                'kms:ReEncrypt*',
+              ],
+              Resource: [this.kmsKey.arn],
+            },
           ],
         }),
       }
@@ -827,7 +890,7 @@ export class SecureInfrastructureModules extends Construct {
   }
 
   // Helper method to create AWS Backup service role
-  private createBackupRole(_accountId: string): iamRole.IamRole {
+  private createBackupRole(): iamRole.IamRole {
     const role = new iamRole.IamRole(this, 'SecProject-BackupRole', {
       name: 'SecProject-BackupRole',
       assumeRolePolicy: JSON.stringify({
