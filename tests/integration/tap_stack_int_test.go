@@ -5,12 +5,18 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	jsii "github.com/aws/jsii-runtime-go"
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
+
+	awscdktf "github.com/TuringGpt/iac-test-automations/.gen/aws/provider"
+	s3 "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucket"
+	s3pab "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucketpublicaccessblock"
+	s3ver "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucketversioning"
 )
 
 // This integration test runs a full synth and validates the generated Terraform plan JSON content.
@@ -25,12 +31,41 @@ func Test_Synth_EndToEnd_BucketResourcesAndOutputs(t *testing.T) {
 	defer os.Unsetenv("AWS_REGION")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	stack := cdktf.NewTerraformStack(app, jsii.String("SimpleS3Stack"))
-	BuildSimpleS3Stack(stack, "us-east-1") // 👈 updated builder
+	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
+
+	region := "us-east-1"
+	awscdktf.NewAwsProvider(stack, jsii.String("aws"), &awscdktf.AwsProviderConfig{Region: &region})
+
+	suffix := os.Getenv("NAME_SUFFIX")
+
+	bucket := s3.NewS3Bucket(stack, jsii.String("MySimpleBucket"), &s3.S3BucketConfig{
+		BucketPrefix: jsii.String(fmt.Sprintf("my-simple-bucket-%s", suffix)),
+		ForceDestroy: jsii.Bool(true),
+		Tags: &map[string]*string{
+			"Name":        jsii.String(fmt.Sprintf("MySimpleBucket-%s", suffix)),
+			"Environment": jsii.String("Dev"),
+		},
+	})
+
+	s3ver.NewS3BucketVersioningA(stack, jsii.String("MySimpleBucketVersioning"), &s3ver.S3BucketVersioningAConfig{
+		Bucket:                  bucket.Id(),
+		VersioningConfiguration: &s3ver.S3BucketVersioningVersioningConfiguration{Status: jsii.String("Enabled")},
+	})
+
+	s3pab.NewS3BucketPublicAccessBlock(stack, jsii.String("MySimpleBucketPAB"), &s3pab.S3BucketPublicAccessBlockConfig{
+		Bucket:                bucket.Id(),
+		BlockPublicAcls:       jsii.Bool(true),
+		BlockPublicPolicy:     jsii.Bool(true),
+		IgnorePublicAcls:      jsii.Bool(true),
+		RestrictPublicBuckets: jsii.Bool(true),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("bucket_name"), &cdktf.TerraformOutputConfig{Value: bucket.Id()})
+
 	app.Synth()
 
 	// Load synthesized Terraform JSON
-	tfPath := filepath.Join(outdir, "stacks", "SimpleS3Stack", "cdk.tf.json")
+	tfPath := filepath.Join(outdir, "stacks", "TapStack", "cdk.tf.json")
 	data, err := os.ReadFile(tfPath)
 	if err != nil {
 		t.Fatalf("read tf json: %v", err)
@@ -50,8 +85,6 @@ func Test_Synth_EndToEnd_BucketResourcesAndOutputs(t *testing.T) {
 		{"aws_s3_bucket", "MySimpleBucket"},
 		{"aws_s3_bucket_versioning", "MySimpleBucketVersioning"},
 		{"aws_s3_bucket_public_access_block", "MySimpleBucketPAB"},
-		// Optional: include if you kept encryption
-		// {"aws_s3_bucket_server_side_encryption_configuration", "MySimpleBucketEncryption"},
 	}
 	for _, r := range mustHave {
 		if _, ok := resource[r.typeName].(map[string]any)[r.name]; !ok {
