@@ -1,6 +1,6 @@
 import { DynamoDBClient, PutItemCommand, GetItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { IAMClient, GetRoleCommand, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { IAMClient, GetRoleCommand, ListRolePoliciesCommand } from '@aws-sdk/client-iam';
 import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import fs from 'fs';
 
@@ -156,11 +156,11 @@ describe('TAP Stack Integration Tests', () => {
       expect(roleResult.Role).toBeDefined();
       expect(roleResult.Role?.RoleName).toBe(roleName);
 
-      // List attached policies
-      const policiesResult = await iamClient.send(new ListAttachedRolePoliciesCommand(roleParams));
-      expect(policiesResult.AttachedPolicies).toBeDefined();
+      // List inline policies
+      const policiesResult = await iamClient.send(new ListRolePoliciesCommand(roleParams));
+      expect(policiesResult.PolicyNames).toBeDefined();
       
-      const policyNames = policiesResult.AttachedPolicies?.map(p => p.PolicyName) || [];
+      const policyNames = policiesResult.PolicyNames || [];
       expect(policyNames.some(name => name?.includes('TAPSecureDynamoDBAccess'))).toBe(true);
     });
   });
