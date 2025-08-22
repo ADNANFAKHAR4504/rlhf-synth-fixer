@@ -1,0 +1,51 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "Installing AWS CLI"
+      - pip install --upgrade awscli
+      
+  pre_build:
+    commands:
+      - echo "Starting deployment process"
+      - BUILD_DATE=$(date +%Y-%m-%d)
+      
+  build:
+    commands:
+      - echo "Deploying Lambda functions"
+      
+      # Deploy user service
+      - echo "Deploying user service..."
+      - aws lambda update-function-code \
+          --function-name microservices-cicd-user-service \
+          --s3-bucket $ARTIFACTS_BUCKET \
+          --s3-key builds/$BUILD_DATE/user-service.zip
+          
+      # Deploy order service
+      - echo "Deploying order service..."
+      - aws lambda update-function-code \
+          --function-name microservices-cicd-order-service \
+          --s3-bucket $ARTIFACTS_BUCKET \
+          --s3-key builds/$BUILD_DATE/order-service.zip
+          
+      # Deploy notification service
+      - echo "Deploying notification service..."
+      - aws lambda update-function-code \
+          --function-name microservices-cicd-notification-service \
+          --s3-bucket $ARTIFACTS_BUCKET \
+          --s3-key builds/$BUILD_DATE/notification-service.zip
+      
+      - echo "Running post-deployment smoke tests"
+      - python scripts/smoke_tests.py
+      
+  post_build:
+    commands:
+      - echo "Deployment completed successfully"
+      - echo "Sending deployment notification"
+      - aws sns publish \
+          --topic-arn $SNS_TOPIC_ARN \
+          --message "Deployment completed successfully for build $CODEBUILD_BUILD_NUMBER" \
+          --subject "Microservices Deployment Success"

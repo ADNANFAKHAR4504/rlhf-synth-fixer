@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291691",
+  "team": "4",
+  "startedAt": "2025-08-08T22:47:38.309Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "karosi12",
+  "dockerS3Location": ""
+}
