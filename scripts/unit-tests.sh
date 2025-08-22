@@ -24,7 +24,17 @@ fi
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running JUnit tests..."
   chmod +x ./gradlew
-  ./gradlew test --build-cache --no-daemon
+  ./gradlew test jacocoTestReport --build-cache --no-daemon
+  
+  echo "📊 Checking for generated coverage reports..."
+  if [ -d "build/reports/jacoco" ]; then
+    echo "JaCoCo directory structure:"
+    find build/reports/jacoco -type f -name "*.xml" -o -name "*.html" | head -10
+  else
+    echo "⚠️ No JaCoCo reports directory found"
+    echo "Build directory contents:"
+    ls -la build/ 2>/dev/null || echo "No build directory found"
+  fi
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."
   npm run test:unit-cdktf
