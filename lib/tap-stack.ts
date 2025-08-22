@@ -1,387 +1,135 @@
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { Construct } from 'constructs';
+// tap-stack.int.test.ts
+import fs from 'fs';
+import AWS from 'aws-sdk';
 
-export interface TapStackProps extends cdk.StackProps {
-  environmentSuffix: string;
-  projectName?: string;
-  allowedSshCidr?: string;
-  allowedDbCidr?: string;
-}
+// Load outputs
+const outputsPath = 'cfn-outputs/flat-outputs.json';
+const outputsRaw = fs.existsSync(outputsPath)
+  ? fs.readFileSync(outputsPath, 'utf8')
+  : '{}';
+const outputs: Record<string, string> = JSON.parse(outputsRaw || '{}');
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: TapStackProps) {
-    super(scope, id, props);
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-    const { environmentSuffix } = props;
-    const projectName = props.projectName || 'nova';
-    const allowedSshCidr = props.allowedSshCidr || '10.0.0.0/8';
-    const allowedDbCidr = props.allowedDbCidr || '10.0.0.0/16';
+describe('TapStack Integration Tests', () => {
+  jest.setTimeout(300000); // allow up to 5 minutes for live AWS calls
 
-    // VPC Configuration
-    const vpc = new ec2.Vpc(this, `corp-${projectName}-vpc`, {
-      vpcName: `corp-${projectName}-vpc${environmentSuffix}`,
-      maxAzs: 2,
-      cidr: '10.0.0.0/16',
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: 'isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
-    });
+  const region = process.env.AWS_REGION || 'us-east-1';
+  AWS.config.update({ region });
 
-    // Security Groups
-    const ec2SecurityGroup = new ec2.SecurityGroup(
-      this,
-      `corp-${projectName}-ec2-sg`,
-      {
-        vpc,
-        securityGroupName: `corp-${projectName}-ec2-sg${environmentSuffix}`,
-        description: 'Security group for EC2 instances',
-        allowAllOutbound: true,
-      }
-    );
+  const ec2 = new AWS.EC2();
+  const rds = new AWS.RDS();
+  const kms = new AWS.KMS();
+  const logs = new AWS.CloudWatchLogs();
 
-    ec2SecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(allowedSshCidr),
-      ec2.Port.tcp(22),
-      'Allow SSH access from specified CIDR'
-    );
+  it('should have created the VPC', async () => {
+    expect(outputs.VpcId).toBeDefined();
+    const vpcResp = await ec2
+      .describeVpcs({ VpcIds: [outputs.VpcId] })
+      .promise();
+    expect(vpcResp.Vpcs?.[0]?.VpcId).toEqual(outputs.VpcId);
+  });
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(
-      this,
-      `corp-${projectName}-rds-sg`,
-      {
-        vpc,
-        securityGroupName: `corp-${projectName}-rds-sg${environmentSuffix}`,
-        description: 'Security group for RDS instance',
-        allowAllOutbound: false,
-      }
-    );
-
-    rdsSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(allowedDbCidr),
-      ec2.Port.tcp(3306),
-      'Allow MySQL access from specified CIDR'
-    );
-
-    rdsSecurityGroup.addIngressRule(
-      ec2SecurityGroup,
-      ec2.Port.tcp(3306),
-      'Allow MySQL access from EC2 instances'
-    );
-
-    const lambdaSecurityGroup = new ec2.SecurityGroup(
-      this,
-      `corp-${projectName}-lambda-sg`,
-      {
-        vpc,
-        securityGroupName: `corp-${projectName}-lambda-sg${environmentSuffix}`,
-        description: 'Security group for Lambda functions',
-        allowAllOutbound: true,
-      }
-    );
-
-    // IAM Roles
-    const ec2Role = new iam.Role(this, `corp-${projectName}-ec2-role`, {
-      roleName: `corp-${projectName}-ec2-role${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
-      ],
-    });
-
-    // Add custom policy for EC2 to access S3 and Secrets Manager
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          's3:GetObject',
-          's3:PutObject',
-          's3:DeleteObject',
-          's3:ListBucket',
-        ],
-        resources: [
-          `arn:aws:s3:::corp-${projectName}-*`,
-          `arn:aws:s3:::corp-${projectName}-*/*`,
-        ],
+  it('should have created required subnets', async () => {
+    const subnetsResp = await ec2
+      .describeSubnets({
+        Filters: [{ Name: 'vpc-id', Values: [outputs.VpcId] }],
       })
-    );
+      .promise();
 
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'secretsmanager:GetSecretValue',
-          'secretsmanager:DescribeSecret',
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:corp-${projectName}-*`,
-        ],
+    const subnetTypes = subnetsResp.Subnets?.map(
+      s => s.Tags?.find(t => t.Key === 'aws-cdk:subnet-type')?.Value
+    );
+    expect(subnetTypes).toContain('Public');
+    expect(subnetTypes).toContain('Private');
+    expect(subnetTypes).toContain('Isolated');
+  });
+
+  it('should configure EC2 security group with HTTP/HTTPS inbound', async () => {
+    expect(outputs.Ec2SecurityGroupId).toBeDefined();
+    const sgResp = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.Ec2SecurityGroupId] })
+      .promise();
+    const sg = sgResp.SecurityGroups?.[0];
+    const http = sg?.IpPermissions?.some(
+      p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
+    );
+    const https = sg?.IpPermissions?.some(
+      p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
+    );
+    expect(http).toBeTruthy();
+    expect(https).toBeTruthy();
+  });
+
+  it('should configure RDS security group to allow EC2 access', async () => {
+    expect(outputs.RdsSecurityGroupId).toBeDefined();
+    const sgResp = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.RdsSecurityGroupId] })
+      .promise();
+    const sg = sgResp.SecurityGroups?.[0];
+    const postgresRule = sg?.IpPermissions?.find(
+      p => p.FromPort === 5432 && p.ToPort === 5432 && p.IpProtocol === 'tcp'
+    );
+    expect(postgresRule?.UserIdGroupPairs?.[0]?.GroupId).toEqual(
+      outputs.Ec2SecurityGroupId
+    );
+  });
+
+  it('should have two running EC2 instances with encrypted volumes', async () => {
+    const instanceIds = [outputs.Ec2Instance1Id, outputs.Ec2Instance2Id].filter(
+      Boolean
+    ) as string[];
+    expect(instanceIds).toHaveLength(2);
+
+    const resp = await ec2
+      .describeInstances({ InstanceIds: instanceIds })
+      .promise();
+    const instances = resp.Reservations?.flatMap(r => r.Instances!) ?? [];
+    expect(instances).toHaveLength(2);
+
+    for (const inst of instances) {
+      expect(inst.State?.Name).toBe('running');
+      for (const bd of inst.BlockDeviceMappings ?? []) {
+        const vol = await ec2
+          .describeVolumes({ VolumeIds: [bd.Ebs!.VolumeId!] })
+          .promise();
+        expect(vol.Volumes?.[0]?.Encrypted).toBe(true);
+      }
+    }
+  });
+
+  it('should have an available and encrypted RDS instance', async () => {
+    expect(outputs.DatabaseEndpoint).toBeDefined();
+    const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
+    const resp = await rds
+      .describeDBInstances({ DBInstanceIdentifier: dbIdentifier })
+      .promise();
+    const db = resp.DBInstances?.[0];
+    expect(db?.DBInstanceStatus).toBe('available');
+    expect(db?.StorageEncrypted).toBe(true);
+    expect(db?.PubliclyAccessible).toBe(false);
+  });
+
+  it('should have a valid KMS key with rotation enabled', async () => {
+    expect(outputs.KmsKeyId).toBeDefined();
+    const keyResp = await kms
+      .describeKey({ KeyId: outputs.KmsKeyId })
+      .promise();
+    expect(keyResp.KeyMetadata?.Enabled).toBe(true);
+
+    const rotationResp = await kms
+      .getKeyRotationStatus({ KeyId: outputs.KmsKeyId })
+      .promise();
+    expect(rotationResp.KeyRotationEnabled).toBe(true);
+  });
+
+  it('should have CloudWatch log groups for EC2 instances', async () => {
+    const resp = await logs
+      .describeLogGroups({
+        logGroupNamePrefix: `/aws/ec2/tap-${environmentSuffix}`,
       })
-    );
-
-    const lambdaRole = new iam.Role(this, `corp-${projectName}-lambda-role`, {
-      roleName: `corp-${projectName}-lambda-role${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaVPCAccessExecutionRole'
-        ),
-      ],
-    });
-
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'secretsmanager:GetSecretValue',
-          'secretsmanager:DescribeSecret',
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:corp-${projectName}-*`,
-        ],
-      })
-    );
-
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          's3:GetObject',
-          's3:PutObject',
-          's3:DeleteObject',
-          's3:ListBucket',
-        ],
-        resources: [
-          `arn:aws:s3:::corp-${projectName}-*`,
-          `arn:aws:s3:::corp-${projectName}-*/*`,
-        ],
-      })
-    );
-
-    // MFA Enforcement Policy - Created but not attached to maintain requirement
-    // In production, this would be attached to user groups or roles that need console access
-    new iam.ManagedPolicy(this, `corp-${projectName}-mfa-policy`, {
-      managedPolicyName: `corp-${projectName}-mfa-policy${environmentSuffix}`,
-      description: 'Enforce MFA for console access',
-      statements: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.DENY,
-          actions: ['*'],
-          resources: ['*'],
-          conditions: {
-            BoolIfExists: {
-              'aws:MultiFactorAuthPresent': 'false',
-            },
-            StringNotEquals: {
-              'aws:RequestedRegion': ['us-west-2'],
-            },
-          },
-        }),
-      ],
-    });
-
-    // Secrets Manager for database credentials
-    const dbSecret = new secretsmanager.Secret(
-      this,
-      `corp-${projectName}-db-secret`,
-      {
-        secretName: `corp-${projectName}-db-credentials${environmentSuffix}`,
-        description: 'Database credentials for RDS instance',
-        generateSecretString: {
-          secretStringTemplate: JSON.stringify({ username: 'admin' }),
-          generateStringKey: 'password',
-          excludeCharacters: '"@/\\\'',
-          includeSpace: false,
-          passwordLength: 16,
-        },
-      }
-    );
-
-    // RDS Subnet Group
-    const dbSubnetGroup = new rds.SubnetGroup(
-      this,
-      `corp-${projectName}-db-subnet-group`,
-      {
-        description: 'Subnet group for RDS instance',
-        vpc,
-        subnetGroupName: `corp-${projectName}-db-subnet-group${environmentSuffix}`,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      }
-    );
-
-    // RDS Instance
-    const database = new rds.DatabaseInstance(this, `corp-${projectName}-rds`, {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      securityGroups: [rdsSecurityGroup],
-      subnetGroup: dbSubnetGroup,
-      credentials: rds.Credentials.fromSecret(dbSecret),
-      databaseName: `corp${projectName}db${environmentSuffix}`,
-      storageEncrypted: true,
-      multiAz: false,
-      allocatedStorage: 20,
-      deleteAutomatedBackups: true,
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // EC2 Instance
-    const ec2Instance = new ec2.Instance(this, `corp-${projectName}-ec2`, {
-      instanceName: `corp-${projectName}-ec2${environmentSuffix}`,
-      vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      userData: ec2.UserData.forLinux(),
-    });
-
-    // S3 Buckets
-    const dataBucket = new s3.Bucket(this, `corp-${projectName}-data-bucket`, {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    const logsBucket = new s3.Bucket(this, `corp-${projectName}-logs-bucket`, {
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    // CloudWatch Log Group for Lambda
-    const lambdaLogGroup = new logs.LogGroup(
-      this,
-      `corp-${projectName}-lambda-logs`,
-      {
-        logGroupName: `/aws/lambda/corp-${projectName}-function${environmentSuffix}`,
-        retention: logs.RetentionDays.ONE_WEEK,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }
-    );
-
-    // Lambda Function
-    const lambdaFunction = new lambda.Function(
-      this,
-      `corp-${projectName}-lambda`,
-      {
-        functionName: `corp-${projectName}-function${environmentSuffix}`,
-        runtime: lambda.Runtime.PYTHON_3_9,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-import json
-import boto3
-import os
-
-def handler(event, context):
-    # Example function that retrieves database credentials from Secrets Manager
-    secrets_client = boto3.client('secretsmanager')
-    
-    try:
-        secret_name = os.environ.get('DB_SECRET_NAME')
-        response = secrets_client.get_secret_value(SecretId=secret_name)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': 'Successfully retrieved database credentials',
-                'secret_retrieved': True
-            })
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
-        }
-      `),
-        vpc,
-        securityGroups: [lambdaSecurityGroup],
-        role: lambdaRole,
-        logGroup: lambdaLogGroup,
-        environment: {
-          DB_SECRET_NAME: dbSecret.secretName,
-          DATA_BUCKET: dataBucket.bucketName,
-          LOGS_BUCKET: logsBucket.bucketName,
-        },
-        timeout: cdk.Duration.minutes(5),
-      }
-    );
-
-    // Grant Lambda access to the secret
-    dbSecret.grantRead(lambdaFunction);
-
-    // Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: ec2Instance.instanceId,
-      description: 'EC2 Instance ID',
-    });
-
-    new cdk.CfnOutput(this, 'LambdaFunctionName', {
-      value: lambdaFunction.functionName,
-      description: 'Lambda Function Name',
-    });
-
-    new cdk.CfnOutput(this, 'DataBucketName', {
-      value: dataBucket.bucketName,
-      description: 'Data S3 Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'LogsBucketName', {
-      value: logsBucket.bucketName,
-      description: 'Logs S3 Bucket Name',
-    });
-  }
-}
+      .promise();
+    expect(resp.logGroups?.length).toBeGreaterThan(0);
+  });
+});
