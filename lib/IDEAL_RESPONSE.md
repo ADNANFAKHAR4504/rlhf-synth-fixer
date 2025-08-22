@@ -201,7 +201,7 @@ def publish_completion_notification(task_id, s3_key, status):
 
 ### `lib/tap-stack.mjs`
 
-```javascipt
+```javascript
 import * as cdk from 'aws-cdk-lib';
 import { ServerlessNotificationStack } from './serverless-notification-stack.mjs';
 
