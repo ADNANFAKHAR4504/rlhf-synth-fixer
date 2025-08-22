@@ -25,5 +25,11 @@
     "Cloud Map",
     "Certificate Manager",
     "Route 53"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
