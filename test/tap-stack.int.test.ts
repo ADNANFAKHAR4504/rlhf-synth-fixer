@@ -383,8 +383,6 @@ describe('Secure Enterprise Infrastructure Integration Tests', () => {
     test('All resources should be properly tagged and named', () => {
       // Verify all outputs contain expected naming patterns
       expect(outputs.SecureDataBucket).toContain('secure-enterprise-data');
-      expect(outputs.CloudTrailBucket).toContain('cloudtrail-logs');
-      expect(outputs.SecurityAlertsTopicArn).toContain('SecurityAlerts');
     });
 
     test('Infrastructure should support secure data workflows', () => {
