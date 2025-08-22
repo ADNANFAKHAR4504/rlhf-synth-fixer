@@ -1,16 +1,12 @@
-Hey again, I am getting below errors in my code please check and correct them.
+I'm still running into several TypeScript compilation errors after trying to use your code. Here are the specific issues I'm seeing:
 
-@cdktf/provider-aws has no exported member named AwsProvider. Did you mean provider?ts(2724)
-Module @cdktf/provider-aws has no exported member s3BucketReplication.ts(2305)
+1. The AWS provider import is wrong - it can't find `AwsProvider` but suggests using `provider` instead
+2. There's no `s3BucketReplication` export available 
+3. `cloudtrailTrail` doesn't exist, but `cloudtrail` might be the right one
+4. Several S3-related classes have different names than what you used:
+   - `S3BucketServerSideEncryptionConfiguration` should be `S3BucketServerSideEncryptionConfigurationA`
+   - `S3BucketVersioning` should be `S3BucketVersioningA` 
+   - `S3BucketLogging` should be `S3BucketLoggingA`
+5. The `backupPlan` variable is missing proper type annotations
 
-@cdktf/provider-aws has no exported member named cloudtrailTrail. Did you mean cloudtrail?ts(2724)
-Property S3BucketServerSideEncryptionConfiguration does not exist on type typeof import("/Users/user/Documents/My_Turing/iac-test-automations/node_modules/@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration/index"). Did you mean S3BucketServerSideEncryptionConfigurationA?ts(2551)
-
-index.d.ts(123, 22): S3BucketServerSideEncryptionConfigurationA is declared here.
-Property S3BucketVersioning does not exist on type typeof import("/Users/user/Documents/My_Turing/iac-test-automations/node_modules/@cdktf/provider-aws/lib/s3-bucket-versioning/index"). Did you mean S3BucketVersioningA?ts(2551)
-
-index.d.ts(74, 22): S3BucketVersioningA is declared here.
-Property S3BucketLogging does not exist on type typeof import("/Users/user/Documents/My_Turing/iac-test-automations/node_modules/@cdktf/provider-aws/lib/s3-bucket-logging/index"). Did you mean S3BucketLoggingA?ts(2551)
-index.d.ts(229, 22): S3BucketLoggingA is declared here.
-
-backupPlan implicitly has type any because it does not have a type annotation and is referenced directly or indirectly in its own initializer.ts(7022)
+Could you please review and fix these naming issues so the code compiles properly with the current version of the CDKTF AWS provider?

@@ -1,3 +1,3 @@
-Hey, in above response you have given a corrupted tap-stack.ts file please give me the full file, and also in the modules response, I am getting the following error @cdktf/provider-aws has no exported member named DataAwsCallerIdentity. Did you mean 'dataAwsCallerIdentity'?ts(2724)
+I'm having issues with the code you provided. The tap-stack.ts file appears to be incomplete - it cuts off in the middle. Could you please provide the complete file?
 
-For all the modules, please correct it
+Also, I'm getting TypeScript errors in the modules.ts file. It seems like the import names are wrong. For example, it's complaining that `DataAwsCallerIdentity` doesn't exist, but suggests `dataAwsCallerIdentity` instead. Can you fix all the import names to match what's actually available in the @cdktf/provider-aws package?
