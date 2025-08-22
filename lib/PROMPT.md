@@ -1,55 +1,50 @@
-# Highly Available Web Application Infrastructure
+# Web App Infrastructure Help
 
-I need help creating a production-ready web application infrastructure on AWS using infrastructure as code. The infrastructure should be highly available, secure, and scalable.
+Hey, I'm working on deploying a web application to AWS and could really use some help with the infrastructure setup. We've been running things pretty manually and it's getting messy, so I want to move to infrastructure as code.
 
-## Requirements
+Basically what I need is a proper production setup that won't fall over if something goes wrong. Our current setup is just a single EC2 instance and when it goes down, everything breaks. Not great.
 
-### Network Infrastructure
-- Create a VPC with CIDR block 10.0.0.0/16
-- Set up 2 public subnets across different availability zones (10.0.1.0/24, 10.0.2.0/24)
-- Set up 2 private subnets across different availability zones (10.0.3.0/24, 10.0.4.0/24)
-- Configure an Internet Gateway for public internet access
-- Set up NAT Gateways in each public subnet for private subnet internet access
-- Create appropriate route tables for both public and private subnets
+## What I'm thinking
 
-### Compute and Load Balancing
-- Deploy an Application Load Balancer in the public subnets
-- Create an Auto Scaling group with EC2 instances in the private subnets
-- Configure the Auto Scaling group to span both availability zones for high availability
-- Set up proper health checks and scaling policies
+So we need something that can handle traffic spikes and stay up even if one of the AWS zones has issues. I was reading about load balancers and auto scaling groups - that seems like the way to go?
 
-### Database
-- Deploy an RDS MySQL database in the private subnets with Multi-AZ deployment
-- Use CloudWatch Database Insights for enhanced database monitoring
-- Create a DB subnet group spanning both private subnets
-- Configure automated backups and maintenance windows
+For the network stuff:
+- VPC with 10.0.0.0/16 (that should give us plenty of room to grow)
+- Need public subnets for the load balancer (maybe 10.0.1.0/24 and 10.0.2.0/24?)
+- Private subnets for the actual servers (10.0.3.0/24, 10.0.4.0/24 I guess)
+- Internet gateway so people can actually reach us
+- NAT gateways so the private servers can download updates and stuff
 
-### Storage
-- Create an S3 bucket for static asset storage
-- Implement proper bucket policies and access controls
-- Enable versioning and server-side encryption
+The application itself runs on port 80, pretty standard web app. We're using MySQL for the database right now and it works fine, just need it to be more reliable.
 
-### Security
-- Create security groups with least privilege access
-- Set up IAM roles for EC2 instances and other services
-- Ensure all communication between services is secure
+## Database concerns
 
-### Monitoring and Logging
-- Implement CloudWatch monitoring for all resources
-- Set up CloudWatch alarms for key metrics
-- Use CloudWatch Network Monitoring for enhanced network visibility
-- Configure proper log retention policies
+The database is probably my biggest worry. We've had some outages before and it's always because the database went down. I heard about Multi-AZ deployments - that sounds like what we need. Also someone mentioned something about CloudWatch Database Insights for monitoring?
 
-### Naming Convention
-All resources should follow the naming convention: prod-<resource_name>
+We backup manually right now which is... not ideal. Would love automated backups.
 
-### Latest AWS Features Integration
-Please incorporate these modern AWS capabilities:
-1. CloudWatch Database Insights for RDS performance monitoring and correlation with application metrics
-2. CloudWatch Network Monitoring with flow monitors for near real-time network performance visibility between compute instances and AWS services
+## File storage
 
-## Output Format
+We store some static files (images, documents, that kind of thing). Right now they're just on the file system but I know that's not going to work with multiple servers. S3 seems like the obvious choice here.
 
-Please provide the infrastructure code using Pulumi with JavaScript. Structure the code as a single ComponentResource class that encapsulates all the infrastructure components. Include proper resource dependencies, comprehensive tagging, and follow AWS Well-Architected Framework principles.
+Security is important - don't want files being publicly accessible unless they should be.
 
-Provide one code block per file, ensuring each file can be created by copying from your response.
+## Monitoring
+
+Our current monitoring is basically "someone notices the site is down". That's not working. CloudWatch seems like what everyone uses? I'd like to know about problems before our users do.
+
+CPU and memory alerts would be good. Maybe something that can automatically scale up if we're getting hammered?
+
+## Security stuff
+
+I don't really know much about AWS security to be honest. I know we need security groups and IAM roles. The servers shouldn't be directly accessible from the internet. Database definitely shouldn't be.
+
+## Technical details
+
+We want to use Pulumi with JavaScript if possible. Our team knows JS well, and the declarative approach seems cleaner than all the manual clicking in the AWS console.
+
+Everything should be named with "prod-" prefix so we can tell it apart from dev environments.
+
+One thing I saw mentioned was using CloudWatch Network Monitoring - apparently it gives you better visibility into network performance? Might be useful since we've had some weird latency issues before.
+
+Can you help put together something that covers all this? Ideally as a single component that we can deploy and manage easily.
