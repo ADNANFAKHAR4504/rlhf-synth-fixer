@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-tier Security Configuration - Ultra Minimal Version (AWS Quota Limits Workaround)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'prod']
+    Description: 'Environment type for resource naming and configuration'
+    
+  ProjectName:
+    Type: String
+    Default: 'multi-tier-security'
+    Description: 'Project name for resource tagging and identification'
+    
+  AllowedIpRange:
+    Type: String
+    Default: '192.168.1.0/24'
+    Description: 'IP CIDR range allowed for inbound traffic'
+  
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Suffix for resource names to avoid conflicts between deployments'
+
+Resources:
+  # KMS Key for encryption with annual rotation
+  SecurityKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS Key for ${ProjectName} ${Environment} encryption'
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      EnableKeyRotation: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # VPC Configuration
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Security Group with restricted access
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group - restricted to specific IP range'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedIpRange
+          Description: 'SSH access from allowed IP range'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIpRange
+          Description: 'HTTPS access from allowed IP range'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # S3 Bucket with KMS Encryption - Data Lake
+  DataLakeS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${EnvironmentSuffix}-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: RetainLogs90Days
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # IAM Policy for S3 Limited Access  
+  S3LimitedAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub '${EnvironmentSuffix}-s3-policy'
+      Description: 'Policy for limited S3 access - ListBucket and GetObject only'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource:
+              - !GetAtt DataLakeS3Bucket.Arn
+              - !Sub '${DataLakeS3Bucket.Arn}/*'
+
+  # API Gateway for managed access
+  APIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-api'
+      Description: 'Secure API Gateway for external access'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: execute-api:Invoke
+            Resource: '*'
+            Condition:
+              IpAddress:
+                aws:SourceIp: !Ref AllowedIpRange
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # API Gateway Method (needed for deployment)
+  APIGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGateway
+      ResourceId: !GetAtt APIGateway.RootResourceId
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: '{"message": "API Gateway is working"}'
+      MethodResponses:
+        - StatusCode: 200
+
+  # API Gateway Deployment
+  APIGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: APIGatewayRootMethod
+    Properties:
+      RestApiId: !Ref APIGateway
+      StageName: !Ref Environment
+
+  # CloudWatch Log Group for Application Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/app/${EnvironmentSuffix}'
+      RetentionInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  VPCId:
+    Description: 'ID of the VPC'
+    Value: !Ref SecureVPC
+
+  DataLakeS3BucketName:
+    Description: 'Name of the Data Lake S3 Bucket'
+    Value: !Ref DataLakeS3Bucket
+
+  KMSKeyId:
+    Description: 'ID of the KMS Key'
+    Value: !Ref SecurityKMSKey
+
+  APIGatewayURL:
+    Description: 'API Gateway URL'
+    Value: !Sub 'https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+
+  SecurityGroupId:
+    Description: 'Security Group ID'
+    Value: !Ref EC2SecurityGroup
+
+  S3LimitedAccessPolicyArn:
+    Description: 'S3 Limited Access Policy ARN'
+    Value: !Ref S3LimitedAccessPolicy
+
+  ApplicationLogGroupName:
+    Description: 'Application Log Group Name'
+    Value: !Ref ApplicationLogGroup
+
+  Environment:
+    Description: 'Environment type for this deployment'
+    Value: !Ref Environment
