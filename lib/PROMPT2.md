@@ -1,1 +1,3 @@
-I'm having issues with the code you provided. The tap-stack.ts file appears to be incomplete - it cuts off in the middle. Could you please provide the complete file?
+Now the model response failed with the below error, please help fix with the right solution
+
+provider-aws has no exported member named 'DataAwsCallerIdentity
