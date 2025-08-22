@@ -383,7 +383,7 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:PutObjectAcl
-                Resource: !Sub '${LambdaDeploymentBucket}/*'
+                Resource: !Sub '${LambdaDeploymentBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - kms:Encrypt
@@ -720,8 +720,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${LoggingBucket}/*'
-                - !Sub '${LambdaDeploymentBucket}/*'
+                - !Sub '${LoggingBucket.Arn}/*'
+                - !Sub '${LambdaDeploymentBucket.Arn}/*'
 
   # CloudWatch Alarms for security incidents
   UnauthorizedAPICallsAlarm:

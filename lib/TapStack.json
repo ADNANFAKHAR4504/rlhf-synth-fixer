@@ -645,7 +645,7 @@
                                         "s3:PutObjectAcl"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${LambdaDeploymentBucket}/*"
+                                        "Fn::Sub": "${LambdaDeploymentBucket.Arn}/*"
                                     }
                                 },
                                 {
@@ -1062,10 +1062,10 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${LoggingBucket}/*"
+                                        "Fn::Sub": "${LoggingBucket.Arn}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${LambdaDeploymentBucket}/*"
+                                        "Fn::Sub": "${LambdaDeploymentBucket.Arn}/*"
                                     }
                                 ]
                             }
