@@ -131,6 +131,11 @@
             "Type": "String",
             "Default": "use-existing",
             "Description": "Name of an existing AWS Config Delivery Channel. To create a new one, set this to blank (\"\"), otherwise the template will NOT create a delivery channel."
+        },
+        "ExistingConfigRecorderName": {
+            "Type": "String",
+            "Default": "use-existing",
+            "Description": "Name of an existing AWS Config Configuration Recorder. To create a new one, set this to blank (\"\"), otherwise the template will NOT create a configuration recorder."
         }
     },
     "Conditions": {
@@ -272,6 +277,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "ExistingConfigDeliveryChannelName"
+                },
+                ""
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingConfigRecorderName"
                 },
                 ""
             ]
@@ -1235,7 +1248,7 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
-            "Condition": "CreateConfigDeliveryChannel",
+            "Condition": "CreateConfigRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "SecurityRecorder-${Environment}"
@@ -1998,6 +2011,25 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-Config-Delivery-Channel-Name"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config Configuration Recorder Name",
+            "Value": {
+                "Fn::If": [
+                    "CreateConfigRecorder",
+                    {
+                        "Ref": "ConfigurationRecorder"
+                    },
+                    {
+                        "Ref": "ExistingConfigRecorderName"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Recorder-Name"
                 }
             }
         }

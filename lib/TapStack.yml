@@ -115,6 +115,10 @@ Parameters:
     Type: String
     Default: 'use-existing'
     Description: 'Name of an existing AWS Config Delivery Channel. To create a new one, set this to blank (""), otherwise the template will NOT create a delivery channel.'
+  ExistingConfigRecorderName:
+    Type: String
+    Default: 'use-existing'
+    Description: 'Name of an existing AWS Config Configuration Recorder. To create a new one, set this to blank (""), otherwise the template will NOT create a configuration recorder.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -141,6 +145,7 @@ Conditions:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
     !Equals [!Ref ExistingConfigDeliveryChannelName, '']
+  CreateConfigRecorder: !Equals [!Ref ExistingConfigRecorderName, '']
   HasValidCertificateArn:
     !And [
       !Not [!Equals [!Ref CertificateArn, '']],
@@ -671,7 +676,7 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    Condition: CreateConfigDeliveryChannel
+    Condition: CreateConfigRecorder
     Properties:
       Name: !Sub 'SecurityRecorder-${Environment}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1077,3 +1082,14 @@ Outputs:
       ]
     Export:
       Name: !Sub '${AWS::StackName}-Config-Delivery-Channel-Name'
+
+  ConfigRecorderName:
+    Description: 'AWS Config Configuration Recorder Name'
+    Value:
+      !If [
+        CreateConfigRecorder,
+        !Ref ConfigurationRecorder,
+        !Ref ExistingConfigRecorderName,
+      ]
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
