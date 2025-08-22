@@ -45,3 +45,4 @@ Create a production-ready **CloudFormation template (`secure-infrastructure.yaml
 - Must pass validation using:
   ```bash
   aws cloudformation validate-template --template-body file://secure-infrastructure.yaml
+  
