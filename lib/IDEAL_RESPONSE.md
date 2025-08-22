@@ -387,7 +387,7 @@ Resources:
               Bucket: !GetAtt StagingDataBucket.Arn
               StorageClass: STANDARD
             Filter:
-              Prefix: ""
+              Prefix: "non-sensitive/"
       Tags:
         - Key: Name
           Value: TapStack-Dev-Bucket
@@ -786,7 +786,7 @@ Resources:
               Bucket: !GetAtt ProdDataBucket.Arn
               StorageClass: STANDARD
             Filter:
-              Prefix: ""
+              Prefix: "non-sensitive/"
       Tags:
         - Key: Name
           Value: TapStack-Staging-Bucket

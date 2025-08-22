@@ -166,7 +166,7 @@ describe('TapStack CloudFormation Template', () => {
                     Bucket: { 'Fn::GetAtt': ['StagingDataBucket', 'Arn'] },
                     StorageClass: 'STANDARD',
                   },
-                  Filter: { Prefix: '' },
+                  Filter: { Prefix: 'non-sensitive/' }, // Updated to match TapStack.yml
                 },
               ],
             },
@@ -207,7 +207,7 @@ describe('TapStack CloudFormation Template', () => {
                     Bucket: { 'Fn::GetAtt': ['ProdDataBucket', 'Arn'] },
                     StorageClass: 'STANDARD',
                   },
-                  Filter: { Prefix: '' },
+                  Filter: { Prefix: 'non-sensitive/' }, // Updated to match TapStack.yml
                 },
               ],
             },
@@ -520,7 +520,7 @@ describe('TapStack CloudFormation Template', () => {
       for (const [key, resource] of Object.entries(resources)) {
         if (resource.Properties?.Tags) {
           const env = key.match(/Dev|Staging|Prod/)?.[0] || '';
-          const nameTag = resource.Properties.Tags.find((tag) => tag.Key === 'Name');
+          const nameTag = resource.Properties.Tags.find((tag: CloudFormationTag) => tag.Key === 'Name');
           if (env && nameTag) {
             expect(nameTag.Value).toMatch(new RegExp(`^TapStack-${env}-`));
           }
