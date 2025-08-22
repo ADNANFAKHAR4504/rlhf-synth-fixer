@@ -1,7 +1,7 @@
 """Simplified security stack for deployment testing"""
 
 from aws_cdk import (
-  Stack,
+  NestedStack,
   RemovalPolicy,
   Duration,
   CfnOutput,
@@ -17,7 +17,7 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class SimpleSecurityStack(Stack):
+class SimpleSecurityStack(NestedStack):
     """Simplified security stack with core components"""
     
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str = "dev", **kwargs) -> None:
@@ -160,7 +160,11 @@ def handler(event, context):
             vpc=self.vpc,
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
-            target_type=elbv2.TargetType.INSTANCE
+            target_type=elbv2.TargetType.INSTANCE,
+            health_check=elbv2.HealthCheck(
+                enabled=True,
+                path="/health"
+            )
         )
     
         # Listener

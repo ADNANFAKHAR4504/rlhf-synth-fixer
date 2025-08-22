@@ -127,8 +127,8 @@ class TestSimpleSecurityStack(unittest.TestCase):
 
     @mark.it("creates security groups with correct rules")
     def test_creates_security_groups(self):
-        # ASSERT - Should have 2 security groups (App and ALB)
-        self.template.resource_count_is("AWS::EC2::SecurityGroup", 2)
+        # ASSERT - Should have 3 security groups (App, ALB, and Lambda VPC security group)
+        self.template.resource_count_is("AWS::EC2::SecurityGroup", 3)
         
         # Check ALB security group
         self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
@@ -146,8 +146,8 @@ class TestSimpleSecurityStack(unittest.TestCase):
 
     @mark.it("creates Lambda function with correct configuration")
     def test_creates_lambda_function(self):
-        # ASSERT
-        self.template.resource_count_is("AWS::Lambda::Function", 1)
+        # ASSERT - Expect 2 functions: the main one + auto-delete S3 objects function
+        self.template.resource_count_is("AWS::Lambda::Function", 2)
         self.template.has_resource_properties("AWS::Lambda::Function", {
             "FunctionName": f"tap-{self.env_suffix}-function",
             "Runtime": "python3.11",
@@ -293,10 +293,18 @@ class TestSimpleSecurityStack(unittest.TestCase):
             resources_of_type = self.template.find_resources(resource_type)
             
             for resource_id, resource_props in resources_of_type.items():
-                if "Properties" in resource_props and prop_name in resource_props["Properties"]:
-                    if expected_value in str(resource_props["Properties"][prop_name]):
-                        found = True
-                        break
+                if "Properties" in resource_props:
+                    # Special case for VPC - name is in Tags
+                    if resource_type == "AWS::EC2::VPC" and prop_name == "Name":
+                        if "Tags" in resource_props["Properties"]:
+                            for tag in resource_props["Properties"]["Tags"]:
+                                if tag.get("Key") == "Name" and expected_value in str(tag.get("Value", "")):
+                                    found = True
+                                    break
+                    elif prop_name in resource_props["Properties"]:
+                        if expected_value in str(resource_props["Properties"][prop_name]):
+                            found = True
+                            break
             
             self.assertTrue(found, f"{resource_type} with {prop_name}={expected_value} not found")
 
@@ -371,9 +379,13 @@ class TestSecurityBestPractices(unittest.TestCase):
 
     @mark.it("Lambda function in VPC")
     def test_lambda_in_vpc(self):
-        # ASSERT
+        # ASSERT - Check only our application Lambda functions, not auto-delete utility functions
         lambdas = self.template.find_resources("AWS::Lambda::Function")
         for lambda_id, lambda_props in lambdas.items():
+            # Skip CDK auto-generated Lambda functions for S3 auto-delete
+            if "CustomS3AutoDeleteObjects" in lambda_id:
+                continue
+                
             if "Properties" in lambda_props:
                 self.assertIn("VpcConfig", lambda_props["Properties"],
                              f"Lambda {lambda_id} not in VPC")
