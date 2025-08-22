@@ -1,32 +1,32 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  IAMClient,
-  GetRoleCommand,
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetInstanceProfileCommand,
+  GetRoleCommand,
+  IAMClient,
 } from '@aws-sdk/client-iam';
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -221,7 +221,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     test('ALB should be active and internet-facing', async () => {
-      const albName = `TAP-${outputs.EnvironmentSuffix}-ALB`;
+      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
       const command = new DescribeLoadBalancersCommand({ Names: [albName] });
       const response = await elbv2Client.send(command);
       
@@ -235,7 +235,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('ALB should have listener on port 80', async () => {
-      const albName = `TAP-${outputs.EnvironmentSuffix}-ALB`;
+      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
       const albCommand = new DescribeLoadBalancersCommand({ Names: [albName] });
       const albResponse = await elbv2Client.send(albCommand);
       const albArn = albResponse.LoadBalancers![0].LoadBalancerArn;
@@ -254,7 +254,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Target group should have both instances registered and healthy', async () => {
-      const tgName = `TAP-${outputs.EnvironmentSuffix}-TG`;
+      const tgName = `${stackName}-TG-${outputs.EnvironmentSuffix}`;
       const tgCommand = new DescribeTargetGroupsCommand({ Names: [tgName] });
       const tgResponse = await elbv2Client.send(tgCommand);
       
@@ -356,13 +356,13 @@ describe('TapStack Integration Tests', () => {
       expect(instances.every(i => i.State?.Name === 'running')).toBe(true);
       
       // 3. Check ALB is active
-      const albName = `TAP-${outputs.EnvironmentSuffix}-ALB`;
+      const albName = `${stackName}-ALB-${outputs.EnvironmentSuffix}`;
       const albCommand = new DescribeLoadBalancersCommand({ Names: [albName] });
       const albResponse = await elbv2Client.send(albCommand);
       expect(albResponse.LoadBalancers![0].State?.Code).toBe('active');
       
       // 4. Check target health
-      const tgName = `TAP-${outputs.EnvironmentSuffix}-TG`;
+      const tgName = `${stackName}-TG-${outputs.EnvironmentSuffix}`;
       const tgCommand = new DescribeTargetGroupsCommand({ Names: [tgName] });
       const tgResponse = await elbv2Client.send(tgCommand);
       const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;

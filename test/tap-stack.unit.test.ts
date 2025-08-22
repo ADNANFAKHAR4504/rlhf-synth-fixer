@@ -317,11 +317,11 @@ describe('TapStack CloudFormation Template', () => {
       });
       
       expect(alb.Properties.Name).toEqual({
-        'Fn::Sub': 'TAP-${EnvironmentSuffix}-ALB'
+        'Fn::Sub': '${AWS::StackName}-ALB-${EnvironmentSuffix}'
       });
       
       expect(targetGroup.Properties.Name).toEqual({
-        'Fn::Sub': 'TAP-${EnvironmentSuffix}-TG'
+        'Fn::Sub': '${AWS::StackName}-TG-${EnvironmentSuffix}'
       });
     });
   });
