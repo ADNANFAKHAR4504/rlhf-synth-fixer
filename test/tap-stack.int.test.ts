@@ -43,8 +43,8 @@ import {
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 
-// Get the expected region from environment or default to us-east-1
-const expectedRegion = process.env.EXPECTED_AWS_REGION || 'us-east-1';
+// Get the expected region from environment or default to us-west-2
+const expectedRegion = process.env.EXPECTED_AWS_REGION || 'us-west-2';
 
 // Function to detect if we're in a CI/CD environment
 const isCI = process.env.CI === '1' || process.env.GITHUB_ACTIONS === 'true';
@@ -55,17 +55,17 @@ async function detectTAPResourcesRegion(): Promise<string | null> {
     // Try to find TAP resources in the current region
     const dynamoListCommand = new ListTablesCommand({});
     const dynamoResult = await dynamoClient.send(dynamoListCommand);
-    
+
     // Look for TAP-related tables
-    const tapTables = dynamoResult.TableNames?.filter(name => 
+    const tapTables = dynamoResult.TableNames?.filter(name =>
       name.includes('tap') || name.includes('TapStack')
     ) || [];
-    
+
     if (tapTables.length > 0) {
       console.log(`Found TAP resources in current region ${region}:`, tapTables.join(', '));
       return region;
     }
-    
+
     return null;
   } catch (error) {
     return null;
@@ -110,7 +110,7 @@ describe('TAP Stack Integration Tests', () => {
 
     // Try to detect where TAP resources are actually deployed
     const actualRegion = await detectTAPResourcesRegion();
-    
+
     if (actualRegion) {
       console.log(`✅ TAP resources detected in region ${actualRegion}`);
     } else {
@@ -187,7 +187,7 @@ describe('TAP Stack Integration Tests', () => {
       // This test will pass but provide guidance if region is wrong
       const currentRegion = process.env.AWS_REGION;
 
-            if (currentRegion === expectedRegion) {
+      if (currentRegion === expectedRegion) {
         console.log(`Tests running in correct region (${expectedRegion})`);
         expect(currentRegion).toBe(expectedRegion);
       } else {
@@ -197,7 +197,7 @@ describe('TAP Stack Integration Tests', () => {
         console.warn(
           '   Infrastructure tests will likely fail unless resources are deployed in this region'
         );
-        
+
         // Test still passes - we're just providing guidance
         expect(currentRegion).toBeDefined();
       }
@@ -577,7 +577,7 @@ describe('TAP Stack Integration Tests', () => {
           listResult.Functions?.map(fn => fn.FunctionName) || [];
 
         // Check if any of the expected functions exist
-        const anyFunctionExists = expectedFunctions.some(expectedName => 
+        const anyFunctionExists = expectedFunctions.some(expectedName =>
           functionNames.includes(expectedName)
         );
 
@@ -589,11 +589,11 @@ describe('TAP Stack Integration Tests', () => {
         }
 
         // Log which functions were found
-        const foundFunctions = expectedFunctions.filter(expectedName => 
+        const foundFunctions = expectedFunctions.filter(expectedName =>
           functionNames.includes(expectedName)
         );
         console.log(`Found Lambda functions in region ${region}:`, foundFunctions.join(', '));
-        
+
         expect(anyFunctionExists).toBe(true);
       } catch (error) {
         throw new Error(`Lambda integration test failed: ${error}`);
@@ -612,8 +612,8 @@ describe('TAP Stack Integration Tests', () => {
         const listResult = await lambdaClient.send(listCommand);
         const expectedFunctions = ['tap-create-item', 'tap-get-items', 'tap-upload-file'];
         const functionNames = listResult.Functions?.map(fn => fn.FunctionName) || [];
-        
-        const anyFunctionExists = expectedFunctions.some(expectedName => 
+
+        const anyFunctionExists = expectedFunctions.some(expectedName =>
           functionNames.includes(expectedName)
         );
 
@@ -623,7 +623,7 @@ describe('TAP Stack Integration Tests', () => {
         }
 
         // Find the first available function to test
-        const functionName = expectedFunctions.find(expectedName => 
+        const functionName = expectedFunctions.find(expectedName =>
           functionNames.includes(expectedName)
         );
 
@@ -809,7 +809,7 @@ describe('TAP Stack Integration Tests', () => {
           const tapFunctions = listResult.Functions?.filter(fn =>
             fn.FunctionName?.toLowerCase().includes('tap') || fn.FunctionName?.includes('TapStack')
           ) || [];
-          
+
           if (tapFunctions.length === 0) {
             infrastructureDeployed = false;
             missingResources.push('Lambda functions (any TAP-related functions)');
@@ -828,7 +828,7 @@ describe('TAP Stack Integration Tests', () => {
           const tapSecrets = listResult.SecretList?.filter(secret =>
             secret.Name?.toLowerCase().includes('tap') || secret.Name?.includes('TapStack')
           ) || [];
-          
+
           if (tapSecrets.length === 0) {
             // Secrets Manager is optional - not all TAP deployments require it
             console.log(`ℹ️  No TAP Secrets Manager secrets found in region ${region} (this is optional)`);
@@ -846,7 +846,7 @@ describe('TAP Stack Integration Tests', () => {
           const tapApis = listResult.Items?.filter(api =>
             api.Name?.toLowerCase().includes('tap') || api.Name?.includes('TapStack')
           ) || [];
-          
+
           if (tapApis.length === 0) {
             // API Gateway is optional - not all TAP deployments require it
             console.log(`ℹ️  No TAP API Gateways found in region ${region} (this is optional)`);
@@ -860,7 +860,7 @@ describe('TAP Stack Integration Tests', () => {
         // Check if we have enough TAP resources to consider infrastructure deployed
         // We require at least DynamoDB and Lambda functions (core resources)
         const hasCoreResources = infrastructureDeployed && missingResources.length === 0;
-        
+
         if (!hasCoreResources) {
           console.error(
             'TAP infrastructure is NOT fully deployed in the current region'
