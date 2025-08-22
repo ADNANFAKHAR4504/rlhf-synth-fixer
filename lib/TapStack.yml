@@ -14,7 +14,7 @@ Parameters:
 
   EnableGuardDuty:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
     Description: 'Enable GuardDuty (set to false if already exists in account)'
 
@@ -422,7 +422,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
+      DeletionProtection: false
       EnablePerformanceInsights: true
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
