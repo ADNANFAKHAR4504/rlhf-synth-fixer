@@ -3,6 +3,8 @@ tap_stack.py
 
 This module defines the TapStack class, the main Pulumi ComponentResource for
 the CI/CD pipeline implementing a complete microservices platform on AWS.
+
+Updated after cleanup of PR1581 resources to resolve deployment conflicts.
 """
 
 import json
