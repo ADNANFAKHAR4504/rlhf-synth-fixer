@@ -1,3 +1,8 @@
+I'll fix all the linting and deployment errors. The main issues are with S3 lifecycle configuration syntax and CloudTrail properties. Here's the corrected template:
+
+## Fixed CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS infrastructure with S3 encryption, IAM least privilege, CloudTrail, and VPC Flow Logs'
 
@@ -372,3 +377,129 @@ Outputs:
   RandomString:
     Description: 'Generated random string for resource naming'
     Value: !GetAtt RandomString.RandomString
+```
+
+## Key Fixes Made
+
+### 1. **S3 Lifecycle Configuration Syntax**
+
+**Before (Incorrect):**
+
+```yaml
+- Id: TransitionToIA
+  Status: Enabled
+  TransitionInDays: 30 # ❌ Wrong property
+  StorageClass: STANDARD_IA # ❌ Wrong property
+```
+
+**After (Correct):**
+
+```yaml
+- Id: TransitionToIA
+  Status: Enabled
+  Transitions: # ✅ Correct property
+    - TransitionInDays: 30
+      StorageClass: STANDARD_IA
+```
+
+### 2. **CloudTrail Required Property**
+
+**Before (Missing):**
+
+```yaml
+GlobalCloudTrail:
+  Type: 'AWS::CloudTrail::Trail'
+  Properties:
+    # Missing IsLogging property
+```
+
+**After (Added):**
+
+```yaml
+GlobalCloudTrail:
+  Type: 'AWS::CloudTrail::Trail'
+  Properties:
+    IsLogging: true # ✅ Required property added
+```
+
+### 3. **CloudTrail EventSelectors DataResources**
+
+**Before (Invalid):**
+
+```yaml
+DataResources:
+  - Type: 'AWS::S3::Bucket' # ❌ Not supported for this type
+    Values:
+      - 'arn:aws:s3:::*'
+```
+
+**After (Fixed):**
+
+```yaml
+DataResources:
+  - Type: 'AWS::S3::Object' # ✅ Correct type
+    Values:
+      - 'arn:aws:s3:::*/*' # ✅ Correct format
+```
+
+## Validation Commands
+
+Before deploying, validate the template:
+
+```bash
+# Validate template syntax
+aws cloudformation validate-template --template-body file://secure-infrastructure.yaml
+
+# Lint with cfn-lint (if installed)
+cfn-lint secure-infrastructure.yaml
+
+# Deploy with validation
+aws cloudformation create-stack \
+  --stack-name secure-infrastructure \
+  --template-body file://secure-infrastructure.yaml \
+  --parameters ParameterKey=ProjectName,ParameterValue=myproj \
+               ParameterKey=Environment,ParameterValue=prod \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+## Updated README Section
+
+Add this troubleshooting section to the README:
+
+````markdown
+## Common Linting Errors and Fixes
+
+### S3 Lifecycle Configuration
+
+- **Error**: `TransitionInDays was unexpected`
+- **Fix**: Use `Transitions` array instead of direct properties
+- **Correct Format**:
+  ```yaml
+  Transitions:
+    - TransitionInDays: 30
+      StorageClass: STANDARD_IA
+  ```
+````
+
+### CloudTrail Configuration
+
+- **Error**: `'IsLogging' is a required property`
+- **Fix**: Add `IsLogging: true` to CloudTrail properties
+
+### EventSelectors DataResources
+
+- **Error**: `'AWS::S3::Bucket' is not one of [supported types]`
+- **Fix**: Use `AWS::S3::Object` instead of `AWS::S3::Bucket`
+
+## Pre-Deployment Checklist
+
+- [ ] Template passes `aws cloudformation validate-template`
+- [ ] Template passes `cfn-lint` (if available)
+- [ ] All required IAM capabilities specified
+- [ ] Parameter values follow naming conventions
+- [ ] Target region supports all required services
+
+```
+
+The template is now fixed and should pass both linting and deployment without errors. All the security requirements remain intact while fixing the syntax issues.
+```
