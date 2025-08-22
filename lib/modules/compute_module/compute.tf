@@ -1,3 +1,56 @@
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "${var.environment}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [var.alb_security_group_id]
+  subnets            = var.public_subnet_ids
+
+  enable_deletion_protection = false
+
+  tags = merge(var.tags, {
+    Name = "${var.environment}-alb"
+  })
+}
+
+# Target Group
+resource "aws_lb_target_group" "main" {
+  name     = "${var.environment}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.environment}-target-group"
+  })
+
+  depends_on = [ aws_lb.main ]
+}
+
+# ALB Listener
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+}
+
 # Data source for latest Ubuntu canonical AMI
 data "aws_ami" "ubuntu_jammy" {
   most_recent = true
@@ -30,16 +83,16 @@ resource "aws_launch_template" "main" {
     environment = var.environment
   }))
 
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = "100"
-      volume_type           = "gp3"
-      encrypted             = true
-      kms_key_id            = var.kms_key_arn
-      delete_on_termination = true
-    }
-  }
+#   block_device_mappings {
+#     device_name = "/dev/xvda"
+#     ebs {
+#       volume_size           = "100"
+#       volume_type           = "gp3"
+#       encrypted             = true
+#       kms_key_id            = var.kms_key_arn
+#       delete_on_termination = true
+#     }
+#   }
 
   metadata_options {
     http_endpoint = "enabled"
@@ -109,58 +162,10 @@ resource "aws_autoscaling_group" "main" {
   lifecycle {
     create_before_destroy = true
   }
+
+  depends_on = [ aws_lb_target_group.main ]
 }
 
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.environment}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.alb_security_group_id]
-  subnets            = var.public_subnet_ids
-
-  enable_deletion_protection = false
-
-  tags = merge(var.tags, {
-    Name = "${var.environment}-alb"
-  })
-}
-
-# Target Group
-resource "aws_lb_target_group" "main" {
-  name     = "${var.environment}-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.environment}-target-group"
-  })
-}
-
-# ALB Listener
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
 
 # Auto Scaling Policies
 resource "aws_autoscaling_policy" "scale_up" {

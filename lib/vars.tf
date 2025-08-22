@@ -58,10 +58,10 @@ variable "instance_type" {
 
 variable "max_size" {
     type = number
-    default = 3
+    default = 2
 }
 
 variable "desired_capacity" {
     type = number
-    default = 2
+    default = 1
 }
