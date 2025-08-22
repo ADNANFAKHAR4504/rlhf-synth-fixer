@@ -39,15 +39,6 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
-  DBPassword:
-    Type: String
-    Description: Database master password
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: "[a-zA-Z0-9!@#$%^&*()_+=-]*"
-    ConstraintDescription: Must contain only alphanumeric characters and special characters
-    Default: "ChangeMe123!"
 
   # Environment Tag
   Environment:
@@ -688,7 +679,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-secure-bucket-${EnvironmentSuffix}"
+          Value: "secure-bucket"
         - Key: Environment
           Value: !Ref Environment
 
@@ -696,36 +687,36 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
-  Properties:
-    BucketName:
-      Fn::Join:
-        - "-"
-        - [
-            { "Ref": "AWS::StackName" },
-            "logging-bucket",
-            { "Ref": "EnvironmentSuffix" },
-            { "Ref": "AWS::AccountId" },
-          ]
-    BucketEncryption:
-      ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-          BucketKeyEnabled: true
-    PublicAccessBlockConfiguration:
-      BlockPublicAcls: true
-      BlockPublicPolicy: true
-      IgnorePublicAcls: true
-      RestrictPublicBuckets: true
-    LifecycleConfiguration:
-      Rules:
-        - Id: DeleteOldLogs
-          Status: Enabled
-          ExpirationInDays: 90
-    Tags:
-      - Key: Name
-        Value: !Sub "${AWS::StackName}-logging-bucket-${EnvironmentSuffix}"
-      - Key: Environment
-        Value: !Ref Environment
+    Properties:
+      BucketName:
+        Fn::Join:
+          - "-"
+          - [
+              { "Ref": "AWS::StackName" },
+              "logging-bucket",
+              { "Ref": "EnvironmentSuffix" },
+              { "Ref": "AWS::AccountId" },
+            ]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: "logging-bucket"
+        - Key: Environment
+          Value: !Ref Environment
 
   # ==================== Lambda Function ====================
   SecurityMonitoringLambda:
@@ -743,62 +734,58 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          import logging
-          import os
+      LoggingBucket:
+        Type: AWS::S3::Bucket
+        DeletionPolicy: Delete
+        UpdateReplacePolicy: Delete
+        Properties:
+          BucketName:
+            Fn::Join:
+              - "-"
+              - [
+                  { "Ref": "AWS::StackName" },
+                  Code:
+                    ZipFile: |
+                      import json
+                      import boto3
+                      import logging
+                      import os
 
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
+                      logger = logging.getLogger()
+                      logger.setLevel(logging.INFO)
 
-          def lambda_handler(event, context):
-              logger.info(f"Received event: {json.dumps(event)}")
-              
-              # Process security group change event
-              if 'detail' in event and 'eventName' in event['detail']:
-                  event_name = event['detail']['eventName']
-                  if 'SecurityGroup' in event_name:
-                      logger.warning(f"Security Group change detected: {event_name}")
-                      
-                      # Send SNS notification
-                      sns = boto3.client('sns')
-                      message = f"Security Group change detected: {event_name}"
-                      
-                      try:
-                          response = sns.publish(
-                              TopicArn=os.environ['SNS_TOPIC_ARN'],
-                              Message=message,
-                              Subject='Security Alert: Security Group Change'
-                          )
-                          logger.info(f"SNS notification sent: {response['MessageId']}")
-                      except Exception as e:
-                          logger.error(f"Failed to send SNS notification: {str(e)}")
-              
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps('Event processed successfully')
-              }
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref SecurityAlertsTopic
-      Timeout: 60
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-security-monitoring-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ==================== CloudWatch Logs ====================
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-security-monitoring-${EnvironmentSuffix}"
-      RetentionInDays: 14
-      KmsKeyId: !GetAtt InfrastructureKMSKey.Arn
+                      def lambda_handler(event, context):
+                          logger.info(f"Received event: {json.dumps(event)}")
+                          # Process security group change event
+                          if "detail" in event and "eventName" in event["detail"]:
+                              event_name = event["detail"]["eventName"]
+                              if "SecurityGroup" in event_name:
+                                  logger.warning(f"Security Group change detected: {event_name}")
+                                  # Send SNS notification
+                                  sns = boto3.client("sns")
+                                  message = f"Security Group change detected: {event_name}"
+                                  try:
+                                      response = sns.publish(
+                                          TopicArn=os.environ["SNS_TOPIC_ARN"],
+                                          Message=message,
+                                          Subject="Security Alert: Security Group Change"
+                                      )
+                                      logger.info(f"SNS notification sent: {response['MessageId']}")
+                                  except Exception as e:
+                                      logger.error(f"Failed to send SNS notification: {str(e)}")
+                          return {
+                              "statusCode": 200,
+                              "body": json.dumps("Event processed successfully")
+                          }
+                  Environment:
+                    Variables:
+                      SNS_TOPIC_ARN: !Ref SecurityAlertsTopic
+                  Timeout: 60
+                  Tags:
+                    - Key: Name
+                      Value: !Sub "${AWS::StackName}-security-monitoring-${EnvironmentSuffix}"
+                    - Key: Environment
+                      Value: !Ref Environment
 
   # ==================== SNS Topic for Security Alerts ====================
   SecurityAlertsTopic:
