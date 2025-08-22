@@ -639,10 +639,10 @@ Statement = [
 Sid = "Enable IAM User Permissions"
 Effect = "Allow"
 Principal = {
-AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+AWS = "arn:aws:iam::${data.aws*caller_identity.current.account_id}:root"
 }
-Action = "kms:_"
-Resource = "_"
+Action = "kms:*"
+Resource = "\_"
 },
 {
 Sid = "Allow CloudTrail to encrypt logs"
@@ -789,8 +789,9 @@ type = string
 }
 
 variable "availability_zones" {
-description = "Availability zones"
+description = "Availability zones (if empty, will use available AZs from the region)"
 type = list(string)
+default = []
 }
 
 variable "public_subnet_cidrs" {
@@ -1001,7 +1002,7 @@ default = "10.0.0.0/16"
 variable "availability_zones" {
 description = "Availability zones"
 type = list(string)
-default = ["us-east-1a", "us-east-1b"]
+default = []
 }
 
 variable "public_subnet_cidrs" {
@@ -1177,11 +1178,11 @@ upper = false
 
 locals {
 
-## Random naming prefix for unique resource names
+# Random naming prefix for unique resource names
 
 random_prefix = "${random_string.prefix.result}-${random_id.unique_suffix.hex}"
 
-## Unique resource names
+# Unique resource names
 
 cloudtrail_bucket_name = "${local.random_prefix}-${var.cloudtrail_bucket_name}"
 cloudtrail_name = "${local.random_prefix}-${var.cloudtrail_name}"

@@ -4,8 +4,9 @@ variable "vpc_cidr" {
 }
 
 variable "availability_zones" {
-  description = "Availability zones"
+  description = "Availability zones (if empty, will use available AZs from the region)"
   type        = list(string)
+  default     = []
 }
 
 variable "public_subnet_cidrs" {

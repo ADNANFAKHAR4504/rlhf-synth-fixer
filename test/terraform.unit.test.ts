@@ -198,13 +198,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Resource Configuration', () => {
-    test('availability zones are in us-east-1', () => {
+    test('availability zones use dynamic discovery', () => {
       const azMatch = stackContent.match(
-        /default\s*=\s*\[\s*"([^"]+)",\s*"([^"]+)"\s*\]/
+        /variable\s+"availability_zones"\s*{[\s\S]*?default\s*=\s*\[\s*\]/
       );
       expect(azMatch).toBeTruthy();
-      expect(azMatch![1]).toMatch(/^us-east-1[a-z]$/);
-      expect(azMatch![2]).toMatch(/^us-east-1[a-z]$/);
     });
 
     test('uses appropriate CIDR blocks for VPC and subnets', () => {
