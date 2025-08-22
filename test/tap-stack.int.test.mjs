@@ -87,9 +87,9 @@ const secretsClient = new SecretsManagerClient({ region });
 // Helper function to make HTTP requests
 function makeHttpRequest(url) {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 10000 }, (response) => {
+    const request = https.get(url, { timeout: 10000 }, response => {
       let data = '';
-      response.on('data', (chunk) => {
+      response.on('data', chunk => {
         data += chunk;
       });
       response.on('end', () => {
@@ -106,7 +106,7 @@ function makeHttpRequest(url) {
       reject(new Error('Request timeout'));
     });
 
-    request.on('error', (error) => {
+    request.on('error', error => {
       reject(error);
     });
   });
@@ -266,7 +266,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.groupDescription).toContain('Application Load Balancer');
+        expect(sg?.GroupDescription).toContain('Application Load Balancer');
 
         // Check ingress rules
         const httpRule = sg?.IpPermissions?.find(rule => rule.FromPort === 80);
@@ -299,7 +299,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.groupDescription).toContain('EC2 instances');
+        expect(sg?.GroupDescription).toContain('EC2 instances');
 
         // Check that ALB can access EC2 on port 80
         const albAccessRule = sg?.IpPermissions?.find(
@@ -332,7 +332,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const sg = response.SecurityGroups?.[0];
 
         expect(sg).toBeDefined();
-        expect(sg?.groupDescription).toContain('RDS PostgreSQL');
+        expect(sg?.GroupDescription).toContain('RDS PostgreSQL');
 
         // Check PostgreSQL port access from EC2
         const postgresRule = sg?.IpPermissions?.find(
@@ -393,16 +393,17 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const suffix = process.env.ENVIRONMENT_SUFFIX || 'pr1929';
 
       const response = await autoScalingClient.send(command);
-      const asg = response.AutoScalingGroups?.find(group =>
-        group.AutoScalingGroupName?.includes('WebServerASG') ||
-        group.AutoScalingGroupName?.includes(suffix)
+      const asg = response.AutoScalingGroups?.find(
+        group =>
+          group.AutoScalingGroupName?.includes('WebServerASG') ||
+          group.AutoScalingGroupName?.includes(suffix)
       );
 
       expect(asg).toBeDefined();
       expect(asg?.MinSize).toBe(2);
       expect(asg?.MaxSize).toBe(6);
       expect(asg?.DesiredCapacity).toBeGreaterThanOrEqual(2);
-      
+
       // Verify subnets are private
       expect(asg?.VPCZoneIdentifier).toBeDefined();
       const subnetIds = asg?.VPCZoneIdentifier?.split(',') || [];
@@ -543,11 +544,11 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         `EC2InstanceRole-${suffix}`,
         `TapStack${suffix}-InfrastructureEC2Role`,
         `TapStack${suffix}InfrastructureEC2Role`,
-        outputs.EC2RoleName // If available in outputs
+        outputs.EC2RoleName, // If available in outputs
       ].filter(name => name && !name.includes('undefined'));
 
       let roleFound = false;
-      
+
       for (const roleName of possibleRoleNames) {
         try {
           const getRoleCommand = new GetRoleCommand({ RoleName: roleName });
@@ -576,7 +577,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
           continue;
         }
       }
-      
+
       if (!roleFound) {
         console.warn('EC2 role not found with standard naming patterns');
         expect(possibleRoleNames.length).toBeGreaterThan(0);
@@ -640,14 +641,14 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
     test('should have all required infrastructure outputs defined', () => {
       const requiredOutputs = [
         'VPCId',
-        'ALBSecurityGroupId', 
+        'ALBSecurityGroupId',
         'EC2SecurityGroupId',
         'RDSSecurityGroupId',
         'LoadBalancerDNS',
         'DatabaseEndpoint',
-        'S3BucketName'
+        'S3BucketName',
       ];
-      
+
       requiredOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
         expect(outputs[output]).not.toBe('');
@@ -660,7 +661,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       // Check S3 bucket name includes suffix
       expect(outputs.S3BucketName).toContain(suffix);
 
-      // Check database endpoint includes suffix  
+      // Check database endpoint includes suffix
       expect(outputs.DatabaseEndpoint).toContain(suffix);
 
       // Check ALB DNS includes suffix
@@ -670,29 +671,29 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
     test('should verify complete web application workflow', async () => {
       // This test validates the complete request flow:
       // Internet -> ALB -> EC2 (in private subnets) -> RDS (in private subnets)
-      
+
       // 1. Verify ALB is internet-facing
       const albName = outputs.LoadBalancerDNS.split('.')[0];
       const albCommand = new DescribeLoadBalancersCommand({});
       const albResponse = await elbClient.send(albCommand);
-      const alb = albResponse.LoadBalancers?.find(lb => 
-        lb.DNSName === outputs.LoadBalancerDNS
+      const alb = albResponse.LoadBalancers?.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
       );
-      
+
       expect(alb?.Scheme).toBe('internet-facing');
-      expect(alb?.Subnets?.length).toBeGreaterThanOrEqual(2); // Multi-AZ
-      
+      expect(alb?.AvailabilityZones?.length).toBeGreaterThanOrEqual(2); // Multi-AZ
+
       // 2. Verify target group configuration
       const tgCommand = new DescribeTargetGroupsCommand({});
       const tgResponse = await elbClient.send(tgCommand);
       const targetGroup = tgResponse.TargetGroups?.find(tg =>
         tg.LoadBalancerArns?.includes(alb?.LoadBalancerArn || '')
       );
-      
+
       expect(targetGroup).toBeDefined();
       expect(targetGroup?.Port).toBe(80);
       expect(targetGroup?.Protocol).toBe('HTTP');
-      
+
       // 3. Verify EC2 instances are in private subnets
       const asgCommand = new DescribeAutoScalingGroupsCommand({});
       const asgResponse = await autoScalingClient.send(asgCommand);
@@ -700,34 +701,34 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const asg = asgResponse.AutoScalingGroups?.find(group =>
         group.AutoScalingGroupName?.includes(suffix)
       );
-      
+
       if (asg?.VPCZoneIdentifier) {
         const subnetIds = asg.VPCZoneIdentifier.split(',');
         const subnetCommand = new DescribeSubnetsCommand({
-          SubnetIds: subnetIds
+          SubnetIds: subnetIds,
         });
         const subnetResponse = await ec2Client.send(subnetCommand);
-        
+
         // All subnets should be private (no direct route to IGW)
         subnetResponse.Subnets?.forEach(subnet => {
-          const isPrivate = subnet.Tags?.some(tag => 
-            tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
+          const isPrivate = subnet.Tags?.some(
+            tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
           );
           expect(isPrivate).toBe(true);
         });
       }
-      
+
       // 4. Verify database is in private subnets
       const dbEndpoint = outputs.DatabaseEndpoint;
       const dbIdentifier = dbEndpoint.split('.')[0];
-      
+
       try {
         const dbCommand = new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbIdentifier
+          DBInstanceIdentifier: dbIdentifier,
         });
         const dbResponse = await rdsClient.send(dbCommand);
         const db = dbResponse.DBInstances?.[0];
-        
+
         expect(db?.PubliclyAccessible).toBe(false); // Database should not be publicly accessible
         expect(db?.DBSubnetGroup).toBeDefined();
       } catch (error) {
@@ -738,30 +739,30 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
     test('should verify high availability configuration', async () => {
       // Verify resources are deployed across multiple AZs
-      
+
       // 1. Check VPC spans multiple AZs
       const subnetCommand = new DescribeSubnetsCommand({
-        Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
+        Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }],
       });
       const subnetResponse = await ec2Client.send(subnetCommand);
       const availabilityZones = new Set(
         subnetResponse.Subnets?.map(subnet => subnet.AvailabilityZone)
       );
-      
+
       expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
-      
+
       // 2. Check NAT Gateways for HA
       const natCommand = new DescribeNatGatewaysCommand({
         Filters: [
           { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'state', Values: ['available'] }
-        ]
+          { Name: 'state', Values: ['available'] },
+        ],
       });
       const natResponse = await ec2Client.send(natCommand);
-      
+
       // Should have at least 1 NAT Gateway, ideally 2 for HA
       expect(natResponse.NatGateways?.length).toBeGreaterThanOrEqual(1);
-      
+
       // 3. Verify Auto Scaling Group spans multiple AZs
       const asgCommand = new DescribeAutoScalingGroupsCommand({});
       const asgResponse = await autoScalingClient.send(asgCommand);
@@ -769,7 +770,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const asg = asgResponse.AutoScalingGroups?.find(group =>
         group.AutoScalingGroupName?.includes(suffix)
       );
-      
+
       if (asg?.AvailabilityZones) {
         expect(asg.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
       }
@@ -777,71 +778,82 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
     test('should verify security configuration compliance', async () => {
       // Comprehensive security validation
-      
+
       // 1. Verify S3 bucket security
       const bucketName = outputs.S3BucketName;
-      
+
       try {
         // Check public access is blocked
         const publicAccessCommand = new GetPublicAccessBlockCommand({
-          Bucket: bucketName
+          Bucket: bucketName,
         });
         const publicAccessResponse = await s3Client.send(publicAccessCommand);
-        
-        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-        expect(publicAccessResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-        expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-        
+
+        expect(
+          publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls
+        ).toBe(true);
+        expect(
+          publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy
+        ).toBe(true);
+        expect(
+          publicAccessResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls
+        ).toBe(true);
+        expect(
+          publicAccessResponse.PublicAccessBlockConfiguration
+            ?.RestrictPublicBuckets
+        ).toBe(true);
+
         // Check encryption is enabled
         const encryptionCommand = new GetBucketEncryptionCommand({
-          Bucket: bucketName
+          Bucket: bucketName,
         });
         const encryptionResponse = await s3Client.send(encryptionCommand);
-        
-        expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
+
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration?.Rules
+        ).toBeDefined();
       } catch (error) {
         // In test environment, bucket might not exist
-        expect(bucketName).toMatch(/tap-.*-logs-.*/); 
+        expect(bucketName).toMatch(/tap-.*-logs-.*/);
       }
-      
+
       // 2. Verify database encryption
       const dbEndpoint = outputs.DatabaseEndpoint;
       const dbIdentifier = dbEndpoint.split('.')[0];
-      
+
       try {
         const dbCommand = new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbIdentifier
+          DBInstanceIdentifier: dbIdentifier,
         });
         const dbResponse = await rdsClient.send(dbCommand);
         const db = dbResponse.DBInstances?.[0];
-        
+
         expect(db?.StorageEncrypted).toBe(true);
         expect(db?.DeletionProtection).toBe(false); // Should be false for test environments
       } catch (error) {
         // Database might not exist in test environment
         expect(dbEndpoint).toContain('.rds.amazonaws.com');
       }
-      
+
       // 3. Verify security groups follow least privilege
       const sgCommand = new DescribeSecurityGroupsCommand({
         GroupIds: [
           outputs.ALBSecurityGroupId,
-          outputs.EC2SecurityGroupId, 
-          outputs.RDSSecurityGroupId
-        ]
+          outputs.EC2SecurityGroupId,
+          outputs.RDSSecurityGroupId,
+        ],
       });
-      
+
       try {
         const sgResponse = await ec2Client.send(sgCommand);
-        
+
         sgResponse.SecurityGroups?.forEach(sg => {
           // No overly permissive rules (0.0.0.0/0 should only be on ALB for HTTP/HTTPS)
           sg.IpPermissions?.forEach(rule => {
-            const hasPublicAccess = rule.IpRanges?.some(range => 
-              range.CidrIp === '0.0.0.0/0'
+            const hasPublicAccess = rule.IpRanges?.some(
+              range => range.CidrIp === '0.0.0.0/0'
             );
-            
+
             if (hasPublicAccess) {
               // Only ALB should allow public access and only on ports 80/443
               expect(sg.GroupId).toBe(outputs.ALBSecurityGroupId);
@@ -850,7 +862,10 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
           });
         });
       } catch (error) {
-        console.warn('Could not verify security group configuration:', error.message);
+        console.warn(
+          'Could not verify security group configuration:',
+          error.message
+        );
       }
     });
   });
@@ -871,9 +886,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
       const albCommand = new DescribeLoadBalancersCommand({});
       const albResponse = await elbClient.send(albCommand);
-      const alb = albResponse.LoadBalancers?.find(lb =>
-        lb.DNSName === albDns
-      );
+      const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
 
       expect(alb).toBeDefined();
       expect(alb?.State?.Code).toBe('active');
@@ -890,8 +903,8 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const albSubnetResponse = await ec2Client.send(albSubnetCommand);
 
       albSubnetResponse.Subnets?.forEach(subnet => {
-        const isPublic = subnet.Tags?.some(tag =>
-          tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public'
+        const isPublic = subnet.Tags?.some(
+          tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public'
         );
         expect(isPublic).toBe(true);
       });
@@ -934,11 +947,13 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const instanceSubnetCommand = new DescribeSubnetsCommand({
           SubnetIds: instanceSubnetIds,
         });
-        const instanceSubnetResponse = await ec2Client.send(instanceSubnetCommand);
+        const instanceSubnetResponse = await ec2Client.send(
+          instanceSubnetCommand
+        );
 
         instanceSubnetResponse.Subnets?.forEach(subnet => {
-          const isPrivate = subnet.Tags?.some(tag =>
-            tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
+          const isPrivate = subnet.Tags?.some(
+            tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
           );
           expect(isPrivate).toBe(true);
         });
@@ -965,8 +980,10 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
             DBSubnetGroupName: db.DBSubnetGroup.DBSubnetGroupName,
           });
           const dbSubnetResponse = await rdsClient.send(dbSubnetCommand);
-          
-          expect(dbSubnetResponse.DBSubnetGroups?.[0]?.Subnets?.length).toBeGreaterThanOrEqual(2);
+
+          expect(
+            dbSubnetResponse.DBSubnetGroups?.[0]?.Subnets?.length
+          ).toBeGreaterThanOrEqual(2);
         }
       } catch (error) {
         // Database might not exist in test environment
@@ -988,18 +1005,20 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
       // Verify public route tables have routes to Internet Gateway
       const publicRouteTable = rtResponse.RouteTables?.find(rt =>
-        rt.Routes?.some(route => 
-          route.DestinationCidrBlock === '0.0.0.0/0' && 
-          route.GatewayId?.startsWith('igw-')
+        rt.Routes?.some(
+          route =>
+            route.DestinationCidrBlock === '0.0.0.0/0' &&
+            route.GatewayId?.startsWith('igw-')
         )
       );
       expect(publicRouteTable).toBeDefined();
 
       // Verify private route tables have routes to NAT Gateway
       const privateRouteTable = rtResponse.RouteTables?.find(rt =>
-        rt.Routes?.some(route =>
-          route.DestinationCidrBlock === '0.0.0.0/0' &&
-          route.NatGatewayId?.startsWith('nat-')
+        rt.Routes?.some(
+          route =>
+            route.DestinationCidrBlock === '0.0.0.0/0' &&
+            route.NatGatewayId?.startsWith('nat-')
         )
       );
       expect(privateRouteTable).toBeDefined();
@@ -1011,13 +1030,13 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const subnetResponse = await ec2Client.send(subnetCommand);
 
       const publicSubnets = subnetResponse.Subnets?.filter(subnet =>
-        subnet.Tags?.some(tag => 
-          tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public'
+        subnet.Tags?.some(
+          tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public'
         )
       );
       const privateSubnets = subnetResponse.Subnets?.filter(subnet =>
-        subnet.Tags?.some(tag =>
-          tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
+        subnet.Tags?.some(
+          tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private'
         )
       );
 
@@ -1052,8 +1071,10 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       // 2. Verify CloudWatch alarms
       const alarmCommand = new DescribeAlarmsCommand({});
       const alarmResponse = await cloudWatchClient.send(alarmCommand);
-      const cpuAlarm = alarmResponse.MetricAlarms?.find(alarm =>
-        alarm.AlarmName?.includes('HighCPU') && alarm.AlarmName?.includes(suffix)
+      const cpuAlarm = alarmResponse.MetricAlarms?.find(
+        alarm =>
+          alarm.AlarmName?.includes('HighCPU') &&
+          alarm.AlarmName?.includes(suffix)
       );
 
       expect(cpuAlarm).toBeDefined();
@@ -1065,8 +1086,9 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const activitiesCommand = new DescribeScalingActivitiesCommand({
         AutoScalingGroupName: asg?.AutoScalingGroupName,
       });
-      const activitiesResponse = await autoScalingClient.send(activitiesCommand);
-      
+      const activitiesResponse =
+        await autoScalingClient.send(activitiesCommand);
+
       // Should have at least initial scaling activities
       expect(activitiesResponse.Activities?.length).toBeGreaterThan(0);
     });
@@ -1076,10 +1098,11 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const tgCommand = new DescribeTargetGroupsCommand({});
       const tgResponse = await elbClient.send(tgCommand);
       const suffix = process.env.ENVIRONMENT_SUFFIX || 'pr1929';
-      
-      const targetGroup = tgResponse.TargetGroups?.find(tg =>
-        tg.TargetGroupName?.includes(suffix) || 
-        tg.TargetGroupName?.includes('WebTarget')
+
+      const targetGroup = tgResponse.TargetGroups?.find(
+        tg =>
+          tg.TargetGroupName?.includes(suffix) ||
+          tg.TargetGroupName?.includes('WebTarget')
       );
 
       if (targetGroup?.TargetGroupArn) {
@@ -1089,8 +1112,10 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
         const healthResponse = await elbClient.send(healthCommand);
 
         // Verify targets are registered
-        expect(healthResponse.TargetHealthDescriptions?.length).toBeGreaterThan(0);
-        
+        expect(healthResponse.TargetHealthDescriptions?.length).toBeGreaterThan(
+          0
+        );
+
         // In a fully deployed environment, targets should eventually be healthy
         // For test purposes, we just verify they're registered
         healthResponse.TargetHealthDescriptions?.forEach(target => {
@@ -1116,9 +1141,9 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
           Period: 300,
           Statistics: ['Sum'],
         });
-        
+
         const metricsResponse = await cloudWatchClient.send(metricsCommand);
-        
+
         // Metrics might not be available immediately, so we just verify the command works
         expect(metricsResponse.Datapoints).toBeDefined();
       } catch (error) {
@@ -1130,30 +1155,31 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
     test('should validate data storage and backup configuration', async () => {
       // 1. Verify S3 bucket configuration
       const bucketName = outputs.S3BucketName;
-      
+
       try {
         // Verify bucket exists and is accessible
         const headCommand = new HeadBucketCommand({ Bucket: bucketName });
         await s3Client.send(headCommand);
-        
+
         // Verify bucket location
-        const locationCommand = new GetBucketLocationCommand({ Bucket: bucketName });
+        const locationCommand = new GetBucketLocationCommand({
+          Bucket: bucketName,
+        });
         const locationResponse = await s3Client.send(locationCommand);
-        
+
         const expectedRegion = process.env.AWS_REGION || 'us-east-1';
         const bucketRegion = locationResponse.LocationConstraint || 'us-east-1';
         expect(bucketRegion).toBe(expectedRegion);
-        
+
         // Verify bucket can be used for operations
-        const listCommand = new ListObjectsV2Command({ 
+        const listCommand = new ListObjectsV2Command({
           Bucket: bucketName,
-          MaxKeys: 1 
+          MaxKeys: 1,
         });
         const listResponse = await s3Client.send(listCommand);
-        
+
         // Response should be successful (bucket might be empty)
         expect(listResponse.KeyCount).toBeDefined();
-        
       } catch (error) {
         // In test environment, bucket might not exist
         expect(bucketName).toMatch(/tap-.*-logs-.*/);
@@ -1185,7 +1211,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
     test('should validate security and compliance requirements', async () => {
       // This test validates security best practices implementation
-      
+
       // 1. Verify no public database access
       const dbEndpoint = outputs.DatabaseEndpoint;
       const dbIdentifier = dbEndpoint.split('.')[0];
@@ -1212,14 +1238,16 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       );
 
       if (asg?.Instances) {
-        const instanceIds = asg.Instances.map(instance => instance.InstanceId).filter(Boolean);
-        
+        const instanceIds = asg.Instances.map(
+          instance => instance.InstanceId
+        ).filter(Boolean);
+
         if (instanceIds.length > 0) {
           const instanceCommand = new DescribeInstancesCommand({
             InstanceIds: instanceIds,
           });
           const instanceResponse = await ec2Client.send(instanceCommand);
-          
+
           instanceResponse.Reservations?.forEach(reservation => {
             reservation.Instances?.forEach(instance => {
               // All instances should be in private subnets (no public IP)
@@ -1238,7 +1266,7 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       const vpc = vpcResponse.Vpcs?.[0];
 
       expect(vpc?.Tags?.length).toBeGreaterThan(0);
-      
+
       // Should have environment-related tags
       const hasNameTag = vpc?.Tags?.some(tag => tag.Key === 'Name');
       expect(hasNameTag).toBe(true);
@@ -1248,9 +1276,9 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
   describe('Performance and Scalability Testing', () => {
     test('should validate infrastructure can handle expected load', async () => {
       // This test validates the infrastructure is properly sized for expected workload
-      
+
       const suffix = process.env.ENVIRONMENT_SUFFIX || 'pr1929';
-      
+
       // 1. Verify Auto Scaling configuration can handle load
       const asgCommand = new DescribeAutoScalingGroupsCommand({});
       const asgResponse = await autoScalingClient.send(asgCommand);
@@ -1283,8 +1311,8 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
       // 3. Verify load balancer is configured for high availability
       const albCommand = new DescribeLoadBalancersCommand({});
       const albResponse = await elbClient.send(albCommand);
-      const alb = albResponse.LoadBalancers?.find(lb =>
-        lb.DNSName === outputs.LoadBalancerDNS
+      const alb = albResponse.LoadBalancers?.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
       );
 
       if (alb) {
@@ -1295,22 +1323,22 @@ describeConditional('Scalable Infrastructure Integration Tests', () => {
 
     test('should validate monitoring and alerting configuration', async () => {
       // Verify comprehensive monitoring is in place
-      
+
       const suffix = process.env.ENVIRONMENT_SUFFIX || 'pr1929';
-      
+
       // 1. Verify CloudWatch alarms exist
       const alarmCommand = new DescribeAlarmsCommand({});
       const alarmResponse = await cloudWatchClient.send(alarmCommand);
-      
+
       const infraAlarms = alarmResponse.MetricAlarms?.filter(alarm =>
         alarm.AlarmName?.includes(suffix)
       );
 
       expect(infraAlarms?.length).toBeGreaterThan(0);
-      
+
       // Should have CPU monitoring
-      const cpuAlarm = infraAlarms?.find(alarm =>
-        alarm.MetricName === 'CPUUtilization'
+      const cpuAlarm = infraAlarms?.find(
+        alarm => alarm.MetricName === 'CPUUtilization'
       );
       expect(cpuAlarm).toBeDefined();
 
