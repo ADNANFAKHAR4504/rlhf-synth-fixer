@@ -615,7 +615,7 @@ resource "aws_autoscaling_group" "primary" {
   min_size         = 1
   max_size         = 4
   desired_capacity = 2
-
+  wait_for_capacity_timeout = "30m"
   launch_template {
     id      = aws_launch_template.primary.id
     version = "$Latest"
@@ -648,7 +648,7 @@ resource "aws_autoscaling_group" "secondary" {
   min_size         = 1
   max_size         = 4
   desired_capacity = 2
-
+  wait_for_capacity_timeout = "30m"
   launch_template {
     id      = aws_launch_template.secondary.id
     version = "$Latest"
