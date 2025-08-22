@@ -452,7 +452,7 @@ Resources:
           Value: !Ref Owner
 
   DatabaseSecurityGroup:
-    Type: AWS::EC2::Security-Group
+    Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${Project}-${Environment}-db-sg'
       GroupDescription: 'Security group for database servers - internal access only'
