@@ -1,4 +1,4 @@
-// ⚠️ IMPORTANT: Must be at top
+//  IMPORTANT: Must be at top
 jest.setTimeout(120000); // Increased timeout for comprehensive testing
 
 import { expect } from '@jest/globals';
@@ -22,10 +22,10 @@ AWS.config.update({
 let outputs: any = null;
 try {
   outputs = require('../outputs.json');
-  console.log('✅ Loaded outputs.json');
+  console.log(' Loaded outputs.json');
 } catch (err) {
   console.log(
-    'ℹ️ outputs.json not found — will discover resources dynamically'
+    '  outputs.json not found — will discover resources dynamically'
   );
 }
 
@@ -111,22 +111,22 @@ async function getActualBucketNames(): Promise<{
   // If still not found, use the first available bucket for testing
   if (!appData && Buckets && Buckets.length > 0) {
     appData = Buckets[0].Name || null;
-    console.log(`⚠️ Using first available bucket for app data: ${appData}`);
+    console.log(`  Using first available bucket for app data: ${appData}`);
   }
 
   if (!accessLogs && Buckets && Buckets.length > 1) {
     accessLogs = Buckets[1].Name || null;
     console.log(
-      `⚠️ Using second available bucket for access logs: ${accessLogs}`
+      ` Using second available bucket for access logs: ${accessLogs}`
     );
   }
 
   if (!appData) {
-    console.log('ℹ️ No app data bucket found - will use null for testing');
+    console.log('  No app data bucket found - will use null for testing');
     appData = null;
   }
   if (!accessLogs) {
-    console.log('ℹ️ No access logs bucket found - will use null for testing');
+    console.log('  No access logs bucket found - will use null for testing');
     accessLogs = null;
   }
 
@@ -162,20 +162,20 @@ async function getSecurityGroupIds(): Promise<{
   // If not found, use any available security groups
   if (!ec2Sg && SecurityGroups && SecurityGroups.length > 0) {
     ec2Sg = SecurityGroups[0].GroupId || null;
-    console.log(`ℹ️ Using first available security group for EC2: ${ec2Sg}`);
+    console.log(`  Using first available security group for EC2: ${ec2Sg}`);
   }
 
   if (!rdsSg && SecurityGroups && SecurityGroups.length > 1) {
     rdsSg = SecurityGroups[1].GroupId || null;
-    console.log(`ℹ️ Using second available security group for RDS: ${rdsSg}`);
+    console.log(`  Using second available security group for RDS: ${rdsSg}`);
   }
 
   if (!ec2Sg) {
-    console.log('ℹ️ No EC2 Security Group found - will use null for testing');
+    console.log('  No EC2 Security Group found - will use null for testing');
     ec2Sg = null;
   }
   if (!rdsSg) {
-    console.log('ℹ️ No RDS Security Group found - will use null for testing');
+    console.log('  No RDS Security Group found - will use null for testing');
     rdsSg = null;
   }
 
@@ -271,11 +271,11 @@ beforeAll(async () => {
   try {
     const sts = new AWS.STS();
     const identity = await sts.getCallerIdentity().promise();
-    console.log(`✅ AWS credentials verified for account: ${identity.Account}`);
+    console.log(` AWS credentials verified for account: ${identity.Account}`);
     hasCredentials = true;
   } catch (err) {
     console.log(
-      'ℹ️ AWS credentials not available locally - tests will run in validation mode only'
+      '  AWS credentials not available locally - tests will run in validation mode only'
     );
     hasCredentials = false;
   }
@@ -291,7 +291,7 @@ beforeAll(async () => {
       // Discover additional resources if outputs.json is not available
       let discoveredResources = {};
       if (!outputs) {
-        console.log('🔍 Discovering infrastructure resources dynamically...');
+        console.log(' Discovering infrastructure resources dynamically...');
         const [vpcData, rdsData, ec2Data, cloudtrailData] = await Promise.all([
           discoverVpcAndSubnets().catch(() => ({})),
           discoverRdsInstances().catch(() => ({})),
@@ -305,7 +305,7 @@ beforeAll(async () => {
           ...ec2Data,
           ...cloudtrailData,
         };
-        console.log('✅ Infrastructure discovery completed');
+        console.log(' Infrastructure discovery completed');
       }
 
       (global as any).bucketNames = buckets;
@@ -313,7 +313,7 @@ beforeAll(async () => {
       (global as any).discoveredResources = discoveredResources;
     } catch (err) {
       console.log(
-        'ℹ️ Resource discovery failed - tests will run with limited validation:',
+        '  Resource discovery failed - tests will run with limited validation:',
         err instanceof Error ? err.message : String(err)
       );
       // Set empty defaults so tests can still run
@@ -354,7 +354,7 @@ describe('Infrastructure Integration Tests', () => {
   const skipIfNoCredentials = (testName: string) => {
     if (!hasAwsCredentials) {
       console.log(
-        `ℹ️ ${testName} skipped - no AWS credentials available locally`
+        `  ${testName} skipped - no AWS credentials available locally`
       );
       expect(true).toBe(true);
       return true;
@@ -366,23 +366,23 @@ describe('Infrastructure Integration Tests', () => {
     test('AWS resources are discoverable', async () => {
       if (!hasAwsCredentials) {
         console.log(
-          'ℹ️ Running in validation-only mode - AWS credentials not available locally'
+          '  Running in validation-only mode - AWS credentials not available locally'
         );
         expect(true).toBe(true);
         return;
       }
 
       console.log(
-        `✅ Discovered app data bucket: ${bucketNames.appData || 'None'}`
+        ` Discovered app data bucket: ${bucketNames.appData || 'None'}`
       );
       console.log(
-        `✅ Discovered access logs bucket: ${bucketNames.accessLogs || 'None'}`
+        ` Discovered access logs bucket: ${bucketNames.accessLogs || 'None'}`
       );
       console.log(
-        `✅ Discovered EC2 security group: ${securityGroupIds.ec2 || 'None'}`
+        ` Discovered EC2 security group: ${securityGroupIds.ec2 || 'None'}`
       );
       console.log(
-        `✅ Discovered RDS security group: ${securityGroupIds.rds || 'None'}`
+        ` Discovered RDS security group: ${securityGroupIds.rds || 'None'}`
       );
 
       // Test passes if we have credentials and can discover resources
@@ -394,7 +394,7 @@ describe('Infrastructure Integration Tests', () => {
     test('KMS key exists and rotation is enabled', async () => {
       // Skip KMS tests if no KMS key is configured
       if (!TEST_CONFIG.kmsKeyArn) {
-        console.log('ℹ️ KMS key test skipped - no KMS key configured');
+        console.log('  KMS key test skipped - no KMS key configured');
         expect(true).toBe(true);
         return;
       }
@@ -411,7 +411,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(rotation.KeyRotationEnabled).toBe(true);
       } catch (error) {
         console.log(
-          `ℹ️ KMS key test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  KMS key test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -421,7 +421,7 @@ describe('Infrastructure Integration Tests', () => {
       // Skip KMS tests if no KMS key is configured
       if (!TEST_CONFIG.kmsKeyArn) {
         console.log(
-          'ℹ️ KMS encrypt/decrypt test skipped - no KMS key configured'
+          '  KMS encrypt/decrypt test skipped - no KMS key configured'
         );
         expect(true).toBe(true);
         return;
@@ -442,7 +442,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(Plaintext?.toString()).toBe(plaintext);
       } catch (error) {
         console.log(
-          `ℹ️ KMS encrypt/decrypt test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  KMS encrypt/decrypt test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -452,7 +452,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('S3 Bucket Tests', () => {
     test('App data bucket has encryption and access logging', async () => {
       if (!bucketNames.appData) {
-        console.log('ℹ️ S3 bucket test skipped - no app data bucket found');
+        console.log('  S3 bucket test skipped - no app data bucket found');
         expect(true).toBe(true);
         return;
       }
@@ -487,7 +487,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(config?.RestrictPublicBuckets).toBe(true);
       } catch (error) {
         console.log(
-          `ℹ️ S3 bucket encryption/logging test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  S3 bucket encryption/logging test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -495,7 +495,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('S3 buckets deny non-TLS connections', async () => {
       if (!bucketNames.appData || !bucketNames.accessLogs) {
-        console.log('ℹ️ S3 bucket policy test skipped - buckets not found');
+        console.log('  S3 bucket policy test skipped - buckets not found');
         expect(true).toBe(true);
         return;
       }
@@ -520,7 +520,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(hasDenyInsecure(accessLogsPolicy)).toBe(true);
       } catch (error) {
         console.log(
-          `⚠️ S3 bucket policy test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          ` S3 bucket policy test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         // Skip this test if bucket policies don't exist
         expect(true).toBe(true);
@@ -534,7 +534,7 @@ describe('Infrastructure Integration Tests', () => {
         TEST_CONFIG.rdsIdentifier || discoveredResources.rdsIdentifier;
 
       if (!rdsIdentifier) {
-        console.log('ℹ️ No RDS instance found - skipping RDS tests');
+        console.log('  No RDS instance found - skipping RDS tests');
         expect(true).toBe(true);
         return;
       }
@@ -555,7 +555,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(db.PubliclyAccessible).toBe(false);
       } catch (error) {
         console.log(
-          `ℹ️ RDS test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  RDS test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -587,13 +587,13 @@ describe('Infrastructure Integration Tests', () => {
           // Check for any CloudWatch alarms in the account
           const allAlarms = await cw.describeAlarms().promise();
           console.log(
-            `ℹ️ Found ${allAlarms.MetricAlarms?.length || 0} CloudWatch alarms in account`
+            `  Found ${allAlarms.MetricAlarms?.length || 0} CloudWatch alarms in account`
           );
           expect(allAlarms.MetricAlarms).toBeDefined();
         }
       } catch (error) {
         console.log(
-          `ℹ️ CloudWatch alarm test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          ` CloudWatch alarm test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -627,13 +627,13 @@ describe('Infrastructure Integration Tests', () => {
         expect(trailList!.length).toBeGreaterThan(0);
 
         const trail = trailList![0];
-        console.log(`ℹ️ Found CloudTrail: ${trail.Name}`);
+        console.log(` Found CloudTrail: ${trail.Name}`);
         // Check for basic CloudTrail configuration
         expect(trail.Name).toBeDefined();
         expect(trail.TrailARN).toBeDefined();
       } catch (error) {
         console.log(
-          `ℹ️ CloudTrail test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          ` CloudTrail test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -649,7 +649,7 @@ describe('Infrastructure Integration Tests', () => {
         const vpcId = TEST_CONFIG.vpcId || discoveredResources.vpcId;
 
         if (!vpcId) {
-          console.log('ℹ️ VPC Flow Logs test skipped - no VPC ID available');
+          console.log(' VPC Flow Logs test skipped - no VPC ID available');
           expect(true).toBe(true);
           return;
         }
@@ -665,7 +665,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(FlowLogs![0].TrafficType).toBe('ALL');
       } catch (error) {
         console.log(
-          `ℹ️ VPC Flow Logs test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          ` VPC Flow Logs test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -691,7 +691,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(instance.State?.Name).toBe('running');
       // IMDSv2 is recommended but not always required
       console.log(
-        `ℹ️ EC2 instance IMDSv2 setting: ${instance.MetadataOptions?.HttpTokens}`
+        `EC2 instance IMDSv2 setting: ${instance.MetadataOptions?.HttpTokens}`
       );
       expect(instance.IamInstanceProfile?.Arn).toBeDefined();
     });
@@ -743,7 +743,7 @@ describe('Infrastructure Integration Tests', () => {
 
       // Log the rules for debugging
       console.log(
-        `ℹ️ EC2 Security Group has ${ingressRules!.length} ingress rules`
+        ` EC2 Security Group has ${ingressRules!.length} ingress rules`
       );
       ingressRules!.forEach(rule => {
         console.log(
@@ -773,7 +773,7 @@ describe('Infrastructure Integration Tests', () => {
 
       // Log the rules for debugging
       console.log(
-        `ℹ️ RDS Security Group has ${ingressRules!.length} ingress rules`
+        `  RDS Security Group has ${ingressRules!.length} ingress rules`
       );
       ingressRules!.forEach(rule => {
         console.log(
@@ -788,7 +788,7 @@ describe('Infrastructure Integration Tests', () => {
       const vpcId = TEST_CONFIG.vpcId || discoveredResources.vpcId;
 
       if (!vpcId) {
-        console.log('ℹ️ No VPC found - skipping VPC tests');
+        console.log('  No VPC found - skipping VPC tests');
         expect(true).toBe(true);
         return;
       }
@@ -808,7 +808,7 @@ describe('Infrastructure Integration Tests', () => {
         // Note: EnableDnsHostnames and EnableDnsSupport are not directly accessible in describeVpcs response
       } catch (error) {
         console.log(
-          `ℹ️ VPC test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  VPC test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -832,7 +832,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(subnet.State).toBe('available');
         // Check that subnets are properly configured (private subnets should not auto-assign public IPs)
         console.log(
-          `ℹ️ Private subnet ${subnet.SubnetId}: MapPublicIpOnLaunch = ${subnet.MapPublicIpOnLaunch}`
+          `  Private subnet ${subnet.SubnetId}: MapPublicIpOnLaunch = ${subnet.MapPublicIpOnLaunch}`
         );
         expect(subnet.VpcId).toBeDefined();
       });
@@ -856,7 +856,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(subnet.State).toBe('available');
         // Check that subnets are properly configured (public subnets should auto-assign public IPs)
         console.log(
-          `ℹ️ Public subnet ${subnet.SubnetId}: MapPublicIpOnLaunch = ${subnet.MapPublicIpOnLaunch}`
+          `  Public subnet ${subnet.SubnetId}: MapPublicIpOnLaunch = ${subnet.MapPublicIpOnLaunch}`
         );
         expect(subnet.VpcId).toBeDefined();
       });
@@ -877,14 +877,14 @@ describe('Infrastructure Integration Tests', () => {
 
         if (!topic && Topics && Topics.length > 0) {
           topic = Topics[0];
-          console.log(`ℹ️ Using first available SNS topic: ${topic.TopicArn}`);
+          console.log(`Using first available SNS topic: ${topic.TopicArn}`);
         }
 
         expect(topic).toBeDefined();
         expect(topic!.TopicArn).toBeDefined();
       } catch (error) {
         console.log(
-          `ℹ️ SNS topic test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          ` SNS topic test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -913,7 +913,7 @@ describe('Infrastructure Integration Tests', () => {
 
         if (!ec2Role && Roles && Roles.length > 0) {
           ec2Role = Roles[0];
-          console.log(`ℹ️ Using first available IAM role: ${ec2Role.RoleName}`);
+          console.log(`  Using first available IAM role: ${ec2Role.RoleName}`);
         }
 
         expect(ec2Role).toBeDefined();
@@ -930,7 +930,7 @@ describe('Infrastructure Integration Tests', () => {
         }
       } catch (error) {
         console.log(
-          `ℹ️ IAM role test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  IAM role test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -961,14 +961,14 @@ describe('Infrastructure Integration Tests', () => {
         ) {
           maintenanceWindow = WindowIdentities[0];
           console.log(
-            `ℹ️ Using first available SSM Maintenance Window: ${maintenanceWindow.Name}`
+            `  Using first available SSM Maintenance Window: ${maintenanceWindow.Name}`
           );
         }
 
         expect(maintenanceWindow).toBeDefined();
       } catch (error) {
         console.log(
-          `ℹ️ SSM Maintenance Window test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  SSM Maintenance Window test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -1001,7 +1001,7 @@ describe('Infrastructure Integration Tests', () => {
         if (!vpcFlowLogs && logGroups && logGroups.length > 0) {
           vpcFlowLogs = logGroups[0];
           console.log(
-            `ℹ️ Using first available CloudWatch log group: ${vpcFlowLogs.logGroupName}`
+            `  Using first available CloudWatch log group: ${vpcFlowLogs.logGroupName}`
           );
         }
 
@@ -1011,7 +1011,7 @@ describe('Infrastructure Integration Tests', () => {
         }
       } catch (error) {
         console.log(
-          `ℹ️ CloudWatch Logs test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  CloudWatch Logs test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
@@ -1062,14 +1062,14 @@ describe('Infrastructure Integration Tests', () => {
 
         if (!rdsSecret && SecretList && SecretList.length > 0) {
           rdsSecret = SecretList[0];
-          console.log(`ℹ️ Using first available secret: ${rdsSecret.Name}`);
+          console.log(`  Using first available secret: ${rdsSecret.Name}`);
         }
 
         expect(rdsSecret).toBeDefined();
         // Note: Encryption status is not directly accessible in listSecrets response
       } catch (error) {
         console.log(
-          `ℹ️ Secrets Manager test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `  Secrets Manager test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         expect(true).toBe(true);
       }
