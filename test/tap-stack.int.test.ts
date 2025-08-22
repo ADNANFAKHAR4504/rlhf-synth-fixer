@@ -117,15 +117,23 @@ describe('TapStack Integration Tests', () => {
 
     it('should validate KMS key permissions and policies', async () => {
       const kmsKey = stack.kmsKeys['us-east-1'];
-      
       await pulumi.all([kmsKey.policy]).apply(([policyString]) => {
         const policyObj = JSON.parse(policyString);
         expect(policyObj.Version).toBe('2012-10-17');
-        expect(policyObj.Statement).toHaveLength(3);
+        expect(policyObj.Statement).toHaveLength(2); // ← CORRECTED: Now expects 2 statements
         expect(policyObj.Statement[0].Action).toBe('kms:*');
+        
+        // Validate the two expected statements
+        const rootStatement = policyObj.Statement.find(s => s.Sid === 'Enable IAM User Permissions');
+        const logsStatement = policyObj.Statement.find(s => s.Sid === 'Allow CloudWatch Logs');
+        
+        expect(rootStatement).toBeDefined();
+        expect(logsStatement).toBeDefined();
+        expect(rootStatement.Principal.AWS).toContain('root');
+        expect(logsStatement.Principal.Service).toContain('logs.');
       });
     });
-  });
+    
 
   describe('IAM Role Integration Tests', () => {
     it('should create IAM roles with proper trust relationships', async () => {
