@@ -15,7 +15,7 @@ from typing import Dict, Optional
 
 import pulumi
 import pulumi_aws as aws
-import pulumi_random as random
+import pulumi_random
 from pulumi import ResourceOptions
 
 
@@ -51,7 +51,7 @@ class TapStack(pulumi.ComponentResource):
         }
         
         # Create random suffix for globally unique resource names
-        self.random_suffix = random.RandomId(
+        self.random_suffix = pulumi_random.RandomId(
             f"suffix-{self.environment_suffix}",
             byte_length=4,
             opts=ResourceOptions(parent=self)
