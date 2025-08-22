@@ -440,7 +440,7 @@ resource "aws_iam_role_policy" "ec2_s3_policy" {
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name   = "${local.name_prefix}-ec2-cloudwatch-policy"
   role   = aws_iam_role.ec2_role.id
-  policy = module.data.cloudwatch_logs_policy
+  policy = data.aws_iam_policy_document.cloudwatch_logs_policy.json
 }
 
 # IAM instance profile for EC2
@@ -476,6 +476,26 @@ resource "aws_iam_role" "lambda_role" {
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:${module.data.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+data "aws_iam_policy_document" "cloudwatch_logs_policy" {
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams",
+      "logs:DescribeLogGroups"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:${module.monitoring.ec2_log_group_name}",
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
+    ]
+  }
 }
 
 #######################

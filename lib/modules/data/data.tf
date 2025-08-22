@@ -122,24 +122,3 @@ data "aws_iam_policy_document" "ec2_s3_access" {
     resources = [var.s3_kms_key_arn]
   }
 }
-
-# IAM policy document for CloudWatch logs access
-data "aws_iam_policy_document" "cloudwatch_logs_policy" {
-  statement {
-    sid    = "AllowCloudWatchLogs"
-    effect = "Allow"
-
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-      "logs:DescribeLogStreams",
-      "logs:DescribeLogGroups"
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}-${var.environment}-*",
-      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
-    ]
-  }
-}

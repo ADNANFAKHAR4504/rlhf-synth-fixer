@@ -23,11 +23,6 @@ output "ec2_s3_access_policy" {
   value       = data.aws_iam_policy_document.ec2_s3_access.json
 }
 
-output "cloudwatch_logs_policy" {
-  description = "IAM policy document for CloudWatch logs access"
-  value       = data.aws_iam_policy_document.cloudwatch_logs_policy.json
-}
-
 output "availability_zones" {
   description = "List of available availability zones"
   value       = data.aws_availability_zones.available.names
