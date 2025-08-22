@@ -89,18 +89,28 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
   }
 
   /**
-   * Create Configuration Template
+   * Create Configuration Template - MINIMAL FIX APPLIED
    */
   private createConfigurationTemplate(
     args: ElasticBeanstalkInfrastructureArgs
   ): aws.elasticbeanstalk.ConfigurationTemplate {
-    // Convert subnet arrays to comma-separated strings
+    // Convert subnet arrays to comma-separated strings - FIXED VERSION
     const publicSubnetsString = pulumi
       .all(args.publicSubnetIds)
-      .apply(subnets => subnets.join(','));
+      .apply(subnets => {
+        if (!subnets || subnets.length === 0) {
+          throw new Error(`No public subnets available for ${this.region}`);
+        }
+        return subnets.join(',');
+      });
     const privateSubnetsString = pulumi
       .all(args.privateSubnetIds)
-      .apply(subnets => subnets.join(','));
+      .apply(subnets => {
+        if (!subnets || subnets.length === 0) {
+          throw new Error(`No private subnets available for ${this.region}`);
+        }
+        return subnets.join(',');
+      });
 
     const solutionStackName = this.getSolutionStackName();
     console.log(
