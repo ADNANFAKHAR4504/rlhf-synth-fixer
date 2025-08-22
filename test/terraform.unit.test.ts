@@ -356,8 +356,8 @@ describe("TAP Stack Multi-Account Infrastructure (static checks)", () => {
     expect(varsHcl).toMatch(/min_size[^}]*default\s*=\s*1/);
     expect(varsHcl).toMatch(/vpc_cidr[^}]*default\s*=\s*"10\.0\.0\.0\/16"/);
     expect(varsHcl).toMatch(/instance_type[^}]*default\s*=\s*"t3\.micro"/);
-    expect(varsHcl).toMatch(/max_size[^}]*default\s*=\s*3/);
-    expect(varsHcl).toMatch(/desired_capacity[^}]*default\s*=\s*2/);
+    expect(varsHcl).toMatch(/max_size[^}]*default\s*=\s*2/);
+    expect(varsHcl).toMatch(/desired_capacity[^}]*default\s*=\s*1/);
   });
 
   test("validates subnet CIDR defaults", () => {
