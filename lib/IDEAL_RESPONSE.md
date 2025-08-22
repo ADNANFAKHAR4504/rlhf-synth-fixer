@@ -4,6 +4,7 @@ This document provides comprehensive documentation for the secure AWS infrastruc
 
 ## Overview
 
+
 The infrastructure implements a secure, scalable web application environment with the following key features:
 
 - **Encrypted Storage**: All data is encrypted using AWS KMS
