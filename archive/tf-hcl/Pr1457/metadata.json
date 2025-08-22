@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291316",
+  "team": "4",
+  "startedAt": "2025-08-17T05:12:07.790Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling for stage and production",
+    "Network Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "vpc",
+    "subnet",
+    "iam",
+    "ec2",
+    "security groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

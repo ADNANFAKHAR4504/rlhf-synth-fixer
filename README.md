@@ -2,8 +2,6 @@
 
 # Get ready.
 
-# Since now Claude Code is available and ready for attempting to complete TAP tasks.
-
 # Medium: solution in 30 mins
 
 # Hard: 2h
@@ -83,7 +81,7 @@ Since engineers don't have direct access to the AWS Console, an EC2 instance has
 **Login to the EC2 instance:**
 
 ```bash
-ssh -o PreferredAuthentications=password devuser@34.231.140.94
+ssh -o PreferredAuthentications=password trainer@52.201.128.13
 ```
 
 **Password**: Ask your team leader for the password.
@@ -117,6 +115,7 @@ This command will launch an interactive prompt that guides you through:
 3. **Complexity Level**: Set the task complexity (Medium, Hard, Expert)
 4. **Turn Type**: Choose between Single or Multi-turn interactions
 5. **Task ID**: Enter a unique identifier for the task
+6. **Team Selection**: Choose from team 1-6 or the synth team
 
 The CLI will:
 

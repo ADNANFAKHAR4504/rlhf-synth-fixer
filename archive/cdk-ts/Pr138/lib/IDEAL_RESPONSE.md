@@ -1,20 +1,179 @@
-To create an infrastructure that will be deployed across two distinct environments: development and production, both hosted on AWS. Each environment will need its own VPC, ECS cluster, and supporting AWS resources, ensuring complete isolation and the ability to test changes independently before pushing to production.
+# AWS CDK TypeScript Multi-Environment ECS Infrastructure
 
-1. **Set up your AWS CDK project**:
-   Ensure you have AWS CDK installed and initialized. If not, you can install it using npm:
-   ```bash
-   npm install -g aws-cdk
-   cdk init app --language typescript
-   ```
+This solution provides a multi-environment ECS infrastructure with complete isolation between development and production environments using AWS CDK TypeScript.
 
-2. **Next, install the necessary AWS CDK libraries:**:
-```bash
-npm install @aws-cdk-lib  constructs 
+## lib/tap-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { ACMClient, ImportCertificateCommand } from '@aws-sdk/client-acm';
+import {
+  SSMClient,
+  PutParameterCommand,
+  GetParameterCommand,
+} from '@aws-sdk/client-ssm';
+import { Construct } from 'constructs';
+
+// ? Import your stacks here
+import { MultiEnvEcsStack, EnvironmentConfig } from './multienv-ecs-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+const DOMAIN = 'example.com';
+const REGION = 'us-east-1';
+const OUT_DIR = './certs';
+const SSM_PARAM = '/app/certArn';
+
+const KEY_FILE = path.join(OUT_DIR, `${DOMAIN}.key`);
+const CSR_FILE = path.join(OUT_DIR, `${DOMAIN}.csr`);
+const CRT_FILE = path.join(OUT_DIR, `${DOMAIN}.crt`);
+if (require.main === module) {
+  (async function generateSelfSignedCertAndStore(): Promise<void> {
+    const ssm = new SSMClient({ region: REGION });
+
+    // Check if cert already exists in SSM
+    try {
+      const existing = await ssm.send(
+        new GetParameterCommand({ Name: SSM_PARAM })
+      );
+      console.log(
+        `ℹ️ Certificate already exists: ${existing.Parameter?.Value}`
+      );
+      return;
+    } catch (err) {
+      const e = err as Record<string, unknown>;
+      if (e.name !== 'ParameterNotFound') {
+        console.error('❌ Error checking SSM parameter:', err);
+        throw err;
+      }
+      console.log('📎 No existing cert ARN, generating new one...');
+    }
+
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+
+    console.log('🔧 Generating private key...');
+    execSync(`openssl genrsa -out "${KEY_FILE}" 2048`);
+
+    console.log('🔧 Creating CSR...');
+    execSync(
+      `openssl req -new -key "${KEY_FILE}" -out "${CSR_FILE}" -subj "/C=US/ST=Dev/L=Dev/O=Dev/OU=Dev/CN=${DOMAIN}"`
+    );
+
+    console.log('🔧 Creating self-signed certificate...');
+    execSync(
+      `openssl x509 -req -in "${CSR_FILE}" -signkey "${KEY_FILE}" -out "${CRT_FILE}" -days 365`
+    );
+
+    console.log('✅ Self-signed certificate generated in', OUT_DIR);
+
+    const certificate = fs.readFileSync(CRT_FILE);
+    const privateKey = fs.readFileSync(KEY_FILE);
+
+    const acm = new ACMClient({ region: REGION });
+
+    console.log('📤 Importing certificate to AWS ACM...');
+    const importResp = await acm.send(
+      new ImportCertificateCommand({
+        Certificate: certificate,
+        PrivateKey: privateKey,
+      })
+    );
+
+    const certArn = importResp.CertificateArn;
+    if (!certArn) {
+      throw new Error('❌ Certificate ARN was not returned from ACM.');
+    }
+
+    console.log(`✅ Certificate imported. ARN: ${certArn}`);
+
+    console.log(`📦 Storing ARN to SSM: ${SSM_PARAM}`);
+    await ssm.send(
+      new PutParameterCommand({
+        Name: SSM_PARAM,
+        Type: 'String',
+        Value: certArn,
+        Overwrite: true,
+      })
+    );
+
+    console.log(`✅ ARN stored in SSM: ${SSM_PARAM}`);
+  })();
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+    const imageName = process.env.IMAGE_NAME || 'nginx';
+    const imageTag = process.env.IMAGE_TAG || '1.25.3';
+    const port = Number(process.env.PORT) || 80;
+    const hostedZoneName = process.env.HOSTED_ZONE_NAME; // you should have this domain in route53
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+
+    // Define configurations for each environment
+    let config: EnvironmentConfig;
+    if (environmentSuffix === 'dev') {
+      config = {
+        hostedZoneName,
+        imageName,
+        imageTag,
+        port,
+        domainName: process.env.DOMAIN_NAME || 'api.dev.local',
+        envName: 'dev',
+        vpcCidr: '10.0.0.0/16',
+        cpu: Number(process.env.CPU_VALUE) || 256,
+        memoryLimit: Number(process.env.MEMORY_LIMIT) || 512,
+      };
+    } else {
+      config = {
+        hostedZoneName,
+        imageName,
+        imageTag,
+        port,
+        domainName: process.env.DOMAIN_NAME || `api.${environmentSuffix}.local`,
+        envName: environmentSuffix,
+        vpcCidr: '10.1.0.0/16',
+        cpu: Number(process.env.CPU_VALUE) || 512,
+        memoryLimit: Number(process.env.MEMORY_LIMIT) || 1024,
+      };
+    }
+
+    // Deploy stacks for each environment
+    function capitalize(str: string): string {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    new MultiEnvEcsStack(
+      this,
+      capitalize(`${environmentSuffix}Stack`),
+      config,
+      {
+        env: {
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+          region: process.env.CDK_DEFAULT_REGION,
+        },
+      }
+    );
+  }
+}
 ```
 
+## lib/multienv-ecs-stack.ts
 
-```bash
-
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -197,34 +356,44 @@ export class MultiEnvEcsStack extends cdk.Stack {
         ),
         zone,
       });
+      new cdk.CfnOutput(this, 'HostedZoneId', {
+        value: zone.hostedZoneId,
+        description: 'Route53 Hosted Zone ID',
+      });
     }
 
     // Alarms
-    new cloudwatch.Alarm(this, `${config.envName} HighCpuAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName}:HighCpuAlarm`, {
       metric: fargateService.metricCpuUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmName: `${config.envName}:HighCpuAlarm`,
     });
 
-    new cloudwatch.Alarm(this, `${config.envName} HighMemoryAlarm`, {
+    new cloudwatch.Alarm(this, `${config.envName}:HighMemoryAlarm`, {
       metric: fargateService.metricMemoryUtilization(),
       evaluationPeriods: 2,
       threshold: 80,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmName: `${config.envName}:HighMemoryAlarm`,
     });
 
     //Output
+    // --- Outputs ---
     new cdk.CfnOutput(this, 'LoadBalanceDNS', {
       value: lb.loadBalancerDnsName,
       description: 'Load balancer dns name',
     });
-
+    new cdk.CfnOutput(this, 'envName', {
+      value: config.envName,
+      description: 'Environment name',
+    });
     new cdk.CfnOutput(this, 'DomainName', {
       value: config.domainName,
-      description: 'domain name',
+      description: 'Application domain name',
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
@@ -235,6 +404,10 @@ export class MultiEnvEcsStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ClusterName', {
       value: cluster.clusterName,
       description: 'ECS Cluster Name',
+    });
+    new cdk.CfnOutput(this, 'ClusterArn', {
+      value: cluster.clusterArn,
+      description: 'ECS Cluster ARN',
     });
 
     new cdk.CfnOutput(this, 'TaskDefinitionArn', {
@@ -274,6 +447,13 @@ export class MultiEnvEcsStack extends cdk.Stack {
       description: 'SSL Certificate ARN',
     });
 
+    // Cloud Map Namespace output
+    new cdk.CfnOutput(this, 'Namespace', {
+      value: `${config.envName}.local`,
+      description: 'ECS Cloud Map namespace name',
+    });
+
+    // Route 53 Outputs
     if (config.hostedZoneName) {
       new cdk.CfnOutput(this, 'HostedZoneName', {
         value: config.hostedZoneName,
@@ -287,90 +467,17 @@ export class MultiEnvEcsStack extends cdk.Stack {
     }
   }
 }
-
 ```
 
-Finally, create a `README.md` file to document the setup and usage:
-```markdown
-# Multi-Environment ECS Infrastructure
+## Key Features
 
-This project provisions a production-grade AWS ECS Fargate deployment using AWS CDK (TypeScript). It supports multiple isolated environments (e.g., `dev`, `prod`) with key components like:
+1. **Multi-Environment Support**: Isolated VPCs and resources for development and production environments
+2. **ECS Fargate**: Serverless container orchestration with auto-scaling based on CPU and memory metrics
+3. **Application Load Balancer**: HTTPS-enabled load balancing with health checks
+4. **Service Discovery**: Cloud Map integration for service-to-service communication
+5. **Monitoring**: CloudWatch alarms for CPU and memory utilization
+6. **SSL/TLS**: ACM certificate integration for secure HTTPS connections
+7. **Route 53**: Optional DNS integration for custom domains
+8. **Parameter Store**: SSM parameters for configuration management
 
-- **VPC, ECS Cluster, and Fargate Service**
-- **Application Load Balancer (HTTPS)**
-- **Route 53 DNS Record**
-- **SSM Parameter Store with optional SecureString support**
-- **CloudWatch Alarms for CPU and Memory**
-- **Auto Scaling based on metrics**
-- **Tagged Resources for Cost and Environment Management**
-
-## 🏗️ Prerequisites
-
-- AWS CLI configured with appropriate permissions
-- AWS CDK installed
-- Node.js v22.17.0
-- AWS CLI configured with `aws configure`
-- CDK CLI v2 installed:  
-  ```bash
-  npm install -g aws-cdk
-
-## 🚀 Deployment
-
-1. Install dependencies:
-
-```bash
-npm install
-```
-
-2. Bootstrap the CDK environment (if not already done):
-
-```bash
-cdk bootstrap
-```
-
-3. Deploy the development environment:
-
-```bash
-cdk deploy DevStack
-```
-
-4. Deploy the production environment:
-
-```bash
-cdk deploy ProdStack
-```
-
-5. Deploy an environment
-    ```bash
-    cdk deploy MyStack-dev \
-    --context envName=dev \
-    --context domainName=myapp.example.com \
-    --context hostedZoneId=Z3P5QSUBK4POTI \
-    --context hostedZoneName=example.com \
-    --context certificateArn=arn:aws:acm:us-east-1:123456789012:certificate/abc123
-
-## Infrastructure
-
-- **VPC**: Separate VPCs for development and production.
-- **ECS Cluster**: ECS clusters running on Fargate.
-- **SSM Parameter Store**: Environment-specific configurations encrypted with AWS KMS.
-- **Application Load Balancer**: Distributes incoming traffic.
-- **Route 53**: Manages DNS records.
-- **CloudWatch**: Monitoring and alarms for CPU utilization.
-- **Auto Scaling**: Scales based on CPU utilization.
-
-## Usage
-
-Access the application using the domain names configured in Route 53:
-
-- Development: `http://dev.example.com`
-- Production: `http://prod.example.com`
-
-## Cleanup
-
-To destroy the deployed stacks:
-
-```bash
-cdk destroy DevStack
-cdk destroy ProdStack
-```
+This solution provides a production-ready, scalable multi-environment infrastructure with complete isolation between environments.

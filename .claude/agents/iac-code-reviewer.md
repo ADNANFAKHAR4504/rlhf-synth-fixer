@@ -13,16 +13,62 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 ### Phase 1: Prerequisites Check
 
-- Verify `lib/PROMPT.md` and `lib/IDEAL_RESPONSE.md` exist
+- Verify latest PROMPT file (e.g., `lib/PROMPT.md`, `lib/PROMPT2.md`, `lib/PROMPT3.md`, etc.) and `lib/IDEAL_RESPONSE.md` exist
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
+
+### Phase 1.5: Metadata Enhancement
+
+- **Identify Latest Files**: 
+  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
+  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
+  - If only PROMPT.md exists, use that file
+  - If only MODEL_RESPONSE.md exists, use that file
+- Analyze the requirements from the conversation to determine the subtask category
+- Add `subtask` field to `metadata.json` with one of these values based on prompt content:
+  - "IaC Program Optimization"
+  - "Infrastructure QA and Management"  
+  - "Web Application Deployment"
+  - "Database and Storage Setup"
+  - "Security and Compliance Implementation"
+  - "Monitoring and Observability Setup"
+  - "Network Infrastructure Design"
+  - "Serverless Architecture Implementation"
+  - "Container Orchestration Setup"
+  - "CI/CD Pipeline Infrastructure"
+  - "General Infrastructure Provisioning"
+  - (... feel free to add more subtasks if none of the above applies.)
+- Read `lib/MODEL_FAILURES.md` and analyze the failures/fixes described
+- Add `subject_labels` array field to `metadata.json` with relevant labels such as:
+  - "General Infrastructure Tooling QA"
+  - "IaC Optimization"
+  - "Web Application Deployment"
+  - "Security Configuration"
+  - "Database Management"
+  - "Network Configuration"
+  - "Resource Scaling"
+  - "Monitoring Setup"
+  - "Access Control"
+  - "Performance Optimization"
+  - (... feel free to add more labels if none of the above applies.)
+- Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
+  - This metric should reflect the potential training quality that this data will provide when used for retraining the model
+  that generated the MODEL_RESPONSE.
+  - It should be a number between 0 and 10 where:
+    - 0 means no improves on the model retraining at all.
+    - 1 means that the improvement is minimal.
+    - ...
+    - 10 means that the data will increase the model's knowledge substantially on the specific domain of the task.
+- Add `aws_services` to `metadata.json`, extracting from `lib/IDEAL_RESPONSE.md` a list of strings of AWS Services
+used in the task.
+- Provide report on the training_quality metric and it's justification.
 
 ### Phase 2: Compliance Analysis
 
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
 - Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
 - Calculate compliance percentage
-- Compare `lib/IDEAL_RESPONSE.md` and `lib/MODEL_RESPONSE.md`. Highlight the differences in terms
+- Compare `lib/IDEAL_RESPONSE.md` and the latest MODEL_RESPONSE file. Highlight the differences in terms
  of infrastructure and validate the value added.
 
 ### Phase 3: Test Coverage
