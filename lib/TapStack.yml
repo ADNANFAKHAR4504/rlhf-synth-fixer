@@ -35,6 +35,10 @@ Parameters:
     Type: String
     Description: Suffix to append to resource names for unique identification
     Default: dev
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    ConstraintDescription: Must contain only alphanumeric characters and hyphens
+    MinLength: 1
+    MaxLength: 20
 
 Mappings:
   RegionMap:
@@ -132,7 +136,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw-main'
+          Value: !Sub '${Environment}-igw-main-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -156,7 +160,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-public-1'
+          Value: !Sub '${Environment}-subnet-public-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -173,7 +177,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-public-2'
+          Value: !Sub '${Environment}-subnet-public-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -190,7 +194,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-private-1'
+          Value: !Sub '${Environment}-subnet-private-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -206,7 +210,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-private-2'
+          Value: !Sub '${Environment}-subnet-private-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -221,7 +225,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-rt-public'
+          Value: !Sub '${Environment}-rt-public-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -253,7 +257,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-bastion'
+      GroupName: !Sub '${Environment}-sg-bastion-${EnvironmentSuffix}'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -264,7 +268,7 @@ Resources:
           Description: SSH access from allowed CIDR range
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-bastion'
+          Value: !Sub '${Environment}-sg-bastion-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -275,7 +279,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-webserver'
+      GroupName: !Sub '${Environment}-sg-webserver-${EnvironmentSuffix}'
       GroupDescription: Security group for web servers - HTTPS only from specific CIDR
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -295,7 +299,7 @@ Resources:
           Description: All outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-webserver'
+          Value: !Sub '${Environment}-sg-webserver-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -306,7 +310,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-database'
+      GroupName: !Sub '${Environment}-sg-database-${EnvironmentSuffix}'
       GroupDescription: Security group for RDS database - no public access
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -317,7 +321,7 @@ Resources:
           Description: MySQL access from web servers only
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-database'
+          Value: !Sub '${Environment}-sg-database-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -386,7 +390,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-role-ec2-webserver'
+      RoleName: !Sub '${Environment}-role-ec2-webserver-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -421,7 +425,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-profile-ec2-webserver'
+      InstanceProfileName: !Sub '${Environment}-profile-ec2-webserver-${EnvironmentSuffix}'
       Roles:
         - !Ref EC2Role
 
@@ -429,7 +433,7 @@ Resources:
   DeveloperGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${Environment}-group-developers'
+      GroupName: !Sub '${Environment}-group-developers-${EnvironmentSuffix}'
       Policies:
         - PolicyName: MFARequiredPolicy
           PolicyDocument:
@@ -472,13 +476,13 @@ Resources:
                 Resource: '*'
                 Condition:
                   BoolIfExists:
-                    'aws:MultiFactorAuthPresent': 'false'
+                    aws:MultiFactorAuthPresent: 'false'
 
   # RDS Subnet Group (private subnets only)
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-dbsubnet-main'
+      DBSubnetGroupName: !Sub '${Environment}-dbsubnet-main-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -499,9 +503,9 @@ Resources:
       Description: 'RDS Database Password'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
+        GenerateStringKey: password
         PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -582,7 +586,7 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub '${Environment}-cloudtrail-global'
+      TrailName: !Sub '${Environment}-cloudtrail-global-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: cloudtrail-logs/
       IncludeGlobalServiceEvents: true
@@ -637,7 +641,7 @@ Resources:
             Resource: !Ref CloudTrailBucket
             Condition:
               StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -647,13 +651,13 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}'
 
   # Launch Template for EC2 instances
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-lt-webserver'
+      LaunchTemplateName: !Sub '${Environment}-lt-webserver-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: t3.micro
@@ -707,7 +711,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${Environment}-ec2-webserver'
+                Value: !Sub '${Environment}-ec2-webserver-${EnvironmentSuffix}'
               - Key: Environment
                 Value: !Ref Environment
               - Key: Owner
