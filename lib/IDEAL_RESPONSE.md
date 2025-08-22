@@ -78,12 +78,42 @@ export class TapStack extends TerraformStack {
     for (const config of props.environments) {
       const constructIdSuffix = `-${config.envName}`;
       const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+      // FIX: Standardized resource name prefix to 'webapp-'
       const resourceNamePrefix = `webapp-${config.envName}-${uniqueSuffix}`;
 
-      // --- KMS Key for Encryption ---
+      // --- KMS Key for Encryption (with Policy) ---
+      const kmsKeyPolicy = JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: { AWS: `arn:aws:iam::${callerIdentity.accountId}:root` },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs to use the key',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${config.awsRegion}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      });
+
       const kmsKey = new KmsKey(this, `KmsKey${constructIdSuffix}`, {
         description: `KMS key for ${config.envName} environment`,
         enableKeyRotation: true,
+        policy: kmsKeyPolicy,
         tags: config.tags,
       });
 
@@ -141,8 +171,6 @@ export class TapStack extends TerraformStack {
         name: `${resourceNamePrefix}-sg`,
         vpcId: vpc.id,
         ingress: [
-          // CRITICAL FIX: Removed SSH open to the world.
-          // In a real scenario, you would add a specific, trusted IP range.
           {
             protocol: 'tcp',
             fromPort: 80,
@@ -163,7 +191,7 @@ export class TapStack extends TerraformStack {
         {
           name: `/aws/ec2/${resourceNamePrefix}`,
           retentionInDays: 14,
-          kmsKeyId: kmsKey.id, // Encrypt logs
+          kmsKeyId: kmsKey.arn,
           tags: config.tags,
         }
       );
@@ -192,8 +220,7 @@ export class TapStack extends TerraformStack {
             {
               Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
               Effect: 'Allow',
-              // CRITICAL FIX: Scoped resource to the specific log group
-              Resource: `arn:aws:logs:${config.awsRegion}:${callerIdentity.accountId}:log-group:${logGroup.name}:*`,
+              Resource: logGroup.arn,
             },
           ],
         }),
@@ -223,12 +250,12 @@ export class TapStack extends TerraformStack {
       const instance = new Instance(this, `Instance${constructIdSuffix}`, {
         ami: ami.id,
         instanceType: config.instanceType,
-        subnetId: subnetA.id, // Deploy instance in the first AZ
+        subnetId: subnetA.id,
         vpcSecurityGroupIds: [instanceSg.id],
         iamInstanceProfile: instanceProfile.name,
         rootBlockDevice: {
           encrypted: true,
-          kmsKeyId: kmsKey.id, // Encrypt root volume
+          kmsKeyId: kmsKey.id,
         },
         userData: `#!/bin/bash
 yum update -y && yum install -y httpd && systemctl start httpd && systemctl enable httpd
