@@ -157,8 +157,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
+              - !GetAtt TAPSecureS3Bucket.Arn
               - !Sub '${TAPSecureS3Bucket}/*'
-              - !Sub '${TAPSecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -174,8 +174,8 @@ Resources:
               - s3:GetBucketVersioning
               - s3:GetObjectVersion
             Resource:
+              - !GetAtt TAPSecureS3Bucket.Arn
               - !Sub '${TAPSecureS3Bucket}/*'
-              - !Sub '${TAPSecureS3Bucket}'
 
   # CloudWatch Log Group for S3
   TAPS3LogGroup:
@@ -218,88 +218,88 @@ Resources:
         - Key: Purpose
           Value: TAP-Secure-Storage
 
-  # CloudTrail for DynamoDB logging
-  TAPDynamoDBCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub 'tap-dynamodb-${EnvironmentSuffix}-trail'
-      S3BucketName: !Ref TAPCloudTrailLogsBucket
-      S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}/'
-      IncludeGlobalServiceEvents: false
-      IsMultiRegionTrail: false
-      IsLogging: true
-      EnableLogFileValidation: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: false
-          DataResources:
-            - Type: AWS::DynamoDB::Table
-              Values:
-                - !Sub '${TurnAroundPromptTable}/*'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Purpose
-          Value: TAP-DynamoDB-Audit
-
-  # CloudTrail Logs Bucket
-  TAPCloudTrailLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'tap-cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldTrailLogs
-            Status: Enabled
-            ExpirationInDays: 365
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Purpose
-          Value: TAP-CloudTrail-Logs
-
-  # CloudTrail Logs Bucket Policy
-  TAPCloudTrailLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TAPCloudTrailLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Ref TAPCloudTrailLogsBucket
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${TAPCloudTrailLogsBucket}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${TAPCloudTrailLogsBucket}/*'
-              - !Ref TAPCloudTrailLogsBucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+  # NOTE: CloudTrail resources commented out due to AWS quota limits (5 trails per region)
+  # Uncomment if you have available CloudTrail quota or delete existing trails
+  
+  # TAPDynamoDBCloudTrail:
+  #   Type: AWS::CloudTrail::Trail
+  #   Properties:
+  #     TrailName: !Sub 'tap-dynamodb-${EnvironmentSuffix}-trail'
+  #     S3BucketName: !Ref TAPCloudTrailLogsBucket
+  #     S3KeyPrefix: !Sub 'tap-dynamodb-logs-${EnvironmentSuffix}/'
+  #     IncludeGlobalServiceEvents: false
+  #     IsMultiRegionTrail: false
+  #     IsLogging: true
+  #     EnableLogFileValidation: true
+  #     EventSelectors:
+  #       - ReadWriteType: All
+  #         IncludeManagementEvents: false
+  #         DataResources:
+  #           - Type: AWS::DynamoDB::Table
+  #             Values:
+  #               - !Sub '${TurnAroundPromptTable}/*'
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Purpose
+  #         Value: TAP-DynamoDB-Audit
+  
+  # TAPCloudTrailLogsBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub 'tap-cloudtrail-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldTrailLogs
+  #           Status: Enabled
+  #           ExpirationInDays: 365
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: Purpose
+  #         Value: TAP-CloudTrail-Logs
+  
+  # TAPCloudTrailLogsBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref TAPCloudTrailLogsBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AWSCloudTrailAclCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:GetBucketAcl
+  #           Resource: !Ref TAPCloudTrailLogsBucket
+  #         - Sid: AWSCloudTrailWrite
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:PutObject
+  #           Resource: !Sub '${TAPCloudTrailLogsBucket}/*'
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': bucket-owner-full-control
+  #         - Sid: DenyInsecureConnections
+  #           Effect: Deny
+  #           Principal: '*'
+  #           Action: 's3:*'
+  #           Resource:
+  #             - !Sub '${TAPCloudTrailLogsBucket}/*'
+  #             - !Ref TAPCloudTrailLogsBucket
+  #           Condition:
+  #             Bool:
+  #               'aws:SecureTransport': 'false'
 
   # IAM Policy for DynamoDB access
   TAPDynamoDBAccessPolicy:
@@ -372,12 +372,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-TAPAccessRole'
 
-  # CloudTrail Outputs
-  CloudTrailArn:
-    Description: CloudTrail ARN for DynamoDB logging
-    Value: !GetAtt TAPDynamoDBCloudTrail.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail'
+  # CloudTrail Outputs (commented out due to quota limits)
+  # CloudTrailArn:
+  #   Description: CloudTrail ARN for DynamoDB logging
+  #   Value: !GetAtt TAPDynamoDBCloudTrail.Arn
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-CloudTrail'
 
   # Legacy Outputs (maintained for backward compatibility)
   StackName:

@@ -28,7 +28,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'TAP Stack - Secure Task Assignment Platform with S3 and DynamoDB Infrastructure'
       );
     });
 
@@ -58,62 +58,227 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+    const expectedResources = [
+      'TAPAccessRole',
+      'TAPDynamoDBKMSKey', 
+      'TAPDynamoDBKMSKeyAlias',
+      'TAPSecureS3Bucket',
+      'TAPS3AccessLogsBucket',
+      'TAPSecureS3BucketPolicy',
+      'TAPS3LogGroup',
+      'TurnAroundPromptTable',
+      'TAPDynamoDBAccessPolicy'
+    ];
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have all required resources', () => {
+      expectedResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    describe('IAM Role', () => {
+      test('TAPAccessRole should be an IAM role', () => {
+        const role = template.Resources.TAPAccessRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
+      });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      test('TAPAccessRole should have correct properties', () => {
+        const role = template.Resources.TAPAccessRole;
+        const properties = role.Properties;
+        expect(properties.RoleName).toEqual({
+          'Fn::Sub': 'TAPAccessRole-${EnvironmentSuffix}'
+        });
+        expect(properties.AssumeRolePolicyDocument).toBeDefined();
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    describe('KMS Resources', () => {
+      test('TAPDynamoDBKMSKey should be a KMS key', () => {
+        const kmsKey = template.Resources.TAPDynamoDBKMSKey;
+        expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      test('TAPDynamoDBKMSKeyAlias should be a KMS alias', () => {
+        const alias = template.Resources.TAPDynamoDBKMSKeyAlias;
+        expect(alias.Type).toBe('AWS::KMS::Alias');
+        expect(alias.Properties.AliasName).toEqual({
+          'Fn::Sub': 'alias/tap-dynamodb-${EnvironmentSuffix}'
+        });
+      });
+    });
+
+    describe('S3 Resources', () => {
+      test('TAPSecureS3Bucket should be an S3 bucket', () => {
+        const bucket = template.Resources.TAPSecureS3Bucket;
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+      });
+
+      test('TAPS3AccessLogsBucket should be an S3 bucket', () => {
+        const logsBucket = template.Resources.TAPS3AccessLogsBucket;
+        expect(logsBucket.Type).toBe('AWS::S3::Bucket');
+      });
+
+      test('TAPSecureS3BucketPolicy should be an S3 bucket policy', () => {
+        const policy = template.Resources.TAPSecureS3BucketPolicy;
+        expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      });
+
+      test('S3 bucket should have encryption enabled', () => {
+        const bucket = template.Resources.TAPSecureS3Bucket;
+        const encryption = bucket.Properties.BucketEncryption;
+        expect(encryption).toBeDefined();
+        expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      });
+
+      test('S3 bucket should have versioning enabled', () => {
+        const bucket = template.Resources.TAPSecureS3Bucket;
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      });
+
+      test('S3 bucket should block public access', () => {
+        const bucket = template.Resources.TAPSecureS3Bucket;
+        const publicBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicBlock.BlockPublicAcls).toBe(true);
+        expect(publicBlock.BlockPublicPolicy).toBe(true);
+        expect(publicBlock.IgnorePublicAcls).toBe(true);
+        expect(publicBlock.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
+    describe('DynamoDB Table', () => {
+      test('TurnAroundPromptTable should be a DynamoDB table', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        expect(table.Type).toBe('AWS::DynamoDB::Table');
+      });
+
+      test('TurnAroundPromptTable should have correct deletion policies', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        expect(table.DeletionPolicy).toBe('Delete');
+        expect(table.UpdateReplacePolicy).toBe('Delete');
+      });
+
+      test('TurnAroundPromptTable should have correct properties', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        const properties = table.Properties;
+
+        expect(properties.TableName).toEqual({
+          'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        });
+        expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
+        expect(properties.DeletionProtectionEnabled).toBe(false);
+      });
+
+      test('TurnAroundPromptTable should have KMS encryption', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        const sse = table.Properties.SSESpecification;
+        expect(sse.SSEEnabled).toBe(true);
+        expect(sse.SSEType).toBe('KMS');
+        expect(sse.KMSMasterKeyId).toEqual({ Ref: 'TAPDynamoDBKMSKey' });
+      });
+
+      test('TurnAroundPromptTable should have point-in-time recovery enabled', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+      });
+
+      test('TurnAroundPromptTable should have streams enabled', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+      });
+
+      test('TurnAroundPromptTable should have correct attribute definitions', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        const attributeDefinitions = table.Properties.AttributeDefinitions;
+
+        expect(attributeDefinitions).toHaveLength(1);
+        expect(attributeDefinitions[0].AttributeName).toBe('id');
+        expect(attributeDefinitions[0].AttributeType).toBe('S');
+      });
+
+      test('TurnAroundPromptTable should have correct key schema', () => {
+        const table = template.Resources.TurnAroundPromptTable;
+        const keySchema = table.Properties.KeySchema;
+
+        expect(keySchema).toHaveLength(1);
+        expect(keySchema[0].AttributeName).toBe('id');
+        expect(keySchema[0].KeyType).toBe('HASH');
+      });
+    });
+
+    describe('CloudWatch Log Group', () => {
+      test('TAPS3LogGroup should be a CloudWatch log group', () => {
+        const logGroup = template.Resources.TAPS3LogGroup;
+        expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      });
+
+      test('TAPS3LogGroup should have correct retention', () => {
+        const logGroup = template.Resources.TAPS3LogGroup;
+        expect(logGroup.Properties.RetentionInDays).toBe(30);
+      });
+    });
+
+    describe('IAM Policy', () => {
+      test('TAPDynamoDBAccessPolicy should be an IAM policy', () => {
+        const policy = template.Resources.TAPDynamoDBAccessPolicy;
+        expect(policy.Type).toBe('AWS::IAM::Policy');
+      });
+
+      test('TAPDynamoDBAccessPolicy should have correct DynamoDB permissions', () => {
+        const policy = template.Resources.TAPDynamoDBAccessPolicy;
+        const policyDoc = policy.Properties.PolicyDocument;
+        const statements = policyDoc.Statement;
+        
+        const dynamoStatement = statements.find((s: any) => 
+          s.Action.includes('dynamodb:GetItem'));
+        expect(dynamoStatement).toBeDefined();
+        expect(dynamoStatement.Effect).toBe('Allow');
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
+        'S3BucketName',
+        'S3BucketArn', 
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
+        'KMSKeyId',
+        'TAPAccessRoleArn',
         'StackName',
         'EnvironmentSuffix',
       ];
 
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
+      });
+    });
+
+    test('S3BucketName output should be correct', () => {
+      const output = template.Outputs.S3BucketName;
+      expect(output.Description).toBe('Name of the secure TAP S3 bucket');
+      expect(output.Value).toEqual({ Ref: 'TAPSecureS3Bucket' });
+    });
+
+    test('S3BucketArn output should be correct', () => {
+      const output = template.Outputs.S3BucketArn;
+      expect(output.Description).toBe('ARN of the secure TAP S3 bucket');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['TAPSecureS3Bucket', 'Arn'],
+      });
+    });
+
+    test('KMSKeyId output should be correct', () => {
+      const output = template.Outputs.KMSKeyId;
+      expect(output.Description).toBe('KMS Key ID for DynamoDB encryption');
+      expect(output.Value).toEqual({ Ref: 'TAPDynamoDBKMSKey' });
+    });
+
+    test('TAPAccessRoleArn output should be correct', () => {
+      const output = template.Outputs.TAPAccessRoleArn;
+      expect(output.Description).toBe('ARN of the TAP access role');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['TAPAccessRole', 'Arn'],
       });
     });
 
@@ -172,9 +337,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThanOrEqual(8); // At least 8 main resources
     });
 
     test('should have exactly one parameter', () => {
@@ -182,9 +347,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBeGreaterThanOrEqual(8); // At least 8 outputs
     });
   });
 
