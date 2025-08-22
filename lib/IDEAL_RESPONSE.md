@@ -351,6 +351,7 @@ export class TapStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         databaseName: 'tapdb',
         credentials: rds.Credentials.fromGeneratedSecret('tapuser'),
+        instanceIdentifier: `tap-database-${environmentSuffix}`,
       });
 
       // Enable automated backups for cross-region read replica

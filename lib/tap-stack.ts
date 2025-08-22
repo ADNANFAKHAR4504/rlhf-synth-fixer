@@ -1,213 +1,46 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as rds from 'aws-cdk-lib/aws-rds';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
+
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
-  isPrimary?: boolean;
-  primaryRegion?: string;
-  primaryBucketArn?: string;
-  primaryDatabaseIdentifier?: string;
 }
 
 export class TapStack extends cdk.Stack {
-  public readonly primaryBucketArn: string;
-  public readonly databaseInstanceIdentifier?: string;
-
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const isPrimary = props?.isPrimary ?? true;
-    const region = this.region;
+    const commonTags = {
+      Environment: 'production',
+      Project: 'tap',
+      Owner: 'devops-team',
+    };
 
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
-      description: `TAP Multi-Region KMS Key - ${region}`,
+      description: 'KMS key for TAP stack encryption',
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      policy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: 'Enable IAM User Permissions',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['kms:*'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow EC2 Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow AutoScaling Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow RDS Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow S3 Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow SNS Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow Lambda Service',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-        ],
-      }),
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Enable complete cleanup
     });
 
-    const bucket = new s3.Bucket(this, 'TapBucket', {
-      bucketName: `tap-bucket-${region.replace(/-/g, '')}-${environmentSuffix}`,
-      versioned: true,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      enforceSSL: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    this.primaryBucketArn = bucket.bucketArn;
-
-    if (isPrimary) {
-      const replicationRole = new iam.Role(this, 'ReplicationRole', {
-        assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-      });
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:GetObjectVersionForReplication',
-            's3:GetObjectVersionAcl',
-            's3:GetObjectVersionTagging',
-          ],
-          resources: [`${bucket.bucketArn}/*`],
-        })
-      );
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['s3:ListBucket'],
-          resources: [bucket.bucketArn],
-        })
-      );
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:ReplicateObject',
-            's3:ReplicateDelete',
-            's3:ReplicateTags',
-          ],
-          resources: [`arn:aws:s3:::tap-bucket-useast2-${environmentSuffix}/*`],
-        })
-      );
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-          resources: [kmsKey.keyArn],
-        })
-      );
-
-      new cdk.CfnOutput(this, 'ReplicationRoleArn', {
-        value: replicationRole.roleArn,
-        description: 'IAM Role ARN for S3 Cross-Region Replication',
-      });
-    }
-
-    let distribution: cloudfront.Distribution | undefined;
-    if (isPrimary) {
-      distribution = new cloudfront.Distribution(this, 'TapDistribution', {
-        defaultBehavior: {
-          origin: new origins.S3Origin(bucket),
-          viewerProtocolPolicy:
-            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-        priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-        enableLogging: true,
-        comment: `TAP CloudFront Distribution - ${environmentSuffix}`,
-      });
-    }
+    cdk.Tags.of(kmsKey).add('Environment', commonTags.Environment);
+    cdk.Tags.of(kmsKey).add('Project', commonTags.Project);
+    cdk.Tags.of(kmsKey).add('Owner', commonTags.Owner);
 
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 2,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -220,113 +53,76 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
-          cidrMask: 28,
+          cidrMask: 24,
           name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
     });
 
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
-      vpc,
-      description: 'Subnet group for TAP RDS instance',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    cdk.Tags.of(vpc).add('Environment', commonTags.Environment);
+    cdk.Tags.of(vpc).add('Project', commonTags.Project);
+    cdk.Tags.of(vpc).add('Owner', commonTags.Owner);
 
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'TapDbSecurityGroup', {
+    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
       vpc,
-      description: 'Security group for TAP RDS instance',
+      description: 'Security group for EC2 instances',
       allowAllOutbound: false,
     });
 
-    if (isPrimary) {
-      const dbInstance = new rds.DatabaseInstance(this, 'TapDatabase', {
-        engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_16_9,
-        }),
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
-        ),
-        vpc,
-        subnetGroup: dbSubnetGroup,
-        securityGroups: [dbSecurityGroup],
-        multiAz: true,
-        storageEncrypted: true,
-        storageEncryptionKey: kmsKey,
-        backupRetention: cdk.Duration.days(7),
-        deletionProtection: false,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        databaseName: 'tapdb',
-        credentials: rds.Credentials.fromGeneratedSecret('tapuser'),
-      });
-
-      const cfnDbInstance = dbInstance.node.defaultChild as rds.CfnDBInstance;
-      cfnDbInstance.backupRetentionPeriod = 7;
-      
-      // Store the database identifier for cross-stack reference
-      this.databaseInstanceIdentifier = dbInstance.instanceIdentifier;
-    } else {
-      if (!props?.primaryDatabaseIdentifier) {
-        throw new Error('primaryDatabaseIdentifier is required for secondary stack');
-      }
-      
-      new rds.DatabaseInstanceReadReplica(this, 'TapDatabaseReplica', {
-        sourceDatabaseInstance:
-          rds.DatabaseInstance.fromDatabaseInstanceAttributes(
-            this,
-            'SourceDb',
-            {
-              instanceIdentifier: props.primaryDatabaseIdentifier,
-              instanceEndpointAddress: 'placeholder',
-              port: 5432,
-              securityGroups: [],
-            }
-          ),
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
-        ),
-        vpc,
-        subnetGroup: dbSubnetGroup,
-        securityGroups: [dbSecurityGroup],
-        storageEncrypted: true,
-        storageEncryptionKey: kmsKey,
-        deletionProtection: false,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
-    }
-
-    const ec2SecurityGroup = new ec2.SecurityGroup(
-      this,
-      'TapEc2SecurityGroup',
-      {
-        vpc,
-        description: 'Security group for TAP EC2 instances',
-      }
-    );
-
-    ec2SecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic'
-    );
-
-    ec2SecurityGroup.addIngressRule(
+    ec2SecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
+      'HTTPS outbound'
     );
 
-    dbSecurityGroup.addIngressRule(
+    ec2SecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'HTTP outbound'
+    );
+
+    cdk.Tags.of(ec2SecurityGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(ec2SecurityGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(ec2SecurityGroup).add('Owner', commonTags.Owner);
+
+    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc,
+      description: 'Security group for RDS database',
+      allowAllOutbound: false,
+    });
+
+    rdsSecurityGroup.addIngressRule(
       ec2SecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow EC2 to connect to RDS'
+      ec2.Port.tcp(3306),
+      'MySQL access from EC2'
     );
 
-    const ec2Role = new iam.Role(this, 'TapEc2Role', {
+    cdk.Tags.of(rdsSecurityGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(rdsSecurityGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(rdsSecurityGroup).add('Owner', commonTags.Owner);
+
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LambdaSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for Lambda functions',
+        allowAllOutbound: false,
+      }
+    );
+
+    lambdaSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'HTTPS outbound'
+    );
+
+    cdk.Tags.of(lambdaSecurityGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(lambdaSecurityGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(lambdaSecurityGroup).add('Owner', commonTags.Owner);
+
+    const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -339,139 +135,224 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject'],
-              resources: [`${bucket.bucketArn}/*`],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-              resources: [kmsKey.keyArn],
+              resources: ['arn:aws:s3:::tap-bucket-*/*'],
             }),
           ],
         }),
       },
     });
 
-    new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
-      vpc,
+    cdk.Tags.of(ec2Role).add('Environment', commonTags.Environment);
+    cdk.Tags.of(ec2Role).add('Project', commonTags.Project);
+    cdk.Tags.of(ec2Role).add('Owner', commonTags.Owner);
+
+    const ec2Instance = new ec2.Instance(this, 'TapInstance', {
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
       ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      role: ec2Role,
-      securityGroup: ec2SecurityGroup,
-      minCapacity: 1,
-      maxCapacity: 3,
-      desiredCapacity: 1,
+      vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
+      securityGroup: ec2SecurityGroup,
+      role: ec2Role,
       blockDevices: [
         {
           deviceName: '/dev/xvda',
-          volume: autoscaling.BlockDeviceVolume.ebs(8, {
+          volume: ec2.BlockDeviceVolume.ebs(20, {
             encrypted: true,
-            volumeType: autoscaling.EbsDeviceVolumeType.GP3,
+            kmsKey: kmsKey,
           }),
         },
       ],
     });
 
-    const snsTopic = new sns.Topic(this, 'TapReplicationTopic', {
-      topicName: `tap-replication-alerts-${region.replace(/-/g, '')}-${environmentSuffix}`,
-      displayName: `TAP Replication Alerts - ${region}`,
-      masterKey: kmsKey,
+    cdk.Tags.of(ec2Instance).add('Environment', commonTags.Environment);
+    cdk.Tags.of(ec2Instance).add('Project', commonTags.Project);
+    cdk.Tags.of(ec2Instance).add('Owner', commonTags.Owner);
+
+    const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
+      vpc,
+      description: 'Subnet group for RDS database',
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
     });
 
-    const replicationLambda = new lambda.Function(
-      this,
-      'TapReplicationMonitor',
-      {
-        runtime: lambda.Runtime.PYTHON_3_11,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-import json
-import boto3
-import os
+    cdk.Tags.of(dbSubnetGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(dbSubnetGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(dbSubnetGroup).add('Owner', commonTags.Owner);
 
-def handler(event, context):
-    sns = boto3.client('sns')
-    topic_arn = os.environ['SNS_TOPIC_ARN']
-    
-    # Process S3 replication events
-    for record in event.get('Records', []):
-        if record.get('eventSource') == 'aws:s3':
-            message = {
-                'eventName': record.get('eventName'),
-                'bucket': record['s3']['bucket']['name'],
-                'key': record['s3']['object']['key'],
-                'region': record.get('awsRegion'),
-                'timestamp': record.get('eventTime')
-            }
-            
-            sns.publish(
-                TopicArn=topic_arn,
-                Message=json.dumps(message),
-                Subject=f"S3 Replication Event: {record.get('eventName')}"
-            )
-    
-    return {'statusCode': 200, 'body': json.dumps('Success')}
-      `),
-        environment: {
-          SNS_TOPIC_ARN: snsTopic.topicArn,
-        },
-        timeout: cdk.Duration.minutes(5),
-        logRetention: logs.RetentionDays.ONE_WEEK,
-      }
-    );
-
-    // Grant Lambda permission to publish to SNS
-    snsTopic.grantPublish(replicationLambda);
-
-    // Grant Lambda permission to use KMS key
-    kmsKey.grantEncryptDecrypt(replicationLambda);
-
-    // CloudWatch Log Group for Lambda
-    new logs.LogGroup(this, 'TapLambdaLogGroup', {
-      logGroupName: `/aws/lambda/${replicationLambda.functionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
+    const database = new rds.DatabaseInstance(this, 'TapDatabase', {
+      engine: rds.DatabaseInstanceEngine.mysql({
+        version: rds.MysqlEngineVersion.VER_8_0_39,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      credentials: rds.Credentials.fromGeneratedSecret('admin'),
+      vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+      securityGroups: [rdsSecurityGroup],
+      multiAz: true,
+      storageEncrypted: true,
+      storageEncryptionKey: kmsKey,
+      backupRetention: cdk.Duration.days(7),
+      deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      instanceIdentifier: `tap-database-${props?.environmentSuffix || 'default'}`,
     });
 
-    // Outputs
-    new cdk.CfnOutput(this, 'BucketName', {
-      value: bucket.bucketName,
-      description: 'S3 Bucket Name',
+    cdk.Tags.of(database).add('Environment', commonTags.Environment);
+    cdk.Tags.of(database).add('Project', commonTags.Project);
+    cdk.Tags.of(database).add('Owner', commonTags.Owner);
+
+    const bucket = new s3.Bucket(this, 'TapBucket', {
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
-    new cdk.CfnOutput(this, 'KmsKeyId', {
-      value: kmsKey.keyId,
-      description: 'KMS Key ID',
+    // Explicitly set versioning status on the underlying CFN resource
+    const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
+    cfnBucket.versioningConfiguration = {
+      status: 'Enabled',
+    };
+
+    cdk.Tags.of(bucket).add('Environment', commonTags.Environment);
+    cdk.Tags.of(bucket).add('Project', commonTags.Project);
+    cdk.Tags.of(bucket).add('Owner', commonTags.Owner);
+
+    const lambdaRole = new iam.Role(this, 'LambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
+      ],
+      inlinePolicies: {
+        CloudWatchLogs: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              resources: ['arn:aws:logs:*:*:*'],
+            }),
+          ],
+        }),
+      },
     });
 
-    if (distribution) {
-      new cdk.CfnOutput(this, 'CloudFrontDomainName', {
-        value: distribution.distributionDomainName,
-        description: 'CloudFront Distribution Domain Name',
-      });
-    }
+    cdk.Tags.of(lambdaRole).add('Environment', commonTags.Environment);
+    cdk.Tags.of(lambdaRole).add('Project', commonTags.Project);
+    cdk.Tags.of(lambdaRole).add('Owner', commonTags.Owner);
 
-    new cdk.CfnOutput(this, 'SnsTopicArn', {
-      value: snsTopic.topicArn,
-      description: 'SNS Topic ARN for replication alerts',
+    const lambdaFunction = new lambda.Function(this, 'TapLambda', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        exports.handler = async (event) => {
+          console.log('Event:', JSON.stringify(event));
+          return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Hello from Lambda!' }),
+          };
+        };
+      `),
+      role: lambdaRole,
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      logRetention: 14,
     });
 
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
+    cdk.Tags.of(lambdaFunction).add('Environment', commonTags.Environment);
+    cdk.Tags.of(lambdaFunction).add('Project', commonTags.Project);
+    cdk.Tags.of(lambdaFunction).add('Owner', commonTags.Owner);
+
+    const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
+      scope: 'REGIONAL',
+      defaultAction: { allow: {} },
+      rules: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'KnownBadInputsRuleSetMetric',
+          },
+        },
+      ],
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'TapWebAclMetric',
+      },
     });
-    
-    // Output database identifier for primary stack
-    if (isPrimary && this.databaseInstanceIdentifier) {
-      new cdk.CfnOutput(this, 'DatabaseInstanceIdentifier', {
-        value: this.databaseInstanceIdentifier,
-        description: 'RDS Database Instance Identifier',
-      });
-    }
+
+    const api = new apigateway.RestApi(this, 'TapApi', {
+      restApiName: 'TAP API',
+      description: 'API for TAP application',
+      endpointTypes: [apigateway.EndpointType.REGIONAL],
+    });
+
+    // Ensure the API name is set correctly for tests
+    const cfnApi = api.node.defaultChild as apigateway.CfnRestApi;
+    cfnApi.name = 'TAP API';
+
+    cdk.Tags.of(api).add('Environment', commonTags.Environment);
+    cdk.Tags.of(api).add('Project', commonTags.Project);
+    cdk.Tags.of(api).add('Owner', commonTags.Owner);
+
+    const integration = new apigateway.LambdaIntegration(lambdaFunction);
+    api.root.addMethod('GET', integration);
+
+    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+      resourceArn: api.deploymentStage.stageArn,
+      webAclArn: webAcl.attrArn,
+    });
+
+    new cdk.CfnOutput(this, 'TapApiEndpoint', {
+      value: api.url,
+      description: 'TAP API Gateway endpoint URL',
+    });
   }
 }
