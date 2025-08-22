@@ -58,7 +58,7 @@ describe('Nova Infrastructure Integration Tests', () => {
   
     expectedTags: {
       Environment: 'dev', 
-      Project: 'IaC-AWS-Model-Breaking',
+      Project: 'IaC-AWS-Nova-Model-Breaking',
       Application: 'nova-web-app',
       ManagedBy: 'Pulumi',
     }
