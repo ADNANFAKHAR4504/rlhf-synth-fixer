@@ -605,7 +605,7 @@ Resources:
       IsLogging: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       Tags:
         - Key: Environment
