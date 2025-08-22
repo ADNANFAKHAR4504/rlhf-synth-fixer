@@ -14,13 +14,11 @@ Expert that validates and improves IaC through automated testing pipeline.
 ### 1. Project Analysis
 
 - **Identify Latest Files**: 
-  - List all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.)
-  - Always read the highest numbered PROMPT file (e.g., if PROMPT3.md exists, use that instead of PROMPT.md or PROMPT2.md)
+  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
+  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only PROMPT.md exists, use that file
-  - List all MODEL_RESPONSE files in `lib/` directory (MODEL_RESPONSE.md, MODEL_RESPONSE2.md, MODEL_RESPONSE3.md, etc.)
-  - Always read the highest numbered MODEL_RESPONSE file (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only MODEL_RESPONSE.md exists, use that file
-- Read the latest PROMPT file, `metadata.json`, and the latest MODEL_RESPONSE file
+- Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
 ### 2. Code Quality
@@ -52,7 +50,7 @@ that can be deployed with the current configuration of the ci-cd pipelines.
   - If you are not able to deploy, report this error and finish your execution with an error message.
   - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
   input to continue.
-- Important: Verify that the deployed resources are consistent with the latest PROMPT file requirements. If
+- Important: Verify that the deployed resources are consistent with the PROMPT files requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
     that should be already created. Make sure that every deploy execution can run in isolation.

@@ -20,13 +20,11 @@ QA expert that ensures IaC meets quality standards and requirements.
 ### Phase 1.5: Metadata Enhancement
 
 - **Identify Latest Files**: 
-  - List all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.)
-  - Always read the highest numbered PROMPT file (e.g., if PROMPT3.md exists, use that instead of PROMPT.md or PROMPT2.md)
+  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
+  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only PROMPT.md exists, use that file
-  - List all MODEL_RESPONSE files in `lib/` directory (MODEL_RESPONSE.md, MODEL_RESPONSE2.md, MODEL_RESPONSE3.md, etc.)
-  - Always read the highest numbered MODEL_RESPONSE file (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
   - If only MODEL_RESPONSE.md exists, use that file
-- Analyze the requirements from the latest PROMPT file to determine the subtask category
+- Analyze the requirements from the conversation to determine the subtask category
 - Add `subtask` field to `metadata.json` with one of these values based on prompt content:
   - "IaC Program Optimization"
   - "Infrastructure QA and Management"  
