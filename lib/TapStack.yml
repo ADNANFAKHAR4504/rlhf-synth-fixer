@@ -119,6 +119,10 @@ Parameters:
     Type: String
     Default: 'use-existing'
     Description: 'Name of an existing AWS Config Configuration Recorder. To create a new one, set this to blank (""), otherwise the template will NOT create a configuration recorder.'
+  ExistingRDSSubnetGroupName:
+    Type: String
+    Default: 'use-existing'
+    Description: 'Name of an existing RDS DBSubnetGroup. To create a new one, set this to blank (""), otherwise the template will NOT create a DBSubnetGroup.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -158,6 +162,7 @@ Conditions:
       !Not [!Equals [!Ref CertificateArn, '']],
       !Not [!Equals [!Ref CertificateArn, 'use-existing']],
     ]
+  CreateRDSSubnetGroup: !Equals [!Ref ExistingRDSSubnetGroupName, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -835,6 +840,7 @@ Resources:
   # RDS Subnet Group
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDSSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub 'rds-subnet-group-${Environment}'
       DBSubnetGroupDescription: 'Subnet group for RDS instances'
@@ -873,7 +879,12 @@ Resources:
       BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
-      DBSubnetGroupName: !Ref RDSSubnetGroup
+      DBSubnetGroupName:
+        !If [
+          CreateRDSSubnetGroup,
+          !Ref RDSSubnetGroup,
+          !Ref ExistingRDSSubnetGroupName,
+        ]
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       StorageEncrypted: true
