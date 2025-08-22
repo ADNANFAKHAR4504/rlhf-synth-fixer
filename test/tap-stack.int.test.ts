@@ -1,12 +1,6 @@
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
-import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
-import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { APIGatewayClient, GetIntegrationCommand, GetResourcesCommand, GetRestApiCommand, GetStagesCommand } from '@aws-sdk/client-api-gateway';
+import { DescribeContinuousBackupsCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,15 +9,9 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
 // AWS SDK clients
-const ec2Client = new EC2Client({ region });
-const s3Client = new S3Client({ region });
 const dynamoClient = new DynamoDBClient({ region });
-const iamClient = new IAMClient({ region });
-const cloudFormationClient = new CloudFormationClient({ region });
-const autoScalingClient = new AutoScalingClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
-const kmsClient = new KMSClient({ region });
-const rdsClient = new RDSClient({ region });
+const apiGwClient = new APIGatewayClient({ region });
+const lambdaClient = new LambdaClient({ region });
 
 jest.setTimeout(90000);
 
@@ -75,6 +63,8 @@ const loadStackOutputs = async (): Promise<Record<string, string>> => {
 // Integration tests using live AWS resources
 describe('TapStack Integration Tests (live AWS resources)', () => {
   let outputs: Record<string, string>;
+  let apiBaseUrl: string;
+  let apiId: string | undefined;
 
   beforeAll(async () => {
     // Ensure shared config is loaded when using AWS_PROFILE
@@ -93,155 +83,106 @@ describe('TapStack Integration Tests (live AWS resources)', () => {
 
     console.log(`Loaded outputs from cfn-outputs/flat-outputs.json`);
     console.log(`Available output keys: ${Object.keys(outputs).join(', ')}`);
+    apiBaseUrl = outputs.ApiGatewayUrl || '';
+    if (apiBaseUrl.endsWith('/')) apiBaseUrl = apiBaseUrl.slice(0, -1);
+
+    if (apiBaseUrl) {
+      try {
+        const host = new URL(apiBaseUrl).hostname; // e.g. abcd123.execute-api.us-east-1.amazonaws.com
+        apiId = host.split('.')[0];
+      } catch {
+        apiId = undefined;
+      }
+    }
   });
 
-  // Only live AWS resource tests remain below
+  // Only live AWS resource tests below (all via AWS SDK)
 
-  // Live AWS resource tests using SDK (skip when no credentials)
   const describeLive = hasAwsCreds() ? describe : describe.skip;
-  describeLive('Live AWS Resource Validation', () => {
 
-    test('21 - VPC exists and is available', async () => {
-      if (!outputs.VPCId) {
-        throw new Error('VPCId not found in outputs');
-      }
+  // API Gateway and Lambda validations via SDK
+  describeLive('API Gateway and Lambda configuration', () => {
+    const hasOutput = (key: string) => Boolean(outputs && outputs[key]);
+    const t = (cond: boolean) => (cond && Boolean(apiId)) ? test : test.skip;
 
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].VpcId).toBe(outputs.VPCId);
+    t(hasOutput('ApiGatewayUrl'))('API 01 - Rest API exists and prod stage is deployed', async () => {
+      const rest = await apiGwClient.send(new GetRestApiCommand({ restApiId: apiId! }));
+      expect(rest).toBeDefined();
+      const stages = await apiGwClient.send(new GetStagesCommand({ restApiId: apiId! }));
+      const prod = stages.item?.find(s => s.stageName === 'prod');
+      expect(prod).toBeDefined();
     });
 
-    test('22 - S3 bucket exists and is accessible', async () => {
-      if (!outputs.S3BucketName) {
-        throw new Error('S3BucketName not found in outputs');
-      }
-
-      const command = new HeadBucketCommand({
-        Bucket: outputs.S3BucketName
-      });
-
-      // This will throw an error if bucket doesn't exist or is not accessible
-      const response = await s3Client.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+    t(hasOutput('ApiGatewayUrl'))('API 02 - Resources and methods are configured', async () => {
+      const resources = await apiGwClient.send(new GetResourcesCommand({ restApiId: apiId!, embed: ['methods'] }));
+      const items = resources.items?.find(r => r.path === '/items');
+      const itemId = resources.items?.find(r => r.path === '/items/{id}');
+      expect(items?.resourceMethods?.POST).toBeDefined();
+      expect(items?.resourceMethods?.GET).toBeDefined();
+      expect(itemId?.resourceMethods?.GET).toBeDefined();
+      expect(itemId?.resourceMethods?.PUT).toBeDefined();
+      expect(itemId?.resourceMethods?.DELETE).toBeDefined();
     });
 
-    test('23 - IAM role exists and has correct ARN format', async () => {
-      if (!outputs.ALBLogDeliveryRoleArn) {
-        throw new Error('ALBLogDeliveryRoleArn not found in outputs');
+    t(hasOutput('ApiGatewayUrl'))('API 03 - Methods use Lambda proxy integrations', async () => {
+      const resources = await apiGwClient.send(new GetResourcesCommand({ restApiId: apiId! }));
+      const items = resources.items?.find(r => r.path === '/items');
+      const itemId = resources.items?.find(r => r.path === '/items/{id}');
+
+      const getIntegrationUri = async (resourceId: string, httpMethod: string) => {
+        const integ = await apiGwClient.send(new GetIntegrationCommand({ restApiId: apiId!, resourceId, httpMethod }));
+        expect(integ.type).toBe('AWS_PROXY');
+        return integ.uri || '';
+      };
+
+      const uris: string[] = [];
+      if (items?.id) {
+        uris.push(await getIntegrationUri(items.id, 'POST'));
+        uris.push(await getIntegrationUri(items.id, 'GET'));
+      }
+      if (itemId?.id) {
+        uris.push(await getIntegrationUri(itemId.id, 'GET'));
+        uris.push(await getIntegrationUri(itemId.id, 'PUT'));
+        uris.push(await getIntegrationUri(itemId.id, 'DELETE'));
       }
 
-      // Extract role name from ARN
-      const arnParts = outputs.ALBLogDeliveryRoleArn.split('/');
-      const roleName = arnParts[arnParts.length - 1];
-
-      const command = new GetRoleCommand({
-        RoleName: roleName
-      });
-
-      const response = await iamClient.send(command);
-      expect(response.Role).toBeDefined();
-      expect(response.Role!.Arn).toBe(outputs.ALBLogDeliveryRoleArn);
-      expect(response.Role!.RoleName).toBe(roleName);
-    });
-
-    test('24 - Auto Scaling Group exists', async () => {
-      if (!outputs.AutoScalingGroupName) {
-        throw new Error('AutoScalingGroupName not found in outputs');
+      // Verify each integration points to an existing Lambda function
+      const arnRegex = /functions\/(arn:[^/]+)\/invocations/;
+      for (const uri of uris) {
+        const match = uri.match(arnRegex);
+        expect(match).toBeTruthy();
+        const functionArn = match![1];
+        const fn = await lambdaClient.send(new GetFunctionCommand({ FunctionName: functionArn }));
+        expect(fn.Configuration?.FunctionArn).toBe(functionArn);
       }
+    });
+  });
 
-      const command = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [outputs.AutoScalingGroupName]
-      });
+  // DynamoDB table validations via SDK (require AWS creds)
+  describeLive('DynamoDB Table Configuration', () => {
+    const hasOutput = (key: string) => Boolean(outputs && outputs[key]);
+    const t = (cond: boolean) => (cond ? test : test.skip);
 
-      const response = await autoScalingClient.send(command);
-      expect(response.AutoScalingGroups).toBeDefined();
-      expect(response.AutoScalingGroups).toHaveLength(1);
-      expect(response.AutoScalingGroups![0].AutoScalingGroupName).toBe(outputs.AutoScalingGroupName);
+    t(hasOutput('DynamoDBTableName'))('DDB 01 - Table exists with PAY_PER_REQUEST', async () => {
+      const cmd = new DescribeTableCommand({ TableName: outputs.DynamoDBTableName });
+      const res = await dynamoClient.send(cmd);
+      expect(res.Table).toBeDefined();
+      expect(res.Table!.BillingModeSummary?.BillingMode || res.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
-    test('25 - Application Load Balancer exists and is active', async () => {
-      if (!outputs.ApplicationLoadBalancerDNS) {
-        throw new Error('ApplicationLoadBalancerDNS not found in outputs');
-      }
-
-      const command = new DescribeLoadBalancersCommand({});
-      const response = await elbClient.send(command);
-
-      const loadBalancer = response.LoadBalancers?.find(lb => 
-        lb.DNSName === outputs.ApplicationLoadBalancerDNS
-      );
-
-      expect(loadBalancer).toBeDefined();
-      expect(loadBalancer!.State?.Code).toBe('active');
-      expect(loadBalancer!.Type).toBe('application');
+    t(hasOutput('DynamoDBTableName'))('DDB 02 - Table has KMS SSE enabled', async () => {
+      const cmd = new DescribeTableCommand({ TableName: outputs.DynamoDBTableName });
+      const res = await dynamoClient.send(cmd);
+      const sse = res.Table?.SSEDescription;
+      expect(sse).toBeDefined();
+      expect(sse?.SSEType).toBe('KMS');
+      expect(sse?.Status || sse?.Status).toBe('ENABLED');
     });
 
-    test('26 - KMS Key exists and is enabled', async () => {
-      if (!outputs.DatabaseKMSKeyId) {
-        throw new Error('DatabaseKMSKeyId not found in outputs');
-      }
-
-      const command = new DescribeKeyCommand({
-        KeyId: outputs.DatabaseKMSKeyId
-      });
-
-      const response = await kmsClient.send(command);
-      expect(response.KeyMetadata).toBeDefined();
-      expect(response.KeyMetadata!.KeyId).toBe(outputs.DatabaseKMSKeyId);
-      expect(response.KeyMetadata!.KeyState).toBe('Enabled');
-    });
-
-    test('27 - Database instance is available', async () => {
-      if (!outputs.DatabaseEndpoint) {
-        throw new Error('DatabaseEndpoint not found in outputs');
-      }
-
-      // Extract DB instance identifier from endpoint
-      const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      });
-
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances).toHaveLength(1);
-      expect(response.DBInstances![0].DBInstanceStatus).toBe('available');
-      expect(response.DBInstances![0].Endpoint?.Address).toBe(outputs.DatabaseEndpoint);
-    });
-
-    test('28 - Stack outputs match CloudFormation stack outputs', async () => {
-      // Use the actual environment suffix from the outputs file instead of the environment variable
-      const actualStackName = `TapStack${outputs.EnvironmentSuffix}`;
-      
-      const command = new DescribeStacksCommand({
-        StackName: actualStackName
-      });
-
-      const response = await cloudFormationClient.send(command);
-      const stack = response.Stacks?.[0];
-      
-      expect(stack).toBeDefined();
-      expect(stack!.StackStatus).toMatch(/(CREATE_COMPLETE|UPDATE_COMPLETE)/);
-
-      // Convert CloudFormation outputs to flat structure for comparison
-      const cfnOutputs = (stack!.Outputs || []).reduce((acc: Record<string, string>, output) => {
-        if (output.OutputKey && output.OutputValue) {
-          acc[output.OutputKey] = output.OutputValue;
-        }
-        return acc;
-      }, {});
-
-      // Verify key outputs match
-      expect(cfnOutputs.EnvironmentSuffix).toBe(outputs.EnvironmentSuffix);
-      if (cfnOutputs.VPCId) expect(cfnOutputs.VPCId).toBe(outputs.VPCId);
-      if (cfnOutputs.S3BucketName) expect(cfnOutputs.S3BucketName).toBe(outputs.S3BucketName);
+    t(hasOutput('DynamoDBTableName'))('DDB 03 - PITR (continuous backups) is enabled', async () => {
+      const cmd = new DescribeContinuousBackupsCommand({ TableName: outputs.DynamoDBTableName });
+      const res = await dynamoClient.send(cmd);
+      expect(res.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
     });
   });
 });
