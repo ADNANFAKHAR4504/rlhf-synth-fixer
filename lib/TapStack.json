@@ -445,16 +445,17 @@
                 ]
             }
         },
-        "MyRDSSecret": null,
-        "Type": "AWS::SecretsManager::Secret",
-        "Properties": {
-            "Name": "MyRDSSecret",
-            "Description": "RDS master user credentials",
-            "GenerateSecretString": {
-                "SecretStringTemplate": "{\"username\": \"postgres\"}",
-                "GenerateStringKey": "password",
-                "PasswordLength": 20,
-                "ExcludeCharacters": "\"@/\\"
+        "MyRDSSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": "MyRDSSecret",
+                "Description": "RDS master user credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"postgres\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 20,
+                    "ExcludeCharacters": "\"@/\\"
+                }
             }
         },
         "RDSInstance": {

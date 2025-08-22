@@ -261,15 +261,15 @@ Resources:
         - !Ref PrivateSubnet2
 
   MyRDSSecret:
-  Type: AWS::SecretsManager::Secret
-  Properties:
-    Name: MyRDSSecret
-    Description: RDS master user credentials
-    GenerateSecretString:
-      SecretStringTemplate: '{"username": "postgres"}'
-      GenerateStringKey: password
-      PasswordLength: 20
-      ExcludeCharacters: '"@/\'
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: MyRDSSecret
+      Description: RDS master user credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "postgres"}'
+        GenerateStringKey: password
+        PasswordLength: 20
+        ExcludeCharacters: '"@/\'
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
