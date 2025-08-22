@@ -45,15 +45,15 @@ Parameters:
 
   MasterAccountId:
     Type: String
-    Description: 'The master account ID for centralized monitoring'
-    Default: '123456789012'
-    AllowedPattern: '^\d{12}$'
-    ConstraintDescription: 'Must be a 12-digit AWS account ID'
+    Description: 'The master account ID for centralized monitoring. Must be a 12-digit AWS account ID. Leave blank if not used.'
+    Default: ''
+    AllowedPattern: '^(|\d{12})$'
+    ConstraintDescription: 'Must be blank or a 12-digit AWS account ID'
   CreateSecurityHub:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
-    Description: 'Set to false if the account is already subscribed to Security Hub.'
+    Description: 'Set to true if the account is not already subscribed to Security Hub.'
 
   OrganizationalId:
     Type: String
@@ -105,7 +105,11 @@ Parameters:
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
-  IsMasterAccount: !Equals [!Ref AWS::AccountId, !Ref MasterAccountId]
+  IsMasterAccount:
+    !And [
+      !Not [!Equals [!Ref MasterAccountId, '']],
+      !Equals [!Ref AWS::AccountId, !Ref MasterAccountId],
+    ]
   HasOrganizationalId: !Not [!Equals [!Ref OrganizationalId, '']]
   HasMemberAccounts: !Not [!Equals [!Join ['', !Ref MemberAccountIds], '']]
   UseOrganizationalConfig:
@@ -118,6 +122,7 @@ Conditions:
     ]
   CreateVpc: !Equals [!Ref ExistingVpcId, '']
   CreateSecurityHubCondition: !Equals [!Ref CreateSecurityHub, 'true']
+  HasValidMasterAccountId: !Not [!Equals [!Ref MasterAccountId, '']]
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -151,18 +156,21 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-          - Sid: AllowMasterAccountAccess
-            Effect: Allow
-            Principal:
-              AWS: 'arn:aws:iam::123456789012:root'
-            Action:
-              - kms:DescribeKey
-              - kms:GenerateDataKey*
-              - kms:Decrypt
-            Resource: '*'
-            Condition:
-              StringEquals:
-                kms:CallerAccount: !Ref MasterAccountId
+          - !If
+            - HasValidMasterAccountId
+            - Sid: AllowMasterAccountAccess
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:aws:iam::${MasterAccountId}:root'
+              Action:
+                - kms:DescribeKey
+                - kms:GenerateDataKey*
+                - kms:Decrypt
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  kms:CallerAccount: !Ref MasterAccountId
+            - !Ref 'AWS::NoValue'
 
   SecurityKmsKeyAlias:
     Type: AWS::KMS::Alias
@@ -330,19 +338,22 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-          - Sid: AllowMasterAccountRead
-            Effect: Allow
-            Principal:
-              AWS: 'arn:aws:iam::123456789012:root'
-            Action:
-              - s3:GetObject
-              - s3:ListBucket
-            Resource:
-              - !GetAtt CloudTrailLogsBucket.Arn
-              - !Sub '${CloudTrailLogsBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                aws:PrincipalAccount: !Ref MasterAccountId
+          - !If
+            - HasValidMasterAccountId
+            - Sid: AllowMasterAccountRead
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:aws:iam::${MasterAccountId}:root'
+              Action:
+                - s3:GetObject
+                - s3:ListBucket
+              Resource:
+                - !GetAtt CloudTrailLogsBucket.Arn
+                - !Sub '${CloudTrailLogsBucket.Arn}/*'
+              Condition:
+                StringEquals:
+                  aws:PrincipalAccount: !Ref MasterAccountId
+            - !Ref 'AWS::NoValue'
 
   # CloudTrail Configuration with organization trail support
   SecurityCloudTrail:
