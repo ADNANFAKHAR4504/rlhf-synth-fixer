@@ -1,33 +1,32 @@
 import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeRouteTablesCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+  DescribeTargetHealthCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeInstancesCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  EC2Client,
-} from '@aws-sdk/client-ec2';
-import {
-  DescribeListenersCommand,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-  ElasticLoadBalancingV2Client,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  GetInstanceProfileCommand,
-  GetRoleCommand,
   IAMClient,
+  GetRoleCommand,
+  GetInstanceProfileCommand,
 } from '@aws-sdk/client-iam';
-import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
-import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import axios from 'axios';
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -39,22 +38,8 @@ const ec2Client = new EC2Client({ region });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 const iamClient = new IAMClient({ region });
-const stsClient = new STSClient({ region });
-
-// Flag set in beforeAll to indicate whether valid AWS credentials exist
-let hasAws = false;
 
 describe('TapStack Integration Tests', () => {
-  beforeAll(async () => {
-    try {
-      await stsClient.send(new GetCallerIdentityCommand({}));
-      hasAws = true;
-    } catch (err: any) {
-      hasAws = false;
-      console.warn('AWS credentials not available or invalid. Integration tests will be skipped or made tolerant.');
-    }
-  });
-
   const vpcId = outputs.VPCId;
   const loadBalancerDNS = outputs.LoadBalancerDNS;
   const privateSubnet1Id = outputs.PrivateSubnet1Id;
@@ -66,10 +51,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('VPC and Network Configuration', () => {
     test('VPC should exist with correct CIDR block', async () => {
-      if (!hasAws) {
-        console.warn('Skipping VPC checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
       const response = await ec2Client.send(command);
       
@@ -80,102 +61,71 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have 2 public and 2 private subnets in different AZs', async () => {
-      if (!hasAws) {
-        console.warn('Skipping subnet checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeSubnetsCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
       });
       const response = await ec2Client.send(command);
-      // Be tolerant: at minimum there should be two subnets in the VPC
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(2);
-
+      
+      expect(response.Subnets).toHaveLength(4);
+      
       const publicSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch);
       const privateSubnets = response.Subnets!.filter(s => !s.MapPublicIpOnLaunch);
-
-      // Require at least one private subnet
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(1);
-
-      // If multiple AZs/subnets exist, validate distribution
-      if (publicSubnets.length > 1) {
-        const publicAZs = new Set(publicSubnets.map(s => s.AvailabilityZone));
-        expect(publicAZs.size).toBeGreaterThanOrEqual(1);
-      }
-      if (privateSubnets.length > 1) {
-        const privateAZs = new Set(privateSubnets.map(s => s.AvailabilityZone));
-        expect(privateAZs.size).toBeGreaterThanOrEqual(1);
-      }
+      
+      expect(publicSubnets).toHaveLength(2);
+      expect(privateSubnets).toHaveLength(2);
+      
+      // Check different AZs
+      const publicAZs = new Set(publicSubnets.map(s => s.AvailabilityZone));
+      const privateAZs = new Set(privateSubnets.map(s => s.AvailabilityZone));
+      
+      expect(publicAZs.size).toBe(2);
+      expect(privateAZs.size).toBe(2);
     });
 
     test('Internet Gateway should be attached to VPC', async () => {
-      if (!hasAws) {
-        console.warn('Skipping Internet Gateway check: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeInternetGatewaysCommand({
         Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
       });
       const response = await ec2Client.send(command);
-      console.log('response 111', JSON.stringify(response, null, 2));
-
-      // If there's an IGW attached, validate attachment. Otherwise warn but don't fail hard.
-      if (!response.InternetGateways || response.InternetGateways.length === 0) {
-        console.warn(`No Internet Gateway found attached to VPC ${vpcId}`);
-        return;
-      }
+      
+      expect(response.InternetGateways).toHaveLength(1);
       const igw = response.InternetGateways![0];
-      expect(igw.Attachments).toBeDefined();
-      expect(igw.Attachments!.length).toBeGreaterThanOrEqual(1);
+      expect(igw.Attachments).toHaveLength(1);
       expect(igw.Attachments![0].State).toBe('available');
     });
 
-    test('NAT Gateway should be deleted in public subnet', async () => {
-      if (!hasAws) {
-        console.warn('Skipping NAT Gateway check: no valid AWS credentials');
-        return;
-      }
+    test('NAT Gateway should be available in public subnet', async () => {
       const command = new DescribeNatGatewaysCommand({
         Filter: [{ Name: 'vpc-id', Values: [vpcId] }],
       });
       const response = await ec2Client.send(command);
-      // NAT gateways can be present or deleted depending on the environment.
-      if (!response.NatGateways || response.NatGateways.length === 0) {
-        console.warn(`No NAT Gateways found for VPC ${vpcId}`);
-        return;
-      }
+      
+      expect(response.NatGateways).toHaveLength(1);
       const natGateway = response.NatGateways![0];
-      // Accept either deleted or available depending on lifecycle timing
-      expect(['deleted', 'available', 'pending', 'failed']).toContain(natGateway.State);
+      expect(natGateway.State).toBe('available');
       expect(natGateway.VpcId).toBe(vpcId);
     });
 
     test('Route tables should have correct routes configured', async () => {
-      if (!hasAws) {
-        console.warn('Skipping route table checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeRouteTablesCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
       });
       const response = await ec2Client.send(command);
-      // Require at least one route table
-      expect(response.RouteTables!.length).toBeGreaterThanOrEqual(1);
-
-      // Check for routes to 0.0.0.0/0 (internet access) and accept at least one
+      
+      // Should have at least 3 route tables (1 public, 2 private)
+      expect(response.RouteTables!.length).toBeGreaterThanOrEqual(3);
+      
+      // Check for routes to 0.0.0.0/0
       const routesWithInternetAccess = response.RouteTables!.filter(rt =>
         rt.Routes?.some(r => r.DestinationCidrBlock === '0.0.0.0/0')
       );
-      expect(routesWithInternetAccess.length).toBeGreaterThanOrEqual(1);
+      
+      expect(routesWithInternetAccess.length).toBeGreaterThanOrEqual(3);
     });
   });
 
   describe('Security Groups', () => {
     test('ALB security group should allow HTTP traffic on port 80', async () => {
-      if (!hasAws) {
-        console.warn('Skipping ALB security group check: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
@@ -196,10 +146,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('EC2 security group should allow HTTP from ALB and SSH access', async () => {
-      if (!hasAws) {
-        console.warn('Skipping EC2 security group check: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
@@ -231,10 +177,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('EC2 Instances', () => {
     test('both EC2 instances should be running', async () => {
-      if (!hasAws) {
-        console.warn('Skipping EC2 instance status checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeInstancesCommand({
         InstanceIds: [ec2Instance1Id, ec2Instance2Id],
       });
@@ -251,10 +193,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('EC2 instances should be in private subnets', async () => {
-      if (!hasAws) {
-        console.warn('Skipping EC2 subnet membership checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeInstancesCommand({
         InstanceIds: [ec2Instance1Id, ec2Instance2Id],
       });
@@ -268,10 +206,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('EC2 instances should have termination protection enabled', async () => {
-      if (!hasAws) {
-        console.warn('Skipping EC2 termination protection checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeInstancesCommand({
         InstanceIds: [ec2Instance1Id, ec2Instance2Id],
       });
@@ -287,10 +221,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     test('ALB should be active and internet-facing', async () => {
-      if (!hasAws) {
-        console.warn('Skipping ALB existence checks: no valid AWS credentials');
-        return;
-      }
       const albName = `TAP-${outputs.EnvironmentSuffix}-ALB`;
       const command = new DescribeLoadBalancersCommand({ Names: [albName] });
       const response = await elbv2Client.send(command);
@@ -305,10 +235,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('ALB should have listener on port 80', async () => {
-      if (!hasAws) {
-        console.warn('Skipping ALB listener checks: no valid AWS credentials');
-        return;
-      }
       const albName = `TAP-${outputs.EnvironmentSuffix}-ALB`;
       const albCommand = new DescribeLoadBalancersCommand({ Names: [albName] });
       const albResponse = await elbv2Client.send(albCommand);
@@ -328,10 +254,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Target group should have both instances registered and healthy', async () => {
-      if (!hasAws) {
-        console.warn('Skipping target group checks: no valid AWS credentials');
-        return;
-      }
       const tgName = `TAP-${outputs.EnvironmentSuffix}-TG`;
       const tgCommand = new DescribeTargetGroupsCommand({ Names: [tgName] });
       const tgResponse = await elbv2Client.send(tgCommand);
@@ -368,10 +290,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudWatch Logging', () => {
     test('CloudWatch Log Group should exist', async () => {
-      if (!hasAws) {
-        console.warn('Skipping CloudWatch checks: no valid AWS credentials');
-        return;
-      }
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: apiLogGroupName,
       });
@@ -422,10 +340,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('End-to-End Workflow', () => {
     test('complete infrastructure should be functional', async () => {
-      if (!hasAws) {
-        console.warn('Skipping end-to-end check: no valid AWS credentials');
-        return;
-      }
       // This test validates the entire infrastructure is working together
       
       // 1. Check VPC exists
