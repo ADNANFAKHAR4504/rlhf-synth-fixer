@@ -71,6 +71,7 @@ module "monitoring" {
   notification_email = var.notification_email
   asg_name           = aws_autoscaling_group.app.name
   common_tags        = local.common_tags
+  random_suffix      = random_string.suffix.result
 }
 
 #######################
@@ -343,7 +344,7 @@ resource "aws_kms_key" "ebs_key" {
 #######################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb-${random_string.suffix.result}"
+  name_prefix        = "${local.name_prefix}-alb-"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [module.security.alb_sg_id]
@@ -365,10 +366,10 @@ resource "aws_lb" "main" {
 
 # Target group for EC2 instances
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg-${random_string.suffix.result}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name_prefix = "${local.name_prefix}-app-tg-"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
 
   health_check {
     path                = "/health"
@@ -444,7 +445,7 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile-${random_string.suffix.result}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -607,7 +608,7 @@ resource "aws_autoscaling_group" "app" {
 
 # DB subnet group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group-${random_string.suffix.result}"
+  name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
