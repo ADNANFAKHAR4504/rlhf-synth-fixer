@@ -212,8 +212,11 @@ export class TapStack extends cdk.Stack {
   }
 
   private createKeyPair(resourceName: (name: string) => string): ec2.KeyPair {
+    // Generate a unique timestamp for this deployment
+    const timestamp = Date.now();
+
     return new ec2.KeyPair(this, 'EC2KeyPair', {
-      keyPairName: resourceName('key-pair'),
+      keyPairName: `${resourceName('key-pair')}-${timestamp}`,
       type: ec2.KeyPairType.RSA,
       format: ec2.KeyPairFormat.PEM,
     });
