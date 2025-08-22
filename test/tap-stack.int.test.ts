@@ -105,4 +105,24 @@ describe("Security Stack Integration Tests", () => {
       20000 // 20s timeout
     );
   });
+
+  describe('RestrictedSecurityGroup Ingress Rules', () => {
+    test('should only allow access from AllowedIPRange for all ingress rules', () => {
+      const sgResource = template.Resources?.RestrictedSecurityGroup;
+
+      expect(sgResource).toBeDefined();
+      expect(sgResource.Type).toBe('AWS::EC2::SecurityGroup');
+
+      const ingressRules = sgResource.Properties?.SecurityGroupIngress || [];
+      expect(ingressRules.length).toBeGreaterThan(0);
+
+      ingressRules.forEach((rule, idx) => {
+        expect(rule.CidrIp).toBeDefined();
+        expect(rule.CidrIp).toEqual({ Ref: 'AllowedIPRange' });
+        expect([22, 80, 443]).toContain(rule.FromPort);
+        expect(rule.FromPort).toBe(rule.ToPort);
+        expect(rule.IpProtocol).toBe('tcp');
+      });
+    });
+  });
 });
