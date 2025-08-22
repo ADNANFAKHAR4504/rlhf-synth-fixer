@@ -28,7 +28,7 @@ describe('TapStack', () => {
   describe('Happy path', () => {
     beforeEach(() => {
       app = new cdk.App();
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config: baseConfig, createIfNotExists: false });
+      stack = new TapStack(app, stackName, { env, environmentSuffix, config: baseConfig });
       template = Template.fromStack(stack);
     });
 
