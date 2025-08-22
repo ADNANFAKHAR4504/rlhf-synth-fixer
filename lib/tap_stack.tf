@@ -433,7 +433,7 @@ resource "aws_sns_topic_subscription" "email" {
 
 # CloudWatch log group for EC2 instances
 resource "aws_cloudwatch_log_group" "ec2_logs" {
-  name = "/aws/ec2/${local.name_prefix}-${random_string.suffix.result}"
+  name = "/aws/ec2/${local.name_prefix}"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-log-group"
@@ -607,7 +607,7 @@ data "aws_iam_policy_document" "cloudwatch_logs_policy" {
     ]
 
     resources = [
-      aws_cloudwatch_log_group.ec2_logs.arn,
+      "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${local.name_prefix}:*",
       "arn:${data.aws_partition.current.partition}:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
     ]
   }
