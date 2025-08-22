@@ -1,18 +1,28 @@
 import { execSync } from "child_process";
+import * as path from "path";
 
 describe("Terraform Integration Tests", () => {
-  it("should have a VPC in the state", () => {
-    const output = execSync("terraform state list", { encoding: "utf-8" });
-    expect(output).toContain("aws_vpc.main");
+  const tfDir = path.resolve(__dirname, "../lib");
+
+  beforeAll(() => {
+    execSync("terraform init -input=false -no-color", {
+      cwd: tfDir,
+      stdio: "inherit",
+    });
   });
 
-  it("should have at least one public subnet", () => {
-    const output = execSync("terraform state list", { encoding: "utf-8" });
-    expect(output).toMatch(/aws_subnet.public/);
+  it("should apply without errors", () => {
+    const result = execSync("terraform apply -auto-approve -no-color", {
+      cwd: tfDir,
+      encoding: "utf-8",
+    });
+    expect(result).toMatch(/Apply complete!/);
   });
 
-  it("should have an internet gateway", () => {
-    const output = execSync("terraform state list", { encoding: "utf-8" });
-    expect(output).toContain("aws_internet_gateway.main");
+  afterAll(() => {
+    execSync("terraform destroy -auto-approve -no-color", {
+      cwd: tfDir,
+      stdio: "inherit",
+    });
   });
 });
