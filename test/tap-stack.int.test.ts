@@ -122,7 +122,7 @@ describe("Security Stack Integration Tests", () => {
       const ingressRules = sgResource.Properties?.SecurityGroupIngress || [];
       expect(ingressRules.length).toBeGreaterThan(0);
 
-      ingressRules.forEach((rule, idx) => {
+      ingressRules.forEach((rule: any, idx: number) => {
         expect(rule.CidrIp).toBeDefined();
         expect(rule.CidrIp).toEqual({ Ref: 'AllowedIPRange' });
         expect([22, 80, 443]).toContain(rule.FromPort);
