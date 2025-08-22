@@ -28,17 +28,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
   ) {
     super('tap:infrastructure:InfrastructureStack', name, args, opts);
 
-    // AWS Provider with hardcoded region
-    const awsProvider = new aws.Provider(
-      'aws-provider',
-      {
-        region: 'us-east-1',
-      },
-      { parent: this }
-    );
-
-    // Get current AWS account ID
-    const current = aws.getCallerIdentity({}, { provider: awsProvider });
+    const region = aws.getRegion({});
 
     // Configuration
     const config = new pulumi.Config();
@@ -48,126 +38,78 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       args.environmentSuffix || config.get('environment') || stackName;
 
     // Availability Zones
-    const availabilityZones = aws.getAvailabilityZones(
-      {
-        state: 'available',
-      },
-      { provider: awsProvider }
-    );
+    const availabilityZones = aws.getAvailabilityZones({
+      state: 'available',
+    });
 
     // Create KMS key for encryption
     const kmsKey = new aws.kms.Key(
-      `${environment}-infrastructure-key`,
+      'infrastructure-key',
       {
         description: `KMS key for ${projectName}-${environment} infrastructure encryption`,
         enableKeyRotation: true,
-        policy: current.then(c =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'Enable IAM User Permissions',
-                Effect: 'Allow',
-                Principal: {
-                  AWS: `arn:aws:iam::${c.accountId}:root`,
-                },
-                Action: 'kms:*',
-                Resource: '*',
-              },
-              {
-                Sid: 'Allow CloudWatch Logs',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'logs.us-east-1.amazonaws.com',
-                },
-                Action: [
-                  'kms:Encrypt',
-                  'kms:Decrypt',
-                  'kms:ReEncrypt*',
-                  'kms:GenerateDataKey*',
-                  'kms:DescribeKey',
-                ],
-                Resource: '*',
-              },
-              {
-                Sid: 'Allow EC2',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'ec2.amazonaws.com',
-                },
-                Action: [
-                  'kms:Encrypt',
-                  'kms:Decrypt',
-                  'kms:GenerateDataKey*',
-                  'kms:DescribeKey',
-                ],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
         tags: {
-          Name: `${environment}-${projectName}-kms-key`,
+          Name: `${projectName}-${environment}-kms-key`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     new aws.kms.Alias(
-      `${environment}-infrastructure-key-alias`,
+      'infrastructure-key-alias',
       {
-        name: `alias/${environment}-${projectName}-key`,
+        name: `alias/${projectName}-${environment}-key`,
         targetKeyId: kmsKey.keyId,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // VPC
     const vpc = new aws.ec2.Vpc(
-      `${environment}-main-vpc`,
+      'main-vpc',
       {
         cidrBlock: '10.0.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `${environment}-${projectName}-vpc`,
+          Name: `${projectName}-${environment}-vpc`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Internet Gateway
     const internetGateway = new aws.ec2.InternetGateway(
-      `${environment}-main-igw`,
+      'main-igw',
       {
         vpcId: vpc.id,
         tags: {
-          Name: `${environment}-${projectName}-igw`,
+          Name: `${projectName}-${environment}-igw`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Public Subnets (one per AZ)
     const publicSubnets = [0, 1].map(
       i =>
         new aws.ec2.Subnet(
-          `${environment}-public-subnet-${i}`,
+          `public-subnet-${i}`,
           {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i + 1}.0/24`,
             availabilityZone: availabilityZones.then(azs => azs.names[i]),
             mapPublicIpOnLaunch: true,
             tags: {
-              Name: `${environment}-${projectName}-public-subnet-${i}`,
+              Name: `${projectName}-${environment}-public-subnet-${i}`,
               Environment: environment,
               Type: 'public',
             },
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
@@ -175,18 +117,18 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const privateSubnets = [0, 1].map(
       i =>
         new aws.ec2.Subnet(
-          `${environment}-private-subnet-${i}`,
+          `private-subnet-${i}`,
           {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i + 10}.0/24`,
             availabilityZone: availabilityZones.then(azs => azs.names[i]),
             tags: {
-              Name: `${environment}-${projectName}-private-subnet-${i}`,
+              Name: `${projectName}-${environment}-private-subnet-${i}`,
               Environment: environment,
               Type: 'private',
             },
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
@@ -194,15 +136,15 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const natEips = [0, 1].map(
       i =>
         new aws.ec2.Eip(
-          `${environment}-nat-eip-${i}`,
+          `nat-eip-${i}`,
           {
             domain: 'vpc',
             tags: {
-              Name: `${environment}-${projectName}-nat-eip-${i}`,
+              Name: `${projectName}-${environment}-nat-eip-${i}`,
               Environment: environment,
             },
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
@@ -210,68 +152,68 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const natGateways = [0, 1].map(
       i =>
         new aws.ec2.NatGateway(
-          `${environment}-nat-gateway-${i}`,
+          `nat-gateway-${i}`,
           {
             allocationId: natEips[i].id,
             subnetId: publicSubnets[i].id,
             tags: {
-              Name: `${environment}-${projectName}-nat-gateway-${i}`,
+              Name: `${projectName}-${environment}-nat-gateway-${i}`,
               Environment: environment,
             },
           },
-          { parent: this, provider: awsProvider, dependsOn: [internetGateway] }
+          { dependsOn: [internetGateway], parent: this }
         )
     );
 
     // Route Tables
     const publicRouteTable = new aws.ec2.RouteTable(
-      `${environment}-public-route-table`,
+      'public-route-table',
       {
         vpcId: vpc.id,
         tags: {
-          Name: `${environment}-${projectName}-public-rt`,
+          Name: `${projectName}-${environment}-public-rt`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     const privateRouteTables = [0, 1].map(
       i =>
         new aws.ec2.RouteTable(
-          `${environment}-private-route-table-${i}`,
+          `private-route-table-${i}`,
           {
             vpcId: vpc.id,
             tags: {
-              Name: `${environment}-${projectName}-private-rt-${i}`,
+              Name: `${projectName}-${environment}-private-rt-${i}`,
               Environment: environment,
             },
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
     // Routes
     new aws.ec2.Route(
-      `${environment}-public-route`,
+      'public-route',
       {
         routeTableId: publicRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
         gatewayId: internetGateway.id,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     [0, 1].map(
       i =>
         new aws.ec2.Route(
-          `${environment}-private-route-${i}`,
+          `private-route-${i}`,
           {
             routeTableId: privateRouteTables[i].id,
             destinationCidrBlock: '0.0.0.0/0',
             natGatewayId: natGateways[i].id,
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
@@ -279,53 +221,68 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     publicSubnets.map(
       (subnet, i) =>
         new aws.ec2.RouteTableAssociation(
-          `${environment}-public-rta-${i}`,
+          `public-rta-${i}`,
           {
             subnetId: subnet.id,
             routeTableId: publicRouteTable.id,
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
     privateSubnets.map(
       (subnet, i) =>
         new aws.ec2.RouteTableAssociation(
-          `${environment}-private-rta-${i}`,
+          `private-rta-${i}`,
           {
             subnetId: subnet.id,
             routeTableId: privateRouteTables[i].id,
           },
-          { parent: this, provider: awsProvider }
+          { parent: this }
         )
     );
 
+    // Function to get ELB service account for the region
+    function getELBServiceAccount(region: string): string {
+      const elbServiceAccounts: { [key: string]: string } = {
+        'us-east-1': '127311923021',
+        'us-east-2': '033677994240',
+        'us-west-1': '027434742980',
+        'us-west-2': '797873946194',
+        'eu-west-1': '156460612806',
+        'eu-central-1': '054676820928',
+        'ap-southeast-1': '114774131450',
+        'ap-northeast-1': '582318560864',
+      };
+      return elbServiceAccounts[region] || '127311923021';
+    }
+
     // S3 Bucket for ALB Access Logs
     const albLogsBucket = new aws.s3.Bucket(
-      `${environment}-alb-access-logs`,
+      'alb-access-logs',
       {
-        bucket: `${environment}-${projectName}-alb-logs-${stackName}`
-          .toLowerCase()
-          .replace(/[^a-z0-9-]/g, '-'),
+        bucket: `${projectName}-${environment}-alb-logs-${pulumi.getStack()}`,
         forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.arn,
             },
+            bucketKeyEnabled: true,
           },
         },
         tags: {
-          Name: `${environment}-${projectName}-alb-logs`,
+          Name: `${projectName}-${environment}-alb-logs`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // S3 Bucket Public Access Block for ALB logs
     new aws.s3.BucketPublicAccessBlock(
-      `${environment}-alb-logs-pab`,
+      'alb-logs-pab',
       {
         bucket: albLogsBucket.id,
         blockPublicAcls: true,
@@ -333,17 +290,17 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // S3 Bucket Policy for ALB Access Logs
     new aws.s3.BucketPolicy(
-      `${environment}-alb-logs-bucket-policy`,
+      'alb-logs-bucket-policy',
       {
         bucket: albLogsBucket.id,
         policy: pulumi
-          .all([albLogsBucket.arn, current])
-          .apply(([bucketArn, currentAccount]: [string, any]) =>
+          .all([albLogsBucket.arn, region])
+          .apply(([bucketArn, currentRegion]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -361,31 +318,23 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                 {
                   Effect: 'Allow',
                   Principal: {
-                    Service: 'logdelivery.elb.amazonaws.com',
+                    AWS: `arn:aws:iam::${getELBServiceAccount(currentRegion.name)}:root`,
                   },
                   Action: 's3:PutObject',
-                  Resource: `${bucketArn}/AWSLogs/${currentAccount.accountId}/*`,
-                },
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'logdelivery.elb.amazonaws.com',
-                  },
-                  Action: 's3:GetBucketAcl',
-                  Resource: bucketArn,
+                  Resource: `${bucketArn}/*`,
                 },
               ],
             })
           ),
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
-    // Security Groups with least privilege
+    // Security Groups
     const albSecurityGroup = new aws.ec2.SecurityGroup(
-      `${environment}-alb-security-group`,
+      'alb-security-group',
       {
-        name: `${environment}-${projectName}-alb-sg`,
+        name: `${projectName}-${environment}-alb-sg`,
         description: 'Security group for Application Load Balancer',
         vpcId: vpc.id,
         ingress: [
@@ -394,37 +343,34 @@ export class InfrastructureStack extends pulumi.ComponentResource {
             fromPort: 80,
             toPort: 80,
             cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTP from internet',
           },
           {
             protocol: 'tcp',
             fromPort: 443,
             toPort: 443,
             cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTPS from internet',
           },
         ],
         egress: [
           {
-            protocol: 'tcp',
-            fromPort: 80,
-            toPort: 80,
-            cidrBlocks: ['10.0.0.0/16'],
-            description: 'HTTP to private subnets only',
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
           },
         ],
         tags: {
-          Name: `${environment}-${projectName}-alb-sg`,
+          Name: `${projectName}-${environment}-alb-sg`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
-      `${environment}-ec2-security-group`,
+      'ec2-security-group',
       {
-        name: `${environment}-${projectName}-ec2-sg`,
+        name: `${projectName}-${environment}-ec2-sg`,
         description: 'Security group for EC2 instances',
         vpcId: vpc.id,
         ingress: [
@@ -433,38 +379,35 @@ export class InfrastructureStack extends pulumi.ComponentResource {
             fromPort: 80,
             toPort: 80,
             securityGroups: [albSecurityGroup.id],
-            description: 'HTTP from ALB only',
           },
-        ],
-        egress: [
           {
             protocol: 'tcp',
             fromPort: 443,
             toPort: 443,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTPS for package updates',
+            securityGroups: [albSecurityGroup.id],
           },
+        ],
+        egress: [
           {
-            protocol: 'tcp',
-            fromPort: 80,
-            toPort: 80,
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
             cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTP for package updates',
           },
         ],
         tags: {
-          Name: `${environment}-${projectName}-ec2-sg`,
+          Name: `${projectName}-${environment}-ec2-sg`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
-      `${environment}-main-alb`,
+      'main-alb',
       {
-        name: `${environment}-${projectName}-alb`,
+        name: `${projectName}-${environment}-alb`,
         loadBalancerType: 'application',
         subnets: publicSubnets.map(subnet => subnet.id),
         securityGroups: [albSecurityGroup.id],
@@ -473,18 +416,18 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           enabled: true,
         },
         tags: {
-          Name: `${environment}-${projectName}-alb`,
+          Name: `${projectName}-${environment}-alb`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Target Group
     const targetGroup = new aws.lb.TargetGroup(
-      `${environment}-main-target-group`,
+      'main-target-group',
       {
-        name: `${environment}-${projectName}-tg`,
+        name: `${projectName}-${environment}-tg`,
         port: 80,
         protocol: 'HTTP',
         vpcId: vpc.id,
@@ -498,16 +441,16 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           matcher: '200',
         },
         tags: {
-          Name: `${environment}-${projectName}-tg`,
+          Name: `${projectName}-${environment}-tg`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // ALB Listener
     new aws.lb.Listener(
-      `${environment}-main-alb-listener`,
+      'main-alb-listener',
       {
         loadBalancerArn: alb.arn,
         port: 80,
@@ -519,12 +462,12 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
-    // IAM Role for EC2 instances with least privilege
+    // IAM Role for EC2 instances
     const ec2Role = new aws.iam.Role(
-      `${environment}-ec2-role`,
+      'ec2-role',
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -539,73 +482,48 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           ],
         }),
         tags: {
-          Name: `${environment}-${projectName}-ec2-role`,
+          Name: `${projectName}-${environment}-ec2-role`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
-    );
-
-    // IAM Policy for EC2 instances - minimal permissions
-    const ec2Policy = new aws.iam.Policy(
-      `${environment}-ec2-policy`,
-      {
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: 'arn:aws:logs:us-east-1:*:*',
-            },
-          ],
-        }),
-      },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // IAM Instance Profile
     const ec2InstanceProfile = new aws.iam.InstanceProfile(
-      `${environment}-ec2-instance-profile`,
+      'ec2-instance-profile',
       {
         role: ec2Role.name,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
-    // Attach minimal policy to EC2 role
+    // Attach policies to EC2 role
     new aws.iam.RolePolicyAttachment(
-      `${environment}-ec2-role-policy`,
+      'ec2-role-policy',
       {
         role: ec2Role.name,
-        policyArn: ec2Policy.arn,
+        policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Launch Template
     const launchTemplate = new aws.ec2.LaunchTemplate(
-      `${environment}-main-launch-template`,
+      'main-launch-template',
       {
-        name: `${environment}-${projectName}-lt`,
+        name: `${projectName}-${environment}-lt`,
         imageId: aws.ec2
-          .getAmi(
-            {
-              mostRecent: true,
-              owners: ['amazon'],
-              filters: [
-                {
-                  name: 'name',
-                  values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-                },
-              ],
-            },
-            { provider: awsProvider }
-          )
+          .getAmi({
+            mostRecent: true,
+            owners: ['amazon'],
+            filters: [
+              {
+                name: 'name',
+                values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+              },
+            ],
+          })
           .then(ami => ami.id),
         instanceType: 't3.micro',
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
@@ -626,20 +544,20 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           {
             resourceType: 'instance',
             tags: {
-              Name: `${environment}-${projectName}-instance`,
+              Name: `${projectName}-${environment}-instance`,
               Environment: environment,
             },
           },
         ],
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Auto Scaling Group
     new aws.autoscaling.Group(
-      `${environment}-main-asg`,
+      `${projectName}-${environment}-asg`,
       {
-        name: `${environment}-${projectName}-asg`,
+        name: `${projectName}-${environment}-asg`,
         vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
         targetGroupArns: [targetGroup.arn],
         healthCheckType: 'ELB',
@@ -654,7 +572,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         tags: [
           {
             key: 'Name',
-            value: `${environment}-${projectName}-asg`,
+            value: `${projectName}-${environment}-asg`,
             propagateAtLaunch: false,
           },
           {
@@ -664,14 +582,14 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // DynamoDB Table
     const dynamoTable = new aws.dynamodb.Table(
-      `${environment}-main-table`,
+      `${projectName}-${environment}-dynamodb-table`,
       {
-        name: `${environment}-${projectName}-table`,
+        name: `${projectName}-${environment}-table`,
         billingMode: 'PROVISIONED',
         readCapacity: 5,
         writeCapacity: 5,
@@ -690,73 +608,61 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           enabled: true,
         },
         tags: {
-          Name: `${environment}-${projectName}-dynamodb`,
+          Name: `${projectName}-${environment}-dynamodb`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
-
-    // Generate stable random values for secrets based on environment and project
-    const seedString = `${environment}-${projectName}-${stackName}`;
-    const hash = seedString.split('').reduce((a, b) => {
-      a = (a << 5) - a + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    const stableRandom = Math.abs(hash).toString(36);
-    const apiKeyValue = `api-key-${stableRandom}-${environment}`;
-    const jwtSecretValue = `jwt-secret-${stableRandom}-${environment}-extra-entropy`;
 
     // Secrets Manager Secret
     const appSecret = new aws.secretsmanager.Secret(
-      `${environment}-app-secret`,
+      `${projectName}-${environment}-app-secrets`,
       {
-        name: `${environment}-${projectName}-app-secrets`,
+        name: `${projectName}-${environment}-app-secrets`,
         description: 'Application secrets',
         kmsKeyId: kmsKey.id,
         tags: {
-          Name: `${environment}-${projectName}-secrets`,
+          Name: `${projectName}-${environment}-secrets`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     new aws.secretsmanager.SecretVersion(
-      `${environment}-app-secret-version`,
+      `${projectName}-${environment}-app-secret-version`,
       {
         secretId: appSecret.id,
-        secretString: pulumi.interpolate`{
-          "database_url": "dynamodb://${dynamoTable.name}",
-          "api_key": "${apiKeyValue}",
-          "jwt_secret": "${jwtSecretValue}"
-        }`,
+        secretString: JSON.stringify({
+          database_url: pulumi.interpolate`dynamodb://${dynamoTable.name}`,
+          api_key: 'your-api-key-here',
+          jwt_secret: 'your-jwt-secret-here',
+        }),
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // CloudWatch Log Group
     const logGroup = new aws.cloudwatch.LogGroup(
-      `${environment}-main-log-group`,
+      `${projectName}-${environment}-main-log-group`,
       {
-        name: `/aws/ec2/${environment}-${projectName}`,
+        name: `/aws/ec2/${projectName}-${environment}`,
         retentionInDays: 14,
         kmsKeyId: kmsKey.arn,
         tags: {
-          Name: `${environment}-${projectName}-logs`,
+          Name: `${projectName}-${environment}-logs`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // S3 Bucket for CloudFront logs
     const cloudFrontLogsBucket = new aws.s3.Bucket(
-      `${environment}-cloudfront-logs`,
+      `${projectName}-${environment}-cloudfront-logs-${pulumi.getStack()}`,
       {
-        bucket: `${environment}-${projectName}-cloudfront-logs-${stackName}`
-          .toLowerCase()
-          .replace(/[^a-z0-9-]/g, '-'),
+        bucket: `${projectName}-${environment}-cloudfront-logs-${pulumi.getStack()}`,
         forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
@@ -768,39 +674,29 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `${environment}-${projectName}-cloudfront-logs`,
+          Name: `${projectName}-${environment}-cloudfront-logs`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
-    );
-
-    // S3 Bucket ACL for CloudFront logs
-    new aws.s3.BucketAcl(
-      `${environment}-cloudfront-logs-acl`,
-      {
-        bucket: cloudFrontLogsBucket.id,
-        acl: 'private',
-      },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // S3 Bucket Public Access Block for CloudFront logs
     new aws.s3.BucketPublicAccessBlock(
-      `${environment}-cloudfront-logs-pab`,
+      `${projectName}-${environment}-cloudfront-logs-pab`,
       {
         bucket: cloudFrontLogsBucket.id,
-        blockPublicAcls: false,
+        blockPublicAcls: true,
         blockPublicPolicy: true,
-        ignorePublicAcls: false,
+        ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // S3 Bucket Policy for CloudFront logs (SSL enforcement)
     new aws.s3.BucketPolicy(
-      `${environment}-cloudfront-logs-bucket-policy`,
+      `${projectName}-${environment}-cloudfront-logs-bucket-policy`,
       {
         bucket: cloudFrontLogsBucket.id,
         policy: cloudFrontLogsBucket.arn.apply(bucketArn =>
@@ -822,14 +718,14 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           })
         ),
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // WAF Web ACL
     const webAcl = new aws.wafv2.WebAcl(
-      `${environment}-main-web-acl`,
+      `${projectName}-${environment}-main-web-acl`,
       {
-        name: `${environment}-${projectName}-web-acl`,
+        name: `${projectName}-${environment}-web-acl`,
         description: 'Web ACL for DDoS protection',
         scope: 'CLOUDFRONT',
         defaultAction: {
@@ -876,19 +772,19 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         visibilityConfig: {
           sampledRequestsEnabled: true,
           cloudwatchMetricsEnabled: true,
-          metricName: `${environment}${projectName}WebAcl`,
+          metricName: `${projectName}${environment}WebAcl`,
         },
         tags: {
-          Name: `${environment}-${projectName}-waf`,
+          Name: `${projectName}-${environment}-waf`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // CloudFront Distribution with WAF
     const cloudFrontDistribution = new aws.cloudfront.Distribution(
-      `${environment}-main-distribution`,
+      `${projectName}-${environment}-main-distribution`,
       {
         origins: [
           {
@@ -935,7 +831,6 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         viewerCertificate: {
           cloudfrontDefaultCertificate: true,
         },
-
         loggingConfig: {
           bucket: cloudFrontLogsBucket.bucketDomainName,
           includeCookies: false,
@@ -943,11 +838,11 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         },
         webAclId: webAcl.arn,
         tags: {
-          Name: `${environment}-${projectName}-cloudfront`,
+          Name: `${projectName}-${environment}-cloudfront`,
           Environment: environment,
         },
       },
-      { parent: this, provider: awsProvider }
+      { parent: this }
     );
 
     // Set outputs
