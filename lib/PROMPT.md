@@ -1,21 +1,24 @@
-Create a full-stack, highly available web application infrastructure in AWS using CDKTF with TypeScript. The infrastructure must be deployed to the us-east-1 region and use your default AWS account settings.
+# CDKTF TypeScript Production-Ready Infrastructure Prompt
 
-The project is named IaC - AWS Nova Model Breaking, and all resources should be prefixed with MyApp-. All resources must also include the tag Project: MyApp.
+Generate **production-ready CDKTF TypeScript code** for AWS infrastructure with the following specifications:
 
-Your solution should be organized into two main files:
+## Requirements
+1. **VPC** spanning **3 Availability Zones** in `us-east-1`.
+2. Include **public and private subnets** in each AZ for security best practices.
+3. Deploy an **Auto Scaling Group (ASG)** that launches **EC2 instances** in the **private subnets**.
+4. Each EC2 instance must have an **IAM Role** with **read-only access to S3**.
+5. Create a **NAT Gateway** in one of the **public subnets** to provide internet access for EC2 instances in private subnets.
+6. Use resource naming conventions with prefix **"MyApp-"**.
+7. Add **tags** to all resources:
+   - `Project: MyApp`
+8. Use **AWS default account settings** and region `us-east-1`.
+9. Organize the project into **two files only**:
+   - `lib/tap-stack.ts` → Root stack, composes/instantiates all modules.
+   - `lib/modules.ts` → Contains reusable modules (VPC, EC2/ASG, IAM, NAT, etc.).
+10. The output must be a **single deployable CDKTF project** with a stack named **`myapp-infrastructure`**.
 
-lib/tap-stack.ts: This file will contain the main CDKTF stack. It should be responsible for orchestrating and instantiating all the components of your infrastructure.
-
-lib/modules.ts: This file should contain all the reusable, modular components for the infrastructure. These components should include, but are not limited to, modules for VPC, S3, RDS, EC2, ALB, Route 53, CloudWatch, and IAM.
-
-The infrastructure itself must meet the following specific requirements:
-
-VPC: A Virtual Private Cloud (VPC) that spans across three Availability Zones for high availability.
-
-Subnets: Both public and private subnets must be created within the VPC to ensure secure access to resources.
-
-EC2 Instances: EC2 instances should be deployed in the private subnets. These instances must be managed by an Auto Scaling group to handle variable load. Each instance should have an associated IAM role that grants read-only access to S3 buckets.
-
-NAT Gateway: A NAT gateway must be set up in one of the public subnets. This gateway will allow instances in the private subnets to access the internet for updates and other necessary communication.
-
-The final output of the CDKTF synthesis must be a single CloudFormation YAML template file named myapp-infrastructure.yaml. This template should successfully deploy the specified infrastructure and adhere to all the given constraints.
+## Expected Output
+- Fully working **TypeScript code**.
+- **Two files only** (`lib/tap-stack.ts` and `lib/modules.ts`).
+- Production-grade structure with reusable modules and clear naming.
+- Code should be **ready to run `cdktf deploy`** without modification.
