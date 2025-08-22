@@ -20,7 +20,7 @@
   "training_quality": 8,
   "aws_services": [
     "AWS::KMS::Key",
-    "AWS::KMS::Alias", 
+    "AWS::KMS::Alias",
     "AWS::EC2::VPC",
     "AWS::EC2::InternetGateway",
     "AWS::EC2::Subnet",
@@ -48,5 +48,11 @@
     "AWS::Logs::LogGroup",
     "AWS::CloudTrail::Trail",
     "AWS::SNS::Topic"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
