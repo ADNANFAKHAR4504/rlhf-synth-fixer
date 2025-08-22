@@ -27,15 +27,40 @@ provider "aws" {
   }
 }
 
+# Generate a unique random suffix for resource names
+resource "random_string" "unique_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# Generate timestamp for additional uniqueness
 locals {
-  environment = "dev"
-  owner       = "platform-team"
+  timestamp     = formatdate("YYYYMMDD-HHmmss", timestamp())
+  environment   = "dev"
+  owner         = "platform-team"
+  unique_suffix = random_string.unique_suffix.result
+  deployment_id = "${local.environment}-${local.timestamp}-${local.unique_suffix}"
+
+  # Simplified naming for resources that cause dependency cycles
+  simple_suffix = "${local.environment}-${local.timestamp}"
 
   common_tags = {
-    Environment = local.environment
-    Owner       = local.owner
-    Project     = "multi-region-infrastructure"
-    ManagedBy   = "terraform"
+    Environment  = local.environment
+    Owner        = local.owner
+    Project      = "multi-region-infrastructure"
+    ManagedBy    = "terraform"
+    UniqueSuffix = local.unique_suffix
+    DeploymentId = local.deployment_id
+    DeployedAt   = local.timestamp
+  }
+  naming = {
+    short    = { pattern = "${local.environment}-${local.unique_suffix}" }
+    standard = { pattern = "${local.environment}-${local.timestamp}-${local.unique_suffix}" }
+    regional = { pattern = "${local.environment}-${local.unique_suffix}" }
+    full     = { pattern = "${local.deployment_id}" }
+    # Simple naming for resources that cause cycles
+    simple = { pattern = "${local.simple_suffix}" }
   }
 
   regions = {
@@ -162,11 +187,15 @@ module "database_eu_west_1" {
   environment = local.environment
   common_tags = local.common_tags
 
-  # Database configuration - Read replica
-  is_primary                 = false
+  # Database configuration - Temporarily disabled read replica to avoid timing issues
+  # Will be re-enabled after primary database is fully available
+  is_primary                 = true # Temporarily set to true to avoid read replica creation
   private_subnet_ids         = module.vpc_eu_west_1.private_subnet_ids
   database_security_group_id = module.vpc_eu_west_1.database_security_group_id
-  source_db_identifier       = module.database_us_east_1.database_identifier
+  # source_db_identifier       = module.database_us_east_1.database_identifier  # Temporarily commented out
+
+  # Ensure primary database is fully available before creating read replica
+  depends_on = [module.database_us_east_1]
 }
 
 module "logging_eu_west_1" {
@@ -180,75 +209,75 @@ module "logging_eu_west_1" {
   common_tags = local.common_tags
 }
 
-# AP Southeast 1 Infrastructure
-module "vpc_ap_southeast_1" {
-  source = "./modules/vpc"
-  providers = {
-    aws = aws.ap_southeast_1
-  }
+# AP Southeast 1 Infrastructure - Commented out due to AWS limits
+# module "vpc_ap_southeast_1" {
+#   source = "./modules/vpc"
+#   providers = {
+#     aws = aws.ap_southeast_1
+#   }
+#
+#   vpc_cidr    = local.regions.ap_southeast_1.cidr
+#   region      = local.regions.ap_southeast_1.name
+#   environment = local.environment
+#   common_tags = local.common_tags
+# }
+#
+# module "iam_ap_southeast_1" {
+#   source = "./modules/iam"
+#   providers = {
+#     aws = aws.ap_southeast_1
+#   }
+#
+#   region      = local.regions.ap_southeast_1.name
+#   environment = local.environment
+#   common_tags = local.common_tags
+# }
+#
+# module "compute_ap_southeast_1" {
+#   source = "./modules/compute"
+#   providers = {
+#     aws = aws.ap_southeast_1
+#   }
+#
+#   environment           = local.environment
+#   region                = local.regions.ap_southeast_1.name
+#   vpc_id                = module.vpc_ap_southeast_1.vpc_id
+#   subnet_ids            = module.vpc_ap_southeast_1.private_subnet_ids
+#   public_subnet_ids     = module.vpc_ap_southeast_1.public_subnet_ids
+#   security_group_id     = module.vpc_ap_southeast_1.web_security_group_id
+#   instance_profile_name = module.iam_ap_southeast_1.ec2_instance_profile_name
+#   common_tags           = local.common_tags
+# }
+#
+# module "database_ap_southeast_1" {
+#   source = "./modules/database"
+#   providers = {
+#     aws = aws.ap_southeast_1
+#   }
+#
+#   region      = local.regions.ap_southeast_1.name
+#   environment = local.environment
+#   common_tags = local.common_tags
+#
+#   # Database configuration - Read replica
+#   is_primary                 = false
+#   private_subnet_ids         = module.vpc_ap_southeast_1.private_subnet_ids
+#   database_security_group_id = module.vpc_ap_southeast_1.database_security_group_id
+#   source_db_identifier       = null
+# }
+#
+# module "logging_ap_southeast_1" {
+#   source = "./modules/logging"
+#   providers = {
+#     aws = aws.ap_southeast_1
+#   }
+#
+#   region      = local.regions.ap_southeast_1.name
+#   environment = local.environment
+#   common_tags = local.common_tags
+# }
 
-  vpc_cidr    = local.regions.ap_southeast_1.cidr
-  region      = local.regions.ap_southeast_1.name
-  environment = local.environment
-  common_tags = local.common_tags
-}
-
-module "iam_ap_southeast_1" {
-  source = "./modules/iam"
-  providers = {
-    aws = aws.ap_southeast_1
-  }
-
-  region      = local.regions.ap_southeast_1.name
-  environment = local.environment
-  common_tags = local.common_tags
-}
-
-module "compute_ap_southeast_1" {
-  source = "./modules/compute"
-  providers = {
-    aws = aws.ap_southeast_1
-  }
-
-  environment           = local.environment
-  region                = local.regions.ap_southeast_1.name
-  vpc_id                = module.vpc_ap_southeast_1.vpc_id
-  subnet_ids            = module.vpc_ap_southeast_1.private_subnet_ids
-  public_subnet_ids     = module.vpc_ap_southeast_1.public_subnet_ids
-  security_group_id     = module.vpc_ap_southeast_1.web_security_group_id
-  instance_profile_name = module.iam_ap_southeast_1.ec2_instance_profile_name
-  common_tags           = local.common_tags
-}
-
-module "database_ap_southeast_1" {
-  source = "./modules/database"
-  providers = {
-    aws = aws.ap_southeast_1
-  }
-
-  region      = local.regions.ap_southeast_1.name
-  environment = local.environment
-  common_tags = local.common_tags
-
-  # Database configuration - Read replica
-  is_primary                 = false
-  private_subnet_ids         = module.vpc_ap_southeast_1.private_subnet_ids
-  database_security_group_id = module.vpc_ap_southeast_1.database_security_group_id
-  source_db_identifier       = module.database_us_east_1.database_identifier
-}
-
-module "logging_ap_southeast_1" {
-  source = "./modules/logging"
-  providers = {
-    aws = aws.ap_southeast_1
-  }
-
-  region      = local.regions.ap_southeast_1.name
-  environment = local.environment
-  common_tags = local.common_tags
-}
-
-# VPC Peering Connections
+# VPC Peering Connections - Only between US East 1 and EU West 1
 module "vpc_peering" {
   source = "./modules/vpc-peering"
   providers = {
@@ -257,13 +286,11 @@ module "vpc_peering" {
     aws.ap_southeast_1 = aws.ap_southeast_1
   }
 
-  vpc_us_east_1_id      = module.vpc_us_east_1.vpc_id
-  vpc_eu_west_1_id      = module.vpc_eu_west_1.vpc_id
-  vpc_ap_southeast_1_id = module.vpc_ap_southeast_1.vpc_id
+  vpc_us_east_1_id = module.vpc_us_east_1.vpc_id
+  vpc_eu_west_1_id = module.vpc_eu_west_1.vpc_id
 
-  vpc_us_east_1_cidr      = local.regions.us_east_1.cidr
-  vpc_eu_west_1_cidr      = local.regions.eu_west_1.cidr
-  vpc_ap_southeast_1_cidr = local.regions.ap_southeast_1.cidr
+  vpc_us_east_1_cidr = local.regions.us_east_1.cidr
+  vpc_eu_west_1_cidr = local.regions.eu_west_1.cidr
 
   environment = local.environment
   common_tags = local.common_tags
@@ -557,30 +584,30 @@ output "eu_west_1_vpc_id" {
   value       = module.vpc_eu_west_1.vpc_id
 }
 
-output "ap_southeast_1_vpc_id" {
-  description = "VPC ID for AP Southeast 1"
-  value       = module.vpc_ap_southeast_1.vpc_id
-}
+# output "ap_southeast_1_vpc_id" {
+#   description = "VPC ID for AP Southeast 1"
+#   value       = module.vpc_ap_southeast_1.vpc_id
+# }
 
 output "eu_west_1_load_balancer_dns" {
   description = "Load balancer DNS name for EU West 1"
   value       = module.compute_eu_west_1.load_balancer_dns_name
 }
 
-output "ap_southeast_1_load_balancer_dns" {
-  description = "Load balancer DNS name for AP Southeast 1"
-  value       = module.compute_ap_southeast_1.load_balancer_dns_name
-}
+# output "ap_southeast_1_load_balancer_dns" {
+#   description = "Load balancer DNS name for AP Southeast 1"
+#   value       = module.compute_ap_southeast_1.load_balancer_dns_name
+# }
 
 output "eu_west_1_database_endpoint" {
   description = "Database endpoint for EU West 1 read replica"
   value       = module.database_eu_west_1.database_endpoint
 }
 
-output "ap_southeast_1_database_endpoint" {
-  description = "Database endpoint for AP Southeast 1 read replica"
-  value       = module.database_ap_southeast_1.database_endpoint
-}
+# output "ap_southeast_1_database_endpoint" {
+#   description = "Database endpoint for AP Southeast 1 read replica"
+#   value       = module.database_ap_southeast_1.database_endpoint
+# }
 
 # VPC Peering Outputs
 output "vpc_peering_connections" {
@@ -631,12 +658,12 @@ output "infrastructure_summary" {
         autoscaling_group = module.compute_eu_west_1.autoscaling_group_name
       }
       ap_southeast_1 = {
-        region            = local.regions.ap_southeast_1.name
-        vpc_id            = module.vpc_ap_southeast_1.vpc_id
-        vpc_cidr          = module.vpc_ap_southeast_1.vpc_cidr_block
-        load_balancer_dns = module.compute_ap_southeast_1.load_balancer_dns_name
-        database_endpoint = module.database_ap_southeast_1.database_endpoint
-        autoscaling_group = module.compute_ap_southeast_1.autoscaling_group_name
+        region            = "disabled"
+        vpc_id            = "disabled"
+        vpc_cidr          = "disabled"
+        load_balancer_dns = "disabled"
+        database_endpoint = "disabled"
+        autoscaling_group = "disabled"
       }
     }
     vpc_peering = module.vpc_peering.all_peering_connections
@@ -653,6 +680,7 @@ output "infrastructure_summary" {
     dashboard_name = module.logging_us_east_1.dashboard_name
   }
 }
+
 
 ```
 

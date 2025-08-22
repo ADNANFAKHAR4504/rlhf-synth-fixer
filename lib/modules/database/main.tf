@@ -91,7 +91,7 @@ resource "aws_db_instance" "main" {
   allocated_storage     = var.allocated_storage
   max_allocated_storage = var.max_allocated_storage
   storage_encrypted     = true
-  kms_key_id           = var.kms_key_id != "" ? var.kms_key_id : null
+  kms_key_id            = var.kms_key_id != "" ? var.kms_key_id : null
 
   db_name  = var.database_name
   username = var.database_username
@@ -131,7 +131,7 @@ resource "aws_db_instance" "read_replica" {
 
   allocated_storage = var.allocated_storage
   storage_encrypted = true
-  kms_key_id       = var.kms_key_id != "" ? var.kms_key_id : null
+  kms_key_id        = var.kms_key_id != "" ? var.kms_key_id : null
 
   vpc_security_group_ids = [var.database_security_group_id]
 
