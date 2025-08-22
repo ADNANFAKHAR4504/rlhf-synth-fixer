@@ -540,7 +540,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier             = "${local.name_prefix}-database"
+  identifier             = "${local.name_prefix}-database-${random_string.suffix.result}"
   allocated_storage      = 20
   storage_type           = "gp2"
   engine                 = "mysql"

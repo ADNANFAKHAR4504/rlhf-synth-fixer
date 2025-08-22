@@ -95,6 +95,7 @@ EOF
 
 # Auto Scaling Group for high availability
 resource "aws_autoscaling_group" "app" {
+  depends_on          = [aws_launch_template.app]
   name_prefix         = "${local.name_prefix}-app-asg-"
   vpc_zone_identifier = var.app_subnet_ids
   target_group_arns   = [var.tg_arn]
