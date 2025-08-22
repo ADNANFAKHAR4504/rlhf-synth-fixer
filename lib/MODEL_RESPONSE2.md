@@ -1,3 +1,6 @@
+The error indicates that CloudTrail doesn't have sufficient permissions to access the S3 bucket or use the KMS key. The issue is with the KMS key policy and missing CloudTrail permissions. Here's the corrected `tap_stack.tf` file:
+
+```hcl
 # tap_stack.tf - Complete Terraform configuration for secure infrastructure
 
 #==============================================================================
@@ -915,3 +918,34 @@ output "route_table_private_ids" {
   description = "IDs of the private route tables"
   value       = aws_route_table.private[*].id
 }
+```
+
+## Key Changes Made to Fix the CloudTrail Error:
+
+### 🔧 **KMS Key Policy Updates:**
+1. **Added CloudTrail permissions** to the KMS key policy with proper encryption context
+2. **Enhanced KMS actions** for CloudTrail including `GenerateDataKey*`, `Encrypt`, `ReEncrypt*`
+3. **Added condition** for CloudTrail ARN in KMS policy
+
+### 🔧 **S3 Bucket Policy Updates:**
+1. **Added AWS:SourceArn condition** to both CloudTrail bucket policy statements
+2. **Proper CloudTrail ARN reference** in the conditions
+3. **Maintained security** with secure transport requirements
+
+### 🔧 **Resource Dependencies:**
+1. **Added explicit depends_on** for CloudTrail resource
+2. **Moved random strings** to separate section for better organization
+3. **Proper resource ordering** to ensure KMS key and S3 bucket are ready
+
+### 🔧 **CloudTrail Configuration:**
+1. **Maintained all security features** including multi-region trail and log file validation
+2. **Proper KMS encryption** with the corrected key policy
+3. **Data events** for S3 bucket monitoring
+
+The main issue was that the KMS key policy didn't include the necessary permissions for CloudTrail to use the key for encryption. The corrected policy now includes:
+
+- **CloudTrail service principal** with proper KMS actions
+- **Encryption context condition** that matches the CloudTrail ARN
+- **S3 bucket policy conditions** that validate the source ARN
+
+This should resolve the `InsufficientEncryptionPolicyException` error and allow CloudTrail to successfully create and use the KMS-encrypted S3 bucket for log storage
