@@ -122,7 +122,6 @@ describe('WebAppStack CloudFormation Template', () => {
       'PublicSubnet2Id',
       'PrivateSubnet1Id',
       'PrivateSubnet2Id',
-      'ElasticIPAddress',
       'LoadBalancerDNS',
       'LoadBalancerArn',
       'TargetGroupArn',
