@@ -15,7 +15,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients for different regions
 const primaryRegion = 'us-east-1';
-const secondaryRegion = 'us-east-2';
+const secondaryRegion = 'us-west-1';
 
 const s3Primary = new AWS.S3({ region: primaryRegion });
 const s3Secondary = new AWS.S3({ region: secondaryRegion });
