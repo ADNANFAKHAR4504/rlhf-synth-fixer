@@ -18,6 +18,33 @@ Parameters:
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
   
+  DBEngineVersion:
+    Type: String
+    Default: '8.0.43'
+    AllowedValues:
+      - '5.7.44-rds.20240408'
+      - '5.7.44-rds.20240529'
+      - '5.7.44-rds.20240808'
+      - '5.7.44-rds.20250103'
+      - '5.7.44-rds.20250213'
+      - '5.7.44-rds.20250508'
+      - '8.0.37'
+      - '8.0.39'
+      - '8.0.40'
+      - '8.0.41'
+      - '8.0.42'
+      - '8.0.43'
+      - '8.4.3'
+      - '8.4.4'
+      - '8.4.5'
+      - '8.4.6'
+    Description: 'MySQL engine version for RDS'
+  
+  DbUsername:
+    Type: String
+    Default: 'admin'
+    Description: 'Database master username'
+  
   S3BucketName:
     Type: String
     Default: 'secure-app-data-bucket'
@@ -39,6 +66,23 @@ Parameters:
     Description: 'Latest Amazon Linux 2 AMI ID via SSM'
 
 Resources:
+  # Database Secret
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-db-secret'
+      Description: 'Database credentials'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DbUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   # KMS Keys
   S3KMSKey:
     Type: AWS::KMS::Key
@@ -132,11 +176,11 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: 'us-east-1a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1a'
+          Value: !Sub '${Environment}-private-subnet-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -147,11 +191,11 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: 'us-east-1b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1b'
+          Value: !Sub '${Environment}-private-subnet-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -299,7 +343,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
-            Resource: !Sub '${CloudTrailBucket}'
+            Resource: !GetAtt CloudTrailBucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -334,7 +378,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
-                Resource: !Sub '${S3Bucket}'
+                Resource: !GetAtt S3Bucket.Arn
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
@@ -398,7 +442,7 @@ Resources:
                 Action:
                   - 's3:GetBucketAcl'
                   - 's3:ListBucket'
-                Resource: !Sub '${S3Bucket}'
+                Resource: !GetAtt S3Bucket.Arn
               - Effect: Allow
                 Action:
                   - 's3:PutObject'
@@ -479,9 +523,9 @@ Resources:
       DBInstanceIdentifier: !Sub '${Environment}-rds-instance'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
-      MasterUsername: 'admin'
-      MasterUserPassword: 'TempPassword123!'
+      EngineVersion: !Ref DBEngineVersion
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -552,6 +596,7 @@ Resources:
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
+      IsLogging: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
       CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
@@ -639,7 +684,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: 's3:GetBucketAcl'
-            Resource: !Sub '${ConfigBucket}'
+            Resource: !GetAtt ConfigBucket.Arn
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'
@@ -648,7 +693,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: 's3:ListBucket'
-            Resource: !Sub '${ConfigBucket}'
+            Resource: !GetAtt ConfigBucket.Arn
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'

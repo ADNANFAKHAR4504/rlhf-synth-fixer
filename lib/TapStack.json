@@ -18,6 +18,34 @@
             "Description": "CIDR block allowed for SSH access",
             "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
         },
+        "DBEngineVersion": {
+            "Type": "String",
+            "Default": "8.0.43",
+            "AllowedValues": [
+                "5.7.44-rds.20240408",
+                "5.7.44-rds.20240529",
+                "5.7.44-rds.20240808",
+                "5.7.44-rds.20250103",
+                "5.7.44-rds.20250213",
+                "5.7.44-rds.20250508",
+                "8.0.37",
+                "8.0.39",
+                "8.0.40",
+                "8.0.41",
+                "8.0.42",
+                "8.0.43",
+                "8.4.3",
+                "8.4.4",
+                "8.4.5",
+                "8.4.6"
+            ],
+            "Description": "MySQL engine version for RDS"
+        },
+        "DbUsername": {
+            "Type": "String",
+            "Default": "admin",
+            "Description": "Database master username"
+        },
         "S3BucketName": {
             "Type": "String",
             "Default": "secure-app-data-bucket",
@@ -40,6 +68,37 @@
         }
     },
     "Resources": {
+        "DbSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-db-secret"
+                },
+                "Description": "Database credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DbUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
         "S3KMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -203,13 +262,20 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-1a"
+                            "Fn::Sub": "${Environment}-private-subnet-1"
                         }
                     },
                     {
@@ -234,13 +300,20 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-1b"
+                            "Fn::Sub": "${Environment}-private-subnet-2"
                         }
                     },
                     {
@@ -537,7 +610,10 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailBucket}"
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
                             }
                         },
                         {
@@ -599,7 +675,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}"
+                                        "Fn::GetAtt": [
+                                            "S3Bucket",
+                                            "Arn"
+                                        ]
                                     }
                                 },
                                 {
@@ -732,7 +811,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}"
+                                        "Fn::GetAtt": [
+                                            "S3Bucket",
+                                            "Arn"
+                                        ]
                                     }
                                 },
                                 {
@@ -903,9 +985,15 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
-                "MasterUsername": "admin",
-                "MasterUserPassword": "TempPassword123!",
+                "EngineVersion": {
+                    "Ref": "DBEngineVersion"
+                },
+                "MasterUsername": {
+                    "Ref": "DbUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DbSecret}::password}}"
+                },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
@@ -1031,6 +1119,7 @@
                 "S3KeyPrefix": "cloudtrail-logs",
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
+                "IsLogging": true,
                 "EnableLogFileValidation": true,
                 "KMSKeyId": {
                     "Ref": "S3KMSKey"
@@ -1197,7 +1286,10 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::Sub": "${ConfigBucket}"
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1215,7 +1307,10 @@
                             },
                             "Action": "s3:ListBucket",
                             "Resource": {
-                                "Fn::Sub": "${ConfigBucket}"
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
                             },
                             "Condition": {
                                 "StringEquals": {

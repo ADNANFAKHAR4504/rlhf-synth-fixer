@@ -1,4 +1,4 @@
-```yml
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure multi-service AWS infrastructure with KMS encryption, private networking, and compliance monitoring'
 
