@@ -17,12 +17,12 @@ I'll help you create a well-structured prompt that aligns with Claude Sonnet's b
 ```
 project-root/
 ├── lib/
-│   └── tap_stack.py
+│ └── tap_stack.py
 ├── tests/
-│   ├── unit/
-│   │   └── test_tap_stack.py
-│   └── integration/
-│       └── test_tap_stack.py
+│ ├── unit/
+│ │ └── test_tap_stack.py
+│ └── integration/
+│ └── test_tap_stack.py
 ```
 
 ### Deliverable Requirements
@@ -36,7 +36,7 @@ project-root/
 
 **2. CI/CD Pipeline Configuration:**
 - Support for rolling updates with zero-downtime deployment strategy
-- Multi-stage pipeline: build → test → deploy-staging → deploy-production
+- Multi-stage pipeline: build test deploy-staging deploy-production
 - Cross-region deployment orchestration
 - Rollback mechanisms for failed deployments
 - Integration with Pulumi state management
@@ -91,8 +91,8 @@ Your solution must demonstrate:
 - Zero-downtime rolling updates with automatic rollback
 - Functional monitoring and alerting system
 - Passing unit and integration test suites
--  Proper error handling and logging throughout the pipeline
--  Cost optimization and resource efficiency
+- Proper error handling and logging throughout the pipeline
+- Cost optimization and resource efficiency
 
 **Constraints:**
 - Use only AWS native services (no third-party tools except Pulumi)
@@ -109,7 +109,7 @@ Please provide the complete implementation with detailed explanations for each c
 This prompt template follows Claude's best practices by:
 - **Clear Structure**: Organized sections with specific requirements
 - **Concrete Examples**: File structure and naming conventions
-- **Specific Constraints**: Technical limitations and success criteria  
+- **Specific Constraints**: Technical limitations and success criteria 
 - **Action-Oriented**: Clear deliverables and expected outcomes
 - **Context-Rich**: Complete background information for informed decisions
 - **Measurable Results**: Testable success criteria and validation requirements

@@ -26,8 +26,8 @@ You are an expert AWS Solutions Architect with deep expertise in Infrastructure 
 - **Instance**: Implement a secure bastion host using an EC2 instance
 - **Placement**: Deploy the instance in one of the public subnets
 - **Configuration**: 
-  - Use a minimal footprint (e.g., `t3.micro` or `t2.micro` instance type)
-  - Use an appropriate Amazon Linux AMI
+- Use a minimal footprint (e.g., `t3.micro` or `t2.micro` instance type)
+- Use an appropriate Amazon Linux AMI
 
 ### 3. Comprehensive IAM Roles and Policies
 
@@ -41,7 +41,7 @@ Configure security groups to enforce strict access control:
 
 #### Bastion Host Security Group
 - **SSH Access**: Limit inbound SSH access (port 22) to specific, predefined IP addresses or CIDR blocks only
-- **⚠️ Security Requirement**: Do **NOT** allow `0.0.0.0/0` for SSH access
+- ** Security Requirement**: Do **NOT** allow `0.0.0.0/0` for SSH access
 
 #### Internal Application Tiers Security Groups
 Create security groups that support internal application architecture:

@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291322",
+  "team": "1",
+  "startedAt": "2025-08-15T15:11:25.210Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
+}

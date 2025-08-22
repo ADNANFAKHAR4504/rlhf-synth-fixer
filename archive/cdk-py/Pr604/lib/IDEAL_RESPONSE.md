@@ -1,4 +1,4 @@
-```
+```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -222,10 +222,9 @@ class TapStack(cdk.Stack):
 
   def _create_s3_buckets(self, environment_suffix: str) -> tuple:
     """Create S3 buckets with security configurations"""
-    # S3 access logs bucket
+    # S3 access logs bucket - remove explicit naming to auto-generate
     access_logs_bucket = s3.Bucket(
       self, "S3AccessLogsBucket",
-      bucket_name=f"tap-access-logs-{environment_suffix}-{self.account}-{self.region}",
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
       versioned=True,
@@ -239,10 +238,9 @@ class TapStack(cdk.Stack):
       ]
     )
     
-    # Main application bucket
+    # Main application bucket - remove explicit naming to auto-generate
     bucket = s3.Bucket(
       self, "TapBucket",
-      bucket_name=f"tap-bucket-{environment_suffix}",
       encryption=s3.BucketEncryption.KMS,
       encryption_key=self.kms_key,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -274,7 +272,7 @@ class TapStack(cdk.Stack):
     """Create DynamoDB table with encryption and backup"""
     table = dynamodb.Table(
       self, "TapTable",
-      table_name=f"tap-object-metadata-{environment_suffix}",
+      table_name=f"tap-object-metadata-{environment_suffix}-{self.region}",  # Add region
       partition_key=dynamodb.Attribute(
         name="objectKey",
         type=dynamodb.AttributeType.STRING
@@ -296,7 +294,7 @@ class TapStack(cdk.Stack):
     """Create SNS topic with KMS encryption"""
     topic = sns.Topic(
       self, "TapNotificationTopic",
-      topic_name=f"tap-notification-{environment_suffix}",
+      topic_name=f"tap-notification-{environment_suffix}-{self.region}",  # Add region
       master_key=self.kms_key
     )
     
@@ -372,7 +370,7 @@ class TapStack(cdk.Stack):
     
     functions['data_processor'] = _lambda.Function(
       self, "DataProcessorFunction",
-      function_name=f"tap-object-processor-{environment_suffix}",
+      function_name=f"tap-object-processor-{environment_suffix}-{self.region}",  # Add region
       runtime=_lambda.Runtime.PYTHON_3_11,
       handler="index.lambda_handler",
       code=_lambda.Code.from_inline("""
@@ -512,7 +510,7 @@ def lambda_handler(event, context):
     
     functions['api_handler'] = _lambda.Function(
       self, "APIHandlerFunction",
-      function_name=f"tap-api-handler-{environment_suffix}",
+      function_name=f"tap-api-handler-{environment_suffix}-{self.region}",  # Add region
       runtime=_lambda.Runtime.PYTHON_3_11,
       handler="index.lambda_handler",
       code=_lambda.Code.from_inline("""
@@ -700,10 +698,10 @@ def lambda_handler(event, context):
 
   def _enable_logging(self):
     """Enable comprehensive logging and auditing"""
-    # CloudTrail for API auditing
+    # CloudTrail for API auditing - remove explicit naming to auto-generate
     cloudtrail_bucket = s3.Bucket(
       self, "CloudTrailBucket",
-      bucket_name=f"tap-cloudtrail-{self.account}-{self.region}",
+      # Remove bucket_name to auto-generate unique name
       encryption=s3.BucketEncryption.S3_MANAGED,
       block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
       versioned=True,
@@ -793,6 +791,4 @@ def lambda_handler(event, context):
                   value=",".join([subnet.subnet_id for subnet in self.vpc.public_subnets]))
     cdk.CfnOutput(self, "PrivateSubnetIdsOutput", 
                   value=",".join([subnet.subnet_id for subnet in self.vpc.private_subnets]))
-
-
 ```

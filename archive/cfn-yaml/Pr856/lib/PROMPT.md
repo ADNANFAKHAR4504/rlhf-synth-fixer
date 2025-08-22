@@ -31,8 +31,8 @@ Design a CloudFormation template that provisions a **secure web application infr
 
 ### 4. Security Configuration
 - **Security groups** with least privilege principle:
-  - ALB security group: Allow inbound HTTP (80) and HTTPS (443) from 0.0.0.0/0
-  - EC2 security group: Allow inbound traffic only from ALB security group
+- ALB security group: Allow inbound HTTP (80) and HTTPS (443) from 0.0.0.0/0
+- EC2 security group: Allow inbound traffic only from ALB security group
 - **Separate security groups** for different tiers
 - **No SSH access** unless explicitly justified
 
@@ -53,7 +53,7 @@ Design a CloudFormation template that provisions a **secure web application infr
 
 ### Best Practices to Implement:
 - **Parameterization**: Use parameters for configurable values
-- **Conditions**: Implement conditional logic where appropriate  
+- **Conditions**: Implement conditional logic where appropriate 
 - **Outputs**: Export key resource references for stack integration
 - **Tagging**: Consistent tagging strategy across all resources
 - **Naming**: Use `!Sub` for dynamic resource naming
@@ -79,32 +79,32 @@ Design a CloudFormation template that provisions a **secure web application infr
 
 ## Expected Output Structure
 ```
-AWSTemplateFormatVersion: ‘2010-09-09’
-Description: ‘Secure web application infrastructure with ALB and Auto Scaling’
+AWSTemplateFormatVersion: 2010-09-09
+Description: Secure web application infrastructure with ALB and Auto Scaling
 Parameters:
-    Environment, instance type, key pair, etc.
+Environment, instance type, key pair, etc.
 Conditions:
-    Conditional logic for optional features
+Conditional logic for optional features
 Resources:
-    VPC and networking components
-    Security groups
-    IAM roles and policies
-    Auto Scaling Group and Launch Template
-    Application Load Balancer and Target Groups
-    CloudWatch alarms (if applicable)
+VPC and networking components
+Security groups
+IAM roles and policies
+Auto Scaling Group and Launch Template
+Application Load Balancer and Target Groups
+CloudWatch alarms (if applicable)
 Outputs:
-    Key resource references for integration
+Key resource references for integration
 ```
 
 ## Validation Criteria
 
 Your template will be evaluated on:
 
-1. **Functional Correctness**:  Infrastructure deploys successfully
-2. **Security Compliance**:  Follows AWS security best practices
-3. **Code Quality**:  Passes cfn-lint validation with zero errors
-4. **Architecture**:  Implements high availability and scalability
-5. **Best Practices**:  Proper parameterization, tagging, and documentation
+1. **Functional Correctness**: Infrastructure deploys successfully
+2. **Security Compliance**: Follows AWS security best practices
+3. **Code Quality**: Passes cfn-lint validation with zero errors
+4. **Architecture**: Implements high availability and scalability
+5. **Best Practices**: Proper parameterization, tagging, and documentation
 
 ## Additional Considerations
 
@@ -118,11 +118,11 @@ Your template will be evaluated on:
 ## Success Criteria
 
 The generated CloudFormation template should:
--  Deploy a fully functional, secure web application infrastructure
--  Pass all cfn-lint validation checks
--  Follow AWS Well-Architected Framework principles
--  Be production-ready with proper security controls
--  Support high availability across multiple AZs
--  Include comprehensive documentation and comments
+- Deploy a fully functional, secure web application infrastructure
+- Pass all cfn-lint validation checks
+- Follow AWS Well-Architected Framework principles
+- Be production-ready with proper security controls
+- Support high availability across multiple AZs
+- Include comprehensive documentation and comments
 
 Generate a complete CloudFormation YAML template that meets all these requirements while maintaining security, scalability, and operational excellence standards.

@@ -4,7 +4,7 @@ Act as an expert AWS Cloud Architect and CDK developer. Help me design and imple
 
 ---
 
-## ✅ Requirements
+## Requirements
 
 - **Multi-region deployment** across `us-east-1` and `us-west-2` to ensure high availability.
 - **VPCs in each region** to provide network isolation and security for application components.
@@ -16,7 +16,7 @@ Act as an expert AWS Cloud Architect and CDK developer. Help me design and imple
 
 ---
 
-## 🛠️ Your Task
+## Your Task
 
 1. **Provide a CDK (Python) project structure** with example stacks/modules implementing these requirements.
 2. **Explain design decisions**, such as:
@@ -30,7 +30,7 @@ Act as an expert AWS Cloud Architect and CDK developer. Help me design and imple
 
 ---
 
-## 📌 Focus Areas
+## Focus Areas
 
 - **Infrastructure-as-code best practices**
 - **Modular design**

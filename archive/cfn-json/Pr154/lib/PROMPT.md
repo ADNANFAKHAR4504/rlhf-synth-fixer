@@ -6,7 +6,7 @@ Review Requirements: Carefully read the specifications and constraints before wr
 
 CloudFormation Template: Author a single, minimal JSON CloudFormation template to provision the described resources.
 
-Security Standards: Ensure security best practices are followed—only expose public resources where necessary, and restrict network access as appropriate for public/private subnets.
+Security Standards: Ensure security best practices are followedonly expose public resources where necessary, and restrict network access as appropriate for public/private subnets.
 
 Tagging: All resources must include the tag key Environment with the value Production.
 
@@ -36,4 +36,4 @@ Ensures resources are distributed for high availability.
 Output Format
 Provide a single AWS CloudFormation template in JSON format (formatted, valid, and ready for deployment).
 
-No additional text or explanations—output only the CloudFormation JSON template.
+No additional text or explanationsoutput only the CloudFormation JSON template.

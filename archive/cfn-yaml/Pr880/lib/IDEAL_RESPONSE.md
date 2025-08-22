@@ -1,3 +1,14 @@
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready serverless API backend with DynamoDB, Lambda, API Gateway, and monitoring'
 
@@ -34,7 +45,7 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
-      KeyRotationStatus: true
+      EnableKeyRotation: true
 
   # KMS Key Alias for easier reference
   DynamoDBKMSKeyAlias:
@@ -57,6 +68,7 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       SSESpecification:
         SSEEnabled: true
+        SSEType: KMS
         KMSMasterKeyId: !Ref DynamoDBKMSKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -121,12 +133,12 @@ Resources:
           import uuid
           import os
           from datetime import datetime
-          
+
           # Initialize DynamoDB client
           dynamodb = boto3.resource('dynamodb')
           table_name = os.environ['TABLE_NAME']
           table = dynamodb.Table(table_name)
-          
+
           def lambda_handler(event, context):
               print(f"Received event: {json.dumps(event)}")
               
@@ -198,7 +210,6 @@ Resources:
                       'body': json.dumps({'error': 'Internal server error'})
                   }
       Timeout: 30
-      ReservedConcurrencyLimit: 100
 
   # CloudWatch Log Group for Lambda function
   LambdaLogGroup:
@@ -214,7 +225,7 @@ Resources:
       FunctionName: !Ref ItemsLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ItemsRestApi}/*/POST/items'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ItemsRestApi}/*/*'
 
   # API Gateway REST API
   ItemsRestApi:
@@ -342,11 +353,7 @@ Resources:
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
-          LoggingLevel: INFO
-          DataTraceEnabled: true
           MetricsEnabled: true
-      TracingConfig:
-        TracingEnabled: true
 
   # SNS Topic for CloudWatch Alarms
   AlertsTopic:
@@ -431,3 +438,24 @@ Outputs:
     Value: !Ref DynamoDBKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+```
