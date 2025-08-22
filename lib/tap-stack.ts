@@ -573,7 +573,7 @@ export class TapStack extends pulumi.ComponentResource {
             dataResources: [
               {
                 type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/*'],
+                values: ['arn:aws:s3:::*/'], 
               },
             ],
           },
@@ -659,7 +659,7 @@ export class TapStack extends pulumi.ComponentResource {
         logDestination: flowLogsGroup.arn,
         logDestinationType: 'cloud-watch-logs',
         trafficType: 'ALL',
-        vpcId: this.vpc.id,   
+        vpcId: this.vpc.id,
         tags: this.defaultTags,
       },
       { parent: this }
@@ -667,7 +667,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     return { role: vpcFlowLogsRole, flowLogs: vpcFlowLogs };
   }
-
 
   private createStackSetInfrastructure() {
     // StackSet Administration Role
