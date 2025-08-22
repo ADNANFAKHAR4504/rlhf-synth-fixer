@@ -31,15 +31,6 @@ Parameters:
     MinLength: 4
     MaxLength: 16
 
-  EnvironmentSuffix:
-    Type: String
-    Description: Suffix to append to resource names for unique identification
-    Default: dev
-    AllowedPattern: '^[a-zA-Z0-9-]+$'
-    ConstraintDescription: Must contain only alphanumeric characters and hyphens
-    MinLength: 1
-    MaxLength: 20
-
 Mappings:
   RegionMap:
     us-east-1:
@@ -54,7 +45,7 @@ Resources:
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub '${Environment}-${Project}-encryption-key-${EnvironmentSuffix}'
+      Description: !Sub '${Environment}-${Project}-encryption-key'
       KeyPolicy:
         Statement:
           - Sid: Enable IAM User Permissions
@@ -71,34 +62,6 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-          - Sid: Allow CloudWatch Logs to encrypt logs
-            Effect: Allow
-            Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-            Condition:
-              ArnEquals:
-                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
-          - Sid: Allow CloudWatch Logs CloudTrail to encrypt logs
-            Effect: Allow
-            Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-            Condition:
-              ArnEquals:
-                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -110,7 +73,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${Environment}-${Project}-key-${EnvironmentSuffix}'
+      AliasName: !Sub 'alias/${Environment}-${Project}-key'
       TargetKeyId: !Ref KMSKey
 
   # VPC Configuration
@@ -122,7 +85,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc-main-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-vpc-main'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -136,7 +99,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw-main-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-igw-main'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -160,7 +123,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-public-1-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-subnet-public-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -177,7 +140,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-public-2-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-subnet-public-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -194,7 +157,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-private-1-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-subnet-private-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -210,7 +173,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-subnet-private-2-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-subnet-private-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -225,7 +188,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-rt-public-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-rt-public'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -257,7 +220,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-bastion-${EnvironmentSuffix}'
+      GroupName: !Sub '${Environment}-sg-bastion'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -268,7 +231,7 @@ Resources:
           Description: SSH access from allowed CIDR range
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-bastion-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-sg-bastion'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -279,7 +242,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-webserver-${EnvironmentSuffix}'
+      GroupName: !Sub '${Environment}-sg-webserver'
       GroupDescription: Security group for web servers - HTTPS only from specific CIDR
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -299,7 +262,7 @@ Resources:
           Description: All outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-webserver-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-sg-webserver'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -310,7 +273,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-sg-database-${EnvironmentSuffix}'
+      GroupName: !Sub '${Environment}-sg-database'
       GroupDescription: Security group for RDS database - no public access
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -321,7 +284,7 @@ Resources:
           Description: MySQL access from web servers only
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-sg-database-${EnvironmentSuffix}'
+          Value: !Sub '${Environment}-sg-database'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -333,7 +296,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-appdata-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-appdata-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -359,7 +322,7 @@ Resources:
   S3LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-accesslogs-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-accesslogs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -382,7 +345,7 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/ec2/${Environment}-application'
       RetentionInDays: 30
       KmsKeyId: !GetAtt KMSKey.Arn
 
@@ -390,7 +353,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-role-ec2-webserver-${EnvironmentSuffix}'
+      RoleName: !Sub '${Environment}-role-ec2-webserver'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -425,7 +388,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-profile-ec2-webserver-${EnvironmentSuffix}'
+      InstanceProfileName: !Sub '${Environment}-profile-ec2-webserver'
       Roles:
         - !Ref EC2Role
 
@@ -433,7 +396,7 @@ Resources:
   DeveloperGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${Environment}-group-developers-${EnvironmentSuffix}'
+      GroupName: !Sub '${Environment}-group-developers'
       Policies:
         - PolicyName: MFARequiredPolicy
           PolicyDocument:
@@ -476,13 +439,13 @@ Resources:
                 Resource: '*'
                 Condition:
                   BoolIfExists:
-                    aws:MultiFactorAuthPresent: 'false'
+                    'aws:MultiFactorAuthPresent': 'false'
 
   # RDS Subnet Group (private subnets only)
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-dbsubnet-main-${EnvironmentSuffix}'
+      DBSubnetGroupName: !Sub '${Environment}-dbsubnet-main'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -499,13 +462,13 @@ Resources:
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${Environment}-rds-password-${EnvironmentSuffix}'
+      Name: !Sub '${Environment}-rds-password'
       Description: 'RDS Database Password'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: password
+        GenerateStringKey: 'password'
         PasswordLength: 16
-        ExcludeCharacters: '"@/\\'
+        ExcludeCharacters: '"@/\'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -520,7 +483,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-rds-main-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !Sub '${Environment}-rds-main'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -551,7 +514,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-audit'
       RetentionInDays: 90
       KmsKeyId: !GetAtt KMSKey.Arn
 
@@ -582,20 +545,11 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                 Resource: !Sub '${CloudTrailLogGroup}:*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
-        - Key: Purpose
-          Value: CloudTrail-LogsAccess
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub '${Environment}-cloudtrail-global-${EnvironmentSuffix}'
+      TrailName: !Sub '${Environment}-cloudtrail-global'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: cloudtrail-logs/
       IncludeGlobalServiceEvents: true
@@ -617,7 +571,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-s3-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-s3-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -650,7 +604,7 @@ Resources:
             Resource: !Ref CloudTrailBucket
             Condition:
               StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -660,40 +614,13 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}'
-
-  # S3 Bucket for CloudFormation state (fixes S3 endpoint error)
-  CloudFormationStateBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
-        - Key: Purpose
-          Value: CloudFormationState
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global'
 
   # Launch Template for EC2 instances
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-lt-webserver-${EnvironmentSuffix}'
+      LaunchTemplateName: !Sub '${Environment}-lt-webserver'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: t3.micro
@@ -747,7 +674,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${Environment}-ec2-webserver-${EnvironmentSuffix}'
+                Value: !Sub '${Environment}-ec2-webserver'
               - Key: Environment
                 Value: !Ref Environment
               - Key: Owner
@@ -800,9 +727,3 @@ Outputs:
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Sub '${Environment}-sg-webserver'
-
-  CloudFormationStateBucketName:
-    Description: S3 Bucket for CloudFormation state
-    Value: !Ref CloudFormationStateBucket
-    Export:
-      Name: !Sub '${Environment}-cfn-state-bucket'
