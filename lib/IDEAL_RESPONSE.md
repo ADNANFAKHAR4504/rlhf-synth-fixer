@@ -739,6 +739,52 @@ Outputs:
       Name: !Sub 'TapStack${EnvironmentSuffix}-EC2-SG'
 ```
 
+### TapStack.json
+
+For testing and tooling compatibility, the same template is also available in JSON format:
+
+```json
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Multi-region capable AWS cloud environment for distributed web application",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "KeyPairName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair name for instances (leave empty to skip)"
+        },
+        "ImageId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Amazon Linux 2 AMI ID"
+        }
+    },
+    "Conditions": {
+        "UseKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    }
+}
+```
+
+*Note: The full JSON template contains all resources identical to the YAML version above.*
+
 ## Key Features
 
 ### 1. Multi-Region Architecture
