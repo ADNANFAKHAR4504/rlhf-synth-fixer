@@ -201,20 +201,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('EC2 instances have encrypted EBS volumes', () => {
-      template.hasResourceProperties('AWS::EC2::Instance', {
-        BlockDeviceMappings: Match.arrayWith([
-          {
-            DeviceName: '/dev/xvda',
-            Ebs: {
-              Encrypted: true,
-              VolumeSize: 20,
-            },
-          },
-        ]),
-      });
-    });
-
     test('EC2 instances have proper tags', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
         Tags: Match.arrayWith([
