@@ -264,7 +264,6 @@ Resources:
   # NAT Gateways
   NatGateway1EIP:
     Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -275,7 +274,6 @@ Resources:
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -286,7 +284,6 @@ Resources:
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
-    DependsOn: PublicSubnet1RouteTableAssociation
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -298,7 +295,6 @@ Resources:
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
-    DependsOn: PublicSubnet2RouteTableAssociation
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -321,7 +317,6 @@ Resources:
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -351,7 +346,6 @@ Resources:
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: NatGateway1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -359,7 +353,6 @@ Resources:
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: DefaultPrivateRoute1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
@@ -376,7 +369,6 @@ Resources:
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
-    DependsOn: NatGateway2
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -384,7 +376,6 @@ Resources:
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: DefaultPrivateRoute2
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
@@ -392,9 +383,6 @@ Resources:
   # Security Groups
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn:
-      - LoadBalancerSecurityGroup
-      - BastionSecurityGroup
     Properties:
       GroupName: !Sub "prod-webapp-web-sg-${EnvironmentSuffix}"
       GroupDescription: Security group for web servers
@@ -446,7 +434,6 @@ Resources:
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: WebServerSecurityGroup
     Properties:
       GroupName: !Sub "prod-webapp-db-sg-${EnvironmentSuffix}"
       GroupDescription: Security group for database
@@ -484,9 +471,6 @@ Resources:
   # S3 Bucket
   AppS3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - AppKMSKey
-      - LoggingBucket
     Properties:
       BucketName: !Sub "prod-webapp-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
@@ -513,7 +497,6 @@ Resources:
 
   LoggingBucket:
     Type: AWS::S3::Bucket
-    DependsOn: AppKMSKey
     Properties:
       BucketName: !Sub "prod-webapp-logs-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
@@ -628,7 +611,6 @@ Resources:
   # Database Secret
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
-    DependsOn: AppKMSKey
     Properties:
       Name: !Sub "prod-webapp-db-credentials-${EnvironmentSuffix}"
       Description: Database credentials for web application
@@ -646,9 +628,6 @@ Resources:
 
   SecretRDSInstanceAttachment:
     Type: AWS::SecretsManager::SecretTargetAttachment
-    DependsOn:
-      - DatabaseSecret
-      - Database
     Properties:
       SecretId: !Ref DatabaseSecret
       TargetId: !Ref Database
@@ -657,9 +636,6 @@ Resources:
   # RDS Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    DependsOn:
-      - PrivateSubnet1
-      - PrivateSubnet2
     Properties:
       DBSubnetGroupName: !Sub "prod-webapp-db-subnet-group-${EnvironmentSuffix}"
       DBSubnetGroupDescription: Subnet group for database
@@ -677,11 +653,6 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
-    DependsOn:
-      - DatabaseSecurityGroup
-      - DatabaseSubnetGroup
-      - DatabaseSecret
-      - AppKMSKey
     Properties:
       DBInstanceIdentifier: !Sub "prod-webapp-database-${EnvironmentSuffix}"
       DBName: !Ref DatabaseName
@@ -717,7 +688,6 @@ Resources:
   # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn: WebServerSecurityGroup
     Properties:
       LaunchTemplateName: !Sub "prod-webapp-launch-template-${EnvironmentSuffix}"
       LaunchTemplateData:
@@ -782,11 +752,6 @@ Resources:
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - LaunchTemplate
-      - TargetGroup
-      - PrivateSubnet1RouteTableAssociation
-      - PrivateSubnet2RouteTableAssociation
     Properties:
       AutoScalingGroupName: !Sub "prod-webapp-asg-${EnvironmentSuffix}"
       VPCZoneIdentifier:
@@ -813,7 +778,6 @@ Resources:
   # Scaling Policies
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
-    DependsOn: AutoScalingGroup
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
@@ -822,7 +786,6 @@ Resources:
 
   ScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
-    DependsOn: AutoScalingGroup
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
@@ -832,10 +795,6 @@ Resources:
   # CloudWatch Alarms
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
-    DependsOn:
-      - AutoScalingGroup
-      - ScaleUpPolicy
-      - SNSTopic
     Properties:
       AlarmName: prod-webapp-cpu-high
       AlarmDescription: Scale up on high CPU
@@ -855,9 +814,6 @@ Resources:
 
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
-    DependsOn:
-      - AutoScalingGroup
-      - ScaleDownPolicy
     Properties:
       AlarmName: prod-webapp-cpu-low
       AlarmDescription: Scale down on low CPU
@@ -877,10 +833,6 @@ Resources:
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn:
-      - LoadBalancerSecurityGroup
-      - PublicSubnet1RouteTableAssociation
-      - PublicSubnet2RouteTableAssociation
     Properties:
       Name: !Sub "prod-webapp-alb-${EnvironmentSuffix}"
       Scheme: internet-facing
@@ -898,7 +850,6 @@ Resources:
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: AppVPC
     Properties:
       Name: !Sub "prod-tg-${EnvironmentSuffix}"
       Port: 80
@@ -918,9 +869,6 @@ Resources:
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn:
-      - ApplicationLoadBalancer
-      - TargetGroup
     Properties:
       DefaultActions:
         - Type: forward
@@ -986,9 +934,6 @@ Resources:
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
-    DependsOn:
-      - ApplicationLoadBalancer
-      - WebACL
     Properties:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
@@ -996,7 +941,6 @@ Resources:
   # CloudWatch Log Groups
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: AppKMSKey
     Properties:
       LogGroupName: !Sub "/aws/ec2/prod-webapp-${EnvironmentSuffix}"
       RetentionInDays: 30
@@ -1004,7 +948,6 @@ Resources:
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: AppKMSKey
     Properties:
       LogGroupName: !Sub "/aws/s3/prod-webapp-${EnvironmentSuffix}"
       RetentionInDays: 30
@@ -1012,7 +955,6 @@ Resources:
 
   WAFLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: AppKMSKey
     Properties:
       LogGroupName: !Sub "/aws/wafv2/prod-webapp-${EnvironmentSuffix}"
       RetentionInDays: 30
@@ -1021,7 +963,6 @@ Resources:
   # SNS Topic for notifications
   SNSTopic:
     Type: AWS::SNS::Topic
-    DependsOn: AppKMSKey
     Properties:
       TopicName: !Sub "prod-webapp-alerts-${EnvironmentSuffix}"
       DisplayName: Production Web App Alerts
@@ -1035,7 +976,6 @@ Resources:
   # CloudTrail for auditing
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailLoggingBucketPolicy
     Properties:
       TrailName: !Sub "prod-webapp-cloudtrail-${EnvironmentSuffix}"
       S3BucketName: !Ref LoggingBucket
@@ -1124,5 +1064,3 @@ Outputs:
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailArn"
-
-
