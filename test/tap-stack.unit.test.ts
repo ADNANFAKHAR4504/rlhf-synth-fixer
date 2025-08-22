@@ -187,9 +187,7 @@ describe('TapStack UsWest2', () => {
             LOCAL_TABLE_NAME: {
               Ref: 'MultiRegionDynamoTableDA1B48CB'
             },
-            REMOTE_TABLE_NAME: {
-              'Fn::ImportValue': 'TestTapStackUsWest1-DynamoTableName'
-            }
+            REMOTE_TABLE_NAME: 'multi-region-table-us-west-1'
           }
         }
       });

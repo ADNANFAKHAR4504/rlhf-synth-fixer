@@ -32,7 +32,7 @@ const shouldRunIntegrationTests = process.env.AWS_ACCESS_KEY_ID &&
   process.env.AWS_SECRET_ACCESS_KEY && 
   process.env.CI === '1';
 
-// Load outputs from deployment
+// Load deployment outputs from CI/CD pipeline
 let outputs: any;
 try {
   outputs = JSON.parse(
@@ -40,14 +40,7 @@ try {
   );
 } catch (error) {
   console.log('Skipping integration tests: cfn-outputs/flat-outputs.json not found');
-  outputs = {
-    // Mock outputs for local testing
-    'TapStackUsWest1dev-DynamoTableName': 'multi-region-table-us-west-1',
-    'TapStackUsWest1dev-DynamoTableArn': 'arn:aws:dynamodb:us-west-1:123456789012:table/multi-region-table-us-west-1',
-    'TapStackUsWest2dev-DynamoTableName': 'multi-region-table-us-west-2',
-    'TapStackUsWest2dev-DynamoTableArn': 'arn:aws:dynamodb:us-west-2:123456789012:table/multi-region-table-us-west-2',
-    'TapStackUsWest2dev-CrossRegionLambdaFunctionArn': 'arn:aws:lambda:us-west-2:123456789012:function:cross-region-lambda-us-west-2',
-  };
+  outputs = {};
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)

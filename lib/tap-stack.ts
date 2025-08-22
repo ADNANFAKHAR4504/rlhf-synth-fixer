@@ -124,7 +124,8 @@ export class TapStack extends cdk.Stack {
 
     // Add cross-region access for us-west-2 (imports from us-west-1)
     if (currentRegion === 'us-west-2') {
-      // Add cross-region table access using Fn::ImportValue
+      // Add cross-region table access using hardcoded ARN pattern
+      // This avoids Fn::ImportValue issues during stack updates
       const crossRegionPolicy = new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
@@ -136,11 +137,9 @@ export class TapStack extends cdk.Stack {
           'dynamodb:Scan',
         ],
         resources: [
-          // This will be resolved to the us-west-1 table ARN via Fn::ImportValue
-          cdk.Fn.importValue(
-            `${this.stackName.replace('UsWest2', 'UsWest1')}-DynamoTableArn`
-          ),
-          `${cdk.Fn.importValue(`${this.stackName.replace('UsWest2', 'UsWest1')}-DynamoTableArn`)}/index/*`,
+          // Use hardcoded ARN pattern for cross-region access
+          `arn:aws:dynamodb:us-west-1:${this.account}:table/multi-region-table-us-west-1`,
+          `arn:aws:dynamodb:us-west-1:${this.account}:table/multi-region-table-us-west-1/index/*`,
         ],
       });
       dynamoDbRole.addToPolicy(crossRegionPolicy);
@@ -219,9 +218,7 @@ export class TapStack extends cdk.Stack {
         `),
           environment: {
             LOCAL_TABLE_NAME: dynamoTable.tableName,
-            REMOTE_TABLE_NAME: cdk.Fn.importValue(
-              `${this.stackName.replace('UsWest2', 'UsWest1')}-DynamoTableName`
-            ),
+            REMOTE_TABLE_NAME: 'multi-region-table-us-west-1',
             AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
           },
           timeout: cdk.Duration.seconds(30),
