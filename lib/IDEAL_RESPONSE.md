@@ -8,7 +8,7 @@ This Terraform configuration implements a comprehensive, secure AWS environment 
 
 ### 1. Enhanced Variable Management
 - Added `environment_suffix` variable for unique resource naming across deployments
-- Made `project_name` configurable to avoid naming conflicts (changed from hardcoded "iac-aws-nova-model" to "cucumber-pineapple")
+- Made `project_name` configurable to avoid naming conflicts (changed from hardcoded "iac-aws-nova-model" to "nova-elite-project")
 - Improved variable descriptions and validation
 
 ### 2. Production-Ready Resource Naming
@@ -48,7 +48,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "cucumber-pineapple"
+  default     = "nova-elite-project"
 }
 
 variable "environment" {
@@ -66,7 +66,7 @@ variable "environment_suffix" {
 variable "domain_name" {
   description = "Domain name for Route 53 hosted zone"
   type        = string
-  default     = "cucumber-pineapple.turing.com"
+  default     = "nova-elite-project.turing.com"
 }
 
 # Locals

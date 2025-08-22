@@ -95,7 +95,7 @@ interface SecurityReport {
 
 // Test configuration
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
-const PROJECT_NAME = 'cucumber-pineapple';
+const PROJECT_NAME = 'nova-elite-project';
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients

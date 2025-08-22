@@ -8,7 +8,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "cucumber-pineapple"
+  default     = "nova-elite-project"
 }
 
 variable "environment" {
@@ -26,7 +26,7 @@ variable "environment_suffix" {
 variable "domain_name" {
   description = "Domain name for Route 53 hosted zone"
   type        = string
-  default     = "cucumber-pineapple.meerio.com"
+  default     = "nova-elite-project.meerio.com"
 }
 
 # Locals
