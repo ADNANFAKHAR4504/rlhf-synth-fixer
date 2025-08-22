@@ -4,7 +4,7 @@ import * as fs from 'fs';
 // Integration tests for TapStack
 // These tests run against deployed infrastructure
 
-const environmentSuffix = process.env.CDK_CONTEXT_ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX  || 'dev';
 let outputs: Record<string, any> = {};
 const outputsFile = 'cfn-outputs/flat-outputs.json';
 
