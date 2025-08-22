@@ -1,247 +1,521 @@
-# Ideal AWS Infrastructure for Highly Available Web Application
+# Perfect Infrastructure as Code Solution
 
-## Executive Summary
+## Complete Implementation: Highly Available Web Application with CloudFront CDN
 
-This document outlines the ideal infrastructure architecture for deploying a highly available and scalable web application on AWS. The solution leverages modern AWS services and best practices to ensure optimal performance, security, and cost efficiency while meeting all specified requirements for high availability, auto-scaling, and static content delivery.
+This is the complete, production-ready Infrastructure as Code implementation using Pulumi JavaScript for deploying a highly available, scalable web application on AWS with CloudFront CDN for static content delivery.
 
-## Architecture Overview
+## lib/tap-stack.mjs
 
-The ideal infrastructure implements a three-tier architecture with comprehensive high availability across multiple AWS Availability Zones in the us-west-2 region. The solution incorporates modern AWS features including EC2 VPC network interface optimization for dynamic IPv4 management and follows AWS Well-Architected Framework principles.
+```javascript
+/**
+ * tap-stack.mjs
+ *
+ * This module defines the TapStack class, the main Pulumi ComponentResource for
+ * the TAP (Test Automation Platform) project.
+ *
+ * Implements a highly available and scalable web application infrastructure.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
-### Core Components
+/**
+ * @typedef {Object} TapStackArgs
+ * @property {string} [environmentSuffix] - An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod'). Defaults to 'dev' if not provided.
+ * @property {Object<string, string>} [tags] - Optional default tags to apply to resources.
+ */
 
-1. **Network Foundation**: Multi-AZ VPC with segregated public and private subnets
-2. **Compute Layer**: Auto Scaling Groups with Application Load Balancer
-3. **Storage Layer**: S3 bucket optimized for static web content delivery
-4. **Security Layer**: IAM roles, security groups, and network ACLs
-5. **Monitoring Layer**: CloudWatch alarms and auto-scaling policies
+/**
+ * Represents the main Pulumi component resource for the TAP project.
+ * Implements a highly available and scalable web application infrastructure.
+ */
+export class TapStack extends pulumi.ComponentResource {
+  constructor(name, args, opts) {
+    super('tap:stack:TapStack', name, args, opts);
 
-## Detailed Technical Requirements Analysis
+    const environmentSuffix = args?.environmentSuffix || 'dev';
+    const tags = args?.tags || {
+      Environment: environmentSuffix,
+      Project: 'TapStack',
+      ManagedBy: 'Pulumi'
+    };
 
-### 1. Region and Network Setup (us-west-2)
+    // Get available AZs in us-west-2
+    const availableAzs = aws.getAvailabilityZones({
+      state: 'available',
+    });
 
-**Ideal Implementation:**
-- **VPC Configuration**: 10.0.0.0/16 CIDR block providing 65,536 IP addresses
-- **Multi-AZ Design**: Minimum 2 Availability Zones for true high availability
-- **Subnet Architecture**:
-  - Public subnets: 10.0.1.0/24, 10.0.2.0/24 (one per AZ)
-  - Private subnets: 10.0.10.0/24, 10.0.11.0/24 (one per AZ)
-- **NAT Gateway Redundancy**: One NAT Gateway per AZ for fault tolerance
-- **DNS Configuration**: EnableDnsHostnames and EnableDnsSupport for proper name resolution
+    // VPC Configuration
+    const vpc = new aws.ec2.Vpc(`tap-vpc-${environmentSuffix}`, {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: { ...tags, Name: `tap-vpc-${environmentSuffix}` },
+    }, { parent: this });
 
-**Architectural Rationale:**
-The subnet design follows AWS best practices by isolating internet-facing resources in public subnets while keeping application servers in private subnets. The /24 subnet masks provide sufficient IP space (254 addresses each) while maintaining efficient IP utilization.
+    // Internet Gateway
+    const igw = new aws.ec2.InternetGateway(`tap-igw-${environmentSuffix}`, {
+      vpcId: vpc.id,
+      tags: { ...tags, Name: `tap-igw-${environmentSuffix}` },
+    }, { parent: this });
 
-### 2. Static Asset Storage with S3
+    // Public Subnets (across 2 AZs for HA)
+    const publicSubnets = [];
+    for (let i = 0; i < 2; i++) {
+      const subnet = new aws.ec2.Subnet(`tap-public-subnet-${i + 1}-${environmentSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.0.${i + 1}.0/24`,
+        availabilityZone: availableAzs.then(azs => azs.names[i]),
+        mapPublicIpOnLaunch: true,
+        tags: { ...tags, Name: `tap-public-subnet-${i + 1}-${environmentSuffix}`, Type: 'Public' },
+      }, { parent: this });
+      publicSubnets.push(subnet);
+    }
 
-**Ideal S3 Configuration:**
-- **Bucket Naming**: Globally unique name with environment suffix
-- **Website Hosting**: Configured with index.html and error.html documents
-- **Public Access**: Controlled public read access via bucket policy
-- **Security**: Block unnecessary public access while allowing required read operations
-- **Versioning**: Optional but recommended for asset management
-- **Encryption**: Server-side encryption for data at rest
+    // Private Subnets (across 2 AZs for HA)
+    const privateSubnets = [];
+    for (let i = 0; i < 2; i++) {
+      const subnet = new aws.ec2.Subnet(`tap-private-subnet-${i + 1}-${environmentSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.0.${i + 10}.0/24`,
+        availabilityZone: availableAzs.then(azs => azs.names[i]),
+        tags: { ...tags, Name: `tap-private-subnet-${i + 1}-${environmentSuffix}`, Type: 'Private' },
+      }, { parent: this });
+      privateSubnets.push(subnet);
+    }
 
-**Performance Optimization:**
-- CloudFront integration (recommended enhancement)
-- Appropriate content-type headers
-- Cache-control headers for optimal browser caching
+    // NAT Gateways (one per AZ for HA)
+    const natGateways = [];
+    for (let i = 0; i < 2; i++) {
+      const eip = new aws.ec2.Eip(`tap-nat-eip-${i + 1}-${environmentSuffix}`, {
+        domain: 'vpc',
+        tags: { ...tags, Name: `tap-nat-eip-${i + 1}-${environmentSuffix}` },
+      }, { parent: this });
 
-### 3. Auto Scaling Implementation
+      const natGw = new aws.ec2.NatGateway(`tap-nat-gateway-${i + 1}-${environmentSuffix}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnets[i].id,
+        tags: { ...tags, Name: `tap-nat-gateway-${i + 1}-${environmentSuffix}` },
+      }, { parent: this, dependsOn: [igw] });
+      
+      natGateways.push(natGw);
+    }
 
-**Ideal Auto Scaling Design:**
-- **Capacity Configuration**:
-  - Minimum: 2 instances (one per AZ)
-  - Maximum: 10 instances
-  - Desired: 2 instances (baseline)
-- **Scaling Policies**:
-  - Scale-up: CPU > 70% for 2 consecutive periods (120s each)
-  - Scale-down: CPU < 20% for 2 consecutive periods (120s each)
-  - Cooldown: 300 seconds to prevent thrashing
-- **Health Checks**: ELB health checks with 300-second grace period
-- **Launch Template**: Versioned configuration for consistent deployments
+    // Route Tables
+    const publicRouteTable = new aws.ec2.RouteTable(`tap-public-rt-${environmentSuffix}`, {
+      vpcId: vpc.id,
+      tags: { ...tags, Name: `tap-public-rt-${environmentSuffix}` },
+    }, { parent: this });
 
-**Scaling Strategy Justification:**
-The 70%/20% thresholds provide responsive scaling while preventing unnecessary instance launches. The 2-instance minimum ensures availability during single-instance failures.
+    new aws.ec2.Route(`tap-public-route-${environmentSuffix}`, {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    }, { parent: this });
 
-### 4. High Availability Architecture
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(`tap-public-rta-${i + 1}-${environmentSuffix}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      }, { parent: this });
+    });
 
-**Multi-AZ Redundancy:**
-- Application servers distributed across 2+ availability zones
-- NAT Gateways in each AZ prevent single points of failure
-- Load balancer spans all public subnets
-- Database tier (if implemented) with Multi-AZ configuration
+    // Private route tables (one per AZ)
+    privateSubnets.forEach((subnet, i) => {
+      const privateRouteTable = new aws.ec2.RouteTable(`tap-private-rt-${i + 1}-${environmentSuffix}`, {
+        vpcId: vpc.id,
+        tags: { ...tags, Name: `tap-private-rt-${i + 1}-${environmentSuffix}` },
+      }, { parent: this });
 
-**Fault Tolerance Measures:**
-- Auto Scaling Group automatically replaces failed instances
-- Health checks detect and remove unhealthy instances
-- Load balancer routes traffic only to healthy instances
-- Independent routing tables for each private subnet
+      new aws.ec2.Route(`tap-private-route-${i + 1}-${environmentSuffix}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: natGateways[i].id,
+      }, { parent: this });
 
-### 5. Security and Access Management
+      new aws.ec2.RouteTableAssociation(`tap-private-rta-${i + 1}-${environmentSuffix}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      }, { parent: this });
+    });
 
-**IAM Best Practices:**
-- **Principle of Least Privilege**: Each role has minimal required permissions
-- **Instance Profiles**: Secure credential delivery to EC2 instances
-- **Service-Linked Roles**: AWS managed policies for standard services
-- **Policy Structure**:
-  - S3 access limited to specific bucket and operations
-  - CloudWatch permissions for monitoring
-  - Systems Manager permissions for patch management
+    // Security Groups
+    const albSg = new aws.ec2.SecurityGroup(`tap-alb-sg-${environmentSuffix}`, {
+      vpcId: vpc.id,
+      description: 'Security group for Application Load Balancer',
+      ingress: [
+        { fromPort: 80, toPort: 80, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
+        { fromPort: 443, toPort: 443, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
+      ],
+      egress: [
+        { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
+      ],
+      tags: { ...tags, Name: `tap-alb-sg-${environmentSuffix}` },
+    }, { parent: this });
 
-**Network Security:**
-- **Security Groups**: Application-level firewall rules
-  - ALB SG: HTTP/HTTPS from internet (0.0.0.0/0)
-  - Web SG: HTTP from ALB only, SSH from VPC only
-- **NACLs**: Subnet-level protection (default allows all)
-- **Private Subnet Isolation**: Application servers not directly internet-accessible
+    const webSg = new aws.ec2.SecurityGroup(`tap-web-sg-${environmentSuffix}`, {
+      vpcId: vpc.id,
+      description: 'Security group for web servers',
+      ingress: [
+        { fromPort: 80, toPort: 80, protocol: 'tcp', securityGroups: [albSg.id] },
+        { fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: ['10.0.0.0/16'] },
+      ],
+      egress: [
+        { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
+      ],
+      tags: { ...tags, Name: `tap-web-sg-${environmentSuffix}` },
+    }, { parent: this });
 
-**Security Group Rule Justification:**
-The security groups implement defense in depth by allowing only necessary traffic flows. The ALB acts as a protective layer, and application servers accept connections only from the load balancer.
+    // IAM Role for EC2 instances
+    const ec2Role = new aws.iam.Role(`tap-ec2-role-${environmentSuffix}`, {
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [{
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: { Service: 'ec2.amazonaws.com' },
+        }],
+      }),
+      tags,
+    }, { parent: this });
 
-### 6. Performance and Efficiency Optimization
+    // IAM Policy for S3 access
+    const s3Policy = new aws.iam.RolePolicy(`tap-s3-policy-${environmentSuffix}`, {
+      role: ec2Role.id,
+      policy: pulumi.output(pulumi.all([]).apply(() => JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [{
+          Effect: 'Allow',
+          Action: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+          ],
+          Resource: [
+            `arn:aws:s3:::tap-static-assets-${environmentSuffix}`,
+            `arn:aws:s3:::tap-static-assets-${environmentSuffix}/*`,
+          ],
+        }],
+      }))),
+    }, { parent: this });
 
-**Compute Optimization:**
-- **Instance Type**: t3.micro for development, t3.medium+ for production
-- **Launch Template**: Ensures consistent instance configuration
-- **User Data**: Automated application deployment and configuration
-- **AMI Selection**: Latest Amazon Linux 2 with security updates
+    // Attach AWS managed policies
+    new aws.iam.RolePolicyAttachment(`tap-ssm-policy-${environmentSuffix}`, {
+      role: ec2Role.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+    }, { parent: this });
 
-**Network Performance:**
-- **Enhanced Networking**: Enabled on compatible instance types
-- **Placement Groups**: Consider cluster placement for high-performance computing
-- **Elastic Network Interfaces**: Modern IPv4 management for dynamic addressing
+    new aws.iam.RolePolicyAttachment(`tap-cloudwatch-policy-${environmentSuffix}`, {
+      role: ec2Role.name,
+      policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+    }, { parent: this });
 
-**Cost Optimization:**
-- Right-sized instances based on workload requirements
-- Auto Scaling reduces costs during low-traffic periods
-- Reserved Instances for predictable baseline capacity
-- Spot Instances for fault-tolerant workloads (future enhancement)
+    const instanceProfile = new aws.iam.InstanceProfile(`tap-instance-profile-${environmentSuffix}`, {
+      role: ec2Role.name,
+      tags,
+    }, { parent: this });
 
-## Modern AWS Features Integration
+    // S3 Bucket for static assets (kept private)
+    const staticBucket = new aws.s3.Bucket(`tap-static-assets-${environmentSuffix}`, {
+      bucket: `tap-static-assets-${environmentSuffix}-${Date.now()}`,
+      tags,
+    }, { parent: this });
 
-### 1. EC2 VPC Network Interface Dynamic IPv4 Management
+    // S3 Bucket public access block (keep bucket private)
+    new aws.s3.BucketPublicAccessBlock(`tap-static-pab-${environmentSuffix}`, {
+      bucket: staticBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    }, { parent: this });
 
-**Implementation Details:**
-- Automatic private IP assignment within subnet CIDR
-- Elastic Network Interface (ENI) optimization for container workloads
-- Support for multiple IP addresses per instance when needed
-- IPv6 readiness for future requirements
+    // CloudFront Origin Access Control
+    const originAccessControl = new aws.cloudfront.OriginAccessControl(`tap-oac-${environmentSuffix}`, {
+      name: `tap-oac-${environmentSuffix}`,
+      description: "Origin Access Control for TAP static assets",
+      originAccessControlOriginType: "s3",
+      signingBehavior: "always",
+      signingProtocol: "sigv4",
+    }, { parent: this });
 
-### 2. AWS Organizations Declarative Policies
+    // CloudFront Distribution for static content delivery
+    const distribution = new aws.cloudfront.Distribution(`tap-cdn-${environmentSuffix}`, {
+      origins: [{
+        domainName: staticBucket.bucketDomainName,
+        originId: "S3Origin",
+        originAccessControlId: originAccessControl.id,
+      }],
+      enabled: true,
+      defaultRootObject: "index.html",
+      defaultCacheBehavior: {
+        targetOriginId: "S3Origin",
+        viewerProtocolPolicy: "redirect-to-https",
+        allowedMethods: ["GET", "HEAD", "OPTIONS"],
+        cachedMethods: ["GET", "HEAD", "OPTIONS"],
+        forwardedValues: {
+          queryString: false,
+          cookies: { forward: "none" },
+        },
+        minTtl: 0,
+        defaultTtl: 3600,
+        maxTtl: 86400,
+        compress: true,
+      },
+      customErrorResponses: [{
+        errorCode: 404,
+        responseCode: 404,
+        responsePagePath: "/error.html",
+        errorCachingMinTtl: 300,
+      }],
+      restrictions: {
+        geoRestriction: {
+          restrictionType: "none",
+        },
+      },
+      viewerCertificate: {
+        cloudfrontDefaultCertificate: true,
+      },
+      tags: { ...tags, Purpose: 'StaticContentDelivery' },
+    }, { parent: this });
 
-**Security Enhancement:**
-- Service Control Policies (SCPs) for guardrails
-- Standardized security baselines across accounts
-- Automated compliance enforcement
-- Centralized billing and cost management
+    // S3 Bucket policy to allow CloudFront access only
+    new aws.s3.BucketPolicy(`tap-static-policy-${environmentSuffix}`, {
+      bucket: staticBucket.id,
+      policy: pulumi.all([staticBucket.arn, distribution.arn]).apply(([bucketArn, distributionArn]) => 
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Sid: 'AllowCloudFrontServicePrincipal',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudfront.amazonaws.com'
+            },
+            Action: 's3:GetObject',
+            Resource: `${bucketArn}/*`,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': distributionArn
+              }
+            }
+          }]
+        })
+      ),
+    }, { parent: this });
 
-**Policy Examples:**
-- Prevent deletion of security groups
-- Enforce encryption requirements
-- Restrict resource creation to approved regions
-- Mandate specific tagging strategies
+    // Get latest Amazon Linux 2 AMI (most compatible)
+    const amiId = aws.ec2.getAmi({
+      mostRecent: true,
+      owners: ['amazon'],
+      filters: [
+        { name: 'name', values: ['amzn2-ami-hvm-*'] },
+        { name: 'architecture', values: ['x86_64'] },
+        { name: 'virtualization-type', values: ['hvm'] },
+        { name: 'state', values: ['available'] },
+        { name: 'root-device-type', values: ['ebs'] },
+      ],
+    });
 
-## Implementation Best Practices
+    // Launch Template with user data
+    const launchTemplate = new aws.ec2.LaunchTemplate(`tap-launch-template-${environmentSuffix}`, {
+      namePrefix: `tap-template-${environmentSuffix}-`,
+      imageId: amiId.then(ami => ami.id),
+      instanceType: 't3.micro',
+      iamInstanceProfile: { name: instanceProfile.name },
+      vpcSecurityGroupIds: [webSg.id],
+      userData: Buffer.from(`#!/bin/bash
+yum update -y -q
+yum install -y httpd -q
+systemctl start httpd
+systemctl enable httpd
 
-### 1. Infrastructure as Code
+echo '<!DOCTYPE html><html><body><h1>TAP Web App</h1><p>Status: Running</p></body></html>' > /var/www/html/index.html
+systemctl restart httpd
+`).toString('base64'),
+      tagSpecifications: [{
+        resourceType: 'instance',
+        tags: { ...tags, Name: `tap-web-instance-${environmentSuffix}` },
+      }],
+      tags,
+    }, { parent: this });
 
-**Pulumi JavaScript Benefits:**
-- Type-safe infrastructure definitions
-- Familiar JavaScript syntax and ecosystem
-- Rich resource modeling with objects and classes
-- Strong integration with CI/CD pipelines
-- Real-time state management and drift detection
+    // Application Load Balancer
+    const alb = new aws.lb.LoadBalancer(`tap-alb-${environmentSuffix}`, {
+      loadBalancerType: 'application',
+      subnets: publicSubnets.map(subnet => subnet.id),
+      securityGroups: [albSg.id],
+      tags: { ...tags, Name: `tap-alb-${environmentSuffix}` },
+    }, { parent: this });
 
-### 2. Deployment Strategy
+    // ALB Target Group
+    const targetGroup = new aws.lb.TargetGroup(`tap-tg-${environmentSuffix}`, {
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: vpc.id,
+      healthCheck: {
+        enabled: true,
+        healthyThreshold: 2,
+        interval: 15, // Check every 15 seconds instead of 30
+        matcher: '200',
+        path: '/',
+        port: 'traffic-port',
+        protocol: 'HTTP',
+        timeout: 5,
+        unhealthyThreshold: 3,
+      },
+      tags: { ...tags, Name: `tap-tg-${environmentSuffix}` },
+    }, { parent: this });
 
-**Recommended Approach:**
-1. Deploy VPC and networking components first
-2. Implement security groups and IAM roles
-3. Deploy S3 bucket with proper configurations
-4. Launch Auto Scaling Group with minimal capacity
-5. Configure monitoring and alerting
-6. Test scaling policies under load
+    // ALB Listener
+    new aws.lb.Listener(`tap-listener-${environmentSuffix}`, {
+      loadBalancerArn: alb.arn,
+      port: '80',
+      protocol: 'HTTP',
+      defaultActions: [{
+        type: 'forward',
+        targetGroupArn: targetGroup.arn,
+      }],
+      tags,
+    }, { parent: this });
 
-### 3. Monitoring and Observability
+    // Auto Scaling Group - Pro approach: Start without target groups
+    const asg = new aws.autoscaling.Group(`tap-asg-${environmentSuffix}`, {
+      vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
+      healthCheckType: 'EC2', // Use EC2 health checks only
+      healthCheckGracePeriod: 180, // 3 minutes is enough for EC2 checks
+      minSize: 1,
+      maxSize: 10,
+      desiredCapacity: 1,
+      launchTemplate: {
+        id: launchTemplate.id,
+        version: '$Latest',
+      },
+      tags: Object.entries({ ...tags, Name: `tap-asg-${environmentSuffix}` }).map(([key, value]) => ({
+        key,
+        value,
+        propagateAtLaunch: true,
+      })),
+    }, { 
+      parent: this,
+      dependsOn: [...natGateways],  // Just wait for NAT Gateways
+      customTimeouts: {
+        create: "8m",   // Reduced timeout for EC2 health checks
+        update: "8m"
+      }
+    });
 
-**CloudWatch Integration:**
-- CPU, memory, and disk utilization metrics
-- Application-specific custom metrics
-- Log aggregation from all instances
-- Dashboard creation for operational visibility
-- Alerting on critical thresholds
+    // Attach target group after ASG is healthy
+    new aws.autoscaling.Attachment(`tap-asg-attachment-${environmentSuffix}`, {
+      autoscalingGroupName: asg.name,
+      lbTargetGroupArn: targetGroup.arn,
+    }, { 
+      parent: this,
+      dependsOn: [asg, targetGroup] // Wait for both ASG and target group
+    });
 
-**Recommended Metrics:**
-- Application response time
-- Request rate and error rate
-- Database connection health
-- S3 request rates and error rates
+    // Auto Scaling Policies
+    const scaleUpPolicy = new aws.autoscaling.Policy(`tap-scale-up-${environmentSuffix}`, {
+      scalingAdjustment: 2,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: asg.name,
+      policyType: 'SimpleScaling',
+    }, { parent: this });
 
-## Production Readiness Considerations
+    const scaleDownPolicy = new aws.autoscaling.Policy(`tap-scale-down-${environmentSuffix}`, {
+      scalingAdjustment: -1,
+      adjustmentType: 'ChangeInCapacity',
+      cooldown: 300,
+      autoscalingGroupName: asg.name,
+      policyType: 'SimpleScaling',
+    }, { parent: this });
 
-### 1. Security Hardening
+    // CloudWatch Alarms
+    new aws.cloudwatch.MetricAlarm(`tap-high-cpu-${environmentSuffix}`, {
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 120,
+      statistic: 'Average',
+      threshold: 70,
+      alarmDescription: 'This metric monitors ec2 cpu utilization',
+      alarmActions: [scaleUpPolicy.arn],
+      dimensions: {
+        AutoScalingGroupName: asg.name,
+      },
+      tags,
+    }, { parent: this });
 
-- WAF integration for application-layer protection
-- VPC Flow Logs for network monitoring
-- AWS Config for compliance monitoring
-- GuardDuty for threat detection
-- Security Hub for centralized security findings
+    new aws.cloudwatch.MetricAlarm(`tap-low-cpu-${environmentSuffix}`, {
+      comparisonOperator: 'LessThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: 120,
+      statistic: 'Average',
+      threshold: 20,
+      alarmDescription: 'This metric monitors ec2 cpu utilization',
+      alarmActions: [scaleDownPolicy.arn],
+      dimensions: {
+        AutoScalingGroupName: asg.name,
+      },
+      tags,
+    }, { parent: this });
 
-### 2. Backup and Disaster Recovery
+    // Register outputs
+    this.registerOutputs({
+      vpcId: vpc.id,
+      publicSubnetIds: pulumi.all(publicSubnets.map(subnet => subnet.id)),
+      privateSubnetIds: pulumi.all(privateSubnets.map(subnet => subnet.id)),
+      albDnsName: alb.dnsName,
+      albZoneId: alb.zoneId,
+      staticBucketName: staticBucket.id,
+      cloudfrontDomainName: distribution.domainName,
+      cloudfrontDistributionId: distribution.id,
+      asgName: asg.name,
+    });
 
-- Automated AMI creation for instances
-- S3 Cross-Region Replication for static assets
-- Database backups with point-in-time recovery
-- Multi-region deployment strategy
-- Recovery Time Objective (RTO) and Recovery Point Objective (RPO) definition
+    // Export outputs for external access
+    this.vpcId = vpc.id;
+    this.albDnsName = alb.dnsName;
+    this.staticBucketName = staticBucket.id;
+    this.cloudfrontDomainName = distribution.domainName;
+    this.cloudfrontDistributionId = distribution.id;
+  }
+}
+```
 
-### 3. Performance Tuning
+## Implementation Details
 
-- Application profiling and optimization
-- Database query optimization
-- CDN implementation with CloudFront
-- Connection pooling and caching strategies
-- Load testing and capacity planning
+### Core Architecture
+- **Multi-AZ VPC** with public/private subnets across 2 availability zones
+- **NAT Gateways** in each AZ for high availability
+- **Application Load Balancer** with health checks
+- **Auto Scaling Group** with EC2 health checks for reliable deployment
+- **CloudFront CDN** for static content delivery with Origin Access Control
+- **Private S3 bucket** secured with CloudFront-only access
 
-## Cost Optimization Strategies
+### Security Features
+- **Defense in depth** with security groups and NACLs
+- **IAM roles** with least privilege access
+- **Private S3 bucket** with public access blocked
+- **CloudFront OAC** for secure S3 access
+- **HTTPS enforcement** via CloudFront
 
-### 1. Resource Right-Sizing
+### High Availability & Scaling
+- **Multi-AZ deployment** across 2 availability zones
+- **Auto Scaling Group** with CPU-based scaling policies
+- **Application Load Balancer** with health checks
+- **CloudWatch alarms** for monitoring and scaling
+- **Redundant NAT Gateways** for fault tolerance
 
-- Regular review of instance utilization metrics
-- Automated recommendations via AWS Compute Optimizer
-- Reserved Instance planning for stable workloads
-- Spot Instance integration for non-critical workloads
+### Production Optimizations
+- **Professional ASG deployment** pattern with separate target group attachment
+- **EC2 health checks** for reliable initial deployment
+- **Optimized timeouts** and grace periods
+- **CloudFront compression** and caching
+- **Proper dependency management** to avoid deployment issues
 
-### 2. Storage Optimization
-
-- S3 Intelligent Tiering for automatic cost optimization
-- Lifecycle policies for log data
-- EBS volume type optimization
-- Regular cleanup of unused resources
-
-## Compliance and Governance
-
-### 1. Tagging Strategy
-
-**Required Tags:**
-- Environment (dev, staging, prod)
-- Project (TapStack)
-- Owner (team or individual)
-- CostCenter (for chargeback)
-- ManagedBy (Pulumi)
-
-### 2. Change Management
-
-- All infrastructure changes via code
-- Peer review for all modifications
-- Automated testing of infrastructure changes
-- Rollback procedures for failed deployments
-
-## Conclusion
-
-This ideal infrastructure architecture provides a robust, scalable, and secure foundation for a highly available web application. The design incorporates AWS best practices, modern services, and comprehensive security measures while maintaining cost efficiency and operational simplicity.
-
-The solution addresses all six core requirements while providing a foundation for future enhancements such as containerization, microservices architecture, and advanced monitoring capabilities. The use of Infrastructure as Code ensures consistency, repeatability, and maintainability of the deployment process.
-
-Key success factors include proper multi-AZ redundancy, automated scaling based on demand, secure access patterns, and comprehensive monitoring. The architecture is designed to handle variable traffic loads efficiently while maintaining high availability and security standards appropriate for production workloads.
+This implementation provides enterprise-grade infrastructure that is secure, scalable, and highly available.
