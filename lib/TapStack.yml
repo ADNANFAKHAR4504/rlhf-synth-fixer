@@ -678,7 +678,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: "secure-bucket"
+          Value: secure-bucket
         - Key: Environment
           Value: !Ref Environment
 
@@ -690,12 +690,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - [
-              { "Ref": "AWS::StackName" },
-              "logging-bucket",
-              { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" },
-            ]
+          - ["logging", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -713,7 +708,7 @@ Resources:
             ExpirationInDays: 90
       Tags:
         - Key: Name
-          Value: "logging-bucket"
+          Value: logging-bucket
         - Key: Environment
           Value: !Ref Environment
 
