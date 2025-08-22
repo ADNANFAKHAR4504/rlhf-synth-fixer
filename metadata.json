@@ -6,24 +6,27 @@
   "po_id": "291551",
   "team": "1",
   "startedAt": "2025-08-22T15:14:09.558Z",
-  "subtask": "Serverless Architecture Implementation",
+  "subtask": "Serverless REST API with Infrastructure as Code",
   "subject_labels": [
     "Serverless Architecture",
-    "API Gateway Configuration", 
-    "Lambda Function Development",
-    "DynamoDB Management",
-    "IAM Security Configuration",
-    "CloudWatch Monitoring Setup",
+    "REST API Development", 
+    "Lambda Function Implementation",
+    "DynamoDB NoSQL Database",
+    "IAM Security Policies",
+    "CloudWatch Logging",
     "CORS Configuration",
-    "Infrastructure Provisioning"
+    "Resource Naming Patterns",
+    "Terraform Infrastructure",
+    "Error Handling and Testing"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "aws_services": [
     "Lambda",
     "API Gateway", 
     "DynamoDB",
     "IAM",
     "CloudWatch Logs",
-    "Route53"
+    "S3",
+    "STS"
   ]
 }
