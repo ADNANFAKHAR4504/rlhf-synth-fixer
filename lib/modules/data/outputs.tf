@@ -37,3 +37,8 @@ output "caller_identity_account_id" {
   description = "Current AWS account ID"
   value       = data.aws_caller_identity.current.account_id
 }
+
+output "elb_service_account_id" {
+  description = "ID of the ELB service account"
+  value       = data.aws_elb_service_account.main.id
+}

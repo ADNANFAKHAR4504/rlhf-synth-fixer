@@ -122,3 +122,5 @@ data "aws_iam_policy_document" "ec2_s3_access" {
     resources = [var.s3_kms_key_arn]
   }
 }
+
+data "aws_elb_service_account" "main" {}

@@ -330,7 +330,7 @@ module "monitoring" {
   project_name       = var.project_name
   environment        = var.environment
   notification_email = var.notification_email
-  asg_name           = aws_autoscaling_group.app.name
+  asg_name           = module.compute.asg_name
   random_suffix      = random_string.suffix.result
   common_tags        = local.common_tags
 }
@@ -701,5 +701,5 @@ output "alb_logs_s3_bucket_name" {
 
 output "ec2_autoscaling_group_name" {
   description = "Name of the EC2 Auto Scaling group"
-  value       = aws_autoscaling_group.app.name
+  value       = module.compute.asg_name
 }
