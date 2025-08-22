@@ -17,10 +17,16 @@ echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 if [ "$LANGUAGE" = "ts" ]; then
     echo "✅ TypeScript project detected, running ESLint..."
     npm run lint
+
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
-    # Ensure provider bindings exist for CDKTF Go projects before tidy
     if [ "$PLATFORM" = "cdktf" ]; then
+        # --- FIX: remove legacy terraform.tfstate before cdktf get ---
+        if [ -f "terraform.tfstate" ]; then
+            echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+            rm -f terraform.tfstate
+        fi
+
         if [ ! -d ".gen/providers" ]; then
             echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/providers)"
             npx --yes cdktf get
@@ -28,27 +34,29 @@ elif [ "$LANGUAGE" = "go" ]; then
             echo ".gen/providers exists, skipping cdktf get"
         fi
     fi
+
     echo "Running go mod tidy to populate go.sum and fetch deps"
-    # Bypass proxy/checksum size limits for large CDKTF Go providers
     export GOPROXY=${GOPROXY:-direct}
     export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
     export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
     go mod tidy
-    # Only format our Go sources under lib and tests
+
     UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
         echo "❌ The following files are not gofmt formatted:"
         echo "$UNFORMATTED"
         exit 1
     fi
-    # Vet only lib and tests packages; exclude node_modules and .gen
+
     PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
     if [ -n "$PKGS" ]; then
         echo "$PKGS" | xargs -r go vet
     else
         echo "No Go packages found under lib or tests to vet."
     fi
+
 elif [ "$LANGUAGE" = "py" ]; then
+    # (unchanged pylint block)
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
     echo "--- START PYLINT OUTPUT (Raw) ---"
@@ -60,19 +68,14 @@ elif [ "$LANGUAGE" = "py" ]; then
         echo "⚠️ Pylint command exited with non-zero status code: $LINT_EXIT_CODE."
     fi
     
-    # Extract the score from the Pylint output
     SCORE=$(echo "$LINT_OUTPUT" | sed -n 's/.*rated at \([0-9.]*\)\/10.*/\1/p')
     if [[ -z "$SCORE" || ! "$SCORE" =~ ^[0-9.]+$ ]]; then
         echo "❌ ERROR: Could not extract linting score from Pylint output."
-        echo "Please verify Pylint's output format or if it ran successfully enough to produce a score."
         exit 1
     fi
     echo "Detected Pylint Score: $SCORE/10"
-    
-    # Define the minimum acceptable score
+
     MIN_SCORE=7.0
-    
-    # Compare the extracted score with the minimum threshold
     if (( $(echo "$SCORE >= $MIN_SCORE" | bc -l) )); then
         echo "✅ Linting score $SCORE/10 is greater than or equal to $MIN_SCORE. Linting passed."
         exit 0
@@ -80,11 +83,13 @@ elif [ "$LANGUAGE" = "py" ]; then
         echo "❌ Linting score $SCORE/10 is less than $MIN_SCORE. Linting failed."
         exit 1
     fi
+
 elif [ "$LANGUAGE" = "java" ]; then
     echo "✅ Java project detected, running Checkstyle..."
     chmod +x ./gradlew
     ./gradlew check --build-cache --no-daemon
     echo "✅ Java linting completed successfully"
+
 elif [ "$PLATFORM" = "cfn" ]; then
     echo "✅ CloudFormation project detected, running CloudFormation validation..."
     if [ "$LANGUAGE" = "json" ]; then
@@ -92,6 +97,7 @@ elif [ "$PLATFORM" = "cfn" ]; then
     elif [ "$LANGUAGE" = "yaml" ]; then
         pipenv run cfn-validate-yaml
     fi
+
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
     echo "💡 Running default ESLint only"
