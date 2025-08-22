@@ -1,158 +1,87 @@
-# 📄 System Prompt
+# Project brief
 
-You are an expert DevOps engineer specializing in **Terraform (HCL)** and **AWS production architectures**.  
-Your task is to generate a **single-file Terraform configuration** named **`tap_stack.tf`** that sets up a **secure, scalable, and observable** AWS environment optimized for **zero-downtime Fargate deployments**.
+We need a single Terraform file called `tap_stack.tf` that brings up a small, production‑ready stack on AWS. The stack runs an ECS Fargate service behind an Application Load Balancer, uses an RDS Postgres database in private subnets, stores secrets in AWS Secrets Manager, and includes basic monitoring and autoscaling. Keep it simple, secure by default, and ready for zero‑downtime deployments.
 
-**Critical rules:**
-- Produce **only valid HCL** in one file called **`tap_stack.tf`** — this file must contain **all variable declarations, sensible defaults, locals, data sources, resources, and outputs**.  
-- **Do not** include provider or backend configuration (that already exists in `provider.tf`).  
-- **Assume** the provider is AWS and already configured in `provider.tf` to use the variable `aws_region`.  
-- **Target region is `us-east-1` only** and must be enforced via the `aws_region` variable you declare (default to `us-east-1`).  
-- The code must be **brand-new** (no external module sources, no references to preexisting stacks).  
-- Use **production best practices** (least privilege IAM, encryption, tagging, multi-AZ where relevant, health checks, alarms, autoscaling where applicable).  
-- **Pass `terraform validate`** and be ready to apply in a clean AWS account.
+Key constraints
 
----
+- Provider and backend are defined in `provider.tf`; do not add provider/backend blocks to `tap_stack.tf`.
+- Use a single region exposed via `variable "aws_region"` (default `us-west-2`) and reference it consistently.
+- Everything lives in `tap_stack.tf`: variables, locals, data sources, resources, and outputs.
+- Favor least‑privilege IAM, encryption at rest, multi‑AZ where appropriate, and consistent tagging.
 
-# 👤 User Prompt
+Network
 
-Generate `tap_stack.tf` implementing the following **requirements** and **constraints**. Respect every item.
+- Create a VPC with public and private subnets across at least two AZs.
+- Public subnets have an Internet Gateway; private subnets route through a NAT Gateway.
+- Associate route tables correctly.
+  - Security groups:
+  - ALB allows inbound 80/443 from `var.allowed_cidrs`.
+  - ECS service (in private subnets) only accepts traffic from the ALB SG on the app port.
+  - RDS allows inbound on the DB port only from the ECS tasks’ SG.
 
-## Environment & Organization
-1. **Single region**: All resources must be in **`us-east-1`**.  
-   - Declare `variable "aws_region"` with default `"us-east-1"` and use it throughout.  
-   - Do **not** set provider/backends here (they live in `provider.tf` and use `var.aws_region`).
+Security defaults
 
-2. **Tagging**: All resources must have tags that include **`Environment = "Production"`**.  
-   - Implement a `local.common_tags` and **merge** it into every resource that supports tags.
+- Enable account‑level EBS encryption by default (`aws_ebs_encryption_by_default`).
+- Encrypt RDS storage. Use CloudWatch Logs for application logs.
 
-3. **Terraform Cloud**: Assume state is managed in Terraform Cloud (backend configured in `provider.tf`).  
-   - Do **not** declare `backend` blocks here.  
-   - Include a `terraform` block with `required_version` and `required_providers` only.
+Compute (ECS)
 
-## Network (VPC)
-4. **VPC with public & private subnets** across **at least 2 AZs** in `us-east-1`.  
-   - Internet Gateway for public subnets, **NAT Gateway** for private subnets.  
-   - Route tables correctly associated.  
-   - Security groups:
-     - ALB: allow inbound 80/443 from `var.allowed_cidrs` (declare with sensible defaults).  
-     - ECS services in private subnets: restrict inbound from ALB SG only.  
-     - RDS: restrict inbound **only** from ECS tasks’ SG on DB port.
+- Create an ECS cluster for Fargate.
+- Define a task execution role and a task role (least privilege).
+- Send container logs to CloudWatch using the awslogs driver.
+- Place an ALB in public subnets. Use IP target type, health checks, and separate target groups for blue/green.
 
-5. **EBS encryption-by-default** enabled at the account level.  
-   - Use `aws_ebs_encryption_by_default`.
+Zero‑downtime deployments
 
-## Compute (Serverless on ECS Fargate)
-6. **ECS on Fargate** for application services (no EC2 capacity).  
-   - Create a cluster, task execution role, task role (least privilege), CloudWatch log groups.  
-   - Container(s) should use **AWS Logs** driver to CloudWatch.  
-   - Use **Application Load Balancer** in public subnets and target groups in private subnets with **dynamic port mapping**.  
-   - Health checks configured for ALB target groups.
+- Configure CodeDeploy (ECS) for blue/green: a CodeDeploy app and deployment group using two target groups, plus prod and test listeners. Include a termination wait time and traffic shifting. The ECS service must use `deployment_controller { type = "CODE_DEPLOY" }`.
 
-7. **Zero-downtime deployments**:  
-   Implement **CodeDeploy Blue/Green for ECS** with:
-   - `aws_codedeploy_app` (ECS), `aws_codedeploy_deployment_group` using two target groups, listener rules, and an **ALB**.  
-   - Enable termination wait time, traffic shifting (all in HCL).  
-   - ECS service must set `deployment_controller { type = "CODE_DEPLOY" }`.
+Autoscaling
 
-8. **Autoscaling (optional but recommended)**:  
-   - Include ECS service autoscaling policies (CPU/Memory) to demonstrate scalability.
+- Add ECS service target tracking policies for CPU and memory.
 
-## Data (RDS & Secrets)
-9. **RDS** (e.g., Postgres or MySQL) in **private subnets**:  
-   - Multi-AZ = `true` (recommended for prod) or justify if not feasible.  
-   - Enable **automated backups** (`backup_retention_period`, `preferred_backup_window`).  
-   - Encrypted at rest (with AWS-managed or KMS key).  
-   - DB SG allows access only from ECS tasks’ SG.  
-   - Output the DB endpoint (but **do not** output secrets).
+Data layer
 
-10. **AWS Secrets Manager**:  
-   - Create secrets for app config (e.g., DB password) and **reference them** from ECS task definitions using `secrets` in container definitions.  
-   - Task role has **least-privilege** policy to read **only** those secrets ARNs.
+- RDS Postgres in private subnets, Multi‑AZ enabled, automated backups and a maintenance window, encrypted storage. Output the DB endpoint only (no secrets).
 
-## IAM (Least Privilege)
-11. **IAM roles**:
-   - **Task execution role** for pulling images and writing logs.  
-   - **Task role** limited to required secrets and specific AWS APIs used by the app.  
-   - Any additional roles/policies strictly **least privilege** and **scoped to ARNs**.  
-   - Inline policy examples should be explicit and minimal.
+Secrets
 
-## Monitoring & Logging
-12. **CloudWatch**:
-   - Log groups for ECS tasks (with retention).  
-   - **Alarms** for:  
-     - ALB 5XX error rate,  
-     - ECS service CPU/Memory high,  
-     - RDS CPU high / FreeStorage low.  
-   - Use sensible thresholds and include alarm descriptions.
+- Store the DB password and any app config in Secrets Manager.
+- Reference secrets from the task definition via `secrets`.
+- Allow the task role to read only those specific secret ARNs.
 
-## Security & Compliance
-13. **Encryption everywhere**:
-   - EBS default encryption ON.  
-   - RDS storage encryption ON.  
-   - CloudWatch Logs (KMS optional).  
-   - ALB access logs to S3 (if you add this, ensure S3 bucket is private & encrypted). *(Optional but nice)*
+Monitoring
 
-14. **Ingress restrictions**:
-   - Parameterize `var.allowed_cidrs` and use it for ALB 80/443 ingress.  
-   - Deny broad access elsewhere.
+- CloudWatch log group for ECS tasks (set a sensible retention).
+- Alarms: ALB 5XX errors, ECS CPU high, ECS memory high, RDS CPU high, RDS free storage low. Use reasonable thresholds and short descriptions.
 
-## Modularity (Single-file Pattern)
-15. **Single file** but **modularized structure**:  
-   - Since Terraform doesn’t support inline modules, emulate modularity using **sectioned blocks** with clear comments and **reusable locals**.  
-   - Group resources by “virtual module” sections: `# module: vpc`, `# module: ecs`, `# module: codedeploy`, `# module: rds`, `# module: secrets`, `# module: monitoring`.  
-   - Use `locals` for reusable names, ARNs, tags, and share them across sections.  
-   - Avoid external module sources.
+Structure in a single file
 
-## Outputs
-16. Provide outputs for:
-   - VPC ID, public/private subnet IDs,  
-   - ALB DNS name,  
-   - ECS service name/ARN,  
-   - CodeDeploy application & deployment group names,  
-   - RDS endpoint,  
-   - CloudWatch log group names.  
-   - **Do not output secret values**.
+- Use clear comment headers to organize sections (e.g., `module: vpc`, `module: ecs`, `module: codedeploy`, `module: rds`, `module: secrets`, `module: monitoring`). Reuse names/ARNs via locals.
 
----
+Variables (with defaults where practical)
 
-## Interface & Defaults to Declare
-- `variable "aws_region"` { default = "us-east-1" }  
-- `variable "project_name"` { default = "nova-model-breaking" }  
-- `variable "environment"` { default = "Production" }  
-- `variable "allowed_cidrs"` { type = list(string), default = ["0.0.0.0/0"] } *(You may narrow the default if you prefer.)*  
-- `variable "db_engine"` { default = "postgres" }  
-- `variable "db_engine_version"` { default = "15.5" } *(or a stable version)*  
-- `variable "db_instance_class"` { default = "db.t3.medium" }  
-- `variable "db_allocated_storage"` { default = 50 }  
-- `variable "container_image"` { description = "ECR image URI", default = "public.ecr.aws/amazonlinux/amazonlinux:latest" } *(placeholder ok)*  
-- `variable "container_port"` { default = 8080 }  
-- `variable "desired_count"` { default = 2 }  
-- Any other sensible variables (ALB idle timeout, health check path, etc.).
+- `aws_region` (default `us-west-2`)
+- `project_name` (default `nova-model-breaking`)
+- `environment` (default `Production`)
+- `allowed_cidrs` (list, default `["0.0.0.0/0"]`)
+- `db_engine` (default `postgres`)
+- `db_engine_version` (default `15.5`)
+- `db_instance_class` (default `db.t3.medium`)
+- `db_allocated_storage` (default `50`)
+- `container_image` (can be a public placeholder)
+- `container_port` (default `8080`)
+- `desired_count` (default `2`)
+- Any other useful knobs (e.g., ALB idle timeout, health check path).
 
----
+Outputs
 
-## Acceptance Criteria
-- ✅ **Single file**: Output **only** `tap_stack.tf` with valid HCL.  
-- ✅ **Region-pinned** to `us-east-1` via `var.aws_region`.  
-- ✅ **Fargate ECS** with ALB, private subnets, CloudWatch logs.  
-- ✅ **CodeDeploy Blue/Green** for **zero-downtime** ECS deployments (two target groups, listener rules).  
-- ✅ **Secrets Manager** used and least-privilege access from the ECS **task role**.  
-- ✅ **RDS** in private subnets with automated backups, encryption, and SG scoped to ECS.  
-- ✅ **EBS encryption-by-default** enabled.  
-- ✅ **CloudWatch alarms** for ALB 5XX, ECS CPU/Memory, RDS CPU/FreeStorage.  
-- ✅ **All resources tagged** with `Environment = "Production"` via `local.common_tags`.  
-- ✅ **No external modules** or remote sources; emulate modularity within the single file.  
-- ✅ **No provider/backend** blocks in this file.
+- VPC ID; public and private subnet IDs
+- ALB DNS name
+- ECS service name and ARN
+- CodeDeploy app and deployment group names
+- RDS endpoint
+- CloudWatch log group name(s)
 
----
+Deliverable
 
-## Output Format
-Return a single fenced HCL block:
-
-\`\`\`hcl
-# tap_stack.tf
-# (entire working configuration here)
-\`\`\`
-
-No prose, no README, no comments outside the code block.
+- One file: `tap_stack.tf` (valid HCL), ready to pass `terraform validate` in a clean AWS account, with no provider/backend blocks inside it.
