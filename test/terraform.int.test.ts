@@ -96,8 +96,8 @@ describe('Terraform Integration Tests', () => {
 
     test('should enable S3 bucket encryption and versioning', () => {
       expect(tapStackContent).toContain('aws_s3_bucket');
-      expect(tapStackContent).toContain('aws_s3_bucket_encryption');
-      expect(tapStackContent).toContain('SSE-S3');
+      expect(tapStackContent).toContain('aws_s3_bucket_server_side_encryption_configuration');
+      expect(tapStackContent).toContain('aws:kms');
       expect(tapStackContent).toContain('aws_s3_bucket_versioning');
       expect(tapStackContent).toContain('Enabled');
     });
