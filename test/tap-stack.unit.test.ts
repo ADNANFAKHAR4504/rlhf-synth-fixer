@@ -391,7 +391,7 @@ describe('TapStack CloudFormation Template', () => {
       const policy = template.Resources.CloudTrailBucketPolicy;
       const statements = policy.Properties.PolicyDocument.Statement;
       
-      expect(statements).toHaveLength(2);
+      expect(statements).toHaveLength(3);
       statements.forEach((stmt: any) => {
         expect(stmt.Condition).toBeDefined();
         expect(stmt.Principal.Service).toBe('cloudtrail.amazonaws.com');

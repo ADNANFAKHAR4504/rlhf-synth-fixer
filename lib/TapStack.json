@@ -1254,6 +1254,24 @@
                             }
                         },
                         {
+                            "Sid": "AWSCloudTrailBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketLocation",
+                            "Resource": {
+                                "Ref": "CloudTrailBucket"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}"
+                                    }
+                                }
+                            }
+                        },
+                        {
                             "Sid": "AWSCloudTrailWrite",
                             "Effect": "Allow",
                             "Principal": {
