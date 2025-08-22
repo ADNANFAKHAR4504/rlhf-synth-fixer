@@ -9,7 +9,7 @@
   "subtask": "Serverless REST API with Infrastructure as Code",
   "subject_labels": [
     "Serverless Architecture",
-    "REST API Development", 
+    "REST API Development",
     "Lambda Function Implementation",
     "DynamoDB NoSQL Database",
     "IAM Security Policies",
@@ -22,11 +22,17 @@
   "training_quality": 9,
   "aws_services": [
     "Lambda",
-    "API Gateway", 
+    "API Gateway",
     "DynamoDB",
     "IAM",
     "CloudWatch Logs",
     "S3",
     "STS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
 }
