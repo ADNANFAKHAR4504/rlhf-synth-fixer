@@ -41,7 +41,8 @@ describe('TapStack CloudFormation Template', () => {
         'DatabaseName',
         'DatabaseUsername',
         'InstanceType',
-        'LatestAmiId'
+        'LatestAmiId',
+        'AllowedSSHCidr'
       ];
       
       expectedParams.forEach(param => {
@@ -200,17 +201,29 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.SNSTopic).toBeDefined();
       expect(template.Resources.SNSTopic.Type).toBe('AWS::SNS::Topic');
     });
+
+    test('should have CloudTrail for audit logging', () => {
+      expect(template.Resources.CloudTrail).toBeDefined();
+      expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(template.Resources.CloudTrail.Properties.S3BucketName.Ref).toBe('LoggingBucket');
+      expect(template.Resources.CloudTrail.Properties.KMSKeyId.Ref).toBe('AppKMSKey');
+    });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
         'VPCId',
         'LoadBalancerDNS',
         'DatabaseEndpoint',
         'S3BucketName',
         'KMSKeyId',
-        'WebACLArn'
+        'WebACLArn',
+        'CloudTrailArn'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -244,6 +257,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(dbSG.SecurityGroupIngress[0].FromPort).toBe(3306);
       expect(dbSG.SecurityGroupIngress[0].SourceSecurityGroupId.Ref).toBe('WebServerSecurityGroup');
     });
+
+    test('bastion security group should restrict SSH access', () => {
+      const bastionSG = template.Resources.BastionSecurityGroup.Properties;
+      expect(bastionSG.SecurityGroupIngress).toHaveLength(1);
+      const sshRule = bastionSG.SecurityGroupIngress[0];
+      expect(sshRule.FromPort).toBe(22);
+      expect(sshRule.ToPort).toBe(22);
+      expect(sshRule.CidrIp.Ref).toBe('AllowedSSHCidr');
+      expect(sshRule.Description).toBe('SSH from authorized IP ranges only');
+    });
   });
 
   describe('Template Validation', () => {
@@ -260,9 +283,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have at least 40 resources', () => {
+    test('should have at least 41 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(40);
+      expect(resourceCount).toBeGreaterThanOrEqual(41);
     });
   });
 });

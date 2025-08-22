@@ -74,6 +74,10 @@ Metadata:
         Parameters:
           - InstanceType
           - LatestAmiId
+      - Label:
+          default: "Security Configuration"
+        Parameters:
+          - AllowedSSHCidr
 
 Parameters:
   EnvironmentSuffix:
@@ -128,6 +132,13 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
     Description: "Latest Amazon Linux 2 AMI ID from Systems Manager Parameter Store"
+
+  AllowedSSHCidr:
+    Type: String
+    Default: "10.0.0.0/8"
+    Description: "CIDR block allowed for SSH access to bastion host (restrict to your organization's IP range)"
+    AllowedPattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+    ConstraintDescription: "Must be a valid CIDR block (e.g., 203.0.113.0/24)"
 
 Resources:
   TurnAroundPromptTable:
@@ -1025,6 +1036,12 @@ Outputs:
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub "${AWS::StackName}-WebACLArn"
+
+  CloudTrailArn:
+    Description: CloudTrail ARN for audit logging
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudTrailArn"
 ```
 
 ### Implementation Notes
@@ -1043,4 +1060,8 @@ Outputs:
 
 7. **AMI Management**: Uses AWS Systems Manager Parameter Store to automatically retrieve the latest Amazon Linux 2 AMI, ensuring the template works across regions and stays current.
 
-This implementation meets all security requirements while following AWS Well-Architected Framework principles and includes the latest AMI management best practices to prevent deployment failures.
+8. **CloudTrail Auditing**: Comprehensive audit logging for all AWS API calls with encrypted logs stored in S3, including detailed event tracking for S3 bucket access and management events.
+
+9. **Enhanced Bastion Security**: SSH access to bastion host is restricted to specific IP ranges via the AllowedSSHCidr parameter, replacing the insecure 0.0.0.0/0 access pattern.
+
+This implementation meets all security requirements while following AWS Well-Architected Framework principles, includes the latest AMI management best practices to prevent deployment failures, and provides comprehensive audit logging and access controls.

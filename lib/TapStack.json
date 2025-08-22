@@ -33,6 +33,14 @@
             "InstanceType",
             "LatestAmiId"
           ]
+        },
+        {
+          "Label": {
+            "default": "Security Configuration"
+          },
+          "Parameters": [
+            "AllowedSSHCidr"
+          ]
         }
       ]
     }
@@ -94,9 +102,40 @@
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
       "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
       "Description": "Latest Amazon Linux 2 AMI ID from Systems Manager Parameter Store"
+    },
+    "AllowedSSHCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/8",
+      "Description": "CIDR block allowed for SSH access to bastion host (restrict to your organization's IP range)",
+      "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$",
+      "ConstraintDescription": "Must be a valid CIDR block (e.g., 203.0.113.0/24)"
     }
   },
   "Resources": {
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false
+      }
+    },
     "AppKMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -714,8 +753,10 @@
             "IpProtocol": "tcp",
             "FromPort": 22,
             "ToPort": 22,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "SSH from internet"
+            "CidrIp": {
+              "Ref": "AllowedSSHCidr"
+            },
+            "Description": "SSH from authorized IP ranges only"
           }
         ],
         "Tags": [
@@ -1353,9 +1394,107 @@
           }
         ]
       }
+    },
+    "CloudTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "prod-webapp-cloudtrail-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "LoggingBucket"
+        },
+        "S3KeyPrefix": "cloudtrail-logs/",
+        "IncludeGlobalServiceEvents": true,
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {
+          "Ref": "AppKMSKey"
+        },
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  {
+                    "Fn::Sub": "${AppS3Bucket.Arn}/*"
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "AppS3Bucket",
+                      "Arn"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-cloudtrail"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
     }
   },
   "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
     "VPCId": {
       "Description": "VPC ID",
       "Value": {
@@ -1428,6 +1567,20 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-WebACLArn"
+        }
+      }
+    },
+    "CloudTrailArn": {
+      "Description": "CloudTrail ARN for audit logging",
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudTrail",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudTrailArn"
         }
       }
     }
