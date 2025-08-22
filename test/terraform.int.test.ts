@@ -7,7 +7,8 @@ import AWS from 'aws-sdk';
 // -----------------------------
 // Test Configuration
 // -----------------------------
-const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-1';
+const region =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-1';
 
 // Force AWS SDK to use EC2 instance metadata credentials
 AWS.config.update({
@@ -117,7 +118,10 @@ beforeAll(async () => {
     const identity = await sts.getCallerIdentity().promise();
     console.log(`✅ AWS credentials verified for account: ${identity.Account}`);
   } catch (err) {
-    console.error('❌ AWS credentials not configured:', err.message);
+    console.error(
+      '❌ AWS credentials not configured:',
+      err instanceof Error ? err.message : String(err)
+    );
     throw err;
   }
 
@@ -127,7 +131,10 @@ beforeAll(async () => {
     (global as any).bucketNames = buckets;
     (global as any).securityGroupIds = sgs;
   } catch (err) {
-    console.error('❌ Setup failed:', (err as Error).message);
+    console.error(
+      '❌ Setup failed:',
+      err instanceof Error ? err.message : String(err)
+    );
     throw err;
   }
 }, 60000);
@@ -171,7 +178,7 @@ describe('Infrastructure Integration Tests', () => {
         .promise();
 
       const { Plaintext } = await kms
-        .decrypt({ CiphertextBlob })
+        .decrypt({ CiphertextBlob: CiphertextBlob! })
         .promise();
       expect(Plaintext?.toString()).toBe(plaintext);
     });
@@ -271,7 +278,7 @@ describe('Infrastructure Integration Tests', () => {
     test('VPC Flow Logs are enabled', async () => {
       const { FlowLogs } = await ec2
         .describeFlowLogs({
-          Filters: [{ Name: 'resource-id', Values: [TEST_CONFIG.vpcId] }],
+          Filter: [{ Name: 'resource-id', Values: [TEST_CONFIG.vpcId] }],
         })
         .promise();
 
