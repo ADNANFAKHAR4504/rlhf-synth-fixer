@@ -756,3 +756,315 @@ Outputs:
 - Monitoring and logging infrastructure ready
 
 This template provides a secure foundation that can be extended with additional services like CloudTrail, Config, and GuardDuty once account limitations are resolved.
+
+## TapStack.json
+
+```json
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Simplified Secure Infrastructure for testing",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming to avoid conflicts",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": ["dev", "staging", "prod"],
+            "Description": "Environment name for resource tagging and naming"
+        },
+        "Project": {
+            "Type": "String",
+            "Default": "secure-infra",
+            "Description": "Project name for resource tagging"
+        },
+        "Owner": {
+            "Type": "String",
+            "Default": "security-team",
+            "Description": "Owner/Team responsible for resources"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC"
+        },
+        "PublicSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for public subnet 1"
+        },
+        "PublicSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for public subnet 2"
+        },
+        "PrivateSubnet1Cidr": {
+            "Type": "String",
+            "Default": "10.0.10.0/24",
+            "Description": "CIDR block for private subnet 1"
+        },
+        "PrivateSubnet2Cidr": {
+            "Type": "String",
+            "Default": "10.0.11.0/24",
+            "Description": "CIDR block for private subnet 2"
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {"Ref": "VpcCidr"},
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-${EnvironmentSuffix}-vpc"}},
+                    {"Key": "Environment", "Value": {"Ref": "Environment"}},
+                    {"Key": "Project", "Value": {"Ref": "Project"}},
+                    {"Key": "Owner", "Value": {"Ref": "Owner"}}
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-${EnvironmentSuffix}-igw"}},
+                    {"Key": "Environment", "Value": {"Ref": "Environment"}},
+                    {"Key": "Project", "Value": {"Ref": "Project"}},
+                    {"Key": "Owner", "Value": {"Ref": "Owner"}}
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {"Fn::Sub": "${Project}-${Environment}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}"},
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {"Key": "Name", "Value": {"Fn::Sub": "${Project}-${Environment}-${EnvironmentSuffix}-logs"}},
+                    {"Key": "Environment", "Value": {"Ref": "Environment"}},
+                    {"Key": "Project", "Value": {"Ref": "Project"}},
+                    {"Key": "Owner", "Value": {"Ref": "Owner"}}
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {"Ref": "VPC"},
+            "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-VPC-ID"}}
+        },
+        "LoggingBucketName": {
+            "Description": "S3 bucket name for logging",
+            "Value": {"Ref": "LoggingBucket"},
+            "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-LoggingBucket-Name"}}
+        }
+    }
+}
+```
+
+## TapStackMinimal.yml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simplified Secure Infrastructure for testing'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming to avoid conflicts'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name for resource tagging and naming'
+
+  Project:
+    Type: String
+    Default: 'secure-infra'
+    Description: 'Project name for resource tagging'
+
+  Owner:
+    Type: String
+    Default: 'security-team'
+    Description: 'Owner/Team responsible for resources'
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-${EnvironmentSuffix}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Project}-${Environment}-${EnvironmentSuffix}-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-${EnvironmentSuffix}-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  LoggingBucketName:
+    Description: 'S3 bucket name for logging'
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LoggingBucket-Name'
+```
+
+## SecureInfraSetup.yaml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Multi-Region AWS Infrastructure with comprehensive security controls'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - Environment
+          - Project
+          - Owner
+      - Label:
+          default: 'Network Configuration'  
+        Parameters:
+          - VpcCidr
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+          - PrivateSubnet1Cidr
+          - PrivateSubnet2Cidr
+          - AllowedSshCidr
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - EnableGuardDuty
+          - EnableVpcFlowLogs
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name for resource tagging and naming'
+
+  Project:
+    Type: String
+    Default: 'secure-infra'
+    Description: 'Project name for resource tagging'
+
+  Owner:
+    Type: String
+    Default: 'security-team'
+    Description: 'Owner/Team responsible for resources'
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for encrypting infrastructure resources'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Project}-${Environment}-kms'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  KMSKeyId:
+    Description: 'KMS key ID for encryption'
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKey-ID'
+```
+
+## AWS_REGION
+
+```text
+us-east-1
+```
