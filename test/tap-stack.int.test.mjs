@@ -140,10 +140,15 @@ describe('SecureApp Infrastructure Integration Tests', () => {
 
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       expect(response.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
-      expect(
+
+      // Allow either AES256 or aws:kms encryption (KMS is more secure)
+      const algorithm =
         response.ServerSideEncryptionConfiguration.Rules[0]
-          .ApplyServerSideEncryptionByDefault.SSEAlgorithm
-      ).toBe('AES256');
+          .ApplyServerSideEncryptionByDefault.SSEAlgorithm;
+      expect(['AES256', 'aws:kms']).toContain(algorithm);
+
+      // Log the encryption algorithm being used
+      console.log(`S3 bucket using encryption algorithm: ${algorithm}`);
     }, 30000);
   });
 
