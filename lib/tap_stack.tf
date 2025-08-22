@@ -521,12 +521,12 @@ resource "aws_db_instance" "main" {
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.ec2_instance_type
-  key_name               = var.bastion_key_name
+  key_name               = aws_key_pair.bastion.key_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
   subnet_id              = aws_subnet.public[0].id
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
               yum install -y amazon-cloudwatch-agent
@@ -557,12 +557,12 @@ resource "aws_instance" "private" {
   count                  = 2
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.ec2_instance_type
-  key_name               = var.bastion_key_name
+  key_name               = aws_key_pair.bastion.key_name
   vpc_security_group_ids = [aws_security_group.ec2_private.id]
   subnet_id              = aws_subnet.private[count.index].id
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
               yum install -y amazon-cloudwatch-agent
