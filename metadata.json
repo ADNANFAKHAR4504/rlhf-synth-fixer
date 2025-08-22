@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "YAML",
+  "platform": "cfn",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr937",
