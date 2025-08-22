@@ -2,6 +2,10 @@
 # Main infrastructure resources with comprehensive security controls
 # Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
 
+terraform {
+  backend "local" {}
+}
+
 
 # Local values for consistent tagging and naming
 locals {
@@ -525,8 +529,8 @@ module "compute" {
 
 # DB subnet group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
+  name_prefix = "${local.name_prefix}-db-subnet-group-"
+  subnet_ids  = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"

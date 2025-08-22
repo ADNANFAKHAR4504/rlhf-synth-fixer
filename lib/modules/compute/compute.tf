@@ -95,14 +95,15 @@ EOF
 
 # Auto Scaling Group for high availability
 resource "aws_autoscaling_group" "app" {
-  name                = "${local.name_prefix}-app-asg"
+  name_prefix         = "${local.name_prefix}-app-asg-"
   vpc_zone_identifier = var.app_subnet_ids
   target_group_arns   = [var.tg_arn]
   health_check_type   = "ELB"
 
-  min_size         = 1
-  max_size         = 4
-  desired_capacity = 2
+  health_check_grace_period = 300
+  min_size                  = 1
+  max_size                  = 4
+  desired_capacity          = 2
 
   launch_template {
     id      = aws_launch_template.app.id
