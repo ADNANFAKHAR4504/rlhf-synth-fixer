@@ -6,16 +6,16 @@ This document outlines potential failures, edge cases, and common issues that ma
 
 ### 1. Provider Configuration Issues
 
-**❌ Provider Block in main.tf**
+**ERROR: Provider Block in main.tf**
 ```hcl
 # WRONG - Do not include provider blocks in main.tf
 provider "aws" {
   region = var.aws_region
 }
 ```
-**✅ Solution:** Provider blocks should only exist in `provider.tf`. The `main.tf` file should only declare the `aws_region` variable.
+**SOLUTION:** Provider blocks should only exist in `provider.tf`. The `main.tf` file should only declare the `aws_region` variable.
 
-**❌ Missing Required Providers**
+**ERROR: Missing Required Providers**
 ```hcl
 # WRONG - Missing archive provider in provider.tf
 required_providers {
@@ -26,36 +26,36 @@ required_providers {
   # Missing: random and archive providers
 }
 ```
-**✅ Solution:** Ensure `provider.tf` includes all required providers: `aws`, `random`, and `archive`.
+**SOLUTION:** Ensure `provider.tf` includes all required providers: `aws`, `random`, and `archive`.
 
 ### 2. Variable Declaration Errors
 
-**❌ Hardcoded Secrets**
+**ERROR: Hardcoded Secrets**
 ```hcl
 # WRONG - Never hardcode sensitive values
 variable "db_master_password" {
   default = "mypassword123"
 }
 ```
-**✅ Solution:** Mark sensitive variables as `sensitive = true` and provide empty defaults.
+**SOLUTION:** Mark sensitive variables as `sensitive = true` and provide empty defaults.
 
-**❌ Missing Required Variables**
+**ERROR: Missing Required Variables**
 ```hcl
 # WRONG - Missing critical variables
 # Missing: aws_region, project, environment, etc.
 ```
-**✅ Solution:** Declare all required variables listed in the IDEAL_RESPONSE.md.
+**SOLUTION:** Declare all required variables listed in the IDEAL_RESPONSE.md.
 
 ### 3. Resource Naming Conflicts
 
-**❌ Static Resource Names**
+**ERROR: Static Resource Names**
 ```hcl
 # WRONG - Static names cause conflicts in CI
 resource "aws_s3_bucket" "static" {
   bucket = "my-static-bucket"  # Will conflict in CI
 }
 ```
-**✅ Solution:** Use account ID and random suffix for globally unique names:
+**SOLUTION:** Use account ID and random suffix for globally unique names:
 ```hcl
 bucket = "prodapp-static-${local.account_id}-${local.suffix_hex}"
 ```
@@ -64,7 +64,7 @@ bucket = "prodapp-static-${local.account_id}-${local.suffix_hex}"
 
 ### 4. IAM Permission Issues
 
-**❌ Overly Broad IAM Policies**
+**ERROR: Overly Broad IAM Policies**
 ```hcl
 # WRONG - Wildcard resources and actions
 statement {
@@ -72,7 +72,7 @@ statement {
   resources = ["*"]
 }
 ```
-**✅ Solution:** Use least privilege with specific resource ARNs:
+**SOLUTION:** Use least privilege with specific resource ARNs:
 ```hcl
 statement {
   actions = ["s3:GetObject", "s3:ListBucket"]
@@ -83,12 +83,12 @@ statement {
 }
 ```
 
-**❌ Missing VPC Permissions for Lambda**
+**ERROR: Missing VPC Permissions for Lambda**
 ```hcl
 # WRONG - Lambda in VPC without proper permissions
 # Missing EC2 VPC permissions for ENI management
 ```
-**✅ Solution:** Include VPC-related permissions for Lambda:
+**SOLUTION:** Include VPC-related permissions for Lambda:
 ```hcl
 statement {
   actions = [
@@ -102,7 +102,7 @@ statement {
 
 ### 5. S3 Security Misconfigurations
 
-**❌ Deprecated ACL Usage**
+**ERROR: Deprecated ACL Usage**
 ```hcl
 # WRONG - Deprecated inline ACL
 resource "aws_s3_bucket" "static" {
@@ -110,7 +110,7 @@ resource "aws_s3_bucket" "static" {
   acl    = "private"  # Deprecated
 }
 ```
-**✅ Solution:** Use separate ACL resources with ownership controls:
+**SOLUTION:** Use separate ACL resources with ownership controls:
 ```hcl
 resource "aws_s3_bucket_acl" "static" {
   bucket     = aws_s3_bucket.static.id
@@ -119,7 +119,7 @@ resource "aws_s3_bucket_acl" "static" {
 }
 ```
 
-**❌ Missing Public Access Block**
+**ERROR: Missing Public Access Block**
 ```hcl
 # WRONG - S3 bucket without public access restrictions
 resource "aws_s3_bucket" "static" {
@@ -127,11 +127,11 @@ resource "aws_s3_bucket" "static" {
   # Missing: public access block
 }
 ```
-**✅ Solution:** Always include public access block for security.
+**SOLUTION:** Always include public access block for security.
 
 ### 6. Network Security Issues
 
-**❌ Open Security Groups**
+**ERROR: Open Security Groups**
 ```hcl
 # WRONG - Overly permissive security group
 ingress {
@@ -141,7 +141,7 @@ ingress {
   cidr_blocks = ["0.0.0.0/0"]
 }
 ```
-**✅ Solution:** Restrict access to specific ports and sources:
+**SOLUTION:** Restrict access to specific ports and sources:
 ```hcl
 ingress {
   from_port       = 5432
@@ -155,7 +155,7 @@ ingress {
 
 ### 7. API Gateway Configuration Issues
 
-**❌ Incorrect Stage Configuration**
+**ERROR: Incorrect Stage Configuration**
 ```hcl
 # WRONG - stage_name as attribute of deployment
 resource "aws_api_gateway_deployment" "deployment" {
@@ -163,7 +163,7 @@ resource "aws_api_gateway_deployment" "deployment" {
   stage_name  = "prod"  # This attribute doesn't exist
 }
 ```
-**✅ Solution:** Use separate stage resource:
+**SOLUTION:** Use separate stage resource:
 ```hcl
 resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.deployment.id
@@ -172,7 +172,7 @@ resource "aws_api_gateway_stage" "prod" {
 }
 ```
 
-**❌ Missing Deployment Triggers**
+**ERROR: Missing Deployment Triggers**
 ```hcl
 # WRONG - Deployment without triggers may not redeploy
 resource "aws_api_gateway_deployment" "deployment" {
@@ -180,20 +180,20 @@ resource "aws_api_gateway_deployment" "deployment" {
   # Missing: triggers for redeployment
 }
 ```
-**✅ Solution:** Include deployment triggers to ensure updates.
+**SOLUTION:** Include deployment triggers to ensure updates.
 
 ## Lambda Function Failures
 
 ### 8. Lambda Code Packaging Issues
 
-**❌ Missing Lambda Code File**
+**ERROR: Missing Lambda Code File**
 ```hcl
 # WRONG - References non-existent zip file
 resource "aws_lambda_function" "app" {
   filename = "path/to/nonexistent/lambda.zip"
 }
 ```
-**✅ Solution:** Use inline code with archive data source:
+**SOLUTION:** Use inline code with archive data source:
 ```hcl
 data "archive_file" "lambda_zip" {
   type = "zip"
@@ -204,109 +204,109 @@ data "archive_file" "lambda_zip" {
 }
 ```
 
-**❌ Incorrect Handler Configuration**
+**ERROR: Incorrect Handler Configuration**
 ```hcl
 # WRONG - Handler doesn't match code structure
 resource "aws_lambda_function" "app" {
   handler = "index.handler"  # But code is in app.py
 }
 ```
-**✅ Solution:** Ensure handler matches filename: `app.handler` for `app.py`.
+**SOLUTION:** Ensure handler matches filename: `app.handler` for `app.py`.
 
 ### 9. Lambda VPC Configuration Issues
 
-**❌ Lambda Without VPC Access to RDS**
+**ERROR: Lambda Without VPC Access to RDS**
 ```hcl
 # WRONG - Lambda needs VPC config to reach RDS
 resource "aws_lambda_function" "app" {
   # Missing: vpc_config block
 }
 ```
-**✅ Solution:** Configure Lambda VPC access when using RDS.
+**SOLUTION:** Configure Lambda VPC access when using RDS.
 
 ## RDS Configuration Failures
 
 ### 10. Database Configuration Issues
 
-**❌ Deprecated Database Name Attribute**
+**ERROR: Deprecated Database Name Attribute**
 ```hcl
 # WRONG - 'name' attribute is deprecated
 resource "aws_db_instance" "db" {
   name     = "mydb"  # Deprecated
 }
 ```
-**✅ Solution:** Use `db_name` instead:
+**SOLUTION:** Use `db_name` instead:
 ```hcl
 resource "aws_db_instance" "db" {
   db_name = "${var.project}_db"
 }
 ```
 
-**❌ Public Database Access**
+**ERROR: Public Database Access**
 ```hcl
 # WRONG - RDS publicly accessible
 resource "aws_db_instance" "db" {
   publicly_accessible = true  # Security risk
 }
 ```
-**✅ Solution:** Always set `publicly_accessible = false` for security.
+**SOLUTION:** Always set `publicly_accessible = false` for security.
 
-**❌ Missing Storage Encryption**
+**ERROR: Missing Storage Encryption**
 ```hcl
 # WRONG - Unencrypted RDS storage
 resource "aws_db_instance" "db" {
   # Missing: storage_encrypted = true
 }
 ```
-**✅ Solution:** Always enable storage encryption.
+**SOLUTION:** Always enable storage encryption.
 
 ## Data Source Issues
 
 ### 11. Deprecated Data Sources
 
-**❌ Using Deprecated aws_subnet_ids**
+**ERROR: Using Deprecated aws_subnet_ids**
 ```hcl
 # WRONG - aws_subnet_ids is deprecated
 data "aws_subnet_ids" "default_vpc" {
   vpc_id = data.aws_vpc.default.id
 }
 ```
-**✅ Solution:** Use `aws_subnets` instead (though current code still works).
+**SOLUTION:** Use `aws_subnets` instead (though current code still works).
 
 ## Output Configuration Failures
 
 ### 12. Incorrect Output Structure
 
-**❌ Sensitive Outputs**
+**ERROR: Sensitive Outputs**
 ```hcl
 # WRONG - Outputting sensitive information
 output "database_password" {
   value = aws_db_instance.db.password
 }
 ```
-**✅ Solution:** Never output sensitive values. Mark as `sensitive = false` explicitly for non-sensitive outputs.
+**SOLUTION:** Never output sensitive values. Mark as `sensitive = false` explicitly for non-sensitive outputs.
 
-**❌ Missing Required Outputs**
+**ERROR: Missing Required Outputs**
 ```hcl
 # WRONG - Missing outputs required by integration tests
 # Missing: api_gateway_url, rds_instance_identifier, etc.
 ```
-**✅ Solution:** Include all outputs specified in requirements.
+**SOLUTION:** Include all outputs specified in requirements.
 
-**❌ Incorrect Output Naming**
+**ERROR: Incorrect Output Naming**
 ```hcl
 # WRONG - Output name doesn't match expected format
 output "api_gateway_invoke_url" {  # Should be "api_gateway_url"
   value = "https://..."
 }
 ```
-**✅ Solution:** Use exact output names expected by integration tests.
+**SOLUTION:** Use exact output names expected by integration tests.
 
 ## Tagging and Compliance Failures
 
 ### 13. Inconsistent Tagging
 
-**❌ Missing Common Tags**
+**ERROR: Missing Common Tags**
 ```hcl
 # WRONG - Resources without consistent tags
 resource "aws_s3_bucket" "static" {
@@ -314,9 +314,9 @@ resource "aws_s3_bucket" "static" {
   # Missing: tags = local.common_tags
 }
 ```
-**✅ Solution:** Apply common tags to all taggable resources.
+**SOLUTION:** Apply common tags to all taggable resources.
 
-**❌ Missing Required Tag Fields**
+**ERROR: Missing Required Tag Fields**
 ```hcl
 # WRONG - Incomplete common_tags
 locals {
@@ -326,40 +326,40 @@ locals {
   }
 }
 ```
-**✅ Solution:** Include all required tag fields.
+**SOLUTION:** Include all required tag fields.
 
 ## Testing and CI/CD Failures
 
 ### 14. Test Incompatible Configurations
 
-**❌ Non-Conditional RDS Outputs**
+**ERROR: Non-Conditional RDS Outputs**
 ```hcl
 # WRONG - Output fails when RDS is disabled
 output "rds_instance_identifier" {
   value = aws_db_instance.db.id  # Fails when count = 0
 }
 ```
-**✅ Solution:** Use conditional output:
+**SOLUTION:** Use conditional output:
 ```hcl
 output "rds_instance_identifier" {
   value = var.create_rds ? aws_db_instance.db[0].id : ""
 }
 ```
 
-**❌ Hardcoded Account Dependencies**
+**ERROR: Hardcoded Account Dependencies**
 ```hcl
 # WRONG - Hardcoded account ID
 resource "aws_s3_bucket" "static" {
   bucket = "prodapp-static-123456789012-abc123"
 }
 ```
-**✅ Solution:** Use dynamic account ID from data source.
+**SOLUTION:** Use dynamic account ID from data source.
 
 ## Deployment Environment Issues
 
 ### 15. Environment-Specific Failures
 
-**❌ Missing Backend Configuration**
+**ERROR: Missing Backend Configuration**
 ```hcl
 # WRONG - Backend configuration in main.tf
 terraform {
@@ -368,38 +368,38 @@ terraform {
   }
 }
 ```
-**✅ Solution:** Backend configuration should be in `provider.tf` or injected at runtime.
+**SOLUTION:** Backend configuration should be in `provider.tf` or injected at runtime.
 
-**❌ Region Hardcoding**
+**ERROR: Region Hardcoding**
 ```hcl
 # WRONG - Hardcoded region
 resource "aws_s3_bucket" "static" {
   # References us-east-1 specific resources
 }
 ```
-**✅ Solution:** Use `var.aws_region` and dynamic data sources.
+**SOLUTION:** Use `var.aws_region` and dynamic data sources.
 
 ## Performance and Cost Issues
 
 ### 16. Resource Sizing Problems
 
-**❌ Oversized Resources**
+**ERROR: Oversized Resources**
 ```hcl
 # WRONG - Expensive instance types for development
 variable "db_instance_class" {
   default = "db.r5.2xlarge"  # Too large for dev/test
 }
 ```
-**✅ Solution:** Use cost-effective defaults like `db.t3.micro`.
+**SOLUTION:** Use cost-effective defaults like `db.t3.micro`.
 
-**❌ Missing Lifecycle Policies**
+**ERROR: Missing Lifecycle Policies**
 ```hcl
 # WRONG - S3 without lifecycle management
 resource "aws_s3_bucket" "static" {
   # Missing: lifecycle configuration
 }
 ```
-**✅ Solution:** Include lifecycle policies for cost optimization.
+**SOLUTION:** Include lifecycle policies for cost optimization.
 
 ## Common Error Messages and Solutions
 
