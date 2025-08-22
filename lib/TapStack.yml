@@ -583,14 +583,14 @@ Resources:
                   - logs:CreateLogStream
                 Resource: !Sub '${CloudTrailLogGroup}:*'
       Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-role-cloudtrail-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
+        - Key: Purpose
+          Value: CloudTrail-LogsAccess
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
