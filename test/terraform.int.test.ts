@@ -215,32 +215,31 @@ describe('TAP Infrastructure Integration Tests', () => {
       }
 
       try {
-        // Extract ALB names from DNS names
-        const primaryAlbName = outputs.primary_alb_dns.split('.')[0];
-        const secondaryAlbName = outputs.secondary_alb_dns.split('.')[0];
-
-        // Validate primary ALB
-        const primaryAlbCommand = new DescribeLoadBalancersCommand({
-          Names: [primaryAlbName]
-        });
+        // List all load balancers and find the ones matching our DNS names
+        const primaryAlbCommand = new DescribeLoadBalancersCommand({});
         const primaryAlbResponse = await elbv2Client.send(primaryAlbCommand);
 
-        expect(primaryAlbResponse.LoadBalancers).toBeDefined();
-        expect(primaryAlbResponse.LoadBalancers!.length).toBe(1);
-        expect(primaryAlbResponse.LoadBalancers![0].DNSName).toBe(outputs.primary_alb_dns);
-        expect(primaryAlbResponse.LoadBalancers![0].State!.Code).toBe('active');
+        // Find primary ALB by DNS name
+        const primaryAlb = primaryAlbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.primary_alb_dns
+        );
+        expect(primaryAlb).toBeDefined();
+        expect(primaryAlb!.State!.Code).toBe('active');
 
         // Validate secondary ALB (us-west-2)
         const secondaryElbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
-        const secondaryAlbCommand = new DescribeLoadBalancersCommand({
-          Names: [secondaryAlbName]
-        });
+        const secondaryAlbCommand = new DescribeLoadBalancersCommand({});
         const secondaryAlbResponse = await secondaryElbv2Client.send(secondaryAlbCommand);
 
-        expect(secondaryAlbResponse.LoadBalancers).toBeDefined();
-        expect(secondaryAlbResponse.LoadBalancers!.length).toBe(1);
-        expect(secondaryAlbResponse.LoadBalancers![0].DNSName).toBe(outputs.secondary_alb_dns);
-        expect(secondaryAlbResponse.LoadBalancers![0].State!.Code).toBe('active');
+        // Find secondary ALB by DNS name
+        const secondaryAlb = secondaryAlbResponse.LoadBalancers?.find(
+          lb => lb.DNSName === outputs.secondary_alb_dns
+        );
+        expect(secondaryAlb).toBeDefined();
+        expect(secondaryAlb!.State!.Code).toBe('active');
+
+        console.log(`Primary ALB found: ${primaryAlb?.LoadBalancerName} (${primaryAlb?.DNSName})`);
+        console.log(`Secondary ALB found: ${secondaryAlb?.LoadBalancerName} (${secondaryAlb?.DNSName})`);
       } catch (error) {
         console.warn('AWS API call failed, skipping ALB validation:', error);
         // Skip the test gracefully instead of failing
