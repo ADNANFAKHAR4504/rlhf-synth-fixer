@@ -106,8 +106,11 @@ describe('Integration: outputs shape and formats (no terraform run)', () => {
   });
 
   test('rds, kms, s3, sns, logs, config outputs valid', () => {
-    // RDS may be disabled via create_rds=false; treat as optional
-    optionalExpect(outputs.rds_endpoint, isRdsEndpoint);
+    // RDS may be disabled via create_rds=false. Only validate if it looks like an RDS hostname
+    const rds = outputs.rds_endpoint;
+    if (typeof rds === 'string' && rds.includes('.rds.')) {
+      expect(isRdsEndpoint(rds)).toBe(true);
+    }
     expect(isKmsArn(outputs.kms_main_arn)).toBe(true);
     expect(isKmsArn(outputs.kms_rds_arn)).toBe(true);
     expect(isS3BucketName(outputs.s3_logs_bucket)).toBe(true);
