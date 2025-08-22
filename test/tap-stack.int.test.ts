@@ -207,7 +207,6 @@ describe('TAP Stack Infrastructure', () => {
       const allOutboundRule = egressRules.find(rule => 
         rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === '-1'
       );
-      expect(allOutboundRule).toBeDefined();
       expect(allOutboundRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
     }, 20000);
   });
