@@ -1,15 +1,15 @@
 {
   "platform": "pulumi",
-  "language": "js", 
+  "language": "js",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr236",
   "team": "synth",
   "startedAt": "2025-08-22T11:49:49+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization", 
+    "IaC Optimization",
     "Security Configuration",
     "Database Management",
     "Network Configuration",
@@ -19,7 +19,7 @@
   "training_quality": 8,
   "aws_services": [
     "EC2",
-    "VPC", 
+    "VPC",
     "S3",
     "DynamoDB",
     "IAM",
@@ -27,5 +27,11 @@
     "Security Groups",
     "Subnets",
     "Route Tables"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
