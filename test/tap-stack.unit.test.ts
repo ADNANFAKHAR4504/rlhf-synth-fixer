@@ -461,6 +461,31 @@ describe('TapStack', () => {
         BucketName: Match.anyValue(),
       });
     });
+
+    test('defaults to primary when isPrimary is undefined', () => {
+      const app = new cdk.App();
+      const defaultStack = new TapStack(app, 'TestStackDefault', {
+        environmentSuffix: 'test',
+        // isPrimary is undefined, should default to true
+      });
+      const template = Template.fromStack(defaultStack);
+
+      // Should create primary stack resources (like CloudFront distribution)
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          DefaultCacheBehavior: {
+            ViewerProtocolPolicy: 'redirect-to-https',
+          },
+          PriceClass: 'PriceClass_100',
+          Enabled: true,
+        },
+      });
+
+      // Should create S3 bucket (primary resource)
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.anyValue(),
+      });
+    });
   });
 
   describe('Resource Dependencies', () => {
