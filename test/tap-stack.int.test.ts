@@ -29,8 +29,8 @@ describe("Security Stack Integration Tests", () => {
   describe("CloudFormation Outputs", () => {
     test("KMS Key ID should exist", () => {
       expect(kmsKeyId).toBeDefined();
-      expect(kmsKeyId).toMatch(/^arn:aws:kms:/);
-    });
+      expect(kmsKeyId).toMatch(/^[0-9a-fA-F-]{36}$/);
+      });
 
     test("Secure Data S3 bucket name should exist", () => {
       expect(secureDataBucketName).toBeDefined();
