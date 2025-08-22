@@ -65,6 +65,25 @@
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
             "Description": "Latest Amazon Linux 2 AMI ID via SSM"
+        },
+        "EnableConfig": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to create AWS Config resources (recorder, delivery channel, bucket, and rule). Set to true only if no existing AWS Config setup exists in the account/region."
+        }
+    },
+    "Conditions": {
+        "CreateConfig": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableConfig"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -772,6 +791,7 @@
         },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfig",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Statement": [
@@ -1216,6 +1236,7 @@
         },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateConfig",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "aws-config-${AWS::AccountId}-${Environment}"
@@ -1256,6 +1277,7 @@
         },
         "ConfigBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "Condition": "CreateConfig",
             "Properties": {
                 "Bucket": {
                     "Ref": "ConfigBucket"
@@ -1312,7 +1334,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ConfigBucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1329,6 +1351,7 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfig",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${Environment}-config-recorder"
@@ -1347,6 +1370,7 @@
         },
         "DeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfig",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${Environment}-config-delivery-channel"
@@ -1358,6 +1382,7 @@
         },
         "SecurityGroupConfigRule": {
             "Type": "AWS::Config::ConfigRule",
+            "Condition": "CreateConfig",
             "DependsOn": [
                 "ConfigurationRecorder",
                 "DeliveryChannel"
