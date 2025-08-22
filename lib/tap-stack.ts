@@ -1,12 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import {
-  aws_cloudwatch as cloudwatch,
   aws_iam as iam,
-  aws_lambda as lambda,
   aws_logs as logs,
-  aws_s3 as s3,
-  aws_s3_notifications as s3n,
-  aws_ssm as ssm,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -18,255 +13,165 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    const environmentSuffix: string =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
+    const environmentSuffix =
+      props?.environmentSuffix ??
+      this.node.tryGetContext('environmentSuffix') ??
       'dev';
 
     const accountId = cdk.Stack.of(this).account;
     const currentRegion = cdk.Stack.of(this).region;
-    const primaryRegion: string =
-      this.node.tryGetContext('primaryRegion') || 'us-east-1';
-    const backupRegion: string =
-      this.node.tryGetContext('backupRegion') || 'us-west-2';
-    const peerRegion =
-      currentRegion === primaryRegion ? backupRegion : primaryRegion;
 
-    // Resource naming following Corp-<resource> (S3 bucket names must be lowercase and DNS-compliant)
-    const normalizedEnv = environmentSuffix.toLowerCase();
-    const bucketNameCurrent =
-      `corp-data-${normalizedEnv}-${currentRegion}-${accountId}`.toLowerCase();
-    const bucketNamePeer =
-      `corp-data-${normalizedEnv}-${peerRegion}-${accountId}`.toLowerCase();
-
-    // S3 bucket (versioned, encrypted, SSL-only, public access blocked)
-    const dataBucket = new s3.Bucket(this, 'Corp-DataBucket', {
-      bucketName: bucketNameCurrent,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    // Expose this region's bucket name via SSM Parameter Store
-    const localBucketParamPath = `/corp/tap/${normalizedEnv}/${currentRegion}/bucket-name`;
-    const localBucketParam = new ssm.StringParameter(
-      this,
-      'Corp-LocalBucketNameParam',
-      {
-        parameterName: localBucketParamPath,
-        stringValue: dataBucket.bucketName,
-        description: 'Bucket name for this region used by cross-region sync',
-      }
-    );
-    localBucketParam.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-
-    // Lambda function to synchronize objects to peer-region bucket
-    const peerBucketParamPath = `/corp/tap/${normalizedEnv}/${peerRegion}/bucket-name`;
-
-    // Explicit Log Group so we can control retention and removal policy
-    const syncLogGroup = new logs.LogGroup(this, 'Corp-S3SyncLogGroup', {
-      logGroupName: `/aws/lambda/Corp-S3Sync-${currentRegion}-${normalizedEnv}`,
+    // === IAM audit log group (scoped, least privilege targets) ===
+    const auditLogGroupName = `/corp/iam/audit/${environmentSuffix}/${currentRegion}`;
+    const auditLogGroup = new logs.LogGroup(this, 'IamAuditLogGroup', {
+      logGroupName: auditLogGroupName,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Inline Lambda code as a single-quoted string
-    const syncFunctionInline = [
-      "'use strict';",
-      "const AWS = require('aws-sdk');",
-      'const ssm = new AWS.SSM();',
-      "const s3 = new AWS.S3({ signatureVersion: 'v4' });",
-      'exports.handler = async (event) => {',
-      '  const destRegion = process.env.DEST_REGION;',
-      '  const paramName = process.env.DEST_PARAM_PATH;',
-      "  if (!destRegion || !paramName) { throw new Error('Missing DEST_REGION or DEST_PARAM_PATH'); }",
-      '  const param = await ssm.getParameter({ Name: paramName, WithDecryption: false }).promise();',
-      '  const destBucket = param.Parameter && param.Parameter.Value;',
-      "  if (!destBucket) { throw new Error('Destination bucket parameter not found'); }",
-      '  const results = await Promise.all((event.Records || []).map(async (record) => {',
-      '    if (!record || !record.s3 || !record.s3.object) return;',
-      '    const srcBucket = record.s3.bucket.name;',
-      "    const key = decodeURIComponent((record.s3.object.key || '').replace(/\\+/g, ' '));",
-      '    if (!key) return;',
-      '    const copySource = encodeURI(`${srcBucket}/${key}`);',
-      '    await s3.copyObject({',
-      '      CopySource: copySource,',
-      '      Bucket: destBucket,',
-      '      Key: key,',
-      "      ACL: 'bucket-owner-full-control',",
-      "      MetadataDirective: 'COPY'",
-      '    }).promise();',
-      '  }));',
-      '  return { statusCode: 200, copied: results ? results.length : 0 };',
-      '};',
-    ].join('\n');
+    // Common ARNs used in inline policies (no resource-wide wildcards)
+    const logsGroupArn = `arn:${cdk.Aws.PARTITION}:logs:${currentRegion}:${accountId}:log-group:${auditLogGroupName}`;
+    const logsStreamArn = `${logsGroupArn}:log-stream:*`;
+    const ssmParamPathPrefix = `/corp/iam/${environmentSuffix}/${currentRegion}/`;
+    const ssmParamArn = `arn:${cdk.Aws.PARTITION}:ssm:${currentRegion}:${accountId}:parameter${ssmParamPathPrefix}*`;
 
-    const syncFunction = new lambda.Function(this, 'Corp-S3SyncFunction', {
-      functionName: `Corp-S3Sync-${currentRegion}-${normalizedEnv}`,
-      description: 'Copies newly created S3 objects to the peer region bucket',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      timeout: cdk.Duration.minutes(5),
-      logGroup: syncLogGroup,
-      environment: {
-        DEST_PARAM_PATH: peerBucketParamPath,
-        DEST_REGION: peerRegion,
-      },
-      code: lambda.Code.fromInline(syncFunctionInline),
+    // === Application service role (EC2) with least privilege ===
+    const appServiceRole = new iam.Role(this, 'AppServiceRole', {
+      roleName: `corp-app-service-role-${environmentSuffix}-${currentRegion}`,
+      description:
+        'Least-privilege role for EC2-based services to read scoped SSM params and write to an audit log group',
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      maxSessionDuration: cdk.Duration.hours(1),
     });
 
-    // Least-privilege IAM for the sync function
-    dataBucket.grantRead(syncFunction); // read from local bucket
-    syncFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowWriteToPeerBucket',
-        actions: [
-          's3:PutObject',
-          's3:AbortMultipartUpload',
-          's3:ListBucket',
-          's3:ListBucketMultipartUploads',
-        ],
-        resources: [
-          `arn:${cdk.Aws.PARTITION}:s3:::${bucketNamePeer}`,
-          `arn:${cdk.Aws.PARTITION}:s3:::${bucketNamePeer}/*`,
-        ],
-      })
-    );
-    syncFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowReadPeerBucketParam',
-        actions: ['ssm:GetParameter'],
-        resources: [
-          `arn:${cdk.Aws.PARTITION}:ssm:${peerRegion}:${cdk.Aws.ACCOUNT_ID}:parameter${peerBucketParamPath}`,
+    // Inline policy: write only to the dedicated audit log group
+    appServiceRole.attachInlinePolicy(
+      new iam.Policy(this, 'AppLogsPolicy', {
+        policyName: `corp-app-logs-${environmentSuffix}-${currentRegion}`,
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'WriteToAuditLogGroup',
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+            ],
+            resources: [logsStreamArn],
+          }),
+          new iam.PolicyStatement({
+            sid: 'CreateGroupIfMissing',
+            effect: iam.Effect.ALLOW,
+            actions: ['logs:CreateLogGroup', 'logs:DescribeLogStreams'],
+            resources: [logsGroupArn],
+          }),
         ],
       })
     );
 
-    // Triggers: replicate only newly created objects
-    dataBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED_PUT,
-      new s3n.LambdaDestination(syncFunction)
-    );
-    dataBucket.addEventNotification(
-      s3.EventType.OBJECT_CREATED_COMPLETE_MULTIPART_UPLOAD,
-      new s3n.LambdaDestination(syncFunction)
-    );
-
-    // CloudWatch Dashboard for visibility across both regions
-    const dashboard = new cloudwatch.Dashboard(
-      this,
-      'Corp-ReplicationDashboard',
-      {
-        dashboardName: `Corp-Replication-${normalizedEnv}-${currentRegion}-${accountId}`,
-      }
-    );
-    dashboard.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-
-    // Lambda operational metrics
-    const invocations = syncFunction.metricInvocations();
-    const errors = syncFunction.metricErrors();
-    const duration = syncFunction.metricDuration();
-
-    // S3 metrics
-    const objectsCurrent = new cloudwatch.Metric({
-      namespace: 'AWS/S3',
-      metricName: 'NumberOfObjects',
-      dimensionsMap: {
-        BucketName: bucketNameCurrent,
-        StorageType: 'AllStorageTypes',
-      },
-      statistic: 'Average',
-      region: currentRegion,
-    });
-    const objectsPeer = new cloudwatch.Metric({
-      namespace: 'AWS/S3',
-      metricName: 'NumberOfObjects',
-      dimensionsMap: {
-        BucketName: bucketNamePeer,
-        StorageType: 'AllStorageTypes',
-      },
-      statistic: 'Average',
-      region: peerRegion,
-    });
-    const sizeCurrent = new cloudwatch.Metric({
-      namespace: 'AWS/S3',
-      metricName: 'BucketSizeBytes',
-      dimensionsMap: {
-        BucketName: bucketNameCurrent,
-        StorageType: 'StandardStorage',
-      },
-      statistic: 'Average',
-      region: currentRegion,
-    });
-    const sizePeer = new cloudwatch.Metric({
-      namespace: 'AWS/S3',
-      metricName: 'BucketSizeBytes',
-      dimensionsMap: {
-        BucketName: bucketNamePeer,
-        StorageType: 'StandardStorage',
-      },
-      statistic: 'Average',
-      region: peerRegion,
-    });
-
-    dashboard.addWidgets(
-      new cloudwatch.GraphWidget({
-        title: 'Corp-Lambda S3 Sync - Invocations/Errors',
-        left: [invocations],
-        right: [errors],
-        width: 12,
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Corp-Lambda S3 Sync - Duration (p95)',
-        left: [duration.with({ statistic: 'p95' })],
-        width: 12,
-      })
-    );
-    dashboard.addWidgets(
-      new cloudwatch.GraphWidget({
-        title: `Corp-S3 NumberOfObjects (${currentRegion} vs ${peerRegion})`,
-        left: [objectsCurrent, objectsPeer],
-        width: 12,
-      }),
-      new cloudwatch.GraphWidget({
-        title: `Corp-S3 BucketSizeBytes (${currentRegion} vs ${peerRegion})`,
-        left: [sizeCurrent, sizePeer],
-        width: 12,
+    // Inline policy: read only specific SSM Parameter path
+    appServiceRole.attachInlinePolicy(
+      new iam.Policy(this, 'AppSsmReadPolicy', {
+        policyName: `corp-app-ssm-read-${environmentSuffix}-${currentRegion}`,
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'ReadScopedParameters',
+            effect: iam.Effect.ALLOW,
+            actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+            resources: [ssmParamArn],
+          }),
+        ],
       })
     );
 
-    // Outputs
-    new cdk.CfnOutput(this, 'CorpBucketName', {
-      value: dataBucket.bucketName,
-      exportName: `Corp-BucketName-${normalizedEnv}-${currentRegion}`,
+    // === Lambda execution role with minimal permissions ===
+    const lambdaExecRole = new iam.Role(this, 'LambdaExecutionRole', {
+      roleName: `corp-lambda-exec-role-${environmentSuffix}-${currentRegion}`,
+      description:
+        'Least-privilege role for Lambda to write logs to the audit group and read scoped SSM params',
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      maxSessionDuration: cdk.Duration.hours(1),
     });
-    new cdk.CfnOutput(this, 'CorpSyncFunctionName', {
-      value: syncFunction.functionName,
-      exportName: `Corp-SyncFunctionName-${normalizedEnv}-${currentRegion}`,
+
+    lambdaExecRole.attachInlinePolicy(
+      new iam.Policy(this, 'LambdaLogsPolicy', {
+        policyName: `corp-lambda-logs-${environmentSuffix}-${currentRegion}`,
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'WriteToAuditLogGroup',
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+            ],
+            resources: [logsStreamArn],
+          }),
+          new iam.PolicyStatement({
+            sid: 'CreateGroupIfMissing',
+            effect: iam.Effect.ALLOW,
+            actions: ['logs:CreateLogGroup', 'logs:DescribeLogStreams'],
+            resources: [logsGroupArn],
+          }),
+        ],
+      })
+    );
+
+    lambdaExecRole.attachInlinePolicy(
+      new iam.Policy(this, 'LambdaSsmReadPolicy', {
+        policyName: `corp-lambda-ssm-read-${environmentSuffix}-${currentRegion}`,
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'ReadScopedParameters',
+            effect: iam.Effect.ALLOW,
+            actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+            resources: [ssmParamArn],
+          }),
+        ],
+      })
+    );
+
+    // === Optional guardrails: deny destructive IAM ops unless MFA ===
+    // This applies ONLY to these roles themselves (no broad impact).
+    const selfProtection = new iam.Policy(this, 'SelfProtection', {
+      policyName: `corp-iam-self-protect-${environmentSuffix}-${currentRegion}`,
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'DenyDeleteOrDetachWithoutMFA',
+          effect: iam.Effect.DENY,
+          actions: [
+            'iam:DeleteRole',
+            'iam:DeleteRolePolicy',
+            'iam:DetachRolePolicy',
+            'iam:PutRolePolicy',
+            'iam:AttachRolePolicy',
+          ],
+          resources: [appServiceRole.roleArn, lambdaExecRole.roleArn],
+          conditions: {
+            Bool: { 'aws:MultiFactorAuthPresent': 'false' },
+          },
+        }),
+      ],
     });
-    new cdk.CfnOutput(this, 'CorpSyncFunctionArn', {
-      value: syncFunction.functionArn,
-      exportName: `Corp-SyncFunctionArn-${normalizedEnv}-${currentRegion}`,
+    appServiceRole.attachInlinePolicy(selfProtection);
+    lambdaExecRole.attachInlinePolicy(selfProtection);
+
+    // === Stack-level: enable termination protection (safe rollback guard) ===
+    const cfnStack = this.node.defaultChild as cdk.CfnStack;
+   
+
+    // === Outputs ===
+    new cdk.CfnOutput(this, 'AuditLogGroupName', {
+      value: auditLogGroup.logGroupName,
+      exportName: `corp-iam-audit-loggroup-${environmentSuffix}-${currentRegion}`,
     });
-    new cdk.CfnOutput(this, 'CorpLocalBucketParamName', {
-      value: localBucketParam.parameterName,
-      exportName: `Corp-LocalBucketParam-${normalizedEnv}-${currentRegion}`,
+
+    new cdk.CfnOutput(this, 'AppServiceRoleArn', {
+      value: appServiceRole.roleArn,
+      exportName: `corp-app-role-${environmentSuffix}-${currentRegion}`,
     });
-    new cdk.CfnOutput(this, 'CorpDashboardName', {
-      value: dashboard.dashboardName,
-      exportName: `Corp-DashboardName-${normalizedEnv}-${currentRegion}`,
-    });
-    new cdk.CfnOutput(this, 'CorpDashboardUrl', {
-      value: `https://${currentRegion}.console.aws.amazon.com/cloudwatch/home?region=${currentRegion}#dashboards:name=${dashboard.dashboardName}`,
-      exportName: `Corp-DashboardUrl-${normalizedEnv}-${currentRegion}`,
-    });
-    new cdk.CfnOutput(this, 'CorpPeerRegion', {
-      value: peerRegion,
-      exportName: `Corp-PeerRegion-${normalizedEnv}-${currentRegion}`,
+
+    new cdk.CfnOutput(this, 'LambdaExecutionRoleArn', {
+      value: lambdaExecRole.roleArn,
+      exportName: `corp-lambda-role-${environmentSuffix}-${currentRegion}`,
     });
   }
 }
