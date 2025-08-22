@@ -28,5 +28,11 @@
     "AWS KMS",
     "AWS X-Ray",
     "Amazon CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
