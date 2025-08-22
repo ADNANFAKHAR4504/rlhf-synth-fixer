@@ -662,6 +662,33 @@ Resources:
                 's3:x-amz-acl': bucket-owner-full-control
                 'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-cloudtrail-global-${EnvironmentSuffix}'
 
+  # S3 Bucket for CloudFormation state (fixes S3 endpoint error)
+  CloudFormationStateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Purpose
+          Value: CloudFormationState
+
   # Launch Template for EC2 instances
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -773,3 +800,9 @@ Outputs:
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Sub '${Environment}-sg-webserver'
+
+  CloudFormationStateBucketName:
+    Description: S3 Bucket for CloudFormation state
+    Value: !Ref CloudFormationStateBucket
+    Export:
+      Name: !Sub '${Environment}-cfn-state-bucket'

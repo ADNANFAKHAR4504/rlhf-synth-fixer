@@ -1274,6 +1274,57 @@
                 }
             }
         },
+        "CloudFormationStateBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "CloudFormationState"
+                    }
+                ]
+            }
+        },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -1432,6 +1483,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${Environment}-sg-webserver"
+                }
+            }
+        },
+        "CloudFormationStateBucketName": {
+            "Description": "S3 Bucket for CloudFormation state",
+            "Value": {
+                "Ref": "CloudFormationStateBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-cfn-state-bucket"
                 }
             }
         }
