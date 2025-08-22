@@ -1107,26 +1107,8 @@
                         }
                     ]
                 },
-                "Policies": [
-                    {
-                        "PolicyName": "CloudWatchLogsPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:PutLogEvents",
-                                        "logs:CreateLogGroup",
-                                        "logs:CreateLogStream"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "${CloudTrailLogGroup}:*"
-                                    }
-                                }
-                            ]
-                        }
-                    }
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
                 ],
                 "Tags": [
                     {
@@ -1146,10 +1128,6 @@
                         "Value": {
                             "Ref": "Project"
                         }
-                    },
-                    {
-                        "Key": "Purpose",
-                        "Value": "CloudTrail-LogsAccess"
                     }
                 ]
             }

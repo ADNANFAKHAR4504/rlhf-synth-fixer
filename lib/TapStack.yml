@@ -555,17 +555,8 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudWatchLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:PutLogEvents
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                Resource: !Sub '${CloudTrailLogGroup}:*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -573,8 +564,6 @@ Resources:
           Value: !Ref Owner
         - Key: Project
           Value: !Ref Project
-        - Key: Purpose
-          Value: CloudTrail-LogsAccess
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
