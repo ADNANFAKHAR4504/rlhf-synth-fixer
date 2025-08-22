@@ -1,11 +1,11 @@
 {
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
   "po_id": "trainr940",
-  "task_id": "trainr940",
-  "problem_id": "Cloud_Environment_Setup_CloudFormation_YAML_k9Xc1BThF4Jz",
-  "platform": "CloudFormation",
-  "language": "YAML",
-  "difficulty": "hard",
-  "category": "Cloud Environment Setup",
+  "team": "synth",
+  "startedAt": "2025-08-22T11:20:00Z",
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
@@ -16,10 +16,6 @@
     "Access Control"
   ],
   "training_quality": 8,
-  "complexity": "hard",
-  "startedAt": "2025-08-22T11:20:00Z",
-  "turn_type": "single",
-  "team": "synth",
   "aws_services": [
     "VPC",
     "EC2",
@@ -32,31 +28,5 @@
     "Security Groups",
     "Route Tables",
     "Elastic IP"
-  ],
-  "task_title": "Cloud Environment Setup",
-  "task_description": "Design a CloudFormation template for setting up a cloud environment that includes network and compute resources. The environment must adhere to the following requirements: 1. Create a VPC, public and private subnets. 2. Set up an Internet Gateway and a NAT Gateway. 3. Deploy EC2 instances in private subnets. 4. Configure security groups and IAM roles. 5. Implement monitoring and alerting for infrastructure health and performance. 6. Ensure all resources are tagged for organization. 7. Meet specific routing, security, and monitoring constraints.",
-  "environment_context": "AWS environment with VPC, subnets spread across availability zones in the us-east-1 region, and a NAT solution for private resources' internet access.",
-  "task_context": "This task involves setting up a secure, scalable, and redundant environment in AWS using CloudFormation, highlighting the importance of network and security configurations in cloud best practices.",
-  "expected_output": "A complete CloudFormation YAML template that meets the above requirements and constraints, ready for deployment, passing all necessary validations and JSON schema checks.",
-  "num_constraints": 12,
-  "constraints": [
-    "Ensure all AWS resources are created in the us-east-1 region.",
-    "Create a new VPC with a CIDR block of 10.0.0.0/16.",
-    "Create two public subnets in separate availability zones with CIDR blocks of 10.0.1.0/24 and 10.0.2.0/24.",
-    "Create two private subnets in separate availability zones with CIDR blocks of 10.0.3.0/24 and 10.0.4.0/24.",
-    "Create an Internet Gateway and attach it to the VPC.",
-    "Create a NAT Gateway in one of the public subnets to allow outbound internet traffic from the private subnets.",
-    "Ensure all subnets have the appropriate route tables associated with them.",
-    "Deploy an EC2 instance in each private subnet using the latest Amazon Linux 2 AMI.",
-    "The EC2 instances must use an IAM role that allows reading from an S3 bucket within the same account.",
-    "Set up a security group allowing SSH access to the EC2 instances only from a specific IP range.",
-    "Monitor the EC2 instances using CloudWatch and set up an alarm for CPU usage exceeding 80%.",
-    "Ensure there are appropriate tags on all resources for cost management and resource identification."
-  ],
-  "github_url": "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html",
-  "resources": [
-    "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html",
-    "https://aws.amazon.com/cloudformation/",
-    "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/sample-templates-services-us-east-1.html"
   ]
 }
