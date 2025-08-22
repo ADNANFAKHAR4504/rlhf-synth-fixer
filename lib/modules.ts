@@ -559,14 +559,6 @@ export class SecureInfrastructureModules extends Construct {
                 replicaKmsKeyId:
                   'arn:aws:kms:us-west-2:718240086340:key/c307df4a-ec6a-4ec3-bb0c-79f91fed991b',
               },
-              replicationTime: {
-                status: 'Enabled',
-                time: { minutes: 15 },
-              },
-              metrics: {
-                status: 'Enabled',
-                eventThreshold: { minutes: 15 },
-              },
             },
             sourceSelectionCriteria: {
               sseKmsEncryptedObjects: {
