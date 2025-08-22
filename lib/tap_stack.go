@@ -65,12 +65,11 @@ func BuildSimpleS3Stack(app cdktf.App, region string) cdktf.TerraformStack {
 
 // Entrypoint
 func main() {
-    app := cdktf.NewApp(nil)
-    region := os.Getenv("AWS_REGION")
-    if region == "" {
-        region = "us-east-1"
-    }
-    BuildSimpleS3Stack(app, region)
-    app.Synth()
+	app := cdktf.NewApp(nil)
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	BuildSimpleS3Stack(app, region)
+	app.Synth()
 }
-

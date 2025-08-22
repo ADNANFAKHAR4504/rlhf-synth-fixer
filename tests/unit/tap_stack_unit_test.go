@@ -14,7 +14,7 @@ func TestStr(t *testing.T) {
 	t.Run("should convert string to pointer", func(t *testing.T) {
 		input := "test-string"
 		result := str(input)
-		
+
 		assert.NotNil(t, result)
 		assert.Equal(t, input, *result)
 	})
@@ -22,7 +22,7 @@ func TestStr(t *testing.T) {
 	t.Run("should handle empty string", func(t *testing.T) {
 		input := ""
 		result := str(input)
-		
+
 		assert.NotNil(t, result)
 		assert.Equal(t, "", *result)
 	})
@@ -41,7 +41,7 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 
 		testValue := "test-suffix-123"
 		os.Setenv("NAME_SUFFIX", testValue)
-		
+
 		suffix := os.Getenv("NAME_SUFFIX")
 		assert.Equal(t, testValue, suffix)
 	})
@@ -57,7 +57,7 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 		}()
 
 		os.Unsetenv("NAME_SUFFIX")
-		
+
 		suffix := os.Getenv("NAME_SUFFIX")
 		assert.Equal(t, "", suffix)
 	})
@@ -74,7 +74,7 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 
 		testRegion := "eu-central-1"
 		os.Setenv("AWS_REGION", testRegion)
-		
+
 		region := os.Getenv("AWS_REGION")
 		assert.Equal(t, testRegion, region)
 	})
@@ -90,7 +90,7 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 		}()
 
 		os.Unsetenv("AWS_REGION")
-		
+
 		region := os.Getenv("AWS_REGION")
 		if region == "" {
 			region = "us-east-1"
