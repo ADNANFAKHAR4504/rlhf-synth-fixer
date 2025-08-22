@@ -1751,7 +1751,7 @@
         "EnableCloudwatchLogsExports": [
           "postgresql"
         ],
-        "EnablePerformanceInsights": true,
+        "EnablePerformanceInsights": false,
         "Engine": "postgres",
         "EngineVersion": "15.3",
         "KmsKeyId": {
@@ -1781,13 +1781,6 @@
           ]
         },
         "MultiAZ": false,
-        "PerformanceInsightsKMSKeyId": {
-          "Fn::GetAtt": [
-            "SecureDatabaseRDSEncryptionKeyFF451A26",
-            "Arn"
-          ]
-        },
-        "PerformanceInsightsRetentionPeriod": 7,
         "StorageEncrypted": true,
         "StorageType": "gp2",
         "Tags": [

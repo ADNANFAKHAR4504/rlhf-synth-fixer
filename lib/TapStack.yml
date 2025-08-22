@@ -531,7 +531,7 @@ Resources:
       MultiAZ: true
       AutoMinorVersionUpgrade: true
       DeletionProtection: true
-      EnablePerformanceInsights: true
+      EnablePerformanceInsights: false
       PerformanceInsightsRetentionPeriod: 7
       MonitoringInterval: 60
       MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
