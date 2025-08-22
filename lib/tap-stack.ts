@@ -360,11 +360,12 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createStorageInfrastructure() {
-    // CloudTrail S3 Bucket
+    // CloudTrail S3 Bucket with forceDestroy enabled
     const cloudTrailBucket = new aws.s3.Bucket(
       `${this.environment}-cloudtrail-logs`,
       {
         bucket: `${this.environment}-cloudtrail-logs-${Date.now()}`,
+        forceDestroy: true, // This automatically deletes all objects and versions before deleting the bucket
         tags: this.defaultTags,
       },
       { parent: this }
