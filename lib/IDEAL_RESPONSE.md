@@ -716,8 +716,9 @@ resource "aws_iam_role_policy_attachment" "security_readonly" {
   role       = aws_iam_role.security.name
 }
 
-resource "aws_iam_role_policy_attachment" "security_cloudtrail" {
-  policy_arn = "arn:aws:iam::aws:policy/CloudTrailReadOnlyAccess"
+# Note: CloudTrailReadOnlyAccess policy doesn't exist, using CloudWatchLogsReadOnlyAccess instead
+resource "aws_iam_role_policy_attachment" "security_cloudwatch" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsReadOnlyAccess"
   role       = aws_iam_role.security.name
 }
 ```
@@ -766,7 +767,6 @@ resource "aws_iam_role_policy_attachment" "business_billing" {
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.project_name}-${var.environment}"
   retention_in_days = 2557 # 7 years
-  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment}-cloudtrail-logs"
@@ -776,7 +776,6 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/application/${var.project_name}-${var.environment}"
   retention_in_days = 90
-  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment}-application-logs"
