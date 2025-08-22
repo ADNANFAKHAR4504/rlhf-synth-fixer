@@ -26,7 +26,7 @@ variable "environment_suffix" {
 variable "domain_name" {
   description = "Domain name for Route 53 hosted zone"
   type        = string
-  default     = "cucumber-pineapple.turing.com"
+  default     = "cucumber-pineapple.meerio.com"
 }
 
 # Locals
