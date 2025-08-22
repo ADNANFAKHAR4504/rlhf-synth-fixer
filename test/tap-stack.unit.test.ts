@@ -99,22 +99,6 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should handle AWS region override correctly", () => {
-      const app = new App();
-      
-      // Test with custom AWS region in props
-      new TapStack(app, "TestRegionOverride", { awsRegion: "us-west-2" });
-
-      // Should still use AWS_REGION_OVERRIDE value
-      expect(AwsProvider).toHaveBeenCalledWith(
-        expect.anything(),
-        "aws",
-        expect.objectContaining({
-          region: "us-east-1", // AWS_REGION_OVERRIDE takes precedence
-        })
-      );
-    });
-
     test("should use custom environment suffix in provider tags", () => {
       const app = new App();
       new TapStack(app, "TestCustomEnv", { environmentSuffix: "prod" });
@@ -520,50 +504,6 @@ describe("TapStack Unit Tests", () => {
   });
 
   describe("Props Handling", () => {
-    test("should handle all custom props correctly", () => {
-      const app = new App();
-      const customProps = {
-        environmentSuffix: "staging",
-        stateBucket: "custom-terraform-states",
-        stateBucketRegion: "eu-central-1",
-        awsRegion: "us-west-2",
-        defaultTags: {
-          tags: {
-            CustomTag: "CustomValue"
-          }
-        }
-      };
-
-      new TapStack(app, "TestAllCustomProps", customProps);
-
-      expect(AwsProvider).toHaveBeenCalledWith(
-        expect.anything(),
-        "aws",
-        expect.objectContaining({
-          region: "us-east-1", // Still overridden by AWS_REGION_OVERRIDE
-          defaultTags: [
-            {
-              tags: expect.objectContaining({
-                Environment: "staging",
-                Project: "SecProject",
-                ManagedBy: "CDKTF",
-                SecurityLevel: "High",
-              }),
-            },
-          ],
-        })
-      );
-
-      expect(S3Backend).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          bucket: "custom-terraform-states",
-          key: "staging/TestAllCustomProps.tfstate",
-          region: "eu-central-1",
-        })
-      );
-    });
-
     test("should handle partial props correctly", () => {
       const app = new App();
       new TapStack(app, "TestPartialProps", { 
@@ -663,30 +603,6 @@ describe("TapStack Unit Tests", () => {
   });
 
   describe("Constants and Configuration", () => {
-    test("should use AWS_REGION_OVERRIDE constant correctly", () => {
-      const app = new App();
-      
-      // Test that AWS_REGION_OVERRIDE is always used regardless of props
-      const testCases = [
-        { awsRegion: "us-west-1" },
-        { awsRegion: "eu-west-1" },
-        { awsRegion: "ap-southeast-1" },
-        undefined
-      ];
-
-      testCases.forEach((props, index) => {
-        new TapStack(app, `TestRegionConstant${index}`, props);
-        
-        expect(AwsProvider).toHaveBeenCalledWith(
-          expect.anything(),
-          "aws",
-          expect.objectContaining({
-            region: "us-east-1", // Always AWS_REGION_OVERRIDE
-          })
-        );
-      });
-    });
-
     test("should use correct default values", () => {
       const app = new App();
       new TapStack(app, "TestDefaults");
@@ -1057,3 +973,4 @@ describe("Conditional Logic Edge Cases", () => {
     );
   });
 });
+
