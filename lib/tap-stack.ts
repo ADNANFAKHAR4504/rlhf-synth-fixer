@@ -383,5 +383,60 @@ def handler(event, context):
       value: logsBucket.bucketName,
       description: 'Logs S3 Bucket Name',
     });
+    // Add these outputs
+    new cdk.CfnOutput(this, 'EC2SecurityGroupId', {
+      value: ec2SecurityGroup.securityGroupId,
+      description: 'EC2 Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'RDSSecurityGroupId', {
+      value: rdsSecurityGroup.securityGroupId,
+      description: 'RDS Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
+      value: lambdaSecurityGroup.securityGroupId,
+      description: 'Lambda Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'EC2RoleArn', {
+      value: ec2Role.roleArn,
+      description: 'EC2 IAM Role ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRoleArn', {
+      value: lambdaRole.roleArn,
+      description: 'Lambda IAM Role ARN',
+    });
+
+    new cdk.CfnOutput(this, 'DBSecretArn', {
+      value: dbSecret.secretArn,
+      description: 'Database Secret ARN',
+    });
+
+    new cdk.CfnOutput(this, 'VpcCidr', {
+      value: vpc.vpcCidrBlock,
+      description: 'VPC CIDR Block',
+    });
+
+    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+      value: vpc.privateSubnets.map(s => s.subnetId).join(','),
+      description: 'Private Subnet IDs',
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnetIds', {
+      value: vpc.publicSubnets.map(s => s.subnetId).join(','),
+      description: 'Public Subnet IDs',
+    });
+
+    new cdk.CfnOutput(this, 'DataBucketArn', {
+      value: dataBucket.bucketArn,
+      description: 'Data Bucket ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LogsBucketArn', {
+      value: logsBucket.bucketArn,
+      description: 'Logs Bucket ARN',
+    });
   }
 }
