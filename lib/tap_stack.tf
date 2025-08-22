@@ -14,7 +14,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Environment suffix for unique resource naming"
   type        = string
-  default     = "dev"
+  default     = "pr1948"
 }
 
 variable "vpc_cidr" {
@@ -309,7 +309,7 @@ resource "aws_instance" "main" {
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   monitoring             = true
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
               yum install -y httpd
