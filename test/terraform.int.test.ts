@@ -9,7 +9,6 @@ const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 let outputsRaw: Record<string, any>;
 let outputs: Record<string, any>;
 
-// Utility functions
 const isNonEmptyString = (val: any): boolean => typeof val === "string" && val.trim().length > 0;
 const isValidArn = (val: any): boolean => typeof val === "string" && val.startsWith("arn:aws:");
 
@@ -17,13 +16,13 @@ beforeAll(() => {
   outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
   outputs = {};
   for (const [key, val] of Object.entries(outputsRaw)) {
-    try {
-      if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
+    if (typeof val === "string" && (val.trim().startsWith("[") || val.trim().startsWith("{"))) {
+      try {
         outputs[key] = JSON.parse(val);
-      } else {
+      } catch {
         outputs[key] = val;
       }
-    } catch {
+    } else {
       outputs[key] = val;
     }
   }
@@ -39,24 +38,25 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
   const s3ClientSecondary = new S3Client({ region: secondaryRegion });
   const iamClient = new IAMClient({ region: "us-east-1" }); // IAM is global
 
-  // 1. EC2 Instance Checks
   it("Primary EC2 instance exists and is running with correct instance type and tags", async () => {
     const instanceId = outputs.primary_ec2_instance_id;
     expect(isNonEmptyString(instanceId)).toBe(true);
 
-    const response = await ec2ClientPrimary.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    const response = await ec2ClientPrimary.send(
+      new DescribeInstancesCommand({ InstanceIds: [instanceId] })
+    );
     const instance = response.Reservations?.[0]?.Instances?.;
     expect(instance).toBeDefined();
     expect(instance?.InstanceId).toEqual(instanceId);
     expect(instance?.State?.Name).toBe("running");
     expect(instance?.InstanceType).toBe(outputs.primary_ec2_instance_type);
 
-    // Validate tags contain expected common tags
     const commonTags = JSON.parse(outputs.common_tags);
     const tagMap = new Map<string, string>();
     (instance?.Tags ?? []).forEach(t => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
     });
+
     for (const [k, v] of Object.entries(commonTags)) {
       expect(tagMap.get(k)).toBe(v);
     }
@@ -64,13 +64,15 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
 
   it("Secondary EC2 instance exists and is running with correct instance type and tags", async () => {
     if (!outputs.secondary_ec2_instance_id) {
-      return; // Skip if not present
+      return; // skip if no secondary instance
     }
 
     const instanceId = outputs.secondary_ec2_instance_id;
     expect(isNonEmptyString(instanceId)).toBe(true);
 
-    const response = await ec2ClientSecondary.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    const response = await ec2ClientSecondary.send(
+      new DescribeInstancesCommand({ InstanceIds: [instanceId] })
+    );
     const instance = response.Reservations?.[0]?.Instances?.;
     expect(instance).toBeDefined();
     expect(instance?.InstanceId).toEqual(instanceId);
@@ -82,12 +84,12 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
     (instance?.Tags ?? []).forEach(t => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
     });
+
     for (const [k, v] of Object.entries(commonTags)) {
       expect(tagMap.get(k)).toBe(v);
     }
   });
 
-  // 2. S3 Bucket Checks - Versioning and Replication
   it("Primary S3 bucket has versioning enabled and replication configuration", async () => {
     const bucketName = outputs.primary_s3_bucket_name;
     expect(isNonEmptyString(bucketName)).toBe(true);
@@ -112,7 +114,6 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
     expect(replication.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
   });
 
-  // 3. IAM Role Checks
   it("EC2 IAM role exists and matches ARN and name", async () => {
     const roleName = outputs.ec2_iam_role_name;
     const roleArn = outputs.ec2_iam_role_arn;
@@ -138,6 +139,4 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
     expect(response.Role.Arn).toBe(roleArn);
     expect(response.Role.RoleName).toBe(roleName);
   });
-
-  // Additional tests can be added for VPCs, Subnets, NAT Gateway, Security Groups, etc.   
 });
