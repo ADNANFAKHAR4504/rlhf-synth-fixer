@@ -82,7 +82,8 @@ describe("TapStack Unit Tests", () => {
       expect(stack.vpcId).toBeDefined();
       expect(stack.albDnsName).toBeDefined();
       expect(stack.staticBucketName).toBeDefined();
-      expect(stack.staticBucketWebsiteEndpoint).toBeDefined();
+      expect(stack.cloudfrontDomainName).toBeDefined();
+      expect(stack.cloudfrontDistributionId).toBeDefined();
     });
   });
 

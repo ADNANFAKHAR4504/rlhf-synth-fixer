@@ -22,6 +22,7 @@ describe('TapStack Integration Tests', () => {
   let iamClient;
   let autoscalingClient;
   let cloudwatchClient;
+  let cloudfrontClient;
 
   beforeAll(async () => {
     // Initialize AWS clients
@@ -33,6 +34,7 @@ describe('TapStack Integration Tests', () => {
     iamClient = new AWS.IAM();
     autoscalingClient = new AWS.AutoScaling();
     cloudwatchClient = new AWS.CloudWatch();
+    cloudfrontClient = new AWS.CloudFront();
 
     // Load stack outputs from deployment
     try {
@@ -179,7 +181,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('S3 Static Assets', () => {
-    test('S3 bucket should exist and be configured for web hosting', async () => {
+    test('S3 bucket should exist and be private', async () => {
       if (!stackOutputs.staticBucketName) {
         console.warn('S3 bucket name not found, skipping test');
         return;
@@ -192,18 +194,22 @@ describe('TapStack Integration Tests', () => {
 
       expect(bucketResponse).toBeDefined();
 
-      // Check website configuration
-      const websiteConfig = await s3Client.getBucketWebsite({
-        Bucket: stackOutputs.staticBucketName
-      }).promise();
-
-      expect(websiteConfig.IndexDocument.Suffix).toBe('index.html');
-      expect(websiteConfig.ErrorDocument.Key).toBe('error.html');
+      // Verify bucket is not configured for website hosting (should be private)
+      try {
+        await s3Client.getBucketWebsite({
+          Bucket: stackOutputs.staticBucketName
+        }).promise();
+        // If we reach here, website hosting is configured (not expected)
+        fail('Bucket should not be configured for website hosting');
+      } catch (error) {
+        // Expected - bucket should not have website configuration
+        expect(error.code).toBe('NoSuchWebsiteConfiguration');
+      }
     });
 
-    test('S3 bucket should have correct public access policy', async () => {
-      if (!stackOutputs.staticBucketName) {
-        console.warn('S3 bucket name not found, skipping policy test');
+    test('S3 bucket should have correct CloudFront access policy', async () => {
+      if (!stackOutputs.staticBucketName || !stackOutputs.cloudfrontDistributionId) {
+        console.warn('S3 bucket name or CloudFront distribution ID not found, skipping policy test');
         return;
       }
 
@@ -217,13 +223,92 @@ describe('TapStack Integration Tests', () => {
         
         const statement = policy.Statement[0];
         expect(statement.Effect).toBe('Allow');
-        expect(statement.Principal).toBe('*');
+        expect(statement.Principal.Service).toBe('cloudfront.amazonaws.com');
         expect(statement.Action).toBe('s3:GetObject');
+        expect(statement.Condition.StringEquals['AWS:SourceArn']).toBeDefined();
       } catch (error) {
         if (error.code !== 'NoSuchBucketPolicy') {
           throw error;
         }
       }
+    });
+
+    test('S3 bucket should be private with public access blocked', async () => {
+      if (!stackOutputs.staticBucketName) {
+        console.warn('S3 bucket name not found, skipping public access block test');
+        return;
+      }
+
+      const publicAccessBlock = await s3Client.getPublicAccessBlock({
+        Bucket: stackOutputs.staticBucketName
+      }).promise();
+
+      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+    });
+  });
+
+  describe('CloudFront Distribution', () => {
+    test('CloudFront distribution should be configured correctly', async () => {
+      if (!stackOutputs.cloudfrontDistributionId) {
+        console.warn('CloudFront distribution ID not found, skipping test');
+        return;
+      }
+
+      const response = await cloudfrontClient.getDistribution({
+        Id: stackOutputs.cloudfrontDistributionId
+      }).promise();
+
+      const distribution = response.Distribution;
+      
+      expect(distribution.Status).toBe('Deployed');
+      expect(distribution.DistributionConfig.Enabled).toBe(true);
+      expect(distribution.DistributionConfig.DefaultRootObject).toBe('index.html');
+      expect(distribution.DistributionConfig.Origins.Items).toHaveLength(1);
+      
+      const origin = distribution.DistributionConfig.Origins.Items[0];
+      expect(origin.Id).toBe('S3Origin');
+      expect(origin.OriginAccessControlId).toBeDefined();
+    });
+
+    test('CloudFront should have correct cache behavior', async () => {
+      if (!stackOutputs.cloudfrontDistributionId) {
+        console.warn('CloudFront distribution ID not found, skipping cache behavior test');
+        return;
+      }
+
+      const response = await cloudfrontClient.getDistribution({
+        Id: stackOutputs.cloudfrontDistributionId
+      }).promise();
+
+      const defaultCacheBehavior = response.Distribution.DistributionConfig.DefaultCacheBehavior;
+      
+      expect(defaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
+      expect(defaultCacheBehavior.Compress).toBe(true);
+      expect(defaultCacheBehavior.TargetOriginId).toBe('S3Origin');
+      expect(defaultCacheBehavior.DefaultTTL).toBe(3600);
+    });
+
+    test('CloudFront should have custom error responses', async () => {
+      if (!stackOutputs.cloudfrontDistributionId) {
+        console.warn('CloudFront distribution ID not found, skipping error response test');
+        return;
+      }
+
+      const response = await cloudfrontClient.getDistribution({
+        Id: stackOutputs.cloudfrontDistributionId
+      }).promise();
+
+      const customErrorResponses = response.Distribution.DistributionConfig.CustomErrorResponses;
+      
+      expect(customErrorResponses.Items.length).toBeGreaterThanOrEqual(1);
+      
+      const errorResponse = customErrorResponses.Items.find(item => item.ErrorCode === 404);
+      expect(errorResponse).toBeDefined();
+      expect(errorResponse.ResponsePagePath).toBe('/error.html');
+      expect(errorResponse.ResponseCode).toBe(404);
     });
   });
 
@@ -368,24 +453,25 @@ describe('TapStack Integration Tests', () => {
       }
     }, 15000);
 
-    test('S3 website endpoint should be accessible', async () => {
-      if (!stackOutputs.staticBucketWebsiteEndpoint) {
-        console.warn('S3 website endpoint not found, skipping test');
+    test('CloudFront distribution should be accessible', async () => {
+      if (!stackOutputs.cloudfrontDomainName) {
+        console.warn('CloudFront domain name not found, skipping test');
         return;
       }
 
       try {
         const fetch = (await import('node-fetch')).default;
-        const response = await fetch(`http://${stackOutputs.staticBucketWebsiteEndpoint}`, {
-          timeout: 10000
+        const response = await fetch(`https://${stackOutputs.cloudfrontDomainName}`, {
+          timeout: 15000
         });
 
         // We expect either success or 404 (no index.html uploaded yet)
+        // CloudFront may return 403 if no default root object is found
         expect([200, 403, 404]).toContain(response.status);
       } catch (error) {
-        console.warn('S3 website connectivity test failed:', error.message);
+        console.warn('CloudFront connectivity test failed:', error.message);
       }
-    }, 10000);
+    }, 20000);
   });
 
   describe('Resource Tagging', () => {
