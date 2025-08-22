@@ -741,34 +741,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Secrets Manager resource policy
-    new aws.secretsmanager.SecretPolicy(
-      `${sanitizedName}-app-secret-policy`,
-      {
-        secretArn: appSecret.arn,
-        policy: pulumi.all([current]).apply(([currentAccount]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  AWS: `arn:aws:iam::${currentAccount.accountId}:role/${sanitizedName}-ec2-role`,
-                },
-                Action: 'secretsmanager:GetSecretValue',
-                Resource: '*',
-                Condition: {
-                  StringEquals: {
-                    'aws:SourceAccount': currentAccount.accountId,
-                  },
-                },
-              },
-            ],
-          })
-        ),
-      },
-      { parent: this }
-    );
+    // Secrets Manager access controlled via IAM role policies
 
     new aws.secretsmanager.SecretVersion(
       `${sanitizedName}-app-secret-version`,
