@@ -279,8 +279,8 @@ describe("SecureCorp AWS Infrastructure - Unit Tests", () => {
 
   describe("CloudTrail Configuration", () => {
     test("uses existing CloudTrail trail", () => {
-      expect(stackContent).toMatch(/data\s+"aws_cloudtrail"\s+"existing"\s*{/);
-      expect(stackContent).toMatch(/name\s*=\s*"prod-dev-trail"/);
+      expect(stackContent).toMatch(/locals\s*{/);
+      expect(stackContent).toMatch(/existing_cloudtrail_name\s*=\s*"prod-dev-trail"/);
     });
 
     test("CloudTrail bucket policy allows CloudTrail service access", () => {
@@ -350,7 +350,7 @@ describe("SecureCorp AWS Infrastructure - Unit Tests", () => {
 
     test("outputs CloudTrail information", () => {
       expect(stackContent).toMatch(/output\s+"cloudtrail_arn"\s*{/);
-      expect(stackContent).toMatch(/value\s*=\s*data\.aws_cloudtrail\.existing\.arn/);
+      expect(stackContent).toMatch(/value\s*=\s*"arn:aws:cloudtrail:\$\{var\.aws_region\}:\$\{data\.aws_caller_identity\.current\.account_id\}:trail\/\$\{local\.existing_cloudtrail_name\}"/);
     });
   });
 

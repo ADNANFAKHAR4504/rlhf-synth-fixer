@@ -77,30 +77,7 @@ function loadOutputs() {
   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 
   if (!fs.existsSync(p)) {
-    console.log("Outputs file not found at cfn-outputs/all-outputs.json. Using mock data for testing.");
-    // Return mock data for testing when outputs don't exist
-    return {
-      vpcId: 'vpc-0123456789abcdef0',
-      privateSubnetIds: ['subnet-0123456789abcdef0', 'subnet-0123456789abcdef1'],
-      publicSubnetIds: ['subnet-0123456789abcdef2', 'subnet-0123456789abcdef3'],
-      kmsKeyId: '01234567-89ab-cdef-0123-456789abcdef',
-      kmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/01234567-89ab-cdef-0123-456789abcdef',
-      cloudtrailLogsBucket: 'securecorp-dev-cloudtrail-logs-mock123',
-      appDataBucket: 'securecorp-dev-app-data-mock123',
-      iamRoles: {
-        developer: 'arn:aws:iam::123456789012:role/securecorp-dev-developer-role',
-        devops: 'arn:aws:iam::123456789012:role/securecorp-dev-devops-role',
-        security: 'arn:aws:iam::123456789012:role/securecorp-dev-security-role',
-        business: 'arn:aws:iam::123456789012:role/securecorp-dev-business-role'
-      },
-      vpcEndpoints: {
-        s3: 'vpce-0123456789abcdef0',
-        kms: 'vpce-0123456789abcdef1',
-        cloudtrail: 'vpce-0123456789abcdef2',
-        logs: 'vpce-0123456789abcdef3'
-      },
-      cloudtrailArn: 'arn:aws:cloudtrail:us-east-1:123456789012:trail/securecorp-dev-trail'
-    };
+    throw new Error("Outputs file not found at cfn-outputs/all-outputs.json. Please run terraform apply first.");
   }
 
   try {
@@ -141,36 +118,18 @@ function loadOutputs() {
     }
     return o;
   } catch (error) {
-    // If there's any error reading the file, return mock data
-    console.log("Error reading outputs file, using mock data for testing.");
-    return {
-      vpcId: 'vpc-0123456789abcdef0',
-      privateSubnetIds: ['subnet-0123456789abcdef0', 'subnet-0123456789abcdef1'],
-      publicSubnetIds: ['subnet-0123456789abcdef2', 'subnet-0123456789abcdef3'],
-      kmsKeyId: '01234567-89ab-cdef-0123-456789abcdef',
-      kmsKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/01234567-89ab-cdef-0123-456789abcdef',
-      cloudtrailLogsBucket: 'securecorp-dev-cloudtrail-logs-mock123',
-      appDataBucket: 'securecorp-dev-app-data-mock123',
-      iamRoles: {
-        developer: 'arn:aws:iam::123456789012:role/securecorp-dev-developer-role',
-        devops: 'arn:aws:iam::123456789012:role/securecorp-dev-devops-role',
-        security: 'arn:aws:iam::123456789012:role/securecorp-dev-security-role',
-        business: 'arn:aws:iam::123456789012:role/securecorp-dev-business-role'
-      },
-      vpcEndpoints: {
-        s3: 'vpce-0123456789abcdef0',
-        kms: 'vpce-0123456789abcdef1',
-        cloudtrail: 'vpce-0123456789abcdef2',
-        logs: 'vpce-0123456789abcdef3'
-      },
-      cloudtrailArn: 'arn:aws:cloudtrail:us-east-1:123456789012:trail/securecorp-dev-trail'
-    };
+    if (error instanceof Error) {
+      throw new Error(`Error reading outputs file: ${error.message}`);
+    }
+    throw new Error("Error reading outputs file");
   }
 }
 
 async function initializeLiveTesting() {
+  // Auto-discover region from VPC ID if not set
   region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
+  // Initialize AWS clients
   ec2Client = new EC2Client({ region });
   s3Client = new S3Client({ region });
   kmsClient = new KMSClient({ region });
@@ -178,12 +137,14 @@ async function initializeLiveTesting() {
   cloudTrailClient = new CloudTrailClient({ region });
   cloudWatchLogsClient = new CloudWatchLogsClient({ region });
 
+  // Test connectivity with a simple API call - only if VPC ID looks real
   if (OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0') {
     try {
       await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }));
       console.log(`Live testing enabled - using region: ${region}`);
     } catch (error) {
       console.log(`Warning: VPC ${OUT.vpcId} not found in AWS. Infrastructure may not be deployed yet.`);
+      console.log(`Live testing will be skipped until infrastructure is deployed.`);
     }
   } else {
     console.log(`Mock VPC ID detected. Live testing will be skipped until real infrastructure is deployed.`);
@@ -207,17 +168,21 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 1000): Prom
 }
 
 function hasRealInfrastructure(): boolean {
+  // Check if we have real infrastructure by looking for non-mock VPC ID
   return OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0';
 }
 
+/** ===================== Jest Config ===================== */
 jest.setTimeout(120_000);
 
+/** ===================== Test Setup ===================== */
 beforeAll(async () => {
   OUT = loadOutputs();
   await initializeLiveTesting();
 });
 
 afterAll(async () => {
+  // Clean up AWS clients
   try {
     await ec2Client?.destroy();
     await s3Client?.destroy();
@@ -230,6 +195,7 @@ afterAll(async () => {
   }
 });
 
+/** ===================== Infrastructure Outputs Validation ===================== */
 describe("Infrastructure Outputs Validation", () => {
   test("Outputs file exists and has valid structure", () => {
     expect(OUT).toBeDefined();
@@ -283,6 +249,7 @@ describe("Infrastructure Outputs Validation", () => {
   });
 });
 
+/** ===================== Live AWS Resource Validation ===================== */
 describe("Live AWS Resource Validation", () => {
   test("VPC exists and is properly configured", async () => {
     if (!hasRealInfrastructure()) {
@@ -291,19 +258,19 @@ describe("Live AWS Resource Validation", () => {
       return;
     }
 
-    const command = new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] });
+    const command = new DescribeVpcsCommand({
+      VpcIds: [OUT.vpcId]
+    });
     const response = await retry(() => ec2Client.send(command));
 
     expect(response.Vpcs).toBeDefined();
-    expect(response.Vpcs!.length).toBe(1);
+    expect(response.Vpcs!.length).toBeGreaterThan(0);
 
     const vpc = response.Vpcs![0];
     expect(vpc.State).toBe('available');
     expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-    // Note: These properties might not be available in the AWS SDK response
-    // expect(vpc.EnableDnsHostnames).toBe(true);
-    // expect(vpc.EnableDnsSupport).toBe(true);
 
+    // Check for required tags
     const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
     expect(nameTag?.Value).toBe('securecorp-dev-vpc');
   }, 30000);
@@ -316,18 +283,26 @@ describe("Live AWS Resource Validation", () => {
     }
 
     const allSubnetIds = [...OUT.privateSubnetIds, ...OUT.publicSubnetIds];
-    const command = new DescribeSubnetsCommand({ SubnetIds: allSubnetIds });
+    const command = new DescribeSubnetsCommand({
+      SubnetIds: allSubnetIds
+    });
     const response = await retry(() => ec2Client.send(command));
 
     expect(response.Subnets).toBeDefined();
     expect(response.Subnets!.length).toBe(4);
 
+    // Verify we have subnets in multiple AZs
     const uniqueAzs = new Set(response.Subnets!.map((subnet: any) => subnet.AvailabilityZone));
     expect(uniqueAzs.size).toBe(2);
 
     response.Subnets!.forEach((subnet: any) => {
       expect(subnet.State).toBe('available');
       expect(subnet.VpcId).toBe(OUT.vpcId);
+
+      // Check for required tags
+      const nameTag = subnet.Tags?.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag?.Value).toMatch(/^securecorp-dev-(public|private)-subnet-[12]$/);
     });
   }, 30000);
 
@@ -339,18 +314,34 @@ describe("Live AWS Resource Validation", () => {
     }
 
     const command = new DescribeSecurityGroupsCommand({
-      Filters: [{ Name: 'vpc-id', Values: [OUT.vpcId] }]
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [OUT.vpcId]
+        }
+      ]
     });
     const response = await retry(() => ec2Client.send(command));
 
     expect(response.SecurityGroups).toBeDefined();
+    expect(response.SecurityGroups!.length).toBeGreaterThan(0);
 
+    // Find our specific security groups
+    const vpcEndpointsSg = response.SecurityGroups!.find((sg: any) => sg.GroupName?.includes('vpc-endpoints-sg'));
+    const privateSg = response.SecurityGroups!.find((sg: any) => sg.GroupName?.includes('private-sg'));
+
+    expect(vpcEndpointsSg).toBeDefined();
+    expect(privateSg).toBeDefined();
+
+    // Check that no security group allows all traffic from 0.0.0.0/0 for inbound rules
     response.SecurityGroups!.forEach((sg: any) => {
       const dangerousRules = sg.IpPermissions?.filter((rule: any) =>
         rule.IpRanges?.some((range: any) =>
           range.CidrIp === '0.0.0.0/0' &&
-          !(rule.FromPort === 80 && rule.ToPort === 80) &&
-          !(rule.FromPort === 443 && rule.ToPort === 443)
+          // Allow HTTPS for VPC endpoints
+          !(rule.FromPort === 443 && rule.ToPort === 443) &&
+          // Allow HTTP for some services
+          !(rule.FromPort === 80 && rule.ToPort === 80)
         )
       );
       expect(dangerousRules?.length || 0).toBe(0);
@@ -365,7 +356,9 @@ describe("Live AWS Resource Validation", () => {
     }
 
     const endpointIds = Object.values(OUT.vpcEndpoints) as string[];
-    const command = new DescribeVpcEndpointsCommand({ VpcEndpointIds: endpointIds });
+    const command = new DescribeVpcEndpointsCommand({
+      VpcEndpointIds: endpointIds
+    });
     const response = await retry(() => ec2Client.send(command));
 
     expect(response.VpcEndpoints).toBeDefined();
@@ -374,6 +367,11 @@ describe("Live AWS Resource Validation", () => {
     response.VpcEndpoints!.forEach((endpoint: any) => {
       expect(endpoint.State).toBe('available');
       expect(endpoint.VpcId).toBe(OUT.vpcId);
+
+      // Check for proper tagging
+      const nameTag = endpoint.Tags?.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag?.Value).toMatch(/^securecorp-dev-(s3|kms|cloudtrail|logs)-endpoint$/);
     });
   }, 30000);
 
@@ -384,18 +382,23 @@ describe("Live AWS Resource Validation", () => {
       return;
     }
 
-    const command = new DescribeKeyCommand({ KeyId: OUT.kmsKeyId });
+    const command = new DescribeKeyCommand({
+      KeyId: OUT.kmsKeyId
+    });
     const response = await retry(() => kmsClient.send(command));
 
     expect(response.KeyMetadata).toBeDefined();
     expect(response.KeyMetadata!.KeyState).toBe('Enabled');
     expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+    expect(response.KeyMetadata!.DeletionDate).toBeUndefined();
 
+    // Check alias exists
     const aliasCommand = new ListAliasesCommand({});
     const aliasResponse = await retry(() => kmsClient.send(aliasCommand));
 
     const alias = aliasResponse.Aliases?.find((a: any) => a.AliasName === 'alias/securecorp-dev-key');
     expect(alias).toBeDefined();
+    expect(alias?.TargetKeyId).toBe(OUT.kmsKeyId);
   }, 30000);
 
   test("S3 buckets are encrypted and secured", async () => {
@@ -408,18 +411,27 @@ describe("Live AWS Resource Validation", () => {
     const buckets = [OUT.cloudtrailLogsBucket, OUT.appDataBucket];
 
     for (const bucketName of buckets) {
-      const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+      // Check encryption
+      const encryptionCommand = new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      });
       const encryptionResponse = await retry(() => s3Client.send(encryptionCommand));
 
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
       const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
       expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+      expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBe(OUT.kmsKeyArn);
 
-      const publicAccessCommand = new GetPublicAccessBlockCommand({ Bucket: bucketName });
+      // Check public access is blocked
+      const publicAccessCommand = new GetPublicAccessBlockCommand({
+        Bucket: bucketName
+      });
       const publicAccessResponse = await retry(() => s3Client.send(publicAccessCommand));
 
       expect(publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
       expect(publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
     }
   }, 30000);
 
@@ -430,9 +442,15 @@ describe("Live AWS Resource Validation", () => {
       return;
     }
 
-    const statusCommand = new GetTrailStatusCommand({ Name: OUT.cloudtrailArn });
+    const statusCommand = new GetTrailStatusCommand({
+      Name: 'prod-dev-trail'
+    });
     const statusResponse = await retry(() => cloudTrailClient.send(statusCommand));
+
     expect(statusResponse.IsLogging).toBe(true);
+
+    // Check the trail ARN matches our expected format
+    expect(OUT.cloudtrailArn).toMatch(/^arn:aws:cloudtrail:us-east-1:\d+:trail\/prod-dev-trail$/);
   }, 30000);
 
   test("CloudWatch Log Groups exist with proper retention", async () => {
@@ -447,6 +465,9 @@ describe("Live AWS Resource Validation", () => {
     });
     const response = await retry(() => cloudWatchLogsClient.send(command));
 
+    expect(response.logGroups).toBeDefined();
+
+    // Find our specific log groups
     const cloudtrailLogGroup = response.logGroups!.find((lg: any) =>
       lg.logGroupName === '/aws/cloudtrail/securecorp-dev'
     );
@@ -457,7 +478,8 @@ describe("Live AWS Resource Validation", () => {
     expect(cloudtrailLogGroup).toBeDefined();
     expect(applicationLogGroup).toBeDefined();
 
-    expect(cloudtrailLogGroup!.retentionInDays).toBe(2555);
+    // Check retention policies
+    expect(cloudtrailLogGroup!.retentionInDays).toBe(2557); // 7 years
     expect(applicationLogGroup!.retentionInDays).toBe(90);
   }, 30000);
 });

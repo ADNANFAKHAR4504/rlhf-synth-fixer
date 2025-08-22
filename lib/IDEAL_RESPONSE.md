@@ -787,12 +787,12 @@ resource "aws_cloudwatch_log_group" "application" {
 
 > **Note**: This configuration uses existing CloudTrail trails instead of creating new ones to avoid hitting the maximum limit of 5 trails per region. If you need to create a new trail, you may need to delete an existing one first.
 
-### Data Source for Existing CloudTrail
+### Reference Existing CloudTrail
 
 ```hcl
-# Data source to get existing CloudTrail trail
-data "aws_cloudtrail" "existing" {
-  name = "prod-dev-trail"
+# Reference existing CloudTrail trail by name
+locals {
+  existing_cloudtrail_name = "prod-dev-trail"
 }
 ```
 
@@ -894,7 +894,7 @@ output "vpc_endpoints" {
 
 output "cloudtrail_arn" {
   description = "ARN of the existing CloudTrail"
-  value       = data.aws_cloudtrail.existing.arn
+  value       = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.existing_cloudtrail_name}"
 }
 ```
 

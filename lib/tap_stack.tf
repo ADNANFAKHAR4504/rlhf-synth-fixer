@@ -689,9 +689,9 @@ resource "aws_cloudwatch_log_group" "application" {
 ########################
 # CloudTrail - Using Existing Trail
 ########################
-# Data source to get existing CloudTrail trail
-data "aws_cloudtrail" "existing" {
-  name = "prod-dev-trail"
+# Reference existing CloudTrail trail by name
+locals {
+  existing_cloudtrail_name = "prod-dev-trail"
 }
 
 # Data source to get existing CloudTrail service principal
@@ -789,5 +789,5 @@ output "vpc_endpoints" {
 
 output "cloudtrail_arn" {
   description = "ARN of the existing CloudTrail"
-  value       = data.aws_cloudtrail.existing.arn
+  value       = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${local.existing_cloudtrail_name}"
 }
