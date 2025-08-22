@@ -27,13 +27,13 @@ The template has been updated to resolve all dependency and configuration issues
 1. **CloudTrail S3 Bucket Policy**: Fixed SourceArn conditions to use specific trail ARN instead of wildcards
 2. **CloudTrail KMS Permissions**: Added CloudTrail service permissions to KMS key policy
 3. **CloudTrail DataResources**: Corrected S3 bucket ARN format for proper CloudTrail validation
-4. **Resource Dependencies**: Added proper DependsOn attributes for all resources to ensure correct creation order
-5. **Network Dependencies**: Fixed NAT Gateway and route table dependencies for proper VPC routing
-6. **Security Group Dependencies**: Ensured security groups are created in the correct order
-7. **S3 Bucket Dependencies**: Added dependencies for encryption and logging configuration
-8. **Database Dependencies**: Fixed RDS instance dependencies on security groups and subnet groups
-9. **Auto Scaling Dependencies**: Ensured proper dependency chain for scaling resources
-10. **Load Balancer Dependencies**: Fixed ALB dependencies on security groups and subnets
+4. **Resource Dependencies**: Optimized by removing redundant DependsOn attributes while maintaining proper creation order
+5. **Network Dependencies**: CloudFormation automatically handles NAT Gateway and route table dependencies through intrinsic functions
+6. **Security Group Dependencies**: Dependencies automatically enforced through security group references
+7. **S3 Bucket Dependencies**: Dependencies automatically enforced through bucket and KMS key references
+8. **Database Dependencies**: Dependencies automatically enforced through security group and subnet group references
+9. **Auto Scaling Dependencies**: Dependencies automatically enforced through launch template and target group references
+10. **Load Balancer Dependencies**: Dependencies automatically enforced through security group and subnet references
 
 ### Key Security Features
 
@@ -113,62 +113,108 @@ Values:
   - !Sub "arn:aws:s3:${AWS::Region}:${AWS::AccountId}:${AppS3Bucket}"
 ```
 
-### Resource Dependency Fixes
+### Resource Dependency Optimization
 
-Critical resource dependencies have been added to prevent deployment failures:
+The template has been optimized by removing redundant `DependsOn` attributes while maintaining proper resource creation order. CloudFormation automatically enforces dependencies through intrinsic functions:
 
-#### Network Dependencies
+#### Automatic Dependency Resolution
 ```yaml
-# NAT Gateways depend on route table associations
+# CloudFormation automatically handles dependencies through !Ref and !GetAtt
 NatGateway1:
-  DependsOn: PublicSubnet1RouteTableAssociation
+  Type: AWS::EC2::NatGateway
+  Properties:
+    AllocationId: !GetAtt NatGateway1EIP.AllocationId  # Auto-dependency on EIP
+    SubnetId: !Ref PublicSubnet1                       # Auto-dependency on subnet
 
-# Private routes depend on NAT Gateways  
 DefaultPrivateRoute1:
-  DependsOn: NatGateway1
-
-# Subnet associations depend on routes
-PrivateSubnet1RouteTableAssociation:
-  DependsOn: DefaultPrivateRoute1
+  Type: AWS::EC2::Route
+  Properties:
+    RouteTableId: !Ref PrivateRouteTable1              # Auto-dependency on route table
+    NatGatewayId: !Ref NatGateway1                    # Auto-dependency on NAT Gateway
 ```
 
 #### Security Group Dependencies
 ```yaml
-# Web server security group depends on load balancer and bastion security groups
+# Dependencies automatically enforced through security group references
 WebServerSecurityGroup:
-  DependsOn: 
-    - LoadBalancerSecurityGroup
-    - BastionSecurityGroup
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup  # Auto-dependency
+      - SourceSecurityGroupId: !Ref BastionSecurityGroup      # Auto-dependency
 
-# Database security group depends on web server security group
 DatabaseSecurityGroup:
-  DependsOn: WebServerSecurityGroup
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref WebServerSecurityGroup    # Auto-dependency
 ```
 
 #### Infrastructure Dependencies
 ```yaml
-# S3 buckets depend on KMS key and logging configuration
+# Dependencies automatically enforced through resource references
 AppS3Bucket:
-  DependsOn: 
-    - AppKMSKey
-    - LoggingBucket
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            KMSMasterKeyID: !Ref AppKMSKey              # Auto-dependency on KMS key
+    LoggingConfiguration:
+      DestinationBucketName: !Ref LoggingBucket         # Auto-dependency on logging bucket
 
-# Database depends on security groups, subnet groups, and secrets
 Database:
-  DependsOn: 
-    - DatabaseSecurityGroup
-    - DatabaseSubnetGroup
-    - DatabaseSecret
-    - AppKMSKey
-
-# Auto scaling group depends on launch template and target group
-AutoScalingGroup:
-  DependsOn: 
-    - LaunchTemplate
-    - TargetGroup
-    - PrivateSubnet1RouteTableAssociation
-    - PrivateSubnet2RouteTableAssociation
+  Type: AWS::RDS::DBInstance
+  Properties:
+    VPCSecurityGroups: 
+      - !Ref DatabaseSecurityGroup                      # Auto-dependency on security group
+    DBSubnetGroupName: !Ref DatabaseSubnetGroup        # Auto-dependency on subnet group
+    MasterUserSecret:
+      SecretArn: !Ref DatabaseSecret                    # Auto-dependency on secret
+      KmsKeyId: !Ref AppKMSKey                         # Auto-dependency on KMS key
 ```
+
+### CloudFormation Validation Improvements
+
+The template has been optimized to eliminate all W3005 warnings about redundant dependencies:
+
+#### Before (With Warnings)
+```yaml
+# These DependsOn attributes caused W3005 warnings
+DefaultPrivateRoute1:
+  Type: AWS::EC2::Route
+  DependsOn: NatGateway1  # ❌ Redundant - !Ref NatGateway1 already enforces dependency
+  Properties:
+    NatGatewayId: !Ref NatGateway1
+
+WebServerSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  DependsOn: [LoadBalancerSecurityGroup, BastionSecurityGroup]  # ❌ Redundant
+  Properties:
+    SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup  # Already enforces dependency
+```
+
+#### After (Optimized)
+```yaml
+# CloudFormation automatically handles dependencies through intrinsic functions
+DefaultPrivateRoute1:
+  Type: AWS::EC2::Route
+  Properties:
+    NatGatewayId: !Ref NatGateway1  # ✅ Auto-dependency enforced
+
+WebServerSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    SecurityGroupIngress:
+      - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup  # ✅ Auto-dependency enforced
+```
+
+#### Benefits of Optimization
+- **Clean Validation**: No more W3005 warnings about redundant dependencies
+- **Better Performance**: CloudFormation can optimize resource creation order
+- **Maintainability**: Cleaner, more concise template code
+- **Best Practices**: Follows CloudFormation dependency resolution best practices
 
 ### CloudFormation Template
 
