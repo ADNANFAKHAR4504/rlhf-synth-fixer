@@ -216,10 +216,9 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       }, { parent: this })
     );
 
-    // Generate unique bucket names
-    const timestamp = Date.now().toString();
-    const albBucketName = `${sanitizedName}-alb-logs-${timestamp}`;
-    const cloudFrontBucketName = `${sanitizedName}-cf-logs-${timestamp}`;
+    // Generate bucket names without timestamps
+    const albBucketName = `${sanitizedName}-alb-logs`;
+    const cloudFrontBucketName = `${sanitizedName}-cf-logs`;
 
     // S3 Bucket for ALB Access Logs
     const albLogsBucket = new aws.s3.Bucket("alb-access-logs", {
@@ -231,17 +230,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       },
     }, { parent: this });
 
-    // S3 Bucket Server Side Encryption for ALB logs
-    const albLogsBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration("alb-logs-encryption", {
-      bucket: albLogsBucket.id,
-      rules: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: "aws:kms",
-          kmsMasterKeyId: kmsKey.arn,
-        },
-        bucketKeyEnabled: true,
-      }],
-    }, { parent: this });
+    // ALB access logs use SSE-S3 by default (KMS not supported)
 
     // S3 Bucket Public Access Block for ALB logs
     const albLogsBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock("alb-logs-pab", {
