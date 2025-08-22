@@ -30,6 +30,7 @@ import {
   cloudwatchMetricAlarm,
   snsTopicSubscription,
   snsTopic,
+  s3BucketPolicy,
 } from '@cdktf/provider-aws';
 
 export interface SecureInfraConfig {
@@ -304,6 +305,43 @@ export class SecureInfrastructureModules extends Construct {
       },
     });
 
+    // Add this new block after your 'logBucket' resource
+    const logBucketPolicy = new s3BucketPolicy.S3BucketPolicy(
+      this,
+      'SecProject-LogBucketPolicy',
+      {
+        bucket: this.logBucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.logBucket.arn,
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.logBucket.arn}/cloudtrail/AWSLogs/${current.accountId}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+          ],
+        }),
+      }
+    );
+
     // Encrypt log bucket with KMS
     new s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
       this,
@@ -476,6 +514,18 @@ export class SecureInfrastructureModules extends Construct {
               encryptionConfiguration: {
                 replicaKmsKeyId: this.kmsKey.arn,
               },
+              replicationTime: {
+                status: 'Enabled',
+                time: { minutes: 15 },
+              },
+              metrics: {
+                status: 'Enabled',
+              },
+            },
+            sourceSelectionCriteria: {
+              sseKmsEncryptedObjects: {
+                status: 'Enabled',
+              },
             },
           },
         ],
@@ -616,6 +666,7 @@ export class SecureInfrastructureModules extends Construct {
       kmsKeyId: this.kmsKey.arn,
       cloudWatchLogsGroupArn: `${cloudTrailLogGroup.arn}:*`,
       cloudWatchLogsRoleArn: this.createCloudTrailRole(current.accountId).arn,
+      dependsOn: [logBucketPolicy],
       eventSelector: [
         {
           readWriteType: 'All',
@@ -870,7 +921,10 @@ export class SecureInfrastructureModules extends Construct {
                 'kms:GenerateDataKey*',
                 'kms:ReEncrypt*',
               ],
-              Resource: [this.kmsKey.arn],
+              Resource: [
+                this.kmsKey.arn,
+                `arn:aws:kms:us-west-2:${accountId}:key/${this.kmsKey.id}`,
+              ],
             },
           ],
         }),
