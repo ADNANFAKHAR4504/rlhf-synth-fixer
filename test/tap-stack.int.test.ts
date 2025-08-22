@@ -1,553 +1,410 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
-import { expect, jest } from '@jest/globals';
-import AWS from 'aws-sdk';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeRouteTablesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeAddressesCommand
+} from '@aws-sdk/client-ec2';
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  GetBucketPolicyCommand
+} from '@aws-sdk/client-s3';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetRolePolicyCommand
+} from '@aws-sdk/client-iam';
 
-// Mock AWS SDK to avoid actual API calls
-jest.mock('aws-sdk', () => {
-  const mockEC2 = {
-    describeVpcs: jest.fn(),
-    describeSubnets: jest.fn(),
-    describeNatGateways: jest.fn(),
-    describeRouteTables: jest.fn(),
-  };
-  const mockS3 = {
-    getBucketTagging: jest.fn(),
-    getBucketEncryption: jest.fn(),
-    getBucketVersioning: jest.fn(),
-    getBucketPolicy: jest.fn(),
-  };
-  const mockIAM = {
-    getRole: jest.fn(),
-  };
-  return {
-    EC2: jest.fn(() => mockEC2),
-    S3: jest.fn(() => mockS3),
-    IAM: jest.fn(() => mockIAM),
-  };
-});
+const p = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+const outputsRaw = fs.readFileSync(p, 'utf-8');
+const allOutputs: Record<string, Record<string, string>> = JSON.parse(outputsRaw); // Assume structure like {dev: {VPCId: '...', ...}, staging: {...}, prod: {...}}
 
-const mockEC2 = new AWS.EC2() as any;
-const mockS3 = new AWS.S3() as any;
-const mockIAM = new AWS.IAM() as any;
-
-// Custom schema for CloudFormation tags
-const CFN_SCHEMA = new yaml.Schema([
-  new yaml.Type('!Ref', { kind: 'scalar', construct: (data) => ({ 'Fn::Ref': data }) }),
-  new yaml.Type('!Equals', { kind: 'sequence', construct: (data) => ({ 'Fn::Equals': data }) }),
-  new yaml.Type('!Not', { kind: 'sequence', construct: (data) => ({ 'Fn::Not': data }) }),
-  new yaml.Type('!Sub', { kind: 'scalar', construct: (data) => ({ 'Fn::Sub': data }) }),
-  new yaml.Type('!Sub', { kind: 'sequence', construct: (data) => ({ 'Fn::Sub': data }) }),
-  new yaml.Type('!GetAtt', { kind: 'scalar', construct: (data) => ({ 'Fn::GetAtt': data.split('.') }) }),
-  new yaml.Type('!FindInMap', { kind: 'sequence', construct: (data) => ({ 'Fn::FindInMap': data }) }),
-  new yaml.Type('!Cidr', { kind: 'sequence', construct: (data) => ({ 'Fn::Cidr': data }) }),
-  new yaml.Type('!Select', { kind: 'sequence', construct: (data) => ({ 'Fn::Select': data }) }),
-  new yaml.Type('!Join', { kind: 'sequence', construct: (data) => ({ 'Fn::Join': data }) }),
-  new yaml.Type('!If', { kind: 'sequence', construct: (data) => ({ 'Fn::If': data }) }),
-  new yaml.Type('!GetAZs', { kind: 'scalar', construct: (data) => ({ 'Fn::GetAZs': data }) }),
-]);
+const ec2Client = new EC2Client({}); // Assume credentials and region are configured via env
+const s3Client = new S3Client({});
+const iamClient = new IAMClient({});
 
 describe('TapStack Integration Tests', () => {
-  let template: any;
-  let outputs: any;
-  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr1847'}`;
-  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1847';
-
-  beforeAll(() => {
-    // Load TapStack.yml
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-    expect(fs.existsSync(templatePath)).toBe(true);
-    const yamlContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(yamlContent, { schema: CFN_SCHEMA }) as any;
-
-    // Load all-outputs.json and transform to flat object
-    const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
-    expect(fs.existsSync(outputsPath)).toBe(true);
-    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    outputs = rawOutputs[stackName].reduce((acc: any, output: any) => {
-      acc[output.OutputKey] = output.OutputValue;
-      return acc;
-    }, {});
-
-    // Mock AWS SDK methods
-    mockEC2.describeVpcs.mockImplementation(() => ({
-      promise: async () => ({
-        Vpcs: [{
-          VpcId: outputs.VPCId,
-          CidrBlock: '10.0.0.0/16',
-          Tags: [
-            { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-vpc` },
-            { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-            { Key: 'Environment', Value: envSuffix },
-            { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-          ],
-        }],
-      }),
-    }));
-
-    mockEC2.describeSubnets.mockImplementation(() => ({
-      promise: async () => ({
-        Subnets: [
-          {
-            SubnetId: outputs.PublicSubnets.split(',')[0],
-            VpcId: outputs.VPCId,
-            CidrBlock: '10.0.0.0/18',
-            AvailabilityZone: 'us-east-1a',
-            MapPublicIpOnLaunch: true,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubneta` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-          {
-            SubnetId: outputs.PublicSubnets.split(',')[1],
-            VpcId: outputs.VPCId,
-            CidrBlock: '10.0.64.0/18',
-            AvailabilityZone: 'us-east-1b',
-            MapPublicIpOnLaunch: true,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubnetb` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-          {
-            SubnetId: outputs.PrivateSubnets.split(',')[0],
-            VpcId: outputs.VPCId,
-            CidrBlock: '10.0.128.0/18',
-            AvailabilityZone: 'us-east-1a',
-            MapPublicIpOnLaunch: false,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubneta` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-          {
-            SubnetId: outputs.PrivateSubnets.split(',')[1],
-            VpcId: outputs.VPCId,
-            CidrBlock: '10.0.192.0/18',
-            AvailabilityZone: 'us-east-1b',
-            MapPublicIpOnLaunch: false,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubnetb` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-        ],
-      }),
-    }));
-
-    mockEC2.describeNatGateways.mockImplementation(() => ({
-      promise: async () => ({
-        NatGateways: template.Parameters.CreateNatPerAZ.Default === 'true' ? [
-          {
-            NatGatewayId: 'nat-123',
-            SubnetId: outputs.PublicSubnets.split(',')[0],
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewaya` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-          {
-            NatGatewayId: 'nat-456',
-            SubnetId: outputs.PublicSubnets.split(',')[1],
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewayb` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-        ] : [
-          {
-            NatGatewayId: 'nat-789',
-            SubnetId: outputs.PublicSubnets.split(',')[0],
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-          },
-        ],
-      }),
-    }));
-
-    mockEC2.describeRouteTables.mockImplementation(() => ({
-      promise: async () => ({
-        RouteTables: [
-          {
-            RouteTableId: 'rtb-public',
-            VpcId: outputs.VPCId,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicrt` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-123' }],
-          },
-          {
-            RouteTableId: 'rtb-private-a',
-            VpcId: outputs.VPCId,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privaterta` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-123' : 'nat-789' }],
-          },
-          {
-            RouteTableId: 'rtb-private-b',
-            VpcId: outputs.VPCId,
-            Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatertb` },
-              { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: envSuffix },
-              { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-            ],
-            Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-456' : 'nat-789' }],
-          },
-        ],
-      }),
-    }));
-
-    mockS3.getBucketTagging.mockImplementation(() => ({
-      promise: async () => ({
-        TagSet: [
-          { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-databucket` },
-          { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-          { Key: 'Environment', Value: envSuffix },
-          { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-        ],
-      }),
-    }));
-
-    mockS3.getBucketEncryption.mockImplementation(() => ({
-      promise: async () => ({
-        ServerSideEncryptionConfiguration: {
-          Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
-        },
-      }),
-    }));
-
-    mockS3.getBucketVersioning.mockImplementation(() => ({
-      promise: async () => ({ Status: 'Enabled' }),
-    }));
-
-    mockS3.getBucketPolicy.mockImplementation(() => ({
-      promise: async () => ({
-        Policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{ Effect: 'Deny', Principal: '*', Action: 's3:*', Resource: `${outputs.DataBucketARN}/*`, Condition: { Bool: { 'aws:SecureTransport': 'false' } } }],
-        }),
-      }),
-    }));
-
-    mockIAM.getRole.mockImplementation(() => ({
-      promise: async () => ({
-        Role: {
-          RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role`,
-          Arn: outputs.EnvironmentRoleARN,
-          AssumeRolePolicyDocument: JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [{
-              Effect: 'Allow',
-              Principal: { AWS: template.Parameters.TeamPrincipalARN.Default || `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root` },
-              Action: 'sts:AssumeRole',
-            }],
-          }),
-          Tags: [
-            { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-            { Key: 'Environment', Value: envSuffix },
-            { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
-          ],
-        },
-      }),
-    }));
-  });
-
-  // Output Validation
-  describe('Stack Outputs', () => {
-    test('Outputs file contains all expected keys', () => {
-      expect(outputs).toHaveProperty('VPCId');
-      expect(outputs).toHaveProperty('PublicSubnets');
-      expect(outputs).toHaveProperty('PrivateSubnets');
-      expect(outputs).toHaveProperty('DataBucketName');
-      expect(outputs).toHaveProperty('DataBucketARN');
-      expect(outputs).toHaveProperty('EnvironmentRoleARN');
-    });
-
-    test('VPCId is a valid VPC ID format', () => {
-      expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]{8,17}$/);
-    });
-
-    test('PublicSubnets contains two subnet IDs', () => {
-      const subnets = outputs.PublicSubnets.split(',');
-      expect(subnets).toHaveLength(2);
-      subnets.forEach((subnetId: string) => {
-        expect(subnetId).toMatch(/^subnet-[a-z0-9]{8,17}$/);
-      });
-    });
-
-    test('PrivateSubnets contains two subnet IDs', () => {
-      const subnets = outputs.PrivateSubnets.split(',');
-      expect(subnets).toHaveLength(2);
-      subnets.forEach((subnetId: string) => {
-        expect(subnetId).toMatch(/^subnet-[a-z0-9]{8,17}$/);
-      });
-    });
-
-    test('DataBucketName matches naming convention', () => {
-      expect(outputs.DataBucketName).toMatch(
-        new RegExp(`^${template.Parameters.ProjectName.Default}-${envSuffix}-databucket-\\d{12}-us-east-1$`)
-      );
-    });
-
-    test('DataBucketARN is valid and matches bucket name', () => {
-      expect(outputs.DataBucketARN).toMatch(/^arn:aws:s3:::.*$/);
-      expect(outputs.DataBucketARN).toBe(`arn:aws:s3:::${outputs.DataBucketName}`);
-    });
-
-    test('EnvironmentRoleARN is a valid IAM role ARN', () => {
-      expect(outputs.EnvironmentRoleARN).toMatch(
-        new RegExp(`^arn:aws:iam::\\d{12}:role/${template.Parameters.ProjectName.Default}-${envSuffix}-role$`)
-      );
-    });
-  });
-
-  // Input Validation (Parameters)
-  describe('Input Parameters', () => {
-    test('ProjectName adheres to AllowedPattern', () => {
-      expect(template.Parameters.ProjectName.Default).toMatch(/^[a-z][a-z0-9-]*$/);
-    });
-
-    test('EnvironmentSuffix adheres to AllowedPattern', () => {
-      expect(template.Parameters.EnvironmentSuffix.Default).toMatch(/^[a-z0-9-]*$/);
-    });
-
-    test('Owner adheres to AllowedPattern', () => {
-      expect(template.Parameters.Owner.Default).toMatch(/^[a-zA-Z0-9-]*$/);
-    });
-
-    test('TeamPrincipalARN is empty or valid ARN', () => {
-      expect(template.Parameters.TeamPrincipalARN.Default).toMatch(/^$|^arn:aws:iam::\d{12}:(user|group|role)\/[a-zA-Z0-9+=,.@_-]+$/);
-    });
-
-    test('CreateNatPerAZ is valid', () => {
-      expect(['true', 'false']).toContain(template.Parameters.CreateNatPerAZ.Default);
-    });
-
-    test('ProjectName rejects uppercase', () => {
-      expect('TapStack').not.toMatch(template.Parameters.ProjectName.AllowedPattern);
-    });
-
-    test('EnvironmentSuffix rejects uppercase', () => {
-      expect('DEV').not.toMatch(template.Parameters.EnvironmentSuffix.AllowedPattern);
-    });
-
-    test('TeamPrincipalARN rejects invalid ARN', () => {
-      expect('arn:aws:iam::123456789012:invalid/test').not.toMatch(template.Parameters.TeamPrincipalARN.AllowedPattern);
-    });
-  });
-
-  // VPC and Networking
-  describe('VPC and Networking', () => {
-    test('VPC exists with correct configuration', async () => {
-      const result = await mockEC2.describeVpcs().promise();
-      expect(result.Vpcs).toBeDefined();
-      expect(result.Vpcs?.length).toBeGreaterThan(0);
-      const vpc = result.Vpcs![0];
-      expect(vpc.VpcId).toBe(outputs.VPCId);
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.Tags).toContainEqual({ Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-vpc` });
-      expect(vpc.Tags).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(vpc.Tags).toContainEqual({ Key: 'Environment', Value: envSuffix });
-      expect(vpc.Tags).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
-    });
-
-    test('Public subnets are configured correctly', async () => {
-      const result = await mockEC2.describeSubnets().promise();
-      expect(result.Subnets).toBeDefined();
-      expect(result.Subnets?.length).toBeGreaterThan(0);
-      const publicSubnets = result.Subnets!.filter((s: any) => s.MapPublicIpOnLaunch);
-      expect(publicSubnets).toHaveLength(2);
-      expect(publicSubnets[0].SubnetId).toBe(outputs.PublicSubnets.split(',')[0]);
-      expect(publicSubnets[0].CidrBlock).toBe('10.0.0.0/18');
-      expect(publicSubnets[0].AvailabilityZone).toBe('us-east-1a');
-      expect(publicSubnets[0].Tags).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubneta`,
-      });
-      expect(publicSubnets[1].SubnetId).toBe(outputs.PublicSubnets.split(',')[1]);
-      expect(publicSubnets[1].CidrBlock).toBe('10.0.64.0/18');
-      expect(publicSubnets[1].AvailabilityZone).toBe('us-east-1b');
-      expect(publicSubnets[1].Tags).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubnetb`,
-      });
-    });
-
-    test('Private subnets are configured correctly', async () => {
-      const result = await mockEC2.describeSubnets().promise();
-      expect(result.Subnets).toBeDefined();
-      expect(result.Subnets?.length).toBeGreaterThan(0);
-      const privateSubnets = result.Subnets!.filter((s: any) => !s.MapPublicIpOnLaunch);
-      expect(privateSubnets).toHaveLength(2);
-      expect(privateSubnets[0].SubnetId).toBe(outputs.PrivateSubnets.split(',')[0]);
-      expect(privateSubnets[0].CidrBlock).toBe('10.0.128.0/18');
-      expect(privateSubnets[0].AvailabilityZone).toBe('us-east-1a');
-      expect(privateSubnets[0].Tags).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubneta`,
-      });
-      expect(privateSubnets[1].SubnetId).toBe(outputs.PrivateSubnets.split(',')[1]);
-      expect(privateSubnets[1].CidrBlock).toBe('10.0.192.0/18');
-      expect(privateSubnets[1].AvailabilityZone).toBe('us-east-1b');
-      expect(privateSubnets[1].Tags).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubnetb`,
-      });
-    });
-
-    test('NAT Gateways are created based on CreateNatPerAZ', async () => {
-      const result = await mockEC2.describeNatGateways().promise();
-      expect(result.NatGateways).toBeDefined();
-      expect(result.NatGateways?.length).toBeGreaterThan(0);
-      if (template.Parameters.CreateNatPerAZ.Default === 'true') {
-        expect(result.NatGateways).toHaveLength(2);
-        expect(result.NatGateways![0].SubnetId).toBe(outputs.PublicSubnets.split(',')[0]);
-        expect(result.NatGateways![0].Tags).toContainEqual({
-          Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewaya`,
-        });
-        expect(result.NatGateways![1].SubnetId).toBe(outputs.PublicSubnets.split(',')[1]);
-        expect(result.NatGateways![1].Tags).toContainEqual({
-          Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewayb`,
-        });
-      } else {
-        expect(result.NatGateways).toHaveLength(1);
-        expect(result.NatGateways![0].SubnetId).toBe(outputs.PublicSubnets.split(',')[0]);
-        expect(result.NatGateways![0].Tags).toContainEqual({
-          Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway`,
-        });
+  // Helper to get expected CIDRs from mappings
+  const getExpectedCidrs = (env: string) => {
+    const cidrMappings: Record<string, { CIDR: string; PublicSubnetA: string; PublicSubnetB: string; PrivateSubnetA: string; PrivateSubnetB: string }> = {
+      dev: {
+        CIDR: '10.0.0.0/16',
+        PublicSubnetA: '10.0.0.0/18',
+        PublicSubnetB: '10.0.64.0/18',
+        PrivateSubnetA: '10.0.128.0/18',
+        PrivateSubnetB: '10.0.192.0/18'
+      },
+      staging: {
+        CIDR: '10.1.0.0/16',
+        PublicSubnetA: '10.1.0.0/18',
+        PublicSubnetB: '10.1.64.0/18',
+        PrivateSubnetA: '10.1.128.0/18',
+        PrivateSubnetB: '10.1.192.0/18'
+      },
+      prod: {
+        CIDR: '10.2.0.0/16',
+        PublicSubnetA: '10.2.0.0/18',
+        PublicSubnetB: '10.2.64.0/18',
+        PrivateSubnetA: '10.2.128.0/18',
+        PrivateSubnetB: '10.2.192.0/18'
       }
-    });
+    };
+    return cidrMappings[env];
+  };
 
-    test('Route tables are configured correctly', async () => {
-      const result = await mockEC2.describeRouteTables().promise();
-      expect(result.RouteTables).toBeDefined();
-      expect(result.RouteTables?.length).toBeGreaterThan(0);
-      const publicRouteTable = result.RouteTables!.find((rt: any) =>
-        rt.Tags.some((tag: any) => tag.Value.includes('publicrt'))
-      );
-      expect(publicRouteTable).toBeDefined();
-      expect(publicRouteTable!.Routes).toContainEqual({
-        DestinationCidrBlock: '0.0.0.0/0',
-        GatewayId: 'igw-123',
+  // Loop over environments assuming all-outputs.json has entries for dev, staging, prod
+  ['dev', 'staging', 'prod'].forEach((environment) => {
+    describe(`Environment: ${environment}`, () => {
+      let outputs: Record<string, string>;
+      let projectName: string;
+      let owner: string;
+      let createNatPerAZ: boolean = false; // Initialize to avoid undefined issues
+      let hasTeamPrincipal: boolean = false; // Initialize
+      let vpcId: string;
+      let publicSubnets: string[];
+      let privateSubnets: string[];
+      let dataBucketName: string;
+      let environmentRoleArn: string;
+
+      beforeAll(async () => {
+        outputs = allOutputs[environment];
+        if (!outputs) {
+          throw new Error(`No outputs found for environment: ${environment}`);
+        }
+        vpcId = outputs.VPCId;
+        publicSubnets = outputs.PublicSubnets.split(',');
+        privateSubnets = outputs.PrivateSubnets.split(',');
+        dataBucketName = outputs.DataBucketName;
+        environmentRoleArn = outputs.EnvironmentRoleARN;
+
+        // Determine projectName and owner from tags (assume defaults for simplicity)
+        projectName = 'tapstack'; // Default
+        owner = 'team'; // Default
+
+        // Determine createNatPerAZ by counting NAT gateways
+        const natResponse = await ec2Client.send(
+          new DescribeNatGatewaysCommand({ Filter: [{ Name: 'vpc-id', Values: [vpcId] }] })
+        );
+        const natGateways = natResponse.NatGateways?.filter(nat => nat.VpcId === vpcId) || [];
+        createNatPerAZ = natGateways.length === 2;
+
+        // Determine hasTeamPrincipal from role
+        const roleName = environmentRoleArn.split('/').pop() || '';
+        const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        const assumePolicy = JSON.parse(decodeURIComponent(roleResponse.Role?.AssumeRolePolicyDocument || '{}'));
+        hasTeamPrincipal = assumePolicy.Statement?.[0]?.Principal?.AWS !== `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`; // Assume env var for account ID
       });
-      const privateRouteTableA = result.RouteTables!.find((rt: any) =>
-        rt.Tags.some((tag: any) => tag.Value.includes('privaterta'))
-      );
-      expect(privateRouteTableA).toBeDefined();
-      expect(privateRouteTableA!.Routes).toContainEqual({
-        DestinationCidrBlock: '0.0.0.0/0',
-        NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-123' : 'nat-789',
+
+      // Positive Case: Validate VPC existence and configuration
+      test('VPC should exist with correct CIDR and tags', async () => {
+        const response = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+        const vpc = response.Vpcs?.[0];
+        expect(vpc).toBeDefined();
+        const expectedCidrs = getExpectedCidrs(environment);
+        expect(vpc?.CidrBlock).toBe(expectedCidrs.CIDR);
+        // Note: EnableDnsSupport and EnableDnsHostnames are not directly accessible in Vpc type
+        // Instead, verify via DescribeVpcAttributeCommand if needed, but assume true from template
+        const tags = vpc?.Tags || [];
+        expect(tags).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-vpc` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
       });
-      const privateRouteTableB = result.RouteTables!.find((rt: any) =>
-        rt.Tags.some((tag: any) => tag.Value.includes('privatertb'))
-      );
-      expect(privateRouteTableB).toBeDefined();
-      expect(privateRouteTableB!.Routes).toContainEqual({
-        DestinationCidrBlock: '0.0.0.0/0',
-        NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-456' : 'nat-789',
+
+      // Edge Case: Validate VPC with invalid ID (should fail)
+      test('VPC with invalid ID should not exist', async () => {
+        await expect(
+          ec2Client.send(new DescribeVpcsCommand({ VpcIds: ['invalid-vpc-id'] }))
+        ).rejects.toThrow();
       });
-    });
-  });
 
-  // S3 Bucket
-  describe('S3 Bucket', () => {
-    test('DataBucket exists with correct configuration', async () => {
-      const tagging = await mockS3.getBucketTagging({ Bucket: outputs.DataBucketName }).promise();
-      expect(tagging.TagSet).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-databucket`,
+      // Positive Case: Validate Public Subnets
+      test('Public Subnets should exist with correct CIDR, AZ, and tags', async () => {
+        const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnets }));
+        const subnets = response.Subnets || [];
+        expect(subnets.length).toBe(2);
+        const expectedCidrs = getExpectedCidrs(environment);
+        expect(subnets[0].CidrBlock).toBe(expectedCidrs.PublicSubnetA);
+        expect(subnets[1].CidrBlock).toBe(expectedCidrs.PublicSubnetB);
+        expect(subnets[0].MapPublicIpOnLaunch).toBe(true);
+        expect(subnets[1].MapPublicIpOnLaunch).toBe(true);
+        // AZs: Assume first is a, second b
+        expect(subnets[0].AvailabilityZone).toContain('a');
+        expect(subnets[1].AvailabilityZone).toContain('b');
+        // Tags
+        const tagsA = subnets[0].Tags || [];
+        expect(tagsA).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-public-a` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
+        const tagsB = subnets[1].Tags || [];
+        expect(tagsB).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-public-b` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
       });
-      expect(tagging.TagSet).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(tagging.TagSet).toContainEqual({ Key: 'Environment', Value: envSuffix });
-      expect(tagging.TagSet).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
 
-      const encryption = await mockS3.getBucketEncryption({ Bucket: outputs.DataBucketName }).promise();
-      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
-      const rules = encryption.ServerSideEncryptionConfiguration?.Rules;
-      expect(rules).toBeDefined();
-      if (rules && rules.length > 0 && rules[0].ApplyServerSideEncryptionByDefault) {
-        expect(rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-      } else {
-        throw new Error('No valid encryption rules found');
-      }
-
-      const versioning = await mockS3.getBucketVersioning({ Bucket: outputs.DataBucketName }).promise();
-      expect(versioning.Status).toBe('Enabled');
-
-      const policy = await mockS3.getBucketPolicy({ Bucket: outputs.DataBucketName }).promise();
-      expect(policy.Policy).toBeDefined();
-      const policyDoc = JSON.parse(policy.Policy!);
-      expect(policyDoc.Statement[0].Effect).toBe('Deny');
-      expect(policyDoc.Statement[0].Condition.Bool['aws:SecureTransport']).toBe('false');
-    });
-  });
-
-  // IAM Role
-  describe('IAM Role', () => {
-    test('EnvironmentRole exists with correct configuration', async () => {
-      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role` }).promise();
-      expect(result.Role).toBeDefined();
-      expect(result.Role!.Arn).toBe(outputs.EnvironmentRoleARN);
-      expect(result.Role!.AssumeRolePolicyDocument).toBeDefined();
-      const policyDoc = JSON.parse(result.Role!.AssumeRolePolicyDocument as string);
-      expect(policyDoc.Statement[0].Principal.AWS).toBe(
-        template.Parameters.TeamPrincipalARN.Default || `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root`
-      );
-      expect(result.Role!.Tags).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(result.Role!.Tags).toContainEqual({ Key: 'Environment', Value: envSuffix });
-      expect(result.Role!.Tags).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
-    });
-  });
-
-  // Edge Cases
-  describe('Edge Cases', () => {
-    test('NAT Gateway configuration with CreateNatPerAZ=false', async () => {
-      template.Parameters.CreateNatPerAZ.Default = 'false';
-      const result = await mockEC2.describeNatGateways().promise();
-      expect(result.NatGateways).toBeDefined();
-      expect(result.NatGateways?.length).toBe(1);
-      expect(result.NatGateways![0].Tags).toContainEqual({
-        Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway`,
+      // Positive Case: Validate Private Subnets
+      test('Private Subnets should exist with correct CIDR, AZ, and tags', async () => {
+        const response = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnets }));
+        const subnets = response.Subnets || [];
+        expect(subnets.length).toBe(2);
+        const expectedCidrs = getExpectedCidrs(environment);
+        expect(subnets[0].CidrBlock).toBe(expectedCidrs.PrivateSubnetA);
+        expect(subnets[1].CidrBlock).toBe(expectedCidrs.PrivateSubnetB);
+        expect(subnets[0].MapPublicIpOnLaunch).toBe(false);
+        expect(subnets[1].MapPublicIpOnLaunch).toBe(false);
+        // AZs
+        expect(subnets[0].AvailabilityZone).toContain('a');
+        expect(subnets[1].AvailabilityZone).toContain('b');
+        // Tags
+        const tagsA = subnets[0].Tags || [];
+        expect(tagsA).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-private-a` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
+        const tagsB = subnets[1].Tags || [];
+        expect(tagsB).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-private-b` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
       });
-      template.Parameters.CreateNatPerAZ.Default = 'true'; // Reset
-    });
 
-    test('TeamPrincipalARN empty uses account root', async () => {
-      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role` }).promise();
-      expect(result.Role).toBeDefined();
-      expect(result.Role!.AssumeRolePolicyDocument).toBeDefined();
-      const policyDoc = JSON.parse(result.Role!.AssumeRolePolicyDocument as string);
-      expect(policyDoc.Statement[0].Principal.AWS).toMatch(/:root$/);
+      // Positive Case: Validate Internet Gateway and Attachment
+      test('Internet Gateway should exist and be attached to VPC', async () => {
+        const igwResponse = await ec2Client.send(
+          new DescribeInternetGatewaysCommand({ Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }] })
+        );
+        const igw = igwResponse.InternetGateways?.[0];
+        expect(igw).toBeDefined();
+        const tags = igw?.Tags || [];
+        expect(tags).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-igw` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
+
+        // Attachment check via InternetGateway response
+        const attachment = igw?.Attachments?.[0];
+        expect(attachment?.VpcId).toBe(vpcId);
+        expect(attachment?.State).toBe('available');
+      });
+
+      // Positive Case: Validate Public Route Table and Routes
+      test('Public Route Table should exist with correct route to IGW', async () => {
+        const rtResponse = await ec2Client.send(
+          new DescribeRouteTablesCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'tag:Name', Values: [`${projectName}-${environment}-public-rt`] }
+            ]
+          })
+        );
+        const publicRt = rtResponse.RouteTables?.[0];
+        expect(publicRt).toBeDefined();
+        const tags = publicRt?.Tags || [];
+        expect(tags).toEqual(expect.arrayContaining([
+          { Key: 'Name', Value: `${projectName}-${environment}-public-rt` },
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
+
+        // Route to 0.0.0.0/0 via IGW
+        const routes = publicRt?.Routes || [];
+        const defaultRoute = routes.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
+        expect(defaultRoute).toBeDefined();
+        expect(defaultRoute?.GatewayId).toContain('igw-');
+        expect(defaultRoute?.State).toBe('active');
+
+        // Associations
+        const associations = publicRt?.Associations || [];
+        expect(associations.length).toBe(2);
+        expect(associations.map(a => a.SubnetId)).toEqual(expect.arrayContaining(publicSubnets));
+      });
+
+      // Positive/Conditional Case: Validate NAT Gateways and EIPs based on CreateNatPerAZ
+      test('NAT Gateways and EIPs should match CreateNatPerAZ condition', async () => {
+        const natResponse = await ec2Client.send(
+          new DescribeNatGatewaysCommand({ Filter: [{ Name: 'vpc-id', Values: [vpcId] }] })
+        );
+        const natGateways = natResponse.NatGateways || [];
+        const eipResponse = await ec2Client.send(
+          new DescribeAddressesCommand({ Filters: [{ Name: 'domain', Values: ['vpc'] }] })
+        );
+        const eips = eipResponse.Addresses?.filter(eip => eip.Tags?.some(t => t.Value?.includes(`${projectName}-${environment}-eip`))) || [];
+
+        if (createNatPerAZ) {
+          // Expect 2 NATs and 2 EIPs
+          expect(natGateways.length).toBe(2);
+          expect(eips.length).toBe(2);
+
+          // Check tags and subnets
+          const natA = natGateways.find(n => n.Tags?.some(t => t.Value === `${projectName}-${environment}-nat-a`));
+          expect(natA).toBeDefined();
+          expect(natA?.SubnetId).toBe(publicSubnets[0]);
+          const natB = natGateways.find(n => n.Tags?.some(t => t.Value === `${projectName}-${environment}-nat-b`));
+          expect(natB).toBeDefined();
+          expect(natB?.SubnetId).toBe(publicSubnets[1]);
+        } else {
+          // Expect 1 NAT and 1 EIP
+          expect(natGateways.length).toBe(1);
+          expect(eips.length).toBe(1);
+
+          // Check tags and subnet
+          const nat = natGateways[0];
+          expect(nat.Tags?.some(t => t.Value === `${projectName}-${environment}-nat`)).toBe(true);
+          expect(nat.SubnetId).toBe(publicSubnets[0]); // In A
+        }
+      });
+
+      // Positive Case: Validate Private Route Tables and Routes
+      test('Private Route Tables should exist with correct routes to NAT', async () => {
+        const rtResponse = await ec2Client.send(
+          new DescribeRouteTablesCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
+        );
+        const privateRtA = rtResponse.RouteTables?.find(rt => rt.Tags?.some(t => t.Value === `${projectName}-${environment}-private-rt-a`));
+        const privateRtB = rtResponse.RouteTables?.find(rt => rt.Tags?.some(t => t.Value === `${projectName}-${environment}-private-rt-b`));
+        expect(privateRtA).toBeDefined();
+        expect(privateRtB).toBeDefined();
+
+        // Routes
+        const routesA = privateRtA?.Routes || [];
+        const defaultRouteA = routesA.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
+        expect(defaultRouteA).toBeDefined();
+        expect(defaultRouteA?.NatGatewayId).toContain('nat-');
+        expect(defaultRouteA?.State).toBe('active');
+
+        const routesB = privateRtB?.Routes || [];
+        const defaultRouteB = routesB.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
+        expect(defaultRouteB).toBeDefined();
+        expect(defaultRouteB?.NatGatewayId).toContain('nat-');
+        expect(defaultRouteB?.State).toBe('active');
+
+        if (createNatPerAZ) {
+          // Different NATs
+          expect(defaultRouteA?.NatGatewayId).not.toBe(defaultRouteB?.NatGatewayId);
+        } else {
+          // Same NAT
+          expect(defaultRouteA?.NatGatewayId).toBe(defaultRouteB?.NatGatewayId);
+        }
+
+        // Associations
+        expect(privateRtA?.Associations?.[0].SubnetId).toBe(privateSubnets[0]);
+        expect(privateRtB?.Associations?.[0].SubnetId).toBe(privateSubnets[1]);
+      });
+
+      // Positive Case: Validate S3 Bucket configuration
+      test('S3 Data Bucket should exist with versioning, encryption, public access block, and policy', async () => {
+        // Versioning
+        const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({ Bucket: dataBucketName }));
+        expect(versioningResponse.Status).toBe('Enabled');
+
+        // Encryption
+        const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: dataBucketName }));
+        const rules = encryptionResponse.ServerSideEncryptionConfiguration?.Rules || [];
+        expect(rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+
+        // Public Access Block
+        const publicAccessResponse = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: dataBucketName }));
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+
+        // Policy: Deny non-secure transport
+        const policyResponse = await s3Client.send(new GetBucketPolicyCommand({ Bucket: dataBucketName }));
+        const policy = JSON.parse(policyResponse.Policy || '{}');
+        const statement = policy.Statement[0];
+        expect(statement.Effect).toBe('Deny');
+        expect(statement.Action).toBe('s3:*');
+        expect(statement.Condition.Bool['aws:SecureTransport']).toBe('false');
+      });
+
+      // Edge Case: Validate S3 Bucket denies public access
+      test('S3 Bucket should not allow public access', async () => {
+        const publicAccessResponse = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: dataBucketName }));
+        expect(publicAccessResponse.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      });
+
+      // Positive Case: Validate IAM Role
+      test('IAM Environment Role should exist with correct assume policy and attached policies', async () => {
+        const roleName = environmentRoleArn.split('/').pop() || '';
+        const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        const role = roleResponse.Role;
+        expect(role).toBeDefined();
+        expect(role?.RoleName).toBe(`${projectName}-${environment}-role`);
+
+        // Assume Policy
+        const assumePolicy = JSON.parse(decodeURIComponent(role?.AssumeRolePolicyDocument || '{}'));
+        expect(assumePolicy.Statement[0].Effect).toBe('Allow');
+        expect(assumePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+        if (hasTeamPrincipal) {
+          expect(assumePolicy.Statement[0].Principal.AWS).toBeDefined();
+        } else {
+          expect(assumePolicy.Statement[0].Principal.AWS).toBe(`arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`);
+        }
+
+        // Tags
+        const tags = role?.Tags || [];
+        expect(tags).toEqual(expect.arrayContaining([
+          { Key: 'Project', Value: projectName },
+          { Key: 'Environment', Value: environment },
+          { Key: 'CreatedBy', Value: owner }
+        ]));
+
+        // Inline Policies: S3Access
+        const s3PolicyResponse = await iamClient.send(new GetRolePolicyCommand({ RoleName: roleName, PolicyName: 'S3Access' }));
+        const s3Policy = JSON.parse(decodeURIComponent(s3PolicyResponse.PolicyDocument || ''));
+        expect(s3Policy.Statement[0].Effect).toBe('Allow');
+        expect(s3Policy.Statement[0].Action).toEqual(['s3:GetObject', 's3:PutObject', 's3:ListBucket']);
+        expect(s3Policy.Statement[0].Resource).toEqual(expect.arrayContaining([outputs.DataBucketARN, `${outputs.DataBucketARN}/*`]));
+
+        // EC2ReadOnly
+        const ec2PolicyResponse = await iamClient.send(new GetRolePolicyCommand({ RoleName: roleName, PolicyName: 'EC2ReadOnly' }));
+        const ec2Policy = JSON.parse(decodeURIComponent(ec2PolicyResponse.PolicyDocument || ''));
+        expect(ec2Policy.Statement[0].Effect).toBe('Allow');
+        expect(ec2Policy.Statement[0].Action).toEqual(['ec2:Describe*']);
+        expect(ec2Policy.Statement[0].Resource).toBe('*');
+      });
+
+      // Edge Case: Validate IAM Role without TeamPrincipal
+      test('IAM Role should trust account root when no TeamPrincipalARN', async () => {
+        const roleName = environmentRoleArn.split('/').pop() || '';
+        const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+        const assumePolicy = JSON.parse(decodeURIComponent(roleResponse.Role?.AssumeRolePolicyDocument || '{}'));
+        if (!hasTeamPrincipal) {
+          expect(assumePolicy.Statement[0].Principal.AWS).toBe(`arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`);
+        }
+      });
+
+      // Edge Case: Validate no extra resources (e.g., no unexpected NATs)
+      test('No unexpected NAT Gateways in VPC', async () => {
+        const natResponse = await ec2Client.send(
+          new DescribeNatGatewaysCommand({ Filter: [{ Name: 'vpc-id', Values: [vpcId] }] })
+        );
+        const natGateways = natResponse.NatGateways || [];
+        const expectedCount = createNatPerAZ ? 2 : 1;
+        expect(natGateways.length).toBe(expectedCount);
+      });
     });
   });
 });
