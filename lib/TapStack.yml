@@ -1,162 +1,136 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack.yml — Secure and compliant production environment in us-east-1.
-  Enforces least-privilege IAM roles, encrypted EC2 EBS volumes, S3 bucket SSE,
-  IP-range–restricted access (default 192.168.0.0/16), CloudTrail->CloudWatch logging,
-  production tagging, RDS in a predefined VPC, Lambda with >=128MB, and no public SSH.
-
+  TapStack.yml — Secure, production-ready environment in us-east-1.
+  Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy,
+  RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.
 Parameters:
   NamePrefix:
     Type: String
     Default: prod
-    AllowedPattern: '^[a-z0-9-]+$'
-    Description: Naming prefix (must follow prod-* convention; default "prod").
   EnvironmentSuffix:
     Type: String
-    Default: dev
-    AllowedPattern: '^[a-z0-9-]+$'
-    Description: Environment suffix for unique naming.
+    Default: env
   AllowedIpCidr:
     Type: String
     Default: 192.168.0.0/16
-    Description: IP range allowed to access resources (no public access).
-  VpcId:
-    Type: String
-    Default: ""
-    Description: Predefined VPC ID where resources will be deployed. Leave empty to use default VPC.
-  PrivateSubnetIds:
-    Type: CommaDelimitedList
-    Default: ""
-    Description: Private subnet IDs for EC2 and RDS. Leave empty to use default subnets.
-  LambdaSubnetIds:
-    Type: CommaDelimitedList
-    Default: ""
-    Description: Private subnet IDs for Lambda. Leave empty to use default subnets.
-  EC2AmiId:
-    Type: String
-    Default: ""
-    Description: AMI ID for EC2 instance. Leave empty to use latest Amazon Linux 2023.
-  EC2InstanceType:
-    Type: String
-    Default: t3.micro
-    AllowedValues:
-      - t3.micro
-      - t3.small
-      - t3.medium
-      - t3.large
-      - m6i.large
-      - m6i.xlarge
-    Description: Instance type for EC2.
-  TrailBucketName:
-    Type: String
-    Default: ""
-    Description: S3 bucket name for CloudTrail logs. Leave empty to auto-generate.
-  DBEngine:
-    Type: String
-    Default: postgres
-    AllowedValues: [postgres, mysql]
-  DBEngineVersion:
-    Type: String
-    Default: '15.5'
-    Description: Engine version (e.g., Postgres 15.x or MySQL 8.x).
-  DBInstanceClass:
-    Type: String
-    Default: db.t3.micro
-  DBAllocatedStorage:
-    Type: Number
-    Default: 20
-    MinValue: 20
-    MaxValue: 16384
-  DBUsername:
-    Type: String
-    Default: dbadmin
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]+$'
-    Description: Master username for the database.
-  AppBucketName:
-    Type: String
-    Default: ""
-    Description: S3 bucket name for application data. Leave empty to auto-generate.
-  ExistingDBParameterGroupName:
-    Type: String
-    Default: ""
-    Description: "Optional: Use an existing DB parameter group instead of creating a new one."
-  IsEphemeral:
-    Type: String
-    Default: "true"
-    AllowedValues: ["true", "false"]
-    Description: "If true, ephemeral stacks skip creating DBParameterGroup to avoid hitting quota."
-
-Mappings:
-  EngineFamily:
-    postgres:
-      Family: postgres15
-      SslParamName: rds.force_ssl
-      SslParamValue: '1'
-    mysql:
-      Family: mysql8.0
-      SslParamName: require_secure_transport
-      SslParamValue: 'ON'
-  # AMI mapping for Amazon Linux 2023 in us-east-1
-  RegionMap:
-    us-east-1:
-      AMI: ami-0230bd60aa48260c6
-
-Conditions:
-  IsPostgres: !Equals [!Ref DBEngine, 'postgres']
-  HasVpcId: !Not [!Equals [!Ref VpcId, ""]]
-  HasPrivateSubnets: !Not [!Equals [!Join ["", !Ref PrivateSubnetIds], ""]]
-  HasLambdaSubnets: !Not [!Equals [!Join ["", !Ref LambdaSubnetIds], ""]]
-  HasAmiId: !Not [!Equals [!Ref EC2AmiId, ""]]
-  HasTrailBucket: !Not [!Equals [!Ref TrailBucketName, ""]]
-  HasAppBucket: !Not [!Equals [!Ref AppBucketName, ""]]
-  UseDefaultVpc: !Not [!Condition HasVpcId]
-  UseDefaultSubnets: !And [!Not [!Condition HasPrivateSubnets], !Not [!Condition HasVpcId]]
-  HasExistingDBParameterGroup: !Not [!Equals [!Ref ExistingDBParameterGroupName, ""]]
-  CreateDBParameterGroup: !And 
-    - !Equals [!Ref IsEphemeral, "false"]
-    - !Not [!Condition HasExistingDBParameterGroup]
-
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 Resources:
-  # Get default VPC info - only when we need it
-  DefaultVpcLookup:
-    Type: AWS::CloudFormation::CustomResource
-    Condition: UseDefaultVpc
+  ##############################################
+  # Networking
+  ##############################################
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      ServiceToken: !GetAtt VpcLookupFunction.Arn
-
-  VpcLookupFunction:
-    Type: AWS::Lambda::Function
-    Condition: UseDefaultVpc
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Environment
+          Value: Production
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Properties:
-      Runtime: python3.12
-      Handler: index.handler
-      Role: !GetAtt VpcLookupRole.Arn
-      Code:
-        ZipFile: |
-          import boto3
-          import cfnresponse
-          def handler(event, context):
-              try:
-                  ec2 = boto3.client('ec2')
-                  vpcs = ec2.describe_vpcs(Filters=[{'Name': 'isDefault', 'Values': ['true']}])
-                  if vpcs['Vpcs']:
-                      vpc_id = vpcs['Vpcs'][0]['VpcId']
-                      subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
-                      subnet_ids = [s['SubnetId'] for s in subnets['Subnets'][:2]]
-                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
-                          'VpcId': vpc_id,
-                          'SubnetIds': ','.join(subnet_ids)
-                      })
-                  else:
-                      cfnresponse.send(event, context, cfnresponse.FAILED, {}, "No default VPC found")
-              except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, str(e))
-
-  VpcLookupRole:
+      Tags:
+        - Key: Environment
+          Value: Production
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Environment
+          Value: Production
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Environment
+          Value: Production
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Environment
+          Value: Production
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1Assoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  ##############################################
+  # Security Group
+  ##############################################
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: App security group (no SSH, restricted HTTP/HTTPS)
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedIpCidr
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIpCidr
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+  ##############################################
+  # IAM Roles
+  ##############################################
+  EC2Role:
     Type: AWS::IAM::Role
-    Condition: UseDefaultVpc
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2Minimal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ "s3:GetObject", "s3:ListBucket" ]
+                Resource: "*"
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref EC2Role]
+  LambdaRole:
+    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -164,142 +138,119 @@ Resources:
           - Effect: Allow
             Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: VpcLookup
+        - PolicyName: LambdaLogs
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - ec2:DescribeVpcs
-                  - ec2:DescribeSubnets
-                Resource: '*'
-
-  #######################################
-  # S3 — CloudTrail log bucket (SSE, BPA)
-  #######################################
-  TrailBucket:
+                Action: [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ]
+                Resource: "*"
+  ##############################################
+  # EC2 Instance
+  ##############################################
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds: [!Ref AppSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 8, VolumeType: gp3, Encrypted: true }
+  ##############################################
+  # S3 Bucket for CloudTrail + Policy
+  ##############################################
+  SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !If 
-        - HasTrailBucket
-        - !Ref TrailBucketName
-        - !Sub "${NamePrefix}-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
         IgnorePublicAcls: true
+        BlockPublicPolicy: true
         RestrictPublicBuckets: true
-      VersioningConfiguration: { Status: Enabled }
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  TrailBucketPolicy:
+  SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref TrailBucket
+      Bucket: !Ref SecureS3Bucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          # Allow CloudTrail to write logs
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt SecureS3Bucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action:
-              - s3:PutObject
-              - s3:GetBucketAcl
-            Resource:
-              - !Sub "${TrailBucket}"
-              - !Sub "${TrailBucket}/AWSLogs/${AWS::AccountId}/*"
+            Action: s3:PutObject
+            Resource: !Sub "${SecureS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          # Optional IP restriction for direct access (administrative usage)
-          - Sid: IpRestrictAdminAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub "${TrailBucket}"
-              - !Sub "${TrailBucket}/*"
-            Condition:
-              NotIpAddress:
-                aws:SourceIp: !Ref AllowedIpCidr
-
-  #######################################
-  # S3 — Application bucket (SSE + IP restrict)
-  #######################################
-  AppBucket:
-    Type: AWS::S3::Bucket
+                "s3:x-amz-acl": "bucket-owner-full-control"
+  ##############################################
+  # RDS + Secret
+  ##############################################
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      BucketName: !If
-        - HasAppBucket
-        - !Ref AppBucketName
-        - !Sub "${NamePrefix}-app-${EnvironmentSuffix}-${AWS::AccountId}"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration: { Status: Enabled }
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  AppBucketPolicy:
-    Type: AWS::S3::BucketPolicy
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: "\"@/ '"
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
     Properties:
-      Bucket: !Ref AppBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: EnforceTls
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub "${AppBucket}"
-              - !Sub "${AppBucket}/*"
-            Condition:
-              Bool:
-                aws:SecureTransport: 'false'
-          - Sid: IpRestrict
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub "${AppBucket}"
-              - !Sub "${AppBucket}/*"
-            Condition:
-              NotIpAddress:
-                aws:SourceIp: !Ref AllowedIpCidr
-
-  #######################################
-  # CloudWatch Logs + CloudTrail (API activity)
-  #######################################
-  TrailLogGroup:
+      DBSubnetGroupDescription: Private DB subnets
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [!Ref AppSecurityGroup]
+      MasterUsername: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:username}}"]]
+      MasterUserPassword: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:password}}"]]
+  ##############################################
+  # Lambda
+  ##############################################
+  MyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Role: !GetAtt LambdaRole.Arn
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 30
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"statusCode":200, "body":"Hello from TapStack"}
+  ##############################################
+  # CloudTrail
+  ##############################################
+  CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/cloudtrail/${NamePrefix}-api-activity-${EnvironmentSuffix}
-      RetentionInDays: 365
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  CloudTrailToCWLRole:
+      RetentionInDays: 90
+  CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${NamePrefix}-cloudtrail-to-cwl-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -307,328 +258,32 @@ Resources:
             Principal: { Service: cloudtrail.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: CloudTrailToCWL
+        - PolicyName: CloudTrailToCW
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !GetAtt TrailLogGroup.Arn
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  OrgCloudTrail:
+                Action: [ "logs:CreateLogStream", "logs:PutLogEvents" ]
+                Resource: "*"
+  CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub ${NamePrefix}-api-activity-${EnvironmentSuffix}
-      S3BucketName: !Ref TrailBucket
-      IsLogging: true
+      TrailName: !Sub "${NamePrefix}-${EnvironmentSuffix}-trail"
+      S3BucketName: !Ref SecureS3Bucket
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      IsMultiRegionTrail: false
       IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !GetAtt TrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailToCWLRole.Arn
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  #######################################
-  # Security Groups (deny public SSH; restrict by CIDR)
-  #######################################
-  Ec2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub '${NamePrefix} EC2 SG - no public SSH'
-      VpcId: !If 
-        - HasVpcId
-        - !Ref VpcId
-        - !GetAtt DefaultVpcLookup.VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedIpCidr
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-ec2-sg-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  RdsSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub '${NamePrefix} RDS SG - restricted client access'
-      VpcId: !If 
-        - HasVpcId
-        - !Ref VpcId
-        - !GetAtt DefaultVpcLookup.VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !If [IsPostgres, 5432, 3306]
-          ToPort: !If [IsPostgres, 5432, 3306]
-          CidrIp: !Ref AllowedIpCidr
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-rds-sg-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub '${NamePrefix} Lambda SG - restricted egress'
-      VpcId: !If 
-        - HasVpcId
-        - !Ref VpcId
-        - !GetAtt DefaultVpcLookup.VpcId
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-lambda-sg-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  #######################################
-  # EC2 Instance (encrypted EBS, private subnets only)
-  #######################################
-  Ec2Instance:
-    Type: AWS::EC2::Instance
-    Metadata:
-      Comment: Encrypted root volume; no public IP; SSH allowed only from AllowedIpCidr via SG.
-    Properties:
-      ImageId: !If 
-        - HasAmiId
-        - !Ref EC2AmiId
-        - !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      InstanceType: !Ref EC2InstanceType
-      SecurityGroupIds: 
-        - !Ref Ec2SecurityGroup
-      SubnetId: !If 
-        - HasPrivateSubnets
-        - !Select [0, !Ref PrivateSubnetIds]
-        - !If 
-          - UseDefaultVpc
-          - !Select [0, !Split [",", !GetAtt DefaultVpcLookup.SubnetIds]]
-          - !Ref "AWS::NoValue"
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 16
-            VolumeType: gp3
-            Encrypted: true
-      IamInstanceProfile: !Ref Ec2MinimalInstanceProfile
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-ec2-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  Ec2MinimalInstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${NamePrefix}-ec2-minimal-${EnvironmentSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: ec2.amazonaws.com }
-            Action: sts:AssumeRole
-      # Least-privilege example: allow writing to instance's own CW log stream only.
-      Policies:
-        - PolicyName: EC2CWLogsMinimal
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: CreateOwnLogStream
-                Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:CreateLogGroup
-                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${NamePrefix}-*
-              - Sid: PutLogEvents
-                Effect: Allow
-                Action: logs:PutLogEvents
-                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${NamePrefix}-*:log-stream:*
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  Ec2MinimalInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles: [!Ref Ec2MinimalInstanceRole]
-
-  #######################################
-  # RDS — Subnet group, parameter group, instance (encrypted, private)
-  #######################################
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Condition: HasPrivateSubnets
-    Properties:
-      DBSubnetGroupDescription: !Sub '${NamePrefix} RDS subnet group'
-      SubnetIds: !Ref PrivateSubnetIds
-      DBSubnetGroupName: !Sub ${NamePrefix}-db-subnets-${EnvironmentSuffix}
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-db-subnets-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  DefaultDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Condition: UseDefaultSubnets
-    Properties:
-      DBSubnetGroupDescription: !Sub '${NamePrefix} RDS subnet group - default VPC'
-      SubnetIds: !Split [",", !GetAtt DefaultVpcLookup.SubnetIds]
-      DBSubnetGroupName: !Sub ${NamePrefix}-db-subnets-default-${EnvironmentSuffix}
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-db-subnets-default-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  # Create a secret for the database password
-  DBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub ${NamePrefix}-db-password-${EnvironmentSuffix}
-      Description: !Sub 'Database password for ${NamePrefix} RDS instance'
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "dbadmin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  DBParameterGroup:
-    Condition: CreateDBParameterGroup
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      Description: !Sub '${NamePrefix} parameter group to enforce TLS'
-      Family: !FindInMap [EngineFamily, !Ref DBEngine, Family]
-      Parameters: !If
-        - IsPostgres
-        - rds.force_ssl: '1'
-        - require_secure_transport: 'ON'
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub ${NamePrefix}-db-${EnvironmentSuffix}
-      AllocatedStorage: !Ref DBAllocatedStorage
-      DBInstanceClass: !Ref DBInstanceClass
-      Engine: !Ref DBEngine
-      EngineVersion: !Ref DBEngineVersion
-      MasterUsername: !Ref DBUsername
-      ManageMasterUserPassword: true
-      StorageEncrypted: true
-      PubliclyAccessible: false
-      VPCSecurityGroups: [!Ref RdsSecurityGroup]
-      DBSubnetGroupName: !If 
-        - HasPrivateSubnets
-        - !Ref DBSubnetGroup
-        - !If
-          - UseDefaultSubnets
-          - !Ref DefaultDBSubnetGroup
-          - !Ref "AWS::NoValue"
-      DBParameterGroupName: !If
-        - HasExistingDBParameterGroup
-        - !Ref ExistingDBParameterGroupName
-        - !If
-          - CreateDBParameterGroup
-          - !Ref DBParameterGroup
-          - !Ref "AWS::NoValue"
-      DeletionProtection: false
-      CopyTagsToSnapshot: true
-      MultiAZ: false
-      Tags:
-        - Key: Name
-          Value: !Sub ${NamePrefix}-db-${EnvironmentSuffix}
-        - Key: Environment
-          Value: Production
-
-  #######################################
-  # Lambda (>=128MB, VPC, least-priv role)
-  #######################################
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${NamePrefix}-lambda-exec-${EnvironmentSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        # Minimal logging + VPC ENI mgmt for Lambda
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - !If 
-          - HasLambdaSubnets
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
-          - !Ref "AWS::NoValue"
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  HelloFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub ${NamePrefix}-hello-${EnvironmentSuffix}
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Runtime: python3.12
-      Handler: index.handler
-      MemorySize: 128
-      Timeout: 10
-      VpcConfig: !If
-        - HasLambdaSubnets
-        - SecurityGroupIds: [!Ref LambdaSecurityGroup]
-          SubnetIds: !Ref LambdaSubnetIds
-        - !Ref "AWS::NoValue"
-      Code:
-        ZipFile: |
-          import json
-          def handler(event, context):
-              return {"statusCode": 200, "body": json.dumps({"message": "hello from prod lambda"})}
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  #######################################
-  # CloudWatch Log Group for EC2 app logs
-  #######################################
-  Ec2AppLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/ec2/${NamePrefix}-app-${EnvironmentSuffix}
-      RetentionInDays: 90
-      Tags:
-        - Key: Environment
-          Value: Production
-
+      IsLogging: true
 Outputs:
-  EC2InstanceId:
-    Description: EC2 instance ID
-    Value: !Ref Ec2Instance
-  RdsEndpoint:
-    Description: RDS endpoint address
-    Value: !GetAtt Database.Endpoint.Address
-  AppBucketOut:
-    Description: Application S3 bucket name
-    Value: !Ref AppBucket
-  CloudTrailName:
-    Description: CloudTrail trail name capturing all API activity
-    Value: !Ref OrgCloudTrail
-  LambdaName:
-    Description: Lambda function name
-    Value: !Ref HelloFunction
-  DBPasswordSecretArn:
-    Description: ARN of the database password secret
-    Value: !Ref DBPasswordSecret
+  VPC: { Value: !Ref VPC }
+  PublicSubnet1: { Value: !Ref PublicSubnet1 }
+  PrivateSubnet1: { Value: !Ref PrivateSubnet1 }
+  PrivateSubnet2: { Value: !Ref PrivateSubnet2 }
+  EC2Instance: { Value: !Ref EC2Instance }
+  S3Bucket: { Value: !Ref SecureS3Bucket }
+  RDS: { Value: !GetAtt RDSInstance.Endpoint.Address }
+  Lambda: { Value: !Ref MyLambda }
+  CloudTrail: { Value: !Ref CloudTrail }
+  DBSecret: { Value: !Ref DBSecret }

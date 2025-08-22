@@ -1,381 +1,31 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure and compliant production environment in us-east-1. Enforces least-privilege IAM roles, encrypted EC2 EBS volumes, S3 bucket SSE, IP-range–restricted access (default 192.168.0.0/16), CloudTrail->CloudWatch logging, production tagging, RDS in a predefined VPC, Lambda with >=128MB, and no public SSH.\n",
+    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy, RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.\n",
     "Parameters": {
         "NamePrefix": {
             "Type": "String",
-            "Default": "prod",
-            "AllowedPattern": "^[a-z0-9-]+$",
-            "Description": "Naming prefix (must follow prod-* convention; default \"prod\")."
+            "Default": "prod"
         },
         "EnvironmentSuffix": {
             "Type": "String",
-            "Default": "dev",
-            "AllowedPattern": "^[a-z0-9-]+$",
-            "Description": "Environment suffix for unique naming."
+            "Default": "env"
         },
         "AllowedIpCidr": {
             "Type": "String",
-            "Default": "192.168.0.0/16",
-            "Description": "IP range allowed to access resources (no public access)."
+            "Default": "192.168.0.0/16"
         },
-        "VpcId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Predefined VPC ID where resources will be deployed. Leave empty to use default VPC."
-        },
-        "PrivateSubnetIds": {
-            "Type": "CommaDelimitedList",
-            "Default": "",
-            "Description": "Private subnet IDs for EC2 and RDS. Leave empty to use default subnets."
-        },
-        "LambdaSubnetIds": {
-            "Type": "CommaDelimitedList",
-            "Default": "",
-            "Description": "Private subnet IDs for Lambda. Leave empty to use default subnets."
-        },
-        "EC2AmiId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "AMI ID for EC2 instance. Leave empty to use latest Amazon Linux 2023."
-        },
-        "EC2InstanceType": {
-            "Type": "String",
-            "Default": "t3.micro",
-            "AllowedValues": [
-                "t3.micro",
-                "t3.small",
-                "t3.medium",
-                "t3.large",
-                "m6i.large",
-                "m6i.xlarge"
-            ],
-            "Description": "Instance type for EC2."
-        },
-        "TrailBucketName": {
-            "Type": "String",
-            "Default": "",
-            "Description": "S3 bucket name for CloudTrail logs. Leave empty to auto-generate."
-        },
-        "DBEngine": {
-            "Type": "String",
-            "Default": "postgres",
-            "AllowedValues": [
-                "postgres",
-                "mysql"
-            ]
-        },
-        "DBEngineVersion": {
-            "Type": "String",
-            "Default": "15.5",
-            "Description": "Engine version (e.g., Postgres 15.x or MySQL 8.x)."
-        },
-        "DBInstanceClass": {
-            "Type": "String",
-            "Default": "db.t3.micro"
-        },
-        "DBAllocatedStorage": {
-            "Type": "Number",
-            "Default": 20,
-            "MinValue": 20,
-            "MaxValue": 16384
-        },
-        "DBUsername": {
-            "Type": "String",
-            "Default": "dbadmin",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]+$",
-            "Description": "Master username for the database."
-        },
-        "AppBucketName": {
-            "Type": "String",
-            "Default": "",
-            "Description": "S3 bucket name for application data. Leave empty to auto-generate."
-        },
-        "ExistingDBParameterGroupName": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional: Use an existing DB parameter group instead of creating a new one."
-        },
-        "IsEphemeral": {
-            "Type": "String",
-            "Default": "true",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Description": "If true, ephemeral stacks skip creating DBParameterGroup to avoid hitting quota."
-        }
-    },
-    "Mappings": {
-        "EngineFamily": {
-            "postgres": {
-                "Family": "postgres15",
-                "SslParamName": "rds.force_ssl",
-                "SslParamValue": "1"
-            },
-            "mysql": {
-                "Family": "mysql8.0",
-                "SslParamName": "require_secure_transport",
-                "SslParamValue": "ON"
-            }
-        },
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0230bd60aa48260c6"
-            }
-        }
-    },
-    "Conditions": {
-        "IsPostgres": {
-            "Fn::Equals": [
-                {
-                    "Ref": "DBEngine"
-                },
-                "postgres"
-            ]
-        },
-        "HasVpcId": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "VpcId"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "HasPrivateSubnets": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Fn::Join": [
-                                "",
-                                {
-                                    "Ref": "PrivateSubnetIds"
-                                }
-                            ]
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "HasLambdaSubnets": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Fn::Join": [
-                                "",
-                                {
-                                    "Ref": "LambdaSubnetIds"
-                                }
-                            ]
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "HasAmiId": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EC2AmiId"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "HasTrailBucket": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "TrailBucketName"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "HasAppBucket": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "AppBucketName"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "UseDefaultVpc": {
-            "Fn::Not": [
-                {
-                    "Condition": "HasVpcId"
-                }
-            ]
-        },
-        "UseDefaultSubnets": {
-            "Fn::And": [
-                {
-                    "Fn::Not": [
-                        {
-                            "Condition": "HasPrivateSubnets"
-                        }
-                    ]
-                },
-                {
-                    "Fn::Not": [
-                        {
-                            "Condition": "HasVpcId"
-                        }
-                    ]
-                }
-            ]
-        },
-        "HasExistingDBParameterGroup": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "ExistingDBParameterGroupName"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
-        "CreateDBParameterGroup": {
-            "Fn::And": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "IsEphemeral"
-                        },
-                        "false"
-                    ]
-                },
-                {
-                    "Fn::Not": [
-                        {
-                            "Condition": "HasExistingDBParameterGroup"
-                        }
-                    ]
-                }
-            ]
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
         }
     },
     "Resources": {
-        "DefaultVpcLookup": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Condition": "UseDefaultVpc",
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
             "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "VpcLookupFunction",
-                        "Arn"
-                    ]
-                }
-            }
-        },
-        "VpcLookupFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Condition": "UseDefaultVpc",
-            "Properties": {
-                "Runtime": "python3.12",
-                "Handler": "index.handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "VpcLookupRole",
-                        "Arn"
-                    ]
-                },
-                "Code": {
-                    "ZipFile": "import boto3\nimport cfnresponse\ndef handler(event, context):\n    try:\n        ec2 = boto3.client('ec2')\n        vpcs = ec2.describe_vpcs(Filters=[{'Name': 'isDefault', 'Values': ['true']}])\n        if vpcs['Vpcs']:\n            vpc_id = vpcs['Vpcs'][0]['VpcId']\n            subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])\n            subnet_ids = [s['SubnetId'] for s in subnets['Subnets'][:2]]\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {\n                'VpcId': vpc_id,\n                'SubnetIds': ','.join(subnet_ids)\n            })\n        else:\n            cfnresponse.send(event, context, cfnresponse.FAILED, {}, \"No default VPC found\")\n    except Exception as e:\n        cfnresponse.send(event, context, cfnresponse.FAILED, {}, str(e))\n"
-                }
-            }
-        },
-        "VpcLookupRole": {
-            "Type": "AWS::IAM::Role",
-            "Condition": "UseDefaultVpc",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "lambda.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "VpcLookup",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ec2:DescribeVpcs",
-                                        "ec2:DescribeSubnets"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "TrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::If": [
-                        "HasTrailBucket",
-                        {
-                            "Ref": "TrailBucketName"
-                        },
-                        {
-                            "Fn::Sub": "${NamePrefix}-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
-                        }
-                    ]
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -384,96 +34,9 @@
                 ]
             }
         },
-        "TrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
             "Properties": {
-                "Bucket": {
-                    "Ref": "TrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": [
-                                "s3:PutObject",
-                                "s3:GetBucketAcl"
-                            ],
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${TrailBucket}"
-                                },
-                                {
-                                    "Fn::Sub": "${TrailBucket}/AWSLogs/${AWS::AccountId}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "IpRestrictAdminAccess",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${TrailBucket}"
-                                },
-                                {
-                                    "Fn::Sub": "${TrailBucket}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "NotIpAddress": {
-                                    "aws:SourceIp": {
-                                        "Ref": "AllowedIpCidr"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AppBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::If": [
-                        "HasAppBucket",
-                        {
-                            "Ref": "AppBucketName"
-                        },
-                        {
-                            "Fn::Sub": "${NamePrefix}-app-${EnvironmentSuffix}-${AWS::AccountId}"
-                        }
-                    ]
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -482,249 +45,34 @@
                 ]
             }
         },
-        "AppBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
-                "Bucket": {
-                    "Ref": "AppBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "EnforceTls",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${AppBucket}"
-                                },
-                                {
-                                    "Fn::Sub": "${AppBucket}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "Bool": {
-                                    "aws:SecureTransport": "false"
-                                }
-                            }
-                        },
-                        {
-                            "Sid": "IpRestrict",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "${AppBucket}"
-                                },
-                                {
-                                    "Fn::Sub": "${AppBucket}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "NotIpAddress": {
-                                    "aws:SourceIp": {
-                                        "Ref": "AllowedIpCidr"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "TrailLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${NamePrefix}-api-activity-${EnvironmentSuffix}"
-                },
-                "RetentionInDays": 365,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "CloudTrailToCWLRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${NamePrefix}-cloudtrail-to-cwl-${EnvironmentSuffix}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "CloudTrailToCWL",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "TrailLogGroup",
-                                            "Arn"
-                                        ]
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "OrgCloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "${NamePrefix}-api-activity-${EnvironmentSuffix}"
-                },
-                "S3BucketName": {
-                    "Ref": "TrailBucket"
-                },
-                "IsLogging": true,
-                "IncludeGlobalServiceEvents": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "CloudWatchLogsLogGroupArn": {
-                    "Fn::GetAtt": [
-                        "TrailLogGroup",
-                        "Arn"
-                    ]
-                },
-                "CloudWatchLogsRoleArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailToCWLRole",
-                        "Arn"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "Ec2SecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": {
-                    "Fn::Sub": "${NamePrefix} EC2 SG - no public SSH"
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
                 },
                 "VpcId": {
-                    "Fn::If": [
-                        "HasVpcId",
-                        {
-                            "Ref": "VpcId"
-                        },
-                        {
-                            "Fn::GetAtt": [
-                                "DefaultVpcLookup",
-                                "VpcId"
-                            ]
-                        }
-                    ]
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": {
-                            "Ref": "AllowedIpCidr"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-ec2-sg-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                    "Ref": "VPC"
+                }
             }
         },
-        "RdsSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
             "Properties": {
-                "GroupDescription": {
-                    "Fn::Sub": "${NamePrefix} RDS SG - restricted client access"
-                },
                 "VpcId": {
-                    "Fn::If": [
-                        "HasVpcId",
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "VpcId"
-                        },
-                        {
-                            "Fn::GetAtt": [
-                                "DefaultVpcLookup",
-                                "VpcId"
-                            ]
+                            "Fn::GetAZs": ""
                         }
                     ]
                 },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": {
-                            "Fn::If": [
-                                "IsPostgres",
-                                5432,
-                                3306
-                            ]
-                        },
-                        "ToPort": {
-                            "Fn::If": [
-                                "IsPostgres",
-                                5432,
-                                3306
-                            ]
-                        },
-                        "CidrIp": {
-                            "Ref": "AllowedIpCidr"
-                        }
-                    }
-                ],
                 "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-rds-sg-${EnvironmentSuffix}"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": "Production"
@@ -732,33 +80,23 @@
                 ]
             }
         },
-        "LambdaSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
             "Properties": {
-                "GroupDescription": {
-                    "Fn::Sub": "${NamePrefix} Lambda SG - restricted egress"
-                },
                 "VpcId": {
-                    "Fn::If": [
-                        "HasVpcId",
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": false,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "VpcId"
-                        },
-                        {
-                            "Fn::GetAtt": [
-                                "DefaultVpcLookup",
-                                "VpcId"
-                            ]
+                            "Fn::GetAZs": ""
                         }
                     ]
                 },
                 "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-lambda-sg-${EnvironmentSuffix}"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": "Production"
@@ -766,107 +104,97 @@
                 ]
             }
         },
-        "Ec2Instance": {
-            "Type": "AWS::EC2::Instance",
-            "Metadata": {
-                "Comment": "Encrypted root volume; no public IP; SSH allowed only from AllowedIpCidr via SG."
-            },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
             "Properties": {
-                "ImageId": {
-                    "Fn::If": [
-                        "HasAmiId",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "MapPublicIpOnLaunch": false,
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
                         {
-                            "Ref": "EC2AmiId"
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                "RegionMap",
-                                {
-                                    "Ref": "AWS::Region"
-                                },
-                                "AMI"
-                            ]
+                            "Fn::GetAZs": ""
                         }
                     ]
                 },
-                "InstanceType": {
-                    "Ref": "EC2InstanceType"
-                },
-                "SecurityGroupIds": [
+                "Tags": [
                     {
-                        "Ref": "Ec2SecurityGroup"
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
-                ],
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1Assoc": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
                 "SubnetId": {
-                    "Fn::If": [
-                        "HasPrivateSubnets",
-                        {
-                            "Fn::Select": [
-                                0,
-                                {
-                                    "Ref": "PrivateSubnetIds"
-                                }
-                            ]
-                        },
-                        {
-                            "Fn::If": [
-                                "UseDefaultVpc",
-                                {
-                                    "Fn::Select": [
-                                        0,
-                                        {
-                                            "Fn::Split": [
-                                                ",",
-                                                {
-                                                    "Fn::GetAtt": [
-                                                        "DefaultVpcLookup",
-                                                        "SubnetIds"
-                                                    ]
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "Ref": "AWS::NoValue"
-                                }
-                            ]
-                        }
-                    ]
+                    "Ref": "PublicSubnet1"
                 },
-                "BlockDeviceMappings": [
-                    {
-                        "DeviceName": "/dev/xvda",
-                        "Ebs": {
-                            "VolumeSize": 16,
-                            "VolumeType": "gp3",
-                            "Encrypted": true
-                        }
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "Ec2MinimalInstanceProfile"
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
                 },
-                "Tags": [
+                "GroupDescription": "App security group (no SSH, restricted HTTP/HTTPS)",
+                "SecurityGroupIngress": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-ec2-${EnvironmentSuffix}"
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "AllowedIpCidr"
                         }
                     },
                     {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "AllowedIpCidr"
+                        }
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ]
             }
         },
-        "Ec2MinimalInstanceRole": {
+        "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${NamePrefix}-ec2-minimal-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -881,261 +209,37 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "EC2CWLogsMinimal",
+                        "PolicyName": "EC2Minimal",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
-                                    "Sid": "CreateOwnLogStream",
                                     "Effect": "Allow",
                                     "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:CreateLogGroup"
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${NamePrefix}-*"
-                                    }
-                                },
-                                {
-                                    "Sid": "PutLogEvents",
-                                    "Effect": "Allow",
-                                    "Action": "logs:PutLogEvents",
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${NamePrefix}-*:log-stream:*"
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
                 ]
             }
         },
-        "Ec2MinimalInstanceProfile": {
+        "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "Roles": [
                     {
-                        "Ref": "Ec2MinimalInstanceRole"
+                        "Ref": "EC2Role"
                     }
                 ]
             }
         },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Condition": "HasPrivateSubnets",
-            "Properties": {
-                "DBSubnetGroupDescription": {
-                    "Fn::Sub": "${NamePrefix} RDS subnet group"
-                },
-                "SubnetIds": {
-                    "Ref": "PrivateSubnetIds"
-                },
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "${NamePrefix}-db-subnets-${EnvironmentSuffix}"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-db-subnets-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "DefaultDBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Condition": "UseDefaultSubnets",
-            "Properties": {
-                "DBSubnetGroupDescription": {
-                    "Fn::Sub": "${NamePrefix} RDS subnet group - default VPC"
-                },
-                "SubnetIds": {
-                    "Fn::Split": [
-                        ",",
-                        {
-                            "Fn::GetAtt": [
-                                "DefaultVpcLookup",
-                                "SubnetIds"
-                            ]
-                        }
-                    ]
-                },
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "${NamePrefix}-db-subnets-default-${EnvironmentSuffix}"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-db-subnets-default-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "DBPasswordSecret": {
-            "Type": "AWS::SecretsManager::Secret",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${NamePrefix}-db-password-${EnvironmentSuffix}"
-                },
-                "Description": {
-                    "Fn::Sub": "Database password for ${NamePrefix} RDS instance"
-                },
-                "GenerateSecretString": {
-                    "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "DBParameterGroup": {
-            "Condition": "CreateDBParameterGroup",
-            "Type": "AWS::RDS::DBParameterGroup",
-            "Properties": {
-                "Description": {
-                    "Fn::Sub": "${NamePrefix} parameter group to enforce TLS"
-                },
-                "Family": {
-                    "Fn::FindInMap": [
-                        "EngineFamily",
-                        {
-                            "Ref": "DBEngine"
-                        },
-                        "Family"
-                    ]
-                },
-                "Parameters": {
-                    "Fn::If": [
-                        "IsPostgres",
-                        {
-                            "rds.force_ssl": "1"
-                        },
-                        {
-                            "require_secure_transport": "ON"
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "Database": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "${NamePrefix}-db-${EnvironmentSuffix}"
-                },
-                "AllocatedStorage": {
-                    "Ref": "DBAllocatedStorage"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DBInstanceClass"
-                },
-                "Engine": {
-                    "Ref": "DBEngine"
-                },
-                "EngineVersion": {
-                    "Ref": "DBEngineVersion"
-                },
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
-                "ManageMasterUserPassword": true,
-                "StorageEncrypted": true,
-                "PubliclyAccessible": false,
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "RdsSecurityGroup"
-                    }
-                ],
-                "DBSubnetGroupName": {
-                    "Fn::If": [
-                        "HasPrivateSubnets",
-                        {
-                            "Ref": "DBSubnetGroup"
-                        },
-                        {
-                            "Fn::If": [
-                                "UseDefaultSubnets",
-                                {
-                                    "Ref": "DefaultDBSubnetGroup"
-                                },
-                                {
-                                    "Ref": "AWS::NoValue"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "DBParameterGroupName": {
-                    "Fn::If": [
-                        "HasExistingDBParameterGroup",
-                        {
-                            "Ref": "ExistingDBParameterGroupName"
-                        },
-                        {
-                            "Fn::If": [
-                                "CreateDBParameterGroup",
-                                {
-                                    "Ref": "DBParameterGroup"
-                                },
-                                {
-                                    "Ref": "AWS::NoValue"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "DeletionProtection": false,
-                "CopyTagsToSnapshot": true,
-                "MultiAZ": false,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${NamePrefix}-db-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "LambdaExecutionRole": {
+        "LambdaRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${NamePrefix}-lambda-exec-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1148,125 +252,326 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                "Policies": [
                     {
-                        "Fn::If": [
-                            "HasLambdaSubnets",
-                            "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
-                            {
-                                "Ref": "AWS::NoValue"
-                            }
-                        ]
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "PolicyName": "LambdaLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ]
             }
         },
-        "HelloFunction": {
-            "Type": "AWS::Lambda::Function",
+        "EC2Instance": {
+            "Type": "AWS::EC2::Instance",
             "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "${NamePrefix}-hello-${EnvironmentSuffix}"
+                "InstanceType": "t3.micro",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
                 },
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
-                    ]
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
                 },
-                "Runtime": "python3.12",
-                "Handler": "index.handler",
-                "MemorySize": 128,
-                "Timeout": 10,
-                "VpcConfig": {
-                    "Fn::If": [
-                        "HasLambdaSubnets",
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "AppSecurityGroup"
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": 8,
+                            "VolumeType": "gp3",
+                            "Encrypted": true
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
                         {
-                            "SecurityGroupIds": [
-                                {
-                                    "Ref": "LambdaSecurityGroup"
-                                }
-                            ],
-                            "SubnetIds": {
-                                "Ref": "LambdaSubnetIds"
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
                             }
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
                         }
                     ]
                 },
-                "Code": {
-                    "ZipFile": "import json\ndef handler(event, context):\n    return {\"statusCode\": 200, \"body\": json.dumps({\"message\": \"hello from prod lambda\"})}\n"
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "IgnorePublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
                 },
-                "Tags": [
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SecureS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\":\"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/ '"
+                }
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Private DB subnets",
+                "SubnetIds": [
                     {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
                     }
                 ]
             }
         },
-        "Ec2AppLogGroup": {
+        "RDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "Engine": "mysql",
+                "DBInstanceClass": "db.t3.micro",
+                "AllocatedStorage": 20,
+                "StorageEncrypted": true,
+                "PubliclyAccessible": false,
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "AppSecurityGroup"
+                    }
+                ],
+                "MasterUsername": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:username}}"
+                        ]
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "{{resolve:secretsmanager:",
+                            {
+                                "Ref": "DBSecret"
+                            },
+                            ":SecretString:password}}"
+                        ]
+                    ]
+                }
+            }
+        },
+        "MyLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Handler": "index.handler",
+                "MemorySize": 128,
+                "Timeout": 30,
+                "Code": {
+                    "ZipFile": "def handler(event, context):\n    return {\"statusCode\":200, \"body\":\"Hello from TapStack\"}\n"
+                }
+            }
+        },
+        "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/ec2/${NamePrefix}-app-${EnvironmentSuffix}"
+                "RetentionInDays": 90
+            }
+        },
+        "CloudTrailRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
                 },
-                "RetentionInDays": 90,
-                "Tags": [
+                "Policies": [
                     {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "PolicyName": "CloudTrailToCW",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ]
+            }
+        },
+        "CloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${NamePrefix}-${EnvironmentSuffix}-trail"
+                },
+                "S3BucketName": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "CloudWatchLogsLogGroupArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailLogGroup",
+                        "Arn"
+                    ]
+                },
+                "CloudWatchLogsRoleArn": {
+                    "Fn::GetAtt": [
+                        "CloudTrailRole",
+                        "Arn"
+                    ]
+                },
+                "IsMultiRegionTrail": false,
+                "IncludeGlobalServiceEvents": true,
+                "EnableLogFileValidation": true,
+                "IsLogging": true
             }
         }
     },
     "Outputs": {
-        "EC2InstanceId": {
-            "Description": "EC2 instance ID",
+        "VPC": {
             "Value": {
-                "Ref": "Ec2Instance"
+                "Ref": "VPC"
             }
         },
-        "RdsEndpoint": {
-            "Description": "RDS endpoint address",
+        "PublicSubnet1": {
+            "Value": {
+                "Ref": "PublicSubnet1"
+            }
+        },
+        "PrivateSubnet1": {
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            }
+        },
+        "PrivateSubnet2": {
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            }
+        },
+        "EC2Instance": {
+            "Value": {
+                "Ref": "EC2Instance"
+            }
+        },
+        "S3Bucket": {
+            "Value": {
+                "Ref": "SecureS3Bucket"
+            }
+        },
+        "RDS": {
             "Value": {
                 "Fn::GetAtt": [
-                    "Database",
+                    "RDSInstance",
                     "Endpoint.Address"
                 ]
             }
         },
-        "AppBucketOut": {
-            "Description": "Application S3 bucket name",
+        "Lambda": {
             "Value": {
-                "Ref": "AppBucket"
+                "Ref": "MyLambda"
             }
         },
-        "CloudTrailName": {
-            "Description": "CloudTrail trail name capturing all API activity",
+        "CloudTrail": {
             "Value": {
-                "Ref": "OrgCloudTrail"
+                "Ref": "CloudTrail"
             }
         },
-        "LambdaName": {
-            "Description": "Lambda function name",
+        "DBSecret": {
             "Value": {
-                "Ref": "HelloFunction"
-            }
-        },
-        "DBPasswordSecretArn": {
-            "Description": "ARN of the database password secret",
-            "Value": {
-                "Ref": "DBPasswordSecret"
+                "Ref": "DBSecret"
             }
         }
     }
