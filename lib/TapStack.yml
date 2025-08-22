@@ -121,8 +121,8 @@ Parameters:
     Description: 'Name of an existing AWS Config Configuration Recorder. To create a new one, set this to blank (""), otherwise the template will NOT create a configuration recorder.'
   ExistingRDSSubnetGroupName:
     Type: String
-    Default: 'use-existing'
-    Description: 'Name of an existing RDS DBSubnetGroup. To create a new one, set this to blank (""), otherwise the template will NOT create a DBSubnetGroup.'
+    Default: ''
+    Description: 'Name of an existing RDS DBSubnetGroup. Leave blank to create a new one. If using an existing group, set this to the actual subnet group name.'
   ExistingCloudTrailLogsBucketName:
     Type: String
     Default: 'use-existing'
