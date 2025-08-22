@@ -9,17 +9,17 @@ The ideal response demonstrates a production-ready AWS CDK application that not 
 ## Architecture Requirements Met
 
 ### Core Requirements (Original Prompt)
-1. **Multi-Region Deployment**: Resources deployed to both `us-west-1` and `us-west-2`
-2. **Isolated DynamoDB Tables**: Distinct tables in each region
-3. **Configurable Capacity**: 
-   - `us-west-1`: Fixed capacity (5/5)
-   - `us-west-2`: Parameterized capacity via `CfnParameter`
-4. **Resource Connection & Permissions**: Lambda functions with fine-grained IAM permissions
+1. Multi-Region Deployment: Resources deployed to both us-west-1 and us-west-2
+2. Isolated DynamoDB Tables: Distinct tables in each region
+3. Configurable Capacity: 
+   - us-west-1: Fixed capacity (5/5)
+   - us-west-2: Parameterized capacity via CfnParameter
+4. Resource Connection & Permissions: Lambda functions with fine-grained IAM permissions
 
 ### Enhanced Requirements (Task Context)
-5. **CloudFormation Intrinsic Functions**: Extensive use of `Fn::GetAtt`, `Fn::ImportValue`, `Fn::Sub`, `Fn::Join`
-6. **Cross-Region Dependencies**: Resources accurately referenced between regions
-7. **Proper Resource Dependencies**: Dependencies maintained between resources
+5. CloudFormation Intrinsic Functions: Extensive use of Fn::GetAtt, Fn::ImportValue, Fn::Sub, Fn::Join
+6. Cross-Region Dependencies: Resources accurately referenced between regions
+7. Proper Resource Dependencies: Dependencies maintained between resources
 
 ## Ideal Code Implementation
 
@@ -313,26 +313,26 @@ export class TapStack extends cdk.Stack {
 ## Key Differentiators from Basic Implementation
 
 ### 1. Advanced CloudFormation Intrinsic Functions
-- **`Fn::ImportValue`**: Cross-region table name/ARN imports
-- **`Fn::GetAtt`**: Extensive use for ARN references
-- **`Fn::Join`**: Dynamic string construction in outputs
-- **`Ref`**: Parameter and resource references
+- Fn::ImportValue: Cross-region table name/ARN imports
+- Fn::GetAtt: Extensive use for ARN references
+- Fn::Join: Dynamic string construction in outputs
+- Ref: Parameter and resource references
 
 ### 2. Cross-Region Dependencies
-- **us-west-2** imports table name and ARN from **us-west-1**
-- **Lambda function** demonstrates cross-region operations
-- **IAM policies** include cross-region table access
+- us-west-2 imports table name and ARN from us-west-1
+- Lambda function demonstrates cross-region operations
+- IAM policies include cross-region table access
 
 ### 3. Resource Dependencies
-- **Lambda function** depends on IAM role
-- **IAM policies** reference both local and remote tables
-- **Proper CloudFormation dependencies** maintained
+- Lambda function depends on IAM role
+- IAM policies reference both local and remote tables
+- Proper CloudFormation dependencies maintained
 
 ### 4. Production-Ready Features
-- **Comprehensive error handling** in Lambda functions
-- **Resource cleanup** and proper tagging
-- **Security best practices** with least-privilege access
-- **Monitoring and logging** setup
+- Comprehensive error handling in Lambda functions
+- Resource cleanup and proper tagging
+- Security best practices with least-privilege access
+- Monitoring and logging setup
 
 ## Deployment and Testing
 
@@ -359,7 +359,7 @@ npx cdk list
 
 ### Enhanced Features
 - Cross-region Lambda function (us-west-2 only)
-- Cross-region IAM permissions using `Fn::ImportValue`
+- Cross-region IAM permissions using Fn::ImportValue
 - Comprehensive CloudFormation outputs
 - Production-ready error handling and logging
 - Resource tagging and monitoring setup

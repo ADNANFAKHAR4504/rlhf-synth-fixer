@@ -1,43 +1,42 @@
-# AWS CDK Multi-Region Infrastructure Development Task
+# Multi-Region DynamoDB Infrastructure Setup
 
-## Overview
-You are tasked with creating a complete, production-ready AWS CDK application that deploys a multi-region infrastructure using TypeScript. This should be a single, well-structured file that's ready for immediate deployment.
+## Task Overview
+We need to build a multi-region AWS infrastructure using CDK TypeScript. The goal is to create DynamoDB tables in two different regions with some specific requirements around capacity and permissions.
 
-## Infrastructure Requirements
+## What We Need to Build
 
-### 1. Multi-Region Deployment
-- Deploy resources to **both** `us-west-1` and `us-west-2` AWS regions
-- Each region needs its own dedicated CDK Stack
+### Multi-Region Setup
+- Deploy resources to both us-west-1 and us-west-2 regions
+- Each region should have its own CDK stack
 
-### 2. DynamoDB Tables
-- Create **separate** Amazon DynamoDB tables in each region
-- Tables should be isolated and independent
+### DynamoDB Tables
+- Create separate DynamoDB tables in each region
+- Tables should be independent and isolated from each other
 
-### 3. Capacity Configuration
-- **us-west-1 table**: Fixed capacity
-  - Read capacity: **5**
-  - Write capacity: **5**
-- **us-west-2 table**: Configurable capacity
-  - Use `CfnParameter` to allow runtime configuration
-  - Users can specify read/write capacities during deployment
+### Capacity Configuration
+- **us-west-1 table**: Use fixed capacity
+  - Read capacity: 5
+  - Write capacity: 5
+- **us-west-2 table**: Make capacity configurable
+  - Use CfnParameter so users can set read/write capacity during deployment
 
-### 4. Lambda Functions & Permissions
-- Create AWS Lambda functions in each region with Node.js runtime
-- Set up **fine-grained IAM permissions**:
-  - **us-west-1 Lambda**: Write permissions to us-west-1 table only
-  - **us-west-2 Lambda**: Write permissions to us-west-2 table only
-  - **Restrict permissions** to: `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:DeleteItem`
+### Lambda Functions and Permissions
+- Add Lambda functions in each region (Node.js runtime)
+- Set up IAM permissions for each Lambda:
+  - us-west-1 Lambda should have write access to us-west-1 table only
+  - us-west-2 Lambda should have write access to us-west-2 table only
+  - Limit permissions to: dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem
 
-## Deliverable
-Provide a complete, executable TypeScript CDK application in a single file that:
+## What to Deliver
+Provide a complete CDK TypeScript application that:
 - Includes all necessary imports
-- Is logically structured
-- Can be deployed with `cdk deploy`
-- Demonstrates best practices for resource linking and permission management
-- Is self-contained and production-ready
+- Has logical structure
+- Can be deployed with cdk deploy
+- Shows best practices for linking resources and managing permissions
+- Is self-contained and ready for production use
 
 ## Key Points
-- Focus on **minimal changes** to meet requirements
-- Ensure **proper resource isolation** between regions
-- Implement **secure, least-privilege permissions**
-- Make the code **deployment-ready** with clear structure and comments
+- Keep changes minimal to meet requirements
+- Ensure proper isolation between regions
+- Implement secure, least-privilege permissions
+- Make the code deployment-ready with clear structure
