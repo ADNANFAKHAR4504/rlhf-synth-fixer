@@ -17,7 +17,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 
 // Configuration - these would typically come from outputs or environment
 const TEST_CONFIG = {
-  region: 'eu-west-3',
+  region: 'us-west-2',
   // These values would be set by the deployment process
   expectedTags: {
     Environment: 'dev',

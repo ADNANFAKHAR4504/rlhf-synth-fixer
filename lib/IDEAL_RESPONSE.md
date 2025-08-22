@@ -577,7 +577,7 @@ description = "Common tags for all resources"
 type = map(string)
 }
 
-## KMS Key for S3 Encryption
+# KMS Key for S3 Encryption
 
 resource "aws_kms_key" "s3_key" {
 description = "KMS key for S3 bucket encryption"
@@ -618,7 +618,7 @@ name = "alias/${var.common_tags.Environment}-s3-key"
 target_key_id = aws_kms_key.s3_key.key_id
 }
 
-## CloudTrail S3 Bucket
+# CloudTrail S3 Bucket
 
 resource "aws_s3_bucket" "cloudtrail_logs" {
 bucket = "${var.cloudtrail_bucket_name}-${random_id.bucket_suffix.hex}"
@@ -632,7 +632,7 @@ resource "random_id" "bucket_suffix" {
 byte_length = 4
 }
 
-## S3 Bucket Versioning
+# S3 Bucket Versioning
 
 resource "aws_s3_bucket_versioning" "cloudtrail_logs_versioning" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -641,7 +641,7 @@ status = "Enabled"
 }
 }
 
-## S3 Bucket Server Side Encryption
+# S3 Bucket Server Side Encryption
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs_encryption" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -655,7 +655,7 @@ bucket_key_enabled = true
 }
 }
 
-## S3 Bucket Public Access Block
+# S3 Bucket Public Access Block
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail_logs_pab" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -666,7 +666,7 @@ ignore_public_acls = true
 restrict_public_buckets = true
 }
 
-## S3 Bucket Policy for CloudTrail
+# S3 Bucket Policy for CloudTrail
 
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -684,7 +684,7 @@ Action = "s3:GetBucketAcl"
 Resource = aws_s3_bucket.cloudtrail_logs.arn
 Condition = {
 StringEquals = {
-"AWS:SourceArn" = "arn:aws:cloudtrail:eu-west-3:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+"AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
 }
 }
 },
@@ -699,7 +699,7 @@ Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
 Condition = {
 StringEquals = {
 "s3:x-amz-acl" = "bucket-owner-full-control"
-"AWS:SourceArn" = "arn:aws:cloudtrail:eu-west-3:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
+"AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/${var.common_tags.Environment}-trail"
 }
 }
 }
@@ -709,7 +709,7 @@ StringEquals = {
 
 data "aws_caller_identity" "current" {}
 
-## Outputs
+# Outputs
 
 output "cloudtrail_bucket_name" {
 description = "Name of the CloudTrail S3 bucket"
@@ -951,7 +951,7 @@ default = "10.0.0.0/16"
 variable "availability_zones" {
 description = "Availability zones"
 type = list(string)
-default = ["eu-west-3a", "eu-west-3b"]
+default = ["us-west-2a", "us-west-2b"]
 }
 
 variable "public_subnet_cidrs" {
@@ -1017,7 +1017,7 @@ default = false
 variable "aws_region" {
 description = "AWS region for resources"
 type = string
-default = "eu-west-3"
+default = "us-west-2"
 }
 
 variable "enable_cloudtrail" {

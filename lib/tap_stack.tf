@@ -29,7 +29,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "Availability zones"
   type        = list(string)
-  default     = ["eu-west-3a", "eu-west-3b"]
+  default     = ["us-west-2a", "us-west-2b"]
 }
 
 variable "public_subnet_cidrs" {
@@ -95,7 +95,7 @@ variable "enable_deletion_protection" {
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "eu-west-3"
+  default     = "us-west-2"
 }
 
 variable "enable_cloudtrail" {
