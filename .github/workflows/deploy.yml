@@ -1,0 +1,175 @@
+name: Deploy to AWS Fargate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: ci-cd-pipeline-app-dev
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run unit tests
+      run: npm test
+
+    - name: Run integration tests
+      run: npm run test:integration
+
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Setup Pulumi
+      uses: pulumi/actions@v4
+      with:
+        command: up
+        stack-name: dev
+        upsert: true
+        work-dir: .
+      env:
+        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+    - name: Update ECS Service
+      run: |
+        aws ecs update-service \
+          --cluster ci-cd-pipeline-cluster-dev \
+          --service ci-cd-pipeline-service-dev \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Wait for service stability
+      run: |
+        aws ecs wait services-stable \
+          --cluster ci-cd-pipeline-cluster-dev \
+          --services ci-cd-pipeline-service-dev \
+          --region ${{ env.AWS_REGION }}
+
+  infrastructure-test:
+    name: Test Infrastructure
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Test ECS Service Health
+      run: |
+        # Check if ECS service is running
+        SERVICE_STATUS=$(aws ecs describe-services \
+          --cluster ci-cd-pipeline-cluster-dev \
+          --services ci-cd-pipeline-service-dev \
+          --query 'services[0].status' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        
+        if [ "$SERVICE_STATUS" != "ACTIVE" ]; then
+          echo "ECS service is not active"
+          exit 1
+        fi
+        
+        # Check running task count
+        RUNNING_COUNT=$(aws ecs describe-services \
+          --cluster ci-cd-pipeline-cluster-dev \
+          --services ci-cd-pipeline-service-dev \
+          --query 'services[0].runningCount' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        
+        if [ "$RUNNING_COUNT" -lt "1" ]; then
+          echo "No running tasks found"
+          exit 1
+        fi
+        
+        echo "ECS service is healthy with $RUNNING_COUNT running tasks"
+
+    - name: Test Load Balancer Health
+      run: |
+        # Get ALB DNS name
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names ci-cd-pipeline-alb-dev \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        
+        # Test health endpoint
+        for i in {1..5}; do
+          if curl -f "http://$ALB_DNS/health"; then
+            echo "Health check passed"
+            break
+          fi
+          echo "Attempt $i failed, retrying in 30 seconds..."
+          sleep 30
+        done
+
+    - name: Test Auto Scaling Configuration
+      run: |
+        # Check if auto scaling target exists
+        aws application-autoscaling describe-scalable-targets \
+          --service-namespace ecs \
+          --resource-ids service/ci-cd-pipeline-cluster-dev/ci-cd-pipeline-service-dev \
+          --region ${{ env.AWS_REGION }}
+        
+        # Check if scaling policies exist
+        aws application-autoscaling describe-scaling-policies \
+          --service-namespace ecs \
+          --resource-id service/ci-cd-pipeline-cluster-dev/ci-cd-pipeline-service-dev \
+          --region ${{ env.AWS_REGION }}
+        
+        echo "Auto scaling configuration verified"
