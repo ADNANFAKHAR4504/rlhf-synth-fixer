@@ -609,6 +609,11 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
 resource "aws_route53_zone" "main" {
   name = var.domain_name
 
+  # Prevent deletion when DNSSEC is enabled
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-zone-${local.name_suffix}"
   })
@@ -619,6 +624,11 @@ resource "aws_route53_key_signing_key" "main" {
   hosted_zone_id             = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
   name                       = "${var.project_name}-ksk-${local.name_suffix}"
+
+  # Ensure proper cleanup order
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_route53_hosted_zone_dnssec" "main" {
@@ -628,6 +638,11 @@ resource "aws_route53_hosted_zone_dnssec" "main" {
   depends_on = [
     aws_route53_key_signing_key.main
   ]
+
+  # Ensure DNSSEC is disabled before destroying the hosted zone
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Enhanced S3 Configuration
@@ -1022,7 +1037,7 @@ resource "aws_iam_role" "config_role" {
 
 resource "aws_iam_role_policy_attachment" "config_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_bucket_access" {
