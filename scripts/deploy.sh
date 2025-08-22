@@ -45,6 +45,28 @@ fi
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
+# Function to show CloudFormation stack errors
+show_cfn_errors() {
+  local stack_name="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  echo "🔍 Showing CloudFormation stack events for failed resources..."
+  
+  # Show CREATE_FAILED events
+  echo "📋 Failed Resource Creation Events:"
+  aws cloudformation describe-stack-events --stack-name "$stack_name" --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' --output table 2>/dev/null || echo "No CREATE_FAILED events found"
+  
+  # Show UPDATE_FAILED events
+  echo "📋 Failed Resource Update Events:"
+  aws cloudformation describe-stack-events --stack-name "$stack_name" --query 'StackEvents[?ResourceStatus==`UPDATE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' --output table 2>/dev/null || echo "No UPDATE_FAILED events found"
+  
+  # Show ROLLBACK events for context
+  echo "📋 Rollback Events:"
+  aws cloudformation describe-stack-events --stack-name "$stack_name" --query 'StackEvents[?ResourceStatus==`ROLLBACK_IN_PROGRESS` || ResourceStatus==`UPDATE_ROLLBACK_IN_PROGRESS`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' --output table 2>/dev/null || echo "No rollback events found"
+  
+  # Show recent events (last 10)
+  echo "📋 Most Recent Stack Events:"
+  aws cloudformation describe-stack-events --stack-name "$stack_name" --query 'StackEvents[:10].[Timestamp,ResourceStatus,ResourceType,LogicalResourceId,ResourceStatusReason]' --output table 2>/dev/null || echo "Could not retrieve recent events"
+}
+
 # Deploy step
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
