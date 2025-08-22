@@ -77,9 +77,9 @@ const CONFIG = {
       db: 'sg-0df53b92c360ba1ac'
     },
     roles: {
-      alb: 'pulumi-infra-alb-alb-role',  // From createAlbRole in main.ts
-      ec2: 'pulumi-infra-ec2-ec2-role',  // From createEc2InstanceRole in main.ts
-      rds: 'pulumi-infra-rds-rds-role'   // From createRdsRole in main.ts
+      alb: 'pulumi-infra-alb-alb-role',  // From createAlbRole in tap-stack.ts
+      ec2: 'pulumi-infra-ec2-ec2-role',  // From createEc2InstanceRole in tap-stack.ts
+      rds: 'pulumi-infra-rds-rds-role'   // From createRdsRole in tap-stack.ts
     }
   }
 };
@@ -268,7 +268,7 @@ describe('Pulumi AWS Infrastructure Integration Tests', () => {
         const db = response.DBInstances![0];
         expect(db.DBInstanceStatus).toBe('available');
         expect(db.Engine).toBe('mysql');
-        // Remove port check since it's returning 0 (possibly not configured or different property)
+
         // expect(db.DbInstancePort).toBe(3306);
         expect(db.StorageEncrypted).toBe(true);
         
@@ -434,8 +434,6 @@ describe('Pulumi AWS Infrastructure Integration Tests', () => {
   describe('CloudWatch Logs', () => {
     test('should verify log groups exist', async () => {
       try {
-        // Based on your main.ts createApplicationLogGroups usage
-        // The exact log group names depend on your createApplicationLogGroups implementation
         const command = new DescribeLogGroupsCommand({
           logGroupNamePrefix: '/aws/'
         });
@@ -456,8 +454,7 @@ describe('Pulumi AWS Infrastructure Integration Tests', () => {
           lg?.startsWith('/aws/ec2/')
         );
         
-        // This test passes as long as CloudWatch Logs service is working
-        // The specific log group names depend on your createApplicationLogGroups implementation
+
         expect(hasRelevantLogGroups).toBe(true);
         
         testResults['CloudWatch Logs'] = true;
@@ -471,10 +468,6 @@ describe('Pulumi AWS Infrastructure Integration Tests', () => {
   describe('AWS Config', () => {
     test('should verify Config recorder exists', async () => {
       try {
-        // Based on your main.ts: createAwsConfig(`${name}-config-${region}`)
-        // Expected name would be: pulumi-infra-config-us-west-1-recorder
-        
-        // First try the expected name pattern from your main.ts
         try {
           const specificCommand = new DescribeConfigurationRecordersCommand({
             ConfigurationRecorderNames: ['pulumi-infra-config-us-west-1-recorder']

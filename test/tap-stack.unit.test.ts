@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import * as pulumi from '@pulumi/pulumi';
 
-// ============================================================================
 // PULUMI MOCKS SETUP (replacing setup.ts)
-// ============================================================================
+
 
 // Mock all Pulumi components and resources
 jest.mock('@pulumi/pulumi', () => {
@@ -476,9 +475,9 @@ const resetPulumiMocks = () => {
 // Initialize mocks
 setupPulumiMocks();
 
-// ============================================================================
+
 // COMPONENT IMPORTS
-// ============================================================================
+
 
 // Import all components
 import { VpcComponent, createVpc } from '../lib/components/vpc/vpc';
@@ -501,9 +500,8 @@ import { SecretsManagerSecretComponent, SecretsManagerSecretVersionComponent, Da
 import { AcmCertificateComponent, AcmCertificateValidationComponent, DnsValidatedCertificateComponent, createAcmCertificate, createAcmCertificateValidation, createDnsValidatedCertificate } from '../lib/components/certificate/acm';
 import { TapStack } from '../lib/tap-stack';
 
-// ============================================================================
+
 // TESTS
-// ============================================================================
 
 describe('AWS Model Breaking Infrastructure Components', () => {
   beforeEach(() => {
@@ -511,9 +509,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     jest.clearAllMocks();
   });
 
-  // ============================================================================
+
+
   // VPC COMPONENTS TESTS
-  // ============================================================================
 
   describe('VPC Components', () => {
     describe('VpcComponent', () => {
@@ -569,9 +567,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     });
   });
 
-  // ============================================================================
+
   // SUBNET COMPONENTS TESTS
-  // ============================================================================
+ 
 
   describe('Subnet Components', () => {
     describe('SubnetComponent', () => {
@@ -625,9 +623,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
 
   });
 
-  // ============================================================================
+
   // NAT GATEWAY COMPONENTS TESTS
-  // ============================================================================
+
 
   describe('NAT Gateway Components', () => {
     describe('NatGatewayComponent', () => {
@@ -705,9 +703,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     });
   });
 
-  // ============================================================================
+  
   // INTERNET GATEWAY COMPONENTS TESTS
-  // ============================================================================
+   
 
   describe('Internet Gateway Components', () => {
     describe('InternetGatewayComponent', () => {
@@ -750,9 +748,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     });
   });
 
-  // ============================================================================
+   
   // ROUTE TABLE COMPONENTS TESTS
-  // ============================================================================
+  
 
   describe('Route Table Components', () => {
     describe('RouteTableComponent', () => {
@@ -867,9 +865,9 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     });
   });
 
-  // ============================================================================
+  
   // SECURITY GROUP COMPONENTS TESTS
-  // ============================================================================
+  
 
   describe('Security Group Components', () => {
     describe('SecurityGroupComponent', () => {
@@ -1025,9 +1023,8 @@ describe('AWS Model Breaking Infrastructure Components', () => {
     });
   });
 
-  // ============================================================================
+  
   // EC2 COMPUTE COMPONENTS TESTS
-  // ============================================================================
 
   describe('EC2 Compute Components', () => {
     describe('Ec2InstanceComponent', () => {
