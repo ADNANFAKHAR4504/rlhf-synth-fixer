@@ -111,6 +111,10 @@ Parameters:
     Type: String
     Default: ''
     Description: 'ARN of an existing IAM Role for Access Key Rotation Lambda (leave blank to create a new one)'
+  ExistingConfigDeliveryChannelName:
+    Type: String
+    Default: ''
+    Description: 'Name of an existing AWS Config Delivery Channel (leave blank to create a new one)'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -135,6 +139,8 @@ Conditions:
   CreateEC2InstanceRole: !Equals [!Ref ExistingEC2InstanceRoleArn, '']
   CreateAccessKeyRotationRole:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
+  CreateConfigDeliveryChannel:
+    !Equals [!Ref ExistingConfigDeliveryChannelName, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -662,6 +668,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfigDeliveryChannel
     Properties:
       Name: !Sub 'SecurityDeliveryChannel-${Environment}'
       S3BucketName: !Ref ConfigBucket
@@ -1050,3 +1057,14 @@ Outputs:
     Value: !Ref MFAEnforcementPolicy
     Export:
       Name: !Sub '${AWS::StackName}-MFA-Policy-ARN'
+
+  ConfigDeliveryChannelName:
+    Description: 'AWS Config Delivery Channel Name'
+    Value:
+      !If [
+        CreateConfigDeliveryChannel,
+        !Ref ConfigDeliveryChannel,
+        !Ref ExistingConfigDeliveryChannelName,
+      ]
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Delivery-Channel-Name'

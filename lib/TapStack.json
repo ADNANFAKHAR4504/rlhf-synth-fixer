@@ -126,6 +126,11 @@
             "Type": "String",
             "Default": "",
             "Description": "ARN of an existing IAM Role for Access Key Rotation Lambda (leave blank to create a new one)"
+        },
+        "ExistingConfigDeliveryChannelName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of an existing AWS Config Delivery Channel (leave blank to create a new one)"
         }
     },
     "Conditions": {
@@ -259,6 +264,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "ExistingAccessKeyRotationRoleArn"
+                },
+                ""
+            ]
+        },
+        "CreateConfigDeliveryChannel": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingConfigDeliveryChannelName"
                 },
                 ""
             ]
@@ -1201,6 +1214,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "SecurityDeliveryChannel-${Environment}"
@@ -1934,6 +1948,25 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-MFA-Policy-ARN"
+                }
+            }
+        },
+        "ConfigDeliveryChannelName": {
+            "Description": "AWS Config Delivery Channel Name",
+            "Value": {
+                "Fn::If": [
+                    "CreateConfigDeliveryChannel",
+                    {
+                        "Ref": "ConfigDeliveryChannel"
+                    },
+                    {
+                        "Ref": "ExistingConfigDeliveryChannelName"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Config-Delivery-Channel-Name"
                 }
             }
         }
