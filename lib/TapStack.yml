@@ -1,142 +1,66 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: TapStack for isolated environments (dev/staging/prod) with S3 replication.
-  Deploy prod (us-west-2), then staging (us-east-2), then dev (us-east-1) to ensure
-  destination buckets exist for replication. Check for existing buckets to avoid conflicts
-  (e.g., aws s3 ls s3://tapstack-dev-databucket-<account-id>).
+Description: TapStack for isolated environments (dev/staging/prod)
 
 Parameters:
   Environment:
     Type: String
     AllowedValues: [dev, staging, prod]
     Default: dev
-    AllowedPattern: '^[a-z][a-z0-9-]{0,10}$'
-    Description: Environment name (dev, staging, or prod; lowercase, max 12 chars for
-      bucket name compliance)
+    Description: Environment name (dev, staging, or prod)
   ProjectName:
     Type: String
     Default: tapstack
-    AllowedPattern: '^[a-z][a-z0-9-]*$'
-    Description: Project name (must start with lowercase letter; valid for S3 buckets)
+    Description: Project name (must start with lowercase letter)
   Owner:
     Type: String
     Default: team
-    AllowedPattern: '^[a-zA-Z0-9-]*$'
     Description: Owner of the stack
   TeamPrincipalARN:
     Type: String
     Default: ''
-    AllowedPattern: '^$|^arn:aws:iam::\d{12}:(user|group|role)/[a-zA-Z0-9+=,.@_-]+$'
     Description: Optional IAM principal ARN for role trust policy
   CreateNatPerAZ:
     Type: String
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Create NAT Gateway per Availability Zone
-  AvailabilityZoneA:
-    Type: String
-    Default: us-east-1a
-    Description: The first Availability Zone (e.g., us-east-1a)
-  AvailabilityZoneB:
-    Type: String
-    Default: us-east-1b
-    Description: The second Availability Zone (e.g., us-east-1b)
 
 Mappings:
-  RegionMap:
-    us-east-1:
-      DestinationRegion: us-east-2
-      DestinationBucket: tapstack-staging-databucket
-    us-east-2:
-      DestinationRegion: us-west-2
-      DestinationBucket: tapstack-prod-databucket
-    us-west-2:
-      DestinationRegion: ''
-      DestinationBucket: ''
+  EnvironmentConfig:
+    dev:
+      CIDR: 10.0.0.0/16
+      PublicSubnetA: 10.0.0.0/18
+      PublicSubnetB: 10.0.64.0/18
+      PrivateSubnetA: 10.0.128.0/18
+      PrivateSubnetB: 10.0.192.0/18
+    staging:
+      CIDR: 10.1.0.0/16
+      PublicSubnetA: 10.1.0.0/18
+      PublicSubnetB: 10.1.64.0/18
+      PrivateSubnetA: 10.1.128.0/18
+      PrivateSubnetB: 10.1.192.0/18
+    prod:
+      CIDR: 10.2.0.0/16
+      PublicSubnetA: 10.2.0.0/18
+      PublicSubnetB: 10.2.64.0/18
+      PrivateSubnetA: 10.2.128.0/18
+      PrivateSubnetB: 10.2.192.0/18
 
 Conditions:
   CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, 'true']
   SingleNat: !Equals [!Ref CreateNatPerAZ, 'false']
   HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, '']]
-  IsNotProd: !Not [!Equals [!Ref Environment, prod]]
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, CIDR]
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-vpc'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  PublicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.0.0/18
-      AvailabilityZone: !Ref AvailabilityZoneA
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-publicsubneta'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  PublicSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.64.0/18
-      AvailabilityZone: !Ref AvailabilityZoneB
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-publicsubnetb'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  PrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.128.0/18
-      AvailabilityZone: !Ref AvailabilityZoneA
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-privatesubneta'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  PrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.192.0/18
-      AvailabilityZone: !Ref AvailabilityZoneB
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-privatesubnetb'
+          Value: !Sub ${ProjectName}-${Environment}-vpc
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -149,7 +73,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-igw'
+          Value: !Sub ${ProjectName}-${Environment}-igw
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -163,13 +87,79 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnetA]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-a
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnetB]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-b
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnetA]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-a
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnetB]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-b
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-publicrt'
+          Value: !Sub ${ProjectName}-${Environment}-public-rt
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -197,6 +187,21 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
+  EIPA:
+    Type: AWS::EC2::EIP
+    Condition: CreateNatPerAZ
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-eip-a
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
   NatGatewayA:
     Type: AWS::EC2::NatGateway
     Condition: CreateNatPerAZ
@@ -205,7 +210,7 @@ Resources:
       AllocationId: !GetAtt EIPA.AllocationId
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-natgatewaya'
+          Value: !Sub ${ProjectName}-${Environment}-nat-a
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -213,14 +218,14 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  EIPA:
+  EIPB:
     Type: AWS::EC2::EIP
     Condition: CreateNatPerAZ
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-eipa'
+          Value: !Sub ${ProjectName}-${Environment}-eip-b
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -236,7 +241,7 @@ Resources:
       AllocationId: !GetAtt EIPB.AllocationId
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-natgatewayb'
+          Value: !Sub ${ProjectName}-${Environment}-nat-b
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -244,14 +249,30 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  EIPB:
+  SingleEIP:
     Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
+    Condition: SingleNat
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-eipb'
+          Value: !Sub ${ProjectName}-${Environment}-eip
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  SingleNatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: SingleNat
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt SingleEIP.AllocationId
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-nat
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -265,7 +286,21 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-privaterta'
+          Value: !Sub ${ProjectName}-${Environment}-private-rt-a
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CreatedBy
+          Value: !Ref Owner
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-rt-b
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
@@ -281,27 +316,6 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayA
 
-  PrivateSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref PrivateSubnetA
-      RouteTableId: !Ref PrivateRouteTableA
-
-  PrivateRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-privatertb'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
   PrivateRouteB:
     Type: AWS::EC2::Route
     Condition: CreateNatPerAZ
@@ -309,44 +323,6 @@ Resources:
       RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayB
-
-  PrivateSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref PrivateSubnetB
-      RouteTableId: !Ref PrivateRouteTableB
-
-  SingleNatGateway:
-    Type: AWS::EC2::NatGateway
-    Condition: SingleNat
-    Properties:
-      SubnetId: !Ref PublicSubnetA
-      AllocationId: !GetAtt SingleEIP.AllocationId
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-natgateway'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
-
-  SingleEIP:
-    Type: AWS::EC2::EIP
-    Condition: SingleNat
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-eip'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CreatedBy
-          Value: !Ref Owner
 
   SinglePrivateRouteA:
     Type: AWS::EC2::Route
@@ -364,16 +340,14 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref SingleNatGateway
 
-  SinglePrivateSubnetARouteTableAssociation:
+  PrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: SingleNat
     Properties:
       SubnetId: !Ref PrivateSubnetA
       RouteTableId: !Ref PrivateRouteTableA
 
-  SinglePrivateSubnetBRouteTableAssociation:
+  PrivateSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: SingleNat
     Properties:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTableB
@@ -381,44 +355,27 @@ Resources:
   DataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
+      BucketName: !Sub ${ProjectName}-${Environment}-data-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-databucket'
+          Value: !Sub ${ProjectName}-${Environment}-bucket
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
         - Key: CreatedBy
           Value: !Ref Owner
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      ReplicationConfiguration:
-        !If
-          - IsNotProd
-          - Role: !GetAtt ReplicationRole.Arn
-            Rules:
-              - Id: !Sub '${ProjectName}-${Environment}-replication'
-                Status: Enabled
-                Priority: 1
-                DeleteMarkerReplication:
-                  Status: Disabled
-                Destination:
-                  Bucket: !Sub
-                    - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}'
-                    - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
-                Filter:
-                  Prefix: ''
-          - !Ref AWS::NoValue
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -430,77 +387,48 @@ Resources:
           - Effect: Deny
             Principal: '*'
             Action: 's3:*'
-            Resource: !Sub 'arn:aws:s3:::${DataBucket}/*'
+            Resource: 
+              - !GetAtt DataBucket.Arn
+              - !Sub ${DataBucket.Arn}/*
             Condition:
               Bool:
                 aws:SecureTransport: false
-          - !If
-            - IsNotProd
-            - Effect: Allow
-              Principal:
-                AWS: !GetAtt ReplicationRole.Arn
-              Action:
-                - s3:ReplicateObject
-                - s3:ReplicateDelete
-                - s3:ReplicateTags
-              Resource:
-                - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}/*'
-            - !Ref AWS::NoValue
-          - !If
-            - IsNotProd
-            - Effect: Allow
-              Principal:
-                AWS: !GetAtt ReplicationRole.Arn
-              Action:
-                - s3:GetBucketVersioning
-                - s3:GetReplicationConfiguration
-              Resource: !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
-            - !Ref AWS::NoValue
 
-  ReplicationRole:
+  EnvironmentRole:
     Type: AWS::IAM::Role
-    Condition: IsNotProd
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-replication-role'
+      RoleName: !Sub ${ProjectName}-${Environment}-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: s3.amazonaws.com
+              AWS: !If 
+                - HasTeamPrincipal
+                - !Ref TeamPrincipalARN
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub '${ProjectName}-${Environment}-replication-policy'
+        - PolicyName: S3Access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObjectVersion
+                  - s3:GetObject
+                  - s3:PutObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
-                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}/*'
+                  - !GetAtt DataBucket.Arn
+                  - !Sub ${DataBucket.Arn}/*
+        - PolicyName: EC2ReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
               - Effect: Allow
                 Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                Resource: !Sub
-                  - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}/*'
-                  - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
-
-  EnvironmentRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !If [HasTeamPrincipal, !Ref TeamPrincipalARN, !Sub 'arn:aws:iam::${AWS::AccountId}:root']
-            Action: sts:AssumeRole
+                  - ec2:Describe*
+                Resource: '*'
       Tags:
         - Key: Project
           Value: !Ref ProjectName
