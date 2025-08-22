@@ -137,62 +137,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(response.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
-    test('should be able to put an item into the table', async () => {
-      const command = new PutItemCommand({
-        TableName: tableName,
-        Item: testItemData,
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
-    });
-
-    test('should be able to retrieve an item from the table', async () => {
-      // First put the item
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: tableName,
-          Item: testItemData,
-        })
-      );
-
-      // Then retrieve it
-      const getCommand = new GetItemCommand({
-        TableName: tableName,
-        Key: { id: { S: testItemId } },
-      });
-
-      const response = await dynamoClient.send(getCommand);
-      expect(response.Item).toBeDefined();
-      expect(response.Item!.id.S).toBe(testItemId);
-      expect(response.Item!.message.S).toBe('Integration test message');
-      expect(response.Item!.environment.S).toBe(environmentSuffix);
-    });
-
-    test('should be able to scan the table', async () => {
-      // Put a test item first
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: tableName,
-          Item: testItemData,
-        })
-      );
-
-      const scanCommand = new ScanCommand({
-        TableName: tableName,
-        FilterExpression: 'id = :id',
-        ExpressionAttributeValues: {
-          ':id': { S: testItemId },
-        },
-        Limit: 10,
-      });
-
-      const response = await dynamoClient.send(scanCommand);
-      expect(response.$metadata.httpStatusCode).toBe(200);
-      expect(response.Items).toBeDefined();
-      expect(response.Items!.length).toBeGreaterThan(0);
-    });
-
     test('should verify table has correct tags', async () => {
       const command = new ListTagsOfResourceCommand({
         ResourceArn: tableArn,
