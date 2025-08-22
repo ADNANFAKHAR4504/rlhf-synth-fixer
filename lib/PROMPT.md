@@ -21,6 +21,7 @@ a Terraform remote backend with state locking and versioning should be used to m
 infrastructure state reliably across teams and environments.
 
 **Instructions:**
+
 The goal is to build an Infrastructure as Code (IaC) solution using Terraform to deploy a consistent,
 multi-environment setup across three AWS regions. This solution must comprehensively address networking,
 compute, database, and IAM configurations, following the defined constraints.
