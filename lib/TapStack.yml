@@ -125,6 +125,7 @@ Parameters:
     Description: |
       Name of an existing RDS DBSubnetGroup. Leave blank to create a new one.
       If you see an error that the subnet group already exists, set this to the actual existing DBSubnetGroup name (e.g., 'rds-subnet-group-production').
+      Note: If you set this to an existing group, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually.
   ExistingCloudTrailLogsBucketName:
     Type: String
     Default: ''
@@ -891,6 +892,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'RDS-SubnetGroup-${Environment}'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # RDS Security Group
   RDSSecurityGroup:
@@ -907,6 +910,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'RDS-SG-${Environment}'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # RDS Instance with backup retention
   RDSInstance:
