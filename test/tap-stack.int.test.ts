@@ -512,7 +512,9 @@ describe('TapStack Integration Tests', () => {
         );
         expect(associatedSecurityGroup).toBeDefined();
       } catch (error) {
-        throw new Error(`Failed to validate security group association: ${error}`);
+        throw new Error(
+          `Failed to validate security group association: ${error}`
+        );
       }
     }, 30000);
   });
