@@ -566,18 +566,7 @@ export class TapStack extends pulumi.ComponentResource {
         includeGlobalServiceEvents: true,
         isMultiRegionTrail: true,
         enableLogging: true,
-        eventSelectors: [
-          {
-            readWriteType: 'All',
-            includeManagementEvents: true,
-            dataResources: [
-              {
-                type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/'], 
-              },
-            ],
-          },
-        ],
+        // Remove eventSelectors completely - CloudTrail will log all management events by default
         tags: this.defaultTags,
       },
       { parent: this }
