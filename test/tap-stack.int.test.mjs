@@ -21,7 +21,7 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('VPC Infrastructure', () => {
     test('VPC should exist and be available', async () => {
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
       
       const response = await ec2Client.send(command);
@@ -42,7 +42,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('VPC should have correct tags', async () => {
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
       
       const response = await ec2Client.send(command);
@@ -62,7 +62,7 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('Subnet Configuration', () => {
     test('Both subnets should exist and be available', async () => {
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       
       const response = await ec2Client.send(command);
@@ -70,14 +70,14 @@ describe('TAP Infrastructure Integration Tests', () => {
       
       response.Subnets.forEach(subnet => {
         expect(subnet.State).toBe('available');
-        expect(subnet.VpcId).toBe(outputs.VPCId);
+        expect(subnet.VpcId).toBe(outputs.vpcId);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
     });
 
     test('Subnets should be in different availability zones', async () => {
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       
       const response = await ec2Client.send(command);
@@ -87,7 +87,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('Subnets should have correct CIDR blocks', async () => {
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       
       const response = await ec2Client.send(command);
@@ -97,7 +97,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('Subnets should have correct tags', async () => {
       const command = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       
       const response = await ec2Client.send(command);
@@ -117,7 +117,7 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('EC2 Instance', () => {
     test('EC2 instance should exist and be running', async () => {
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const response = await ec2Client.send(command);
@@ -131,31 +131,31 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('EC2 instance should have public IP', async () => {
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const response = await ec2Client.send(command);
       const instance = response.Reservations[0].Instances[0];
       
       expect(instance.PublicIpAddress).toBeDefined();
-      expect(instance.PublicIpAddress).toBe(outputs.PublicIp);
+      expect(instance.PublicIpAddress).toBe(outputs.publicIp);
     });
 
     test('EC2 instance should be in correct subnet', async () => {
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const response = await ec2Client.send(command);
       const instance = response.Reservations[0].Instances[0];
       
-      expect(instance.SubnetId).toBe(outputs.PublicSubnet1Id);
-      expect(instance.VpcId).toBe(outputs.VPCId);
+      expect(instance.SubnetId).toBe(outputs.publicSubnet1Id);
+      expect(instance.VpcId).toBe(outputs.vpcId);
     });
 
     test('EC2 instance should have correct tags', async () => {
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const response = await ec2Client.send(command);
@@ -173,7 +173,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('EC2 instance should use Amazon Linux 2023 AMI', async () => {
       const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const response = await ec2Client.send(command);
@@ -189,7 +189,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     test('Security group should exist with SSH access', async () => {
       // First get the security group ID from the instance
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const instanceResponse = await ec2Client.send(instanceCommand);
@@ -205,7 +205,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(sgResponse.SecurityGroups).toHaveLength(1);
       
       const sg = sgResponse.SecurityGroups[0];
-      expect(sg.VpcId).toBe(outputs.VPCId);
+      expect(sg.VpcId).toBe(outputs.vpcId);
       
       // Check ingress rules
       const sshRule = sg.IpPermissions.find(rule => 
@@ -219,7 +219,7 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('Security group should have correct tags', async () => {
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       
       const instanceResponse = await ec2Client.send(instanceCommand);
@@ -250,7 +250,7 @@ describe('TAP Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'attachment.vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           }
         ]
       });
@@ -259,7 +259,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(response.InternetGateways).toHaveLength(1);
       
       const igw = response.InternetGateways[0];
-      const attachment = igw.Attachments.find(a => a.VpcId === outputs.VPCId);
+      const attachment = igw.Attachments.find(a => a.VpcId === outputs.vpcId);
       expect(attachment).toBeDefined();
       expect(attachment.State).toBe('available');
     });
@@ -269,7 +269,7 @@ describe('TAP Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'attachment.vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           }
         ]
       });
@@ -294,7 +294,7 @@ describe('TAP Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           },
           {
             Name: 'tag:Name',
@@ -324,11 +324,11 @@ describe('TAP Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           },
           {
             Name: 'association.subnet-id',
-            Values: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+            Values: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
           }
         ]
       });
@@ -345,8 +345,8 @@ describe('TAP Infrastructure Integration Tests', () => {
         });
       });
       
-      expect(associatedSubnets.has(outputs.PublicSubnet1Id)).toBe(true);
-      expect(associatedSubnets.has(outputs.PublicSubnet2Id)).toBe(true);
+      expect(associatedSubnets.has(outputs.publicSubnet1Id)).toBe(true);
+      expect(associatedSubnets.has(outputs.publicSubnet2Id)).toBe(true);
     });
   });
 
@@ -354,35 +354,35 @@ describe('TAP Infrastructure Integration Tests', () => {
     test('All networking components should be properly connected', async () => {
       // Verify VPC exists
       const vpcCommand = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
       const vpcResponse = await ec2Client.send(vpcCommand);
       expect(vpcResponse.Vpcs).toHaveLength(1);
       
       // Verify subnets are in VPC
       const subnetCommand = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       const subnetResponse = await ec2Client.send(subnetCommand);
       subnetResponse.Subnets.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.VPCId);
+        expect(subnet.VpcId).toBe(outputs.vpcId);
       });
       
       // Verify instance is in correct subnet and VPC
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instance = instanceResponse.Reservations[0].Instances[0];
-      expect(instance.VpcId).toBe(outputs.VPCId);
-      expect(instance.SubnetId).toBe(outputs.PublicSubnet1Id);
+      expect(instance.VpcId).toBe(outputs.vpcId);
+      expect(instance.SubnetId).toBe(outputs.publicSubnet1Id);
       
       // Verify Internet Gateway is attached
       const igwCommand = new DescribeInternetGatewaysCommand({
         Filters: [
           {
             Name: 'attachment.vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.vpcId]
           }
         ]
       });
@@ -393,7 +393,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     test('Resource naming convention should use tf- prefix', async () => {
       // Check VPC name
       const vpcCommand = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
       const vpcResponse = await ec2Client.send(vpcCommand);
       const vpcName = vpcResponse.Vpcs[0].Tags?.find(t => t.Key === 'Name')?.Value;
@@ -401,7 +401,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       
       // Check subnet names
       const subnetCommand = new DescribeSubnetsCommand({
-        SubnetIds: [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id]
+        SubnetIds: [outputs.publicSubnet1Id, outputs.publicSubnet2Id]
       });
       const subnetResponse = await ec2Client.send(subnetCommand);
       subnetResponse.Subnets.forEach(subnet => {
@@ -411,7 +411,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       
       // Check instance name
       const instanceCommand = new DescribeInstancesCommand({
-        InstanceIds: [outputs.InstanceId]
+        InstanceIds: [outputs.instanceId]
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instanceName = instanceResponse.Reservations[0].Instances[0].Tags?.find(t => t.Key === 'Name')?.Value;
