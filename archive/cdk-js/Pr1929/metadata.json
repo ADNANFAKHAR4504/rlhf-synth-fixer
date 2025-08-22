@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291625",
+  "team": "4",
+  "startedAt": "2025-08-21T18:19:42.332Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Database Management"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS PostgreSQL",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
