@@ -15,6 +15,7 @@ JAVA_VERSION=${JAVA_VERSION:-17}
 DOWNLOAD_ARTIFACTS=${DOWNLOAD_ARTIFACTS:-false}
 UPLOAD_ARTIFACTS=${UPLOAD_ARTIFACTS:-false}
 PLATFORM=${PLATFORM:-""}
+LANGUAGE=${LANGUAGE:-""}
 
 echo "Environment setup configuration:"
 echo "  Node.js version: $NODE_VERSION"
@@ -24,6 +25,7 @@ echo "  Python version: $PYTHON_VERSION"
 echo "  Pipenv version: $PIPENV_VERSION"
 echo "  Java version: $JAVA_VERSION"
 echo "  Platform: $PLATFORM"
+echo "  Language: $LANGUAGE"
 echo "  Download artifacts: $DOWNLOAD_ARTIFACTS"
 echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
 
@@ -87,6 +89,23 @@ if [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "" ]; then
     fi
   fi
 fi
+
+# Setup Go for CDKTF Go projects
+if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
+  echo "📦 Verifying Go toolchain for CDKTF Go..."
+  if command -v go >/dev/null 2>&1; then
+    echo "Go: $(go version)"
+  else
+    echo "❌ Go not found in PATH (should be installed by setup-environment action)"
+    exit 1
+  fi
+
+  # Enforce single-module layout
+  if [ -f "lib/go.mod" ] || [ -f "lib/go.sum" ]; then
+    echo "⚠️ Found lib/go.mod or lib/go.sum. Removing to avoid multi-module conflicts."
+    rm -f lib/go.mod lib/go.sum || true
+  fi
+fi 
 
 # Check metadata to see if Java is needed
 if [ -f "metadata.json" ]; then
