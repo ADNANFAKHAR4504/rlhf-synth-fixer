@@ -27,7 +27,11 @@ max-line-length=120
 expected-line-ending-format=LF
 
 # Indentation preference
+<<<<<<< HEAD
 indent-string='    '  # 4 spaces (Python standard)
+=======
+indent-string='    '  # 4 spaces
+>>>>>>> c4b2051b8 (Complete trainr134cdkpy Security Configuration as Code infrastructure)
 indent-after-paren=4  # 4 spaces
 
 [BASIC]
