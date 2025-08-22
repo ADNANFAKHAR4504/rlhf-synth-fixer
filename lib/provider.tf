@@ -18,3 +18,29 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+
+# Primary region provider
+provider "aws" {
+  alias  = "primary"
+  region = "us-east-1"
+  
+  default_tags {
+    tags = {
+      Project     = "tap-multi-region"
+      Environment = "production"
+    }
+  }
+}
+
+# Secondary region provider
+provider "aws" {
+  alias  = "secondary"
+  region = "us-west-2"
+  
+  default_tags {
+    tags = {
+      Project     = "tap-multi-region"
+      Environment = "production"
+    }
+  }
+}
