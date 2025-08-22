@@ -8,7 +8,6 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -80,41 +79,52 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-      ],
-      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*`],
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*`,
+        ],
+      })
+    );
 
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'kms:Decrypt',
-        'kms:GenerateDataKey',
-      ],
-      resources: [kmsKey.keyArn],
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+        resources: [kmsKey.keyArn],
+      })
+    );
 
-    const launchTemplate = new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+    // Launch template for future auto-scaling groups
+    new ec2.LaunchTemplate(this, 'TapLaunchTemplate', {
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       role: ec2Role,
       securityGroup: ec2SecurityGroup,
-      blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(20, {
-          encrypted: true,
-          kmsKey: kmsKey,
-        }),
-      }],
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(20, {
+            encrypted: true,
+            kmsKey: kmsKey,
+          }),
+        },
+      ],
     });
 
     const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
@@ -141,7 +151,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_8,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
@@ -171,27 +184,27 @@ export class TapStack extends cdk.Stack {
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
 
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-      ],
-      resources: [s3Bucket.arnForObjects('*')],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject'],
+        resources: [s3Bucket.arnForObjects('*')],
+      })
+    );
 
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'kms:Decrypt',
-        'kms:GenerateDataKey',
-      ],
-      resources: [kmsKey.keyArn],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+        resources: [kmsKey.keyArn],
+      })
+    );
 
     const lambdaFunction = new lambda.Function(this, 'TapFunction', {
       runtime: lambda.Runtime.PYTHON_3_11,
@@ -276,28 +289,26 @@ def handler(event, context):
     });
 
     const userGroup = new iam.Group(this, 'TapUserGroup');
-    
-    userGroup.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ec2:DescribeInstances',
-        'ec2:DescribeImages',
-        'ec2:DescribeSnapshots',
-      ],
-      resources: ['*'],
-    }));
 
-    userGroup.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:ListBucket',
-      ],
-      resources: [
-        s3Bucket.bucketArn,
-        s3Bucket.arnForObjects('*'),
-      ],
-    }));
+    userGroup.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:DescribeInstances',
+          'ec2:DescribeImages',
+          'ec2:DescribeSnapshots',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    userGroup.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:ListBucket'],
+        resources: [s3Bucket.bucketArn, s3Bucket.arnForObjects('*')],
+      })
+    );
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,

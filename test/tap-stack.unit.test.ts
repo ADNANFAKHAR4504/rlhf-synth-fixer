@@ -100,15 +100,15 @@ describe('TapStack', () => {
 
     test('should create RDS security group with PostgreSQL access from EC2', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS database'
+        GroupDescription: 'Security group for RDS database',
       });
-      
+
       // Check that RDS security group has ingress rule from EC2 security group
       template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
         IpProtocol: 'tcp',
         FromPort: 5432,
         ToPort: 5432,
-        Description: 'PostgreSQL from EC2'
+        Description: 'PostgreSQL from EC2',
       });
     });
   });
@@ -172,7 +172,7 @@ describe('TapStack', () => {
 
     test('should create IAM user group with least privilege policies', () => {
       template.hasResourceProperties('AWS::IAM::Group', Match.anyValue());
-      
+
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
@@ -187,10 +187,7 @@ describe('TapStack', () => {
             },
             {
               Effect: 'Allow',
-              Action: [
-                's3:GetObject',
-                's3:ListBucket',
-              ],
+              Action: ['s3:GetObject', 's3:ListBucket'],
               Resource: Match.anyValue(),
             },
           ]),
@@ -391,10 +388,10 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::Lambda::Function', 2); // 1 main function + 1 log retention function
       template.resourceCountIs('AWS::CloudFront::Distribution', 1);
       template.resourceCountIs('AWS::WAFv2::WebACL', 1);
-      
+
       // Security groups
       template.resourceCountIs('AWS::EC2::SecurityGroup', 2); // EC2 + RDS
-      
+
       // IAM resources
       template.resourceCountIs('AWS::IAM::Role', 3); // EC2 + Lambda + Log retention
       template.resourceCountIs('AWS::IAM::Group', 1);
