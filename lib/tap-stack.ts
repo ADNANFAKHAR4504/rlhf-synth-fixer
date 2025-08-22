@@ -216,7 +216,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.publicSubnets[0].id,
       securityGroupIds: [publicEc2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'your-key-pair-name', // Replace with your key pair name
+      keyName: 'turing-key', // Replace with your key pair name
       userData: `#!/bin/bash
         yum update -y
         # Add your initialization scripts here
