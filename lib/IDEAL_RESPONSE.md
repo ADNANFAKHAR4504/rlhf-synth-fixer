@@ -195,7 +195,7 @@ export class TapStack extends cdk.Stack {
 
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_39,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       credentials: rds.Credentials.fromGeneratedSecret('admin'),

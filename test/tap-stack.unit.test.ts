@@ -185,7 +185,7 @@ describe('TapStack', () => {
     test('should create encrypted RDS instance', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0.39',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
         StorageEncrypted: true,
@@ -315,7 +315,7 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::Instance', 1);
       template.resourceCountIs('AWS::RDS::DBInstance', 1);
       template.resourceCountIs('AWS::S3::Bucket', 1);
-      template.resourceCountIs('AWS::Lambda::Function', 3); // App Lambda + 2 Log retention Lambdas
+      template.resourceCountIs('AWS::Lambda::Function', 2); // App Lambda + 1 CDK custom resource Lambda
       template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
       template.resourceCountIs('AWS::WAFv2::WebACL', 1);
       template.resourceCountIs('AWS::KMS::Key', 1);
