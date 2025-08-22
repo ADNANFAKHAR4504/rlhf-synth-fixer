@@ -32,8 +32,30 @@ if [ "$PLATFORM" = "cdk" ]; then
   npm run cdk:destroy || echo "No resources to destroy or destruction failed"
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF destroy..."
+  
+  # CDKTF-specific setup based on language
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Setting up Go dependencies for CDKTF..."
+    
+    # Generate AWS provider code if not already generated
+    if [ ! -d ".gen/aws" ]; then
+      echo "📦 Generating AWS provider code..."
+      cdktf get || echo "cdktf get failed, but continuing with destroy attempt"
+    fi
+    
+    # Install Go dependencies
+    echo "📦 Installing Go dependencies..."
+    go mod tidy || echo "go mod tidy failed, but continuing with destroy attempt"
+    
+    # Try to build first to catch compilation errors early
+    echo "🔨 Building Go project..."
+    go build ./lib || echo "Build failed, but attempting destroy anyway"
+  fi
+  
   # Try to destroy any leftover resources, but don't fail if they don't exist
+  echo "🚀 Running CDKTF destroy..."
   npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
+  
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
   # Try to destroy any leftover resources, but don't fail if they don't exist
