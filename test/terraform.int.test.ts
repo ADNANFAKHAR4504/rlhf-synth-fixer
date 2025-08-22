@@ -38,11 +38,8 @@ describe('Terraform stack integration validations', () => {
   });
 
   describe('Global standards', () => {
-    test('terraform block defines required_providers (aws, random)', () => {
-      expectMatch(
-        /terraform\s*\{[\s\S]*required_providers[\s\S]*aws[\s\S]*hashicorp\/aws[\s\S]*~>\s*5\.0[\s\S]*\}/
-      );
-      expectMatch(/required_providers[\s\S]*random[\s\S]*hashicorp\/random/);
+    test('terraform block is not defined here (kept in provider.tf)', () => {
+      expectNotMatch(/\bterraform\s*\{/);
     });
 
     test('EBS encryption-by-default is enabled', () => {
@@ -223,7 +220,7 @@ describe('Terraform stack integration validations', () => {
 
     test('App autoscaling target and policies reference the ECS service and cluster', () => {
       expectMatch(
-        /resource\s+"aws_appautoscaling_target"\s+"ecs_target"[\s\S]*resource_id\s*=\s*"service\/${aws_ecs_cluster\.main\.name}\/${aws_ecs_service\.app\.name}"/
+        /resource\s+"aws_appautoscaling_target"\s+"ecs_target"[\s\S]*resource_id\s*=\s*"service\/\$\{aws_ecs_cluster\.main\.name\}\/\$\{aws_ecs_service\.app\.name\}"/
       );
       expectMatch(/resource\s+"aws_appautoscaling_policy"\s+"ecs_cpu_policy"/);
       expectMatch(
