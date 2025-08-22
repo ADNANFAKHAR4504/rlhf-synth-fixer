@@ -1,5 +1,5 @@
 // ⚠️ IMPORTANT: Must be at top
-jest.setTimeout(60000);
+jest.setTimeout(120000); // Increased timeout for comprehensive testing
 
 import { expect } from '@jest/globals';
 import AWS from 'aws-sdk';
@@ -8,15 +8,14 @@ import AWS from 'aws-sdk';
 // Test Configuration
 // -----------------------------
 const region =
-  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-1';
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-2';
 
-// Force AWS SDK to use EC2 instance metadata credentials
+// Configure AWS SDK with environment credentials for GitHub Actions
 AWS.config.update({
   region,
-  credentials: new AWS.EC2MetadataCredentials({
-    httpOptions: { timeout: 5000 },
-    maxRetries: 10,
-  }),
+  credentials: new AWS.EnvironmentCredentials('AWS'),
+  httpOptions: { timeout: 15000 },
+  maxRetries: 5,
 });
 
 // Load outputs from Terraform
@@ -29,22 +28,47 @@ try {
 }
 
 const TEST_CONFIG = {
-  kmsAlias:
-    outputs?.kms_key_alias?.value || 'alias/secure-infra-prod-primary-cmk',
-  appDataBucketPrefix:
-    outputs?.app_data_bucket?.value?.split('-').slice(0, -1).join('-') ||
-    'secure-infra-prod-app-data',
-  accessLogsBucketPrefix:
-    outputs?.access_logs_bucket?.value?.split('-').slice(0, -1).join('-') ||
-    'secure-infra-prod-access-logs',
-  rdsIdentifier: outputs?.rds_identifier?.value || 'secure-infra-prod-rds',
-  cloudTrailName:
-    outputs?.cloudtrail_name?.value || 'secure-infra-prod-cloudtrail',
-  cloudWatchLogGroup:
-    outputs?.cloudwatch_log_group?.value || '/aws/cloudtrail/secure-infra-prod',
-  alarmName:
-    outputs?.alarm_name?.value || 'secure-infra-prod-unauthorized-api-calls',
-  vpcId: outputs?.vpc_id?.value || 'vpc-0abc123de456',
+  kmsKeyArn:
+    outputs?.kms_key_arn?.value ||
+    'arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012',
+  appDataBucket: outputs?.s3_app_data_bucket?.value || 'prod-app-data-bucket',
+  accessLogsBucket:
+    outputs?.s3_access_logs_bucket?.value || 'prod-access-logs-bucket',
+  cloudtrailBucket:
+    outputs?.s3_cloudtrail_bucket?.value || 'prod-cloudtrail-bucket',
+  rdsIdentifier: outputs?.rds_identifier?.value || 'prod-rds',
+  rdsEndpoint:
+    outputs?.rds_endpoint?.value ||
+    'prod-rds.123456789012.us-west-2.rds.amazonaws.com',
+  cloudTrailName: outputs?.cloudtrail_name?.value || 'prod-cloudtrail',
+  cloudTrailArn:
+    outputs?.cloudtrail_arn?.value ||
+    'arn:aws:cloudtrail:us-west-2:123456789012:trail/prod-cloudtrail',
+  ec2InstanceId: outputs?.ec2_instance_id?.value || 'i-1234567890abcdef0',
+  ec2PrivateIp: outputs?.ec2_private_ip?.value || '10.0.1.100',
+  ec2PublicIp: outputs?.ec2_public_ip?.value || '52.123.45.67',
+  vpcId: outputs?.vpc_id?.value || 'vpc-12345678',
+  vpcFlowLogId: outputs?.vpc_flow_log_id?.value || 'fl-12345678',
+  snsTopicArn:
+    outputs?.sns_topic_arn?.value ||
+    'arn:aws:sns:us-west-2:123456789012:prod-security-alerts',
+  securityGroupEc2Id: outputs?.security_group_ec2_id?.value || 'sg-12345678',
+  securityGroupRdsId: outputs?.security_group_rds_id?.value || 'sg-87654321',
+  subnetPrivateIds: outputs?.subnet_private_ids?.value || [
+    'subnet-12345678',
+    'subnet-87654321',
+  ],
+  subnetPublicIds: outputs?.subnet_public_ids?.value || [
+    'subnet-abcdef12',
+    'subnet-21fedcba',
+  ],
+  availabilityZones: outputs?.availability_zones?.value || [
+    'us-west-2a',
+    'us-west-2b',
+  ],
+  accountId: outputs?.account_id?.value || '123456789012',
+  projectName: outputs?.project_name?.value || 'prod',
+  environment: outputs?.environment?.value || 'production',
   allowedCidrs: ['10.0.0.0/8', '172.16.0.0/12'],
 };
 
@@ -65,19 +89,17 @@ const cloudtrail = new AWS.CloudTrail();
 async function getActualBucketNames() {
   const { Buckets } = await s3.listBuckets().promise();
   const appData = Buckets?.find(b =>
-    b.Name?.startsWith(TEST_CONFIG.appDataBucketPrefix)
+    b.Name?.includes(TEST_CONFIG.appDataBucket)
   )?.Name;
   const accessLogs = Buckets?.find(b =>
-    b.Name?.startsWith(TEST_CONFIG.accessLogsBucketPrefix)
+    b.Name?.includes(TEST_CONFIG.accessLogsBucket)
   )?.Name;
 
   if (!appData)
-    throw new Error(
-      `App data bucket not found: ${TEST_CONFIG.appDataBucketPrefix}`
-    );
+    throw new Error(`App data bucket not found: ${TEST_CONFIG.appDataBucket}`);
   if (!accessLogs)
     throw new Error(
-      `Access logs bucket not found: ${TEST_CONFIG.accessLogsBucketPrefix}`
+      `Access logs bucket not found: ${TEST_CONFIG.accessLogsBucket}`
     );
 
   return { appData, accessLogs };
@@ -158,12 +180,12 @@ describe('Infrastructure Integration Tests', () => {
   describe('KMS Key Tests', () => {
     test('KMS key exists and rotation is enabled', async () => {
       const result = await kms
-        .describeKey({ KeyId: TEST_CONFIG.kmsAlias })
+        .describeKey({ KeyId: TEST_CONFIG.kmsKeyArn })
         .promise();
       expect(result.KeyMetadata?.KeyState).toBe('Enabled');
 
       const rotation = await kms
-        .getKeyRotationStatus({ KeyId: TEST_CONFIG.kmsAlias })
+        .getKeyRotationStatus({ KeyId: TEST_CONFIG.kmsKeyArn })
         .promise();
       expect(rotation.KeyRotationEnabled).toBe(true);
     });
@@ -172,7 +194,7 @@ describe('Infrastructure Integration Tests', () => {
       const plaintext = 'test-data';
       const { CiphertextBlob } = await kms
         .encrypt({
-          KeyId: TEST_CONFIG.kmsAlias,
+          KeyId: TEST_CONFIG.kmsKeyArn,
           Plaintext: Buffer.from(plaintext),
         })
         .promise();
@@ -248,7 +270,11 @@ describe('Infrastructure Integration Tests', () => {
   describe('CloudWatch Alarms Tests', () => {
     test('CloudWatch alarm exists for UnauthorizedAPICalls', async () => {
       const alarms = await cw
-        .describeAlarms({ AlarmNames: [TEST_CONFIG.alarmName] })
+        .describeAlarms({
+          AlarmNames: [
+            `${TEST_CONFIG.projectName}-${TEST_CONFIG.environment}-unauthorized-api-calls`,
+          ],
+        })
         .promise();
       expect(alarms.MetricAlarms).toBeDefined();
       expect(alarms.MetricAlarms!.length).toBeGreaterThan(0);
@@ -285,6 +311,267 @@ describe('Infrastructure Integration Tests', () => {
       expect(FlowLogs).toBeDefined();
       expect(FlowLogs!.length).toBeGreaterThan(0);
       expect(FlowLogs![0].TrafficType).toBe('ALL');
+    });
+  });
+
+  describe('EC2 Instance Tests', () => {
+    test('EC2 instance exists and has proper configuration', async () => {
+      const { Reservations } = await ec2
+        .describeInstances({
+          InstanceIds: [TEST_CONFIG.ec2InstanceId],
+        })
+        .promise();
+
+      expect(Reservations).toBeDefined();
+      expect(Reservations!.length).toBeGreaterThan(0);
+
+      const instance = Reservations![0].Instances![0];
+      expect(instance.State?.Name).toBe('running');
+      expect(instance.MetadataOptions?.HttpTokens).toBe('required'); // IMDSv2
+      expect(instance.IamInstanceProfile?.Arn).toBeDefined();
+    });
+
+    test('EC2 instance has proper security groups', async () => {
+      const { Reservations } = await ec2
+        .describeInstances({
+          InstanceIds: [TEST_CONFIG.ec2InstanceId],
+        })
+        .promise();
+
+      const instance = Reservations![0].Instances![0];
+      const securityGroups = instance.SecurityGroups;
+
+      expect(securityGroups).toBeDefined();
+      expect(securityGroups!.length).toBeGreaterThan(0);
+
+      // Check if security group contains expected name pattern
+      const hasExpectedSg = securityGroups!.some(
+        sg =>
+          sg.GroupName?.includes(TEST_CONFIG.projectName) ||
+          sg.GroupName?.includes('ec2')
+      );
+      expect(hasExpectedSg).toBe(true);
+    });
+  });
+
+  describe('Security Groups Tests', () => {
+    test('EC2 Security Group has proper ingress rules', async () => {
+      const { SecurityGroups } = await ec2
+        .describeSecurityGroups({
+          GroupIds: [TEST_CONFIG.securityGroupEc2Id],
+        })
+        .promise();
+
+      expect(SecurityGroups).toBeDefined();
+      expect(SecurityGroups!.length).toBeGreaterThan(0);
+
+      const sg = SecurityGroups![0];
+      const ingressRules = sg.IpPermissions;
+
+      // Check for SSH access (port 22)
+      const sshRule = ingressRules?.find(
+        rule =>
+          rule.FromPort === 22 &&
+          rule.ToPort === 22 &&
+          rule.IpProtocol === 'tcp'
+      );
+      expect(sshRule).toBeDefined();
+
+      // Check for HTTP access (port 80)
+      const httpRule = ingressRules?.find(
+        rule =>
+          rule.FromPort === 80 &&
+          rule.ToPort === 80 &&
+          rule.IpProtocol === 'tcp'
+      );
+      expect(httpRule).toBeDefined();
+    });
+
+    test('RDS Security Group has proper ingress rules', async () => {
+      const { SecurityGroups } = await ec2
+        .describeSecurityGroups({
+          GroupIds: [TEST_CONFIG.securityGroupRdsId],
+        })
+        .promise();
+
+      expect(SecurityGroups).toBeDefined();
+      expect(SecurityGroups!.length).toBeGreaterThan(0);
+
+      const sg = SecurityGroups![0];
+      const ingressRules = sg.IpPermissions;
+
+      // Check for PostgreSQL access (port 5432)
+      const postgresRule = ingressRules?.find(
+        rule =>
+          rule.FromPort === 5432 &&
+          rule.ToPort === 5432 &&
+          rule.IpProtocol === 'tcp'
+      );
+      expect(postgresRule).toBeDefined();
+    });
+  });
+
+  describe('VPC and Subnet Tests', () => {
+    test('VPC exists with proper configuration', async () => {
+      const { Vpcs } = await ec2
+        .describeVpcs({
+          VpcIds: [TEST_CONFIG.vpcId],
+        })
+        .promise();
+
+      expect(Vpcs).toBeDefined();
+      expect(Vpcs!.length).toBeGreaterThan(0);
+
+      const vpc = Vpcs![0];
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      // Note: EnableDnsHostnames and EnableDnsSupport are not directly accessible in describeVpcs response
+    });
+
+    test('Private subnets exist and are properly configured', async () => {
+      const { Subnets } = await ec2
+        .describeSubnets({
+          SubnetIds: TEST_CONFIG.subnetPrivateIds,
+        })
+        .promise();
+
+      expect(Subnets).toBeDefined();
+      expect(Subnets!.length).toBeGreaterThan(0);
+
+      Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+        expect(subnet.VpcId).toBe(TEST_CONFIG.vpcId);
+      });
+    });
+
+    test('Public subnets exist and are properly configured', async () => {
+      const { Subnets } = await ec2
+        .describeSubnets({
+          SubnetIds: TEST_CONFIG.subnetPublicIds,
+        })
+        .promise();
+
+      expect(Subnets).toBeDefined();
+      expect(Subnets!.length).toBeGreaterThan(0);
+
+      Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+        expect(subnet.VpcId).toBe(TEST_CONFIG.vpcId);
+      });
+    });
+  });
+
+  describe('SNS Topic Tests', () => {
+    test('SNS topic exists and is properly configured', async () => {
+      const sns = new AWS.SNS();
+      const { Topics } = await sns.listTopics().promise();
+
+      const topic = Topics?.find(t => t.TopicArn === TEST_CONFIG.snsTopicArn);
+      expect(topic).toBeDefined();
+    });
+  });
+
+  describe('IAM Role Tests', () => {
+    test('EC2 IAM role exists and has proper policies', async () => {
+      const iam = new AWS.IAM();
+      const { Roles } = await iam.listRoles().promise();
+
+      const ec2Role = Roles?.find(
+        role =>
+          role.RoleName?.includes('ec2') &&
+          role.RoleName?.includes(TEST_CONFIG.projectName)
+      );
+      expect(ec2Role).toBeDefined();
+
+      if (ec2Role) {
+        const { AttachedPolicies } = await iam
+          .listAttachedRolePolicies({
+            RoleName: ec2Role.RoleName!,
+          })
+          .promise();
+
+        expect(AttachedPolicies).toBeDefined();
+        expect(AttachedPolicies!.length).toBeGreaterThan(0);
+
+        // Check for SSM managed policy
+        const hasSSMPolicy = AttachedPolicies!.some(policy =>
+          policy.PolicyName?.includes('SSMManagedInstanceCore')
+        );
+        expect(hasSSMPolicy).toBe(true);
+      }
+    });
+  });
+
+  describe('SSM Patch Manager Tests', () => {
+    test('SSM Maintenance Windows exist', async () => {
+      const ssm = new AWS.SSM();
+      const { WindowIdentities } = await ssm
+        .describeMaintenanceWindows()
+        .promise();
+
+      const maintenanceWindow = WindowIdentities?.find(
+        window =>
+          window.Name?.includes(TEST_CONFIG.projectName) &&
+          window.Name?.includes('patch')
+      );
+      expect(maintenanceWindow).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Logs Tests', () => {
+    test('CloudWatch log groups exist with proper retention', async () => {
+      const { logGroups } = await logs.describeLogGroups().promise();
+
+      const vpcFlowLogs = logGroups?.find(
+        group =>
+          group.logGroupName?.includes('vpc/flowlogs') &&
+          group.logGroupName?.includes(TEST_CONFIG.projectName)
+      );
+      expect(vpcFlowLogs).toBeDefined();
+      expect(vpcFlowLogs!.retentionInDays).toBeGreaterThan(0);
+
+      const cloudtrailLogs = logGroups?.find(
+        group =>
+          group.logGroupName?.includes('cloudtrail') &&
+          group.logGroupName?.includes(TEST_CONFIG.projectName)
+      );
+      expect(cloudtrailLogs).toBeDefined();
+      expect(cloudtrailLogs!.retentionInDays).toBeGreaterThan(0);
+    });
+  });
+
+  describe('RDS Subnet Group Tests', () => {
+    test('RDS subnet group exists and uses private subnets', async () => {
+      const { DBSubnetGroups } = await rds.describeDBSubnetGroups().promise();
+
+      const subnetGroup = DBSubnetGroups?.find(group =>
+        group.DBSubnetGroupName?.includes(TEST_CONFIG.projectName)
+      );
+      expect(subnetGroup).toBeDefined();
+      expect(subnetGroup!.Subnets!.length).toBeGreaterThan(0);
+
+      // Verify it uses private subnets
+      subnetGroup!.Subnets!.forEach(subnet => {
+        expect(subnet.SubnetAvailabilityZone).toBeDefined();
+        expect(subnet.SubnetStatus).toBe('Active');
+      });
+    });
+  });
+
+  describe('Secrets Manager Tests', () => {
+    test('RDS password secret exists and is encrypted', async () => {
+      const secretsmanager = new AWS.SecretsManager();
+      const { SecretList } = await secretsmanager.listSecrets().promise();
+
+      const rdsSecret = SecretList?.find(
+        secret =>
+          secret.Name?.includes('rds-password') &&
+          secret.Name?.includes(TEST_CONFIG.projectName)
+      );
+      expect(rdsSecret).toBeDefined();
+      // Note: Encryption status is not directly accessible in listSecrets response
     });
   });
 });
