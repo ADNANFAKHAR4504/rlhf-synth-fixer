@@ -554,6 +554,33 @@ Resources:
         - Key: Environment
           Value: Production
 
+  # S3 Bucket Policy for CloudTrail
+  CloudTrailLoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${LoggingBucket.Arn}/cloudtrail-logs/*"
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+                'AWS:SourceArn': !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
+
   # IAM Roles - Commented due to quota limit
   # EC2Role:
   #   Type: AWS::IAM::Role
@@ -1060,7 +1087,7 @@ Outputs:
 
 7. **AMI Management**: Uses AWS Systems Manager Parameter Store to automatically retrieve the latest Amazon Linux 2 AMI, ensuring the template works across regions and stays current.
 
-8. **CloudTrail Auditing**: Comprehensive audit logging for all AWS API calls with encrypted logs stored in S3, including detailed event tracking for S3 bucket access and management events.
+8. **CloudTrail Auditing**: Comprehensive audit logging for all AWS API calls with encrypted logs stored in S3, including detailed event tracking for S3 bucket access and management events. Includes proper S3 bucket policy for CloudTrail service access.
 
 9. **Enhanced Bastion Security**: SSH access to bastion host is restricted to specific IP ranges via the AllowedSSHCidr parameter, replacing the insecure 0.0.0.0/0 access pattern.
 

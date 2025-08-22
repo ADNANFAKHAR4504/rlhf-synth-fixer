@@ -208,6 +208,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.CloudTrail.Properties.S3BucketName.Ref).toBe('LoggingBucket');
       expect(template.Resources.CloudTrail.Properties.KMSKeyId.Ref).toBe('AppKMSKey');
     });
+
+    test('should have S3 bucket policy for CloudTrail', () => {
+      expect(template.Resources.CloudTrailLoggingBucketPolicy).toBeDefined();
+      expect(template.Resources.CloudTrailLoggingBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(template.Resources.CloudTrailLoggingBucketPolicy.Properties.Bucket.Ref).toBe('LoggingBucket');
+      const policyDoc = template.Resources.CloudTrailLoggingBucketPolicy.Properties.PolicyDocument;
+      expect(policyDoc.Statement).toHaveLength(2);
+    });
   });
 
   describe('Outputs', () => {
@@ -283,9 +291,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have at least 41 resources', () => {
+    test('should have at least 42 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(41);
+      expect(resourceCount).toBeGreaterThanOrEqual(42);
     });
   });
 });
