@@ -1,5 +1,7 @@
 {
   "task_id": "trainr148-new",
+  "team": "iac-test-automations",
+  "startedat": "2025-08-22T16:15:00Z",
   "platform": "pulumi+js",
   "region": "us-east-1",
   "difficulty": "hard",
