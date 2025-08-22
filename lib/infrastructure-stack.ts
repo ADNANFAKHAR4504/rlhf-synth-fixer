@@ -89,6 +89,20 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                 ],
                 Resource: '*',
               },
+              {
+                Sid: 'Allow EC2',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'ec2.amazonaws.com',
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+              },
             ],
           })
         ),
