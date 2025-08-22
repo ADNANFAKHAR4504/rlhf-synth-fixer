@@ -1,4 +1,3 @@
-aws-cdk-lib>=2.150.0
-constructs>=10.0.0
-aws-cdk.aws-ec2-alpha>=2.150.0a0
-aws-cdk.aws-ecs-alpha>=2.150.0a0
+pulumi>=3.0.0,<4.0.0
+pulumi-aws>=6.0.0,<8.0.0
+pulumi-awsx>=2.0.0,<4.0.0
