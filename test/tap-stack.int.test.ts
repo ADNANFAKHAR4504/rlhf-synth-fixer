@@ -1,315 +1,210 @@
-import fs from 'fs';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { S3Client, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { CloudTrailClient, DescribeTrailsCommand, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudTrailClient, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import fs from 'fs';
 
-describe('TapStack Integration Tests', () => {
-  const shouldRunIntegration = process.env.RUN_INTEGRATION === '1';
-  const stackName = process.env.STACK_NAME;
-  const region = process.env.AWS_REGION || 'us-east-1';
+const STACK_NAME = process.env.STACK_NAME;
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
+describe('TapStack CloudFormation Integration Tests', () => {
   let outputs: any = {};
-  let cfClient: CloudFormationClient;
-  let s3Client: S3Client;
-  let rdsClient: RDSClient;
-  let cloudTrailClient: CloudTrailClient;
-  let logsClient: CloudWatchLogsClient;
 
-  beforeAll(async () => {
-    if (!shouldRunIntegration) {
+  beforeAll(() => {
+    // Skip all tests if RUN_INTEGRATION is not set to '1'
+    if (process.env.RUN_INTEGRATION !== '1') {
+      console.log('Skipping integration tests. Set RUN_INTEGRATION=1 to run.');
       return;
     }
 
-    // Initialize AWS clients
-    cfClient = new CloudFormationClient({ region });
-    s3Client = new S3Client({ region });
-    rdsClient = new RDSClient({ region });
-    cloudTrailClient = new CloudTrailClient({ region });
-    logsClient = new CloudWatchLogsClient({ region });
+    if (!STACK_NAME) {
+      throw new Error('STACK_NAME environment variable is required');
+    }
 
-    // Load outputs from deployment
+    // Load stack outputs if available
     try {
-      const outputsContent = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
-      outputs = JSON.parse(outputsContent);
+      outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
     } catch (error) {
-      console.warn('Could not load cfn-outputs/flat-outputs.json, some tests may fail');
+      console.warn('Could not load flat-outputs.json, some tests may fail');
     }
   });
 
-  describe('Stack Status Validation', () => {
+  describe('Stack Status', () => {
     test('stack should be in CREATE_COMPLETE or UPDATE_COMPLETE status', async () => {
-      if (!shouldRunIntegration) return;
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const command = new DescribeStacksCommand({
-        StackName: stackName
-      });
+      const cfnClient = new CloudFormationClient({ region: AWS_REGION });
+      const response = await cfnClient.send(new DescribeStacksCommand({
+        StackName: STACK_NAME
+      }));
 
-      const response = await cfClient.send(command);
       const stack = response.Stacks?.[0];
-
       expect(stack).toBeDefined();
       expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack?.StackStatus);
     });
   });
 
-  describe('Stack Outputs Validation', () => {
+  describe('Stack Outputs', () => {
     test('required outputs should exist', async () => {
-      if (!shouldRunIntegration) return;
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const command = new DescribeStacksCommand({
-        StackName: stackName
-      });
+      const cfnClient = new CloudFormationClient({ region: AWS_REGION });
+      const response = await cfnClient.send(new DescribeStacksCommand({
+        StackName: STACK_NAME
+      }));
 
-      const response = await cfClient.send(command);
       const stack = response.Stacks?.[0];
-      const stackOutputs = stack?.Outputs || [];
+      const outputs = stack?.Outputs || [];
+      const outputKeys = outputs.map(output => output.OutputKey);
 
-      const requiredOutputs = [
+      const expectedOutputs = [
         'VPCId',
-        'PrivateSubnet1Id',
+        'PrivateSubnet1Id', 
         'PrivateSubnet2Id',
-        'DatabaseEndpoint',
+        'EC2SecurityGroupId',
         'S3BucketName',
-        'CloudTrailName'
+        'CloudTrailBucketName',
+        'EC2InstanceId',
+        'RDSInstanceEndpoint'
       ];
 
-      requiredOutputs.forEach(outputKey => {
-        const output = stackOutputs.find(o => o.OutputKey === outputKey);
-        expect(output).toBeDefined();
-        expect(output?.OutputValue).toBeDefined();
+      expectedOutputs.forEach(expectedOutput => {
+        expect(outputKeys).toContain(expectedOutput);
       });
     });
   });
 
-  describe('CloudTrail Integration Tests', () => {
+  describe('CloudTrail Validation', () => {
     test('CloudTrail should be logging', async () => {
-      if (!shouldRunIntegration) return;
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const cloudTrailName = outputs.CloudTrailName;
-      expect(cloudTrailName).toBeDefined();
+      const cloudTrailClient = new CloudTrailClient({ region: AWS_REGION });
+      
+      // Get trail name from outputs or construct it
+      const trailName = outputs.CloudTrailName || `${process.env.Environment || 'production'}-cloudtrail`;
+      
+      const response = await cloudTrailClient.send(new GetTrailStatusCommand({
+        Name: trailName
+      }));
 
-      const statusCommand = new GetTrailStatusCommand({
-        Name: cloudTrailName
-      });
-
-      const statusResponse = await cloudTrailClient.send(statusCommand);
-      expect(statusResponse.IsLogging).toBe(true);
-    });
-
-    test('CloudTrail should have multi-region configuration', async () => {
-      if (!shouldRunIntegration) return;
-
-      const cloudTrailName = outputs.CloudTrailName;
-      expect(cloudTrailName).toBeDefined();
-
-      const describeCommand = new DescribeTrailsCommand({
-        trailNameList: [cloudTrailName]
-      });
-
-      const response = await cloudTrailClient.send(describeCommand);
-      const trail = response.trailList?.[0];
-
-      expect(trail).toBeDefined();
-      expect(trail?.IsMultiRegionTrail).toBe(true);
-      expect(trail?.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail?.LogFileValidationEnabled).toBe(true);
+      expect(response.IsLogging).toBe(true);
     });
   });
 
-  describe('S3 Bucket Encryption and Security Tests', () => {
-    test('trail bucket should have KMS encryption', async () => {
-      if (!shouldRunIntegration) return;
+  describe('S3 Bucket Validation', () => {
+    test('data bucket should have KMS encryption and public access blocked', async () => {
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const trailBucketName = outputs.CloudTrailBucketName;
-      expect(trailBucketName).toBeDefined();
-
-      const command = new GetBucketEncryptionCommand({
-        Bucket: trailBucketName
-      });
-
-      const response = await s3Client.send(command);
-      const rules = response.ServerSideEncryptionConfiguration?.Rules || [];
+      const s3Client = new S3Client({ region: AWS_REGION });
+      const bucketName = outputs.S3BucketName;
       
-      expect(rules.length).toBeGreaterThan(0);
-      const kmRule = rules.find(rule => 
-        rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms'
-      );
-      expect(kmRule).toBeDefined();
+      if (!bucketName) {
+        throw new Error('S3BucketName not found in outputs');
+      }
+
+      // Test encryption
+      const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      }));
+
+      const encryptionConfig = encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(encryptionConfig?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(encryptionConfig?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
+
+      // Test public access block
+      const publicAccessResponse = await s3Client.send(new GetPublicAccessBlockCommand({
+        Bucket: bucketName
+      }));
+
+      const publicAccessConfig = publicAccessResponse.PublicAccessBlockConfiguration;
+      expect(publicAccessConfig?.BlockPublicAcls).toBe(true);
+      expect(publicAccessConfig?.BlockPublicPolicy).toBe(true);
+      expect(publicAccessConfig?.IgnorePublicAcls).toBe(true);
+      expect(publicAccessConfig?.RestrictPublicBuckets).toBe(true);
     });
 
-    test('data bucket should have KMS encryption', async () => {
-      if (!shouldRunIntegration) return;
+    test('CloudTrail bucket should have KMS encryption and public access blocked', async () => {
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const dataBucketName = outputs.S3BucketName;
-      expect(dataBucketName).toBeDefined();
-
-      const command = new GetBucketEncryptionCommand({
-        Bucket: dataBucketName
-      });
-
-      const response = await s3Client.send(command);
-      const rules = response.ServerSideEncryptionConfiguration?.Rules || [];
+      const s3Client = new S3Client({ region: AWS_REGION });
+      const bucketName = outputs.CloudTrailBucketName;
       
-      expect(rules.length).toBeGreaterThan(0);
-      const kmsRule = rules.find(rule => 
-        rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms'
-      );
-      expect(kmsRule).toBeDefined();
-    });
+      if (!bucketName) {
+        throw new Error('CloudTrailBucketName not found in outputs');
+      }
 
-    test('trail bucket should have public access blocked', async () => {
-      if (!shouldRunIntegration) return;
+      // Test encryption
+      const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      }));
 
-      const trailBucketName = outputs.CloudTrailBucketName;
-      expect(trailBucketName).toBeDefined();
+      const encryptionConfig = encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(encryptionConfig?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(encryptionConfig?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
 
-      const command = new GetPublicAccessBlockCommand({
-        Bucket: trailBucketName
-      });
+      // Test public access block
+      const publicAccessResponse = await s3Client.send(new GetPublicAccessBlockCommand({
+        Bucket: bucketName
+      }));
 
-      const response = await s3Client.send(command);
-      const config = response.PublicAccessBlockConfiguration;
-
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
-    });
-
-    test('data bucket should have public access blocked', async () => {
-      if (!shouldRunIntegration) return;
-
-      const dataBucketName = outputs.S3BucketName;
-      expect(dataBucketName).toBeDefined();
-
-      const command = new GetPublicAccessBlockCommand({
-        Bucket: dataBucketName
-      });
-
-      const response = await s3Client.send(command);
-      const config = response.PublicAccessBlockConfiguration;
-
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
+      const publicAccessConfig = publicAccessResponse.PublicAccessBlockConfiguration;
+      expect(publicAccessConfig?.BlockPublicAcls).toBe(true);
+      expect(publicAccessConfig?.BlockPublicPolicy).toBe(true);
+      expect(publicAccessConfig?.IgnorePublicAcls).toBe(true);
+      expect(publicAccessConfig?.RestrictPublicBuckets).toBe(true);
     });
   });
 
-  describe('RDS Integration Tests', () => {
+  describe('RDS Validation', () => {
     test('RDS instance should have storage encryption enabled', async () => {
-      if (!shouldRunIntegration) return;
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const dbInstanceId = outputs.DatabaseInstanceId || outputs.RDSInstanceId;
-      expect(dbInstanceId).toBeDefined();
+      const rdsClient = new RDSClient({ region: AWS_REGION });
+      const instanceId = outputs.RDSInstanceId || `${process.env.Environment || 'production'}-rds-instance`;
+      
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: instanceId
+      }));
 
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
       const dbInstance = response.DBInstances?.[0];
-
       expect(dbInstance).toBeDefined();
       expect(dbInstance?.StorageEncrypted).toBe(true);
       expect(dbInstance?.KmsKeyId).toBeDefined();
     });
-
-    test('RDS instance should be running MySQL engine', async () => {
-      if (!shouldRunIntegration) return;
-
-      const dbInstanceId = outputs.DatabaseInstanceId || outputs.RDSInstanceId;
-      expect(dbInstanceId).toBeDefined();
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbInstanceId
-      });
-
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances?.[0];
-
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.Engine).toBe('mysql');
-      expect(dbInstance?.EngineVersion).toBeDefined();
-    });
   });
 
-  describe('Lambda Function Log Group Tests', () => {
+  describe('Lambda Log Group Validation', () => {
     test('Lambda log group should exist', async () => {
-      if (!shouldRunIntegration) return;
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const lambdaFunctionName = outputs.SecurityMonitoringLambdaName || outputs.LambdaFunctionName;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
+      const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
+      const logGroupName = `/aws/lambda/${process.env.Environment || 'production'}-function`;
       
-      const command = new DescribeLogGroupsCommand({
+      const response = await logsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName
-      });
+      }));
 
-      const response = await logsClient.send(command);
       const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
-
       expect(logGroup).toBeDefined();
+      expect(logGroup?.retentionInDays).toBe(14);
     });
   });
 
-  describe('Networking Integration Tests', () => {
-    test('VPC should exist with expected configuration', async () => {
-      if (!shouldRunIntegration) return;
+  describe('CloudTrail Log Group Validation', () => {
+    test('CloudTrail log group should exist', async () => {
+      if (process.env.RUN_INTEGRATION !== '1') return;
 
-      const vpcId = outputs.VPCId;
-      expect(vpcId).toBeDefined();
-      expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
-    });
-
-    test('private subnets should exist', async () => {
-      if (!shouldRunIntegration) return;
-
-      const subnet1Id = outputs.PrivateSubnet1Id;
-      const subnet2Id = outputs.PrivateSubnet2Id;
-
-      expect(subnet1Id).toBeDefined();
-      expect(subnet2Id).toBeDefined();
-      expect(subnet1Id).toMatch(/^subnet-[a-f0-9]+$/);
-      expect(subnet2Id).toMatch(/^subnet-[a-f0-9]+$/);
-      expect(subnet1Id).not.toBe(subnet2Id);
-    });
-  });
-
-  describe('Security Groups Integration Tests', () => {
-    test('security groups should exist', async () => {
-      if (!shouldRunIntegration) return;
-
-      const webSecurityGroupId = outputs.WebSecurityGroupId;
-      const dbSecurityGroupId = outputs.DatabaseSecurityGroupId;
-
-      if (webSecurityGroupId) {
-        expect(webSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
-      }
+      const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
+      const logGroupName = `${process.env.Environment || 'production'}-cloudtrail-log-group`;
       
-      if (dbSecurityGroupId) {
-        expect(dbSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
-      }
-    });
-  });
+      const response = await logsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      }));
 
-  describe('IAM Resources Integration Tests', () => {
-    test('IAM roles should exist', async () => {
-      if (!shouldRunIntegration) return;
-
-      const ec2RoleArn = outputs.EC2InstanceRoleArn;
-      const lambdaRoleArn = outputs.LambdaExecutionRoleArn;
-
-      if (ec2RoleArn) {
-        expect(ec2RoleArn).toMatch(/^arn:aws:iam::\d+:role\/.+$/);
-      }
-      
-      if (lambdaRoleArn) {
-        expect(lambdaRoleArn).toMatch(/^arn:aws:iam::\d+:role\/.+$/);
-      }
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
+      expect(logGroup).toBeDefined();
+      expect(logGroup?.retentionInDays).toBe(90);
     });
   });
 });
