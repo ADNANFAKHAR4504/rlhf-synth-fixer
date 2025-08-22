@@ -161,7 +161,7 @@ class TestTapStackIntegration(unittest.TestCase):
             response = self.iam_client.get_policy(PolicyArn=policy_arn)
             policy = response['Policy']
             
-            self.assertTrue('MFAEnforcementPolicysynthtrainr134cdkpy' in policy['PolicyName'])
+            self.assertTrue('MFAEnforcementPolicypr2078' in policy['PolicyName'])
             self.assertIsNotNone(policy['DefaultVersionId'])
             
             # Get policy document
