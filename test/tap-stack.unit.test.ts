@@ -98,14 +98,24 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
-    Object.keys(template.Outputs).forEach(outputName => {
-      test(`should define output ${outputName} with export`, () => {
-        const output = template.Outputs[outputName];
-        expect(output).toBeDefined();
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toHaveProperty('Fn::Sub');
-      });
+    const expectedOutputs = [
+      'KMSKeyId',
+      'SecureDataBucketName',
+      'DatabaseEndpoint',
+      'LambdaFunctionArn',
+      'VPCId'
+    ];
+
+  expectedOutputs.forEach(out => {
+    test(`should have ${out} output`, () => {
+      expect(template.Outputs).toBeDefined();
+      const output = template.Outputs[out];
+      expect(output).toBeDefined();
+      expect(output.Export).toBeDefined();
+      expect(output.Export.Name).toHaveProperty('Fn::Sub');
+      expect(typeof output.Export.Name['Fn::Sub']).toBe('string');
     });
+  });
   });
 
   describe('Template Validation', () => {
