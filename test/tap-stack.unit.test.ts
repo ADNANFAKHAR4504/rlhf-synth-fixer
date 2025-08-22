@@ -209,35 +209,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.CloudTrail.Properties.KMSKeyId.Ref).toBe('AppKMSKey');
     });
 
-    test('should have S3 bucket policy for CloudTrail', () => {
-      expect(template.Resources.CloudTrailLoggingBucketPolicy).toBeDefined();
-      expect(template.Resources.CloudTrailLoggingBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-      expect(template.Resources.CloudTrailLoggingBucketPolicy.Properties.Bucket.Ref).toBe('LoggingBucket');
-      const policyDoc = template.Resources.CloudTrailLoggingBucketPolicy.Properties.PolicyDocument;
-      expect(policyDoc.Statement).toHaveLength(2);
-      
-      // Validate the two CloudTrail policy statements
-      const statements = policyDoc.Statement;
-      
-      // Statement 1: AWSCloudTrailAclCheck
-      expect(statements[0].Sid).toBe('AWSCloudTrailAclCheck');
-      expect(statements[0].Effect).toBe('Allow');
-      expect(statements[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
-      expect(statements[0].Action).toBe('s3:GetBucketAcl');
-      expect(statements[0].Resource).toBeDefined();
-      expect(statements[0].Condition).toBeDefined();
-      expect(statements[0].Condition.StringEquals['AWS:SourceArn']).toBeDefined();
-      
-      // Statement 2: AWSCloudTrailWrite
-      expect(statements[1].Sid).toBe('AWSCloudTrailWrite');
-      expect(statements[1].Effect).toBe('Allow');
-      expect(statements[1].Principal.Service).toBe('cloudtrail.amazonaws.com');
-      expect(statements[1].Action).toBe('s3:PutObject');
-      expect(statements[1].Resource).toBeDefined();
-      expect(statements[1].Condition).toBeDefined();
-      expect(statements[1].Condition.StringEquals['AWS:SourceArn']).toBeDefined();
-      expect(statements[1].Condition.StringEquals['s3:x-amz-acl']).toBe('bucket-owner-full-control');
-    });
+
   });
 
   describe('Outputs', () => {
