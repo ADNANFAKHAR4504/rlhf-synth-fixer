@@ -798,7 +798,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                                     }
                                 },
                                 {
@@ -807,7 +807,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "S3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
                                     }
                                 }
                             ]

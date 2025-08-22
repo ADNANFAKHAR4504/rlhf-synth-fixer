@@ -342,7 +342,7 @@ describe('TapStack CloudFormation Template', () => {
       const objectStatement = statements.find((stmt: any) =>
         stmt.Action.includes('s3:GetObject')
       );
-      expect(objectStatement.Resource['Fn::Sub']).toBe('${S3Bucket}/*');
+      expect(objectStatement.Resource['Fn::Sub']).toBe('arn:aws:s3:::${S3Bucket}/*');
     });
   });
 
