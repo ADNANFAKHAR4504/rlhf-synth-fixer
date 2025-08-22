@@ -795,12 +795,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - [
-              { "Ref": "AWS::StackName" },
-              "cloudtrail",
-              { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" },
-            ]
+          - ["cloudtrail", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -818,7 +813,7 @@ Resources:
             ExpirationInDays: 365
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-cloudtrail-bucket-${EnvironmentSuffix}"
+          Value: cloudtrail-bucket-tapstack
         - Key: Environment
           Value: !Ref Environment
 
