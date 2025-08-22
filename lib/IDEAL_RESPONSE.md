@@ -361,16 +361,365 @@ class ServerlessStack(cdk.Stack):
     cdk.Tags.of(self).add("ManagedBy", "CDK")
 
   def _get_image_processing_code(self) -> str:
-    # Lambda function code for image processing
-    return '''[Lambda code here]'''
+    return '''
+import json
+import logging
+import boto3
+from typing import Dict, Any
+
+# Configure structured JSON logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", "function": "image-processor"}'
+)
+logger = logging.getLogger()
+
+def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    try:
+        logger.info("Processing S3 event for image processing", extra={
+            "event_source": "s3",
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+
+        for record in event['Records']:
+            bucket_name = record['s3']['bucket']['name']
+            object_key = record['s3']['object']['key']
+
+            logger.info("Processing image file", extra={
+                "bucket": bucket_name,
+                "object_key": object_key,
+                "event_name": record['eventName']
+            })
+
+            # Simulate image processing
+            result = process_image(bucket_name, object_key)
+
+            logger.info("Image processing completed", extra={
+                "bucket": bucket_name,
+                "object_key": object_key,
+                "result": result
+            })
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Image processing completed successfully",
+                "processed_files": len(event['Records'])
+            })
+        }
+
+    except Exception as e:
+        logger.error("Error processing image", extra={
+            "error": str(e),
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+        raise
+
+def process_image(bucket_name: str, object_key: str) -> Dict[str, Any]:
+    """Simulate image processing logic"""
+    # In real implementation, you would use PIL, OpenCV, or similar
+    return {
+        "processed": True,
+        "original_size": "1920x1080",
+        "thumbnails_created": ["thumb_small.jpg", "thumb_medium.jpg"],
+        "processing_time": "2.3s"
+    }
+'''
 
   def _get_data_transform_code(self) -> str:
-    # Lambda function code for data transformation
-    return '''[Lambda code here]'''
+    return '''
+import json
+import logging
+import boto3
+from typing import Dict, Any, List
+import csv
+from io import StringIO
+
+# Configure structured JSON logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", "function": "data-transformer"}'
+)
+logger = logging.getLogger()
+
+s3_client = boto3.client('s3')
+
+def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    try:
+        logger.info("Processing S3 event for data transformation", extra={
+            "event_source": "s3",
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+
+        processed_files = []
+
+        for record in event['Records']:
+            bucket_name = record['s3']['bucket']['name']
+            object_key = record['s3']['object']['key']
+
+            logger.info("Processing data file", extra={
+                "bucket": bucket_name,
+                "object_key": object_key,
+                "event_name": record['eventName']
+            })
+
+            # Transform the data
+            result = transform_data(bucket_name, object_key)
+            processed_files.append(result)
+
+            logger.info("Data transformation completed", extra={
+                "bucket": bucket_name,
+                "object_key": object_key,
+                "records_processed": result.get('records_processed', 0)
+            })
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Data transformation completed successfully",
+                "processed_files": processed_files
+            })
+        }
+
+    except Exception as e:
+        logger.error("Error transforming data", extra={
+            "error": str(e),
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+        raise
+
+def transform_data(bucket_name: str, object_key: str) -> Dict[str, Any]:
+    """Transform data based on file type"""
+    try:
+        # Get the file from S3
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        content = response['Body'].read().decode('utf-8')
+
+        if object_key.endswith('.json'):
+            data = json.loads(content)
+            transformed_data = transform_json_data(data)
+        elif object_key.endswith('.csv'):
+            transformed_data = transform_csv_data(content)
+        else:
+            raise ValueError(f"Unsupported file type: {object_key}")
+
+        # Save transformed data back to S3
+        output_key = f"transformed/{object_key}"
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=output_key,
+            Body=json.dumps(transformed_data),
+            ContentType='application/json'
+        )
+
+        return {
+            "original_file": object_key,
+            "transformed_file": output_key,
+            "records_processed": len(transformed_data) if isinstance(transformed_data, list) else 1
+        }
+
+    except Exception as e:
+        logger.error(f"Error transforming file {object_key}: {str(e)}")
+        raise
+
+def transform_json_data(data: Any) -> Any:
+    """Transform JSON data - add timestamp and normalize"""
+    if isinstance(data, dict):
+        data['processed_at'] = '2024-01-01T00:00:00Z'
+        data['version'] = '1.0'
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict):
+                item['processed_at'] = '2024-01-01T00:00:00Z'
+                item['version'] = '1.0'
+    return data
+
+def transform_csv_data(content: str) -> List[Dict[str, Any]]:
+    """Transform CSV data to JSON with additional metadata"""
+    csv_reader = csv.DictReader(StringIO(content))
+    transformed_data = []
+
+    for row in csv_reader:
+        transformed_row = dict(row)
+        transformed_row['processed_at'] = '2024-01-01T00:00:00Z'
+        transformed_row['source'] = 'csv_import'
+        transformed_data.append(transformed_row)
+
+    return transformed_data
+'''
 
   def _get_api_handler_code(self) -> str:
-    # Lambda function code for API handling
-    return '''[Lambda code here]'''
+    return '''
+import json
+import logging
+import boto3
+from typing import Dict, Any
+import os
+
+# Configure structured JSON logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", "function": "api-handler"}'
+)
+logger = logging.getLogger()
+
+s3_client = boto3.client('s3')
+BUCKET_NAME = os.environ.get('BUCKET_NAME')
+
+def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    try:
+        http_method = event['httpMethod']
+        path = event['path']
+
+        logger.info("Processing API request", extra={
+            "method": http_method,
+            "path": path,
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+
+        if path == '/status':
+            return handle_status_request()
+        elif path == '/files':
+            if http_method == 'GET':
+                return handle_list_files()
+            elif http_method == 'POST':
+                return handle_file_upload(event)
+
+        return {
+            "statusCode": 404,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"message": "Not Found"})
+        }
+
+    except Exception as e:
+        logger.error("Error processing API request", extra={
+            "error": str(e),
+            "function_name": context.function_name,
+            "request_id": context.aws_request_id
+        })
+
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"message": "Internal Server Error"})
+        }
+
+def handle_status_request() -> Dict[str, Any]:
+    """Handle health check requests"""
+    return {
+        "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps({
+            "status": "healthy",
+            "service": "serverless-api",
+            "version": "1.0.0",
+            "timestamp": "2024-01-01T00:00:00Z"
+        })
+    }
+
+def handle_list_files() -> Dict[str, Any]:
+    """List files in the S3 bucket"""
+    try:
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, MaxKeys=100)
+
+        files = []
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                files.append({
+                    "key": obj['Key'],
+                    "size": obj['Size'],
+                    "last_modified": obj['LastModified'].isoformat(),
+                    "storage_class": obj.get('StorageClass', 'STANDARD')
+                })
+
+        logger.info("Listed files from S3", extra={
+            "bucket": BUCKET_NAME,
+            "file_count": len(files)
+        })
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
+                "files": files,
+                "total_count": len(files),
+                "bucket": BUCKET_NAME
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Error listing files: {str(e)}")
+        raise
+
+def handle_file_upload(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle file upload requests (returns presigned URL)"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        filename = body.get('filename')
+        content_type = body.get('content_type', 'application/octet-stream')
+
+        if not filename:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                },
+                "body": json.dumps({"message": "filename is required"})
+            }
+
+        # Generate presigned URL for upload
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': BUCKET_NAME,
+                'Key': filename,
+                'ContentType': content_type
+            },
+            ExpiresIn=3600
+        )
+
+        logger.info("Generated presigned URL for upload", extra={
+            "filename": filename,
+            "content_type": content_type,
+            "bucket": BUCKET_NAME
+        })
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({
+                "upload_url": presigned_url,
+                "filename": filename,
+                "bucket": BUCKET_NAME,
+                "expires_in": 3600
+            })
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating upload URL: {str(e)}")
+        raise
+'''
 ```
 
 ### lib/tap_stack.py
