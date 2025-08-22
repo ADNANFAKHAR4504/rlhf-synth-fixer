@@ -130,6 +130,10 @@ Parameters:
     Type: String
     Default: ''
     Description: 'Name of an existing S3 bucket for CloudTrail logs. To create a new one, leave blank. If using an existing bucket, set this to the actual bucket name.'
+  ExistingInternetGatewayId:
+    Type: String
+    Default: ''
+    Description: 'ID of an existing Internet Gateway to attach to the VPC. Leave blank to create a new one.'
 
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
@@ -172,6 +176,7 @@ Conditions:
   CreateRDSSubnetGroup: !Equals [!Ref ExistingRDSSubnetGroupName, '']
   CreateCloudTrailLogsBucket:
     !Equals [!Ref ExistingCloudTrailLogsBucketName, '']
+  CreateInternetGateway: !Equals [!Ref ExistingInternetGatewayId, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -294,7 +299,7 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Condition: CreateVpc
+    Condition: CreateInternetGateway
     Properties:
       Tags:
         - Key: Name
@@ -302,9 +307,9 @@ Resources:
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
-    Condition: CreateVpc
+    Condition: CreateInternetGateway
     Properties:
-      VpcId: !Ref SecurityVpc
+      VpcId: !If [CreateVpc, !Ref SecurityVpc, !Ref ExistingVpcId]
       InternetGatewayId: !Ref InternetGateway
 
   PublicRouteTable:
@@ -317,7 +322,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    Condition: CreateVpc
+    Condition: CreateInternetGateway
     DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
