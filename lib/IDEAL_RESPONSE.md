@@ -758,6 +758,12 @@ description = "Common tags for all resources"
 type = map(string)
 }
 
+## Data source to get available AZs
+
+data "aws_availability_zones" "available" {
+state = "available"
+}
+
 ## VPC
 
 resource "aws_vpc" "main" {
@@ -787,7 +793,7 @@ count = length(var.public_subnet_cidrs)
 
 vpc_id = aws_vpc.main.id
 cidr_block = var.public_subnet_cidrs[count.index]
-availability_zone = var.availability_zones[count.index]
+availability_zone = length(var.availability_zones) > count.index ? var.availability_zones[count.index] : data.aws_availability_zones.available.names[count.index % length(data.aws_availability_zones.available.names)]
 map_public_ip_on_launch = true
 
 tags = merge(var.common_tags, {
@@ -803,7 +809,7 @@ count = length(var.private_subnet_cidrs)
 
 vpc_id = aws_vpc.main.id
 cidr_block = var.private_subnet_cidrs[count.index]
-availability_zone = var.availability_zones[count.index]
+availability_zone = length(var.availability_zones) > count.index ? var.availability_zones[count.index] : data.aws_availability_zones.available.names[count.index % length(data.aws_availability_zones.available.names)]
 
 tags = merge(var.common_tags, {
 Name = "${var.common_tags.Environment}-private-subnet-${count.index + 1}"
@@ -1014,6 +1020,12 @@ type = string
 default = "eu-west-3"
 }
 
+variable "enable_cloudtrail" {
+description = "Enable CloudTrail creation (disable if hitting account limits)"
+type = bool
+default = false
+}
+
 ## VPC Module
 
 module "vpc" {
@@ -1044,9 +1056,10 @@ cloudtrail_bucket_name = var.cloudtrail_bucket_name
 common_tags = local.common_tags
 }
 
-## CloudTrail Module
+## CloudTrail Module (conditional)
 
 module "cloudtrail" {
+count = var.enable_cloudtrail ? 1 : 0
 source = "./modules/cloudtrail"
 
 cloudtrail_name = var.cloudtrail_name
@@ -1133,7 +1146,7 @@ sensitive = true
 
 output "cloudtrail_arn" {
 description = "ARN of the CloudTrail"
-value = module.cloudtrail.cloudtrail_arn
+value = var.enable_cloudtrail ? module.cloudtrail[0].cloudtrail_arn : ""
 }
 
 output "s3_bucket_name" {

@@ -98,6 +98,12 @@ variable "aws_region" {
   default     = "eu-west-3"
 }
 
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail creation (disable if hitting account limits)"
+  type        = bool
+  default     = false
+}
+
 # VPC Module
 module "vpc" {
   source = "./modules/vpc"
@@ -125,8 +131,9 @@ module "s3" {
   common_tags            = local.common_tags
 }
 
-# CloudTrail Module
+# CloudTrail Module (conditional)
 module "cloudtrail" {
+  count  = var.enable_cloudtrail ? 1 : 0
   source = "./modules/cloudtrail"
 
   cloudtrail_name        = var.cloudtrail_name
@@ -210,7 +217,7 @@ output "rds_endpoint" {
 
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
-  value       = module.cloudtrail.cloudtrail_arn
+  value       = var.enable_cloudtrail ? module.cloudtrail[0].cloudtrail_arn : ""
 }
 
 output "s3_bucket_name" {

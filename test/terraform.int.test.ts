@@ -361,9 +361,12 @@ describe('AWS Infrastructure Integration Tests', () => {
       const requiredModules = ['vpc', 'iam', 's3', 'cloudtrail', 'ec2', 'rds'];
 
       for (const moduleName of requiredModules) {
-        const modulePath = path.resolve(
-          __dirname,
-          `../lib/modules/${moduleName}/tap_stack.tf`
+        const modulePath = path.join(
+          process.cwd(),
+          'lib',
+          'modules',
+          moduleName,
+          'tap_stack.tf'
         );
         expect(fs.existsSync(modulePath)).toBe(true);
 
