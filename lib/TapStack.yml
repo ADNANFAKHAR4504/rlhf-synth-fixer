@@ -1,11 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: TapStack for isolated environments (dev/staging/prod) with S3 replication. Deploy prod (us-west-2), then staging (us-east-2), then dev (us-east-1) to ensure destination buckets exist for replication. Check for existing buckets to avoid conflicts (e.g., aws s3 ls s3://tapstack-dev-databucket-<account-id>).
-
-Metadata:
-  cfn-lint:
-    config:
-      ignore_checks:
-        - W7001 # RegionMap is used in ReplicationConfiguration and ReplicationRole, false positive
+Description: TapStack for isolated environments (dev/staging/prod) with S3 replication.
+  Deploy prod (us-west-2), then staging (us-east-2), then dev (us-east-1) to ensure
+  destination buckets exist for replication. Check for existing buckets to avoid conflicts
+  (e.g., aws s3 ls s3://tapstack-dev-databucket-<account-id>).
 
 Parameters:
   Environment:
@@ -13,7 +10,8 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Default: dev
     AllowedPattern: '^[a-z][a-z0-9-]{0,10}$'
-    Description: Environment name (dev, staging, or prod; lowercase, max 12 chars for bucket name compliance)
+    Description: Environment name (dev, staging, or prod; lowercase, max 12 chars for
+      bucket name compliance)
   ProjectName:
     Type: String
     Default: tapstack
@@ -374,11 +372,6 @@ Resources:
 
   DataBucket:
     Type: AWS::S3::Bucket
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W1031 # Bucket name is valid, false positive due to dynamic AWS::AccountId
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
       VersioningConfiguration:
@@ -403,21 +396,21 @@ Resources:
         RestrictPublicBuckets: true
       ReplicationConfiguration:
         !If
-        - IsNotProd
-        - Role: !Ref ReplicationRole
-          Rules:
-            - Id: !Sub '${ProjectName}-${Environment}-replication'
-              Status: Enabled
-              Priority: 1
-              DeleteMarkerReplication:
-                Status: Disabled
-              Destination:
-                Bucket: !Sub
-                  - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}'
-                  - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
-              Filter:
-                Prefix: ''
-        - !Ref AWS::NoValue
+          - IsNotProd
+          - Role: !GetAtt ReplicationRole.Arn
+            Rules:
+              - Id: !Sub '${ProjectName}-${Environment}-replication'
+                Status: Enabled
+                Priority: 1
+                DeleteMarkerReplication:
+                  Status: Disabled
+                Destination:
+                  Bucket: !Sub
+                    - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}'
+                    - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
+                Filter:
+                  Prefix: ''
+          - !Ref AWS::NoValue
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -433,15 +426,32 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
+          - !If
+            - IsNotProd
+            - Effect: Allow
+              Principal:
+                AWS: !GetAtt ReplicationRole.Arn
+              Action:
+                - s3:ReplicateObject
+                - s3:ReplicateDelete
+                - s3:ReplicateTags
+              Resource:
+                - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}/*'
+            - !Ref AWS::NoValue
+          - !If
+            - IsNotProd
+            - Effect: Allow
+              Principal:
+                AWS: !GetAtt ReplicationRole.Arn
+              Action:
+                - s3:GetBucketVersioning
+                - s3:GetReplicationConfiguration
+              Resource: !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
+            - !Ref AWS::NoValue
 
   ReplicationRole:
     Type: AWS::IAM::Role
     Condition: IsNotProd
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W1020 # Fn::Sub contains variables (Environment, AWS::AccountId), false positive
     Properties:
       RoleName: !Sub '${ProjectName}-${Environment}-replication-role'
       AssumeRolePolicyDocument:
@@ -458,8 +468,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObject*
-                  - s3:GetBucket*
+                  - s3:GetObjectVersion
                   - s3:ListBucket
                 Resource:
                   - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
