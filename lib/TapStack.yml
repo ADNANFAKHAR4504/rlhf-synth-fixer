@@ -24,6 +24,14 @@ Parameters:
     Description: 'CIDR block for the VPC'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
 
+  # Add environment suffix parameter for better naming
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
 Resources:
   # Random string generator for unique naming
   RandomString:
@@ -34,7 +42,7 @@ Resources:
   RandomStringFunction:
     Type: 'AWS::Lambda::Function'
     Properties:
-      FunctionName: !Sub '${ProjectName}-${Environment}-random-generator'
+      FunctionName: !Sub '${ProjectName}-${Environment}-random-generator-${EnvironmentSuffix}'
       Runtime: 'python3.9'
       Handler: 'index.handler'
       Role: !GetAtt RandomStringLambdaRole.Arn
@@ -58,7 +66,7 @@ Resources:
   RandomStringLambdaRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-random-lambda-role'
+      RoleName: !Sub '${ProjectName}-${Environment}-random-lambda-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -73,7 +81,7 @@ Resources:
   CloudTrailLogsBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-logs-${RandomString.RandomString}'
+      BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-logs-${EnvironmentSuffix}-${RandomString.RandomString}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -106,7 +114,7 @@ Resources:
   VpcFlowLogsBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-vpc-flowlogs-${RandomString.RandomString}'
+      BucketName: !Sub '${ProjectName}-${Environment}-vpc-flowlogs-${EnvironmentSuffix}-${RandomString.RandomString}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -130,7 +138,7 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
 
-  # CloudTrail Bucket Policy
+  # CloudTrail Bucket Policy - Fixed for proper CloudTrail integration
   CloudTrailBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Properties:
@@ -146,23 +154,23 @@ Resources:
             Resource: !GetAtt CloudTrailLogsBucket.Arn
             Condition:
               StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-global-trail-${EnvironmentSuffix}-${RandomString.RandomString}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailLogsBucket.Arn}/*'
+            Resource: !Sub '${CloudTrailLogsBucket.Arn}/cloudtrail-logs/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-global-trail-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   # IAM Role for CloudTrail
   CloudTrailRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-cloudtrail-role-${RandomString.RandomString}'
+      RoleName: !Sub '${ProjectName}-${Environment}-cloudtrail-role-${EnvironmentSuffix}-${RandomString.RandomString}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -189,7 +197,7 @@ Resources:
     Type: 'AWS::CloudTrail::Trail'
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${ProjectName}-${Environment}-global-trail-${RandomString.RandomString}'
+      TrailName: !Sub '${ProjectName}-${Environment}-global-trail-${EnvironmentSuffix}-${RandomString.RandomString}'
       S3BucketName: !Ref CloudTrailLogsBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
@@ -213,7 +221,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-vpc-${RandomString.RandomString}'
+          Value: !Sub '${ProjectName}-${Environment}-vpc-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   # Public Subnet
   PublicSubnet:
@@ -225,7 +233,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-public-subnet-${RandomString.RandomString}'
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   # Private Subnet
   PrivateSubnet:
@@ -236,7 +244,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-private-subnet-${RandomString.RandomString}'
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   # Internet Gateway
   InternetGateway:
@@ -244,7 +252,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-igw-${RandomString.RandomString}'
+          Value: !Sub '${ProjectName}-${Environment}-igw-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   AttachGateway:
     Type: 'AWS::EC2::VPCGatewayAttachment'
@@ -256,7 +264,7 @@ Resources:
   VpcFlowLogsRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-flowlogs-role-${RandomString.RandomString}'
+      RoleName: !Sub '${ProjectName}-${Environment}-flowlogs-role-${EnvironmentSuffix}-${RandomString.RandomString}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -293,13 +301,13 @@ Resources:
       MaxAggregationInterval: 60
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-flowlogs-${RandomString.RandomString}'
+          Value: !Sub '${ProjectName}-${Environment}-flowlogs-${EnvironmentSuffix}-${RandomString.RandomString}'
 
   # IAM Role for EC2 instances (example of least privilege)
   Ec2InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role-${RandomString.RandomString}'
+      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role-${EnvironmentSuffix}-${RandomString.RandomString}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -340,7 +348,7 @@ Resources:
   Ec2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile-${RandomString.RandomString}'
+      InstanceProfileName: !Sub '${ProjectName}-${Environment}-ec2-profile-${EnvironmentSuffix}-${RandomString.RandomString}'
       Roles:
         - !Ref Ec2InstanceRole
 
@@ -349,13 +357,13 @@ Outputs:
     Description: 'Name of the CloudTrail logs S3 bucket'
     Value: !Ref CloudTrailLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
 
   VpcFlowLogsBucketName:
     Description: 'Name of the VPC Flow Logs S3 bucket'
     Value: !Ref VpcFlowLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-VpcFlowLogsBucket'
+      Name: !Sub '${AWS::StackName}-VpcFlowLogsBucketName'
 
   VpcId:
     Description: 'VPC ID'
@@ -372,3 +380,11 @@ Outputs:
   RandomString:
     Description: 'Generated random string for resource naming'
     Value: !GetAtt RandomString.RandomString
+    Export:
+      Name: !Sub '${AWS::StackName}-RandomString'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
