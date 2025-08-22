@@ -82,7 +82,14 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "🧹 Checking for failed stacks and cleaning up if necessary..."
   npm run cfn:cleanup-stack
 
-  npm run cfn:deploy-yaml
+  if npm run cfn:deploy-yaml; then
+    echo "✅ CloudFormation deployment successful"
+  else
+    echo "❌ CloudFormation deployment failed - showing error details:"
+    show_cfn_errors
+    exit 1
+  fi
+  
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
