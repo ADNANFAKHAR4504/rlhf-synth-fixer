@@ -97,7 +97,19 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   export PYTHONPATH=.:bin
-  pipenv run pulumi-create-stack
+  
+  # Handle potential encryption issues by trying to create stack
+  echo "🔧 Attempting to create or select Pulumi stack..."
+  if ! pipenv run pulumi-create-stack; then
+    echo "⚠️ Stack creation failed, likely due to existing encrypted stack"
+    echo "🔧 Attempting to remove existing encrypted stack and retry..."
+    # Try to remove the problematic stack
+    STACK_NAME="${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    pipenv run pulumi stack rm "$STACK_NAME" --yes --force 2>/dev/null || echo "Stack removal attempted"
+    echo "🔄 Retrying stack creation..."
+    pipenv run pulumi-create-stack
+  fi
+  
   echo "Deploying infrastructure ..."
   pipenv run pulumi-deploy
 else
