@@ -1,51 +1,48 @@
-You are tasked with creating an AWS CDK application in Python to provision a secure, high-availability web application infrastructure. The CDK stack must be structured so that the `tap.py` file at the root serves as the main entry point (like `app.py`), and the stack implementation resides in `lib/Tapstack.py`. The application should define all resources in code, synthesize them into CloudFormation templates, and be deployable without manual intervention.
+To provide a safe, high-availability web application infrastructure, you must write a Python application for the AWS CDK. The CDK stack needs to be organised so that the stack implementation is located in `lib/Tapstack.py` and the `tap.py` file at the root acts as the primary entry point (similar to `app.py`). All resources should be defined in the application's code, combined into CloudFormation templates, and deployable automatically.
 
 ---
 
-## Requirements
+## Conditions
 
-- **Networking**
-  - Provision a VPC spanning at least two availability zones.
-  - Include both public and private subnets.
-  - Configure route tables to properly isolate public and private traffic.
+### Making connections
+- Set up a VPC with a minimum of two availability zones.  
+- Incorporate both private and public subnets.  
+- Route tables should be set up to appropriately separate private and public traffic.  
 
-- **Compute**
-  - Deploy an Auto Scaling Group of EC2 instances.
-  - Place EC2 instances behind an Elastic Load Balancer.
-  - Use Security Groups for layered security.
+### Calculate
+- Set up a group of EC2 instances that will automatically scale.  
+- Install an elastic load balancer behind EC2 instances.  
+- For layered security, use Security Groups.  
 
-- **Storage**
-  - Create S3 buckets with:
-    - Server-side encryption enabled.
-    - All public access blocked.
-  - Provision DynamoDB tables with point-in-time recovery enabled.
+### Keeping
+- Enable server-side encryption when creating S3 buckets.  
+- All public access has been blocked.  
+- Set up DynamoDB tables with point-in-time recovery activated.  
 
-- **Databases**
-  - Deploy RDS databases inside private subnets.
-  - Ensure databases are not directly accessible from the internet.
-  - Store sensitive credentials (e.g., DB password) in AWS Secrets Manager.
+### Databases
+- RDS databases should be installed inside private subnets.  
+- Make sure that databases cannot be accessed directly from the internet.  
+- Use AWS Secrets Manager to store private information, such as database passwords.  
 
-- **Identity and Security**
-  - Define IAM roles explicitly, enforcing least-privilege access.
-  - Enable AWS Config to track and monitor configuration changes.
-  - Attach AWS WAF to a CloudFront distribution to protect against common web exploits.
-
----
-
-## Constraints
-
-- All resources must exist within a **single CDK stack**.
-- The infrastructure must be deployed in **us-west-2**.
-- Subnets must be distributed across **two availability zones** to ensure redundancy.
-- Security Groups must be explicitly defined and applied to EC2 instances.
-- No database or sensitive service should be internet-facing.
-- Consistent naming conventions must be applied:
-  - Format: `project-name-resource-type`.
+### Security and Identity
+- Enforce least-privilege access by clearly defining IAM roles.  
+- To track and keep an eye on configuration changes, turn on AWS Config.  
+- To defend against popular online exploits, integrate AWS WAF with a CloudFront distribution.  
 
 ---
 
-## Proposed Statement
+## Limitations
+- A single CDK stack must contain all of the resources.  
+- It is necessary to deploy the infrastructure in US-West-2.  
+- To guarantee redundancy, subnets must be dispersed throughout two availability zones.  
+- EC2 instances require the explicit definition and application of Security Groups.  
+- No sensitive service or database should be accessible over the internet.  
+- It is necessary to use consistent naming conventions:  
+  - Format: `resource-type-project-name`  
 
-The AWS CDK application will deploy a full infrastructure stack in the **us-west-2 region**, leveraging **at least two availability zones** for resilience and high availability. The stack will include a secure VPC with isolated subnets, EC2 instances running within an Auto Scaling group behind a load balancer, and properly scoped IAM roles enforcing least-privilege permissions. Storage services like S3 and DynamoDB will be provisioned with encryption and recovery features enabled, while RDS databases will run exclusively in private subnets with credentials stored securely in AWS Secrets Manager. To maintain compliance and strengthen defenses, AWS Config will monitor infrastructure changes, and AWS WAF integrated with CloudFront will mitigate common web threats.
+---
 
-All resources will be defined in Python CDK constructs inside `lib/Tapstack.py` and synthesized via `tap.py` into valid CloudFormation templates for automated deployment.
+## Suggested Declaration
+Using at least two availability zones for high availability and resilience, the AWS CDK application will deploy a complete infrastructure stack in the US-West-2 region. A secure VPC with isolated subnets, EC2 instances operating in an Auto Scaling group behind a load balancer, and appropriately scoped IAM roles enforcing least-privilege permissions are all components of the stack. While RDS databases will only operate in private subnets with credentials safely stored in AWS Secrets Manager, storage services such as S3 and DynamoDB will be provisioned with encryption and recovery features enabled. AWS WAF integrated with CloudFront will reduce common web threats, and AWS Config will keep an eye on infrastructure changes to ensure compliance and fortify defences.
+
+For automated deployment, all resources will be defined in Python CDK constructs within `lib/Tapstack.py` and synthesised via `tap.py` into legitimate CloudFormation templates.
