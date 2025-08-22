@@ -30,5 +30,11 @@
     "Events",
     "Config",
     "EBS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "RakeshNaik7780",
+  "dockerS3Location": ""
 }
