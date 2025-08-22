@@ -221,6 +221,19 @@ jobs:
       - name: Run unit tests
         run: ./scripts/unit-tests.sh
 
+      - name: Prepare coverage reports for Java projects
+        if: ${{ needs.detect-metadata.outputs.language == 'java' }}
+        run: |
+          echo \"Preparing Java coverage reports for upload...\"
+          mkdir -p coverage
+          if [ -d \"build/reports/jacoco/test/\" ]; then
+            cp -r build/reports/jacoco/test/* coverage/
+            echo \"✅ Copied JaCoCo reports to coverage/ directory\"
+            ls -la coverage/
+          else
+            echo \"⚠️ JaCoCo reports not found in build/reports/jacoco/test/\"
+          fi
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
