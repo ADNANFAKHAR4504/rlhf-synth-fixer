@@ -129,7 +129,7 @@
         },
         "ExistingConfigDeliveryChannelName": {
             "Type": "String",
-            "Default": "",
+            "Default": "use-existing",
             "Description": "Name of an existing AWS Config Delivery Channel (leave blank to create a new one)"
         }
     },
