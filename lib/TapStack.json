@@ -37,10 +37,6 @@
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "Description": "Database admin username"
-        },
-        "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
         }
     },
     "Mappings": {
@@ -449,6 +445,22 @@
                 }
             }
         },
+        "KeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Properties": {
+                "KeyName": {
+                    "Fn::Sub": "${EnvironmentName}-key-pair"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-KeyPair"
+                        }
+                    }
+                ]
+            }
+        },
         "ApplicationLoadBalancerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -741,18 +753,6 @@
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
                 },
-                "NotificationConfiguration": {
-                    "CloudWatchConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "CloudWatchConfiguration": {
-                                "LogGroupName": {
-                                    "Ref": "S3LogGroup"
-                                }
-                            }
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -900,6 +900,7 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${EnvironmentName}-database"
@@ -1089,7 +1090,7 @@
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Ref": "KeyPair"
                     },
                     "IamInstanceProfile": {
                         "Arn": {
@@ -1291,7 +1292,7 @@
                 },
                 "InstanceType": "t3.micro",
                 "KeyName": {
-                    "Ref": "KeyPairName"
+                    "Ref": "KeyPair"
                 },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
@@ -1316,9 +1317,7 @@
                     }
                 ],
                 "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch Agent for bastion\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s\n"
-                    }
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch Agent for bastion\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s\n"
                 },
                 "Tags": [
                     {
@@ -1468,7 +1467,7 @@
             "Value": {
                 "Fn::GetAtt": [
                     "ApplicationLoadBalancer",
-                    "Arn"
+                    "LoadBalancerArn"
                 ]
             },
             "Export": {
@@ -1560,6 +1559,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-EnvironmentName"
+                }
+            }
+        },
+        "KeyPairName": {
+            "Description": "EC2 Key Pair Name",
+            "Value": {
+                "Ref": "KeyPair"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KeyPairName"
                 }
             }
         }

@@ -26,10 +26,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database admin username'
-    
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for SSH access'
 
 Mappings:
   AWSRegionAMI:
@@ -241,6 +237,18 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
 
   # ============================================================================
+  # SECURITY & KEY PAIR
+  # ============================================================================
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${EnvironmentName}-key-pair'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-KeyPair'
+
+  # ============================================================================
   # SECURITY GROUPS
   # ============================================================================
 
@@ -414,11 +422,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Backup-Bucket'
@@ -506,6 +509,7 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
       DBInstanceClass: !Ref DBInstanceClass
@@ -611,7 +615,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !Ref KeyPair
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -772,7 +776,7 @@ Resources:
     Properties:
       ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
+      KeyName: !Ref KeyPair
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
@@ -785,7 +789,7 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -948,7 +952,7 @@ Outputs:
 
   ApplicationLoadBalancerArn:
     Description: 'Application Load Balancer ARN'
-    Value: !GetAtt ApplicationLoadBalancer.Arn
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
     Export:
       Name: !Sub '${AWS::StackName}-ALBArn'
 
@@ -993,3 +997,9 @@ Outputs:
     Value: !Ref EnvironmentName
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentName'
+
+  KeyPairName:
+    Description: 'EC2 Key Pair Name'
+    Value: !Ref KeyPair
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyPairName'

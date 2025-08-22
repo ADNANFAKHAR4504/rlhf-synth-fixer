@@ -70,12 +70,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(usernameParam.MinLength).toBe(1);
       expect(usernameParam.MaxLength).toBe(16);
     });
-
-    test('should have KeyPairName parameter', () => {
-      expect(template.Parameters.KeyPairName).toBeDefined();
-      const keyParam = template.Parameters.KeyPairName;
-      expect(keyParam.Type).toBe('AWS::EC2::KeyPair::KeyName');
-    });
   });
 
   describe('Mappings', () => {
@@ -154,6 +148,17 @@ describe('TapStack CloudFormation Template', () => {
       
       expect(nat1.Type).toBe('AWS::EC2::NatGateway');
       expect(nat2.Type).toBe('AWS::EC2::NatGateway');
+    });
+  });
+
+  describe('Security Resources', () => {
+    test('should have KeyPair resource', () => {
+      expect(template.Resources.KeyPair).toBeDefined();
+      const keyPair = template.Resources.KeyPair;
+      expect(keyPair.Type).toBe('AWS::EC2::KeyPair');
+      expect(keyPair.Properties.KeyName).toEqual({
+        'Fn::Sub': '${EnvironmentName}-key-pair'
+      });
     });
   });
 
@@ -362,7 +367,8 @@ describe('TapStack CloudFormation Template', () => {
         'BastionHostPublicIP',
         'AutoScalingGroupName',
         'StackName',
-        'EnvironmentName'
+        'EnvironmentName',
+        'KeyPairName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -422,14 +428,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(20); // Should have many resources
     });
 
-    test('should have exactly five parameters', () => {
+    test('should have exactly four parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(4);
     });
 
-    test('should have exactly fourteen outputs', () => {
+    test('should have exactly fifteen outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(14);
+      expect(outputCount).toBe(15);
     });
   });
 
