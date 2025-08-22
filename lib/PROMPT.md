@@ -1,105 +1,104 @@
-AWS Multi-Region Web Application Deployment - (Pulumi TypeScript)
-==============================================================================
+Building a Secure Multi-Region Web Application with AWS and Pulumi TypeScript
+=============================================================================
 
-**Environment**
----------------
-
-*   Deploy web application in multi-region AWS environment using **Pulumi with TypeScript**
-    
-*   Must utilize AWS GovCloud for maximum security
-    
-*   Comply with US Government regulations
-    
-*   Support auto-scaling features for application instances
-    
-
-**Project Details**
+What We're Building
 -------------------
-    
-*   **Difficulty Level:** Expert
-    
-*   **Technology Stack:** Pulumi + TypeScript
-    
 
-**Requirements**
+We're creating a robust web application that runs across multiple AWS regions using **Pulumi with TypeScript** as our infrastructure management tool. This isn't just any deployment - we're targeting **AWS GovCloud** to meet the highest security standards and comply with US Government regulations. The application will intelligently scale itself based on demand, ensuring optimal performance while maintaining cost efficiency.
+
+Project Overview
 ----------------
 
-*   Use AWS Elastic Beanstalk for application deployment
+**Complexity Level:** This is an expert-level project that requires deep understanding of cloud architecture and infrastructure as code.
+
+**Our Tech Stack:** Pulumi paired with TypeScript for clean, maintainable infrastructure code.
+
+What You Need to Accomplish
+---------------------------
+
+### Core Infrastructure Requirements
+
+*   Deploy your application using **AWS Elastic Beanstalk** for streamlined application management
     
-*   Incorporate AWS GovCloud regions for enhanced security and compliance
+*   Leverage **AWS GovCloud regions** to ensure maximum security and regulatory compliance
     
-*   Design infrastructure for automatic scaling based on CPU utilization metrics
+*   Build intelligent auto-scaling that responds to CPU usage patterns
     
-*   Include comprehensive resource tagging for all AWS resources
+*   Implement comprehensive resource tagging across all AWS components
     
-*   Deliver **Pulumi TypeScript configuration** instead of Terraform HCL
+*   Write everything in **Pulumi TypeScript** (no Terraform allowed for this project)
     
-*   Ensure deployment passes pulumi preview and pulumi up
+*   Ensure your deployment works flawlessly with pulumi preview and pulumi up
     
-*   Verify instance scaling functionality is operational
+*   Test and validate that your scaling functionality actually works under load
     
 
-**Constraints**
----------------
+### Important Limitations and Guidelines
 
-*   Must be compatible with AWS GovCloud
+*   Everything must work within AWS GovCloud's security framework
     
-*   Implement automated scaling based on CPU utilization thresholds
+*   Your scaling logic should be CPU-based and responsive to real usage patterns
     
-*   Maintain high compliance and security standards
+*   Maintain strict compliance and security standards throughout
     
-*   Support variable load management through efficient resource scaling
+*   Design for variable workloads - your system should handle traffic spikes gracefully
     
-*   Use Python as the programming language for infrastructure definition
-    
-
-**Expected Deliverables**
--------------------------
-
-*   Complete **Pulumi TypeScript program** (\_\_index\_\_.ts)
-    
-*   **Pulumi.yaml** project configuration file
-    
-*   **requirements.txt** for Python dependencies
-    
-*   Multi-region deployment capability
-    
-*   Auto-scaling implementation
-    
-*   Resource tagging strategy
-    
-*   Validated and tested scaling functionality
+*   **Note:** There's a discrepancy in the original requirements mentioning Python - this project uses TypeScript
     
 
-**Key Components**
-------------------
+What You'll Deliver
+-------------------
 
-*   Infrastructure as Code (Pulumi TypeScript)
+### Essential Files and Components
+
+*   **Complete Pulumi TypeScript application** (index.ts as your main file)
     
-*   AWS Elastic Beanstalk
+*   **Pulumi.yaml** project configuration that defines your project settings
     
-*   AWS GovCloud regions
+*   **package.json** with all necessary TypeScript/Node.js dependencies
     
-*   Auto-scaling groups
+*   Multi-region deployment architecture that can handle failover scenarios
     
-*   CPU utilization monitoring
+*   Working auto-scaling implementation with proper monitoring
     
-*   Multi-region architecture
+*   Smart resource tagging strategy for organization and cost tracking
     
-*   Compliance-focused security implementation
-    
-*   TypeScript-based resource definitions
+*   Thoroughly tested scaling functionality with performance validation
     
 
-**Development Requirements**
-----------------------------
+### Key Technical Components You'll Work With
 
-*   TypeScript environment
+*   Infrastructure as Code using Pulumi's TypeScript SDK
     
-*   Pulumi CLI installed
+*   AWS Elastic Beanstalk for application hosting and management
     
-*   AWS CLI configured for GovCloud access
+*   AWS GovCloud regions for secure, compliant infrastructure
     
-*   Proper IAM permissions for GovCloud resources
+*   Auto-scaling groups that respond intelligently to demand
     
-*   Testing framework for infrastructure validation
+*   CPU utilization monitoring and alerting systems
+    
+*   Multi-region architecture for high availability
+    
+*   Security-first implementation following compliance best practices
+    
+*   Clean, readable TypeScript code for infrastructure definitions
+    
+
+Getting Your Development Environment Ready
+------------------------------------------
+
+### Required Tools and Access
+
+*   TypeScript development environment set up and configured
+    
+*   Pulumi CLI installed and authenticated
+    
+*   AWS CLI configured with proper GovCloud credentials
+    
+*   Appropriate IAM permissions for creating and managing GovCloud resources
+    
+*   Testing framework ready for validating your infrastructure deployments
+    
+
+This project combines the power of modern infrastructure as code with enterprise-grade security requirements, making it an excellent showcase of advanced cloud architecture skills.
