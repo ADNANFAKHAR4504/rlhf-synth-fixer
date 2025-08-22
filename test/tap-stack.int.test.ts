@@ -53,12 +53,12 @@ describe('Nova Infrastructure Integration Tests', () => {
     secondaryDashboardName: 'nova-dashboard-uswest1',
     primaryPrivateSubnetIds: ['subnet-05d37da0b8c8291f2', 'subnet-073d264cf46cf4436'],
     primaryPublicSubnetIds: ['subnet-05ea103ad357474ec', 'subnet-024b6744266483c57'],
-    secondaryPrivateSubnetIds: ['subnet-066577d7fc13a3719', 'subnet-03675dd35bcfa169c'],
+    secondaryPrivateSubnetIds: ['subnet-066577d7fc13a3719', 'subnet-0a4e5fda7fb373738'],
     secondaryPublicSubnetIds: ['subnet-07db2a539987dfefa', 'subnet-00e5dce8cf915f298'],
   
     expectedTags: {
       Environment: 'dev', 
-      Project: 'IaC-AWS-Nova-Model-Breaking',
+      Project: 'IaC-AWS-Model-Breaking',
       Application: 'nova-web-app',
       ManagedBy: 'Pulumi',
     }
