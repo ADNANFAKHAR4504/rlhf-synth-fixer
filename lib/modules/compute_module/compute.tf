@@ -70,7 +70,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment}-asg"
+  name                = "${var.environment}-asg-turing"
   vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
