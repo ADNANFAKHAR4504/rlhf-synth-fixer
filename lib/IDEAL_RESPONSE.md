@@ -10,8 +10,8 @@ The entire infrastructure is self-contained. The stack programmatically creates 
 - **High Availability**: Each environment's VPC is built with subnets across **two availability zones** to ensure resilience and prevent single-point-of-failure at the networking level.
 - **Isolated Networking**: Each environment is provisioned with a unique, non-overlapping VPC CIDR block, preventing IP conflicts and enabling future network peering if required.
 - **Security by Default**:
-  - **Encryption at Rest**: A dedicated, customer-managed **KMS Key** is created for each environment. This key is used to encrypt both the CloudWatch Logs and the root EBS volume of the EC2 instance.
-  - **Hardened Security Groups**: Ingress rules are restricted. The insecure rule allowing SSH access from the entire internet has been removed.
+  - **Encryption at Rest**: A dedicated, customer-managed **KMS Key** is created for each environment, complete with a key policy allowing CloudWatch Logs access. This key is used to encrypt both the CloudWatch Logs and the root EBS volume of the EC2 instance.
+  - **Hardened Security Groups**: Ingress rules are restricted to HTTP traffic only. The insecure rule allowing SSH access from the entire internet has been removed.
   - **Least-Privilege IAM**: A dedicated IAM role is created for the EC2 instance in each environment. Its policy is tightly scoped to only allow logging actions on its **specific CloudWatch Log Group ARN**, removing dangerous wildcards.
 - **Comprehensive Tagging**: All resources are tagged with their respective `Environment` and `Project`, enabling clear cost allocation, resource tracking, and automated governance.
 
@@ -49,7 +49,7 @@ export interface EnvironmentConfig {
   readonly envName: 'dev' | 'staging' | 'prod';
   readonly awsRegion: string;
   readonly instanceType: string;
-  readonly vpcCidr: string; // Added for unique CIDR per environment
+  readonly vpcCidr: string;
   readonly tags: { [key: string]: string };
 }
 
@@ -64,7 +64,6 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
-    // Default provider for the stack
     new AwsProvider(this, 'aws-default', {
       region: 'us-west-2',
     });
@@ -78,7 +77,7 @@ export class TapStack extends TerraformStack {
     for (const config of props.environments) {
       const constructIdSuffix = `-${config.envName}`;
       const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
-      // FIX: Standardized resource name prefix to 'webapp-'
+      // FIX: Standardized resource name prefix to 'webapp-' to match requirements
       const resourceNamePrefix = `webapp-${config.envName}-${uniqueSuffix}`;
 
       // --- KMS Key for Encryption (with Policy) ---
@@ -124,7 +123,6 @@ export class TapStack extends TerraformStack {
         tags: { ...config.tags, Name: `${resourceNamePrefix}-vpc` },
       });
 
-      // Create subnets in two availability zones for high availability
       const subnetA = new Subnet(this, `SubnetA${constructIdSuffix}`, {
         vpcId: vpc.id,
         cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 0),

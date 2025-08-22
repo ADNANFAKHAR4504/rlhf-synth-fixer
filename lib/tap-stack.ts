@@ -25,7 +25,7 @@ export interface EnvironmentConfig {
   readonly envName: 'dev' | 'staging' | 'prod';
   readonly awsRegion: string;
   readonly instanceType: string;
-  readonly vpcCidr: string; // Added for unique CIDR per environment
+  readonly vpcCidr: string;
   readonly tags: { [key: string]: string };
 }
 
@@ -40,7 +40,6 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
-    // Default provider for the stack
     new AwsProvider(this, 'aws-default', {
       region: 'us-west-2',
     });
@@ -54,7 +53,7 @@ export class TapStack extends TerraformStack {
     for (const config of props.environments) {
       const constructIdSuffix = `-${config.envName}`;
       const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
-      // FIX: Standardized resource name prefix to 'webapp-'
+      // FIX: Standardized resource name prefix to 'webapp-' to match requirements
       const resourceNamePrefix = `webapp-${config.envName}-${uniqueSuffix}`;
 
       // --- KMS Key for Encryption (with Policy) ---
@@ -100,7 +99,6 @@ export class TapStack extends TerraformStack {
         tags: { ...config.tags, Name: `${resourceNamePrefix}-vpc` },
       });
 
-      // Create subnets in two availability zones for high availability
       const subnetA = new Subnet(this, `SubnetA${constructIdSuffix}`, {
         vpcId: vpc.id,
         cidrBlock: Fn.cidrsubnet(vpc.cidrBlock, 8, 0),
