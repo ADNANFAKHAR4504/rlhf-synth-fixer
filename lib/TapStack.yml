@@ -1,40 +1,49 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure multi-tier infrastructure with private subnets, encrypted resources, and comprehensive monitoring'
+Description: 'Secure multi-service AWS infrastructure with KMS encryption, private networking, and compliance monitoring'
 
 Parameters:
-  AllowedSSHCIDR:
+  Environment:
+    Type: String
+    Default: 'production'
+    Description: 'Environment name for tagging'
+  
+  Owner:
+    Type: String
+    Default: 'infrastructure-team'
+    Description: 'Owner for tagging'
+  
+  AllowedSshCidr:
     Type: String
     Default: '10.0.0.0/8'
     Description: 'CIDR block allowed for SSH access'
-    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
   
-  DBUsername:
+  S3BucketName:
     Type: String
-    Default: 'admin'
-    Description: 'Database administrator username'
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Default: 'secure-app-data-bucket'
+    Description: 'Name for the main S3 bucket'
   
-  DBPassword:
+  TrailBucketName:
     Type: String
-    NoEcho: true
-    Description: 'Database administrator password'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
+    Default: 'cloudtrail-logs-bucket'
+    Description: 'Name for CloudTrail S3 bucket'
+  
+  NotificationEmail:
+    Type: String
+    Default: 'alerts@company.com'
+    Description: 'Email for CloudWatch alarm notifications'
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID via SSM'
 
 Resources:
   # KMS Keys
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'KMS Key for S3 bucket encryption'
+      Description: 'KMS key for S3 bucket encryption'
       KeyPolicy:
         Statement:
           - Sid: Enable IAM User Permissions
@@ -48,25 +57,33 @@ Resources:
             Principal:
               Service: s3.amazonaws.com
             Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+          - Sid: Allow CloudTrail Service
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
             Resource: '*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/s3-encryption-key
+      AliasName: !Sub 'alias/s3-${Environment}-key'
       TargetKeyId: !Ref S3KMSKey
 
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: 'KMS Key for RDS encryption'
+      Description: 'KMS key for RDS encryption'
       KeyPolicy:
         Statement:
           - Sid: Enable IAM User Permissions
@@ -80,20 +97,19 @@ Resources:
             Principal:
               Service: rds.amazonaws.com
             Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-              - kms:CreateGrant
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
             Resource: '*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/rds-encryption-key
+      AliasName: !Sub 'alias/rds-${Environment}-key'
       TargetKeyId: !Ref RDSKMSKey
 
   # VPC and Networking
@@ -105,11 +121,11 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: 'SecureVPC'
+          Value: !Sub '${Environment}-vpc'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -117,13 +133,14 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: '10.0.1.0/24'
       AvailabilityZone: 'us-east-1a'
+      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: 'PrivateSubnet1'
+          Value: !Sub '${Environment}-private-subnet-1a'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -131,106 +148,26 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: '10.0.2.0/24'
       AvailabilityZone: 'us-east-1b'
+      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: 'PrivateSubnet2'
+          Value: !Sub '${Environment}-private-subnet-1b'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
-
-  # NAT Gateway for private subnet internet access
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  PublicSubnetForNAT:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: '10.0.100.0/24'
-      AvailabilityZone: 'us-east-1a'
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: 'PublicSubnetForNAT'
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnetForNAT
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetForNAT
-      RouteTableId: !Ref PublicRouteTable
+          Value: !Ref Owner
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-rt'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway
+          Value: !Ref Owner
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -248,39 +185,28 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'SecureEC2AccessGroup'
-      GroupDescription: 'Security group for EC2 instances - allows SSH from specific CIDR range'
+      GroupName: !Sub '${Environment}-ec2-sg'
+      GroupDescription: 'Security group for EC2 instances allowing SSH from authorized CIDR'
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref AllowedSSHCIDR
-          Description: 'SSH access from allowed CIDR range'
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS outbound for AWS API calls'
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP outbound for package updates'
+          CidrIp: !Ref AllowedSshCidr
+          Description: 'SSH access from authorized CIDR'
       Tags:
         - Key: Name
-          Value: 'SecureEC2AccessGroup'
+          Value: !Sub '${Environment}-ec2-sg'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'SecureRDSAccessGroup'
-      GroupDescription: 'Security group for RDS instances - allows MySQL access from EC2 security group'
+      GroupName: !Sub '${Environment}-rds-sg'
+      GroupDescription: 'Security group for RDS allowing access from EC2 security group'
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -290,17 +216,17 @@ Resources:
           Description: 'MySQL access from EC2 instances'
       Tags:
         - Key: Name
-          Value: 'SecureRDSAccessGroup'
+          Value: !Sub '${Environment}-rds-sg'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # S3 Bucket
-  SecureS3Bucket:
+  # S3 Buckets
+  S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${S3BucketName}-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -312,174 +238,252 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # IAM Roles and Policies
-  EC2S3AccessRole:
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyUnencryptedPuts
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${S3Bucket}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: RequireKMSEncryption
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${S3Bucket}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt S3KMSKey.Arn
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${TrailBucketName}-${AWS::AccountId}-${Environment}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub '${CloudTrailBucket}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # IAM Roles
+  EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'EC2S3AccessRole'
+      RoleName: !Sub '${Environment}-ec2-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+            Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: S3BucketAccess
+        - PolicyName: S3Access
           PolicyDocument:
-            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub '${SecureS3Bucket}/*'
-                  - !GetAtt SecureS3Bucket.Arn
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: !Sub '${S3Bucket}/*'
               - Effect: Allow
                 Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
+                  - 's3:ListBucket'
+                Resource: !Sub '${S3Bucket}'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
                 Resource: !GetAtt S3KMSKey.Arn
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: 'EC2S3AccessProfile'
+      InstanceProfileName: !Sub '${Environment}-ec2-profile'
       Roles:
-        - !Ref EC2S3AccessRole
+        - !Ref EC2Role
 
-  # Lambda Execution Role
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'LambdaMonitoringRole'
+      RoleName: !Sub '${Environment}-lambda-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+            Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: CloudWatchMetrics
+        - PolicyName: LogsAccess
           PolicyDocument:
-            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - cloudwatch:PutMetricData
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
-                  - !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:metric/*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # CloudTrail Role
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-config-role'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
+      Policies:
+        - PolicyName: ConfigDeliveryPermissions
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !Sub '${S3Bucket}'
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetBucketAcl'
+                Resource: !Sub '${S3Bucket}/config/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': 'bucket-owner-full-control'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'CloudTrailLogsRole'
+      RoleName: !Sub '${Environment}-cloudtrail-logs-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: sts:AssumeRole
+            Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: CloudTrailLogsPolicy
+        - PolicyName: CloudWatchLogsDeliveryRolePolicy
           PolicyDocument:
-            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   # EC2 Instance
-  CriticalEC2Instance:
+  EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: t3.micro
+      ImageId: !Ref LatestAmiId
+      InstanceType: 't3.micro'
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       SubnetId: !Ref PrivateSubnet1
       DisableApiTermination: true
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y amazon-cloudwatch-agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c default
       Tags:
         - Key: Name
-          Value: 'CriticalEC2Instance'
+          Value: !Sub '${Environment}-ec2-instance'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # RDS Subnet Group
+  # RDS
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: 'secure-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS instances in private subnets'
+      DBSubnetGroupName: !Sub '${Environment}-rds-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS in private subnets'
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # RDS Instance
-  SecureRDSInstance:
+  RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: 'secure-database'
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
+      DBInstanceIdentifier: !Sub '${Environment}-rds-instance'
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
       EngineVersion: '8.0.35'
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: 'admin'
+      MasterUserPassword: 'TempPassword123!'
       AllocatedStorage: 20
-      StorageType: gp2
+      StorageType: 'gp2'
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
       VPCSecurityGroups:
@@ -488,182 +492,131 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # Lambda Function
-  MonitoringLambda:
-    Type: AWS::S3::Bucket
+  # Lambda and CloudWatch Logs
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      BucketName: !Sub 'lambda-code-${AWS::AccountId}-${AWS::Region}'
+      LogGroupName: !Sub '/aws/lambda/${Environment}-function'
+      RetentionInDays: 14
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  SecurityMonitoringFunction:
+  LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: 'SecurityMonitoringFunction'
-      Runtime: python3.11
-      Handler: index.lambda_handler
+      FunctionName: !Sub '${Environment}-function'
+      Runtime: 'python3.9'
+      Handler: 'index.lambda_handler'
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import json
-          import boto3
-          import logging
-          
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-          
           def lambda_handler(event, context):
-              logger.info('Security monitoring function executed')
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Security monitoring completed')
+                  'body': json.dumps('Hello from Lambda!')
               }
-      Timeout: 60
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
-
-  # CloudWatch Log Group for Lambda
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${SecurityMonitoringFunction}'
-      RetentionInDays: 14
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   # CloudTrail
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/aws/cloudtrail/security-trail'
+      LogGroupName: !Sub '${Environment}-cloudtrail-log-group'
       RetentionInDays: 90
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  CloudTrailS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Owner
-          Value: Infrastructure
-
-  CloudTrailS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailS3Bucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailS3Bucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-
-  SecurityCloudTrail:
+  CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailS3BucketPolicy
+    DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: 'SecurityCloudTrail'
-      S3BucketName: !Ref CloudTrailS3Bucket
+      TrailName: !Sub '${Environment}-cloudtrail'
+      S3BucketName: !Ref CloudTrailBucket
+      S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
+      KMSKeyId: !Ref S3KMSKey
       CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${SecureS3Bucket}/*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  # CloudWatch Alarms
+  # SNS Topic for Alarms
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-security-alarms'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref NotificationEmail
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # CloudWatch Metric Filter and Alarm
+  UnauthorizedAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+      MetricTransformations:
+        - MetricNamespace: 'Security'
+          MetricName: 'UnauthorizedAccess'
+          MetricValue: '1'
+
   UnauthorizedAccessAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 'UnauthorizedAccessAttempts'
+      AlarmName: !Sub '${Environment}-unauthorized-access-alarm'
       AlarmDescription: 'Alarm for unauthorized access attempts'
-      MetricName: 'UnauthorizedAPICalls'
-      Namespace: 'CloudWatchLogMetrics'
+      MetricName: 'UnauthorizedAccess'
+      Namespace: 'Security'
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
   # AWS Config
-  ConfigServiceRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: 'SecurityConfigDeliveryChannel'
-      S3BucketName: !Ref ConfigS3Bucket
-
-  ConfigS3Bucket:
+  ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'aws-config-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'aws-config-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3KMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -671,22 +624,22 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
-  ConfigS3BucketPolicy:
+  ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref ConfigS3Bucket
+      Bucket: !Ref ConfigBucket
       PolicyDocument:
         Statement:
           - Sid: AWSConfigBucketPermissionsCheck
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigS3Bucket.Arn
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub '${ConfigBucket}'
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'
@@ -694,8 +647,8 @@ Resources:
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt ConfigS3Bucket.Arn
+            Action: 's3:ListBucket'
+            Resource: !Sub '${ConfigBucket}'
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'
@@ -703,64 +656,95 @@ Resources:
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${ConfigS3Bucket.Arn}/*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket}/*'
             Condition:
               StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+                's3:x-amz-acl': 'bucket-owner-full-control'
                 'AWS:SourceAccount': !Ref 'AWS::AccountId'
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: 'SecurityConfigRecorder'
-      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
+      Name: !Sub '${Environment}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  SecurityGroupChangesRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
+  DeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
     Properties:
-      ConfigRuleName: 'security-group-changes-rule'
-      Description: 'Checks for security group modifications'
+      Name: !Sub '${Environment}-config-delivery-channel'
+      S3BucketName: !Ref ConfigBucket
+
+  ConfigurationRecorderStatus:
+    Type: AWS::Config::ConfigurationRecorderStatus
+    DependsOn: DeliveryChannel
+    Properties:
+      ConfigurationRecorderName: !Ref ConfigurationRecorder
+      IsEnabled: true
+
+  SecurityGroupConfigRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorderStatus
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-sg-ssh-restricted'
+      Description: 'Checks whether security groups allow unrestricted incoming SSH traffic'
       Source:
         Owner: AWS
-        SourceIdentifier: SECURITY_GROUPS_UNRESTRICTED_COMMON_PORTS
+        SourceIdentifier: INCOMING_SSH_DISABLED
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
         - Key: Owner
-          Value: Infrastructure
+          Value: !Ref Owner
 
 Outputs:
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${Environment}-vpc-id'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${Environment}-private-subnet-1-id'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${Environment}-private-subnet-2-id'
+
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${Environment}-ec2-sg-id'
 
   S3BucketName:
     Description: 'S3 Bucket Name'
-    Value: !Ref SecureS3Bucket
+    Value: !Ref S3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket'
+      Name: !Sub '${Environment}-s3-bucket-name'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail S3 Bucket Name'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${Environment}-cloudtrail-bucket-name'
 
   EC2InstanceId:
     Description: 'EC2 Instance ID'
-    Value: !Ref CriticalEC2Instance
+    Value: !Ref EC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2-Instance'
+      Name: !Sub '${Environment}-ec2-instance-id'
 
-  RDSEndpoint:
-    Description: 'RDS Endpoint'
-    Value: !GetAtt SecureRDSInstance.Endpoint.Address
+  RDSInstanceEndpoint:
+    Description: 'RDS Instance Endpoint'
+    Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
-
-  LambdaFunctionArn:
-    Description: 'Lambda Function ARN'
-    Value: !GetAtt SecurityMonitoringFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-Lambda-ARN'
+      Name: !Sub '${Environment}-rds-endpoint'
