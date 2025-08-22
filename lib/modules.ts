@@ -86,7 +86,6 @@ export class KmsModule extends Construct {
   }
 }
 
-// S3 Module
 interface S3ModuleProps {
   project: string;
   environment: string;
@@ -95,6 +94,7 @@ interface S3ModuleProps {
   isPublic?: boolean;
 }
 
+// S3 Module - Updated version
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
 
@@ -133,7 +133,7 @@ export class S3Module extends Construct {
       rule: [
         {
           applyServerSideEncryptionByDefault: {
-            kmsMasterKeyId: kmsKey.arn, // Fixed: use kmsMasterKeyId instead of kmsKeyId
+            kmsMasterKeyId: kmsKey.arn,
             sseAlgorithm: 'aws:kms',
           },
           bucketKeyEnabled: true,
@@ -141,19 +141,24 @@ export class S3Module extends Construct {
       ],
     });
 
-    // Configure public access block
-    new S3BucketPublicAccessBlock(this, 'public-access-block', {
-      bucket: this.bucket.id,
-      blockPublicAcls: !isPublic,
-      blockPublicPolicy: !isPublic,
-      ignorePublicAcls: !isPublic,
-      restrictPublicBuckets: !isPublic,
-    });
+    // Configure public access block FIRST
+    const publicAccessBlock = new S3BucketPublicAccessBlock(
+      this,
+      'public-access-block',
+      {
+        bucket: this.bucket.id,
+        blockPublicAcls: !isPublic,
+        blockPublicPolicy: !isPublic, // This is the key setting
+        ignorePublicAcls: !isPublic,
+        restrictPublicBuckets: !isPublic,
+      }
+    );
 
-    // If public bucket, add public read policy
+    // If public bucket, add public read policy AFTER public access block
     if (isPublic) {
       new S3BucketPolicy(this, 'public-policy', {
         bucket: this.bucket.id,
+        dependsOn: [publicAccessBlock], // Ensure proper ordering
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -600,7 +605,6 @@ interface RdsModuleProps {
   project: string;
   environment: string;
   engine: string;
-  engineVersion: string;
   instanceClass: string;
   allocatedStorage: number;
   dbName: string;
@@ -622,7 +626,6 @@ export class RdsModule extends Construct {
       project,
       environment,
       engine,
-      engineVersion,
       instanceClass,
       allocatedStorage,
       dbName,
@@ -648,7 +651,6 @@ export class RdsModule extends Construct {
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${project}-${environment}-db`,
       engine,
-      engineVersion,
       instanceClass,
       allocatedStorage,
       dbName,

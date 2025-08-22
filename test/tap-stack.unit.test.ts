@@ -345,7 +345,6 @@ describe('TapStack Unit Tests', () => {
         project: 'tap-project',
         environment: 'dev',
         engine: 'postgres',
-        engineVersion: '14.9',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'appdb',

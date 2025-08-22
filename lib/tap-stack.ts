@@ -240,7 +240,6 @@ export class TapStack extends TerraformStack {
       project,
       environment: environmentSuffix,
       engine: 'postgres',
-      engineVersion: '14.9',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'appdb',
