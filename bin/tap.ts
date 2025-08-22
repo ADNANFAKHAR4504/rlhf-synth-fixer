@@ -11,7 +11,7 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX ||
   'dev';
 
-new TapStack(app, `TapStack-${environmentSuffix}`, {
+new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   env: {
     region: 'us-east-1',
