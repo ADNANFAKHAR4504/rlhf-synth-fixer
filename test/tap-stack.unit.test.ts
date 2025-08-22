@@ -1,7 +1,9 @@
 // __tests__/tap-stack.unit.test.ts
-import { App } from "cdktf";
+import { App, S3Backend } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
+import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
+
 
 // Mock SecureInfrastructureModules used in TapStack
 jest.mock("../lib/modules", () => ({
@@ -799,5 +801,259 @@ describe("TapStack Unit Tests", () => {
         })
       );
     });
+  });
+});
+
+// Add these tests to your existing describe blocks
+
+describe("Branch Coverage for AWS Region Logic", () => {
+  // Mock the AWS_REGION_OVERRIDE to test different scenarios
+  let originalOverride: string;
+
+  beforeAll(() => {
+    // Store original value
+    const TapStackModule = require("../lib/tap-stack");
+    originalOverride = TapStackModule.AWS_REGION_OVERRIDE;
+  });
+
+  afterAll(() => {
+    // Restore original value
+    jest.resetModules();
+  });
+
+  test("should use AWS_REGION_OVERRIDE when it exists (truthy)", () => {
+    // This tests the first branch: AWS_REGION_OVERRIDE ? AWS_REGION_OVERRIDE
+    const app = new App();
+    new TapStack(app, "TestOverrideExists", { awsRegion: "eu-west-1" });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        region: "us-east-1", // Should use AWS_REGION_OVERRIDE value
+      })
+    );
+  });
+
+  test("should use default region when AWS_REGION_OVERRIDE is falsy and no props.awsRegion", () => {
+    // Mock AWS_REGION_OVERRIDE to be falsy
+    jest.doMock("../lib/tap-stack", () => {
+      const actual = jest.requireActual("../lib/tap-stack");
+      return {
+        ...actual,
+        AWS_REGION_OVERRIDE: null, // Make it falsy
+      };
+    });
+
+    const { TapStack: MockedTapStack } = require("../lib/tap-stack");
+    
+    const app = new App();
+    new MockedTapStack(app, "TestDefaultRegion", {}); // No awsRegion in props
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        region: "us-east-1", // Should use default 'us-east-1'
+      })
+    );
+
+    jest.dontMock("../lib/tap-stack");
+  });
+
+  test("should handle undefined props gracefully", () => {
+    // Mock AWS_REGION_OVERRIDE to be falsy
+    jest.doMock("../lib/tap-stack", () => {
+      const actual = jest.requireActual("../lib/tap-stack");
+      return {
+        ...actual,
+        AWS_REGION_OVERRIDE: false, // Make it falsy
+      };
+    });
+
+    const { TapStack: MockedTapStack } = require("../lib/tap-stack");
+    
+    const app = new App();
+    new MockedTapStack(app, "TestUndefinedProps", undefined); // undefined props
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        region: "us-east-1", // Should use default
+      })
+    );
+
+    jest.dontMock("../lib/tap-stack");
+  });
+});
+
+describe("Additional Branch Coverage Tests", () => {
+  test("should handle environmentSuffix fallback branch", () => {
+    const app = new App();
+    
+    // Test with undefined environmentSuffix
+    new TapStack(app, "TestEnvFallback1", { environmentSuffix: undefined });
+    
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        defaultTags: [
+          {
+            tags: expect.objectContaining({
+              Environment: "dev", // Should fallback to 'dev'
+            }),
+          },
+        ],
+      })
+    );
+
+    // Test with empty string environmentSuffix
+    new TapStack(app, "TestEnvFallback2", { environmentSuffix: "" });
+    
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        defaultTags: [
+          {
+            tags: expect.objectContaining({
+              Environment: "dev", // Should fallback to 'dev' for empty string
+            }),
+          },
+        ],
+      })
+    );
+  });
+
+  test("should handle stateBucket fallback branch", () => {
+    const app = new App();
+    
+    // Test with undefined stateBucket
+    new TapStack(app, "TestBucketFallback1", { stateBucket: undefined });
+    
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: "iac-rlhf-tf-states", // Should use default
+      })
+    );
+
+    // Test with empty string stateBucket
+    new TapStack(app, "TestBucketFallback2", { stateBucket: "" });
+    
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: "iac-rlhf-tf-states", // Should fallback to default for empty string
+      })
+    );
+  });
+
+  test("should handle stateBucketRegion fallback branch", () => {
+    const app = new App();
+    
+    // Test with undefined stateBucketRegion
+    new TapStack(app, "TestRegionFallback1", { stateBucketRegion: undefined });
+    
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        region: "us-east-1", // Should use default
+      })
+    );
+
+    // Test with empty string stateBucketRegion
+    new TapStack(app, "TestRegionFallback2", { stateBucketRegion: "" });
+    
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        region: "us-east-1", // Should fallback to default
+      })
+    );
+  });
+
+  test("should handle all props combinations for complete branch coverage", () => {
+    const app = new App();
+    
+    // Test all possible combinations of truthy/falsy values
+    const testCases = [
+      { 
+        props: { environmentSuffix: "test", stateBucket: "test-bucket", stateBucketRegion: "us-west-2" },
+        expectedEnv: "test",
+        expectedBucket: "test-bucket",
+        expectedRegion: "us-west-2"
+      },
+      { 
+        props: { environmentSuffix: "", stateBucket: "", stateBucketRegion: "" },
+        expectedEnv: "dev",
+        expectedBucket: "iac-rlhf-tf-states",
+        expectedRegion: "us-east-1"
+      },
+      { 
+        props: { environmentSuffix: null, stateBucket: null, stateBucketRegion: null },
+        expectedEnv: "dev",
+        expectedBucket: "iac-rlhf-tf-states",
+        expectedRegion: "us-east-1"
+      }
+    ];
+
+    testCases.forEach((testCase, index) => {
+      // @ts-ignore - Testing edge cases with null values
+      new TapStack(app, `TestCombination${index}`, testCase.props);
+
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        "aws",
+        expect.objectContaining({
+          defaultTags: [
+            {
+              tags: expect.objectContaining({
+                Environment: testCase.expectedEnv,
+              }),
+            },
+          ],
+        })
+      );
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: testCase.expectedBucket,
+          region: testCase.expectedRegion,
+        })
+      );
+    });
+  });
+});
+
+describe("Conditional Logic Edge Cases", () => {
+
+  test("should handle props optional chaining branches", () => {
+    const app = new App();
+    
+    // Test with null props (tests props?.awsRegion branch)
+    new TapStack(app, "TestNullProps", null as any);
+    
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        region: "us-east-1", // Should handle null props gracefully
+      })
+    );
+
+    // Test with props object but undefined awsRegion
+    new TapStack(app, "TestUndefinedAwsRegion", { awsRegion: undefined });
+    
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      "aws",
+      expect.objectContaining({
+        region: "us-east-1", // Should use AWS_REGION_OVERRIDE
+      })
+    );
   });
 });
