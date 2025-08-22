@@ -384,6 +384,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail_logs" {
     id     = "cloudtrail_logs_lifecycle"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -741,7 +745,7 @@ resource "aws_cloudtrail" "main" {
     }
 
     data_resource {
-      type   = "AWS::S3::Bucket"
+      type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*"]
     }
   }
