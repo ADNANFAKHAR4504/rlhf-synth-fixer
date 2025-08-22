@@ -8,7 +8,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Security Configuration",
-    "Database Management", 
+    "Database Management",
     "Network Configuration",
     "Access Control",
     "Monitoring Setup",
@@ -17,7 +17,7 @@
   "training_quality": 9,
   "aws_services": [
     "IAM",
-    "S3", 
+    "S3",
     "VPC",
     "EC2",
     "RDS",
@@ -29,5 +29,11 @@
   ],
   "turn_type": "single",
   "team": "synth",
-  "startedAt": "2025-08-22T10:00:00Z"
+  "startedAt": "2025-08-22T10:00:00Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
