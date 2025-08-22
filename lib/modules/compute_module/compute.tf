@@ -83,16 +83,16 @@ resource "aws_launch_template" "main" {
     environment = var.environment
   }))
 
-#   block_device_mappings {
-#     device_name = "/dev/xvda"
-#     ebs {
-#       volume_size           = "100"
-#       volume_type           = "gp3"
-#       encrypted             = true
-#       kms_key_id            = var.kms_key_arn
-#       delete_on_termination = true
-#     }
-#   }
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = "100"
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = var.kms_key_arn
+      delete_on_termination = true
+    }
+  }
 
   metadata_options {
     http_endpoint = "enabled"
@@ -129,7 +129,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment}-asg-hcl"
+  name                = "${var.environment}-asg-hcltf"
   vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"

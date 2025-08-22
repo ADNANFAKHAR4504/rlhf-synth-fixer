@@ -75,7 +75,6 @@ resource "aws_iam_policy" "s3_limited_access" {
 resource "aws_iam_policy" "kms_limited_access" {
   name        = "${var.environment}-kms-limited-access"
   description = "Limited KMS access policy following least privilege principle"
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -91,10 +90,23 @@ resource "aws_iam_policy" "kms_limited_access" {
             "kms:ViaService" = "s3.${data.aws_region.current.region}.amazonaws.com"
           }
         }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:CreateGrant"
+        ]
+        Resource = ["${aws_kms_alias.main.arn}"]
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${data.aws_region.current.region}.amazonaws.com"
+          }
+        }
       }
     ]
   })
-
   tags = var.tags
 }
 
@@ -277,7 +289,6 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.environment} environment"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -291,7 +302,7 @@ resource "aws_kms_key" "main" {
         Resource = "*"
       },
       {
-        Sid    = "Allow use of the key for EC2 instances"
+        Sid    = "Allow use of the key for S3"
         Effect = "Allow"
         Principal = {
           AWS = aws_iam_role.ec2_role.arn
@@ -306,10 +317,27 @@ resource "aws_kms_key" "main" {
             "kms:ViaService" = "s3.${data.aws_region.current.region}.amazonaws.com"
           }
         }
+      },
+      {
+        Sid    = "Allow use of the key for EBS encryption"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.ec2_role.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${data.aws_region.current.region}.amazonaws.com"
+          }
+        }
       }
     ]
   })
-
   tags = merge(var.tags, {
     Name = "${var.environment}-kms-key"
   })
