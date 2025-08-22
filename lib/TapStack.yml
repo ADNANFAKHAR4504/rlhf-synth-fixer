@@ -707,7 +707,7 @@ Resources:
   CloudFormationStateBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'iac-rlhf-cfn-states-${AWS::Region}'
+      BucketName: !Sub 'iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

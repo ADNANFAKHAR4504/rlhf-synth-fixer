@@ -1302,7 +1302,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}"
+                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}-${EnvironmentSuffix}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
