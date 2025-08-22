@@ -702,3 +702,28 @@ output "ec2_autoscaling_group_name" {
   description = "Name of the EC2 Auto Scaling group"
   value       = module.compute.asg_name
 }
+
+output "ec2_sg_id" {
+  description = "ID of the EC2 security group"
+  value       = module.security.ec2_sg_id
+}
+
+output "rds_sg_id" {
+  description = "ID of the RDS security group"
+  value       = module.security.rds_sg_id
+}
+
+output "alb_sg_id" {
+  description = "ID of the ALB security group"
+  value       = module.security.alb_sg_id
+}
+
+output "rds_kms_key_id" {
+  description = "ID of the RDS KMS key"
+  value       = aws_kms_key.rds_key.id
+}
+
+output "ec2_instance_profile_name" {
+  description = "Name of the EC2 instance profile"
+  value       = aws_iam_instance_profile.ec2_profile.name
+}
