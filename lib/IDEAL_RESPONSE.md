@@ -503,8 +503,26 @@ output "iam_app_role_arn" {
 }
 ```
 
-```
+```hcl
+# provider.tf
 
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Backend configured externally during init
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+}
 ```
 
 ### Explanation & Mapping
