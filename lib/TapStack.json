@@ -64,9 +64,7 @@
                             "Sid": "Allow CloudWatch Logs encryption",
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": {
-                                    "Fn::Sub": "logs.us-east-1.amazonaws.com"
-                                }
+                                "Service": "logs.us-east-1.amazonaws.com"
                             },
                             "Action": [
                                 "kms:Encrypt",
@@ -130,7 +128,14 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
@@ -149,7 +154,14 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
@@ -168,7 +180,14 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.3.0/24",
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
@@ -588,52 +607,6 @@
                 }
             }
         },
-        "LambdaFunctionCode": {
-            "Type": "AWS::S3::Object",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "LambdaDeploymentBucket"
-                },
-                "Key": "lambda-function.zip",
-                "Body": {
-                    "Fn::Sub": "import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Secure Lambda function for processing events\n    \"\"\"\n    try:\n        # Log the event for audit purposes\n        logger.info(f\"Processing event: {json.dumps(event, default=str)}\")\n        \n        # Get environment variables\n        environment = os.environ.get('ENVIRONMENT', 'unknown')\n        \n        # Example secure processing\n        response_data = {\n            'statusCode': 200,\n            'environment': environment,\n            'timestamp': datetime.utcnow().isoformat(),\n            'message': 'Function executed successfully',\n            'requestId': context.aws_request_id\n        }\n        \n        logger.info(f\"Function completed successfully: {response_data}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'X-Content-Type-Options': 'nosniff',\n                'X-Frame-Options': 'DENY',\n                'X-XSS-Protection': '1; mode=block'\n            },\n            'body': json.dumps(response_data)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing event: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'requestId': context.aws_request_id\n            })\n        }\n"
-                }
-            }
-        },
-        "LambdaZipCreator": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Properties": {
-                "ServiceToken": {
-                    "Fn::GetAtt": [
-                        "LambdaZipCreatorFunction",
-                        "Arn"
-                    ]
-                },
-                "BucketName": {
-                    "Ref": "LambdaDeploymentBucket"
-                }
-            }
-        },
-        "LambdaZipCreatorFunction": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "lambda-zip-creator-${EnvironmentSuffix}"
-                },
-                "Runtime": "python3.9",
-                "Handler": "index.lambda_handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaZipCreatorRole",
-                        "Arn"
-                    ]
-                },
-                "Timeout": 60,
-                "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport zipfile\nimport io\nimport cfnresponse\n\ndef lambda_handler(event, context):\n    try:\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            bucket_name = event['ResourceProperties']['BucketName']\n            \n            # Create the Lambda function code\n            lambda_code = '''import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Secure Lambda function for processing events\n    \"\"\"\n    try:\n        # Log the event for audit purposes\n        logger.info(f\"Processing event: {json.dumps(event, default=str)}\")\n        \n        # Get environment variables\n        environment = os.environ.get('ENVIRONMENT', 'unknown')\n        \n        # Example secure processing\n        response_data = {\n            'statusCode': 200,\n            'environment': environment,\n            'timestamp': datetime.utcnow().isoformat(),\n            'message': 'Function executed successfully',\n            'requestId': context.aws_request_id\n        }\n        \n        logger.info(f\"Function completed successfully: {response_data}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'X-Content-Type-Options': 'nosniff',\n                'X-Frame-Options': 'DENY',\n                'X-XSS-Protection': '1; mode=block'\n            },\n            'body': json.dumps(response_data)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing event: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'requestId': context.aws_request_id\n            })\n        }\n'''\n            \n            # Create zip file in memory\n            zip_buffer = io.BytesIO()\n            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:\n                zip_file.writestr('index.py', lambda_code)\n            \n            # Upload to S3\n            s3_client = boto3.client('s3')\n            s3_client.put_object(\n                Bucket=bucket_name,\n                Key='lambda-function.zip',\n                Body=zip_buffer.getvalue(),\n                ContentType='application/zip'\n            )\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n        else:\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
-                }
-            }
-        },
         "LambdaZipCreatorRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -667,11 +640,61 @@
                                     "Resource": {
                                         "Fn::Sub": "${LambdaDeploymentBucket}/*"
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SecureKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
                                 }
                             ]
                         }
                     }
                 ]
+            }
+        },
+        "LambdaZipCreatorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "lambda-zip-creator-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaZipCreatorRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport zipfile\nimport io\nimport cfnresponse\n\ndef lambda_handler(event, context):\n    try:\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            bucket_name = event['ResourceProperties']['BucketName']\n            \n            # Create the Lambda function code\n            lambda_code = '''import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Secure Lambda function for processing events\n    \"\"\"\n    try:\n        # Log the event for audit purposes\n        logger.info(f\"Processing event: {json.dumps(event, default=str)}\")\n        \n        # Get environment variables\n        environment = os.environ.get('ENVIRONMENT', 'unknown')\n        \n        # Example secure processing\n        response_data = {\n            'statusCode': 200,\n            'environment': environment,\n            'timestamp': datetime.utcnow().isoformat(),\n            'message': 'Function executed successfully',\n            'requestId': context.aws_request_id\n        }\n        \n        logger.info(f\"Function completed successfully: {response_data}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'X-Content-Type-Options': 'nosniff',\n                'X-Frame-Options': 'DENY',\n                'X-XSS-Protection': '1; mode=block'\n            },\n            'body': json.dumps(response_data)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing event: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'requestId': context.aws_request_id\n            })\n        }\n'''\n            \n            # Create zip file in memory\n            zip_buffer = io.BytesIO()\n            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:\n                zip_file.writestr('index.py', lambda_code)\n            \n            # Upload to S3\n            s3_client = boto3.client('s3')\n            s3_client.put_object(\n                Bucket=bucket_name,\n                Key='lambda-function.zip',\n                Body=zip_buffer.getvalue(),\n                ContentType='application/zip'\n            )\n            \n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'Lambda zip file created successfully'})\n        else:\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': 'No action required'})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})\n"
+                }
+            }
+        },
+        "LambdaZipCreator": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "LambdaZipCreatorFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "LambdaDeploymentBucket"
+                }
             }
         },
         "EC2UserDataSecret": {
@@ -684,9 +707,7 @@
                 "KmsKeyId": {
                     "Ref": "SecureKMSKey"
                 },
-                "SecretString": {
-                    "Fn::Sub": "{\n  \"userdata\": \"#!/bin/bash\\nyum update -y\\nyum install -y amazon-cloudwatch-agent\\n# Additional secure configuration here\"\n}\n"
-                }
+                "SecretString": "{\n  \"userdata\": \"#!/bin/bash\\nyum update -y\\nyum install -y amazon-cloudwatch-agent\\n# Additional secure configuration here\"\n}\n"
             }
         },
         "EC2Role": {

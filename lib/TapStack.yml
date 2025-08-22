@@ -46,7 +46,7 @@ Resources:
           - Sid: Allow CloudWatch Logs encryption
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.us-east-1.amazonaws.com'
+              Service: logs.us-east-1.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -89,7 +89,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -100,7 +100,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -112,7 +112,7 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -501,7 +501,7 @@ Resources:
       Name: !Sub 'ec2-userdata-${EnvironmentSuffix}'
       Description: 'Secure storage for EC2 user data'
       KmsKeyId: !Ref SecureKMSKey
-      SecretString: !Sub |
+      SecretString: |
         {
           "userdata": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Additional secure configuration here"
         }
