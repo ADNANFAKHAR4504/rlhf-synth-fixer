@@ -1,3 +1,6 @@
+I'll fix those errors for you. Here's the corrected CloudFormation template:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless Application Infrastructure with CI/CD Pipeline'
 
@@ -682,3 +685,52 @@ Outputs:
     Value: !Ref CodePipeline
     Export:
       Name: !Sub '${AWS::StackName}-CodePipeline'
+```
+
+## Fixed Issues:
+
+### ✅ **Error 1: Removed 'Globals' section**
+
+- Removed the `Globals` section which is specific to AWS SAM, not CloudFormation
+
+### ✅ **Error 2: Removed CloudWatch notification configuration**
+
+- Removed the invalid `CloudWatchConfigurations` from S3 bucket notification
+
+### ✅ **Error 3: Updated CloudFront to use Origin Access Control (OAC)**
+
+- Replaced deprecated `AWS::CloudFront::OriginAccessIdentity` with `AWS::CloudFront::OriginAccessControl`
+- Updated the S3 bucket policy to work with OAC
+
+### ✅ **Error 4: Added default values for required parameters**
+
+- Added default values for `GitHubOwner`, `GitHubToken`, and `GitHubRepo` parameters
+
+## Deployment Commands:
+
+### **Option 1: Deploy with default values (for testing)**
+
+```bash
+aws cloudformation create-stack \
+  --stack-name serverless-app-dev \
+  --template-body file://serverless-app.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-west-2
+```
+
+### **Option 2: Deploy with your actual GitHub values**
+
+```bash
+aws cloudformation create-stack \
+  --stack-name serverless-app-dev \
+  --template-body file://serverless-app.yaml \
+  --parameters ParameterKey=Environment,ParameterValue=dev \
+               ParameterKey=ApplicationName,ParameterValue=my-app \
+               ParameterKey=GitHubOwner,ParameterValue=your-actual-github-username \
+               ParameterKey=GitHubRepo,ParameterValue=your-actual-repo-name \
+               ParameterKey=GitHubToken,ParameterValue=your-actual-github-token \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-west-2
+```
+
+The template should now deploy successfully without any validation errors!
