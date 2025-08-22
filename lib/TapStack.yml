@@ -634,9 +634,9 @@ Resources:
       DBInstanceIdentifier: !Sub "${AWS::StackName}-database-${EnvironmentSuffix}"
       DBInstanceClass: db.t3.micro
       Engine: mysql
-  EngineVersion: "8.0.43"
+      EngineVersion: "8.0.43"
       MasterUsername: !Ref DBUsername
-  MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
+      MasterUserPassword: "{{resolve:secretsmanager:your-secret-id:SecretString:password}}"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -669,7 +669,7 @@ Resources:
               { "Ref": "AWS::StackName" },
               "secure-bucket",
               { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" }
+              { "Ref": "AWS::AccountId" },
             ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -696,37 +696,36 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
-    Properties:
-  # Ensure EnvironmentSuffix is lowercase before deployment
-      BucketName:
-        Fn::Join:
-          - "-"
-          - [
-              { "Ref": "AWS::StackName" },
-              "logging-bucket",
-              { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" }
-            ]
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-logging-bucket-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
+  Properties:
+    BucketName:
+      Fn::Join:
+        - "-"
+        - [
+            { "Ref": "AWS::StackName" },
+            "logging-bucket",
+            { "Ref": "EnvironmentSuffix" },
+            { "Ref": "AWS::AccountId" },
+          ]
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+          BucketKeyEnabled: true
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true
+    LifecycleConfiguration:
+      Rules:
+        - Id: DeleteOldLogs
+          Status: Enabled
+          ExpirationInDays: 90
+    Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-logging-bucket-${EnvironmentSuffix}"
+      - Key: Environment
+        Value: !Ref Environment
 
   # ==================== Lambda Function ====================
   SecurityMonitoringLambda:
@@ -829,7 +828,7 @@ Resources:
               { "Ref": "AWS::StackName" },
               "cloudtrail",
               { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" }
+              { "Ref": "AWS::AccountId" },
             ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
