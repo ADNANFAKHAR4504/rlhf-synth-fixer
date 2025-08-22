@@ -239,7 +239,8 @@ describe("TapStack Structure", () => {
 
     it("should create NAT Gateways with EIPs", () => {
       new TapStack("TestNAT", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createNatGateways: true
       });
       
       // EIPs
@@ -265,7 +266,8 @@ describe("TapStack Structure", () => {
 
     it("should create and configure route tables", () => {
       new TapStack("TestRouteTables", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createNatGateways: true
       });
       
       // Public route table
@@ -467,7 +469,8 @@ describe("TapStack Structure", () => {
 
     it("should create CloudTrail bucket with forceDestroy", () => {
       new TapStack("TestCloudTrailBucket", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createCloudTrail: true
       });
       
       expect(aws.s3.Bucket).toHaveBeenCalledWith(
@@ -533,7 +536,8 @@ describe("TapStack Structure", () => {
   describe("CloudTrail and Auditing", () => {
     it("should create CloudTrail with multi-region support", () => {
       new TapStack("TestCloudTrail", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createCloudTrail: true
       });
       
       expect(aws.cloudtrail.Trail).toHaveBeenCalledWith(
@@ -550,7 +554,8 @@ describe("TapStack Structure", () => {
 
     it("should configure CloudTrail bucket policy", () => {
       new TapStack("TestCloudTrailPolicy", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createCloudTrail: true
       });
       
       expect(aws.s3.BucketPolicy).toHaveBeenCalledWith(
@@ -564,7 +569,8 @@ describe("TapStack Structure", () => {
   describe("RDS and Database Resources", () => {
     it("should create DB subnet group in private subnets", () => {
       new TapStack("TestDBSubnetGroup", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createDbSubnetGroup: true
       });
       
       expect(aws.rds.SubnetGroup).toHaveBeenCalledWith(
@@ -599,7 +605,10 @@ describe("TapStack Structure", () => {
   describe("Stack Outputs", () => {
     it("should expose all required outputs", () => {
       const stack = new TapStack("TestOutputs", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createCloudTrail: true,
+        createDbSubnetGroup: true,
+        createNatGateways: true
       });
       
       expect(stack.vpcId).toBeDefined();
@@ -620,7 +629,10 @@ describe("TapStack Structure", () => {
 
     it("should register outputs correctly", () => {
       const stack = new TapStack("TestRegisterOutputs", {
-        environmentSuffix: "test"
+        environmentSuffix: "test",
+        createCloudTrail: true,
+        createDbSubnetGroup: true,
+        createNatGateways: true
       });
       
       expect(stack.registerOutputs).toHaveBeenCalledWith(
