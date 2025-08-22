@@ -381,7 +381,7 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${StaticContentBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${StaticContentBucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
@@ -454,7 +454,7 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: 's3:GetObject'
-            Resource: !Sub '${StaticContentBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${StaticContentBucket}/*'
 
   # =============================================================================
   # CLOUDFRONT DISTRIBUTION
