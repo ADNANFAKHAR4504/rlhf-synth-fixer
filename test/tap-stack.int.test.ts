@@ -58,14 +58,36 @@ function getOutput(key: string): any {
 }
 
 // --------- Resource outputs ---------
+// Fix: Parse outputs only if value is a valid JSON string, else fallback to array with single string.
+function safeParseArray(val: any): string[] {
+  if (typeof val === "string") {
+    try {
+      // Try to parse JSON array string
+      if (val.trim().startsWith("[") && val.trim().endsWith("]")) {
+        return JSON.parse(val);
+      }
+      // If it's just a single value (not a JSON array), return as array
+      return [val];
+    } catch (e) {
+      return [val];
+    }
+  }
+  // If already an array, return as-is
+  if (Array.isArray(val)) return val;
+  // If undefined or null, return empty array
+  if (val === undefined || val === null) return [];
+  // Fallback: wrap as array
+  return [val];
+}
+
 const outputs = {
   albDnsName: getOutput("alb_dns_name"),
   albHttpsUrl: getOutput("alb_https_url"),
   autoscalingGroupName: getOutput("autoscaling_group_name"),
-  dbSubnets: JSON.parse(getOutput("db_subnets") || "[]"),
+  dbSubnets: safeParseArray(getOutput("db_subnets")),
   deploymentId: getOutput("deployment_id"),
-  privateSubnets: JSON.parse(getOutput("private_subnets") || "[]"),
-  publicSubnets: JSON.parse(getOutput("public_subnets") || "[]"),
+  privateSubnets: safeParseArray(getOutput("private_subnets")),
+  publicSubnets: safeParseArray(getOutput("public_subnets")),
   rdsEndpoint: getOutput("rds_endpoint"),
   resourceSummary: typeof getOutput("resource_summary") === "string"
     ? JSON.parse(getOutput("resource_summary"))
@@ -126,7 +148,6 @@ describe("Terraform Secure AWS Infra E2E Deployment Outputs", () => {
 
     test("App bucket exists and is in correct region", async () => {
       const loc = await s3.send(new GetBucketLocationCommand({ Bucket: outputs.s3AppBucket }));
-      // AWS returns "US" for us-east-1, but TypeScript doesn't include "US" in BucketLocationConstraint
       let actualRegion = loc.LocationConstraint as string | undefined;
       if (!actualRegion || actualRegion === "US") actualRegion = "us-east-1";
       expect(actualRegion).toBe(testRegion);
@@ -196,7 +217,6 @@ describe("Terraform Secure AWS Infra E2E Deployment Outputs", () => {
       const roleName = outputs.resourceSummary.iam_role;
       const policiesRes = await iam.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
       const policyNames = (policiesRes.AttachedPolicies?.map(p => p.PolicyName) || []).filter((pn): pn is string => pn !== undefined);
-      // Should not include AdministratorAccess or root policies
       expect(policyNames).not.toContain("AdministratorAccess");
       expect(policyNames.every(pn =>
         pn.toLowerCase().includes("s3") || pn.toLowerCase().includes("access") || pn.toLowerCase().includes("ec2")
@@ -276,4 +296,4 @@ describe("Terraform Secure AWS Infra E2E Deployment Outputs", () => {
       expect(tgRes.TargetGroups?.some((tg: TargetGroup) => tg.TargetGroupName === outputs.resourceSummary.target_group)).toBe(true);
     });
   });
-});
+}); 
