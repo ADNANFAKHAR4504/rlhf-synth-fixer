@@ -99,11 +99,34 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
   describe('Outputs', () => {
     const expectedOutputs = [
-      'KMSKeyId',
+      'VPCId',
+      'PublicSubnet1Id',
+      'PublicSubnet2Id',
+      'PrivateSubnet1Id',
+      'PrivateSubnet2Id',
+      'PublicRouteTableId',
+      'PrivateRouteTable1Id',
+      'PrivateRouteTable2Id',
+      'NatGateway1Id',
+      'NatGateway2Id',
+      'NatGateway1EipAllocationId',
+      'NatGateway2EipAllocationId',
+      'EC2SecurityGroupId',
+      'RDSSecurityGroupId',
+      'EC2RoleArn',
+      'EC2InstanceProfileName',
+      'CloudTrailRoleArn',
       'SecureDataBucketName',
-      'DatabaseEndpoint',
-      'LambdaFunctionArn',
-      'VPCId'
+      'CloudTrailBucketName',
+      'LoggingBucketName',
+      'RDSEndpoint',
+      'EC2InstanceId',
+      'KMSKeyId',
+      'KMSAliasName',
+      'EC2LogGroupName',
+      'RDSLogGroupName',
+      'S3LogGroupName',
+      'CloudTrailLogGroupName'
     ];
 
   expectedOutputs.forEach(out => {
