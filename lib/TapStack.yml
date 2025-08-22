@@ -40,7 +40,7 @@ Parameters:
 
   EnableGuardDuty:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
     Description: 'Enable GuardDuty threat detection service'
 
