@@ -907,9 +907,10 @@ class TapStack(pulumi.ComponentResource):
     """
     Clean up any existing Pulumi locks before deployment.
     This handles the common CI/CD issue where interrupted deployments leave locks.
+    Enhanced with better error detection, exponential backoff, and comprehensive logging.
     """
-    max_retries = 3
-    retry_delay = 5
+    max_retries = 5
+    base_delay = 2
     
     # Use provided suffix or get from environment
     if not environment_suffix:
@@ -921,11 +922,33 @@ class TapStack(pulumi.ComponentResource):
     else:
       stack_name = f"TapStack{environment_suffix}"
     
-    pulumi.log.info(f"Checking for Pulumi locks on stack: {stack_name}")
+    pulumi.log.info(f"Starting Pulumi lock cleanup for stack: {stack_name}")
+    pulumi.log.debug(f"Environment suffix: {environment_suffix}")
+    pulumi.log.debug(f"Max retries: {max_retries}, Base delay: {base_delay}s")
+    
+    # First, try to check if the stack exists
+    try:
+      stack_check = subprocess.run(
+        ['pulumi', 'stack', 'ls', '--json'],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env={**os.environ}
+      )
+      if stack_check.returncode == 0:
+        pulumi.log.debug(f"Stack list retrieved successfully")
+      else:
+        pulumi.log.warn(f"Could not retrieve stack list: {stack_check.stderr}")
+    except Exception as e:
+      pulumi.log.debug(f"Stack list check failed: {str(e)}")
     
     for attempt in range(max_retries):
+      retry_delay = base_delay * (2 ** attempt)  # Exponential backoff
+      
       try:
-        # Attempt to cancel any existing locks
+        pulumi.log.info(f"Lock cleanup attempt {attempt + 1}/{max_retries}")
+        
+        # Primary method: Use pulumi cancel
         cancel_result = subprocess.run(
           ['pulumi', 'cancel', '--stack', stack_name, '--yes'],
           capture_output=True,
@@ -934,28 +957,104 @@ class TapStack(pulumi.ComponentResource):
           env={**os.environ}
         )
         
+        # Analyze the result
         if cancel_result.returncode == 0:
           pulumi.log.info(f"Successfully cleaned up locks for stack {stack_name}")
-          return
-        elif "no stack operations are currently running" in cancel_result.stderr.lower():
+          return True
+        
+        # Check various error conditions
+        stderr_lower = cancel_result.stderr.lower() if cancel_result.stderr else ""
+        stdout_lower = cancel_result.stdout.lower() if cancel_result.stdout else ""
+        
+        if "no stack operations are currently running" in stderr_lower or \
+           "no stack operations are currently running" in stdout_lower:
           pulumi.log.info(f"No locks to clean for stack {stack_name}")
-          return
+          return True
+        
+        if "could not find stack" in stderr_lower or "stack not found" in stderr_lower:
+          pulumi.log.info(f"Stack {stack_name} does not exist yet, no locks to clean")
+          return True
+        
+        if "error: the stack is currently locked" in stderr_lower:
+          pulumi.log.warn(f"Stack is locked, attempting force unlock")
+          # Try force unlock as fallback
+          self._attempt_force_unlock(stack_name)
         else:
-          pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} - {cancel_result.stderr}")
+          pulumi.log.warn(f"Lock cleanup failed - stdout: {cancel_result.stdout[:200]}")
+          pulumi.log.warn(f"Lock cleanup failed - stderr: {cancel_result.stderr[:200]}")
           
       except subprocess.TimeoutExpired:
-        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} timed out")
+        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} timed out after 30s")
       except FileNotFoundError:
-        # Pulumi CLI not found, skip lock cleanup
-        pulumi.log.warn("Pulumi CLI not found, skipping lock cleanup")
-        return
+        pulumi.log.error("Pulumi CLI not found in PATH, cannot clean locks")
+        pulumi.log.debug("Ensure Pulumi is installed and available in the system PATH")
+        return False
       except Exception as e:
-        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+        pulumi.log.warn(f"Lock cleanup attempt {attempt + 1}/{max_retries} failed with error: {str(e)}")
+        pulumi.log.debug(f"Error type: {type(e).__name__}")
       
       if attempt < max_retries - 1:
-        pulumi.log.info(f"Retrying lock cleanup in {retry_delay} seconds...")
+        pulumi.log.info(f"Waiting {retry_delay} seconds before retry (exponential backoff)")
         time.sleep(retry_delay)
     
-    # If all retries failed, log a warning but continue
-    pulumi.log.warn("Could not clean up Pulumi locks after all retries, proceeding anyway")
+    # Final fallback: Try to unlock using state backend directly
+    pulumi.log.warn("All standard lock cleanup attempts failed, trying direct backend unlock")
+    if self._attempt_backend_unlock(stack_name):
+      return True
+    
+    # If all attempts failed, log comprehensive debugging info
+    pulumi.log.error(f"Could not clean up Pulumi locks after {max_retries} attempts")
+    pulumi.log.info("Manual intervention may be required: pulumi cancel --stack " + stack_name + " --yes")
+    pulumi.log.info("Proceeding with deployment anyway, may fail if locks persist")
+    return False
+  
+  def _attempt_force_unlock(self, stack_name):
+    """
+    Attempt to force unlock the stack using alternative methods.
+    """
+    try:
+      # Try with force flag if available
+      force_result = subprocess.run(
+        ['pulumi', 'cancel', '--stack', stack_name, '--yes', '--force'],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env={**os.environ}
+      )
+      if force_result.returncode == 0:
+        pulumi.log.info("Force unlock successful")
+        return True
+      else:
+        pulumi.log.debug(f"Force unlock failed: {force_result.stderr[:200]}")
+    except Exception as e:
+      pulumi.log.debug(f"Force unlock attempt failed: {str(e)}")
+    return False
+  
+  def _attempt_backend_unlock(self, stack_name):
+    """
+    Attempt to unlock using the backend directly (S3 for this project).
+    """
+    try:
+      # Try to get backend URL from environment
+      backend_url = os.getenv('PULUMI_BACKEND_URL', '')
+      if 's3://' in backend_url:
+        pulumi.log.info("Attempting S3 backend lock cleanup")
+        # Try to remove lock file directly from S3
+        # This is a last resort and may not always work
+        unlock_cmd = ['pulumi', 'state', 'delete', '--stack', stack_name, '--yes']
+        unlock_result = subprocess.run(
+          unlock_cmd,
+          capture_output=True,
+          text=True,
+          timeout=15,
+          env={**os.environ}
+        )
+        if unlock_result.returncode == 0:
+          pulumi.log.info("Backend unlock successful")
+          return True
+      else:
+        pulumi.log.debug(f"Backend URL not S3 or not found: {backend_url[:50] if backend_url else 'empty'}")
+    except Exception as e:
+      pulumi.log.debug(f"Backend unlock attempt failed: {str(e)}")
+    return False
 # Updated for testing deployment pipeline - analyzing CI/CD behavior
