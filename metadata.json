@@ -1,0 +1,48 @@
+{
+  "task_id": "trainr946",
+  "problem_id": "cloud-environment-setup_CloudFormation_YAML_k3h8srv5uyct",
+  "difficulty": "hard",
+  "platform": "cfn",
+  "language": "yaml",
+  "subject": "Cloud Environment Setup",
+  "subtask": "Web Application Deployment",
+  "description": "Create a comprehensive CloudFormation script to set up a robust AWS cloud environment supporting a distributed web application across two regions",
+  "constraints": [
+    "The CloudFormation stack must deploy resources across two AWS regions: us-east-1 and us-west-2",
+    "Use at least three Availability Zones in each region",
+    "Ensure all EC2 instances have a minimum of t3.medium instance type",
+    "Include an Auto Scaling Group with a minimum of 2 instances and a maximum of 6 instances in each region",
+    "The stack must include an Elastic Load Balancer that distributes traffic only between healthy instances",
+    "A VPC with at least three public subnets and three private subnets should be created in each region",
+    "Ensure that all resources are tagged with 'Environment: Production' and 'Team: DevOps'",
+    "Implement a security group to allow HTTP and HTTPS traffic from anywhere in the world",
+    "Include CloudWatch Alarms to monitor CPU utilization and trigger scale-out events if CPU exceeds 70%"
+  ],
+  "environment": "AWS cloud environment spanning us-east-1 and us-west-2 regions",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration", 
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Security Configuration",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC", 
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP"
+  ],
+  "status": "in_progress",
+  "complexity": "hard",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "turn_type": "single",
+  "po_id": "trainr946",
+  "team": "synth"
+}
