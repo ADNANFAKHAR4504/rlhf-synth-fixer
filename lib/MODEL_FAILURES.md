@@ -1,23 +1,81 @@
-# Model Failures Analysis
+# Model Failures
 
-## Introduction
+## 1. Reliance on Custom `data` Module
 
-This document outlines the identified failures and deviations of the model's generated Terraform code (`tap_stack.tf`) when compared against the `IDEAL_RESPONSE.md`.
+**Issue:** The model's response depends on a custom `./modules/data` module to fetch information like availability zones, AWS partition, account ID, and the ELB service account ID. The ideal response, however, uses standard Terraform `data` sources (`aws_availability_zones`, `aws_partition`, `aws_caller_identity`, `aws_elb_service_account`) directly in the root module.
 
-## Key Failures
+**Why it's a failure:** Relying on a custom module for standard data fetching makes the code less portable and harder to understand. The ideal response is more self-contained and follows a more common Terraform pattern.
 
-The primary failures of the model were related to its handling of pre-existing AWS resources. The model initially attempted to create resources that already existed, and then failed to correctly reference them after the code was modified to use data sources.
+**Example from Model Response:**
+```hcl
+resource "aws_subnet" "public" {
+  count = 2
+  # ...
+  availability_zone       = module.data.availability_zones[count.index]
+  # ...
+}
+```
 
-### 1. Incorrect Resource Creation for Existing Infrastructure
+**Example from Ideal Response:**
+```hcl
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
-- **Failure:** The model initially defined the `aws_iam_instance_profile` and `aws_db_instance` as `resource` blocks, which caused `EntityAlreadyExists` and `DBInstanceAlreadyExists` errors during the Terraform apply process.
-- **Analysis:** The model should have identified that these resources were intended to be pre-existing and used `data` sources to look them up instead of attempting to create them. This is a critical failure in a real-world scenario where infrastructure is often managed in separate parts.
+resource "aws_subnet" "public" {
+  count = 2
+  # ...
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  # ...
+}
+```
 
-### 2. Incorrect Referencing of Data Sources
+## 2. Inconsistent and Unpredictable Resource Naming
 
-- **Failure:** After modifying the `aws_iam_instance_profile` and `aws_db_instance` to be `data` sources, the model failed to update the references to these resources in the `aws_launch_template` and the `rds_instance_endpoint` output. This resulted in "Reference to undeclared resource" errors.
-- **Analysis:** This indicates a lack of contextual awareness. The model should have recognized that changing a resource to a data source requires updating all references to that resource throughout the code.
+**Issue:** The model's response uses the `random_string` resource to generate unique suffixes for several key resources, including the ALB, RDS instance, IAM roles, and instance profiles. The ideal response uses deterministic names based on the project name and environment.
 
-## Conclusion
+**Why it's a failure:** While random suffixes guarantee uniqueness, they make resource names unpredictable, which can complicate scripting, monitoring, and manual inspection. The ideal response's naming convention is more predictable and easier to work with.
 
-The model's failures highlight a critical gap in its ability to work with existing infrastructure. While the initial code was well-structured, the inability to correctly handle pre-existing resources and the subsequent failure to update references demonstrate a lack of robustness in a brownfield environment.
+**Example from Model Response:**
+```hcl
+resource "aws_db_instance" "main" {
+  identifier             = "${local.name_prefix}-database-${random_string.suffix.result}"
+  # ...
+}
+```
+
+**Example from Ideal Response:**
+```hcl
+resource "aws_db_instance" "main" {
+  identifier             = "${local.name_prefix}-database"
+  # ...
+}
+```
+
+## 3. Embedded User Data Script
+
+**Issue:** The model's response embeds a multi-line user data script directly within the `aws_launch_template` resource using a heredoc string. The ideal response separates the script into its own file and uses the `templatefile` function to load it.
+
+**Why it's a failure:** Embedding scripts directly in HCL makes the code harder to read, maintain, and test. The `templatefile` approach is cleaner and promotes better separation of concerns.
+
+**Example from Model Response:**
+```hcl
+resource "aws_launch_template" "app" {
+  # ...
+  user_data = base64encode(<<-EOF
+#!/bin/bash
+# ...
+EOF
+  )
+}
+```
+
+**Example from Ideal Response:**
+```hcl
+resource "aws_launch_template" "app" {
+  # ...
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    log_group_name = module.monitoring.ec2_log_group_name
+    region         = var.region
+  }))
+}

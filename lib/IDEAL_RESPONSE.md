@@ -2,7 +2,6 @@
 # Main infrastructure resources with comprehensive security controls
 # Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
 
-
 # Local values for consistent tagging and naming
 locals {
   common_tags = {
@@ -24,46 +23,21 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
-data "aws_availability_zones" "available" {
-  state = "available"
+# Random string to ensure resource name uniqueness
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
-
-data "aws_partition" "current" {}
-
-data "aws_caller_identity" "current" {}
-
-#######################
-# Modules
-#######################
 
 module "data" {
   source = "./modules/data"
 
-  project_name           = var.project_name
-  environment            = var.environment
   app_data_s3_bucket_arn = aws_s3_bucket.app_data.arn
   s3_kms_key_arn         = aws_kms_key.s3_key.arn
   region                 = var.region
-}
-
-module "security" {
-  source = "./modules/security"
-
-  project_name        = var.project_name
-  environment         = var.environment
-  vpc_id              = aws_vpc.main.id
-  allowed_cidr_blocks = var.allowed_cidr_blocks
-  common_tags         = local.common_tags
-}
-
-module "monitoring" {
-  source = "./modules/monitoring"
-
-  project_name       = var.project_name
-  environment        = var.environment
-  notification_email = var.notification_email
-  asg_name           = aws_autoscaling_group.app.name
-  common_tags        = local.common_tags
+  project_name           = var.project_name
+  environment            = var.environment
 }
 
 #######################
@@ -98,7 +72,7 @@ resource "aws_subnet" "public" {
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  availability_zone       = module.data.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -114,7 +88,7 @@ resource "aws_subnet" "private" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = module.data.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
@@ -129,7 +103,7 @@ resource "aws_subnet" "database" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = module.data.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database-subnet-${count.index + 1}"
@@ -248,7 +222,7 @@ resource "aws_kms_key" "rds_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -290,7 +264,7 @@ resource "aws_kms_key" "s3_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -332,11 +306,40 @@ resource "aws_kms_key" "ebs_key" {
 }
 
 #######################
+# Security
+#######################
+
+module "security" {
+  source = "./modules/security"
+
+  project_name        = var.project_name
+  environment         = var.environment
+  vpc_id              = aws_vpc.main.id
+  allowed_cidr_blocks = var.allowed_cidr_blocks
+  common_tags         = local.common_tags
+}
+
+#######################
+# Monitoring
+#######################
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  notification_email = var.notification_email
+  asg_name           = module.compute.asg_name
+  random_suffix      = random_string.suffix.result
+  common_tags        = local.common_tags
+}
+
+#######################
 # Application Load Balancer
 #######################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.name_prefix}-alb-${random_string.suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [module.security.alb_sg_id]
@@ -358,10 +361,10 @@ resource "aws_lb" "main" {
 
 # Target group for EC2 instances
 resource "aws_lb_target_group" "app" {
-  name_prefix = "${local.name_prefix}-app-tg-"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  name     = "${local.name_prefix}-app-tg-${random_string.suffix.result}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
 
   health_check {
     path                = "/health"
@@ -400,7 +403,7 @@ resource "aws_lb_listener" "app" {
 
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  name = "${local.name_prefix}-ec2-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -428,22 +431,42 @@ resource "aws_iam_role_policy" "ec2_s3_policy" {
   policy = module.data.ec2_s3_access_policy
 }
 
+data "aws_iam_policy_document" "cloudwatch_logs_policy" {
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogStreams",
+      "logs:DescribeLogGroups"
+    ]
+
+    resources = [
+      "arn:${module.data.partition}:logs:${var.region}:${module.data.caller_identity_account_id}:log-group:/aws/ec2/${local.name_prefix}:*",
+      "arn:${module.data.partition}:logs:${var.region}:${module.data.caller_identity_account_id}:log-group:/aws/lambda/*"
+    ]
+  }
+}
+
 # IAM policy for CloudWatch logs
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name   = "${local.name_prefix}-ec2-cloudwatch-policy"
   role   = aws_iam_role.ec2_role.id
-  policy = module.data.cloudwatch_logs_policy
+  policy = data.aws_iam_policy_document.cloudwatch_logs_policy.json
 }
 
 # IAM instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile-${random_string.suffix.result}"
   role = aws_iam_role.ec2_role.name
 }
 
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
-  name = "${local.name_prefix}-lambda-role"
+  name = "${local.name_prefix}-lambda-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -471,90 +494,29 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
 }
 
 #######################
-# EC2 Instances
+# Compute
 #######################
 
-# Launch template for EC2 instances with security hardening
-resource "aws_launch_template" "app" {
-  name_prefix   = "${local.name_prefix}-app-"
-  image_id      = module.data.amazon_linux_ami_id
-  instance_type = var.instance_type
+module "compute" {
+  source = "./modules/compute"
 
-  vpc_security_group_ids = [module.security.ec2_sg_id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_type = "gp3"
-      volume_size = 20
-      encrypted   = true
-      kms_key_id  = aws_kms_key.ebs_key.arn
-    }
-  }
-
-  # User data script with CloudWatch logging
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    log_group_name = module.monitoring.ec2_log_group_name
-    region         = var.region
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-app-instance"
-      Type = "compute"
-    })
-  }
-
-  tag_specifications {
-    resource_type = "volume"
-    tags = merge(local.common_tags, {
-      Name = "${local.name_prefix}-app-volume"
-      Type = "storage"
-    })
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-launch-template"
-    Type = "compute"
-  })
+  project_name    = var.project_name
+  environment     = var.environment
+  app_subnet_ids  = aws_subnet.private[*].id
+  vpc_id          = aws_vpc.main.id
+  instance_type   = var.instance_type
+  ami_id          = module.data.amazon_linux_ami_id
+  ec2_sg_id       = module.security.ec2_sg_id
+  ec2_iam_profile = aws_iam_instance_profile.ec2_profile.name
+  ebs_kms_key_arn = aws_kms_key.ebs_key.arn
+  log_group_name  = module.monitoring.ec2_log_group_name
+  tg_arn          = aws_lb_target_group.app.arn
+  common_tags     = local.common_tags
 }
 
-# Auto Scaling Group for high availability
-resource "aws_autoscaling_group" "app" {
-  name                = "${local.name_prefix}-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
-
-  min_size         = 1
-  max_size         = 4
-  desired_capacity = 2
-
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${local.name_prefix}-app-asg-instance"
-    propagate_at_launch = true
-  }
-
-  dynamic "tag" {
-    for_each = local.common_tags
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = true
-    }
-  }
-}
+#######################
+# EC2 Instances
+#######################
 
 #######################
 # RDS Database
@@ -562,8 +524,8 @@ resource "aws_autoscaling_group" "app" {
 
 # DB subnet group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
+  name_prefix = "${local.name_prefix}-db-subnet-group-"
+  subnet_ids  = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"
@@ -573,7 +535,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier             = "${local.name_prefix}-database"
+  identifier             = "${local.name_prefix}-database-${random_string.suffix.result}"
   allocated_storage      = 20
   storage_type           = "gp2"
   engine                 = "mysql"
@@ -685,14 +647,12 @@ data "aws_iam_policy_document" "alb_logs_s3_policy" {
     effect = "Allow"
     principals {
       type        = "AWS"
-      identifiers = ["arn:aws:iam::${data.aws_elb_service_account.main.id}:root"]
+      identifiers = ["arn:aws:iam::${module.data.elb_service_account_id}:root"]
     }
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.alb_logs.arn}/alb-logs/*"]
   }
 }
-
-data "aws_elb_service_account" "main" {}
 
 # outputs.tf
 # Outputs for the secure infrastructure module
@@ -740,5 +700,5 @@ output "alb_logs_s3_bucket_name" {
 
 output "ec2_autoscaling_group_name" {
   description = "Name of the EC2 Auto Scaling group"
-  value       = aws_autoscaling_group.app.name
+  value       = module.compute.asg_name
 }
