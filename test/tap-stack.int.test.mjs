@@ -427,46 +427,46 @@ describe('TapStack Integration Tests', () => {
   describe('End-to-End Connectivity', () => {
     it('should have all components properly connected', () => {
       // Verify all outputs are present
-      expect(outputs.LoadBalancerDNS).toBeDefined();
-      expect(outputs.S3BucketName).toBeDefined();
-      expect(outputs.ElasticIPAddress1).toBeDefined();
-      expect(outputs.ElasticIPAddress2).toBeDefined();
-      expect(outputs.Instance1Id).toBeDefined();
-      expect(outputs.Instance2Id).toBeDefined();
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.KeyPairName).toBeDefined();
+      expect(outputs.albDnsName).toBeDefined();
+      expect(outputs.bucketName).toBeDefined();
+      expect(outputs.elasticIp1).toBeDefined();
+      expect(outputs.elasticIp2).toBeDefined();
+      expect(outputs.instance1Id).toBeDefined();
+      expect(outputs.instance2Id).toBeDefined();
+      expect(outputs.vpcId).toBeDefined();
+      expect(outputs.keyPairName).toBeDefined();
     });
 
     it('should have valid DNS name for load balancer', () => {
-      expect(outputs.LoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/);
+      expect(outputs.albDnsName).toMatch(/.*\.elb\.amazonaws\.com$/);
     });
 
     it('should have valid S3 bucket name', () => {
-      expect(outputs.S3BucketName).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
-      expect(outputs.S3BucketName).toContain('myapp');
-      expect(outputs.S3BucketName).toContain('logs');
+      expect(outputs.bucketName).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+      expect(outputs.bucketName).toContain('myapp');
+      expect(outputs.bucketName).toContain('logs');
     });
 
     it('should have valid IP addresses for Elastic IPs', () => {
       const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-      expect(outputs.ElasticIPAddress1).toMatch(ipRegex);
-      expect(outputs.ElasticIPAddress2).toMatch(ipRegex);
-      expect(outputs.ElasticIPAddress1).not.toBe(outputs.ElasticIPAddress2);
+      expect(outputs.elasticIp1).toMatch(ipRegex);
+      expect(outputs.elasticIp2).toMatch(ipRegex);
+      expect(outputs.elasticIp1).not.toBe(outputs.elasticIp2);
     });
 
     it('should have valid EC2 instance IDs', () => {
       const instanceIdRegex = /^i-[a-f0-9]{8,17}$/;
-      if (outputs.Instance1Id !== 'i-test1') {
-        expect(outputs.Instance1Id).toMatch(instanceIdRegex);
-        expect(outputs.Instance2Id).toMatch(instanceIdRegex);
-        expect(outputs.Instance1Id).not.toBe(outputs.Instance2Id);
+      if (outputs.instance1Id !== 'i-test1') {
+        expect(outputs.instance1Id).toMatch(instanceIdRegex);
+        expect(outputs.instance2Id).toMatch(instanceIdRegex);
+        expect(outputs.instance1Id).not.toBe(outputs.instance2Id);
       }
     });
 
     it('should have valid VPC ID', () => {
       const vpcIdRegex = /^vpc-[a-f0-9]{8,17}$/;
-      if (outputs.VPCId !== 'vpc-test') {
-        expect(outputs.VPCId).toMatch(vpcIdRegex);
+      if (outputs.vpcId !== 'vpc-test') {
+        expect(outputs.vpcId).toMatch(vpcIdRegex);
       }
     });
   });
