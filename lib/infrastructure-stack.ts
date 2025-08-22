@@ -338,45 +338,42 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Get ELB service account for the region
-    const elbServiceAccount = aws.elb.getServiceAccount(
-      {},
-      { provider: awsProvider }
-    );
-
     // S3 Bucket Policy for ALB Access Logs
     new aws.s3.BucketPolicy(
       `${environment}-alb-logs-bucket-policy`,
       {
         bucket: albLogsBucket.id,
-        policy: pulumi
-          .all([albLogsBucket.arn, current, elbServiceAccount])
-          .apply(([bucketArn, _, elbAccount]: [string, any, any]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Deny',
-                  Principal: '*',
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                  Condition: {
-                    Bool: {
-                      'aws:SecureTransport': 'false',
-                    },
+        policy: albLogsBucket.arn.apply(bucketArn =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:*',
+                Resource: [bucketArn, `${bucketArn}/*`],
+                Condition: {
+                  Bool: {
+                    'aws:SecureTransport': 'false',
                   },
                 },
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    AWS: `arn:aws:iam::${elbAccount.id}:root`,
-                  },
-                  Action: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
-                  Resource: [`${bucketArn}/*`, bucketArn],
+              },
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'logdelivery.elb.amazonaws.com',
                 },
-              ],
-            })
-          ),
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/AWSLogs/*`,
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                  },
+                },
+              },
+            ],
+          })
+        ),
       },
       { parent: this, provider: awsProvider }
     );
