@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr956",
+  "team": "synth",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Network Configuration",
+    "Security Configuration",
+    "Performance Optimization",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "EIP",
+    "SecurityGroup",
+    "RouteTable",
+    "InternetGateway",
+    "IAM",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
