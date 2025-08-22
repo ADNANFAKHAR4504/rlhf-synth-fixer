@@ -25,14 +25,9 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment name (prod or staging) for resource tagging and configuration"
+  description = "The environment to deploy the infrastructure to."
   type        = string
-  default     = "staging"
-
-  validation {
-    condition     = contains(["prod", "staging"], var.environment)
-    error_message = "Environment must be either 'prod' or 'staging'."
-  }
+  default     = "dev"
 }
 
 # VPC CIDR with enhanced validation
@@ -120,6 +115,26 @@ variable "enable_deletion_protection" {
   description = "Enable deletion protection for RDS instances in production"
   type        = bool
   default     = true
+}
+
+variable "aws_access_key_id" {
+  description = "AWS access key ID."
+  type        = string
+  default     = ""
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS secret access key."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_session_token" {
+  description = "AWS session token."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 variable "owner" {
