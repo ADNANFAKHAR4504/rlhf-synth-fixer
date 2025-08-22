@@ -641,8 +641,7 @@ describe("TapStack Highly Available Web Application Infrastructure", () => {
           maintenanceWindow: 'sun:04:00-sun:05:00',
           deletionProtection: false,
           skipFinalSnapshot: true,
-          performanceInsightsEnabled: true,
-          performanceInsightsRetentionPeriod: 7,
+          performanceInsightsEnabled: false,
           monitoringInterval: 60,
           tags: expect.objectContaining({
             Name: expect.stringMatching(/prod-mysql-db-.+/)
