@@ -350,7 +350,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -382,7 +381,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2Role
 
@@ -437,9 +435,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
-            Resource:
-              - !Sub '${BackupBucket}/*'
-              - !Ref BackupBucket
+            Resource: !Sub 'arn:aws:s3:::${BackupBucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -506,6 +502,25 @@ Resources:
       AliasName: !Sub 'alias/${EnvironmentName}-database-key'
       TargetKeyId: !Ref DatabaseKMSKey
 
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}-database-secret'
+      Description: 'Database credentials for RDS instance'
+      KmsKeyId: !Ref DatabaseKMSKey
+      GenerateSecretString:
+        SecretStringTemplate: !Sub |
+          {
+            "username": "${DBUsername}"
+          }
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Database-Secret'
+
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -520,7 +535,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref DatabaseKMSKey
       MasterUsername: !Ref DBUsername
-      ManageMasterUserPassword: true
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${EnvironmentName}-database-secret:SecretString:password::}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
@@ -532,13 +547,9 @@ Resources:
       AutoMinorVersionUpgrade: true
       DeletionProtection: true
       EnablePerformanceInsights: false
-      PerformanceInsightsRetentionPeriod: 7
-      MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database'
@@ -552,10 +563,7 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       AutoMinorVersionUpgrade: true
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
-      MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      EnablePerformanceInsights: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-ReadReplica'
