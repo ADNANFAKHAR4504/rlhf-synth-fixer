@@ -1,0 +1,45 @@
+{
+  "po_id": "trainr934",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "problem_id": "SecurityConfigurationAsCode_CloudFormation_YAML_c832bd7fcb12",
+  "difficulty": "hard",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Database Management"
+  ],
+  "subtask": "Security Configuration as Code",
+  "problem": "You have been tasked with creating a CloudFormation template that emphasizes security in its AWS resource configurations. The primary goal is to set up a robust security framework using AWS best practices. Specifically, you need to: 1. Define security groups for EC2 instances that by default deny all traffic except SSH from a specific IP range. 2. Create S3 buckets with policy enforcement to enable server-side encryption using AWS-managed keys. 3. Ensure the RDS database is deployed in a private subnet and is not publicly accessible. 4. Implement IAM roles to restrict access based on least privilege principles, ensuring roles are tightly scoped to the required actions. 5. Develop an SNS topic to alert of any non-compliance in security settings.\n\nExpected Output: The completion of this task will be graded based on the correctness and security compliance of your CloudFormation YAML template. The resources should be configurable and successfully deployable in an AWS environment meeting the above requirements.",
+  "environment": "The target environment involves a single AWS account with multiple VPCs and regions. The resources include EC2 instances, S3 buckets, and RDS databases. Security is a paramount aspect of this infrastructure.",
+  "constraint_count": 2,
+  "constraints": [
+    "Ensure all S3 buckets created in the stack have server-side encryption enabled.",
+    "All security group rules must deny public access unless explicitly stated otherwise."
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "S3",
+    "RDS",
+    "IAM",
+    "SNS",
+    "CloudWatch Logs"
+  ],
+  "startedAt": "2025-08-22T10:00:00Z",
+  "turn_type": "single",
+  "team": "synth",
+  "created_at": "2025-08-22T10:00:00Z",
+  "status": "completed",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
