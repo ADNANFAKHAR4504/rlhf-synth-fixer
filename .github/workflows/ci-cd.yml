@@ -29,6 +29,7 @@ env:
   PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
   detect-metadata:
@@ -101,7 +102,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Synth
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -137,7 +138,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       # Terraform State Management Setup
       - name: Set up Terraform
@@ -225,6 +226,45 @@ jobs:
       - name: Run unit tests
         run: ./scripts/unit-tests.sh
 
+      - name: Prepare coverage reports for Java projects
+        if: ${{ needs.detect-metadata.outputs.language == 'java' }}
+        run: |
+          echo "Preparing Java coverage reports for upload..."
+          echo "Debug: Checking current directory structure:"
+          ls -la
+          
+          echo "Debug: Checking build directory:"
+          if [ -d "build" ]; then
+            ls -la build/
+            if [ -d "build/reports" ]; then
+              echo "Reports directory contents:"
+              ls -la build/reports/
+              if [ -d "build/reports/jacoco" ]; then
+                echo "JaCoCo directory contents:"
+                find build/reports/jacoco -type f | head -10
+              fi
+            fi
+          else
+            echo "No build directory found"
+          fi
+          
+          mkdir -p coverage
+          
+          # Try different possible locations for JaCoCo reports
+          if [ -d "build/reports/jacoco/test/" ]; then
+            cp -r build/reports/jacoco/test/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/test/ to coverage/ directory"
+          elif [ -d "build/reports/jacoco/" ]; then
+            cp -r build/reports/jacoco/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/ to coverage/ directory"
+          else
+            echo "⚠️ JaCoCo reports not found in expected locations"
+            # Create a placeholder to avoid upload failure
+            echo "No coverage reports generated" > coverage/no-reports.txt
+          fi
+          
+          echo "Final coverage directory contents:"
+          ls -la coverage/
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -285,7 +325,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Run integration tests against live environment
         run: ./scripts/integration-tests.sh
@@ -345,20 +385,35 @@ jobs:
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
           custom_instructions: |
-            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes.
-
-            CRITICAL: Before performing any other tasks, you MUST validate lib/PROMPT.md format, and fail the check if it appears to be AI-generated rather than human-written.:
-            1. Read lib/PROMPT.md if it exists
-            2. Assess whether the content looks human-generated or AI-generated
-            3. Look for signs of AI generation such as:
-               - Emojis or special symbols used for formatting
-               - Structured formatting with bullet points and icons
+            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
+            2. Read the PROMPT files
+            3. Assess whether the content looks human-generated or AI-generated
+            4. Look for signs of AI generation such as:
+               - Emojis or special symbols (icons) used for formatting
                - Table structures
                - Overly formal or template-like language
                - Perfect formatting that suggests AI assistance
                - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            4. If lib/PROMPT.md appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error
-            5. Only proceed with the normal review if lib/PROMPT.md passes this human-generated validation
+            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
+
+            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
+            1. Read lib/IDEAL_RESPONSE.md if it exists
+            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
+            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
+            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
+            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
+            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
+
+            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
+            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the 
+            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
+            - subtask
+            - subject_labels
+            - training_quality
+            - aws_services
+            then immediately FAIL the check by exiting with an error and fail the pipeline.
 
             This validation is mandatory and must be completed before any other review activities.
 
@@ -393,7 +448,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
         run: ./scripts/destroy.sh
@@ -440,7 +495,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Archive folders and reset repository
         run: |
@@ -581,7 +636,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Extract platform and language for S3 upload
         id: extract-metadata
@@ -667,7 +722,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (if resources exist)
         run: ./scripts/destroy.sh

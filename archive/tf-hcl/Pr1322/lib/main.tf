@@ -97,9 +97,9 @@ data "aws_ami" "amazon_linux" {
 ########################
 
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
-  short_prefix = "${var.project_name}-prod"  # Shorter prefix for length-limited resources
-  azs         = slice(data.aws_availability_zones.available.names, 0, 3)
+  name_prefix  = "${var.project_name}-${var.environment}"
+  short_prefix = "${var.project_name}-prod" # Shorter prefix for length-limited resources
+  azs          = slice(data.aws_availability_zones.available.names, 0, 3)
 }
 
 ########################
@@ -440,10 +440,10 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type = var.enable_https ? "redirect" : "forward"
-    
+
     dynamic "redirect" {
       for_each = var.enable_https ? [1] : []
       content {
@@ -452,7 +452,7 @@ resource "aws_lb_listener" "http" {
         status_code = "HTTP_301"
       }
     }
-    
+
     dynamic "forward" {
       for_each = var.enable_https ? [] : [1]
       content {
@@ -471,7 +471,7 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
   certificate_arn   = aws_acm_certificate.main[0].arn
-  
+
   default_action {
     type = "forward"
     forward {

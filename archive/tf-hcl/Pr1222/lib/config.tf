@@ -15,7 +15,7 @@ resource "aws_config_configuration_recorder" "main" {
 resource "aws_config_delivery_channel" "main" {
   name           = "${local.project_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
-  
+
   depends_on = [aws_config_configuration_recorder.main]
 }
 
@@ -29,8 +29,8 @@ resource "aws_config_config_rule" "required_tags" {
   }
 
   input_parameters = jsonencode({
-    tag1Key   = "environment"
-    tag2Key   = "owner"
+    tag1Key = "environment"
+    tag2Key = "owner"
   })
 
   depends_on = [aws_config_configuration_recorder.main]

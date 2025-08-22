@@ -34,14 +34,14 @@ Parameters:
 
 Output contract:
 - Fully compilable CDK v2 TS code with comments.
-- No placeholders for APIs that don’t exist.
+- No placeholders for APIs that dont exist.
 - Include CfnOutputs.
 - Explain any assumptions in comments.
 ```
 
 ---
 
-### **Quality Checklist (Claude’s “chain-of-checks”)**
+### **Quality Checklist (Claudes chain-of-checks)**
 
 * [ ] Bucket has AES-256 (S3-managed SSE), `blockPublicAccess: BLOCK_ALL`, `objectOwnership: BUCKET_OWNER_ENFORCED`, and TLS-only policy.
 * [ ] No wildcard admin IAM. Policy allows only `s3:ListBucket` + `s3:GetObject`.

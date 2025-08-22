@@ -1,0 +1,565 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless infrastructure with Lambda, API Gateway, and DynamoDB for trainr929 project",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment name for resource tagging"
+        },
+        "Project": {
+            "Type": "String",
+            "Default": "trainr929",
+            "Description": "Project name for resource identification"
+        }
+    },
+    "Resources": {
+        "DataProcessingTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${Project}-data-processing-table-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": "alias/aws/dynamodb"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Description",
+                        "Value": "DynamoDB table for storing processed request data"
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Project}-lambda-execution-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataProcessingTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                                    },
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": {
+                                                "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "DataProcessingFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Project}-data-processing-function-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "DataProcessingTable"
+                        },
+                        "REGION": {
+                            "Ref": "AWS::Region"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport uuid\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ['TABLE_NAME']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    try:\n        # Extract request data\n        http_method = event.get('requestContext', {}).get('http', {}).get('method', 'GET')\n        path = event.get('requestContext', {}).get('http', {}).get('path', '/')\n        \n        # Process and store data\n        item = {\n            'id': str(uuid.uuid4()),\n            'timestamp': datetime.now().isoformat(),\n            'method': http_method,\n            'path': path,\n            'headers': event.get('headers', {}),\n            'body': event.get('body', ''),\n            'environment': os.environ.get('ENVIRONMENT', 'dev')\n        }\n        \n        # Store in DynamoDB\n        table.put_item(Item=item)\n        \n        # Return response\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key'\n            },\n            'body': json.dumps({\n                'message': 'Request processed successfully',\n                'id': item['id'],\n                'timestamp': item['timestamp']\n            })\n        }\n    except Exception as e:\n        print(f\"Error processing request: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Description",
+                        "Value": "Lambda function for processing HTTP requests and storing data"
+                    }
+                ]
+            }
+        },
+        "LambdaVersion": {
+            "Type": "AWS::Lambda::Version",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DataProcessingFunction"
+                },
+                "Description": {
+                    "Fn::Sub": "Version for ${Project} Lambda function"
+                }
+            }
+        },
+        "LambdaAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DataProcessingFunction"
+                },
+                "FunctionVersion": {
+                    "Fn::GetAtt": [
+                        "LambdaVersion",
+                        "Version"
+                    ]
+                },
+                "Name": "LIVE",
+                "Description": "Alias pointing to the live version of the function"
+            }
+        },
+        "StreamProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Project}-stream-processor-function-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "StreamProcessorRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 256,
+                "Timeout": 30,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\n\ndef lambda_handler(event, context):\n    try:\n        print(f\"Processing {len(event['Records'])} DynamoDB stream records\")\n        \n        for record in event['Records']:\n            event_name = record['eventName']\n            \n            if event_name in ['INSERT', 'MODIFY', 'REMOVE']:\n                print(f\"Processing {event_name} event for item: {record.get('dynamodb', {}).get('Keys', {})}\")\n                \n                # Add your stream processing logic here\n                # For example: send notifications, update other services, etc.\n        \n        return {'statusCode': 200, 'body': 'Stream processed successfully'}\n    except Exception as e:\n        print(f\"Error processing stream: {str(e)}\")\n        raise e\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "StreamProcessorRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Project}-stream-processor-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBStreamAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeStream",
+                                        "dynamodb:GetRecords",
+                                        "dynamodb:GetShardIterator",
+                                        "dynamodb:ListStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataProcessingTable",
+                                            "StreamArn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "StreamEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "DataProcessingTable",
+                        "StreamArn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "StreamProcessorFunction"
+                },
+                "StartingPosition": "LATEST",
+                "MaximumBatchingWindowInSeconds": 10,
+                "BatchSize": 10
+            }
+        },
+        "HttpApi": {
+            "Type": "AWS::ApiGatewayV2::Api",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Project}-http-api-${EnvironmentSuffix}"
+                },
+                "Description": "HTTP API for processing requests via Lambda",
+                "ProtocolType": "HTTP",
+                "CorsConfiguration": {
+                    "AllowCredentials": false,
+                    "AllowHeaders": [
+                        "Content-Type",
+                        "X-Amz-Date",
+                        "Authorization",
+                        "X-Api-Key"
+                    ],
+                    "AllowMethods": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "DELETE",
+                        "OPTIONS"
+                    ],
+                    "AllowOrigins": [
+                        "*"
+                    ],
+                    "MaxAge": 86400
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Project": {
+                        "Ref": "Project"
+                    }
+                }
+            }
+        },
+        "LambdaIntegration": {
+            "Type": "AWS::ApiGatewayV2::Integration",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "IntegrationType": "AWS_PROXY",
+                "IntegrationUri": {
+                    "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DataProcessingFunction.Arn}/invocations"
+                },
+                "PayloadFormatVersion": "2.0",
+                "Description": "Lambda integration for processing HTTP requests"
+            }
+        },
+        "ApiRoute": {
+            "Type": "AWS::ApiGatewayV2::Route",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "RouteKey": "$default",
+                "Target": {
+                    "Fn::Sub": "integrations/${LambdaIntegration}"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGatewayV2::Stage",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "StageName": "$default",
+                "Description": "Default stage for HTTP API",
+                "AutoDeploy": true,
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Project": {
+                        "Ref": "Project"
+                    }
+                }
+            }
+        },
+        "LambdaApiPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "DataProcessingFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayUrl": {
+            "Description": "HTTP API Gateway URL",
+            "Value": {
+                "Fn::Sub": "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api-gateway-url"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataProcessingFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-function-arn"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Table Name",
+            "Value": {
+                "Ref": "DataProcessingTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-dynamodb-table-name"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda Function Name",
+            "Value": {
+                "Ref": "DataProcessingFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-function-name"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataProcessingTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-dynamodb-table-arn"
+                }
+            }
+        },
+        "StreamProcessorFunctionArn": {
+            "Description": "Stream Processor Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StreamProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-stream-processor-function-arn"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-stack-name"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-environment-suffix"
+                }
+            }
+        }
+    }
+}

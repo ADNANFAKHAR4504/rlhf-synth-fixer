@@ -73,8 +73,8 @@ Edit
 Tags:
 
 - Key: Project
-  Value: WebApp
-  Best Practices
+Value: WebApp
+Best Practices
 
 Use only non-deprecated AWS resource types.
 
@@ -91,4 +91,4 @@ Passes cfn-lint and AWS CloudFormation validation checks.
 
 Can be deployed in the AWS us-east-1 region via the AWS Console.
 
-The template should be self-contained and complete — all parameters, mappings, and outputs should be defined where relevant.
+The template should be self-contained and complete all parameters, mappings, and outputs should be defined where relevant.

@@ -84,7 +84,9 @@ function getLanguageChoices(platform: string) {
   if (platform === 'pulumi') {
     return [
       { name: 'TypeScript', value: 'ts' },
+      { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
+      { name: 'Java', value: 'java' },
     ];
   }
   if (platform === 'tf') {
