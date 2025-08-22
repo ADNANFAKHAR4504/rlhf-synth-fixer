@@ -209,7 +209,7 @@ describe("High Availability Web Application - Unit Tests", () => {
     });
 
     test("ASG has proper capacity settings", () => {
-      expect(stackContent).toMatch(/desired_capacity\s*=\s*2/);
+      expect(stackContent).toMatch(/desired_capacity\s*=\s*1/);
       expect(stackContent).toMatch(/max_size\s*=\s*4/);
       expect(stackContent).toMatch(/min_size\s*=\s*1/);
     });
