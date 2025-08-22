@@ -134,6 +134,7 @@ describe('TapStack Integration Tests', () => {
       });
     });
     
+  });
 
   describe('IAM Role Integration Tests', () => {
     it('should create IAM roles with proper trust relationships', async () => {
