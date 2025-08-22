@@ -5,6 +5,22 @@ const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
 
 type Outputs = Record<string, any>;
 
+function normalizeOutputs(maybeStructured: any): Outputs {
+  if (!maybeStructured || typeof maybeStructured !== 'object') return {};
+  const entries = Object.entries(maybeStructured)
+    .map(([key, value]) => {
+      const flattened =
+        value && typeof value === 'object' && 'value' in (value as any)
+          ? (value as any).value
+          : value;
+      return [key, flattened] as [string, any];
+    })
+    .filter(
+      ([_, value]) => value !== null && value !== undefined && value !== ''
+    );
+  return Object.fromEntries(entries);
+}
+
 function loadOutputs(): Outputs {
   const defaults: Outputs = {
     vpc_id: 'vpc-0abc123def4567890',
@@ -31,10 +47,9 @@ function loadOutputs(): Outputs {
     if (fs.existsSync(outputsPath)) {
       const raw = fs.readFileSync(outputsPath, 'utf8');
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        // Merge defaults to ensure required keys exist
-        return { ...defaults, ...parsed } as Outputs;
-      }
+      const flattened = normalizeOutputs(parsed);
+      // Merge defaults first so only valid, non-null values override
+      return { ...defaults, ...flattened } as Outputs;
     }
   } catch {}
   return defaults;
