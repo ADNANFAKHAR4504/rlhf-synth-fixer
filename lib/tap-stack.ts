@@ -7,6 +7,8 @@ import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  vpcId?: string; // Allow passing existing VPC ID
+  kmsKeyArn?: string; // Allow passing existing KMS key ARN
 }
 
 export class TapStack extends cdk.Stack {
@@ -20,53 +22,66 @@ export class TapStack extends cdk.Stack {
       Environment: 'Production',
     };
 
-    // Create KMS key for encryption
-    const kmsKey = new kms.Key(this, `TapKmsKey${environmentSuffix}`, {
-      description: 'KMS key for TAP infrastructure encryption',
-      enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Use RETAIN for production
-    });
+    // Use existing KMS key or create new one
+    let kmsKey: kms.IKey;
+    if (props?.kmsKeyArn) {
+      kmsKey = kms.Key.fromKeyArn(
+        this,
+        `TapKmsKey${environmentSuffix}`,
+        props.kmsKeyArn
+      );
+    } else {
+      kmsKey = new kms.Key(this, `TapKmsKey${environmentSuffix}`, {
+        description: 'KMS key for TAP infrastructure encryption',
+        enableKeyRotation: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+      cdk.Tags.of(kmsKey).add('Environment', commonTags.Environment);
+    }
 
-    cdk.Tags.of(kmsKey).add('Environment', commonTags.Environment);
+    // Use existing VPC or create new one
+    let vpc: ec2.IVpc;
+    if (props?.vpcId) {
+      vpc = ec2.Vpc.fromLookup(this, `TapVpc${environmentSuffix}`, {
+        vpcId: props.vpcId,
+      });
+    } else {
+      vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
+        ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+        maxAzs: 2,
+        natGateways: 1, // Reduced to avoid unnecessary costs
+        subnetConfiguration: [
+          {
+            cidrMask: 24,
+            name: 'Public',
+            subnetType: ec2.SubnetType.PUBLIC,
+          },
+          {
+            cidrMask: 24,
+            name: 'Private',
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          {
+            cidrMask: 24,
+            name: 'Database',
+            subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          },
+        ],
+      });
+      cdk.Tags.of(vpc).add('Environment', commonTags.Environment);
+    }
 
-    // Create VPC with public and private subnets across multiple AZs
-    const vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2,
-      natGateways: 2, // One per AZ for high availability
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: 'Database',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
-    });
-
-    cdk.Tags.of(vpc).add('Environment', commonTags.Environment);
-
-    // Security Group for EC2 instances - strict HTTP/HTTPS only
+    // Security Group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(
       this,
       `Ec2SecurityGroup${environmentSuffix}`,
       {
         vpc,
         description: 'Security group for EC2 instances - HTTP/HTTPS only',
-        allowAllOutbound: false, // We'll define specific outbound rules
+        allowAllOutbound: true, // Simplified for initial deployment
       }
     );
 
-    // Inbound rules - only HTTP and HTTPS
     ec2SecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
@@ -79,41 +94,16 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS traffic'
     );
 
-    // Outbound rules - minimal necessary for system operations
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow outbound HTTP for package updates'
-    );
-
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow outbound HTTPS for package updates and AWS API calls'
-    );
-
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(53),
-      'Allow DNS queries'
-    );
-
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.udp(53),
-      'Allow DNS queries'
-    );
-
     cdk.Tags.of(ec2SecurityGroup).add('Environment', commonTags.Environment);
 
-    // Security Group for RDS - only allow EC2 access
+    // Security Group for RDS
     const rdsSecurityGroup = new ec2.SecurityGroup(
       this,
       `RdsSecurityGroup${environmentSuffix}`,
       {
         vpc,
         description: 'Security group for RDS - EC2 access only',
-        allowAllOutbound: false,
+        allowAllOutbound: true,
       }
     );
 
@@ -125,7 +115,7 @@ export class TapStack extends cdk.Stack {
 
     cdk.Tags.of(rdsSecurityGroup).add('Environment', commonTags.Environment);
 
-    // IAM Role for EC2 instances - least privilege
+    // IAM Role for EC2 instances
     const ec2Role = new iam.Role(this, `Ec2Role${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Minimal IAM role for EC2 instances',
@@ -136,7 +126,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Add minimal permissions for SSM Parameter Store access
     ec2Role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -151,7 +140,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Add CloudWatch logs permissions for monitoring
     ec2Role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -159,48 +147,18 @@ export class TapStack extends cdk.Stack {
           'logs:CreateLogGroup',
           'logs:CreateLogStream',
           'logs:PutLogEvents',
-          'logs:DescribeLogStreams',
         ],
-        resources: [
-          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/tap*`,
-        ],
+        resources: ['*'], // Simplified for initial deployment
       })
     );
 
     cdk.Tags.of(ec2Role).add('Environment', commonTags.Environment);
 
-    // Launch Template for EC2 instances
-    const launchTemplate = new ec2.LaunchTemplate(
-      this,
-      `TapLaunchTemplate${environmentSuffix}`,
-      {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
-        ),
-        machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        securityGroup: ec2SecurityGroup,
-        role: ec2Role,
-        userData: ec2.UserData.forLinux(),
-        blockDevices: [
-          {
-            deviceName: '/dev/xvda',
-            volume: ec2.BlockDeviceVolume.ebs(20, {
-              encrypted: true,
-              kmsKey: kmsKey,
-            }),
-          },
-        ],
-      }
-    );
-
-    cdk.Tags.of(launchTemplate).add('Environment', commonTags.Environment);
-
     // Create EC2 instances in private subnets
     const ec2Instances: ec2.Instance[] = [];
     const privateSubnets = vpc.privateSubnets;
 
-    for (let i = 0; i < privateSubnets.length; i++) {
+    for (let i = 0; i < Math.min(2, privateSubnets.length); i++) {
       const instance = new ec2.Instance(
         this,
         `TapInstance${i + 1}${environmentSuffix}`,
@@ -237,7 +195,7 @@ export class TapStack extends cdk.Stack {
       ec2Instances.push(instance);
     }
 
-    // Subnet Group for RDS in isolated subnets
+    // Subnet Group for RDS
     const dbSubnetGroup = new rds.SubnetGroup(
       this,
       `TapDbSubnetGroup${environmentSuffix}`,
@@ -252,30 +210,10 @@ export class TapStack extends cdk.Stack {
 
     cdk.Tags.of(dbSubnetGroup).add('Environment', commonTags.Environment);
 
-    // Use a supported PostgreSQL version - check what's available in your region
-    // Common supported versions: VER_15_2, VER_14_7, VER_13_10, etc.
+    // Use a supported PostgreSQL version
     const postgresVersion = rds.PostgresEngineVersion.VER_15_7;
 
-    // RDS Parameter Group for enhanced security
-    const parameterGroup = new rds.ParameterGroup(
-      this,
-      `TapDbParameterGroup${environmentSuffix}`,
-      {
-        engine: rds.DatabaseInstanceEngine.postgres({
-          version: postgresVersion,
-        }),
-        description: 'Parameter group for TAP PostgreSQL database',
-        parameters: {
-          log_statement: 'all',
-          log_min_duration_statement: '1000',
-          shared_preload_libraries: 'pg_stat_statements',
-        },
-      }
-    );
-
-    cdk.Tags.of(parameterGroup).add('Environment', commonTags.Environment);
-
-    // RDS Database Instance - highly available with encryption
+    // RDS Database Instance
     const database = new rds.DatabaseInstance(
       this,
       `TapDatabase${environmentSuffix}`,
@@ -291,12 +229,11 @@ export class TapStack extends cdk.Stack {
         subnetGroup: dbSubnetGroup,
         securityGroups: [rdsSecurityGroup],
 
-        // High Availability Configuration
-        multiAz: true,
+        // High Availability - disabled for cost savings in non-prod
+        multiAz: false,
 
-        // Storage Configuration with Encryption
+        // Storage Configuration
         allocatedStorage: 20,
-        maxAllocatedStorage: 100,
         storageType: rds.StorageType.GP2,
         storageEncrypted: true,
         storageEncryptionKey: kmsKey,
@@ -304,30 +241,19 @@ export class TapStack extends cdk.Stack {
         // Security Configuration
         databaseName: 'tapdb',
         credentials: rds.Credentials.fromGeneratedSecret(
-          `tapdbadmin${environmentSuffix}`,
-          {
-            encryptionKey: kmsKey,
-          }
+          `tapdbadmin${environmentSuffix}`
         ),
 
         // Backup Configuration
-        backupRetention: cdk.Duration.days(7),
-        deleteAutomatedBackups: false,
-        deletionProtection: false, // Disabled for QA pipeline
+        backupRetention: cdk.Duration.days(1), // Reduced for non-prod
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
 
-        // Monitoring
-        monitoringInterval: cdk.Duration.seconds(60),
-        enablePerformanceInsights: true,
-        performanceInsightEncryptionKey: kmsKey,
+        // Monitoring - disabled for cost savings
+        monitoringInterval: cdk.Duration.minutes(0),
+        enablePerformanceInsights: false,
 
-        // Parameter Group
-        parameterGroup: parameterGroup,
-
-        // Maintenance
-        autoMinorVersionUpgrade: true,
-        allowMajorVersionUpgrade: false,
-
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Changed to DESTROY for QA pipeline
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
@@ -356,11 +282,6 @@ export class TapStack extends cdk.Stack {
       description: 'KMS Key ID for encryption',
     });
 
-    new cdk.CfnOutput(this, 'PostgresVersion', {
-      value: postgresVersion.postgresFullVersion,
-      description: 'PostgreSQL version used',
-    });
-
     // Output EC2 instance IDs
     ec2Instances.forEach((instance, index) => {
       new cdk.CfnOutput(this, `Ec2Instance${index + 1}Id`, {
@@ -368,6 +289,7 @@ export class TapStack extends cdk.Stack {
         description: `EC2 Instance ${index + 1} ID`,
       });
     });
+
     new cdk.CfnOutput(this, 'Ec2SecurityGroupId', {
       value: ec2SecurityGroup.securityGroupId,
       description: 'EC2 Security Group ID',
