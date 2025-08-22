@@ -9,7 +9,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Security Configuration",
     "Resource Scaling"
   ],
@@ -22,5 +22,11 @@
     "InternetGateway",
     "RouteTable",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
