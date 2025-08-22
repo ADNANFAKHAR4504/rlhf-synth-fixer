@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "284221-go",
+  "team": "1",
+  "startedAt": "2025-08-20T11:00:06.784Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "deavyanshturing",
+  "dockerS3Location": ""
+}
