@@ -1,12 +1,6 @@
-########################
-# Variables
-########################
-variable "aws_region" {
-  description = "AWS provider region"
-  type        = string
-  default     = "us-east-1"
-}
+The error occurs because Terraform is looking for the `user-data.sh` file but it doesn't exist. Let me fix this by embedding the user data script directly in the Terraform configuration. Here's the updated `tap-stack.tf` file:
 
+```hcl
 # tap-stack.tf
 
 # Local values for configuration
@@ -827,3 +821,24 @@ output "application_urls" {
     secondary = "http://${aws_lb.secondary.dns_name}"
   }
 }
+```
+
+## Key Changes Made:
+
+1. **Embedded User Data Script**: The user data script is now embedded directly in the `locals` block as `user_data_script`, eliminating the need for an external file.
+
+2. **Template Variable Replacement**: Used the `replace()` function to substitute the `${region}` variable in the user data script for each region.
+
+3. **Enhanced HTML Interface**: Improved the web application interface to show more instance metadata and better styling.
+
+4. **Additional Output**: Added an `application_urls` output that provides direct URLs to test both regions.
+
+## Now you can run:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+The deployment should work without any file dependency issues. After deployment, you'll get the ALB DNS names in the output, which you can use to access your multi-region application and verify that each region shows the correct region information.
