@@ -11,8 +11,7 @@ Description: 'Secure and optimized AWS infrastructure with comprehensive securit
 Parameters:
   Environment:
     Type: String
-    Default: prod
-    AllowedValues: [dev, staging, prod]
+    Default: production
     Description: Environment name for resource naming convention
   
   VpcCidr:
@@ -59,12 +58,8 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
-    us-west-2:
-      AMI: ami-008fe2fc65df48dac
-    eu-west-1:
-      AMI: ami-01dd271720c1ba44f
+    ap-northeast-1:
+      AMI: ami-0d52744d6551d851e
 
 Resources:
   # ===== VPC AND NETWORKING =====
@@ -76,7 +71,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-vpc'
+          Value: !Sub '${Environment}-${AWS::StackName}-vpc'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -92,7 +87,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1'
+          Value: !Sub '${Environment}-${AWS::StackName}-private-subnet-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
@@ -107,7 +102,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-2'
+          Value: !Sub '${Environment}-${AWS::StackName}-private-subnet-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
@@ -123,7 +118,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-subnet-1'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-subnet-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
@@ -138,7 +133,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-subnet-2'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-subnet-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
@@ -151,7 +146,7 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-route-table'
+          Value: !Sub '${Environment}-${AWS::StackName}-private-route-table'
         - Key: Environment
           Value: !Ref Environment
 
@@ -173,7 +168,7 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-route-table'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-route-table'
         - Key: Environment
           Value: !Ref Environment
 
@@ -196,7 +191,7 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-network-acl'
+          Value: !Sub '${Environment}-${AWS::StackName}-private-network-acl'
         - Key: Environment
           Value: !Ref Environment
 
@@ -223,7 +218,7 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-ec2-security-group'
+      GroupName: !Sub '${Environment}-${AWS::StackName}-ec2-sg'
       GroupDescription: Security group for EC2 instances with least privilege access
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -248,21 +243,16 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: HTTPS outbound for updates and API calls
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: MySQL access to database
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-ec2-security-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-ec2-sg'
         - Key: Environment
           Value: !Ref Environment
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-database-security-group'
+      GroupName: !Sub '${Environment}-${AWS::StackName}-db-sg'
       GroupDescription: Security group for RDS database with restricted access
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -273,14 +263,14 @@ Resources:
           Description: MySQL access from EC2 instances only
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-security-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-db-sg'
         - Key: Environment
           Value: !Ref Environment
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-bastion-security-group'
+      GroupName: !Sub '${Environment}-${AWS::StackName}-bastion-sg'
       GroupDescription: Security group for bastion host (if needed for maintenance)
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -291,7 +281,7 @@ Resources:
           Description: SSH access (restrict to specific IPs in production)
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-bastion-security-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-bastion-sg'
         - Key: Environment
           Value: !Ref Environment
 
@@ -314,7 +304,7 @@ Resources:
           Description: HTTPS access from internet
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-loadbalancer-security-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-alb-sg'
         - Key: Environment
           Value: !Ref Environment
 
@@ -322,7 +312,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-ec2-role'
+      RoleName: !Sub '${Environment}-${AWS::StackName}-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -341,21 +331,30 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource:
+                  Fn::Join:
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - Ref: SecureS3Bucket
+                      - '/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureS3Bucket
+                Resource:
+                  Fn::Join:
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - Ref: SecureS3Bucket
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-ec2-role'
+          Value: !Sub '${Environment}-${AWS::StackName}-ec2-role'
         - Key: Environment
           Value: !Ref Environment
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile'
+      InstanceProfileName: !Sub '${Environment}-${AWS::StackName}-ec2-profile'
       Roles:
         - !Ref EC2Role
 
@@ -363,7 +362,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-${AWS::Region}-bucket'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -383,23 +382,21 @@ Resources:
             NoncurrentVersionExpirationInDays: 30
           - Id: TransitionToIA
             Status: Enabled
-            TransitionInDays: 30
-            StorageClass: STANDARD_IA
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
           - Id: TransitionToGlacier
             Status: Enabled
-            TransitionInDays: 90
-            StorageClass: GLACIER
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: access-logs/
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
+
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-bucket'
+          Value: !Sub '${Environment}-${AWS::Region}-bucket'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -408,7 +405,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logging-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-${AWS::Region}-logging-bucket'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -425,7 +422,7 @@ Resources:
             ExpirationInDays: 90
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-logging-bucket'
+          Value: !Sub '${Environment}-${AWS::StackName}-logging-bucket'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -450,7 +447,7 @@ Resources:
             DeleteOnTermination: true
       Monitoring: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -480,7 +477,7 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-instance-1'
+          Value: !Sub '${Environment}-${AWS::StackName}-secure-instance-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -504,7 +501,7 @@ Resources:
             DeleteOnTermination: true
       Monitoring: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -534,7 +531,7 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-instance-2'
+          Value: !Sub '${Environment}-${AWS::StackName}-secure-instance-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -544,21 +541,21 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-database-subnet-group'
+      DBSubnetGroupName: !Sub '${Environment}-${AWS::StackName}-database-subnet-group'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref DatabaseSubnet1
         - !Ref DatabaseSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-subnet-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-subnet-group'
         - Key: Environment
           Value: !Ref Environment
 
   DatabaseParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
-      DBParameterGroupName: !Sub '${Environment}-database-parameter-group'
+      DBParameterGroupName: !Sub '${Environment}-${AWS::StackName}-database-parameter-group'
       Description: Custom parameter group for enhanced security
       Family: mysql8.0
       Parameters:
@@ -567,18 +564,18 @@ Resources:
         log_queries_not_using_indexes: 1
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-parameter-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-parameter-group'
         - Key: Environment
           Value: !Ref Environment
 
   SecureDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-secure-database'
+      DBInstanceIdentifier: !Sub '${Environment}-${AWS::StackName}-secure-database'
+      DeleteAutomatedBackups: true
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.40'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
@@ -588,18 +585,14 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBParameterGroupName: !Ref DatabaseParameterGroup
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
+      BackupRetentionPeriod: 0
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
-      DeletionProtection: true
+      MonitoringInterval: 0
+      DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-database'
+          Value: !Sub '${Environment}-${AWS::StackName}-secure-database'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
@@ -608,7 +601,7 @@ Resources:
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-rds-monitoring-role'
+      RoleName: !Sub '${Environment}-${AWS::StackName}-rds-monitoring-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -620,7 +613,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-rds-monitoring-role'
+          Value: !Sub '${Environment}-${AWS::StackName}-rds-monitoring-role'
         - Key: Environment
           Value: !Ref Environment
 
@@ -628,7 +621,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-${AWS::Region}-cloudtrail-logs-bucket'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -645,7 +638,7 @@ Resources:
             ExpirationInDays: 365
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-cloudtrail-logs'
+          Value: !Sub '${Environment}-${AWS::StackName}-cloudtrail-logs'
         - Key: Environment
           Value: !Ref Environment
 
@@ -675,7 +668,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailS3BucketPolicy
     Properties:
-      TrailName: !Sub '${Environment}-secure-cloudtrail'
+      TrailName: !Sub '${Environment}-${AWS::StackName}-secure-cloudtrail'
       S3BucketName: !Ref CloudTrailS3Bucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -684,16 +677,9 @@ Resources:
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub '${SecureS3Bucket}/*'
-            - Type: AWS::S3::Bucket
-              Values:
-                - !Ref SecureS3Bucket
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-cloudtrail'
+          Value: !Sub '${Environment}-${AWS::StackName}-secure-cloudtrail'
         - Key: Environment
           Value: !Ref Environment
 
@@ -701,22 +687,22 @@ Resources:
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${Environment}-secure-bucket'
+      LogGroupName: !Sub '/aws/s3/${Environment}-${AWS::StackName}-secure-bucket'
       RetentionInDays: 30
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-s3-log-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-s3-log-group'
         - Key: Environment
           Value: !Ref Environment
 
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${Environment}-secure-instances'
+      LogGroupName: !Sub '/aws/ec2/${Environment}-${AWS::StackName}-secure-instances'
       RetentionInDays: 30
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-ec2-log-group'
+          Value: !Sub '${Environment}-${AWS::StackName}-ec2-log-group'
         - Key: Environment
           Value: !Ref Environment
 
@@ -724,7 +710,7 @@ Resources:
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-high-cpu-utilization'
+      AlarmName: !Sub '${Environment}-${AWS::StackName}-high-cpu-utilization'
       AlarmDescription: Alarm when CPU exceeds 80%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -739,14 +725,14 @@ Resources:
       TreatMissingData: notBreaching
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-high-cpu-alarm'
+          Value: !Sub '${Environment}-${AWS::StackName}-high-cpu-alarm'
         - Key: Environment
           Value: !Ref Environment
 
   DatabaseConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-database-high-connections'
+      AlarmName: !Sub '${Environment}-${AWS::StackName}-database-high-connections'
       AlarmDescription: Alarm when database connections exceed 80% of max
       MetricName: DatabaseConnections
       Namespace: AWS/RDS
@@ -761,7 +747,7 @@ Resources:
       TreatMissingData: notBreaching
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-connections-alarm'
+          Value: !Sub '${Environment}-${AWS::StackName}-database-connections-alarm'
         - Key: Environment
           Value: !Ref Environment
 
@@ -770,17 +756,24 @@ Resources:
     Type: AWS::Budgets::Budget
     Properties:
       Budget:
-        BudgetName: !Sub '${Environment}-monthly-cost-budget'
+        BudgetName: !Sub '${Environment}-${AWS::StackName}-monthly-cost-budget'
         BudgetLimit:
           Amount: !Ref CostAlertThreshold
           Unit: USD
         TimeUnit: MONTHLY
         BudgetType: COST
-        CostFilters:
-          TagKey:
-            - Environment
-          TagValue:
-            - !Ref Environment
+        CostTypes:
+          IncludeCredit: true
+          IncludeDiscount: true
+          IncludeOtherSubscription: true
+          IncludeRecurring: true
+          IncludeRefund: true
+          IncludeSubscription: true
+          IncludeSupport: true
+          IncludeTax: true
+          IncludeUpfront: true
+          UseAmortized: false
+          UseBlended: false
       NotificationsWithSubscribers:
         - Notification:
             NotificationType: ACTUAL
@@ -802,78 +795,78 @@ Outputs:
     Description: ID of the created VPC
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${Environment}-vpc-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-vpc-id'
 
   PrivateSubnet1Id:
     Description: ID of Private Subnet 1
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${Environment}-private-subnet-1-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-private-subnet-1-id'
 
   PrivateSubnet2Id:
     Description: ID of Private Subnet 2
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${Environment}-private-subnet-2-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-private-subnet-2-id'
 
   DatabaseSubnetGroupName:
     Description: Name of the database subnet group
     Value: !Ref DatabaseSubnetGroup
     Export:
-      Name: !Sub '${Environment}-database-subnet-group-name'
+      Name: !Sub '${Environment}-${AWS::StackName}-database-subnet-group-name'
 
   SecureS3BucketName:
     Description: Name of the secure S3 bucket
     Value: !Ref SecureS3Bucket
     Export:
-      Name: !Sub '${Environment}-secure-s3-bucket-name'
+      Name: !Sub '${Environment}-${AWS::Region}-secure-s3-bucket'
 
   DatabaseEndpoint:
     Description: RDS Database endpoint
     Value: !GetAtt SecureDatabase.Endpoint.Address
     Export:
-      Name: !Sub '${Environment}-database-endpoint'
+      Name: !Sub '${Environment}-${AWS::StackName}-database-endpoint'
 
   EC2Instance1Id:
     Description: ID of EC2 Instance 1
     Value: !Ref SecureEC2Instance1
     Export:
-      Name: !Sub '${Environment}-ec2-instance-1-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-ec2-instance-1-id'
 
   EC2Instance2Id:
     Description: ID of EC2 Instance 2
     Value: !Ref SecureEC2Instance2
     Export:
-      Name: !Sub '${Environment}-ec2-instance-2-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-ec2-instance-2-id'
 
   CloudTrailArn:
     Description: ARN of the CloudTrail
     Value: !GetAtt SecureCloudTrail.Arn
     Export:
-      Name: !Sub '${Environment}-cloudtrail-arn'
+      Name: !Sub '${Environment}-${AWS::StackName}-cloudtrail-arn'
 
   EC2SecurityGroupId:
     Description: ID of the EC2 Security Group
     Value: !Ref EC2SecurityGroup
     Export:
-      Name: !Sub '${Environment}-ec2-security-group-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-ec2-security-group-id'
 
   DatabaseSecurityGroupId:
     Description: ID of the Database Security Group
     Value: !Ref DatabaseSecurityGroup
     Export:
-      Name: !Sub '${Environment}-database-security-group-id'
+      Name: !Sub '${Environment}-${AWS::StackName}-database-security-group-id'
 ```
 
 ## Key Security Features Implemented
 
-### 🔒 **Network Security**
+### **Network Security**
 - **Private Subnets Only**: All EC2 instances and databases are deployed in private subnets with no public IP addresses
 - **Security Groups**: Implement least privilege access with specific port and source restrictions
 - **Network ACLs**: Additional layer of subnet-level security controls
 - **VPC Isolation**: Complete network isolation with proper CIDR segmentation
 
-### 🛡️ **Data Protection**
+### **Data Protection**
 - **S3 Encryption**: All S3 buckets use server-side encryption (SSE-S3)
 - **EBS Encryption**: All EBS volumes are encrypted at rest
 - **

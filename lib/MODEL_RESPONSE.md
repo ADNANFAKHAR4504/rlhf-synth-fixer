@@ -867,13 +867,13 @@ Outputs:
 
 ## Key Security Features Implemented
 
-### 🔒 **Network Security**
+### **Network Security**
 - **Private Subnets Only**: All EC2 instances and databases are deployed in private subnets with no public IP addresses
 - **Security Groups**: Implement least privilege access with specific port and source restrictions
 - **Network ACLs**: Additional layer of subnet-level security controls
 - **VPC Isolation**: Complete network isolation with proper CIDR segmentation
 
-### 🛡️ **Data Protection**
+### **Data Protection**
 - **S3 Encryption**: All S3 buckets use server-side encryption (SSE-S3)
 - **EBS Encryption**: All EBS volumes are encrypted at rest
 - **
