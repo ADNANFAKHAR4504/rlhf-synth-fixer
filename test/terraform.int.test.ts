@@ -1,12 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
-import { EC2Client, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeInstancesCommand, Instance } from "@aws-sdk/client-ec2";
 import {
   S3Client,
   GetBucketVersioningCommand,
   GetBucketReplicationCommand,
+  ReplicationConfiguration,
 } from "@aws-sdk/client-s3";
-import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
+import { IAMClient, GetRoleCommand, Role } from "@aws-sdk/client-iam";
 
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 
@@ -47,7 +48,7 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
   const s3ClientSecondary = new S3Client({ region: secondaryRegion });
   const iamClient = new IAMClient({ region: "us-east-1" }); // IAM is global
 
-  it("Primary EC2 instance exists and is running with correct instance type and tags", async () => {
+  it("Primary EC2 instance exists, running, correct type with tags", async () => {
     const instanceId = outputs.primary_ec2_instance_id;
     expect(isNonEmptyString(instanceId)).toBe(true);
 
@@ -55,31 +56,26 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
       new DescribeInstancesCommand({ InstanceIds: [instanceId] })
     );
 
-    const reservations = response.Reservations || [];
-    expect(reservations.length).toBeGreaterThan(0);
-
-    const instances = reservations[0].Instances || [];
-    expect(instances.length).toBeGreaterThan(0);
-
-    const instance = instances;
-    expect(instance.InstanceId).toBe(instanceId);
-    expect(instance.State && instance.State.Name).toBe("running");
-    expect(instance.InstanceType).toBe(outputs.primary_ec2_instance_type);
+    const instance: Instance | undefined = response.Reservations?.[0]?.Instances?.;
+    expect(instance).toBeDefined();
+    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.State?.Name).toBe("running");
+    expect(instance?.InstanceType).toBe(outputs.primary_ec2_instance_type);
 
     const commonTags = JSON.parse(outputs.common_tags);
     const tagMap = new Map<string, string>();
-    (instance.Tags || []).forEach((t) => {
+    (instance?.Tags ?? []).forEach((t: { Key?: string; Value?: string }) => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
     });
 
-    for (const [k, v] of Object.entries(commonTags)) {
-      expect(tagMap.get(k)).toBe(v);
+    for (const [key, value] of Object.entries(commonTags)) {
+      expect(tagMap.get(key)).toBe(value);
     }
   });
 
-  it("Secondary EC2 instance exists and is running with correct instance type and tags", async () => {
+  it("Secondary EC2 instance exists, running, correct type with tags", async () => {
     if (!outputs.secondary_ec2_instance_id) {
-      return;
+      return; // Skip if missing
     }
 
     const instanceId = outputs.secondary_ec2_instance_id;
@@ -89,29 +85,24 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
       new DescribeInstancesCommand({ InstanceIds: [instanceId] })
     );
 
-    const reservations = response.Reservations || [];
-    expect(reservations.length).toBeGreaterThan(0);
-
-    const instances = reservations[0].Instances || [];
-    expect(instances.length).toBeGreaterThan(0);
-
-    const instance = instances;
-    expect(instance.InstanceId).toBe(instanceId);
-    expect(instance.State && instance.State.Name).toBe("running");
-    expect(instance.InstanceType).toBe(outputs.secondary_ec2_instance_type);
+    const instance: Instance | undefined = response.Reservations?.[0]?.Instances?.;
+    expect(instance).toBeDefined();
+    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.State?.Name).toBe("running");
+    expect(instance?.InstanceType).toBe(outputs.secondary_ec2_instance_type);
 
     const commonTags = JSON.parse(outputs.common_tags);
     const tagMap = new Map<string, string>();
-    (instance.Tags || []).forEach((t) => {
+    (instance?.Tags ?? []).forEach((t: { Key?: string; Value?: string }) => {
       if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
     });
 
-    for (const [k, v] of Object.entries(commonTags)) {
-      expect(tagMap.get(k)).toBe(v);
+    for (const [key, value] of Object.entries(commonTags)) {
+      expect(tagMap.get(key)).toBe(value);
     }
   });
 
-  it("Primary S3 bucket has versioning enabled and replication configuration", async () => {
+  it("Primary S3 bucket versioning and replication", async () => {
     const bucketName = outputs.primary_s3_bucket_name;
     expect(isNonEmptyString(bucketName)).toBe(true);
 
@@ -124,10 +115,14 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
       new GetBucketReplicationCommand({ Bucket: bucketName })
     );
     expect(replication.ReplicationConfiguration).toBeDefined();
-    expect(replication.ReplicationConfiguration?.Rules.length).toBeGreaterThan(0);
+
+    const repConfig: ReplicationConfiguration | undefined = replication.ReplicationConfiguration;
+    expect(repConfig?.Rules).toBeDefined();
+    expect(Array.isArray(repConfig?.Rules)).toBe(true);
+    expect(repConfig?.Rules.length).toBeGreaterThan(0);
   });
 
-  it("Secondary S3 bucket has versioning enabled and replication configuration", async () => {
+  it("Secondary S3 bucket versioning and replication", async () => {
     const bucketName = outputs.secondary_s3_bucket_name;
     expect(isNonEmptyString(bucketName)).toBe(true);
 
@@ -140,10 +135,14 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
       new GetBucketReplicationCommand({ Bucket: bucketName })
     );
     expect(replication.ReplicationConfiguration).toBeDefined();
-    expect(replication.ReplicationConfiguration?.Rules.length).toBeGreaterThan(0);
+
+    const repConfig: ReplicationConfiguration | undefined = replication.ReplicationConfiguration;
+    expect(repConfig?.Rules).toBeDefined();
+    expect(Array.isArray(repConfig?.Rules)).toBe(true);
+    expect(repConfig?.Rules.length).toBeGreaterThan(0);
   });
 
-  it("EC2 IAM role exists and matches ARN and name", async () => {
+  it("EC2 IAM Role exists and matches ARN and name", async () => {
     const roleName = outputs.ec2_iam_role_name;
     const roleArn = outputs.ec2_iam_role_arn;
 
@@ -152,11 +151,13 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
 
     const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
     expect(response.Role).toBeDefined();
-    expect(response.Role?.Arn).toBe(roleArn);
-    expect(response.Role?.RoleName).toBe(roleName);
+
+    const role: Role | undefined = response.Role;
+    expect(role?.Arn).toBe(roleArn);
+    expect(role?.RoleName).toBe(roleName);
   });
 
-  it("S3 replication IAM role exists and matches ARN and name", async () => {
+  it("S3 replication IAM Role exists and matches ARN and name", async () => {
     const roleName = outputs.s3_replication_iam_role_name;
     const roleArn = outputs.s3_replication_iam_role_arn;
 
@@ -165,7 +166,9 @@ describe("Live AWS Integration Tests from Deployment Outputs", () => {
 
     const response = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
     expect(response.Role).toBeDefined();
-    expect(response.Role?.Arn).toBe(roleArn);
-    expect(response.Role?.RoleName).toBe(roleName);
+
+    const role: Role | undefined = response.Role;
+    expect(role?.Arn).toBe(roleArn);
+    expect(role?.RoleName).toBe(roleName);
   });
 });
