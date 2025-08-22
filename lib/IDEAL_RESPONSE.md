@@ -5,6 +5,7 @@ This CloudFormation template provisions a secure AWS environment for handling se
 ## Template Overview
 
 The template creates a fully secure AWS infrastructure that meets all enterprise security requirements including:
+
 - IAM roles and policies following least privilege principles
 - KMS encryption for all data at rest
 - Private S3 buckets with public access blocked
@@ -27,7 +28,7 @@ Parameters:
     Default: 'dev'
     Description: 'Environment suffix for resource naming'
     AllowedPattern: '^[a-zA-Z0-9]+$'
-    
+
   CorporateIPRange:
     Type: String
     Default: '10.0.0.0/8'
@@ -615,18 +616,21 @@ Outputs:
 ## Key Security Features
 
 ### 1. IAM Roles and Policies (Least Privilege)
+
 - **SecureDataAccessRole**: Requires MFA authentication with time-based session limits
 - **SecureDataAccessPolicy**: Enforces encryption for all S3 operations
 - **CloudTrailRole**: Limited permissions for CloudTrail service operations
 - **MFAEnforcementPolicy**: Denies all actions unless MFA is present
 
 ### 2. KMS Encryption
+
 - Central KMS key for encrypting all sensitive data
 - Key policies allow CloudTrail and CloudWatch Logs services
 - All S3 buckets use KMS encryption
 - SNS topics encrypted with KMS
 
 ### 3. S3 Security
+
 - **Public Access Blocked**: All buckets have PublicAccessBlockConfiguration enabled
 - **Encryption Enforced**: Bucket policies deny unencrypted uploads
 - **Secure Transport**: HTTPS required for all S3 operations
@@ -634,17 +638,20 @@ Outputs:
 - **Lifecycle Policies**: Automatic archival and retention management
 
 ### 4. MFA Enforcement
+
 - Role assumption requires MFA authentication
 - MFA age validation (max 3600 seconds)
 - Policy denies actions without MFA present
 
 ### 5. VPC Endpoints and Network Security
+
 - Private subnets with no internet gateway
 - VPC endpoints for S3 and KMS services
 - Security groups restrict access to corporate IP ranges
 - Private DNS enabled for seamless integration
 
 ### 6. CloudTrail Audit Logging
+
 - Multi-region trail for global coverage
 - Log file validation enabled
 - Encrypted with KMS
@@ -652,6 +659,7 @@ Outputs:
 - Event selectors for S3 data events
 
 ### 7. CloudWatch Monitoring and Alerting
+
 - Metric filters for security events:
   - Failed MFA login attempts
   - Unauthorized API calls
@@ -678,10 +686,11 @@ aws cloudformation deploy \
 ## Compliance
 
 This template addresses all security requirements:
-- ✅ IAM roles follow least privilege principle
-- ✅ KMS encryption for all data at rest
-- ✅ S3 buckets configured as private by default
-- ✅ MFA enforcement for IAM users
-- ✅ VPC endpoints with corporate IP restrictions
-- ✅ CloudTrail enabled with encryption
-- ✅ CloudWatch alarms for unauthorized access attempts
+
+- IAM roles follow least privilege principle
+- KMS encryption for all data at rest
+- S3 buckets configured as private by default
+- MFA enforcement for IAM users
+- VPC endpoints with corporate IP restrictions
+- CloudTrail enabled with encryption
+- CloudWatch alarms for unauthorized access attempts

@@ -58,7 +58,8 @@ describe('Secure Enterprise CloudFormation Template', () => {
     });
 
     test('KMS key should have proper key policy', () => {
-      const keyPolicy = template.Resources.EnterpriseKMSKey.Properties.KeyPolicy;
+      const keyPolicy =
+        template.Resources.EnterpriseKMSKey.Properties.KeyPolicy;
       expect(keyPolicy.Version).toBe('2012-10-17');
       expect(keyPolicy.Statement).toBeInstanceOf(Array);
       expect(keyPolicy.Statement.length).toBeGreaterThan(0);
@@ -66,8 +67,11 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have KMS key alias with environment suffix', () => {
       expect(template.Resources.EnterpriseKMSKeyAlias).toBeDefined();
-      expect(template.Resources.EnterpriseKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
-      const aliasName = template.Resources.EnterpriseKMSKeyAlias.Properties.AliasName;
+      expect(template.Resources.EnterpriseKMSKeyAlias.Type).toBe(
+        'AWS::KMS::Alias'
+      );
+      const aliasName =
+        template.Resources.EnterpriseKMSKeyAlias.Properties.AliasName;
       expect(aliasName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
@@ -75,28 +79,43 @@ describe('Secure Enterprise CloudFormation Template', () => {
   describe('IAM Roles and Policies', () => {
     test('should have secure data access role', () => {
       expect(template.Resources.SecureDataAccessRole).toBeDefined();
-      expect(template.Resources.SecureDataAccessRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.SecureDataAccessRole.Type).toBe(
+        'AWS::IAM::Role'
+      );
     });
 
     test('secure data access role should require MFA', () => {
-      const assumePolicy = template.Resources.SecureDataAccessRole.Properties.AssumeRolePolicyDocument;
+      const assumePolicy =
+        template.Resources.SecureDataAccessRole.Properties
+          .AssumeRolePolicyDocument;
       const statement = assumePolicy.Statement[0];
       expect(statement.Condition).toBeDefined();
       expect(statement.Condition.Bool).toBeDefined();
-      expect(statement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(statement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(
+        'true'
+      );
     });
 
     test('should have secure data access policy', () => {
       expect(template.Resources.SecureDataAccessPolicy).toBeDefined();
-      expect(template.Resources.SecureDataAccessPolicy.Type).toBe('AWS::IAM::Policy');
+      expect(template.Resources.SecureDataAccessPolicy.Type).toBe(
+        'AWS::IAM::Policy'
+      );
     });
 
     test('secure data access policy should enforce encryption', () => {
-      const policy = template.Resources.SecureDataAccessPolicy.Properties.PolicyDocument;
+      const policy =
+        template.Resources.SecureDataAccessPolicy.Properties.PolicyDocument;
       const statements = policy.Statement;
-      const encryptionStatement = statements.find((s: any) => s.Sid === 'AllowS3AccessWithEncryption');
+      const encryptionStatement = statements.find(
+        (s: any) => s.Sid === 'AllowS3AccessWithEncryption'
+      );
       expect(encryptionStatement).toBeDefined();
-      expect(encryptionStatement.Condition.StringEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
+      expect(
+        encryptionStatement.Condition.StringEquals[
+          's3:x-amz-server-side-encryption'
+        ]
+      ).toBe('aws:kms');
     });
 
     test('should have CloudTrail role', () => {
@@ -106,7 +125,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have MFA enforcement policy', () => {
       expect(template.Resources.MFAEnforcementPolicy).toBeDefined();
-      expect(template.Resources.MFAEnforcementPolicy.Type).toBe('AWS::IAM::ManagedPolicy');
+      expect(template.Resources.MFAEnforcementPolicy.Type).toBe(
+        'AWS::IAM::ManagedPolicy'
+      );
     });
   });
 
@@ -119,16 +140,23 @@ describe('Secure Enterprise CloudFormation Template', () => {
     test('secure data bucket should have encryption enabled', () => {
       const bucket = template.Resources.SecureDataBucket.Properties;
       expect(bucket.BucketEncryption).toBeDefined();
-      expect(bucket.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(
+        bucket.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('aws:kms');
     });
 
     test('secure data bucket should block public access', () => {
       const bucket = template.Resources.SecureDataBucket.Properties;
       expect(bucket.PublicAccessBlockConfiguration).toBeDefined();
       expect(bucket.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(bucket.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(
+        true
+      );
       expect(bucket.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(bucket.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(bucket.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(
+        true
+      );
     });
 
     test('secure data bucket should have versioning enabled', () => {
@@ -146,7 +174,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
       const bucket = template.Resources.LoggingBucket.Properties;
       expect(bucket.LifecycleConfiguration).toBeDefined();
       expect(bucket.LifecycleConfiguration.Rules).toBeInstanceOf(Array);
-      expect(bucket.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(2555);
+      expect(bucket.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(
+        2555
+      );
     });
 
     test('should have CloudTrail bucket', () => {
@@ -158,7 +188,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
       const buckets = ['SecureDataBucket', 'LoggingBucket', 'CloudTrailBucket'];
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
-        expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(bucket.Properties.BucketName['Fn::Sub']).toContain(
+          '${EnvironmentSuffix}'
+        );
       });
     });
   });
@@ -166,12 +198,17 @@ describe('Secure Enterprise CloudFormation Template', () => {
   describe('S3 Bucket Policies', () => {
     test('should have secure data bucket policy', () => {
       expect(template.Resources.SecureDataBucketPolicy).toBeDefined();
-      expect(template.Resources.SecureDataBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(template.Resources.SecureDataBucketPolicy.Type).toBe(
+        'AWS::S3::BucketPolicy'
+      );
     });
 
     test('secure data bucket policy should deny insecure connections', () => {
-      const policy = template.Resources.SecureDataBucketPolicy.Properties.PolicyDocument;
-      const denyInsecure = policy.Statement.find((s: any) => s.Sid === 'DenyInsecureConnections');
+      const policy =
+        template.Resources.SecureDataBucketPolicy.Properties.PolicyDocument;
+      const denyInsecure = policy.Statement.find(
+        (s: any) => s.Sid === 'DenyInsecureConnections'
+      );
       expect(denyInsecure).toBeDefined();
       expect(denyInsecure.Effect).toBe('Deny');
       expect(denyInsecure.Condition.Bool['aws:SecureTransport']).toBe('false');
@@ -179,7 +216,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have CloudTrail bucket policy', () => {
       expect(template.Resources.CloudTrailBucketPolicy).toBeDefined();
-      expect(template.Resources.CloudTrailBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(template.Resources.CloudTrailBucketPolicy.Type).toBe(
+        'AWS::S3::BucketPolicy'
+      );
     });
   });
 
@@ -205,7 +244,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have VPC endpoint security group', () => {
       expect(template.Resources.VPCEndpointSecurityGroup).toBeDefined();
-      expect(template.Resources.VPCEndpointSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.VPCEndpointSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('security group should restrict to corporate IP range', () => {
@@ -215,27 +256,41 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have S3 VPC endpoint', () => {
       expect(template.Resources.S3VPCEndpoint).toBeDefined();
-      expect(template.Resources.S3VPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
-      expect(template.Resources.S3VPCEndpoint.Properties.VpcEndpointType).toBe('Gateway');
+      expect(template.Resources.S3VPCEndpoint.Type).toBe(
+        'AWS::EC2::VPCEndpoint'
+      );
+      expect(template.Resources.S3VPCEndpoint.Properties.VpcEndpointType).toBe(
+        'Gateway'
+      );
     });
 
     test('should have KMS VPC endpoint', () => {
       expect(template.Resources.KMSVPCEndpoint).toBeDefined();
-      expect(template.Resources.KMSVPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
-      expect(template.Resources.KMSVPCEndpoint.Properties.VpcEndpointType).toBe('Interface');
+      expect(template.Resources.KMSVPCEndpoint.Type).toBe(
+        'AWS::EC2::VPCEndpoint'
+      );
+      expect(template.Resources.KMSVPCEndpoint.Properties.VpcEndpointType).toBe(
+        'Interface'
+      );
     });
 
     test('should have route tables and associations', () => {
       expect(template.Resources.PrivateRouteTable).toBeDefined();
-      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet1RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet2RouteTableAssociation
+      ).toBeDefined();
     });
   });
 
   describe('CloudTrail', () => {
     test('should have CloudTrail trail', () => {
       expect(template.Resources.EnterpriseCloudTrail).toBeDefined();
-      expect(template.Resources.EnterpriseCloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(template.Resources.EnterpriseCloudTrail.Type).toBe(
+        'AWS::CloudTrail::Trail'
+      );
     });
 
     test('CloudTrail should have encryption enabled', () => {
@@ -275,21 +330,31 @@ describe('Secure Enterprise CloudFormation Template', () => {
   describe('CloudWatch Logs and Alarms', () => {
     test('should have CloudTrail log group', () => {
       expect(template.Resources.CloudTrailLogGroup).toBeDefined();
-      expect(template.Resources.CloudTrailLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.CloudTrailLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
     });
 
     test('should have S3 access log group', () => {
       expect(template.Resources.S3AccessLogGroup).toBeDefined();
-      expect(template.Resources.S3AccessLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.S3AccessLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
     });
 
     test('should have security alerts log group', () => {
       expect(template.Resources.SecurityAlertsLogGroup).toBeDefined();
-      expect(template.Resources.SecurityAlertsLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.SecurityAlertsLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
     });
 
     test('log groups should have KMS encryption', () => {
-      const logGroups = ['CloudTrailLogGroup', 'S3AccessLogGroup', 'SecurityAlertsLogGroup'];
+      const logGroups = [
+        'CloudTrailLogGroup',
+        'S3AccessLogGroup',
+        'SecurityAlertsLogGroup',
+      ];
       logGroups.forEach(groupName => {
         const logGroup = template.Resources[groupName].Properties;
         expect(logGroup.KmsKeyId).toBeDefined();
@@ -298,7 +363,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
     test('should have SNS topic for security alerts', () => {
       expect(template.Resources.SecurityAlertsTopic).toBeDefined();
-      expect(template.Resources.SecurityAlertsTopic.Type).toBe('AWS::SNS::Topic');
+      expect(template.Resources.SecurityAlertsTopic.Type).toBe(
+        'AWS::SNS::Topic'
+      );
     });
 
     test('SNS topic should have encryption', () => {
@@ -319,7 +386,11 @@ describe('Secure Enterprise CloudFormation Template', () => {
     });
 
     test('alarms should send notifications to SNS topic', () => {
-      const alarms = ['FailedMFALoginAlarm', 'UnauthorizedAPICallsAlarm', 'RootAccountUsageAlarm'];
+      const alarms = [
+        'FailedMFALoginAlarm',
+        'UnauthorizedAPICallsAlarm',
+        'RootAccountUsageAlarm',
+      ];
       alarms.forEach(alarmName => {
         const alarm = template.Resources[alarmName].Properties;
         expect(alarm.AlarmActions).toBeDefined();
@@ -338,7 +409,7 @@ describe('Secure Enterprise CloudFormation Template', () => {
         'SecureDataAccessRoleArn',
         'VPCId',
         'CloudTrailArn',
-        'SecurityAlertsTopicArn'
+        'SecurityAlertsTopicArn',
       ];
       expectedOutputs.forEach(output => {
         expect(template.Outputs[output]).toBeDefined();
@@ -363,11 +434,14 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
   describe('Security Requirements Compliance', () => {
     test('should enforce least privilege IAM policies', () => {
-      const secureDataPolicy = template.Resources.SecureDataAccessPolicy.Properties.PolicyDocument;
+      const secureDataPolicy =
+        template.Resources.SecureDataAccessPolicy.Properties.PolicyDocument;
       const statements = secureDataPolicy.Statement;
-      
+
       // Check for specific actions only
-      const allowStatement = statements.find((s: any) => s.Sid === 'AllowS3AccessWithEncryption');
+      const allowStatement = statements.find(
+        (s: any) => s.Sid === 'AllowS3AccessWithEncryption'
+      );
       expect(allowStatement.Action).toContain('s3:GetObject');
       expect(allowStatement.Action).toContain('s3:PutObject');
       expect(allowStatement.Action).not.toContain('s3:*');
@@ -378,14 +452,21 @@ describe('Secure Enterprise CloudFormation Template', () => {
       const buckets = ['SecureDataBucket', 'LoggingBucket', 'CloudTrailBucket'];
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName].Properties;
-        expect(bucket.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        expect(
+          bucket.BucketEncryption.ServerSideEncryptionConfiguration[0]
+            .ServerSideEncryptionByDefault.SSEAlgorithm
+        ).toBe('aws:kms');
       });
 
       // Check CloudTrail
-      expect(template.Resources.EnterpriseCloudTrail.Properties.KMSKeyId).toBeDefined();
+      expect(
+        template.Resources.EnterpriseCloudTrail.Properties.KMSKeyId
+      ).toBeDefined();
 
       // Check SNS topic
-      expect(template.Resources.SecurityAlertsTopic.Properties.KmsMasterKeyId).toBeDefined();
+      expect(
+        template.Resources.SecurityAlertsTopic.Properties.KmsMasterKeyId
+      ).toBeDefined();
     });
 
     test('should configure all S3 buckets as private', () => {
@@ -403,12 +484,19 @@ describe('Secure Enterprise CloudFormation Template', () => {
     test('should enforce MFA for IAM users', () => {
       // Check SecureDataAccessRole requires MFA
       const role = template.Resources.SecureDataAccessRole.Properties;
-      expect(role.AssumeRolePolicyDocument.Statement[0].Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(
+        role.AssumeRolePolicyDocument.Statement[0].Condition.Bool[
+          'aws:MultiFactorAuthPresent'
+        ]
+      ).toBe('true');
 
       // Check MFA enforcement policy exists
       expect(template.Resources.MFAEnforcementPolicy).toBeDefined();
-      const mfaPolicy = template.Resources.MFAEnforcementPolicy.Properties.PolicyDocument;
-      const denyStatement = mfaPolicy.Statement.find((s: any) => s.Sid === 'DenyAllExceptUnlessMFAAuthenticated');
+      const mfaPolicy =
+        template.Resources.MFAEnforcementPolicy.Properties.PolicyDocument;
+      const denyStatement = mfaPolicy.Statement.find(
+        (s: any) => s.Sid === 'DenyAllExceptUnlessMFAAuthenticated'
+      );
       expect(denyStatement).toBeDefined();
       expect(denyStatement.Effect).toBe('Deny');
     });
@@ -448,7 +536,9 @@ describe('Secure Enterprise CloudFormation Template', () => {
 
   describe('Resource Dependencies', () => {
     test('CloudTrail should depend on bucket policy', () => {
-      expect(template.Resources.EnterpriseCloudTrail.DependsOn).toBe('CloudTrailBucketPolicy');
+      expect(template.Resources.EnterpriseCloudTrail.DependsOn).toBe(
+        'CloudTrailBucketPolicy'
+      );
     });
 
     test('all resources should use environment suffix for uniqueness', () => {
@@ -459,11 +549,13 @@ describe('Secure Enterprise CloudFormation Template', () => {
         { resource: 'LoggingBucket', path: 'Properties.BucketName' },
         { resource: 'CloudTrailBucket', path: 'Properties.BucketName' },
         { resource: 'EnterpriseCloudTrail', path: 'Properties.TrailName' },
-        { resource: 'SecurityAlertsTopic', path: 'Properties.TopicName' }
+        { resource: 'SecurityAlertsTopic', path: 'Properties.TopicName' },
       ];
 
       namedResources.forEach(({ resource, path }) => {
-        const props = path.split('.').reduce((obj, key) => obj[key], template.Resources[resource] as any);
+        const props = path
+          .split('.')
+          .reduce((obj, key) => obj[key], template.Resources[resource] as any);
         if (typeof props === 'object' && props['Fn::Sub']) {
           expect(props['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
