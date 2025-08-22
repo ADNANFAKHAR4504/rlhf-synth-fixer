@@ -122,7 +122,7 @@ describe("SecureApp Infrastructure Integration Tests", () => {
     });
 
     test("CloudTrail S3 bucket (us-east-1) has proper encryption", async () => {
-      const cloudtrailBucket = "iac-291323-secureappcloudtrail-logs";
+      const cloudtrailBucket = "iac-291323-secureapp-cloudtrail-logs";
       const s3ClientUse1 = new AWS.S3({ region: "us-east-1" });
 
       const encryption = await s3ClientUse1.getBucketEncryption({

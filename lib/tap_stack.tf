@@ -339,9 +339,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data_use1" {
 # S3 Bucket for CloudTrail logs (in logging account)
 resource "aws_s3_bucket" "cloudtrail_logs" {
   provider = aws.use1
-  bucket   = "${local.naming_prefix}cloudtrail-logs"
+  bucket   = "${local.naming_prefix}-cloudtrail-logs"
   
-  tags = merge(local.common_tags, { Name = "${local.naming_prefix}cloudtrail-logs" })
+  tags = merge(local.common_tags, { Name = "${local.naming_prefix}-cloudtrail-logs" })
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs" {
@@ -815,6 +815,56 @@ resource "aws_iam_policy" "mfa_enforcement" {
   
   tags = merge(local.common_tags, { Name = "${local.naming_prefix}-mfa-enforcement" })
 }
+
+
+# GuardDuty detectors (conditional)
+variable "create_guardduty" {
+  description = "Whether to create GuardDuty detectors in each region"
+  type        = bool
+  default     = false
+}
+
+resource "aws_guardduty_detector" "usw2" {
+  count                        = var.create_guardduty ? 1 : 0
+  provider                     = aws.usw2
+  enable                       = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+
+  tags = merge(local.common_tags, { Name = "${local.naming_prefix}-guardduty-usw2" })
+}
+
+resource "aws_guardduty_detector" "use1" {
+  count                        = var.create_guardduty ? 1 : 0
+  provider                     = aws.use1
+  enable                       = true
+  finding_publishing_frequency = "FIFTEEN_MINUTES"
+
+  tags = merge(local.common_tags, { Name = "${local.naming_prefix}-guardduty-use1" })
+}
+
+# EBS encryption by default (per region) + default KMS key
+resource "aws_ebs_encryption_by_default" "usw2" {
+  provider = aws.usw2
+  enabled  = true
+}
+
+resource "aws_ebs_default_kms_key" "usw2" {
+  provider   = aws.usw2
+  key_arn    = aws_kms_key.main_usw2.arn
+  depends_on = [aws_ebs_encryption_by_default.usw2]
+}
+
+resource "aws_ebs_encryption_by_default" "use1" {
+  provider = aws.use1
+  enabled  = true
+}
+
+resource "aws_ebs_default_kms_key" "use1" {
+  provider   = aws.use1
+  key_arn    = aws_kms_key.main_use1.arn
+  depends_on = [aws_ebs_encryption_by_default.use1]
+}
+
 
 # Output important resource information - flattened for integration tests
 output "kms_key_ids_usw2" {
