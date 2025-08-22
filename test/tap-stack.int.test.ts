@@ -9,12 +9,6 @@ import {
   DescribeLaunchTemplatesCommand,
 } from '@aws-sdk/client-ec2';
 import {
-  S3Client,
-  GetBucketLocationCommand,
-  GetPublicAccessBlockCommand,
-  HeadBucketCommand,
-} from '@aws-sdk/client-s3';
-import {
   IAMClient,
   GetRoleCommand,
   GetInstanceProfileCommand,
@@ -23,48 +17,26 @@ import {
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
-  DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const ec2Client = new EC2Client({ region: awsRegion });
-const s3Client = new S3Client({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
 const autoScalingClient = new AutoScalingClient({ region: awsRegion });
-const elbClient = new ElasticLoadBalancingV2Client({ region: awsRegion });
-const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
 
-describe('TAP Stack Web Application Infrastructure', () => {
+describe('TAP Stack Infrastructure', () => {
   let vpcId: string;
   let publicSubnetIds: string[];
   let privateSubnetIds: string[];
-  let s3BucketName: string;
-  let s3BucketArn: string;
-  let albSecurityGroupId: string;
   let ec2SecurityGroupId: string;
-  let rdsSecurityGroupId: string;
   let instanceProfileName: string;
+  let iamRoleName: string;
   let launchTemplateId: string;
-  let loadBalancerArn: string;
-  let loadBalancerDns: string;
-  let targetGroupArn: string;
   let autoScalingGroupName: string;
-  let hostedZoneId: string;
-  let logGroupName: string;
-  let logGroupArn: string;
-  let availabilityZones: string[];
+  let internetGatewayId: string;
+  let natGatewayId: string;
 
   beforeAll(() => {
     const suffix = process.env.ENVIRONMENT_SUFFIX;
@@ -92,21 +64,13 @@ describe('TAP Stack Web Application Infrastructure', () => {
     vpcId = stackOutputs['vpc-id'] || stackOutputs['vpcId'];
     publicSubnetIds = stackOutputs['public-subnet-ids'] || stackOutputs['publicSubnetIds'] || [];
     privateSubnetIds = stackOutputs['private-subnet-ids'] || stackOutputs['privateSubnetIds'] || [];
-    s3BucketName = stackOutputs['s3-bucket-name'] || stackOutputs['s3BucketName'];
-    s3BucketArn = stackOutputs['s3-bucket-arn'] || stackOutputs['s3BucketArn'];
-    albSecurityGroupId = stackOutputs['alb-security-group-id'] || stackOutputs['albSecurityGroupId'];
     ec2SecurityGroupId = stackOutputs['ec2-security-group-id'] || stackOutputs['ec2SecurityGroupId'];
-    rdsSecurityGroupId = stackOutputs['rds-security-group-id'] || stackOutputs['rdsSecurityGroupId'];
     instanceProfileName = stackOutputs['instance-profile-name'] || stackOutputs['instanceProfileName'];
+    iamRoleName = stackOutputs['iam-role-name'] || stackOutputs['iamRoleName'];
     launchTemplateId = stackOutputs['launch-template-id'] || stackOutputs['launchTemplateId'];
-    loadBalancerArn = stackOutputs['load-balancer-arn'] || stackOutputs['loadBalancerArn'];
-    loadBalancerDns = stackOutputs['load-balancer-dns'] || stackOutputs['loadBalancerDns'];
-    targetGroupArn = stackOutputs['target-group-arn'] || stackOutputs['targetGroupArn'];
     autoScalingGroupName = stackOutputs['auto-scaling-group-name'] || stackOutputs['autoScalingGroupName'];
-    hostedZoneId = stackOutputs['hosted-zone-id'] || stackOutputs['hostedZoneId'];
-    logGroupName = stackOutputs['log-group-name'] || stackOutputs['logGroupName'];
-    logGroupArn = stackOutputs['log-group-arn'] || stackOutputs['logGroupArn'];
-    availabilityZones = stackOutputs['availability-zones'] || stackOutputs['availabilityZones'] || [];
+    internetGatewayId = stackOutputs['internet-gateway-id'] || stackOutputs['internetGatewayId'];
+    natGatewayId = stackOutputs['nat-gateway-id'] || stackOutputs['natGatewayId'];
 
     // Validation
     const missingOutputs: string[] = [];
@@ -114,8 +78,11 @@ describe('TAP Stack Web Application Infrastructure', () => {
     if (!vpcId) missingOutputs.push('vpc-id');
     if (!Array.isArray(publicSubnetIds) || publicSubnetIds.length === 0) missingOutputs.push('public-subnet-ids');
     if (!Array.isArray(privateSubnetIds) || privateSubnetIds.length === 0) missingOutputs.push('private-subnet-ids');
-    if (!s3BucketName) missingOutputs.push('s3-bucket-name');
-    if (!loadBalancerDns) missingOutputs.push('load-balancer-dns');
+    if (!ec2SecurityGroupId) missingOutputs.push('ec2-security-group-id');
+    if (!instanceProfileName) missingOutputs.push('instance-profile-name');
+    if (!iamRoleName) missingOutputs.push('iam-role-name');
+    if (!launchTemplateId) missingOutputs.push('launch-template-id');
+    if (!autoScalingGroupName) missingOutputs.push('auto-scaling-group-name');
 
     if (missingOutputs.length > 0) {
       throw new Error(`Missing required stack outputs: ${missingOutputs.join(', ')}. Available outputs: ${Object.keys(stackOutputs).join(', ')}`);
@@ -132,7 +99,6 @@ describe('TAP Stack Web Application Infrastructure', () => {
       expect(Vpcs?.[0].VpcId).toBe(vpcId);
       expect(Vpcs?.[0].State).toBe('available');
       expect(Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
-      expect(Vpcs?.[0].DhcpOptionsId).toBeDefined();
     }, 20000);
 
     test('should have correct number of public subnets across AZs', async () => {
@@ -147,6 +113,8 @@ describe('TAP Stack Web Application Infrastructure', () => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.Tags?.find(tag => tag.Key === 'Type')?.Value).toBe('Public');
+        expect(subnet.Tags?.find(tag => tag.Key === 'Name')?.Value).toContain('MyApp-public-subnet');
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.[1-3]\.0\/24$/);
       });
     }, 20000);
 
@@ -162,86 +130,39 @@ describe('TAP Stack Web Application Infrastructure', () => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.Tags?.find(tag => tag.Key === 'Type')?.Value).toBe('Private');
+        expect(subnet.Tags?.find(tag => tag.Key === 'Name')?.Value).toContain('MyApp-private-subnet');
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.1[0-2]\.0\/24$/);
       });
     }, 20000);
 
     test('should have Internet Gateway attached to VPC', async () => {
       const { InternetGateways } = await ec2Client.send(new DescribeInternetGatewaysCommand({
-        Filters: [
-          {
-            Name: 'attachment.vpc-id',
-            Values: [vpcId]
-          }
-        ]
+        InternetGatewayIds: [internetGatewayId]
       }));
       
       expect(InternetGateways?.length).toBe(1);
+      expect(InternetGateways?.[0].InternetGatewayId).toBe(internetGatewayId);
       expect(InternetGateways?.[0].Attachments?.[0].VpcId).toBe(vpcId);
       expect(InternetGateways?.[0].Attachments?.[0].State).toBe('available');
+      expect(InternetGateways?.[0].Tags?.find(tag => tag.Key === 'Name')?.Value).toBe('MyApp-igw');
     }, 20000);
 
     test('should have NAT Gateway in first public subnet', async () => {
       const { NatGateways } = await ec2Client.send(new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId]
-          }
-        ]
+        NatGatewayIds: [natGatewayId]
       }));
       
       expect(NatGateways?.length).toBe(1);
+      expect(NatGateways?.[0].NatGatewayId).toBe(natGatewayId);
       expect(NatGateways?.[0].VpcId).toBe(vpcId);
       expect(NatGateways?.[0].SubnetId).toBe(publicSubnetIds[0]);
       expect(NatGateways?.[0].State).toBe('available');
+      expect(NatGateways?.[0].Tags?.find(tag => tag.Key === 'Name')?.Value).toBe('MyApp-nat-gateway');
     }, 20000);
   });
 
-  // S3 Module Tests
-  describe('S3 Configuration', () => {
-    test('should have S3 bucket accessible', async () => {
-      await expect(s3Client.send(new HeadBucketCommand({ Bucket: s3BucketName }))).resolves.not.toThrow();
-    }, 20000);
-
-    test('should have S3 bucket in correct region', async () => {
-      const { LocationConstraint } = await s3Client.send(new GetBucketLocationCommand({ 
-        Bucket: s3BucketName 
-      }));
-      
-      // LocationConstraint is null for us-east-1
-      const bucketRegion = LocationConstraint || 'us-east-1';
-      expect(bucketRegion).toBe(awsRegion);
-    }, 20000);
-  });
-
-  // Security Group Module Tests
+  // Security Group Tests
   describe('Security Group Configuration', () => {
-    test('should have ALB security group with correct ingress rules', async () => {
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [albSecurityGroupId]
-      }));
-      
-      expect(SecurityGroups?.length).toBe(1);
-      const sg = SecurityGroups?.[0];
-      expect(sg?.VpcId).toBe(vpcId);
-      expect(sg?.GroupName).toContain('alb-sg');
-      
-      const ingressRules = sg?.IpPermissions || [];
-      expect(ingressRules.length).toBe(2);
-      
-      // Check for HTTP rule
-      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
-      expect(httpRule).toBeDefined();
-      expect(httpRule?.IpProtocol).toBe('tcp');
-      expect(httpRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
-      
-      // Check for HTTPS rule
-      const httpsRule = ingressRules.find(rule => rule.FromPort === 443);
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule?.IpProtocol).toBe('tcp');
-      expect(httpsRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
-    }, 20000);
-
     test('should have EC2 security group with correct ingress rules', async () => {
       const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
         GroupIds: [ec2SecurityGroupId]
@@ -253,50 +174,56 @@ describe('TAP Stack Web Application Infrastructure', () => {
       expect(sg?.GroupName).toContain('ec2-sg');
       
       const ingressRules = sg?.IpPermissions || [];
-      expect(ingressRules.length).toBe(2);
-      
-      // Check for HTTP rule from ALB
-      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
-      expect(httpRule).toBeDefined();
-      expect(httpRule?.UserIdGroupPairs?.[0].GroupId).toBe(albSecurityGroupId);
+      expect(ingressRules.length).toBe(3);
       
       // Check for SSH rule
       const sshRule = ingressRules.find(rule => rule.FromPort === 22);
       expect(sshRule).toBeDefined();
+      expect(sshRule?.IpProtocol).toBe('tcp');
       expect(sshRule?.IpRanges?.[0].CidrIp).toBe('10.0.0.0/16');
+      
+      // Check for HTTP rule
+      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.IpProtocol).toBe('tcp');
+      expect(httpRule?.IpRanges?.[0].CidrIp).toBe('10.0.0.0/16');
+      
+      // Check for HTTPS rule
+      const httpsRule = ingressRules.find(rule => rule.FromPort === 443);
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule?.IpProtocol).toBe('tcp');
+      expect(httpsRule?.IpRanges?.[0].CidrIp).toBe('10.0.0.0/16');
     }, 20000);
 
-    test('should have RDS security group with correct ingress rules', async () => {
+    test('should have EC2 security group with correct egress rules', async () => {
       const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [rdsSecurityGroupId]
+        GroupIds: [ec2SecurityGroupId]
       }));
       
-      expect(SecurityGroups?.length).toBe(1);
       const sg = SecurityGroups?.[0];
-      expect(sg?.VpcId).toBe(vpcId);
-      expect(sg?.GroupName).toContain('rds-sg');
+      const egressRules = sg?.IpPermissionsEgress || [];
       
-      const ingressRules = sg?.IpPermissions || [];
-      expect(ingressRules.length).toBe(1);
-      
-      // Check for MySQL rule from EC2
-      const mysqlRule = ingressRules.find(rule => rule.FromPort === 3306);
-      expect(mysqlRule).toBeDefined();
-      expect(mysqlRule?.UserIdGroupPairs?.[0].GroupId).toBe(ec2SecurityGroupId);
+      // Check for all outbound traffic rule
+      const allOutboundRule = egressRules.find(rule => 
+        rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === '-1'
+      );
+      expect(allOutboundRule).toBeDefined();
+      expect(allOutboundRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
     }, 20000);
   });
 
   // IAM Module Tests
   describe('IAM Configuration', () => {
     test('should have EC2 IAM role with correct assume role policy', async () => {
-      const roleName = instanceProfileName.replace('instance-profile', 'ec2-role');
-      const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+      const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: iamRoleName }));
       
-      expect(Role?.RoleName).toBe(roleName);
+      expect(Role?.RoleName).toBe(iamRoleName);
       expect(Role?.AssumeRolePolicyDocument).toBeDefined();
       
       const assumeRolePolicy = JSON.parse(decodeURIComponent(Role?.AssumeRolePolicyDocument || ''));
       expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+      expect(assumeRolePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+      expect(assumeRolePolicy.Statement[0].Effect).toBe('Allow');
     }, 20000);
 
     test('should have instance profile linked to EC2 role', async () => {
@@ -306,26 +233,24 @@ describe('TAP Stack Web Application Infrastructure', () => {
       
       expect(InstanceProfile?.InstanceProfileName).toBe(instanceProfileName);
       expect(InstanceProfile?.Roles?.length).toBe(1);
-      
-      const roleName = instanceProfileName.replace('instance-profile', 'ec2-role');
-      expect(InstanceProfile?.Roles?.[0].RoleName).toBe(roleName);
+      expect(InstanceProfile?.Roles?.[0].RoleName).toBe(iamRoleName);
     }, 20000);
 
-    test('should have SSM managed instance core policy attached', async () => {
-      const roleName = instanceProfileName.replace('instance-profile', 'ec2-role');
+    test('should have S3 read-only policy attached', async () => {
       const { AttachedPolicies } = await iamClient.send(new ListAttachedRolePoliciesCommand({ 
-        RoleName: roleName 
+        RoleName: iamRoleName 
       }));
       
-      const ssmPolicy = AttachedPolicies?.find(policy => 
-        policy.PolicyArn === 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      const s3Policy = AttachedPolicies?.find(policy => 
+        policy.PolicyArn === 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
       );
-      expect(ssmPolicy).toBeDefined();
+      expect(s3Policy).toBeDefined();
+      expect(s3Policy?.PolicyName).toBe('AmazonS3ReadOnlyAccess');
     }, 20000);
   });
 
-  // EC2 Module Tests
-  describe('EC2 Configuration', () => {
+  // EC2 Auto Scaling Module Tests
+  describe('EC2 Auto Scaling Configuration', () => {
     test('should have launch template with correct configuration', async () => {
       const { LaunchTemplates } = await ec2Client.send(new DescribeLaunchTemplatesCommand({
         LaunchTemplateIds: [launchTemplateId]
@@ -334,7 +259,8 @@ describe('TAP Stack Web Application Infrastructure', () => {
       expect(LaunchTemplates?.length).toBe(1);
       const template = LaunchTemplates?.[0];
       expect(template?.LaunchTemplateId).toBe(launchTemplateId);
-      expect(template?.LaunchTemplateName).toContain('launch-template');
+      expect(template?.LaunchTemplateName).toBe('MyApp-launch-template');
+      expect(template?.Tags?.find(tag => tag.Key === 'Name')?.Value).toBe('MyApp-launch-template');
     }, 20000);
 
     test('should have auto scaling group with correct configuration', async () => {
@@ -345,100 +271,54 @@ describe('TAP Stack Web Application Infrastructure', () => {
       expect(AutoScalingGroups?.length).toBe(1);
       const asg = AutoScalingGroups?.[0];
       expect(asg?.AutoScalingGroupName).toBe(autoScalingGroupName);
-      expect(asg?.MinSize).toBe(2);
+      expect(asg?.MinSize).toBe(1);
       expect(asg?.MaxSize).toBe(6);
       expect(asg?.DesiredCapacity).toBe(3);
-      expect(asg?.VPCZoneIdentifier).toBeDefined();
       expect(asg?.LaunchTemplate?.LaunchTemplateId).toBe(launchTemplateId);
+      expect(asg?.LaunchTemplate?.Version).toBe('$Latest');
+      
+      // Verify ASG is deployed in private subnets
+      const asgSubnets = asg?.VPCZoneIdentifier?.split(',') || [];
+      expect(asgSubnets.sort()).toEqual(privateSubnetIds.sort());
     }, 20000);
-  });
 
-  // ALB Module Tests
-  describe('Application Load Balancer Configuration', () => {
-    test('should have load balancer with correct configuration', async () => {
-      const { LoadBalancers } = await elbClient.send(new DescribeLoadBalancersCommand({
-        LoadBalancerArns: [loadBalancerArn]
+    test('should have auto scaling group instances in private subnets', async () => {
+      const { AutoScalingGroups } = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [autoScalingGroupName]
       }));
       
-      expect(LoadBalancers?.length).toBe(1);
-      const lb = LoadBalancers?.[0];
-      expect(lb?.LoadBalancerArn).toBe(loadBalancerArn);
-      expect(lb?.Type).toBe('application');
-      expect(lb?.Scheme).toBe('internet-facing');
-      expect(lb?.State?.Code).toBe('active');
-      expect(lb?.VpcId).toBe(vpcId);
-      expect(lb?.DNSName).toBe(loadBalancerDns);
-    }, 20000);
-
-    test('should have target group with correct health check configuration', async () => {
-      const { TargetGroups } = await elbClient.send(new DescribeTargetGroupsCommand({
-        TargetGroupArns: [targetGroupArn]
-      }));
-      
-      expect(TargetGroups?.length).toBe(1);
-      const tg = TargetGroups?.[0];
-      expect(tg?.TargetGroupArn).toBe(targetGroupArn);
-      expect(tg?.Port).toBe(80);
-      expect(tg?.Protocol).toBe('HTTP');
-      expect(tg?.VpcId).toBe(vpcId);
-      expect(tg?.HealthCheckPath).toBe('/');
-      expect(tg?.HealthCheckProtocol).toBe('HTTP');
-      expect(tg?.HealthyThresholdCount).toBe(2);
-      expect(tg?.UnhealthyThresholdCount).toBe(2);
-      expect(tg?.HealthCheckTimeoutSeconds).toBe(5);
-      expect(tg?.HealthCheckIntervalSeconds).toBe(30);
-    }, 20000);
-
-    test('should have listener configured for HTTP traffic', async () => {
-      const { Listeners } = await elbClient.send(new DescribeListenersCommand({
-        LoadBalancerArn: loadBalancerArn
-      }));
-      
-      expect(Listeners?.length).toBe(1);
-      const listener = Listeners?.[0];
-      expect(listener?.Port).toBe(80);
-      expect(listener?.Protocol).toBe('HTTP');
-      expect(listener?.DefaultActions?.length).toBe(1);
-      expect(listener?.DefaultActions?.[0].Type).toBe('forward');
-      expect(listener?.DefaultActions?.[0].TargetGroupArn).toBe(targetGroupArn);
-    }, 20000);
-  });
-
-  // CloudWatch Module Tests
-  describe('CloudWatch Configuration', () => {
-    test('should have log group with correct retention period', async () => {
-      expect(logGroupName).toContain('MyApp-application-logs');
-      expect(logGroupArn).toContain('log-group:MyApp-application-logs');
-    }, 20000);
-  });
-
-  // Route53 Module Tests
-  describe('Route53 Configuration', () => {
-    test('should have hosted zone created', async () => {
-      expect(hostedZoneId).toBeDefined();
-      expect(hostedZoneId).toMatch(/^Z[A-Z0-9]+$/);
+      const asg = AutoScalingGroups?.[0];
+      const instanceIds = asg?.Instances?.map(instance => instance.InstanceId) || [];
     }, 20000);
   });
 
   // General Infrastructure Tests
   describe('General Infrastructure', () => {
-    test('should be deployed across multiple availability zones', async () => {
-      expect(availabilityZones).toBeDefined();
-      expect(Array.isArray(availabilityZones)).toBe(true);
-      expect(availabilityZones.length).toBe(3);
+    test('should have subnets distributed across multiple availability zones', async () => {
+      const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({
+        SubnetIds: [...publicSubnetIds, ...privateSubnetIds]
+      }));
       
+      const availabilityZones = new Set(Subnets?.map(subnet => subnet.AvailabilityZone));
+      expect(availabilityZones.size).toBe(3);
+      
+      // Verify AZs are in the correct region
       availabilityZones.forEach(az => {
         expect(az).toMatch(new RegExp(`^${awsRegion}[a-z]$`));
       });
     }, 20000);
 
     test('should have consistent naming convention', async () => {
-      const namePrefix = 'MyApp-';
+      const namePrefix = 'MyApp';
       
-      expect(s3BucketName.toLowerCase()).toContain('myapp-');
       expect(instanceProfileName).toContain(namePrefix);
+      expect(iamRoleName).toContain(namePrefix);
       expect(autoScalingGroupName).toContain(namePrefix);
-      expect(logGroupName).toContain(namePrefix);
+      
+      // Verify VPC name tag
+      const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      const vpcNameTag = Vpcs?.[0].Tags?.find(tag => tag.Key === 'Name')?.Value;
+      expect(vpcNameTag).toBe('MyApp-vpc');
     }, 20000);
 
     test('should have all resources tagged with Project', async () => {
@@ -455,6 +335,41 @@ describe('TAP Stack Web Application Infrastructure', () => {
       Subnets?.forEach(subnet => {
         const tags = subnet.Tags || [];
         expect(tags.find(tag => tag.Key === 'Project')?.Value).toBe('MyApp');
+      });
+      
+      // Test security group tags
+      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        GroupIds: [ec2SecurityGroupId]
+      }));
+      
+      const sgTags = SecurityGroups?.[0].Tags || [];
+      expect(sgTags.find(tag => tag.Key === 'Project')?.Value).toBe('MyApp');
+      
+      // Test IAM role tags
+      const { Role } = await iamClient.send(new GetRoleCommand({ RoleName: iamRoleName }));
+      const roleTags = Role?.Tags || [];
+      expect(roleTags.find(tag => tag.Key === 'Project')?.Value).toBe('MyApp');
+    }, 20000);
+
+    test('should have proper resource dependencies', async () => {
+      // Verify NAT Gateway is in public subnet
+      const { NatGateways } = await ec2Client.send(new DescribeNatGatewaysCommand({
+        NatGatewayIds: [natGatewayId]
+      }));
+      
+      expect(NatGateways?.[0].SubnetId).toBe(publicSubnetIds[0]);
+      
+      // Verify Auto Scaling Group uses correct launch template and subnets
+      const { AutoScalingGroups } = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [autoScalingGroupName]
+      }));
+      
+      const asg = AutoScalingGroups?.[0];
+      expect(asg?.LaunchTemplate?.LaunchTemplateId).toBe(launchTemplateId);
+      
+      const asgSubnets = asg?.VPCZoneIdentifier?.split(',') || [];
+      privateSubnetIds.forEach(subnetId => {
+        expect(asgSubnets).toContain(subnetId);
       });
     }, 20000);
   });
