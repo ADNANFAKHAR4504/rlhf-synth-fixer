@@ -169,18 +169,13 @@ data "aws_caller_identity" "current" {}
 ## File: tap_stack.tf
 
 ```hcl
-# tap_stack.tf - Main infrastructure resources with enhanced security
-
-locals {
-  resource_prefix = "${var.project_name}-${var.environment_suffix}"
-  azs             = slice(data.aws_availability_zones.available.names, 0, 2)
-}
+# tap_stack.tf - Main infrastructure resources
 
 ########################
 # KMS Key for Encryption
 ########################
 resource "aws_kms_key" "main" {
-  description             = "KMS key for encrypting S3, RDS, and EBS volumes"
+  description             = "KMS key for encrypting S3 and RDS"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -215,15 +210,34 @@ resource "aws_kms_key" "main" {
     ]
   })
 
-  tags = {
-    Name = "${local.resource_prefix}-kms-key"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-kms-key"
+  })
+}
+
+########################
+# EC2 Key Pair
+########################
+resource "tls_private_key" "bastion" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "bastion" {
+  key_name   = var.bastion_key_name
+  public_key = tls_private_key.bastion.public_key_openssh
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-bastion-key"
+  })
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${local.resource_prefix}-key"
+  name          = "alias/${var.project_name}-${var.environment_suffix}-key"
   target_key_id = aws_kms_key.main.key_id
 }
+
+data "aws_caller_identity" "current" {}
 
 ########################
 # VPC and Networking
@@ -233,18 +247,18 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
-    Name = "${local.resource_prefix}-vpc"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-vpc"
+  })
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name = "${local.resource_prefix}-igw"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-igw"
+  })
 }
 
 # Public Subnets
@@ -252,14 +266,14 @@ resource "aws_subnet" "public" {
   count             = length(var.public_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.public_subnet_cidrs[count.index]
-  availability_zone = local.azs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "${local.resource_prefix}-public-subnet-${count.index + 1}"
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-public-subnet-${count.index + 1}"
     Type = "Public"
-  }
+  })
 }
 
 # Private Subnets
@@ -267,12 +281,12 @@ resource "aws_subnet" "private" {
   count             = length(var.private_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = local.azs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    Name = "${local.resource_prefix}-private-subnet-${count.index + 1}"
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-private-subnet-${count.index + 1}"
     Type = "Private"
-  }
+  })
 }
 
 # Database Subnets
@@ -280,22 +294,22 @@ resource "aws_subnet" "db" {
   count             = length(var.db_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.db_subnet_cidrs[count.index]
-  availability_zone = local.azs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    Name = "${local.resource_prefix}-db-subnet-${count.index + 1}"
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-db-subnet-${count.index + 1}"
     Type = "Database"
-  }
+  })
 }
 
-# NAT Gateways for high availability
+# NAT Gateway
 resource "aws_eip" "nat" {
   count  = length(aws_subnet.public)
   domain = "vpc"
 
-  tags = {
-    Name = "${local.resource_prefix}-nat-eip-${count.index + 1}"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-nat-eip-${count.index + 1}"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -305,9 +319,9 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
-  tags = {
-    Name = "${local.resource_prefix}-nat-gateway-${count.index + 1}"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-nat-gateway-${count.index + 1}"
+  })
 
   depends_on = [aws_internet_gateway.main]
 }
@@ -321,9 +335,9 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-public-rt"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-public-rt"
+  })
 }
 
 resource "aws_route_table" "private" {
@@ -335,9 +349,9 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-private-rt-${count.index + 1}"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-private-rt-${count.index + 1}"
+  })
 }
 
 # Route Table Associations
@@ -356,54 +370,50 @@ resource "aws_route_table_association" "private" {
 ########################
 # VPC Flow Logs
 ########################
-resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/${var.environment_suffix}/flowlogs"
-  retention_in_days = 14
-  kms_key_id        = aws_kms_key.main.arn
-
-  tags = {
-    Name = "${local.resource_prefix}-vpc-flow-logs"
-  }
-}
-
 resource "aws_flow_log" "vpc" {
   iam_role_arn    = aws_iam_role.flow_log.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main.id
+}
 
-  tags = {
-    Name = "${local.resource_prefix}-flow-log"
-  }
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "/aws/vpc/${var.environment_suffix}/flowlogs"
+  retention_in_days = 14
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-vpc-flow-logs"
+  })
 }
 
 ########################
 # Security Groups
 ########################
 resource "aws_security_group" "bastion" {
-  name_prefix = "${local.resource_prefix}-bastion-"
+  name_prefix = "${var.project_name}-${var.environment_suffix}-bastion-"
   vpc_id      = aws_vpc.main.id
-  description = "Security group for bastion host - restricted SSH access"
+  description = "Security group for bastion host"
 
   ingress {
-    description = "SSH from restricted IP ranges"
+    description = "SSH from specific IP ranges"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"] # Should be restricted to specific corporate IP ranges
+    cidr_blocks = ["10.0.0.0/16"] # Restrict to VPC CIDR only
   }
 
   egress {
-    description = "Allow outbound to private subnets only"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.private_subnet_cidrs
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-bastion-sg"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-bastion-sg"
+  })
 
   lifecycle {
     create_before_destroy = true
@@ -411,12 +421,12 @@ resource "aws_security_group" "bastion" {
 }
 
 resource "aws_security_group" "ec2_private" {
-  name_prefix = "${local.resource_prefix}-ec2-private-"
+  name_prefix = "${var.project_name}-${var.environment_suffix}-ec2-private-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances in private subnets"
 
   ingress {
-    description     = "SSH from bastion only"
+    description     = "SSH from bastion"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
@@ -424,7 +434,7 @@ resource "aws_security_group" "ec2_private" {
   }
 
   ingress {
-    description = "HTTP from VPC only"
+    description = "HTTP from VPC"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -432,7 +442,7 @@ resource "aws_security_group" "ec2_private" {
   }
 
   ingress {
-    description = "HTTPS from VPC only"
+    description = "HTTPS from VPC"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -440,16 +450,16 @@ resource "aws_security_group" "ec2_private" {
   }
 
   egress {
-    description = "Allow necessary outbound traffic"
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-ec2-private-sg"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-ec2-private-sg"
+  })
 
   lifecycle {
     create_before_destroy = true
@@ -457,23 +467,21 @@ resource "aws_security_group" "ec2_private" {
 }
 
 resource "aws_security_group" "rds" {
-  name_prefix = "${local.resource_prefix}-rds-"
+  name_prefix = "${var.project_name}-${var.environment_suffix}-rds-"
   vpc_id      = aws_vpc.main.id
-  description = "Security group for RDS database - VPC internal access only"
+  description = "Security group for RDS database"
 
   ingress {
-    description     = "MySQL/Aurora from private EC2 instances only"
+    description     = "MySQL/Aurora from EC2"
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2_private.id]
   }
 
-  # No egress rules - RDS doesn't initiate outbound connections
-
-  tags = {
-    Name = "${local.resource_prefix}-rds-sg"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-rds-sg"
+  })
 
   lifecycle {
     create_before_destroy = true
@@ -484,7 +492,7 @@ resource "aws_security_group" "rds" {
 # IAM Roles and Policies
 ########################
 resource "aws_iam_role" "flow_log" {
-  name = "${local.resource_prefix}-flow-log-role"
+  name = "${var.project_name}-${var.environment_suffix}-flow-log-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -498,10 +506,12 @@ resource "aws_iam_role" "flow_log" {
       }
     ]
   })
+
+  tags = var.common_tags
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "${local.resource_prefix}-flow-log-policy"
+  name = "${var.project_name}-${var.environment_suffix}-flow-log-policy"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -516,14 +526,14 @@ resource "aws_iam_role_policy" "flow_log" {
           "logs:DescribeLogStreams"
         ]
         Effect   = "Allow"
-        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/*"
+        Resource = "*"
       }
     ]
   })
 }
 
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.resource_prefix}-ec2-role"
+  name = "${var.project_name}-${var.environment_suffix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -537,17 +547,18 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
+
+  tags = var.common_tags
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "${local.resource_prefix}-ec2-policy"
+  name = "${var.project_name}-${var.environment_suffix}-ec2-policy"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid = "S3Access"
         Action = [
           "s3:GetObject",
           "s3:PutObject"
@@ -558,58 +569,39 @@ resource "aws_iam_role_policy" "ec2_policy" {
         ]
       },
       {
-        Sid = "KMSAccess"
         Action = [
           "kms:Decrypt",
-          "kms:DescribeKey",
-          "kms:GenerateDataKey"
+          "kms:DescribeKey"
         ]
         Effect = "Allow"
         Resource = [
           aws_kms_key.main.arn
         ]
-      },
-      {
-        Sid = "CloudWatchLogs"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Effect = "Allow"
-        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
-      },
-      {
-        Sid = "SSMParameterAccess"
-        Action = [
-          "ssm:GetParameter",
-          "ssm:GetParameters"
-        ]
-        Effect = "Allow"
-        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.resource_prefix}/*"
       }
     ]
   })
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.resource_prefix}-ec2-profile"
+  name = "${var.project_name}-${var.environment_suffix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
+
+  tags = var.common_tags
 }
 
 ########################
 # S3 Bucket with KMS Encryption
 ########################
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
+resource "aws_s3_bucket" "secure" {
+  bucket = "${var.project_name}-${var.environment_suffix}-secure-${random_id.bucket_suffix.hex}"
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-secure-bucket"
+  })
 }
 
-resource "aws_s3_bucket" "secure" {
-  bucket = "${local.resource_prefix}-secure-${random_id.bucket_suffix.hex}"
-
-  tags = {
-    Name = "${local.resource_prefix}-secure-bucket"
-  }
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure" {
@@ -626,7 +618,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secure" {
 
 resource "aws_s3_bucket_versioning" "secure" {
   bucket = aws_s3_bucket.secure.id
-  
   versioning_configuration {
     status = "Enabled"
   }
@@ -641,38 +632,31 @@ resource "aws_s3_bucket_public_access_block" "secure" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_logging" "secure" {
-  bucket = aws_s3_bucket.secure.id
-
-  target_bucket = aws_s3_bucket.secure.id
-  target_prefix = "access-logs/"
-}
-
 ########################
 # RDS Database
 ########################
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.resource_prefix}-db-subnet-group"
+  name       = "${var.project_name}-${var.environment_suffix}-db-subnet-group"
   subnet_ids = aws_subnet.db[*].id
 
-  tags = {
-    Name = "${local.resource_prefix}-db-subnet-group"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-db-subnet-group"
+  })
 }
 
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
-  upper   = true
-  lower   = true
-  numeric = true
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name_prefix             = "${local.resource_prefix}-db-"
-  description             = "RDS instance master password"
+  name_prefix             = "${var.project_name}-${var.environment_suffix}-db-"
+  description             = "RDS instance password"
   recovery_window_in_days = 7
   kms_key_id              = aws_kms_key.main.arn
+
+  tags = var.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
@@ -681,7 +665,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier = "${local.resource_prefix}-database"
+  identifier = "${var.project_name}-${var.environment_suffix}-database"
 
   engine         = "mysql"
   engine_version = var.db_engine_version
@@ -689,9 +673,6 @@ resource "aws_db_instance" "main" {
 
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = 100
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = var.db_username
@@ -700,29 +681,24 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  # Backup configuration - 7+ days retention
-  backup_retention_period  = 7
+  backup_retention_period = 7
   backup_window           = "07:00-09:00"
   maintenance_window      = "sun:09:00-sun:11:00"
+
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.main.arn
+
+  multi_az                 = true
+  publicly_accessible      = false
+  copy_tags_to_snapshot    = true
   delete_automated_backups = false
+  deletion_protection      = false
 
-  # High availability
-  multi_az = true
+  skip_final_snapshot = true
 
-  # Security settings
-  publicly_accessible   = false
-  copy_tags_to_snapshot = true
-  deletion_protection   = false # Set to true in production
-  skip_final_snapshot   = true  # Set to false in production
-
-  # Monitoring
-  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
-  performance_insights_enabled    = true
-  performance_insights_retention_period = 7
-
-  tags = {
-    Name = "${local.resource_prefix}-database"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-database"
+  })
 }
 
 ########################
@@ -732,14 +708,19 @@ resource "aws_db_instance" "main" {
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.ec2_instance_type
-  key_name               = var.bastion_key_name
+  key_name               = aws_key_pair.bastion.key_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
   subnet_id              = aws_subnet.public[0].id
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = templatefile("${path.module}/user_data_bastion.sh", {
-    cloudwatch_config_name = aws_ssm_parameter.cloudwatch_config.name
-  })
+  user_data_base64 = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y amazon-cloudwatch-agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config -m ec2 -s -c ssm:${aws_ssm_parameter.cloudwatch_config.name}
+              EOF
+  )
 
   root_block_device {
     volume_type = "gp3"
@@ -753,10 +734,10 @@ resource "aws_instance" "bastion" {
     http_put_response_hop_limit = 1
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-bastion"
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-bastion"
     Type = "Bastion"
-  }
+  })
 
   lifecycle {
     create_before_destroy = true
@@ -768,14 +749,19 @@ resource "aws_instance" "private" {
   count                  = 2
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.ec2_instance_type
-  key_name               = var.bastion_key_name
+  key_name               = aws_key_pair.bastion.key_name
   vpc_security_group_ids = [aws_security_group.ec2_private.id]
   subnet_id              = aws_subnet.private[count.index].id
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = templatefile("${path.module}/user_data_private.sh", {
-    cloudwatch_config_name = aws_ssm_parameter.cloudwatch_config.name
-  })
+  user_data_base64 = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y amazon-cloudwatch-agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config -m ec2 -s -c ssm:${aws_ssm_parameter.cloudwatch_config.name}
+              EOF
+  )
 
   root_block_device {
     volume_type = "gp3"
@@ -789,10 +775,10 @@ resource "aws_instance" "private" {
     http_put_response_hop_limit = 1
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-private-${count.index + 1}"
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-private-${count.index + 1}"
     Type = "Private"
-  }
+  })
 
   lifecycle {
     create_before_destroy = true
@@ -803,19 +789,18 @@ resource "aws_instance" "private" {
 # CloudWatch Monitoring
 ########################
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/ec2/${local.resource_prefix}"
+  name              = "/aws/ec2/${var.project_name}-${var.environment_suffix}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.main.arn
 
-  tags = {
-    Name = "${local.resource_prefix}-app-logs"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-app-logs"
+  })
 }
 
 resource "aws_ssm_parameter" "cloudwatch_config" {
-  name = "/${local.resource_prefix}/cloudwatch/config"
+  name = "/${var.project_name}-${var.environment_suffix}/cloudwatch/config"
   type = "String"
-  
   value = jsonencode({
     logs = {
       logs_collected = {
@@ -831,7 +816,7 @@ resource "aws_ssm_parameter" "cloudwatch_config" {
       }
     }
     metrics = {
-      namespace = "${local.resource_prefix}/EC2"
+      namespace = "${var.project_name}-${var.environment_suffix}/EC2"
       metrics_collected = {
         cpu = {
           measurement                 = ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"]
@@ -850,12 +835,14 @@ resource "aws_ssm_parameter" "cloudwatch_config" {
       }
     }
   })
+
+  tags = var.common_tags
 }
 
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   count               = 2
-  alarm_name          = "${local.resource_prefix}-high-cpu-${count.index + 1}"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-high-cpu-${count.index + 1}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -863,16 +850,18 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   period              = "60"
   statistic           = "Average"
   threshold           = "80"
-  alarm_description   = "Alert when EC2 CPU exceeds 80%"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     InstanceId = aws_instance.private[count.index].id
   }
+
+  tags = var.common_tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "${local.resource_prefix}-rds-high-cpu"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-rds-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -880,38 +869,36 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   period              = "60"
   statistic           = "Average"
   threshold           = "80"
-  alarm_description   = "Alert when RDS CPU exceeds 80%"
+  alarm_description   = "This metric monitors RDS CPU utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
+
+  tags = var.common_tags
 }
 
 resource "aws_sns_topic" "alerts" {
-  name              = "${local.resource_prefix}-alerts"
+  name              = "${var.project_name}-${var.environment_suffix}-alerts"
   kms_master_key_id = aws_kms_key.main.arn
-}
 
-resource "aws_sns_topic_subscription" "alert_email" {
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = "security-team@example.com" # Should be parameterized
+  tags = var.common_tags
 }
 
 ########################
 # Route 53 DNS Logging
 ########################
 resource "aws_route53_zone" "main" {
-  name = "${local.resource_prefix}.internal"
+  name = "${var.project_name}-${var.environment_suffix}.internal"
 
   vpc {
     vpc_id = aws_vpc.main.id
   }
 
-  tags = {
-    Name = "${local.resource_prefix}-private-zone"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-private-zone"
+  })
 }
 
 resource "aws_cloudwatch_log_group" "route53_dns" {
@@ -919,14 +906,16 @@ resource "aws_cloudwatch_log_group" "route53_dns" {
   retention_in_days = 14
   kms_key_id        = aws_kms_key.main.arn
 
-  tags = {
-    Name = "${local.resource_prefix}-dns-logs"
-  }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-${var.environment_suffix}-dns-logs"
+  })
 }
 
 resource "aws_route53_resolver_query_log_config" "main" {
-  name            = "${local.resource_prefix}-dns-logging"
+  name            = "${var.project_name}-${var.environment_suffix}-dns-logging"
   destination_arn = aws_cloudwatch_log_group.route53_dns.arn
+
+  tags = var.common_tags
 }
 
 resource "aws_route53_resolver_query_log_config_association" "main" {
@@ -958,6 +947,118 @@ resource "aws_route53_record" "database" {
   type    = "CNAME"
   ttl     = 300
   records = [aws_db_instance.main.address]
+}
+
+########################
+# SNS Topic Subscription
+########################
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = "admin@example.com"
+}
+
+########################
+# CloudWatch Dashboard
+########################
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "${var.project_name}-${var.environment_suffix}-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/EC2", "CPUUtilization", { stat = "Average" }],
+            ["AWS/RDS", "CPUUtilization", { stat = "Average" }],
+            ["AWS/EC2", "NetworkIn", { stat = "Sum" }],
+            ["AWS/EC2", "NetworkOut", { stat = "Sum" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "Infrastructure Metrics"
+        }
+      }
+    ]
+  })
+}
+
+########################
+# Systems Manager Maintenance Window
+########################
+resource "aws_ssm_maintenance_window" "patching" {
+  name                       = "${var.project_name}-${var.environment_suffix}-patching-window"
+  description                = "Maintenance window for patching EC2 instances"
+  schedule                   = "cron(0 2 ? * SUN *)"
+  duration                   = 4
+  cutoff                     = 1
+  allow_unassociated_targets = false
+
+  tags = var.common_tags
+}
+
+resource "aws_ssm_maintenance_window_target" "patching" {
+  window_id     = aws_ssm_maintenance_window.patching.id
+  name          = "${var.project_name}-${var.environment_suffix}-patching-targets"
+  description   = "EC2 instances to patch"
+  resource_type = "INSTANCE"
+
+  targets {
+    key    = "tag:Project"
+    values = [var.project_name]
+  }
+}
+
+resource "aws_ssm_maintenance_window_task" "patching" {
+  window_id        = aws_ssm_maintenance_window.patching.id
+  name             = "${var.project_name}-${var.environment_suffix}-patching-task"
+  description      = "Apply OS patches"
+  task_type        = "RUN_COMMAND"
+  task_arn         = "AWS-RunPatchBaseline"
+  priority         = 1
+  service_role_arn = aws_iam_role.ssm_maintenance.arn
+  max_concurrency  = "50%"
+  max_errors       = "0"
+
+  targets {
+    key    = "WindowTargetIds"
+    values = [aws_ssm_maintenance_window_target.patching.id]
+  }
+
+  task_invocation_parameters {
+    run_command_parameters {
+      parameter {
+        name   = "Operation"
+        values = ["Install"]
+      }
+    }
+  }
+}
+
+resource "aws_iam_role" "ssm_maintenance" {
+  name = "${var.project_name}-${var.environment_suffix}-ssm-maintenance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ssm.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_maintenance" {
+  role       = aws_iam_role.ssm_maintenance.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole"
 }
 ```
 
@@ -1008,7 +1109,6 @@ output "private_instance_ips" {
 output "rds_endpoint" {
   description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
-  sensitive   = true
 }
 
 output "s3_bucket_name" {

@@ -19,6 +19,22 @@ resource "aws_kms_key" "main" {
         }
         Action   = "kms:*"
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -193,7 +209,7 @@ resource "aws_flow_log" "vpc" {
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   name              = "/aws/vpc/${var.environment_suffix}/flowlogs"
   retention_in_days = 14
-  # KMS encryption removed for CloudWatch logs in VPC flow logs
+  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-vpc-flow-logs"
@@ -213,7 +229,7 @@ resource "aws_security_group" "bastion" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"] # Restrict to internal networks
+    cidr_blocks = ["10.0.0.0/16"] # Restrict to VPC CIDR only
   }
 
   egress {
@@ -542,6 +558,11 @@ resource "aws_instance" "bastion" {
     kms_key_id  = aws_kms_key.main.arn
   }
 
+  metadata_options {
+    http_tokens = "required"
+    http_put_response_hop_limit = 1
+  }
+
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-bastion"
     Type = "Bastion"
@@ -578,6 +599,11 @@ resource "aws_instance" "private" {
     kms_key_id  = aws_kms_key.main.arn
   }
 
+  metadata_options {
+    http_tokens = "required"
+    http_put_response_hop_limit = 1
+  }
+
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-private-${count.index + 1}"
     Type = "Private"
@@ -594,7 +620,7 @@ resource "aws_instance" "private" {
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/ec2/${var.project_name}-${var.environment_suffix}"
   retention_in_days = 14
-  # KMS encryption removed for CloudWatch application logs
+  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-app-logs"
@@ -707,7 +733,7 @@ resource "aws_route53_zone" "main" {
 resource "aws_cloudwatch_log_group" "route53_dns" {
   name              = "/aws/route53/${aws_route53_zone.main.name}"
   retention_in_days = 14
-  # KMS encryption removed for CloudWatch Route53 logs
+  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(var.common_tags, {
     Name = "${var.project_name}-${var.environment_suffix}-dns-logs"

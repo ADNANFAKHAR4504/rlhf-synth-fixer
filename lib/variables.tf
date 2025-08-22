@@ -71,7 +71,7 @@ variable "db_instance_class" {
 }
 
 variable "db_allocated_storage" {
-  description = "RDS allocated storage"
+  description = "RDS allocated storage in GB"
   type        = number
   default     = 20
 }
@@ -80,6 +80,7 @@ variable "db_username" {
   description = "RDS master username"
   type        = string
   default     = "admin"
+  sensitive   = true
 }
 
 variable "environment_suffix" {
