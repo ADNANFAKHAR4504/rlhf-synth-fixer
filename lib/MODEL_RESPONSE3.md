@@ -1,3 +1,6 @@
+I'll fix the DynamoDB billing mode error. The issue is that `ON_DEMAND` should be `PAY_PER_REQUEST`. Here's the corrected CloudFormation template:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless Application Infrastructure with CI/CD Pipeline'
 
@@ -682,3 +685,35 @@ Outputs:
     Value: !Ref CodePipeline
     Export:
       Name: !Sub '${AWS::StackName}-CodePipeline'
+```
+
+## ✅ **Fixed Issue: DynamoDB Billing Mode**
+
+**Changed:**
+
+```yaml
+BillingMode: ON_DEMAND # ❌ Invalid value
+```
+
+**To:**
+
+```yaml
+BillingMode: PAY_PER_REQUEST # ✅ Correct value
+```
+
+## **Valid DynamoDB Billing Modes:**
+
+- `PROVISIONED` - You specify read/write capacity units
+- `PAY_PER_REQUEST` - On-demand pricing (what you wanted)
+
+## **Deploy the Fixed Template:**
+
+```bash
+aws cloudformation create-stack \
+  --stack-name serverless-app-dev \
+  --template-body file://serverless-app.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-west-2
+```
+
+The DynamoDB table will now be created with on-demand (pay-per-request) billing mode, which automatically scales based on your application's traffic patterns without you having to manage capacity settings.
