@@ -2,11 +2,6 @@
 # Main infrastructure resources with comprehensive security controls
 # Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
 
-terraform {
-  backend "s3" {}
-}
-
-
 # Local values for consistent tagging and naming
 locals {
   common_tags = {
