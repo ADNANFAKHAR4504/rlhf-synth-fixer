@@ -388,7 +388,7 @@ describe('TapStack', () => {
       expect(synthesized.output['vpc-id'].value).toContain('vpc-12345');
       expect(synthesized.output['instance-profile-name'].value).toContain('MyApp-instance-profile');
       expect(synthesized.output['auto-scaling-group-name'].value).toContain('MyApp-asg');
-      expect(synthesized.output['launch-template-id'].value).toContain('lt-12345');
+      expect(synthesized.output['launch-template-id'].value).toContain('lt-0f9e9d43642bc26c7');
       expect(synthesized.output['ec2-security-group-id'].value).toContain('sg-ec2-12345');
       expect(synthesized.output['internet-gateway-id'].value).toContain('igw-12345');
       expect(synthesized.output['nat-gateway-id'].value).toContain('nat-12345');
