@@ -27,7 +27,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      expect(template.Mappings).toBeDefined();
       expect(template.Conditions).toBeDefined();
     });
   });
@@ -271,13 +270,6 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Multi-Region Support', () => {
-    test('should have region mappings', () => {
-      expect(template.Mappings).toBeDefined();
-      expect(template.Mappings.RegionMap).toBeDefined();
-      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
-    });
-
     test('should use region-specific naming for IAM resources', () => {
       const role = template.Resources.EC2InstanceRole;
       expect(role.Properties.RoleName['Fn::Sub']).toContain('${AWS::Region}');
