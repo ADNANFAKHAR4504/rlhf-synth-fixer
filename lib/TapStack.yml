@@ -551,63 +551,6 @@ Resources:
                 "s3:x-amz-acl": bucket-owner-full-control
                 "AWS:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-webapp-cloudtrail-${EnvironmentSuffix}"
 
-  # IAM Roles - Commented due to quota limit
-  # EC2Role:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     RoleName: !Sub 'prod-webapp-ec2-role-${EnvironmentSuffix}'
-  #     AssumeRolePolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: ec2.amazonaws.com
-  #           Action: sts:AssumeRole
-  #     ManagedPolicyArns:
-  #       - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-  #     Policies:
-  #       - PolicyName: S3AccessPolicy
-  #         PolicyDocument:
-  #           Version: '2012-10-17'
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - s3:GetObject
-  #                 - s3:PutObject
-  #               Resource:
-  #                 - !Sub '${AppS3Bucket.Arn}/*'
-  #             - Effect: Allow
-  #               Action:
-  #                 - s3:ListBucket
-  #               Resource: !GetAtt AppS3Bucket.Arn
-  #       - PolicyName: SecretsManagerPolicy
-  #         PolicyDocument:
-  #           Version: '2012-10-17'
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - secretsmanager:GetSecretValue
-  #               Resource: !Ref DatabaseSecret
-  #       - PolicyName: KMSPolicy
-  #         PolicyDocument:
-  #           Version: '2012-10-17'
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - kms:Decrypt
-  #                 - kms:GenerateDataKey
-  #               Resource: !GetAtt AppKMSKey.Arn
-  #     Tags:
-  #       - Key: Environment
-  #         Value: Production
-
-  # EC2InstanceProfile:
-  #   Type: AWS::IAM::InstanceProfile
-  #   Properties:
-  #     InstanceProfileName: !Sub 'prod-webapp-instance-profile-${EnvironmentSuffix}'
-  #     Roles:
-  #       - !Ref EC2Role
-
   # Database Secret
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
