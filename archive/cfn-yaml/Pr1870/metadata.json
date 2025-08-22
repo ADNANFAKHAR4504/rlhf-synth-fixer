@@ -22,5 +22,11 @@
     "RDS",
     "CloudTrail",
     "CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
 }
