@@ -23,7 +23,7 @@ class TestTapStack(unittest.TestCase):
   def test_creates_infrastructure_child_stacks(self):
     # ARRANGE
     env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
+    stack = TapStack(self.app, "WebAppStackTest",
                      TapStackProps(environment_suffix=env_suffix))
     
     # ASSERT - Check that child stacks are present in the stack tree
@@ -40,7 +40,7 @@ class TestTapStack(unittest.TestCase):
   def test_provides_access_to_infrastructure_stacks(self):
     # ARRANGE
     env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
+    stack = TapStack(self.app, "WebAppStackTest",
                      TapStackProps(environment_suffix=env_suffix))
 
     # ASSERT - Check that stack references are available
@@ -52,7 +52,7 @@ class TestTapStack(unittest.TestCase):
   @mark.it("defaults environment suffix to 'dev' if not provided")
   def test_defaults_env_suffix_to_dev(self):
     # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
+    stack = TapStack(self.app, "WebAppStackTestDefault")
     
     # ASSERT - Check that stacks are still created with default suffix
     self.assertIsNotNone(stack.vpc_stack)
@@ -64,7 +64,7 @@ class TestTapStack(unittest.TestCase):
   def test_creates_infrastructure_with_env_naming(self):
     # ARRANGE
     env_suffix = "test"
-    stack = TapStack(self.app, "TapStackTest",
+    stack = TapStack(self.app, "WebAppStackTest",
                      TapStackProps(environment_suffix=env_suffix))
 
     # ASSERT - Check that the stacks have environment-specific IDs
@@ -76,7 +76,7 @@ class TestTapStack(unittest.TestCase):
   @mark.it("orchestrates infrastructure deployment correctly")
   def test_orchestrates_infrastructure_deployment(self):
     # ARRANGE
-    stack = TapStack(self.app, "TapStackTest",
+    stack = TapStack(self.app, "WebAppStackTest",
                      TapStackProps(environment_suffix="test"))
 
     # ASSERT - Check that the stack orchestrates all components

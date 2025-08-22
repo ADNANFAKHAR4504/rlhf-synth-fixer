@@ -11,7 +11,7 @@ class VpcStack(Stack):
 
         # Create VPC with public and private subnets across 2 AZs
         self.vpc = ec2.Vpc(
-            self, f"WebAppVpc{environment_suffix}",
+            self, f"webapp-vpc-{environment_suffix}",
             max_azs=2,
             nat_gateways=2,
             subnet_configuration=[
@@ -32,7 +32,7 @@ class VpcStack(Stack):
 
         # Security Group for ALB
         self.alb_security_group = ec2.SecurityGroup(
-            self, f"AlbSecurityGroup{environment_suffix}",
+            self, f"webapp-alb-sg-{environment_suffix}",
             vpc=self.vpc,
             description="Security group for Application Load Balancer",
             allow_all_outbound=False
@@ -53,7 +53,7 @@ class VpcStack(Stack):
 
         # Security Group for Fargate tasks
         self.fargate_security_group = ec2.SecurityGroup(
-            self, f"FargateSecurityGroup{environment_suffix}",
+            self, f"webapp-fargate-sg-{environment_suffix}",
             vpc=self.vpc,
             description="Security group for Fargate tasks",
             allow_all_outbound=True
@@ -68,7 +68,7 @@ class VpcStack(Stack):
 
         # Output VPC ID for reference
         CfnOutput(
-            self, f"VpcId{environment_suffix}",
+            self, f"webapp-vpc-id-{environment_suffix}",
             value=self.vpc.vpc_id,
-            export_name=f"VpcId{environment_suffix}"
+            export_name=f"webapp-vpc-id-{environment_suffix}"
         )

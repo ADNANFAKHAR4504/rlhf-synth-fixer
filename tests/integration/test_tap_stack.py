@@ -42,7 +42,7 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies ALB is accessible and healthy")
     def test_alb_is_accessible(self):
         """Test that the Application Load Balancer is accessible"""
-        alb_dns = self.outputs.get('LoadBalancerDNS')
+        alb_dns = self.outputs.get('LoadBalancerDns')
         self.assertIsNotNone(alb_dns, "LoadBalancer DNS not found in outputs")
         
         # Test HTTP access with retries (ALB might take time to be ready)
@@ -98,7 +98,7 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies VPC exists with correct configuration")
     def test_vpc_exists(self):
         """Test that the VPC exists with correct configuration"""
-        vpc_id = self.outputs.get('VPCId')
+        vpc_id = self.outputs.get('webapp-vpc-id') or self.outputs.get('VPCId')
         self.assertIsNotNone(vpc_id, "VPC ID not found in outputs")
         
         response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])

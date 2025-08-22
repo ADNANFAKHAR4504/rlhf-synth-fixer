@@ -21,7 +21,7 @@ class EcsStack(Stack):
 
         # Create ECS Cluster
         self.cluster = ecs.Cluster(
-            self, f"WebAppCluster{environment_suffix}",
+            self, f"webapp-cluster-{environment_suffix}",
             vpc=vpc_stack.vpc,
             cluster_name=f"webapp-cluster-{environment_suffix.lower()}",
             container_insights=True  # Enable CloudWatch Container Insights

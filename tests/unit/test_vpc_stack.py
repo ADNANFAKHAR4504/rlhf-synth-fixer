@@ -86,7 +86,7 @@ class TestVpcStack(unittest.TestCase):
         """Test that VPC ID is exported"""
         outputs = self.template.find_outputs("*")
         vpc_output_exists = any(
-            f"VpcId{self.env_suffix}" in key for key in outputs.keys()
+            f"webapp-vpc-id-{self.env_suffix}" in key for key in outputs.keys()
         )
         self.assertTrue(vpc_output_exists, "VPC ID should be exported")
 

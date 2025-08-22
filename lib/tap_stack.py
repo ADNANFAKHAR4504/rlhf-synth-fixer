@@ -25,7 +25,7 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
     """
-    Represents the main CDK stack for the Tap project.
+    Represents the main CDK stack for the WebApp project.
     This stack orchestrates the deployment of a containerized web application
     with CI/CD pipeline, auto-scaling, and monitoring capabilities.
     """
