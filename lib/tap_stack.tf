@@ -1128,7 +1128,6 @@ output "s3_bucket_names" {
   value = {
     primary    = aws_s3_bucket.primary.bucket
     secondary  = aws_s3_bucket.secondary.bucket
-    cloudtrail = aws_s3_bucket.cloudtrail.bucket
   }
 }
 
@@ -1146,7 +1145,6 @@ output "iam_roles" {
     ec2_role          = aws_iam_role.ec2_role.name
     flow_logs_primary = aws_iam_role.flow_logs.name
     flow_logs_secondary = aws_iam_role.flow_logs_secondary.name
-    cloudtrail_role   = aws_iam_role.cloudtrail.name
   }
 }
 
