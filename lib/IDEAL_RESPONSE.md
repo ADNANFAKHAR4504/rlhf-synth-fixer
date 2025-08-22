@@ -34,6 +34,14 @@ provider "aws" {
 # VARIABLES
 #==============================================================================
 ```hcl
+# tap_stack.tf
+# Comprehensive Terraform configuration for multi-region AWS infrastructure
+# with security best practices and compliance requirements
+
+#==============================================================================
+# VARIABLES
+#==============================================================================
+
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
