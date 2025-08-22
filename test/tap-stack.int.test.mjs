@@ -93,9 +93,11 @@ describe('Security Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
       
       expect(response.FlowLogs.length).toBeGreaterThan(0);
-      const flowLog = response.FlowLogs[0];
-      expect(flowLog.LogDestinationType).toBe('s3');
-      expect(flowLog.TrafficType).toBe('ALL');
+      // Find the S3 flow log specifically (there might be multiple flow logs)
+      const s3FlowLog = response.FlowLogs.find(log => log.LogDestinationType === 's3');
+      expect(s3FlowLog).toBeDefined();
+      expect(s3FlowLog.LogDestinationType).toBe('s3');
+      expect(s3FlowLog.TrafficType).toBe('ALL');
     });
   });
 
