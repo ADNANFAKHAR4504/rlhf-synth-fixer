@@ -25,7 +25,7 @@ pulumi.runtime.setMocks({
         outputs.availabilityZone = 'us-east-1a';
         break;
       case 'aws:s3/bucket:Bucket':
-        outputs.id = `test-bucket-${Math.random().toString(36).substr(2, 9)}`;
+        outputs.id = args.inputs?.bucket || `test-bucket-${Math.random().toString(36).substr(2, 9)}`;
         outputs.bucket = outputs.id;
         outputs.arn = `arn:aws:s3:::${outputs.id}`;
         break;
@@ -35,7 +35,7 @@ pulumi.runtime.setMocks({
         outputs.name = outputs.id;
         break;
       case 'aws:cloudwatch/logGroup:LogGroup':
-        outputs.id = `/aws/infrastructure/${args.name}`;
+        outputs.id = args.inputs?.name || `/aws/infrastructure/${args.name}`;
         outputs.name = outputs.id;
         outputs.arn = `arn:aws:logs:us-east-1:123456789012:log-group:${outputs.id}`;
         break;
@@ -54,7 +54,7 @@ pulumi.runtime.setMocks({
         outputs.value = args.inputs?.value || 'test-value';
         break;
       case 'aws:ec2/flowLog:FlowLog':
-        outputs.id = `fl-${Math.random().toString(36).substr(2, 9)}`;
+        outputs.id = `fl-${Math.random().toString(16).substr(2, 9)}`;
         outputs.arn = `arn:aws:ec2:us-east-1:123456789012:vpc-flow-log/${outputs.id}`;
         break;
       default:
