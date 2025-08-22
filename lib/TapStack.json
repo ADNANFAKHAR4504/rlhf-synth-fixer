@@ -289,6 +289,16 @@
                 ""
             ]
         },
+        "CreateConfigDeliveryChannelAndRecorder": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateConfigDeliveryChannel"
+                },
+                {
+                    "Condition": "CreateConfigRecorder"
+                }
+            ]
+        },
         "HasValidCertificateArn": {
             "Fn::And": [
                 {
@@ -1236,7 +1246,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
-            "Condition": "CreateConfigDeliveryChannel",
+            "Condition": "CreateConfigDeliveryChannelAndRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "SecurityDeliveryChannel-${Environment}"
@@ -1999,7 +2009,7 @@
             "Description": "AWS Config Delivery Channel Name",
             "Value": {
                 "Fn::If": [
-                    "CreateConfigDeliveryChannel",
+                    "CreateConfigDeliveryChannelAndRecorder",
                     {
                         "Ref": "ConfigDeliveryChannel"
                     },
