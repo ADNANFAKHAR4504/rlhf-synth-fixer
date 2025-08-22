@@ -19,6 +19,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand
@@ -153,8 +154,19 @@ describe('TapStack Integration Tests', () => {
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      
+      // Check DNS attributes using DescribeVpcAttribute
+      const dnsHostnamesResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId,
+        Attribute: 'enableDnsHostnames'
+      }));
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      
+      const dnsSupportResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId,
+        Attribute: 'enableDnsSupport'
+      }));
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('subnets should be configured correctly', async () => {

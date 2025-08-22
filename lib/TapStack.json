@@ -27,10 +27,12 @@
     "Resources": {
         "SecureKMSKey": {
             "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Description": {
                     "Fn::Sub": "KMS Key for ${EnvironmentSuffix} environment encryption"
                 },
+                "PendingWindowInDays": 7,
                 "KeyPolicy": {
                     "Statement": [
                         {
@@ -96,6 +98,7 @@
         },
         "SecureKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "AliasName": {
                     "Fn::Sub": "alias/secure-${EnvironmentSuffix}-key"
@@ -491,6 +494,7 @@
         },
         "LoggingBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "security-logs-${AWS::AccountId}-${EnvironmentSuffix}"
@@ -521,6 +525,7 @@
         },
         "LoggingBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Bucket": {
                     "Ref": "LoggingBucket"
@@ -573,6 +578,7 @@
         },
         "LambdaDeploymentBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "lambda-deployment-${AWS::AccountId}-${EnvironmentSuffix}"
@@ -609,6 +615,7 @@
         },
         "LambdaZipCreatorRole": {
             "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -665,6 +672,7 @@
         },
         "LambdaZipCreatorFunction": {
             "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "FunctionName": {
                     "Fn::Sub": "lambda-zip-creator-${EnvironmentSuffix}"
@@ -683,6 +691,102 @@
                 }
             }
         },
+        "S3BucketCleanerRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3BucketCleanerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:ListBucketVersions",
+                                        "s3:GetBucketVersioning"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${LoggingBucket}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${LambdaDeploymentBucket}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:DeleteObject",
+                                        "s3:DeleteObjectVersion"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${LoggingBucket}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${LambdaDeploymentBucket}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "SecureKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3BucketCleanerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "s3-bucket-cleaner-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3BucketCleanerRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport cfnresponse\n\ndef lambda_handler(event, context):\n    try:\n        bucket_name = event['ResourceProperties']['BucketName']\n        \n        if event['RequestType'] == 'Delete':\n            s3_client = boto3.client('s3')\n            s3_resource = boto3.resource('s3')\n            bucket = s3_resource.Bucket(bucket_name)\n            \n            # Delete all object versions and delete markers\n            bucket.object_versions.delete()\n            \n            print(f\"Successfully emptied bucket: {bucket_name}\")\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': f'Bucket {bucket_name} processed successfully'})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Message': f'Error processing bucket, but continuing: {str(e)}'})\n"
+                }
+            }
+        },
         "LambdaZipCreator": {
             "Type": "AWS::CloudFormation::CustomResource",
             "Properties": {
@@ -697,8 +801,37 @@
                 }
             }
         },
+        "LoggingBucketCleaner": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3BucketCleanerFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "LoggingBucket"
+                }
+            }
+        },
+        "LambdaDeploymentBucketCleaner": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3BucketCleanerFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "LambdaDeploymentBucket"
+                }
+            }
+        },
         "EC2UserDataSecret": {
             "Type": "AWS::SecretsManager::Secret",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "ec2-userdata-${EnvironmentSuffix}"
@@ -712,6 +845,7 @@
         },
         "EC2Role": {
             "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "EC2Role-${EnvironmentSuffix}"
@@ -766,6 +900,7 @@
         },
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "Roles": [
                     {
@@ -776,6 +911,7 @@
         },
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "LambdaExecutionRole-${EnvironmentSuffix}"
@@ -822,6 +958,7 @@
         },
         "CloudTrailRole": {
             "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "CloudTrailRole-${EnvironmentSuffix}"
@@ -863,6 +1000,7 @@
         },
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "LogGroupName": {
                     "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}"
@@ -881,6 +1019,7 @@
             "DependsOn": [
                 "LoggingBucketPolicy"
             ],
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "secure-trail-${EnvironmentSuffix}"
@@ -931,6 +1070,7 @@
         },
         "UnauthorizedAPICallsAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "UnauthorizedAPICalls-${EnvironmentSuffix}"
@@ -947,6 +1087,7 @@
         },
         "RootAccountUsageAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "RootAccountUsage-${EnvironmentSuffix}"
@@ -964,6 +1105,7 @@
         "SecureLambdaFunction": {
             "Type": "AWS::Lambda::Function",
             "DependsOn": "LambdaZipCreator",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "FunctionName": {
                     "Fn::Sub": "secure-function-${EnvironmentSuffix}"
@@ -1014,6 +1156,7 @@
         },
         "MFARequiredGroup": {
             "Type": "AWS::IAM::Group",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "MFARequired-${EnvironmentSuffix}"
