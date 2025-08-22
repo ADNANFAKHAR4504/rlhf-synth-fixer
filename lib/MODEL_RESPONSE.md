@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade secure infrastructure with encryption, monitoring, and least-privilege access controls'
 
@@ -5,8 +6,8 @@ Parameters:
   EC2AMIId:
     Type: AWS::EC2::Image::Id
     Description: 'AMI ID for EC2 instance'
-    Default: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI (update as needed)
-  
+    Default: 'ami-0c02fb55956c7d316' # Amazon Linux 2 AMI (update as needed)
+
   EC2InstanceType:
     Type: String
     Description: 'EC2 instance type'
@@ -16,13 +17,13 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
-  
+
   AllowedSSHCIDR:
     Type: String
     Description: 'CIDR block allowed for SSH access'
     Default: '10.0.0.0/8'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-  
+
   Environment:
     Type: String
     Description: 'Environment name'
@@ -276,7 +277,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: 
+                Resource:
                   - !Sub '${ProdS3Bucket}/*'
               - Effect: Allow
                 Action:
@@ -407,7 +408,7 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          
+
           # Configure CloudWatch agent
           cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
           {
@@ -448,7 +449,7 @@ Resources:
             }
           }
           EOF
-          
+
           # Start CloudWatch agent
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
             -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
@@ -493,7 +494,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 1000000000  # 1GB in bytes
+      Threshold: 1000000000 # 1GB in bytes
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: InstanceId
@@ -511,7 +512,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: 1000000000  # 1GB in bytes
+      Threshold: 1000000000 # 1GB in bytes
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: InstanceId
@@ -562,3 +563,4 @@ Outputs:
     Value: !Ref ProdCloudWatchLogGroup
     Export:
       Name: !Sub '${Environment}-log-group'
+```
