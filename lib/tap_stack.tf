@@ -125,6 +125,10 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc" })
 }
 
@@ -141,6 +145,12 @@ resource "aws_subnet" "public" {
   availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = true
 
+  depends_on = [aws_vpc.main]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-${count.index + 1}"
     Type = "Public"
@@ -153,6 +163,12 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.${count.index + 10}.0/24"
   availability_zone = local.availability_zones[count.index]
+
+  depends_on = [aws_vpc.main]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-${count.index + 1}"
