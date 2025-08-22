@@ -35,6 +35,10 @@ Parameters:
     Type: String
     Description: Suffix to append to resource names for unique identification
     Default: dev
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+    ConstraintDescription: Must contain only alphanumeric characters and hyphens
+    MinLength: 1
+    MaxLength: 20
 
 Mappings:
   RegionMap:
@@ -80,9 +84,21 @@ Resources:
             Resource: '*'
             Condition:
               ArnEquals:
-                'kms:EncryptionContext:aws:logs:arn':
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${Environment}-application-${EnvironmentSuffix}'
+          - Sid: Allow CloudWatch Logs CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/${Environment}-audit-${EnvironmentSuffix}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
