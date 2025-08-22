@@ -341,16 +341,18 @@ jobs:
           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
           custom_instructions: |
-            CRITICAL: you MUST validate lib/PROMPT.md format, and fail the check if it appears to be AI-generated rather than human-written:
-            1. Read lib/PROMPT.md if it exists
-            2. Assess whether the content looks human-generated or AI-generated
-            3. Look for signs of AI generation such as:
+            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
+            2. Read the PROMPT files
+            3. Assess whether the content looks human-generated or AI-generated
+            4. Look for signs of AI generation such as:
                - Emojis or special symbols (icons) used for formatting
                - Table structures
                - Overly formal or template-like language
                - Perfect formatting that suggests AI assistance
                - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            4. If lib/PROMPT.md appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
 
             CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
             1. Read lib/IDEAL_RESPONSE.md if it exists
