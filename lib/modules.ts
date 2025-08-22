@@ -269,7 +269,7 @@ export class Ec2AsgModule extends Construct {
 
     // Create security group for EC2 instances
     const securityGroup = new SecurityGroup(this, 'ec2-sg', {
-      name: `${config.name}-ec2-sg`,
+      name: `${config.name}-ec2-sg-new`,
       description: 'Security group for EC2 instances',
       vpcId: config.vpcId,
       egress: [
