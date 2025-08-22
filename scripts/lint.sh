@@ -19,23 +19,34 @@ if [ "$LANGUAGE" = "ts" ]; then
     npm run lint
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
-    if [ -d "lib" ]; then
-        cd lib
-        # Ensure module deps and go.sum are present
-        if [ -f go.mod ]; then
-            echo "Running go mod tidy to populate go.sum and fetch deps"
-            go mod tidy
+    # Ensure provider bindings exist for CDKTF Go projects before tidy
+    if [ "$PLATFORM" = "cdktf" ]; then
+        if [ ! -d ".gen/providers" ]; then
+            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/providers)"
+            npx --yes cdktf get
+        else
+            echo ".gen/providers exists, skipping cdktf get"
         fi
-        UNFORMATTED=$(gofmt -l . || true)
-        if [ -n "$UNFORMATTED" ]; then
-            echo "❌ The following files are not gofmt formatted:" 
-            echo "$UNFORMATTED"
-            exit 1
-        fi
-        go vet ./...
-        cd ..
+    fi
+    echo "Running go mod tidy to populate go.sum and fetch deps"
+    # Bypass proxy/checksum size limits for large CDKTF Go providers
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
+    go mod tidy
+    # Only format our Go sources under lib and tests
+    UNFORMATTED=$(gofmt -l lib tests || true)
+    if [ -n "$UNFORMATTED" ]; then
+        echo "❌ The following files are not gofmt formatted:"
+        echo "$UNFORMATTED"
+        exit 1
+    fi
+    # Vet only lib and tests packages; exclude node_modules and .gen
+    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    if [ -n "$PKGS" ]; then
+        echo "$PKGS" | xargs -r go vet
     else
-        echo "ℹ️ lib directory not found, skipping Go lint"
+        echo "No Go packages found under lib or tests to vet."
     fi
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
