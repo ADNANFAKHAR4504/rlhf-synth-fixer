@@ -1,46 +1,9 @@
-I'll create a comprehensive, production-ready CDK TypeScript infrastructure with all security best practices. Here's the complete solution:
+# AWS CDK TypeScript Infrastructure
 
-## Project Structure
+This solution provides AWS infrastructure using CDK TypeScript.
 
-```
-infrastructure/
-├── lib/
-│   └── production-infrastructure-stack.ts
-├── bin/
-│   └── app.ts
-├── package.json
-└── cdk.json
-```
+## lib/production-infrastructure-stack.ts
 
-## 1. Main CDK App Entry Point
-
-**bin/app.ts**
-```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { ProductionInfrastructureStack } from '../lib/production-infrastructure-stack';
-
-const app = new cdk.App();
-
-new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
-  envSuffix: 'production',
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
-  },
-  description: 'Production-ready secure web application infrastructure',
-});
-
-// Add stack-level tags
-cdk.Tags.of(app).add('Environment', 'Production');
-cdk.Tags.of(app).add('Project', 'SecureWebApp');
-cdk.Tags.of(app).add('ManagedBy', 'CDK');
-```
-
-## 2. Main Infrastructure Stack
-
-**lib/production-infrastructure-stack.ts**
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -258,7 +221,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
     return vpc;
   }
 
-  private createSecureS3Bucket(envSuffix: string, kmsKey: kms.Key): s3.Bucket {
+  private createSecureS3Bucket(envSuffix: string, _kmsKey: kms.Key): s3.Bucket {
     const bucketName = `secure-webapp-artifacts-${envSuffix}`;
     const bucket = new s3.Bucket(this, `ArtifactsBucket-${envSuffix}`, {
       bucketName: bucketName,
@@ -455,6 +418,7 @@ export class ProductionInfrastructureStack extends cdk.Stack {
       masterKey: kmsKey,
     });
   }
+
   private createLaunchTemplate(
     vpc: ec2.Vpc,
     role: iam.Role,
@@ -746,165 +710,45 @@ EOF`,
 }
 ```
 
-## 3. Package Configuration
+## lib/tap-stack.ts
 
-**package.json**
-```json
-{
-  "name": "secure-webapp-infrastructure",
-  "version": "1.0.0",
-  "bin": {
-    "infrastructure": "bin/app.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "test": "jest",
-    "cdk": "cdk",
-    "deploy": "cdk deploy --require-approval never",
-    "destroy": "cdk destroy",
-    "synth": "cdk synth",
-    "diff": "cdk diff"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.4.0",
-    "@types/node": "18.14.6",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.0.5",
-    "aws-cdk": "2.87.0",
-    "ts-node": "^10.9.1",
-    "typescript": "~4.9.5"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "2.87.0",
-    "constructs": "^10.0.0",
-    "source-map-support": "^0.5.21"
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
+import { ProductionInfrastructureStack } from './production-infrastructure-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+
+    // Instantiate the ProductionInfrastructureStack
+    new ProductionInfrastructureStack(this, 'ProductionInfrastructureStack', {
+      envSuffix: environmentSuffix,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-west-2',
+      },
+      description: 'Production-ready secure web application infrastructure',
+    });
   }
 }
 ```
 
-**cdk.json**
-```json
-{
-  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
-  "watch": {
-    "include": [
-      "**"
-    ],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "**/*.d.ts",
-      "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
-      "node_modules",
-      "test"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
-    "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target-partitions": [
-      "aws",
-      "aws-cn"
-    ],
-    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
-    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
-    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
-    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
-    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
-    "@aws-cdk/core:enablePartitionLiterals": true,
-    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
-    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
-    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
-    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
-    "@aws-cdk/aws-route53-patters:useCertificate": true,
-    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
-    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
-    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
-    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
-    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
-    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
-    "@aws-cdk/aws-redshift:columnId": true,
-    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
-    "@aws-cdk/aws-kms:aliasNameRef": true,
-    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
-    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
-    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
-    "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-lambda:baseEnvironmentVariables": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
-    "@aws-cdk/aws-lambda:configureSqsDlq": true,
-    "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": true,
-    "@aws-cdk/core:stackRelativeExports": true
-  }
-}
-```
-
-## 4. TypeScript Configuration
-
-**tsconfig.json**
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": [
-      "es2020"
-    ],
-    "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "typeRoots": [
-      "./node_modules/@types"
-    ]
-  },
-  "exclude": [
-    "node_modules",
-    "cdk.out"
-  ]
-}
-```
-
-## 5. Deployment Instructions
-
-Create a **deploy.sh** script:
-
-```bash
-#!/bin/bash
-
-# Install dependencies
-npm install
-
-# Build the TypeScript code
-npm run build
-
-# Bootstrap CDK (run once per account/region)
-npx cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
-
-# Deploy the infrastructure
-npx cdk deploy --require-approval never
-
-# Show outputs
-npx cdk list
-```

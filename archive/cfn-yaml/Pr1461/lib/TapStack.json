@@ -1,0 +1,471 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "LambdaFunctionName"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "LambdaFunctionName": {
+            "Type": "String",
+            "Default": "tap-data-processor",
+            "Description": "Name for the Lambda function",
+            "MinLength": 1,
+            "MaxLength": 64,
+            "AllowedPattern": "^[a-zA-Z0-9-_]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters, hyphens, and underscores"
+        }
+    },
+    "Resources": {
+        "TurnAroundPromptTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "DeletionProtectionEnabled": false
+            }
+        },
+        "TapLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${LambdaFunctionName}-execution-role-${EnvironmentSuffix}"
+                },
+                "Description": "IAM role for TAP Lambda function with minimal required permissions",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}-${EnvironmentSuffix}*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBAccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TurnAroundPromptTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TapLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${LambdaFunctionName}-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "TapDataProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "TapLambdaLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${LambdaFunctionName}-${EnvironmentSuffix}"
+                },
+                "Description": "TAP serverless data processor function for API Gateway integration",
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "TapLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 256,
+                "Timeout": 15,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "LOG_LEVEL": "INFO",
+                        "DATA_SOURCE": "api-gateway",
+                        "REGION": "us-east-1",
+                        "DYNAMODB_TABLE": {
+                            "Ref": "TurnAroundPromptTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport logging\nimport boto3\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))\n\n# Initialize DynamoDB client\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('DYNAMODB_TABLE')\ntable = dynamodb.Table(table_name) if table_name else None\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Lambda function to process TAP data requests from API Gateway\n    \"\"\"\n    try:\n        # Log the incoming event\n        logger.info(f\"Received event: {json.dumps(event)}\")\n        \n        # Extract environment variables\n        environment = os.environ.get('ENVIRONMENT', 'unknown')\n        data_source = os.environ.get('DATA_SOURCE', 'unknown')\n        region = os.environ.get('REGION', 'us-east-1')\n        \n        # Process the request\n        response_data = {\n            'message': 'TAP data processed successfully',\n            'timestamp': datetime.utcnow().isoformat(),\n            'environment': environment,\n            'data_source': data_source,\n            'region': region,\n            'request_id': context.aws_request_id,\n            'function_name': context.function_name,\n            'memory_limit': context.memory_limit_in_mb,\n            'dynamodb_table': table_name\n        }\n        \n        # Return successful response\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response_data)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing TAP request: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': str(e)\n            })\n        }\n"
+                }
+            }
+        },
+        "TapLambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "TapDataProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${TapServerlessApi}/*/*"
+                }
+            }
+        },
+        "TapServerlessApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tap-api-${EnvironmentSuffix}"
+                },
+                "Description": "REST API for TAP serverless data processing",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "TapDataResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapServerlessApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TapServerlessApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "data"
+            }
+        },
+        "TapDataGetMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapServerlessApi"
+                },
+                "ResourceId": {
+                    "Ref": "TapDataResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${TapDataProcessorFunction.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "TapApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "TapDataGetMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapServerlessApi"
+                },
+                "Description": "Deployment for TAP serverless API"
+            }
+        },
+        "TapApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TapServerlessApi"
+                },
+                "DeploymentId": {
+                    "Ref": "TapApiDeployment"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "Description": {
+                    "Fn::Sub": "TAP API stage for ${EnvironmentSuffix} environment"
+                },
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true
+                    }
+                ]
+            }
+        },
+        "TapApiGatewayLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "API-Gateway-Execution-Logs_${TapServerlessApi}/${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "TapApiGatewayCloudWatchRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "tap-apigateway-cloudwatch-role-${EnvironmentSuffix}"
+                },
+                "Description": "IAM role for TAP API Gateway CloudWatch logging",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "logs:PutLogEvents",
+                                        "logs:GetLogEvents",
+                                        "logs:FilterLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TapApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "TapApiGatewayCloudWatchRole",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "TurnAroundPromptTableName": {
+            "Description": "Name of the DynamoDB table",
+            "Value": {
+                "Ref": "TurnAroundPromptTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+                }
+            }
+        },
+        "TurnAroundPromptTableArn": {
+            "Description": "ARN of the DynamoDB table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TurnAroundPromptTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+                }
+            }
+        },
+        "TapApiEndpoint": {
+            "Description": "API Gateway endpoint URL for the /data resource",
+            "Value": {
+                "Fn::Sub": "https://${TapServerlessApi}.execute-api.us-east-1.amazonaws.com/${EnvironmentSuffix}/data"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapApiEndpoint"
+                }
+            }
+        },
+        "TapApiGatewayId": {
+            "Description": "ID of the TAP API Gateway",
+            "Value": {
+                "Ref": "TapServerlessApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapApiGatewayId"
+                }
+            }
+        },
+        "TapLambdaFunctionArn": {
+            "Description": "ARN of the TAP Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TapDataProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapLambdaFunctionArn"
+                }
+            }
+        },
+        "TapLambdaFunctionName": {
+            "Description": "Name of the TAP Lambda function",
+            "Value": {
+                "Ref": "TapDataProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapLambdaFunctionName"
+                }
+            }
+        },
+        "TapLambdaLogGroup": {
+            "Description": "CloudWatch Log Group for TAP Lambda function",
+            "Value": {
+                "Ref": "TapLambdaLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapLambdaLogGroup"
+                }
+            }
+        },
+        "TapApiGatewayLogGroup": {
+            "Description": "CloudWatch Log Group for TAP API Gateway",
+            "Value": {
+                "Ref": "TapApiGatewayLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TapApiGatewayLogGroup"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
