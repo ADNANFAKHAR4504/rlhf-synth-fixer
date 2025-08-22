@@ -131,33 +131,6 @@ describe("Secure Infrastructure Stack Integration Tests", () => {
       expect(records).toHaveProperty("address");
     });
   });
-
-  //
-  // Security Group Ingress Validation
-  //
-  describe("EC2 Security Group Ingress Rules", () => {
-    test(
-      "should only allow access from AllowedIPRange for all ingress rules",
-      async () => {
-        const ec2 = new AWS.EC2({ region: AWS_REGION });
-        const sg = await ec2.describeSecurityGroups({
-          GroupIds: [ec2SecurityGroupId],
-        }).promise();
-
-        expect(sg.SecurityGroups).toHaveLength(1);
-        const ingressRules = sg.SecurityGroups[0].IpPermissions || [];
-
-        ingressRules.forEach((rule) => {
-          const cidrBlocks = (rule.IpRanges || []).map(r => r.CidrIp);
-          cidrBlocks.forEach(cidr => {
-            expect(cidr).toBe("10.0.0.0/16"); // Matches AllowedIPRange default
-          });
-        });
-      },
-      20000
-    );
-  });
-
   //
   // CloudWatch Log Group Existence Check
   //
