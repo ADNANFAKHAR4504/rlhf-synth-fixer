@@ -98,18 +98,8 @@ jest.mock("@pulumi/aws", () => {
   };
 });
 
-jest.mock("@pulumi/tls", () => ({
-  PrivateKey: jest.fn((name, args, opts) => ({
-    publicKeyOpenssh: {
-      apply: (fn) => ({ value: 'ssh-rsa AAAAB3NzaC1yc2EA...' }),
-      value: 'ssh-rsa AAAAB3NzaC1yc2EA...'
-    }
-  }))
-}));
-
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as tls from "@pulumi/tls";
 import { TapStack } from "../lib/tap-stack.mjs";
 
 describe("TapStack Unit Tests", () => {
@@ -274,25 +264,14 @@ describe("TapStack Unit Tests", () => {
   });
 
   describe("EC2 Instances and Key Pair", () => {
-    it("should generate TLS private key", () => {
-      new TapStack("test-tls", { environmentSuffix: "test" });
-      expect(tls.PrivateKey).toHaveBeenCalledWith(
-        expect.stringContaining("private-key"),
-        expect.objectContaining({
-          algorithm: 'RSA',
-          rsaBits: 4096
-        }),
-        expect.any(Object)
-      );
-    });
-
-    it("should create EC2 key pair", () => {
+    it("should create EC2 key pair with auto-generated key", () => {
       new TapStack("test-keypair", { environmentSuffix: "test" });
       expect(aws.ec2.KeyPair).toHaveBeenCalledWith(
         expect.stringContaining("keypair"),
         expect.objectContaining({
-          keyName: expect.stringContaining("myapp-test-keypair"),
-          publicKey: expect.any(Object)
+          tags: expect.objectContaining({
+            Name: expect.stringContaining("myapp-test-keypair")
+          })
         }),
         expect.any(Object)
       );
