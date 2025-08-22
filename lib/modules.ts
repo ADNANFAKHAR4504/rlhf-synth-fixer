@@ -556,7 +556,8 @@ export class SecureInfrastructureModules extends Construct {
             destination: {
               bucket: this.backupBucket.arn,
               encryptionConfiguration: {
-                replicaKmsKeyId: this.backupKmsKey.arn,
+                replicaKmsKeyId:
+                  'arn:aws:kms:us-west-2:718240086340:key/c307df4a-ec6a-4ec3-bb0c-79f91fed991b',
               },
               replicationTime: {
                 status: 'Enabled',
