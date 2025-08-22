@@ -1,4 +1,0 @@
-encryptionsalt: v1:pfhRmuEfbzs=:v1:WR9x3aJIz+ARhEyC:2d50jPF4eUI2c1DVrv4cyZwL6iuWAA==
-config:
-  aws:region: us-east-1
-  TapStack:env: synthtrainr224
