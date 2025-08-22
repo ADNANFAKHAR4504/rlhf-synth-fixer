@@ -28,7 +28,7 @@ variable "security_team_emails" {
 #########################
 locals {
   bucket_prefix = "secure-data-${random_id.bucket_suffix.hex}"
-  
+
   tags = {
     Environment = "production"
     Project     = "secure-data-storage"
@@ -215,8 +215,8 @@ resource "aws_s3_bucket_policy" "logs" {
         }
       },
       {
-        Sid       = "AllowCloudTrailLogs"
-        Effect    = "Allow"
+        Sid    = "AllowCloudTrailLogs"
+        Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
@@ -229,8 +229,8 @@ resource "aws_s3_bucket_policy" "logs" {
         }
       },
       {
-        Sid       = "AllowCloudTrailAclCheck"
-        Effect    = "Allow"
+        Sid    = "AllowCloudTrailAclCheck"
+        Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }

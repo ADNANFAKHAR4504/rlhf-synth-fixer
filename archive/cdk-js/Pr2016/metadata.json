@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291547",
+  "team": "2",
+  "startedAt": "2025-08-21T10:32:26.082Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Serverless Architecture Implementation",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon S3",
+    "Amazon SNS",
+    "AWS IAM",
+    "AWS CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
