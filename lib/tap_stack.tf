@@ -180,7 +180,7 @@ module "rds" {
 
   common_tags = local.common_tags
 
-  depends_on = [module.vpc]
+  depends_on = [module.vpc, module.ec2]
 }
 
 # Random naming resources to avoid conflicts

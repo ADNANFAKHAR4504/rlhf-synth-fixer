@@ -160,7 +160,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(
         /depends_on\s*=\s*\[\s*module\.vpc,\s*module\.iam\s*\]/
       ); // EC2 dependencies
-      expect(stackContent).toMatch(/depends_on\s*=\s*\[\s*module\.vpc\s*\]/); // RDS depends on VPC
+      expect(stackContent).toMatch(/depends_on\s*=\s*\[\s*module\.vpc,\s*module\.ec2\s*\]/); // RDS depends on VPC and EC2
     });
   });
 

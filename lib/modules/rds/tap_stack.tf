@@ -52,6 +52,10 @@ resource "aws_db_subnet_group" "main" {
   tags = merge(var.common_tags, {
     Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Security Group for RDS
@@ -68,8 +72,12 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.common_tags.Environment}-rds-sg"
+    Name = var.random_prefix != "" ? "${var.random_prefix}-rds-sg" : "${var.common_tags.Environment}-rds-sg"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Generate random password for RDS
@@ -125,8 +133,17 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   tags = merge(var.common_tags, {
-    Name = "${var.common_tags.Environment}-database"
+    Name = var.random_prefix != "" ? "${var.random_prefix}-database" : "${var.common_tags.Environment}-database"
   })
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes = [
+      password # Ignore password changes to prevent unnecessary updates
+    ]
+  }
+
+  depends_on = [aws_db_subnet_group.main]
 }
 
 # Outputs

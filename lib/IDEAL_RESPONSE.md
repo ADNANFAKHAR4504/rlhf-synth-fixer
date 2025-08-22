@@ -153,8 +153,12 @@ description = "All outbound traffic"
 }
 
 tags = merge(var.common_tags, {
-Name = "${var.common_tags.Environment}-ec2-sg"
+Name = var.random_prefix != "" ? "${var.random_prefix}-ec2-sg" : "${var.common_tags.Environment}-ec2-sg"
 })
+
+lifecycle {
+create_before_destroy = true
+}
 }
 
 ## Get latest Amazon Linux 2 AMI
@@ -475,6 +479,10 @@ subnet_ids = var.private_subnet_ids
 tags = merge(var.common_tags, {
 Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
 })
+
+lifecycle {
+create_before_destroy = true
+}
 }
 
 ## Security Group for RDS
@@ -492,8 +500,12 @@ description = "MySQL from VPC"
 }
 
 tags = merge(var.common_tags, {
-Name = "${var.common_tags.Environment}-rds-sg"
+Name = var.random_prefix != "" ? "${var.random_prefix}-rds-sg" : "${var.common_tags.Environment}-rds-sg"
 })
+
+lifecycle {
+create_before_destroy = true
+}
 }
 
 ## Generate random password for RDS
@@ -552,8 +564,17 @@ deletion_protection = var.enable_deletion_protection
 enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
 tags = merge(var.common_tags, {
-Name = "${var.common_tags.Environment}-database"
+Name = var.random_prefix != "" ? "${var.random_prefix}-database" : "${var.common_tags.Environment}-database"
 })
+
+lifecycle {
+prevent_destroy = false
+ignore_changes = [
+password # Ignore password changes to prevent unnecessary updates
+]
+}
+
+depends_on = [aws_db_subnet_group.main]
 }
 
 ## Outputs
@@ -595,7 +616,7 @@ description = "Common tags for all resources"
 type = map(string)
 }
 
-# KMS Key for S3 Encryption
+## KMS Key for S3 Encryption
 
 resource "aws_kms_key" "s3_key" {
 description = "KMS key for S3 bucket encryption"
@@ -636,10 +657,11 @@ name = "alias/${var.common_tags.Environment}-s3-key"
 target_key_id = aws_kms_key.s3_key.key_id
 }
 
-# CloudTrail S3 Bucket
+## CloudTrail S3 Bucket
 
 resource "aws_s3_bucket" "cloudtrail_logs" {
 bucket = "${var.cloudtrail_bucket_name}-${random_id.bucket_suffix.hex}"
+force_destroy = true
 
 tags = merge(var.common_tags, {
 Name = "CloudTrail Logs Bucket"
@@ -650,7 +672,7 @@ resource "random_id" "bucket_suffix" {
 byte_length = 4
 }
 
-# S3 Bucket Versioning
+## S3 Bucket Versioning
 
 resource "aws_s3_bucket_versioning" "cloudtrail_logs_versioning" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -659,7 +681,7 @@ status = "Enabled"
 }
 }
 
-# S3 Bucket Server Side Encryption
+## S3 Bucket Server Side Encryption
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs_encryption" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -673,7 +695,7 @@ bucket_key_enabled = true
 }
 }
 
-# S3 Bucket Public Access Block
+## S3 Bucket Public Access Block
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail_logs_pab" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -684,7 +706,7 @@ ignore_public_acls = true
 restrict_public_buckets = true
 }
 
-# S3 Bucket Policy for CloudTrail
+## S3 Bucket Policy for CloudTrail
 
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
 bucket = aws_s3_bucket.cloudtrail_logs.id
@@ -727,7 +749,7 @@ StringEquals = {
 
 data "aws_caller_identity" "current" {}
 
-# Outputs
+## Outputs
 
 output "cloudtrail_bucket_name" {
 description = "Name of the CloudTrail S3 bucket"
@@ -940,7 +962,7 @@ value = aws_nat_gateway.main[*].id
 
 # lib/tap_stack.tf
 
-# Variables
+## Variables
 
 variable "environment" {
 description = "Environment name"
@@ -1126,7 +1148,7 @@ enable_deletion_protection = var.enable_deletion_protection
 
 common_tags = local.common_tags
 
-depends_on = [module.vpc]
+depends_on = [module.vpc, module.ec2]
 }
 
 ## Random naming resources to avoid conflicts

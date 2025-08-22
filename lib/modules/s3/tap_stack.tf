@@ -51,7 +51,8 @@ resource "aws_kms_alias" "s3_key_alias" {
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "${var.cloudtrail_bucket_name}-${random_id.bucket_suffix.hex}"
+  bucket        = "${var.cloudtrail_bucket_name}-${random_id.bucket_suffix.hex}"
+  force_destroy = true
 
   tags = merge(var.common_tags, {
     Name = "CloudTrail Logs Bucket"

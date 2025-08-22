@@ -85,8 +85,12 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.common_tags.Environment}-ec2-sg"
+    Name = var.random_prefix != "" ? "${var.random_prefix}-ec2-sg" : "${var.common_tags.Environment}-ec2-sg"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Get latest Amazon Linux 2 AMI
