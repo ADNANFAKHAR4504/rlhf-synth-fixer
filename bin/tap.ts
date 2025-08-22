@@ -14,7 +14,7 @@ const environmentSuffix =
 new TapStack(app, `TapStack-${environmentSuffix}`, {
   environmentSuffix,
   env: {
-    region: 'us-east-1',
+    region: 'us-east-2',
   },
   description: 'Production-ready VPC with EC2 instance in public subnet',
   tags: {
