@@ -64,6 +64,12 @@ export class SecureInfrastructureModules extends Construct {
     );
     const region = new dataAwsRegion.DataAwsRegion(this, 'current-region');
 
+    // Create backup provider early so it can be used by KMS key
+    const backupProvider = new provider.AwsProvider(this, 'backup-provider', {
+      region: config.backupRegion,
+      alias: 'backup',
+    });
+
     // =============================================================================
     // KMS KEY - Encrypt all data at rest with customer-managed key
     // =============================================================================
@@ -146,6 +152,7 @@ export class SecureInfrastructureModules extends Construct {
 
     // Create KMS key in backup region for cross-region replication
     this.backupKmsKey = new kmsKey.KmsKey(this, 'SecProject-BackupKMS-Key', {
+      provider: backupProvider,
       description: 'KMS key for SecProject backup region encryption',
       keyUsage: 'ENCRYPT_DECRYPT',
       enableKeyRotation: true,
@@ -492,12 +499,6 @@ export class SecureInfrastructureModules extends Construct {
       }
     );
 
-    // Create backup provider for cross-region resources
-    const backupProvider = new provider.AwsProvider(this, 'backup-provider', {
-      region: config.backupRegion,
-      alias: 'backup',
-    });
-
     // Cross-region backup bucket
     this.backupBucket = new s3Bucket.S3Bucket(this, 'SecProject-BackupBucket', {
       bucket: `secproject-backup-${current.accountId}-${config.backupRegion}`,
@@ -573,7 +574,7 @@ export class SecureInfrastructureModules extends Construct {
           },
         ],
         // Ensure this runs after versioning is enabled
-        dependsOn: [this.backupBucket],
+        dependsOn: [this.backupBucket, this.backupKmsKey],
       }
     );
 
