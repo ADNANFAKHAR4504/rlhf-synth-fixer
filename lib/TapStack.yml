@@ -32,6 +32,12 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Create NAT Gateway per Availability Zone
+  AvailabilityZoneA:
+    Type: String
+    Description: The first Availability Zone (e.g., us-east-1a)
+  AvailabilityZoneB:
+    Type: String
+    Description: The second Availability Zone (e.g., us-east-1b)
 
 Mappings:
   RegionMap:
@@ -73,7 +79,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.0.0/18
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Ref AvailabilityZoneA
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -90,7 +96,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.64.0/18
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Ref AvailabilityZoneB
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -107,7 +113,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.128.0/18
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Ref AvailabilityZoneA
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -124,7 +130,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.192.0/18
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Ref AvailabilityZoneB
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
