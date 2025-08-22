@@ -1,0 +1,568 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for a secure FinTech application infrastructure with VPC, S3, DynamoDB, RDS, IAM, CloudTrail, and Lambda remediation.
+
+# Parameters for customizable inputs
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Production
+    AllowedValues: ['Production', 'Staging', 'Development']
+    Description: Environment type for resource tagging and configuration.
+  CostCenter:
+    Type: String
+    Default: Finance
+    Description: Cost center for resource tagging.
+  VpcCidrBlock:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC.
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet 1.
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet 2.
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for private subnet 1.
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: CIDR block for private subnet 2.
+  AdminUserName:
+    Type: String
+    Default: fintech-admin
+    Description: Name of the IAM admin user.
+
+# Mappings for region-specific configurations
+Mappings:
+  RegionMap:
+    us-east-1:
+      AvailabilityZone1: us-east-1a
+      AvailabilityZone2: us-east-1b
+    us-west-2:
+      AvailabilityZone1: us-west-2a
+      AvailabilityZone2: us-west-2b
+
+# Resources section
+Resources:
+  # VPC Configuration
+  FinTechVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-PublicSubnet2
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-PrivateSubnet2
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref FinTechVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FinTechVPC
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Group for ALB (Allow 80, 443)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB allowing HTTP and HTTPS
+      VpcId: !Ref FinTechVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ALB-SG
+
+  # Security Group for RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS allowing access from private subnets
+      VpcId: !Ref FinTechVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCidrBlock
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-RDS-SG
+
+  # S3 Bucket for App Data
+  AppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-fintech-appdata-${AWS::AccountId}
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveAndDeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # S3 Bucket for CloudTrail Logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-cloudtrail-logs-${AWS::AccountId}
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # DynamoDB Table
+  FinTechTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${EnvironmentName}-FinTechData
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # RDS Instance (PostgreSQL)
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-fintech-db
+      Engine: postgres
+      EngineVersion: '13.7'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageEncrypted: true
+      MasterUsername: admin
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${EnvironmentName}-rds-secret:SecretString:password}}"
+      MultiAZ: true
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudTrail Configuration
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub ${EnvironmentName}-FinTechTrail
+      S3BucketName: !Ref CloudTrailBucket
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # VPC Flow Logs
+  FlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FlowLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  FlowLogLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vpc/${EnvironmentName}-FlowLogs
+      RetentionInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref FinTechVPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref FlowLogLogGroup
+      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # IAM Configuration
+  AdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref AdminUserName
+      ManagedPolicyArns:
+        - !Ref AdminPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  AdminPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - dynamodb:*
+              - rds:DescribeDBInstances
+            Resource:
+              - !GetAtt AppDataBucket.Arn
+              - !Sub ${AppDataBucket.Arn}/*
+              - !GetAtt FinTechTable.Arn
+              - !GetAtt RDSInstance.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  MFADevice:
+    Type: AWS::IAM::VirtualMFADevice
+    Properties:
+      VirtualMfaDeviceName: !Sub ${EnvironmentName}-AdminMFA
+      Users:
+        - !Ref AdminUser
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda for Remediation
+  RemediationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RemediationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutBucketPolicy
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - config:PutEvaluations
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  RemediationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${EnvironmentName}-RemediationFunction
+      Handler: index.handler
+      Role: !GetAtt RemediationRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          
+          def handler(event, context):
+              s3_client = boto3.client('s3')
+              buckets = s3_client.list_buckets()['Buckets']
+              for bucket in buckets:
+                  bucket_name = bucket['Name']
+                  try:
+                      s3_client.put_public_access_block(
+                          Bucket=bucket_name,
+                          PublicAccessBlockConfiguration={
+                              'BlockPublicAcls': True,
+                              'IgnorePublicAcls': True,
+                              'BlockPublicPolicy': True,
+                              'RestrictPublicBuckets': True
+                          }
+                      )
+                  except Exception as e:
+                      print(f"Error remediating {bucket_name}: {str(e)}")
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Remediation complete')
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudWatch Event Rule to Trigger Lambda
+  RemediationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers Lambda to remediate non-compliant S3 buckets
+      ScheduleExpression: rate(1 day)
+      Targets:
+        - Arn: !GetAtt RemediationLambda.Arn
+          Id: RemediationLambdaTarget
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RemediationLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RemediationEventRule.Arn
+
+# Outputs for key resource references
+Outputs:
+  VPCId:
+    Description: ID of the VPC
+    Value: !Ref FinTechVPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VPCId
+  AppDataBucketName:
+    Description: Name of the application data bucket
+    Value: !Ref AppDataBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-AppDataBucket
+  CloudTrailBucketName:
+    Description: Name of the CloudTrail logs bucket
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-CloudTrailBucket
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref FinTechTable
+    Export:
+      Name: !Sub ${EnvironmentName}-DynamoDBTable
+  RDSEndpoint:
+    Description: Endpoint of the RDS instance
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-RDSEndpoint
+  RemediationLambdaArn:
+    Description: ARN of the remediation Lambda function
+    Value: !GetAtt RemediationLambda.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-RemediationLambdaArn
