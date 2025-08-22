@@ -10,4 +10,4 @@ For IAM - set up roles and policies but keep permissions tight, only what's actu
 For logging - get CloudWatch Logs working in both environments and regions so we can monitor what's happening  
 For encryption - use KMS to encrypt data at rest, make sure it works across the different environments
 
-The terraform code should be clean, pass validation, and be in a single .tf file. Just want the HCL code back, no explanations needed.
+The terraform code should be clean, pass validation, and be in a single .tf file. Just want the HCL code back, no explanations needed. 
