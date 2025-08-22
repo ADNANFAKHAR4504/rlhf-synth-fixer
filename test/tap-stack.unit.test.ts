@@ -134,7 +134,6 @@ describe('TapStack Unit Tests', () => {
     test('should use config fallbacks when environment not provided', async () => {
       const argsWithoutEnv = {
         tags: { Environment: 'test' },
-        // environment is undefined
         regions: ['us-west-2'],
       };
       stack = new TapStack('fallback-stack', argsWithoutEnv);
@@ -145,7 +144,6 @@ describe('TapStack Unit Tests', () => {
       const argsWithoutRegions = {
         tags: { Environment: 'test' },
         environment: 'test',
-        // regions is undefined
       };
       stack = new TapStack('default-regions-stack', argsWithoutRegions);
       expect(stack).toBeInstanceOf(TapStack);
@@ -348,7 +346,6 @@ describe('TapStack Unit Tests', () => {
     test('should not create StackSet roles when not specified', async () => {
       const defaultStack = new TapStack('default-stack-test', {
         ...defaultArgs,
-        // enableMultiAccount is undefined
       });
 
       expect(defaultStack.stackSetExecutionRole).toBeUndefined();
@@ -393,13 +390,20 @@ describe('TapStack Unit Tests', () => {
         throw new Error('Permission denied');
       });
 
+      // Mock console.error to avoid cluttering test output
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
       expect(() => {
         new TapStack('file-error-test', defaultArgs);
       }).not.toThrow();
 
       // Wait for the async operation to complete
       await new Promise(resolve => setTimeout(resolve, 100));
+      
       expect(mockFs.writeFileSync).toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to write outputs file: Error: Permission denied');
+
+      consoleErrorSpy.mockRestore();
     });
 
     test('should handle successful file writes', async () => {
@@ -407,10 +411,7 @@ describe('TapStack Unit Tests', () => {
         // Successfully write file
       });
 
-      // Mock console.log to avoid output during tests
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
-      // Set NODE_ENV to non-test to trigger console.log
       const originalNodeEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'development';
 
@@ -421,7 +422,6 @@ describe('TapStack Unit Tests', () => {
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
 
-      // Restore original NODE_ENV
       process.env.NODE_ENV = originalNodeEnv;
       consoleSpy.mockRestore();
     });
@@ -472,7 +472,6 @@ describe('TapStack Unit Tests', () => {
       
       stack = new TapStack('output-test', defaultArgs);
       
-      // Wait for async operations to complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
@@ -487,7 +486,6 @@ describe('TapStack Unit Tests', () => {
       
       stack = new TapStack('custom-output-test', defaultArgs);
       
-      // Wait for async operations to complete  
       await new Promise(resolve => setTimeout(resolve, 100));
       
       expect(mockFs.writeFileSync).toHaveBeenCalled();
