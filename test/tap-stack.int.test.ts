@@ -1,5 +1,3 @@
-import * as fs from "fs";
-import * as path from "path";
 import {
   CloudWatchClient, GetDashboardCommand,
 } from "@aws-sdk/client-cloudwatch";
@@ -25,6 +23,8 @@ import {
 import {
   DescribeSecretCommand, SecretsManagerClient,
 } from "@aws-sdk/client-secrets-manager";
+import * as fs from "fs";
+import * as path from "path";
 
 // --------- Output loading logic (reference aligned) ----------
 
@@ -191,7 +191,7 @@ describe("Terraform High Availability Web App E2E Deployment Outputs", () => {
       ec2 = new EC2Client({ region: testRegion });
     });
 
-    test.skip("NACL exists and has correct rules", async () => {
+  test("NACL exists and has correct rules", async () => {
       const nacls = await ec2.send(new DescribeNetworkAclsCommand({ NetworkAclIds: [outputs.naclId] }));
       const nacl = nacls.NetworkAcls?.[0];
       expect(nacl).toBeTruthy();

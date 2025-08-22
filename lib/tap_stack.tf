@@ -247,6 +247,14 @@ variable "environment_suffix" {
 
 resource "aws_network_acl" "secure_prod" {
   vpc_id = aws_vpc.main.id
+    ingress {
+      protocol   = "tcp"
+      rule_no    = 115
+      action     = "allow"
+      cidr_block = "0.0.0.0/0"
+      from_port  = 443
+      to_port    = 443
+    }
   ingress {
     protocol   = "tcp"
     rule_no    = 110
