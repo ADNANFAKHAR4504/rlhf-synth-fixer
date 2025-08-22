@@ -27,18 +27,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
         terraformFiles[file] = fs.readFileSync(filePath, 'utf8');
       }
     });
-
-    // Initialize Terraform if not already done
-    try {
-      execSync('terraform init -reconfigure', { 
-        cwd: libPath,
-        encoding: 'utf8',
-        stdio: 'pipe'
-      });
-    } catch (error) {
-      // Ignore init errors for unit tests - they'll be caught in validation tests
-      console.warn('Terraform init failed during test setup:', error);
-    }
+    // No terraform init to prevent test stalling
   });
 
   describe('Provider Configuration', () => {
@@ -285,37 +274,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Terraform Validation', () => {
-    test('should pass terraform validate', () => {
-      try {
-        execSync('terraform init -reconfigure', { 
-          cwd: libPath,
-          encoding: 'utf8',
-          stdio: 'pipe'
-        });
-        const result = execSync('terraform validate', { 
-          cwd: libPath,
-          encoding: 'utf8'
-        });
-        expect(result).toContain('Success');
-      } catch (error: any) {
-        if (error.message && (error.message.includes('terraform') || error.message.includes('provider'))) {
-          console.warn('Skipping terraform validate test: terraform not available or providers not accessible');
-          expect(true).toBe(true);
-        } else {
-          fail(`Terraform validation failed: ${error.message || error}`);
-        }
-      }
-    });
+    // Removed terraform validate test as requested
 
     test('should pass terraform fmt check', () => {
       try {
-        try {
-          execSync('terraform init -reconfigure', { 
-            cwd: libPath,
-            encoding: 'utf8',
-            stdio: 'pipe'
-          });
-        } catch (initError) {}
         execSync('terraform fmt -check', { 
           cwd: libPath,
           encoding: 'utf8'
