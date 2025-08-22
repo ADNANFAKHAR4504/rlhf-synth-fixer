@@ -14,6 +14,8 @@ describe('TapStack', () => {
     jest.clearAllMocks();
     
     const env = { account: '111111111111', region: 'us-east-1' };
+    const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+    const stackName = `TapStack${environmentSuffix}`;
 
     const config = {
       vpcId: 'vpc-12345678',
@@ -25,7 +27,7 @@ describe('TapStack', () => {
 
     app = new cdk.App();
 
-    stack = new TapStack(app, 'TestTapStack', { env, environmentSuffix,  config });
+    stack = new TapStack(app, stackName, { env, environmentSuffix,  config });
     template = Template.fromStack(stack);
 
     template = Template.fromStack(stack);
