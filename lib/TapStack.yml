@@ -564,7 +564,6 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-role-cloudtrail-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -584,6 +583,8 @@ Resources:
                   - logs:CreateLogStream
                 Resource: !Sub '${CloudTrailLogGroup}:*'
       Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-role-cloudtrail-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
