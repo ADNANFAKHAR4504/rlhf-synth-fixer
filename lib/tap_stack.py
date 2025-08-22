@@ -1018,10 +1018,12 @@ class TapStack(ComponentResource):
       opts=ResourceOptions(parent=self)
     )
     
-    # CloudWatch Log Group - without KMS encryption to avoid permissions issues
+    # Use unique log group name to avoid conflicts
+    unique_log_group_name = f"/ecs/{self.name_prefix}-{self.unique_suffix}"
+    
     self.log_group = aws.cloudwatch.LogGroup(
       f"{self.name_prefix}-log-group",
-      name=f"/ecs/{self.name_prefix}",
+      name=unique_log_group_name,
       retention_in_days=14,
       tags={
         "Name": f"{self.name_prefix}-log-group",
@@ -1072,6 +1074,7 @@ class TapStack(ComponentResource):
       },
       opts=ResourceOptions(parent=self)
     )
+
   
   def _create_fargate_service(self):
     """Create ECS Fargate service."""
