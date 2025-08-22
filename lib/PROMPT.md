@@ -1,46 +1,13 @@
-# Cloud Environment Setup - CloudFormation YAML
+I need a CloudFormation YAML template that sets up a small AWS environment in the `us-west-2` region. Please return just the template, no explanation text.  
 
-## Task ID: trainr938
-## Platform: CloudFormation
-## Language: YAML
-## Complexity: Medium
+Here’s what the stack should include:  
 
-## Task Description
-You are tasked with setting up a basic cloud environment using AWS CloudFormation in YAML format. This involves creating an S3 bucket, an EC2 instance, and a DynamoDB table while achieving specific operational requirements.
+- An S3 bucket with versioning turned on. The bucket name should be configurable via a parameter.  
+- An EC2 instance that runs inside a specific VPC and subnet (these should be passed in as parameters). The instance type should also be a parameter.  
+- Attach an IAM role to the EC2 instance that only grants `s3:ListBucket` permissions.  
+- A security group for the instance that only allows inbound SSH from one fixed IP address (this IP should be parameterized).  
+- A CloudWatch alarm that triggers if the instance’s CPU usage goes above 70%.  
+- A DynamoDB table with a configurable table name, a primary key, and a read capacity of 5.  
+- All resources must be tagged with `Project: CloudSetup`.  
 
-## Requirements
-1. Define an S3 bucket with versioning enabled
-2. Create an EC2 instance within a specific VPC and subnet
-3. Attach an IAM role to the EC2 instance with s3:ListBucket permission
-4. Ensure the EC2 instance has a security group allowing inbound SSH from a fixed IP address
-5. Set up a CloudWatch alarm for CPU utilization exceeding 70% on the EC2 instance
-6. Create a DynamoDB table with a specified primary key and read capacity set to 5
-7. Ensure all resources are tagged with 'Project: CloudSetup'
-8. Deploy infrastructure in the 'us-west-2' region
-9. Utilize parameters for configurable values such as instance type and bucket name
-
-## Environment Details
-- The infrastructure should be deployed in the 'us-west-2' region
-- A specific VPC and subnet must be used for the EC2 instance
-- All resources must be tagged with 'Project: CloudSetup'
-
-## Constraints
-1. Define an S3 bucket with versioning enabled
-2. Create an EC2 instance within a specific VPC and subnet
-3. Attach an IAM role to the EC2 instance with s3:ListBucket permission
-4. Ensure the EC2 instance has a security group allowing inbound SSH from a fixed IP address
-5. Set up a CloudWatch alarm for CPU utilization exceeding 70% on the EC2 instance
-6. Create a DynamoDB table with a specified primary key and read capacity set to 5
-7. Ensure all resources are tagged with 'Project: CloudSetup'
-8. Deploy infrastructure in the 'us-west-2' region
-9. Utilize parameters for configurable values such as instance type and bucket name
-
-## Expected Output
-A properly structured CloudFormation template in YAML format that creates the defined resources and meets all constraints. The template should run without errors and all constraints should be verifiable through AWS console or CLI commands.
-
-## File to Modify
-- lib/TapStack.yml (CloudFormation template in YAML format)
-
-## Notes
-- CloudFormation is a service that enables you to model and setup your AWS resources so that you can spend less time managing those resources and more time focusing on your applications
-- This challenge will help you understand how to use CloudFormation to automate resource configuration and deployment tasks
+Keep the template clean and properly structured, using parameters wherever possible. Name the file `TapStack.yml` and return the contents in one YAML code block.  
