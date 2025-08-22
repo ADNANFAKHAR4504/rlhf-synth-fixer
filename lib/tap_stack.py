@@ -29,9 +29,11 @@ class TapStackArgs:
     """Configuration arguments for the TapStack component."""
 
     def __init__(self, environment_suffix: Optional[str] = None,
-                tags: Optional[Dict[str, str]] = None):
+                tags: Optional[Dict[str, str]] = None,
+                enable_cloudtrail: bool = False):
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags or {}
+        self.enable_cloudtrail = enable_cloudtrail
 
 
 class TapStack(pulumi.ComponentResource):
@@ -100,8 +102,9 @@ class TapStack(pulumi.ComponentResource):
         # Create monitoring and logging
         self._create_monitoring()
 
-        # Create CloudTrail
-        self._create_cloudtrail()
+        # Create CloudTrail (optional due to AWS account limits)
+        if args.enable_cloudtrail:
+            self._create_cloudtrail()
 
         # Register all outputs
         self.register_outputs({

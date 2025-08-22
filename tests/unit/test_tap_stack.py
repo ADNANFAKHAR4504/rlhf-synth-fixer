@@ -728,6 +728,47 @@ class TestTapStack(unittest.TestCase):
         self.assertIn("Project", stack.common_tags)
         self.assertIn("Owner", stack.common_tags)
 
+    def test_cloudtrail_disabled_by_default(self):
+        """Test that CloudTrail is disabled by default to avoid AWS limits."""
+        # Default args should have CloudTrail disabled
+        default_args = TapStackArgs()
+        self.assertFalse(default_args.enable_cloudtrail)
+        
+        stack = TapStack("test-stack", default_args)
+        
+        # CloudTrail should not be created when disabled
+        mock_aws.cloudtrail.Trail.assert_not_called()
+
+    def test_cloudtrail_enabled_when_requested(self):
+        """Test that CloudTrail is created when explicitly enabled."""
+        # Enable CloudTrail in args
+        cloudtrail_args = TapStackArgs(
+            environment_suffix="test",
+            tags={"TestTag": "TestValue"},
+            enable_cloudtrail=True
+        )
+        
+        stack = TapStack("test-stack", cloudtrail_args)
+        
+        # CloudTrail should be created when enabled
+        mock_aws.cloudtrail.Trail.assert_called()
+        
+        # CloudTrail bucket should also be created
+        # We expect 3 S3 buckets total when CloudTrail is enabled
+        # (artifacts, static, cloudtrail)
+        mock_aws.s3.Bucket.assert_called()
+        # Note: Exact count may vary based on implementation details
+
+    def test_cloudtrail_optional_parameter(self):
+        """Test CloudTrail enable_cloudtrail parameter functionality."""
+        # Test disabled (default)
+        disabled_args = TapStackArgs(enable_cloudtrail=False)
+        self.assertFalse(disabled_args.enable_cloudtrail)
+        
+        # Test enabled
+        enabled_args = TapStackArgs(enable_cloudtrail=True)
+        self.assertTrue(enabled_args.enable_cloudtrail)
+
 
 if __name__ == '__main__':
     unittest.main()
