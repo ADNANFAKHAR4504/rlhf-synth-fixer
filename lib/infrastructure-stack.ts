@@ -311,10 +311,8 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.arn,
+              sseAlgorithm: 'AES256',
             },
-            bucketKeyEnabled: true,
           },
         },
         tags: {
