@@ -29,7 +29,6 @@ export class TapStack extends cdk.Stack {
     const isPrimary = props?.isPrimary ?? true;
     const region = this.region;
 
-    // KMS Key for encryption at rest with comprehensive service permissions
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
       description: `TAP Multi-Region KMS Key - ${region}`,
       enableKeyRotation: true,
@@ -125,7 +124,6 @@ export class TapStack extends cdk.Stack {
       }),
     });
 
-    // S3 Bucket with versioning and encryption
     const bucket = new s3.Bucket(this, 'TapBucket', {
       bucketName: `tap-bucket-${region.replace(/-/g, '')}-${environmentSuffix}`,
       versioned: true,
@@ -139,15 +137,11 @@ export class TapStack extends cdk.Stack {
 
     this.primaryBucketArn = bucket.bucketArn;
 
-    // Cross-region replication setup (only for primary region)
-    // Note: Replication will be configured manually after both stacks are deployed
     if (isPrimary) {
-      // Create replication role with necessary permissions
       const replicationRole = new iam.Role(this, 'ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
       });
 
-      // Add policies to replication role
       replicationRole.addToPolicy(
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
@@ -188,14 +182,12 @@ export class TapStack extends cdk.Stack {
         })
       );
 
-      // Output replication role ARN for manual configuration
       new cdk.CfnOutput(this, 'ReplicationRoleArn', {
         value: replicationRole.roleArn,
         description: 'IAM Role ARN for S3 Cross-Region Replication',
       });
     }
 
-    // CloudFront Distribution (only in primary region)
     let distribution: cloudfront.Distribution | undefined;
     if (isPrimary) {
       distribution = new cloudfront.Distribution(this, 'TapDistribution', {
@@ -211,7 +203,6 @@ export class TapStack extends cdk.Stack {
       });
     }
 
-    // VPC for RDS and EC2
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       maxAzs: 2,
       natGateways: 1,
@@ -234,7 +225,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // RDS Subnet Group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
       vpc,
       description: 'Subnet group for TAP RDS instance',
@@ -243,14 +233,12 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // RDS Security Group
     const dbSecurityGroup = new ec2.SecurityGroup(this, 'TapDbSecurityGroup', {
       vpc,
       description: 'Security group for TAP RDS instance',
       allowAllOutbound: false,
     });
 
-    // RDS Instance (primary) or Read Replica (secondary)
     if (isPrimary) {
       const dbInstance = new rds.DatabaseInstance(this, 'TapDatabase', {
         engine: rds.DatabaseInstanceEngine.postgres({
@@ -273,11 +261,9 @@ export class TapStack extends cdk.Stack {
         credentials: rds.Credentials.fromGeneratedSecret('tapuser'),
       });
 
-      // Enable automated backups for cross-region read replica
       const cfnDbInstance = dbInstance.node.defaultChild as rds.CfnDBInstance;
       cfnDbInstance.backupRetentionPeriod = 7;
     } else {
-      // Read replica in secondary region
       new rds.DatabaseInstanceReadReplica(this, 'TapDatabaseReplica', {
         sourceDatabaseInstance:
           rds.DatabaseInstance.fromDatabaseInstanceAttributes(
@@ -304,7 +290,6 @@ export class TapStack extends cdk.Stack {
       });
     }
 
-    // EC2 Security Group for Auto Scaling Group
     const ec2SecurityGroup = new ec2.SecurityGroup(
       this,
       'TapEc2SecurityGroup',
@@ -326,14 +311,12 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS traffic'
     );
 
-    // Allow EC2 to connect to RDS
     dbSecurityGroup.addIngressRule(
       ec2SecurityGroup,
       ec2.Port.tcp(5432),
       'Allow EC2 to connect to RDS'
     );
 
-    // IAM Role for EC2 instances
     const ec2Role = new iam.Role(this, 'TapEc2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
@@ -359,7 +342,6 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Auto Scaling Group with EBS encryption
     new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
       vpc,
       instanceType: ec2.InstanceType.of(
@@ -386,14 +368,12 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // SNS Topic for replication alerts
     const snsTopic = new sns.Topic(this, 'TapReplicationTopic', {
       topicName: `tap-replication-alerts-${region.replace(/-/g, '')}-${environmentSuffix}`,
       displayName: `TAP Replication Alerts - ${region}`,
       masterKey: kmsKey,
     });
 
-    // Lambda function for replication monitoring
     const replicationLambda = new lambda.Function(
       this,
       'TapReplicationMonitor',
