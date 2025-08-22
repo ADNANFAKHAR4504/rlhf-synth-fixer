@@ -331,6 +331,7 @@ export class TapStack extends cdk.Stack {
 }
 
 ```
+
 ```typescript 
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
