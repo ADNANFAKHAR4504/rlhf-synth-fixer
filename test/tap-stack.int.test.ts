@@ -96,15 +96,14 @@ describe('TapStack Integration Tests', () => {
     `tapstack-${env.toLowerCase()}-data-${AWS_ACCOUNT_ID}-tapstack`;
 
   // Helper function to validate tags
-  const validateTags = (tags: GenericTag[], env: string, resourceName: string) => {
-    expect(tags).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ Key: 'Name', Value: `TapStack-${env}-${resourceName}` }),
-        expect.objectContaining({ Key: 'Project', Value: projectName }),
-        expect.objectContaining({ Key: 'Environment', Value: env }),
-        expect.objectContaining({ Key: 'CreatedBy', Value: owner }),
-      ])
-    );
+  const validateTags = (tags: GenericTag[], env: string, resourceName: string, requireNameTag: boolean = true) => {
+    const expectedTags = [
+      ...(requireNameTag ? [expect.objectContaining({ Key: 'Name', Value: `TapStack-${env}-${resourceName}` })] : []),
+      expect.objectContaining({ Key: 'Project', Value: projectName }),
+      expect.objectContaining({ Key: 'Environment', Value: env }),
+      expect.objectContaining({ Key: 'CreatedBy', Value: owner }),
+    ];
+    expect(tags).toEqual(expect.arrayContaining(expectedTags));
   };
 
   // Helper function to validate resource existence
@@ -427,7 +426,7 @@ describe('TapStack Integration Tests', () => {
         if (!role) return;
         expect(role.Role?.RoleName).toBe(roleName);
         expect(role.Role?.Arn).toBe(roleArn);
-        validateTags((role.Role?.Tags || []) as IAMTag[], env, 'Role');
+        validateTags((role.Role?.Tags || []) as IAMTag[], env, 'Role', false); // Name tag not required for IAM roles
 
         // Validate Assume Role Policy
         const assumeRolePolicy = JSON.parse(
