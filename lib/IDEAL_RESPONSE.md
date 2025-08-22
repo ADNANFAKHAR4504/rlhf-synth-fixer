@@ -91,6 +91,12 @@ description = "Name of the IAM instance profile for EC2 instances"
 type = string
 }
 
+variable "random_prefix" {
+description = "Random prefix for unique resource naming"
+type = string
+default = ""
+}
+
 variable "instance_type" {
 description = "EC2 instance type"
 type = string
@@ -98,8 +104,9 @@ default = "t3.micro"
 }
 
 variable "key_pair_name" {
-description = "EC2 Key Pair name"
+description = "EC2 Key Pair name (optional)"
 type = string
+default = null
 }
 
 variable "common_tags" {
@@ -110,7 +117,7 @@ type = map(string)
 ## Security Group for EC2
 
 resource "aws_security_group" "ec2_sg" {
-name_prefix = "${var.common_tags.Environment}-ec2-sg"
+name_prefix = var.random_prefix != "" ? "${var.random_prefix}-ec2-sg" : "${var.common_tags.Environment}-ec2-sg"
 vpc_id = var.vpc_id
 
 ingress {
@@ -174,7 +181,7 @@ count = length(var.private_subnet_ids)
 
 ami = data.aws_ami.amazon_linux.id
 instance_type = var.instance_type
-key_name = var.key_pair_name
+key_name = var.key_pair_name != null ? var.key_pair_name : null
 vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 subnet_id = var.private_subnet_ids[count.index]
 iam_instance_profile = var.instance_profile_name
@@ -191,7 +198,7 @@ http_endpoint = "enabled"
 http_tokens = "required"
 }
 
-user_data = base64encode(<<-EOF
+user_data = <<-EOF
 #!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
@@ -205,7 +212,7 @@ yum install -y amazon-cloudwatch-agent
             "collect_list": [
               {
                 "file_path": "/var/log/messages",
-                "log_group_name": "${var.common_tags.Environment}-ec2-logs",
+                "log_group_name": "${var.random_prefix != "" ? var.random_prefix : var.common_tags.Environment}-ec2-logs",
                 "log_stream_name": "{instance_id}/messages"
               }
             ]
@@ -218,7 +225,6 @@ yum install -y amazon-cloudwatch-agent
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
 EOF
-)
 
 tags = merge(var.common_tags, {
 Name = "${var.common_tags.Environment}-ec2-${count.index + 1}"
@@ -249,10 +255,16 @@ description = "Common tags for all resources"
 type = map(string)
 }
 
+variable "random_prefix" {
+description = "Random prefix for unique resource naming"
+type = string
+default = ""
+}
+
 ## EC2 Instance Role
 
 resource "aws_iam_role" "ec2_role" {
-name = "${var.common_tags.Environment}-ec2-role"
+name = var.random_prefix != "" ? "${var.random_prefix}-ec2-role" : "${var.common_tags.Environment}-ec2-role"
 
 assume_role_policy = jsonencode({
 Version = "2012-10-17"
@@ -273,7 +285,7 @@ tags = var.common_tags
 ## EC2 Instance Policy
 
 resource "aws_iam_policy" "ec2_policy" {
-name = "${var.common_tags.Environment}-ec2-policy"
+name = var.random_prefix != "" ? "${var.random_prefix}-ec2-policy" : "${var.common_tags.Environment}-ec2-policy"
 description = "Policy for EC2 instances with least privilege access"
 
 policy = jsonencode({
@@ -322,7 +334,7 @@ policy_arn = aws_iam_policy.ec2_policy.arn
 ## Instance Profile
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-name = "${var.common_tags.Environment}-ec2-profile"
+name = var.random_prefix != "" ? "${var.random_prefix}-ec2-profile" : "${var.common_tags.Environment}-ec2-profile"
 role = aws_iam_role.ec2_role.name
 
 tags = var.common_tags
@@ -331,7 +343,7 @@ tags = var.common_tags
 ## CloudTrail Role
 
 resource "aws_iam_role" "cloudtrail_role" {
-name = "${var.common_tags.Environment}-cloudtrail-role"
+name = var.random_prefix != "" ? "${var.random_prefix}-cloudtrail-role" : "${var.common_tags.Environment}-cloudtrail-role"
 
 assume_role_policy = jsonencode({
 Version = "2012-10-17"
@@ -352,7 +364,7 @@ tags = var.common_tags
 ## CloudTrail Policy
 
 resource "aws_iam_policy" "cloudtrail_policy" {
-name = "${var.common_tags.Environment}-cloudtrail-policy"
+name = var.random_prefix != "" ? "${var.random_prefix}-cloudtrail-policy" : "${var.common_tags.Environment}-cloudtrail-policy"
 description = "Policy for CloudTrail logging"
 
 policy = jsonencode({
@@ -419,6 +431,12 @@ description = "List of private subnet IDs for RDS subnet group"
 type = list(string)
 }
 
+variable "random_prefix" {
+description = "Random prefix for unique resource naming"
+type = string
+default = ""
+}
+
 variable "db_instance_class" {
 description = "RDS instance class"
 type = string
@@ -451,18 +469,18 @@ type = map(string)
 ## RDS Subnet Group
 
 resource "aws_db_subnet_group" "main" {
-name = "${var.common_tags.Environment}-db-subnet-group"
+name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
 subnet_ids = var.private_subnet_ids
 
 tags = merge(var.common_tags, {
-Name = "${var.common_tags.Environment}-db-subnet-group"
+Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
 })
 }
 
 ## Security Group for RDS
 
 resource "aws_security_group" "rds_sg" {
-name_prefix = "${var.common_tags.Environment}-rds-sg"
+name_prefix = var.random_prefix != "" ? "${var.random_prefix}-rds-sg" : "${var.common_tags.Environment}-rds-sg"
 vpc_id = var.vpc_id
 
 ingress {
@@ -488,7 +506,7 @@ special = true
 ## Store password in AWS Secrets Manager
 
 resource "aws_secretsmanager_secret" "db_password" {
-name = "${var.common_tags.Environment}/rds/password"
+name = var.random_prefix != "" ? "${var.random_prefix}/rds/password" : "${var.common_tags.Environment}/rds/password"
 description = "RDS database password"
 recovery_window_in_days = 7
 
@@ -506,7 +524,7 @@ password = random_password.db_password.result
 ## RDS Instance
 
 resource "aws_db_instance" "main" {
-identifier = "${var.common_tags.Environment}-database"
+identifier = var.random_prefix != "" ? "${var.random_prefix}-database" : "${var.common_tags.Environment}-database"
 
 engine = "mysql"
 engine_version = var.db_engine_version
@@ -922,7 +940,7 @@ value = aws_nat_gateway.main[*].id
 
 # lib/tap_stack.tf
 
-## Variables
+# Variables
 
 variable "environment" {
 description = "Environment name"
@@ -985,9 +1003,9 @@ default = "t3.micro"
 }
 
 variable "key_pair_name" {
-description = "EC2 Key Pair name"
+description = "EC2 Key Pair name (optional - if not provided, instances will be accessible via Session Manager)"
 type = string
-default = "secure-infrastructure-key"
+default = null
 }
 
 variable "db_instance_class" {
@@ -1044,6 +1062,7 @@ common_tags = local.common_tags
 module "iam" {
 source = "./modules/iam"
 
+random_prefix = local.random_prefix
 common_tags = local.common_tags
 }
 
@@ -1052,7 +1071,7 @@ common_tags = local.common_tags
 module "s3" {
 source = "./modules/s3"
 
-cloudtrail_bucket_name = var.cloudtrail_bucket_name
+cloudtrail_bucket_name = local.cloudtrail_bucket_name
 common_tags = local.common_tags
 }
 
@@ -1062,7 +1081,7 @@ module "cloudtrail" {
 count = var.enable_cloudtrail ? 1 : 0
 source = "./modules/cloudtrail"
 
-cloudtrail_name = var.cloudtrail_name
+cloudtrail_name = local.cloudtrail_name
 s3_bucket_name = module.s3.cloudtrail_bucket_name
 cloudtrail_kms_key_arn = module.s3.cloudtrail_kms_key_arn
 
@@ -1081,6 +1100,7 @@ public_subnet_ids = module.vpc.public_subnet_ids
 private_subnet_ids = module.vpc.private_subnet_ids
 ec2_instance_role_arn = module.iam.ec2_instance_role_arn
 instance_profile_name = module.iam.ec2_instance_profile_name
+random_prefix = local.random_prefix
 
 instance_type = var.ec2_instance_type
 key_pair_name = var.key_pair_name
@@ -1097,6 +1117,7 @@ source = "./modules/rds"
 
 vpc_id = module.vpc.vpc_id
 private_subnet_ids = module.vpc.private_subnet_ids
+random_prefix = local.random_prefix
 
 db_instance_class = var.db_instance_class
 db_allocated_storage = var.db_allocated_storage
@@ -1108,14 +1129,42 @@ common_tags = local.common_tags
 depends_on = [module.vpc]
 }
 
-## Local values for consistent tagging
+## Random naming resources to avoid conflicts
+
+resource "random_id" "unique_suffix" {
+byte_length = 4
+}
+
+resource "random_string" "prefix" {
+length = 6
+special = false
+upper = false
+}
+
+## Local values for consistent tagging and naming
 
 locals {
+
+## Random naming prefix for unique resource names
+
+random_prefix = "${random_string.prefix.result}-${random_id.unique_suffix.hex}"
+
+## Unique resource names
+
+cloudtrail_bucket_name = "${local.random_prefix}-${var.cloudtrail_bucket_name}"
+cloudtrail_name = "${local.random_prefix}-${var.cloudtrail_name}"
+
 common_tags = {
 Environment = var.environment
 Owner = var.owner
 Purpose = var.purpose
+RandomPrefix = local.random_prefix
 }
+}
+
+output "random_prefix" {
+description = "Random prefix used for resource naming to avoid conflicts"
+value = local.random_prefix
 }
 
 output "vpc_id" {

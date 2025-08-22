@@ -9,6 +9,12 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "random_prefix" {
+  description = "Random prefix for unique resource naming"
+  type        = string
+  default     = ""
+}
+
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -40,17 +46,17 @@ variable "common_tags" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.common_tags.Environment}-db-subnet-group"
+  name       = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
 
   tags = merge(var.common_tags, {
-    Name = "${var.common_tags.Environment}-db-subnet-group"
+    Name = var.random_prefix != "" ? "${var.random_prefix}-db-subnet-group" : "${var.common_tags.Environment}-db-subnet-group"
   })
 }
 
 # Security Group for RDS
 resource "aws_security_group" "rds_sg" {
-  name_prefix = "${var.common_tags.Environment}-rds-sg"
+  name_prefix = var.random_prefix != "" ? "${var.random_prefix}-rds-sg" : "${var.common_tags.Environment}-rds-sg"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -74,7 +80,7 @@ resource "random_password" "db_password" {
 
 # Store password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${var.common_tags.Environment}/rds/password"
+  name                    = var.random_prefix != "" ? "${var.random_prefix}/rds/password" : "${var.common_tags.Environment}/rds/password"
   description             = "RDS database password"
   recovery_window_in_days = 7
 
@@ -91,7 +97,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${var.common_tags.Environment}-database"
+  identifier = var.random_prefix != "" ? "${var.random_prefix}-database" : "${var.common_tags.Environment}-database"
 
   engine         = "mysql"
   engine_version = var.db_engine_version

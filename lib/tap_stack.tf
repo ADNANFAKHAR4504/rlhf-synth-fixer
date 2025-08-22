@@ -63,9 +63,9 @@ variable "ec2_instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "EC2 Key Pair name"
+  description = "EC2 Key Pair name (optional - if not provided, instances will be accessible via Session Manager)"
   type        = string
-  default     = "secure-infrastructure-key"
+  default     = null
 }
 
 variable "db_instance_class" {
@@ -120,14 +120,15 @@ module "vpc" {
 module "iam" {
   source = "./modules/iam"
 
-  common_tags = local.common_tags
+  random_prefix = local.random_prefix
+  common_tags   = local.common_tags
 }
 
 # S3 Module
 module "s3" {
   source = "./modules/s3"
 
-  cloudtrail_bucket_name = var.cloudtrail_bucket_name
+  cloudtrail_bucket_name = local.cloudtrail_bucket_name
   common_tags            = local.common_tags
 }
 
@@ -136,7 +137,7 @@ module "cloudtrail" {
   count  = var.enable_cloudtrail ? 1 : 0
   source = "./modules/cloudtrail"
 
-  cloudtrail_name        = var.cloudtrail_name
+  cloudtrail_name        = local.cloudtrail_name
   s3_bucket_name         = module.s3.cloudtrail_bucket_name
   cloudtrail_kms_key_arn = module.s3.cloudtrail_kms_key_arn
 
@@ -154,6 +155,7 @@ module "ec2" {
   private_subnet_ids    = module.vpc.private_subnet_ids
   ec2_instance_role_arn = module.iam.ec2_instance_role_arn
   instance_profile_name = module.iam.ec2_instance_profile_name
+  random_prefix         = local.random_prefix
 
   instance_type = var.ec2_instance_type
   key_pair_name = var.key_pair_name
@@ -169,6 +171,7 @@ module "rds" {
 
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
+  random_prefix      = local.random_prefix
 
   db_instance_class          = var.db_instance_class
   db_allocated_storage       = var.db_allocated_storage
@@ -180,13 +183,37 @@ module "rds" {
   depends_on = [module.vpc]
 }
 
-# Local values for consistent tagging
+# Random naming resources to avoid conflicts
+resource "random_id" "unique_suffix" {
+  byte_length = 4
+}
+
+resource "random_string" "prefix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+# Local values for consistent tagging and naming
 locals {
+  # Random naming prefix for unique resource names
+  random_prefix = "${random_string.prefix.result}-${random_id.unique_suffix.hex}"
+
+  # Unique resource names
+  cloudtrail_bucket_name = "${local.random_prefix}-${var.cloudtrail_bucket_name}"
+  cloudtrail_name        = "${local.random_prefix}-${var.cloudtrail_name}"
+
   common_tags = {
-    Environment = var.environment
-    Owner       = var.owner
-    Purpose     = var.purpose
+    Environment  = var.environment
+    Owner        = var.owner
+    Purpose      = var.purpose
+    RandomPrefix = local.random_prefix
   }
+}
+
+output "random_prefix" {
+  description = "Random prefix used for resource naming to avoid conflicts"
+  value       = local.random_prefix
 }
 
 output "vpc_id" {

@@ -24,6 +24,12 @@ variable "instance_profile_name" {
   type        = string
 }
 
+variable "random_prefix" {
+  description = "Random prefix for unique resource naming"
+  type        = string
+  default     = ""
+}
+
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
@@ -31,8 +37,9 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "EC2 Key Pair name"
+  description = "EC2 Key Pair name (optional)"
   type        = string
+  default     = null
 }
 
 variable "common_tags" {
@@ -42,7 +49,7 @@ variable "common_tags" {
 
 # Security Group for EC2
 resource "aws_security_group" "ec2_sg" {
-  name_prefix = "${var.common_tags.Environment}-ec2-sg"
+  name_prefix = var.random_prefix != "" ? "${var.random_prefix}-ec2-sg" : "${var.common_tags.Environment}-ec2-sg"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -104,7 +111,7 @@ resource "aws_instance" "main" {
 
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = var.key_pair_name
+  key_name               = var.key_pair_name != null ? var.key_pair_name : null
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   subnet_id              = var.private_subnet_ids[count.index]
   iam_instance_profile   = var.instance_profile_name
@@ -121,7 +128,7 @@ resource "aws_instance" "main" {
     http_tokens   = "required"
   }
 
-  user_data = base64encode(<<-EOF
+  user_data = <<-EOF
     #!/bin/bash
     yum update -y
     yum install -y amazon-cloudwatch-agent
@@ -135,7 +142,7 @@ resource "aws_instance" "main" {
             "collect_list": [
               {
                 "file_path": "/var/log/messages",
-                "log_group_name": "${var.common_tags.Environment}-ec2-logs",
+                "log_group_name": "${var.random_prefix != "" ? var.random_prefix : var.common_tags.Environment}-ec2-logs",
                 "log_stream_name": "{instance_id}/messages"
               }
             ]
@@ -147,7 +154,6 @@ resource "aws_instance" "main" {
     
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
   EOF
-  )
 
   tags = merge(var.common_tags, {
     Name = "${var.common_tags.Environment}-ec2-${count.index + 1}"

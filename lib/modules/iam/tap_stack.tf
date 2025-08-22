@@ -3,10 +3,16 @@ variable "common_tags" {
   type        = map(string)
 }
 
+variable "random_prefix" {
+  description = "Random prefix for unique resource naming"
+  type        = string
+  default     = ""
+}
+
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.common_tags.Environment}-ec2-role"
+  name = var.random_prefix != "" ? "${var.random_prefix}-ec2-role" : "${var.common_tags.Environment}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -26,7 +32,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # EC2 Instance Policy
 resource "aws_iam_policy" "ec2_policy" {
-  name        = "${var.common_tags.Environment}-ec2-policy"
+  name        = var.random_prefix != "" ? "${var.random_prefix}-ec2-policy" : "${var.common_tags.Environment}-ec2-policy"
   description = "Policy for EC2 instances with least privilege access"
 
   policy = jsonencode({
@@ -73,7 +79,7 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
 
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.common_tags.Environment}-ec2-profile"
+  name = var.random_prefix != "" ? "${var.random_prefix}-ec2-profile" : "${var.common_tags.Environment}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 
   tags = var.common_tags
@@ -81,7 +87,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # CloudTrail Role
 resource "aws_iam_role" "cloudtrail_role" {
-  name = "${var.common_tags.Environment}-cloudtrail-role"
+  name = var.random_prefix != "" ? "${var.random_prefix}-cloudtrail-role" : "${var.common_tags.Environment}-cloudtrail-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -101,7 +107,7 @@ resource "aws_iam_role" "cloudtrail_role" {
 
 # CloudTrail Policy
 resource "aws_iam_policy" "cloudtrail_policy" {
-  name        = "${var.common_tags.Environment}-cloudtrail-policy"
+  name        = var.random_prefix != "" ? "${var.random_prefix}-cloudtrail-policy" : "${var.common_tags.Environment}-cloudtrail-policy"
   description = "Policy for CloudTrail logging"
 
   policy = jsonencode({
