@@ -185,7 +185,7 @@ import boto3
 import os
 from decimal import Decimal
 
-# Initialize DynamoDB client
+# Initialize DynamoDB client (AWS_REGION is automatically available in Lambda runtime)
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 
@@ -301,7 +301,6 @@ resource "aws_lambda_function" "app_function" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.app_table.name
-      AWS_REGION     = data.aws_region.current.id
     }
   }
 

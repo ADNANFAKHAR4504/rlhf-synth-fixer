@@ -130,7 +130,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         
         expect(result.Configuration!.Environment?.Variables).toBeDefined();
         expect(result.Configuration!.Environment!.Variables!.DYNAMODB_TABLE).toBeDefined();
-        expect(result.Configuration!.Environment!.Variables!.AWS_REGION).toBeDefined();
+        // Note: AWS_REGION is automatically provided by Lambda runtime and cannot be set manually
       } catch (error: any) {
         if (error.code === 'ResourceNotFoundException') {
           return;
