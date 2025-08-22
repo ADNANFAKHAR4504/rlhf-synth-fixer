@@ -20,7 +20,6 @@ const database = new rds.DatabaseInstance(this, 'TapDatabase', {
   engine: rds.DatabaseInstanceEngine.postgres({
     version: rds.PostgresEngineVersion.VER_15_4,  // <- This version is not available
   }),
-  // ... rest of configuration
 });
 ```
 
