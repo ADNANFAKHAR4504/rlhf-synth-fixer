@@ -1,4 +1,5 @@
 Terraform plan is failing with this error
+```
 ╷
 │ Error: Invalid function argument
 │ 
@@ -32,3 +33,4 @@ Terraform plan is failing with this error
 │ configuration source code, so if this file will be created by a resource in
 │ this configuration you must instead obtain this result from an attribute of
 │ that resource.
+```
