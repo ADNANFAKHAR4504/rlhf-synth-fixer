@@ -2,8 +2,6 @@ We're building out a secure AWS environment for a modern organization, and we wa
 
 Here’s what matters: every S3 bucket should be encrypted with AES-256, no shortcuts. IAM policies need to be tight, only giving access where it’s truly needed. EC2 instances should always have IAM roles attached, and SSH access should be locked down or, better yet, disabled unless there’s a real reason for it.
 
-CloudTrail logging should be switched on everywhere, and those logs need to be encrypted with KMS. Our VPC setup should be highly available, with public and private subnets spread across different AZs. RDS needs automated backups with at least a week of retention, and DynamoDB tables should have both point-in-time recovery and continuous backups.
-
 Lambda functions? Make sure their environment variables are encrypted at rest using KMS. ALBs should have access logs enabled and sent to a dedicated S3 bucket that’s locked down so only logging services can write to it. Security groups should be as restrictive as possible—only the necessary ports and protocols allowed, everything else denied.
 
 Tagging is important too: every resource should have tags for owner and environment so we can keep track of what’s what. And don’t forget GuardDuty—it needs to be switched on and set up to aggregate findings across all accounts into our central security account.
