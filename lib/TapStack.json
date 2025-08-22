@@ -1196,6 +1196,7 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "SecurityRecorder-${Environment}"

@@ -659,6 +659,7 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigDeliveryChannel
     Properties:
       Name: !Sub 'SecurityRecorder-${Environment}'
       RoleARN: !GetAtt ConfigRole.Arn
