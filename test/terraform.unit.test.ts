@@ -41,9 +41,9 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
   });
 
   describe('Variables & locals', () => {
-    test('declares aws_region variable with default us-west-2', () => {
+    test('declares aws_region variable with default us-east-1', () => {
       expectMatch(
-        /variable\s+"aws_region"\s*\{[\s\S]*?default\s*=\s*"us-west-2"[\s\S]*?\}/
+        /variable\s+"aws_region"\s*\{[\s\S]*?default\s*=\s*"us-east-1"[\s\S]*?\}/
       );
     });
 
