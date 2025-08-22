@@ -34,21 +34,21 @@ const hasAwsCreds = () =>
       process.env.AWS_WEB_IDENTITY_TOKEN_FILE
   );
 
-const loadStackOutputs = async () => {
+const loadStackOutputs = async (): Promise<Record<string, string>> => {
   const outputsFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 
   if (!fs.existsSync(outputsFilePath)) {
     console.warn(`Outputs file not found: ${outputsFilePath}`);
-    return {} as Record<string, string>;
+    return {};
   }
 
   try {
     const fileContent = fs.readFileSync(outputsFilePath, 'utf8');
     const outputs = JSON.parse(fileContent);
-    return outputs as Record<string, string>;
+    return outputs;
   } catch (error) {
     console.error('Error reading outputs file:', error);
-    return {} as Record<string, string>;
+    return {};
   }
 };
 
