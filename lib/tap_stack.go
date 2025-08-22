@@ -16,16 +16,9 @@ import (
 // Helper to create *string
 func str(v string) *string { return &v }
 
-// Entrypoint
-func main() {
-	app := cdktf.NewApp(nil)
+// BuildSimpleS3Stack constructs the stack (reusable in unit/integration tests)
+func BuildSimpleS3Stack(app cdktf.App, region string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(app, str("TapStack"))
-
-	// Pick AWS region (fallback = us-east-1)
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "us-east-1"
-	}
 
 	// Provider setup
 	awscdktf.NewAwsProvider(stack, str("aws"), &awscdktf.AwsProviderConfig{
@@ -67,5 +60,16 @@ func main() {
 		Value: bucket.Id(),
 	})
 
+	return stack
+}
+
+// Entrypoint
+func main() {
+	app := cdktf.NewApp(nil)
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	BuildSimpleS3Stack(app, region)
 	app.Synth()
 }
