@@ -139,7 +139,7 @@ describe('TapStack', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '15.4',
+        EngineVersion: '16.9',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
         StorageEncrypted: true,
