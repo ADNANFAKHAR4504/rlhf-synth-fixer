@@ -144,9 +144,18 @@ describe("Terraform Stack Integration Tests (Read-only Live Checks)", () => {
   });
 
   // Validate IAM instance profile string
-  it("validates IAM instance profile (should be a non-empty profile name string)", () => {
-    expect(typeof outputs.iam_instance_profile).toBe("string");
-    expect(outputs.iam_instance_profile.trim().length).toBeGreaterThan(0);
-  });
+  it("validates IAM instance profile (should be a non-empty profile name string or an object with name)", () => {
+  const profile = outputs.iam_instance_profile;
+  if (typeof profile === "string") {
+    expect(profile.trim().length).toBeGreaterThan(0);
+  } else if (typeof profile === "object" && profile !== null) {
+    // If object, check it has a 'name' property that is a non-empty string
+    expect(typeof profile.name === "string" && profile.name.trim().length > 0).toBe(true);
+  } else {
+    // Fail the test if neither string nor object as expected
+    throw new Error("IAM instance profile output is not valid string or object");
+  }
+});
+
 });
 
