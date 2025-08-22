@@ -320,13 +320,12 @@ Resources:
         SecurityGroupIds:
           - !Ref AppSecurityGroup
         UserData:
-          Fn::Base64:
-            Fn::Sub: |
-              #!/bin/bash
-              yum update -y
-              yum install -y amazon-cloudwatch-agent
-              # Configure TLS 1.2 minimum
-              echo "MinProtocol = TLSv1.2" >> /etc/ssl/openssl.cnf
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            # Configure TLS 1.2 minimum
+            echo "MinProtocol = TLSv1.2" >> /etc/ssl/openssl.cnf
         MetadataOptions:
           HttpTokens: required
           HttpPutResponseHopLimit: 2
