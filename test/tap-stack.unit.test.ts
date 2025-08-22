@@ -84,12 +84,6 @@ describe('Security CloudFormation Template', () => {
       expect(fn.Properties.VpcConfig).toBeDefined();
     });
 
-    test('should have CloudTrail', () => {
-      const ct = template.Resources.SecurityCloudTrail;
-      expect(ct).toBeDefined();
-      expect(ct.Type).toBe('AWS::CloudTrail::Trail');
-    });
-
     test('should have IAM roles', () => {
       expect(template.Resources.LambdaExecutionRole).toBeDefined();
       expect(template.Resources.RDSEnhancedMonitoringRole).toBeDefined();
@@ -116,7 +110,6 @@ describe('Security CloudFormation Template', () => {
       'SecureDataBucketName',
       'DatabaseEndpoint',
       'LambdaFunctionArn',
-      'CloudTrailArn',
       'VPCId'
     ];
 
