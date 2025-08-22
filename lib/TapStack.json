@@ -11,7 +11,7 @@
         "ExistingVpcId": {
             "Type": "String",
             "Default": "",
-            "Description": "ID of an existing VPC to use (leave blank to create a new one)"
+            "Description": "ID of an existing VPC to use (leave blank to create a new one). Note: If you set this to an existing VPC, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually."
         },
         "PublicSubnetCidr": {
             "Type": "String",
@@ -136,6 +136,21 @@
             "Type": "String",
             "Default": "use-existing",
             "Description": "Name of an existing AWS Config Configuration Recorder. To create a new one, set this to blank (\"\"), otherwise the template will NOT create a configuration recorder."
+        },
+        "ExistingRDSSubnetGroupName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of an existing RDS DBSubnetGroup. Leave blank to create a new one.\nIf you see an error that the subnet group already exists, set this to the actual existing DBSubnetGroup name (e.g., 'rds-subnet-group-production').\nNote: If you set this to an existing group, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually.\n"
+        },
+        "ExistingCloudTrailLogsBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Name of an existing S3 bucket for CloudTrail logs. To create a new one, leave blank. If using an existing bucket, set this to the actual bucket name."
+        },
+        "ExistingInternetGatewayId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "ID of an existing Internet Gateway to attach to the VPC. Leave blank to create a new one. Note: If you set this to an existing IGW, CloudFormation will NOT delete it when the stack is deleted. You must manage its deletion manually."
         }
     },
     "Conditions": {
@@ -329,6 +344,30 @@
                     ]
                 }
             ]
+        },
+        "CreateRDSSubnetGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingRDSSubnetGroupName"
+                },
+                ""
+            ]
+        },
+        "CreateCloudTrailLogsBucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingCloudTrailLogsBucketName"
+                },
+                ""
+            ]
+        },
+        "CreateInternetGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingInternetGatewayId"
+                },
+                ""
+            ]
         }
     },
     "Resources": {
@@ -446,7 +485,9 @@
                         }
                     }
                 ]
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "PublicSubnet": {
             "Type": "AWS::EC2::Subnet",
@@ -608,7 +649,7 @@
         },
         "InternetGateway": {
             "Type": "AWS::EC2::InternetGateway",
-            "Condition": "CreateVpc",
+            "Condition": "CreateInternetGateway",
             "Properties": {
                 "Tags": [
                     {
@@ -618,14 +659,24 @@
                         }
                     }
                 ]
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "AttachGateway": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Condition": "CreateVpc",
+            "Condition": "CreateInternetGateway",
             "Properties": {
                 "VpcId": {
-                    "Ref": "SecurityVpc"
+                    "Fn::If": [
+                        "CreateVpc",
+                        {
+                            "Ref": "SecurityVpc"
+                        },
+                        {
+                            "Ref": "ExistingVpcId"
+                        }
+                    ]
                 },
                 "InternetGatewayId": {
                     "Ref": "InternetGateway"
@@ -658,7 +709,7 @@
         },
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
-            "Condition": "CreateVpc",
+            "Condition": "CreateInternetGateway",
             "DependsOn": "AttachGateway",
             "Properties": {
                 "RouteTableId": {
@@ -696,6 +747,7 @@
         },
         "CloudTrailLogsBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateCloudTrailLogsBucket",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-${Environment}"
@@ -747,7 +799,15 @@
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
-                    "Ref": "CloudTrailLogsBucket"
+                    "Fn::If": [
+                        "CreateCloudTrailLogsBucket",
+                        {
+                            "Ref": "CloudTrailLogsBucket"
+                        },
+                        {
+                            "Ref": "ExistingCloudTrailLogsBucketName"
+                        }
+                    ]
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -760,9 +820,17 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailLogsBucket",
-                                    "Arn"
+                                "Fn::If": [
+                                    "CreateCloudTrailLogsBucket",
+                                    {
+                                        "Fn::GetAtt": [
+                                            "CloudTrailLogsBucket",
+                                            "Arn"
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${ExistingCloudTrailLogsBucketName}"
+                                    }
                                 ]
                             }
                         },
@@ -774,7 +842,15 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                "Fn::If": [
+                                    "CreateCloudTrailLogsBucket",
+                                    {
+                                        "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                    },
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${ExistingCloudTrailLogsBucketName}/*"
+                                    }
+                                ]
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -799,13 +875,29 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::GetAtt": [
-                                                "CloudTrailLogsBucket",
-                                                "Arn"
+                                            "Fn::If": [
+                                                "CreateCloudTrailLogsBucket",
+                                                {
+                                                    "Fn::GetAtt": [
+                                                        "CloudTrailLogsBucket",
+                                                        "Arn"
+                                                    ]
+                                                },
+                                                {
+                                                    "Fn::Sub": "arn:aws:s3:::${ExistingCloudTrailLogsBucketName}"
+                                                }
                                             ]
                                         },
                                         {
-                                            "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                            "Fn::If": [
+                                                "CreateCloudTrailLogsBucket",
+                                                {
+                                                    "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                                },
+                                                {
+                                                    "Fn::Sub": "arn:aws:s3:::${ExistingCloudTrailLogsBucketName}/*"
+                                                }
+                                            ]
                                         }
                                     ],
                                     "Condition": {
@@ -833,7 +925,15 @@
                     "Fn::Sub": "SecurityTrail-${Environment}"
                 },
                 "S3BucketName": {
-                    "Ref": "CloudTrailLogsBucket"
+                    "Fn::If": [
+                        "CreateCloudTrailLogsBucket",
+                        {
+                            "Ref": "CloudTrailLogsBucket"
+                        },
+                        {
+                            "Ref": "ExistingCloudTrailLogsBucketName"
+                        }
+                    ]
                 },
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
@@ -1503,6 +1603,7 @@
         },
         "RDSSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "CreateRDSSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
                     "Fn::Sub": "rds-subnet-group-${Environment}"
@@ -1524,7 +1625,9 @@
                         }
                     }
                 ]
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "RDSSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
@@ -1562,7 +1665,9 @@
                         }
                     }
                 ]
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
@@ -1592,7 +1697,15 @@
                     "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
                 },
                 "DBSubnetGroupName": {
-                    "Ref": "RDSSubnetGroup"
+                    "Fn::If": [
+                        "CreateRDSSubnetGroup",
+                        {
+                            "Ref": "RDSSubnetGroup"
+                        },
+                        {
+                            "Ref": "ExistingRDSSubnetGroupName"
+                        }
+                    ]
                 },
                 "VPCSecurityGroups": [
                     {
@@ -1855,7 +1968,15 @@
         "CloudTrailBucketName": {
             "Description": "CloudTrail S3 Bucket Name",
             "Value": {
-                "Ref": "CloudTrailLogsBucket"
+                "Fn::If": [
+                    "CreateCloudTrailLogsBucket",
+                    {
+                        "Ref": "CloudTrailLogsBucket"
+                    },
+                    {
+                        "Ref": "ExistingCloudTrailLogsBucketName"
+                    }
+                ]
             },
             "Export": {
                 "Name": {
