@@ -76,8 +76,8 @@
         },
         "CertificateArn": {
             "Type": "String",
-            "Description": "ARN of the SSL certificate for the load balancer",
-            "Default": ""
+            "Description": "ARN of the SSL certificate for the load balancer. Set to a valid ARN to enable HTTPS. If not set or set to \"use-existing\", HTTPS listener will not be created.",
+            "Default": "use-existing"
         },
         "DBInstanceIdentifier": {
             "Type": "String",
@@ -274,6 +274,34 @@
                     "Ref": "ExistingConfigDeliveryChannelName"
                 },
                 ""
+            ]
+        },
+        "HasValidCertificateArn": {
+            "Fn::And": [
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "CertificateArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "CertificateArn"
+                                },
+                                "use-existing"
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     },
@@ -1681,6 +1709,7 @@
         },
         "HTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasValidCertificateArn",
             "Properties": {
                 "DefaultActions": [
                     {

@@ -67,8 +67,8 @@ Parameters:
 
   CertificateArn:
     Type: String
-    Description: 'ARN of the SSL certificate for the load balancer'
-    Default: ''
+    Description: 'ARN of the SSL certificate for the load balancer. Set to a valid ARN to enable HTTPS. If not set or set to "use-existing", HTTPS listener will not be created.'
+    Default: 'use-existing'
 
   DBInstanceIdentifier:
     Type: String
@@ -141,6 +141,11 @@ Conditions:
     !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
   CreateConfigDeliveryChannel:
     !Equals [!Ref ExistingConfigDeliveryChannelName, '']
+  HasValidCertificateArn:
+    !And [
+      !Not [!Equals [!Ref CertificateArn, '']],
+      !Not [!Equals [!Ref CertificateArn, 'use-existing']],
+    ]
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -922,6 +927,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasValidCertificateArn
     Properties:
       DefaultActions:
         - Type: fixed-response
