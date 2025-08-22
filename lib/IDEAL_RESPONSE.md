@@ -725,8 +725,11 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          yum install -y amazon-cloudwatch-agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Hello from ${Project}</h1>" > /var/www/html/index.html
+          echo "OK" > /var/www/html/health
       Tags:
         - Key: Name
           Value: !Sub '${Project}-${Environment}-ec2-instance'
@@ -797,7 +800,7 @@ Resources:
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs/'
       IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
+      IsMultiRegionTrail: false
       EnableLogFileValidation: true
       KMSKeyId: !Ref SecureKMSKey
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
@@ -810,7 +813,6 @@ Resources:
           Value: !Ref Project
         - Key: Environment
           Value: !Ref Environment
-
 Outputs:
   # Networking
   VPCId:
@@ -994,3 +996,5 @@ Outputs:
     Value: !GetAtt SecureCloudTrail.Arn
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+```
