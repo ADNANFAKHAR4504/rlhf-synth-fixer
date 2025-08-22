@@ -343,37 +343,42 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       `${environment}-alb-logs-bucket-policy`,
       {
         bucket: albLogsBucket.id,
-        policy: albLogsBucket.arn.apply(bucketArn =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:*',
-                Resource: [bucketArn, `${bucketArn}/*`],
-                Condition: {
-                  Bool: {
-                    'aws:SecureTransport': 'false',
+        policy: pulumi
+          .all([albLogsBucket.arn, current])
+          .apply(([bucketArn, currentAccount]: [string, any]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
                   },
                 },
-              },
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'logdelivery.elb.amazonaws.com',
-                },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/AWSLogs/*`,
-                Condition: {
-                  StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'logdelivery.elb.amazonaws.com',
+                  },
+                  Action: ['s3:PutObject', 's3:GetBucketAcl'],
+                  Resource: [
+                    bucketArn,
+                    `${bucketArn}/AWSLogs/${currentAccount.accountId}/*`,
+                  ],
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { parent: this, provider: awsProvider }
     );
