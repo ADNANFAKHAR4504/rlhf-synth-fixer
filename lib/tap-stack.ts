@@ -329,5 +329,12 @@ export class TapStack extends cdk.Stack {
       description: 'EC2 Instance Availability Zone',
       exportName: resourceName('availability-zone'),
     });
+
+    // Output the AWS Region
+    new cdk.CfnOutput(this, 'AWSRegion', {
+      value: this.region,
+      description: 'AWS Region where the stack is deployed',
+      exportName: resourceName('aws-region'),
+    });
   }
 }
