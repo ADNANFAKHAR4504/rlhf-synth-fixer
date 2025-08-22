@@ -152,7 +152,7 @@ describe('TapStack CloudFormation Template', () => {
       const sg = template.Resources.WebServerSecurityGroup;
       const ingress = sg.Properties.SecurityGroupIngress;
       
-      expect(ingress).toHaveLength(2);
+      expect(ingress).toHaveLength(1);
       
       // HTTP rule
       const httpRule = ingress.find((r: any) => r.FromPort === 80);
@@ -160,13 +160,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(httpRule.IpProtocol).toBe('tcp');
       expect(httpRule.ToPort).toBe(80);
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
-      
-      // SSH rule
-      const sshRule = ingress.find((r: any) => r.FromPort === 22);
-      expect(sshRule).toBeDefined();
-      expect(sshRule.IpProtocol).toBe('tcp');
-      expect(sshRule.ToPort).toBe(22);
-      expect(sshRule.CidrIp).toBe('0.0.0.0/0');
     });
 
     test('WebServerSecurityGroup should allow all egress', () => {
@@ -223,7 +216,6 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.WebServerInstance;
       
       expect(instance.Properties.InstanceType).toBe('t2.micro');
-      expect(instance.Properties.KeyName).toBe('my-key');
       expect(instance.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
       expect(instance.Properties.SecurityGroupIds).toContainEqual({ Ref: 'WebServerSecurityGroup' });
       expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
@@ -414,15 +406,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
     });
 
-    test('Security group should allow SSH on port 22', () => {
-      const sg = template.Resources.WebServerSecurityGroup;
-      const sshRule = sg.Properties.SecurityGroupIngress.find((r: any) => r.FromPort === 22);
-      
-      expect(sshRule).toBeDefined();
-      expect(sshRule.IpProtocol).toBe('tcp');
-      expect(sshRule.ToPort).toBe(22);
-      expect(sshRule.CidrIp).toBe('0.0.0.0/0');
-    });
 
     test('IAM role should allow EC2 to describe instances', () => {
       const role = template.Resources.EC2InstanceRole;

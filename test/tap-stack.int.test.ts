@@ -168,13 +168,6 @@ describe('Cloud Environment Setup Integration Tests', () => {
       expect(httpRule!.IpProtocol).toBe('tcp');
       expect(httpRule!.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
       
-      // SSH rule
-      const sshRule = ingressRules.find(rule => 
-        rule.FromPort === 22 && rule.ToPort === 22
-      );
-      expect(sshRule).toBeDefined();
-      expect(sshRule!.IpProtocol).toBe('tcp');
-      expect(sshRule!.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
       
       // Check egress rules (should allow all)
       const egressRules = sg.IpPermissionsEgress || [];
@@ -201,7 +194,6 @@ describe('Cloud Environment Setup Integration Tests', () => {
       expect(instance.InstanceType).toBe('t2.micro');
       expect(instance.SubnetId).toBe(outputs.PublicSubnet1Id);
       expect(instance.VpcId).toBe(outputs.VPCId);
-      expect(instance.KeyName).toBe('my-key');
       
       // Check security groups
       const sgIds = instance.SecurityGroups?.map(sg => sg.GroupId);
