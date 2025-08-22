@@ -48,22 +48,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   
   # Login to Pulumi S3 backend
   pipenv run pulumi-login
-  
-  # Check if stack exists and handle encryption issues
-  STACK_NAME="${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
-  echo "Checking stack: $STACK_NAME"
-  
-  # Try to select the stack, if it fails due to encryption, remove it
-  if ! pipenv run pulumi stack select "$STACK_NAME" 2>/dev/null; then
-    echo "⚠️ Stack access failed, likely due to encryption issues"
-    echo "🔧 Attempting to remove existing encrypted stack..."
-    # Force remove the problematic stack
-    pipenv run pulumi stack rm "$STACK_NAME" --yes --force 2>/dev/null || echo "Stack removal attempted"
-    echo "✅ Stack cleanup completed, deployment will create fresh stack"
-  else
-    echo "✅ Stack accessible, proceeding with existing stack"
-  fi
-  
   echo "✅ Pulumi bootstrap completed"
 
 elif [ "$PLATFORM" = "tf" ]; then
