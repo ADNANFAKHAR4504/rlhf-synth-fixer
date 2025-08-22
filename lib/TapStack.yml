@@ -703,6 +703,33 @@ Resources:
               - Key: Project
                 Value: !Ref Project
 
+  # CloudFormation State Bucket (required by deployment commands)
+  CloudFormationStateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'iac-rlhf-cfn-states-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+        - Key: Purpose
+          Value: CloudFormationState
+
 Conditions:
   IsProd: !Equals [!Ref Environment, prod]
 
@@ -730,6 +757,12 @@ Outputs:
     Value: !Ref DBPasswordSecret
     Export:
       Name: !Sub '${Environment}-rds-secret'
+
+  CloudFormationStateBucketName:
+    Description: CloudFormation state bucket name
+    Value: !Ref CloudFormationStateBucket
+    Export:
+      Name: !Sub '${Environment}-cfn-state-bucket'
 
   KMSKeyId:
     Description: KMS Key ID for encryption

@@ -122,6 +122,7 @@ describe('TapStack CloudFormation Template', () => {
       'CloudTrail',
       'CloudTrailBucket',
       'CloudTrailBucketPolicy',
+      'CloudFormationStateBucket',
       'LaunchTemplate'
     ];
 
@@ -185,14 +186,18 @@ describe('TapStack CloudFormation Template', () => {
     test('S3 buckets should have encryption and public access blocked', () => {
       const appBucket = template.Resources.S3Bucket;
       const logBucket = template.Resources.S3LoggingBucket;
+      const cfnStateBucket = template.Resources.CloudFormationStateBucket;
 
-      [appBucket, logBucket].forEach(bucket => {
+      [appBucket, logBucket, cfnStateBucket].forEach(bucket => {
         expect(bucket.Properties.BucketEncryption).toBeDefined();
         expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
         expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
         expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
         expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
       });
+      
+      // CloudFormation state bucket should have versioning enabled
+      expect(cfnStateBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
     test('RDS database should be encrypted and private', () => {
@@ -277,6 +282,7 @@ describe('TapStack CloudFormation Template', () => {
       'S3BucketName',
       'DatabaseEndpoint',
       'DatabaseSecretArn',
+      'CloudFormationStateBucketName',
       'KMSKeyId',
       'LaunchTemplateId',
       'WebServerSecurityGroupId'
