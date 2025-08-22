@@ -560,7 +560,7 @@ resource "aws_s3_bucket_versioning" "prod_s3_versioning" {
   }
 }
 
-# S3 Bucket for replication (us-east-1)
+# S3 Bucket for replication (us-west-2)
 resource "aws_s3_bucket" "prod_s3_replica" {
   provider = aws.replica
   bucket   = "prod-ha-replica-bucket-${random_id.bucket_suffix.hex}"

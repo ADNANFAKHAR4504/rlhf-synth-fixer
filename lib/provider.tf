@@ -23,5 +23,5 @@ provider "aws" {
 # Replica AWS provider for cross-region S3 replication
 provider "aws" {
   alias  = "replica"
-  region = "us-east-2"
+  region = "us-west-2"
 }
