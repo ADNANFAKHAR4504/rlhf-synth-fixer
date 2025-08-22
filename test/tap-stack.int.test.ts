@@ -2,6 +2,7 @@ import {
   CloudFrontClient,
   GetDistributionCommand,
 } from "@aws-sdk/client-cloudfront";
+import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import {
   DescribeContinuousBackupsCommand,
   DescribeTableCommand,
@@ -60,6 +61,7 @@ const lambda = new LambdaClient({ region });
 const sns = new SNSClient({ region });
 const kms = new KMSClient({ region });
 const cloudfront = new CloudFrontClient({ region });
+const cloudwatch = new CloudWatchClient({ region });
 
 // Load CloudFormation flat outputs
 const outputs: Record<string, string> = JSON.parse(

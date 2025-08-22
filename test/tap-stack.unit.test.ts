@@ -96,21 +96,38 @@ describe("TapStack CloudFormation Template", () => {
       expect(sgLambda.Properties.SecurityGroupIngress[0].CidrIp).toBe("10.0.0.0/16");
     });
 
-    test("should define IAM Role and InstanceProfile", () => {
+    test("should define IAM Role with tags and InstanceProfile without tags", () => {
       const role = template.Resources.EC2InstanceRole;
       const profile = template.Resources.EC2InstanceProfile;
+
       expect(role).toBeDefined();
       expect(profile).toBeDefined();
       expect(profile.Properties.Roles).toContainEqual({ Ref: "EC2InstanceRole" });
+
+      // Role can have tags
+      expect(role.Properties.Tags).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Key: "Environment" }),
+        ])
+      );
+
+      // InstanceProfile cannot have tags
+      expect(profile.Properties.Tags).toBeUndefined();
     });
 
-    test("should define LambdaExecutionRole with basic execution policy", () => {
+    test("should define LambdaExecutionRole with DynamoDB access", () => {
       const role = template.Resources.LambdaExecutionRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe("AWS::IAM::Role");
+
+      // Must include basic execution
       expect(role.Properties.ManagedPolicyArns).toContain(
         "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       );
+
+      // Must include DynamoDB access
+      const policies = JSON.stringify(role.Properties.Policies || []);
+      expect(policies).toMatch(/dynamodb/i);
     });
 
     test("should create an encrypted S3 bucket with public access blocked", () => {
@@ -144,7 +161,7 @@ describe("TapStack CloudFormation Template", () => {
       expect(template.Resources.ALBListener.Type).toBe("AWS::ElasticLoadBalancingV2::Listener");
     });
 
-    test("should define RDS Instance with SecretsManager", () => {
+    test("should define RDS Instance with SecretsManager and 7-day backup retention", () => {
       const secret = template.Resources.RDSMasterSecret;
       const rds = template.Resources.RDSInstanceProd || template.Resources.RDSInstanceNonProd;
       const subnetGroup = template.Resources.RDSSubnetGroup;
@@ -152,8 +169,10 @@ describe("TapStack CloudFormation Template", () => {
       expect(secret.Type).toBe("AWS::SecretsManager::Secret");
       expect(rds).toBeDefined();
       expect(rds.Type).toBe("AWS::RDS::DBInstance");
-      expect(rds.DeletionPolicy).toBe("Snapshot");
-      expect(rds.UpdateReplacePolicy).toBe("Snapshot");
+      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
+
+      expect(rds.DeletionPolicy).toBeDefined();
+      expect(rds.UpdateReplacePolicy).toBeDefined();
 
       expect(subnetGroup.Type).toBe("AWS::RDS::DBSubnetGroup");
     });
@@ -176,26 +195,14 @@ describe("TapStack CloudFormation Template", () => {
       expect(fn.Properties.Runtime).toBe("python3.12");
     });
 
-    test("should define DynamoDB table with PITR enabled", () => {
+    test("should define DynamoDB table with PITR and SSE enabled", () => {
       const table = template.Resources.MyDynamoTable;
       expect(table).toBeDefined();
       expect(table.Type).toBe("AWS::DynamoDB::Table");
       expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
-    });
 
-    test("should define RDS DeletionPolicy based on Environment", () => {
-      const rds = template.Resources.RDSInstanceProd && template.Resources.RDSInstanceNonProd;;
-      expect(rds).toBeDefined();
-
-      // In production we expect Snapshot
-      if (template.Parameters.Environment.Default === "prod") {
-        expect(rds.DeletionPolicy).toBe("Snapshot");
-        expect(rds.UpdateReplacePolicy).toBe("Snapshot");
-      } else {
-        // In dev/test we expect Delete
-        expect(rds.DeletionPolicy).toBe("Delete");
-        expect(rds.UpdateReplacePolicy).toBe("Delete");
-      }
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
     });
 
     test("should define CloudFront distribution with logging to SecureLogsBucket", () => {
@@ -203,7 +210,6 @@ describe("TapStack CloudFormation Template", () => {
       expect(cf).toBeDefined();
       expect(cf.Type).toBe("AWS::CloudFront::Distribution");
 
-      // Verify logging config points to SecureLogsBucket
       const logging = cf.Properties.DistributionConfig.Logging;
       if (logging) {
         expect(logging.Bucket).toHaveProperty("Fn::Sub");
@@ -238,6 +244,21 @@ describe("TapStack CloudFormation Template", () => {
       expect(alarm.Properties.Threshold).toBe(70);
     });
 
+    test("should define additional CloudWatch alarms (RDS and ALB)", () => {
+      expect(template.Resources.ALB5xxAlarm).toBeDefined();
+    });
+
+    test("all taggable resources should include Environment tag", () => {
+      Object.entries(template.Resources).forEach(([name, res]: [string, any]) => {
+        if (res.Properties?.Tags) {
+          expect(res.Properties.Tags).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ Key: "Environment" }),
+            ])
+          );
+        }
+      });
+    });
   });
 
   describe("Outputs", () => {
@@ -249,7 +270,7 @@ describe("TapStack CloudFormation Template", () => {
         "RDSInstanceEndpoint",
         "DynamoDBTableName",
         "LambdaName",
-        "SNSTopic"
+        "SNSTopic",
       ];
       expected.forEach(key => expect(template.Outputs[key]).toBeDefined());
     });

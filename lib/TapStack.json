@@ -389,7 +389,7 @@
         "ALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Allow HTTPS from internet",
+                "GroupDescription": "Allow HTTP from internet",
                 "VpcId": {
                     "Ref": "VPC"
                 },
@@ -420,7 +420,7 @@
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Allow 443 from ALB",
+                "GroupDescription": "Allow 80 from ALB",
                 "VpcId": {
                     "Ref": "VPC"
                 },
@@ -598,6 +598,40 @@
                                     "Resource": {
                                         "Fn::Sub": "${SecureLogsBucket.Arn}/lambda-logs/*"
                                     }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "lambda-dynamodb-access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "DynamoDBRWTable",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:BatchWriteItem",
+                                        "dynamodb:BatchGetItem",
+                                        "dynamodb:DescribeTable"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "MyDynamoTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${MyDynamoTable.Arn}/index/*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -891,6 +925,7 @@
                     "Ref": "RDSSubnetGroup"
                 },
                 "DeletionProtection": true,
+                "BackupRetentionPeriod": 7,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -949,6 +984,7 @@
                     "Ref": "RDSSubnetGroup"
                 },
                 "DeletionProtection": false,
+                "BackupRetentionPeriod": 7,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -984,6 +1020,151 @@
                 "EvaluationPeriods": 2,
                 "Threshold": 70,
                 "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALB5xxAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "High ALB target 5xx errors",
+                "Namespace": "AWS/ApplicationELB",
+                "MetricName": "HTTPCode_Target_5XX_Count",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "Lambda function has errors",
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "MyLambdaFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSFreeStorageAlarmProd": {
+            "Condition": "IsProd",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "RDS free storage low (prod)",
+                "Namespace": "AWS/RDS",
+                "MetricName": "FreeStorageSpace",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstanceProd"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 2000000000,
+                "ComparisonOperator": "LessThanThreshold",
+                "TreatMissingData": "missing",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSFreeStorageAlarmNonProd": {
+            "Condition": "IsNotProd",
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": "RDS free storage low (nonprod)",
+                "Namespace": "AWS/RDS",
+                "MetricName": "FreeStorageSpace",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstanceNonProd"
+                        }
+                    }
+                ],
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 2000000000,
+                "ComparisonOperator": "LessThanThreshold",
+                "TreatMissingData": "missing",
                 "AlarmActions": [
                     {
                         "Ref": "NotificationTopic"
@@ -1117,6 +1298,11 @@
                 "PointInTimeRecoverySpecification": {
                     "PointInTimeRecoveryEnabled": true
                 },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": "alias/aws/dynamodb"
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -1148,8 +1334,8 @@
                                 ]
                             },
                             "CustomOriginConfig": {
-                                "OriginProtocolPolicy": "https-only",
-                                "HTTPSPort": 443,
+                                "OriginProtocolPolicy": "http-only",
+                                "HTTPPort": 80,
                                 "OriginSSLProtocols": [
                                     "TLSv1.2"
                                 ]
