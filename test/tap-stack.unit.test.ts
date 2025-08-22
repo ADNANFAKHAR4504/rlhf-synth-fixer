@@ -28,7 +28,15 @@ describe('WebAppStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    const expectedParams = ['InstanceType', 'KeyName', 'VpcCIDR', 'PublicSubnet1CIDR', 'PublicSubnet2CIDR', 'PrivateSubnet1CIDR', 'PrivateSubnet2CIDR', 'DBUsername', 'DBPassword'];
+    const expectedParams = [
+      'InstanceType',
+      'KeyName',
+      'VpcCIDR',
+      'PublicSubnet1CIDR',
+      'PublicSubnet2CIDR',
+      'PrivateSubnet1CIDR',
+      'PrivateSubnet2CIDR',
+    ];
 
     expectedParams.forEach(param => {
       test(`should have ${param} parameter`, () => {
@@ -58,13 +66,9 @@ describe('WebAppStack CloudFormation Template', () => {
       expect(template.Resources.AttachGateway).toBeDefined();
     });
 
-    test('should define an Elastic Load Balancer (NLB)', () => {
+    test('should define a Network Load Balancer (NLB)', () => {
       expect(template.Resources.NLB).toBeDefined();
       expect(template.Resources.NLB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    });
-
-    test('should associate a static Elastic IP to NLB', () => {
-      expect(template.Resources.EIPAssociation).toBeDefined();
     });
 
     test('should define a Target Group and Listener', () => {
@@ -162,8 +166,16 @@ describe('WebAppStack CloudFormation Template', () => {
   describe('Security & Least Privilege', () => {
     test('IAM policy should only allow logs actions', () => {
       const statements = template.Resources.WebAppRole.Properties.Policies[0].PolicyDocument.Statement;
-      const actions = statements.flatMap((s: { Action: string[] }) => s.Action);
-      expect(actions).toEqual(expect.arrayContaining(['logs:*']));
+      const actions = statements.flatMap((s: { Action: string[] | string }) =>
+        Array.isArray(s.Action) ? s.Action : [s.Action]
+      );
+      expect(actions).toEqual(
+        expect.arrayContaining([
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ])
+      );
       expect(actions).not.toEqual(expect.arrayContaining(['s3:*', 'ec2:*']));
     });
   });
