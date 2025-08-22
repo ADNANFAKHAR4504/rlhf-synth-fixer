@@ -29,6 +29,8 @@
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
     "test:integration-js": "jest --testPathPattern=\\.int\\.test\\.mjs$ --testTimeout=30000",
     "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000 --setupFilesAfterEnv=./test/setup.js",
+    "test:e2e": "jest --testPathPattern=\\.e2e\\.test\\.mjs$ --testTimeout=60000",
+    "test:all": "npm run test:unit-js && npm run test:integration-js && npm run test:e2e",
     "cdk": "cdk",
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
