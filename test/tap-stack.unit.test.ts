@@ -248,7 +248,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(db.Type).toBe('AWS::RDS::DBInstance');
       expect(db.DeletionPolicy).toBe('Snapshot');
       expect(db.Properties.Engine).toBe('mysql');
-      expect(db.Properties.EngineVersion).toBe('8.0.35');
+      expect(db.Properties.EngineVersion).toBe('8.0.42');
       expect(db.Properties.MultiAZ).toBe(true);
     });
 

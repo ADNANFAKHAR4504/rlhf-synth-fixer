@@ -662,7 +662,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${BackupBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${BackupBucket}/*"
                                     }
                                 },
                                 {
@@ -671,7 +671,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "BackupBucket"
+                                        "Fn::Sub": "arn:aws:s3:::${BackupBucket}"
                                     }
                                 }
                             ]
@@ -909,7 +909,7 @@
                     "Ref": "DBInstanceClass"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.42",
                 "AllocatedStorage": 100,
                 "StorageType": "gp3",
                 "StorageEncrypted": true,
