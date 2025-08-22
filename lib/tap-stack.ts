@@ -1,6 +1,6 @@
 /**
  * Main TapStack - Orchestrates all infrastructure components
- * FIXED VERSION: Addresses AZ conflicts and deployment issues
+ Addresses AZ conflicts and deployment issues
  */
 
 import * as pulumi from '@pulumi/pulumi';
