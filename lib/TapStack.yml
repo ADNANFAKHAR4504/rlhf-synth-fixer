@@ -571,7 +571,10 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-public-instance-${EnvironmentSuffix}"
+            Value:
+              Fn::Join:
+                - "-"
+                - [ !Ref AWS::StackName, "public-instance", !Ref EnvironmentSuffix ]
         - Key: Environment
           Value: !Ref Environment
 
@@ -595,7 +598,10 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default -s
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-private-instance-${EnvironmentSuffix}"
+            Value:
+              Fn::Join:
+                - "-"
+                - [ !Ref AWS::StackName, "private-instance", !Ref EnvironmentSuffix ]
         - Key: Environment
           Value: !Ref Environment
 
@@ -655,12 +661,7 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - [
-              { "Ref": "AWS::StackName" },
-              "secure-bucket",
-              { "Ref": "EnvironmentSuffix" },
-              { "Ref": "AWS::AccountId" },
-            ]
+          - ["secure", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
