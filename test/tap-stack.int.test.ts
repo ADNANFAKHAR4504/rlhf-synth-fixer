@@ -332,7 +332,7 @@ describe('Task Management Application Integration Tests', () => {
       });
       
       // API Gateway should handle CORS preflight
-      expect(response.status).toBeOneOf([200, 204]);
+      expect(response.status === 200 || response.status === 204).toBe(true);
       const corsHeaders = response.headers.get('access-control-allow-origin');
       expect(corsHeaders).toBeDefined();
     });
