@@ -11,7 +11,7 @@
     "Security Configuration",
     "General Infrastructure Tooling QA",
     "IaC Optimization",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "Access Control",
     "Monitoring Setup",
@@ -33,5 +33,11 @@
     "Route Tables",
     "Security Groups",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
