@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_rds as rds,
     aws_cloudwatch as cloudwatch,
     aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
     aws_route53 as route53,
     aws_route53_targets as route53_targets,
     CfnOutput,
@@ -300,7 +301,7 @@ class TapStack(Stack):
         distribution = cloudfront.Distribution(
             self, f'CloudFront-{self.env_name}-{self.region_code}',
             default_behavior=cloudfront.BehaviorOptions(
-                origin=cloudfront.LoadBalancerV2Origin(self.alb),
+                origin=origins.LoadBalancerV2Origin(self.alb),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
                 cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS
