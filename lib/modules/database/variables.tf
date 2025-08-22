@@ -9,25 +9,25 @@ variable "region" {
 }
 
 variable "private_subnet_ids" {
-  description = "Private subnet IDs"
+  description = "Private subnet IDs for RDS"
   type        = list(string)
 }
 
 variable "database_security_group_id" {
-  description = "Database security group ID"
+  description = "Security group ID for RDS"
   type        = string
 }
 
-variable "is_primary" {
-  description = "Whether this is the primary database"
-  type        = bool
-  default     = false
+variable "database_name" {
+  description = "Database name"
+  type        = string
+  default     = "appdb"
 }
 
-variable "source_db_identifier" {
-  description = "Source database identifier for read replica"
+variable "database_username" {
+  description = "Database username"
   type        = string
-  default     = null
+  default     = "dbadmin"
 }
 
 variable "db_instance_class" {
@@ -48,22 +48,26 @@ variable "max_allocated_storage" {
   default     = 100
 }
 
-variable "database_name" {
-  description = "Database name"
-  type        = string
-  default     = "appdb"
+variable "is_primary" {
+  description = "Whether this is a primary database instance"
+  type        = bool
+  default     = true
 }
 
-variable "database_username" {
-  description = "Database username"
+variable "source_db_identifier" {
+  description = "Source database identifier for read replicas"
   type        = string
-  default     = "dbadmin"
+  default     = ""
 }
-
-
 
 variable "common_tags" {
   description = "Common tags"
   type        = map(string)
   default     = {}
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for database encryption"
+  type        = string
+  default     = ""
 }

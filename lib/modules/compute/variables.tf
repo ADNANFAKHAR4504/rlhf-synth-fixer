@@ -68,3 +68,15 @@ variable "common_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "use_spot_instances" {
+  description = "Whether to use spot instances in the Auto Scaling Group"
+  type        = bool
+  default     = true
+}
+
+variable "spot_allocation_strategy" {
+  description = "Spot allocation strategy (capacity-optimized, lowest-price, diversified)"
+  type        = string
+  default     = "capacity-optimized"
+}
