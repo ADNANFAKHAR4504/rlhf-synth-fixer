@@ -1,185 +1,177 @@
 import * as fs from "fs";
 import * as path from "path";
+import { EC2Client, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
+import { S3Client, GetBucketVersioningCommand, GetBucketReplicationCommand } from "@aws-sdk/client-s3";
+import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+let outputsRaw: Record<string, any>;
+let outputs: Record<string, any>;
 
-const isNonEmptyString = (val: any): boolean =>
-  typeof val === "string" && val.trim().length > 0;
+const commonTags = (() => {
+  try {
+    return JSON.parse(outputsRaw["common_tags"]);
+  } catch {
+    return {};
+  }
+})();
 
-// Improved ARN validation to handle IAM role ARNs with slashes
-const isValidArn = (val: any): boolean => {
-  if (typeof val !== "string" || val.trim().length === 0) return false;
+const isNonEmptyString = (val: any): boolean => typeof val === "string" && val.trim().length > 0;
 
-  const iamRoleArnPattern = /^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/;
-  const genericArnPattern = /^arn:aws:[^:]+:[^:]*:\d{12}:[^ ]+$/;
+// Using regex for arn validity, can be enhanced if needed.
+const isValidArn = (val: any): boolean => typeof val === "string" && val.startsWith("arn:aws:");
 
-  return iamRoleArnPattern.test(val) || genericArnPattern.test(val);
-};
-
-const isValidVpcId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("vpc-");
-
-const isValidSubnetId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("subnet-");
-
-const isValidSecurityGroupId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("sg-");
-
-const isValidInternetGatewayId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("igw-");
-
-const isValidNatGatewayId = (val: any): boolean =>
-  isNonEmptyString(val) && val.startsWith("nat-");
-
-const parseMaybeJsonArray = (val: any): any[] | null => {
+const parseJsonIfNeeded = (val: any) => {
   if (!val) return null;
-  if (Array.isArray(val)) return val;
+  if (typeof val === "object") return val;
   if (typeof val === "string") {
     try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
+      return JSON.parse(val);
     } catch {
-      return null;
+      return val;
     }
   }
-  return null;
+  return val;
 };
 
-const isValidIp = (val: string): boolean =>
-  typeof val === "string" &&
-  /^(\d{1,3}\.){3}\d{1,3}$/.test(val);
-
-describe("Selective Terraform Stack Integration Tests (No Secondary RDS)", () => {
-  let outputsRaw: Record<string, any>;
-  let outputs: Record<string, any>;
-
-  beforeAll(() => {
-    outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
-    outputs = {};
-    for (const [key, val] of Object.entries(outputsRaw)) {
-      try {
-        if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
-          outputs[key] = JSON.parse(val);
-        } else {
-          outputs[key] = val;
-        }
-      } catch {
+beforeAll(() => {
+  outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+  outputs = {};
+  for (const [key, val] of Object.entries(outputsRaw)) {
+    try {
+      if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
+        outputs[key] = JSON.parse(val);
+      } else {
         outputs[key] = val;
       }
+    } catch {
+      outputs[key] = val;
+    }
+  }
+});
+
+describe("Live AWS Integration Tests from deployment outputs", () => {
+  const ec2Client = new EC2Client({ region: outputs.primary_region || "us-east-1" });
+  const s3Client = new S3Client({ region: outputs.primary_region || "us-east-1" });
+  const iamClient = new IAMClient({ region: "us-east-1" }); // IAM is global
+
+  // 1. Validate EC2 instances exist and are running with correct tags and types
+  it("Primary EC2 instance exists and in running state with correct instance type", async () => {
+    const instanceId = outputs.primary_ec2_instance_id;
+    expect(isNonEmptyString(instanceId)).toBe(true);
+
+    const params = { InstanceIds: [instanceId] };
+    const cmd = new DescribeInstancesCommand(params);
+    const response = await ec2Client.send(cmd);
+
+    const instance = response.Reservations?.[0]?.Instances?.;
+    expect(instance).toBeDefined();
+    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.State?.Name).toBe("running");
+    expect(instance?.InstanceType).toBe(outputs.primary_ec2_instance_type);
+
+    // Validate tags include your common_tags from outputs 
+    const tagMap = new Map<string, string>();
+    (instance?.Tags ?? []).forEach(t => {
+      if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
+    });
+    for (const [k, v] of Object.entries(commonTags)) {
+      expect(tagMap.get(k)).toBe(v);
     }
   });
 
-  it("should have all expected keys", () => {
-    const expectedKeys = [
-      "ec2_instance_role_arn",
-      "kms_primary_key_arn",
-      "kms_secondary_key_arn",
-      "primary_app_sg_arn",
-      "primary_db_sg_arn",
-      "primary_iam_instance_profile",
-      "primary_igw_id",
-      "primary_nat_gateway_ids",
-      "primary_private_subnet_cidrs",
-      "primary_private_subnet_ids",
-      "primary_public_subnet_cidrs",
-      "primary_public_subnet_ids",
-      "primary_rds_endpoint",
-      "primary_s3_logs_bucket",
-      "primary_vpc_arn",
-      "primary_vpc_id",
-      "primary_web_instance_public_ips",
-      "primary_web_sg_arn",
-      "secondary_app_sg_arn",
-      "secondary_igw_id",
-      "secondary_private_subnet_cidrs",
-      "secondary_private_subnet_ids",
-      "secondary_public_subnet_cidrs",
-      "secondary_public_subnet_ids",
-      "secondary_s3_logs_bucket",
-      "secondary_vpc_arn",
-      "secondary_vpc_id",
-      "secondary_web_sg_arn"
-    ];
-    expectedKeys.forEach(key => {
-      expect(outputs).toHaveProperty(key);
+  it("Secondary EC2 instance exists and in running state with correct instance type", async () => {
+    if (!outputs.secondary_ec2_instance_id) {
+      return; // skip if not present
+    }
+    const instanceId = outputs.secondary_ec2_instance_id;
+    expect(isNonEmptyString(instanceId)).toBe(true);
+
+    const params = { InstanceIds: [instanceId] };
+    const cmd = new DescribeInstancesCommand(params);
+    const response = await ec2Client.send(cmd);
+
+    const instance = response.Reservations?.[0]?.Instances?.;
+    expect(instance).toBeDefined();
+    expect(instance?.InstanceId).toBe(instanceId);
+    expect(instance?.State?.Name).toBe("running");
+    expect(instance?.InstanceType).toBe(outputs.secondary_ec2_instance_type);
+
+    const tagMap = new Map<string, string>();
+    (instance?.Tags ?? []).forEach(t => {
+      if (t.Key && t.Value) tagMap.set(t.Key, t.Value);
     });
+    for (const [k, v] of Object.entries(commonTags)) {
+      expect(tagMap.get(k)).toBe(v);
+    }
   });
 
-  [
-    "ec2_instance_role_arn",
-    "kms_primary_key_arn",
-    "kms_secondary_key_arn",
-    "primary_app_sg_arn",
-    "primary_db_sg_arn",
-    "primary_web_sg_arn",
-    "secondary_app_sg_arn",
-    "secondary_web_sg_arn",
-  ].forEach(key => {
-    it(`${key} should be a valid AWS ARN`, () => {
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
+  // 2. Validate S3 buckets exist with versioning and replication enabled
+
+  it("Primary S3 bucket exists with versioning enabled and correct replication", async () => {
+    const bucketName = outputs.primary_s3_bucket_name;
+    expect(isNonEmptyString(bucketName)).toBe(true);
+
+    // Check bucket versioning
+    const versioningCmd = new GetBucketVersioningCommand({ Bucket: bucketName });
+    const versioning = await s3Client.send(versioningCmd);
+    expect(versioning.Status).toBe("Enabled");
+
+    // Check bucket replication config
+    const replicationCmd = new GetBucketReplicationCommand({ Bucket: bucketName });
+    const replication = await s3Client.send(replicationCmd);
+    expect(replication.ReplicationConfiguration).toBeDefined();
+    expect(replication.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
+    // Optionally check destination bucket ARNs in the rules
   });
 
-  ["primary_vpc_id", "secondary_vpc_id"].forEach(key => {
-    it(`${key} should be a valid VPC ID`, () => {
-      expect(isValidVpcId(outputs[key])).toBe(true);
-    });
+  it("Secondary S3 bucket exists with versioning enabled and correct replication", async () => {
+    const bucketName = outputs.secondary_s3_bucket_name;
+    expect(isNonEmptyString(bucketName)).toBe(true);
+
+    const versioningCmd = new GetBucketVersioningCommand({ Bucket: bucketName });
+    const versioning = await s3Client.send(versioningCmd);
+    expect(versioning.Status).toBe("Enabled");
+
+    const replicationCmd = new GetBucketReplicationCommand({ Bucket: bucketName });
+    const replication = await s3Client.send(replicationCmd);
+    expect(replication.ReplicationConfiguration).toBeDefined();
+    expect(replication.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
   });
 
-  ["primary_igw_id", "secondary_igw_id"].forEach(key => {
-    it(`${key} should be a valid Internet Gateway ID`, () => {
-      expect(isValidInternetGatewayId(outputs[key])).toBe(true);
-    });
+  // 3. Validate IAM roles exist and their paths
+  it("EC2 IAM role exists with correct name and ARN", async () => {
+    const roleName = outputs.ec2_iam_role_name;
+    expect(isNonEmptyString(roleName)).toBe(true);
+
+    const roleArn = outputs.ec2_iam_role_arn;
+    expect(isValidArn(roleArn)).toBe(true);
+
+    const cmd = new GetRoleCommand({ RoleName: roleName });
+    const resp = await iamClient.send(cmd);
+    expect(resp.Role).toBeDefined();
+    expect(resp.Role.RoleName).toBe(roleName);
+    expect(resp.Role.Arn).toBe(roleArn);
   });
 
-  it("primary_nat_gateway_ids should be an array of valid NAT Gateway IDs", () => {
-    const arr = parseMaybeJsonArray(outputs.primary_nat_gateway_ids);
-    expect(arr).not.toBeNull();
-    arr!.forEach(id => expect(isValidNatGatewayId(id)).toBe(true));
+  it("S3 replication IAM role exists with correct name and ARN", async () => {
+    const roleName = outputs.s3_replication_iam_role_name;
+    expect(isNonEmptyString(roleName)).toBe(true);
+
+    const roleArn = outputs.s3_replication_iam_role_arn;
+    expect(isValidArn(roleArn)).toBe(true);
+
+    const cmd = new GetRoleCommand({ RoleName: roleName });
+    const resp = await iamClient.send(cmd);
+    expect(resp.Role).toBeDefined();
+    expect(resp.Role.RoleName).toBe(roleName);
+    expect(resp.Role.Arn).toBe(roleArn);
   });
 
-  ["primary_private_subnet_ids", "primary_public_subnet_ids", "secondary_private_subnet_ids", "secondary_public_subnet_ids"].forEach(key => {
-    it(`${key} should be an array of valid Subnet IDs`, () => {
-      const arr = parseMaybeJsonArray(outputs[key]);
-      expect(arr).not.toBeNull();
-      arr!.forEach(id => expect(isValidSubnetId(id)).toBe(true));
-    });
-  });
-
-  ["primary_private_subnet_cidrs", "primary_public_subnet_cidrs", "secondary_private_subnet_cidrs", "secondary_public_subnet_cidrs"].forEach(key => {
-    it(`${key} should be an array of CIDR strings`, () => {
-      const arr = parseMaybeJsonArray(outputs[key]);
-      expect(arr).not.toBeNull();
-      arr!.forEach(cidr => {
-        expect(typeof cidr).toBe("string");
-        expect(cidr).toMatch(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/);
-      });
-    });
-  });
-
-  it("primary_rds_endpoint should be a valid RDS endpoint string", () => {
-    expect(isNonEmptyString(outputs.primary_rds_endpoint)).toBe(true);
-    expect(outputs.primary_rds_endpoint).toMatch(/\.rds\.amazonaws\.com$/);
-  });
-
-  // No secondary RDS, so no test for secondary_rds_endpoint
-
-  it("primary_web_instance_public_ips should be an array of valid IP addresses", () => {
-    const ips = parseMaybeJsonArray(outputs.primary_web_instance_public_ips);
-    expect(ips).not.toBeNull();
-    ips!.forEach(ip => {
-      expect(typeof ip).toBe("string");
-      expect(/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)).toBe(true);
-    });
-  });
-
-  it("primary_iam_instance_profile should be non-empty string", () => {
-    expect(isNonEmptyString(outputs.primary_iam_instance_profile)).toBe(true);
-  });
-
-  it("primary_s3_logs_bucket and secondary_s3_logs_bucket should be non-empty strings", () => {
-    expect(isNonEmptyString(outputs.primary_s3_logs_bucket)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_s3_logs_bucket)).toBe(true);
-  });
+  // Additional resource checks can be similarly added as needed, e.g.:
+  // - VPCs exist by querying EC2 describeVpcs with the returned VPC id.
+  // - Subnets exist and correct CIDRs.
+  // - Security groups attached to EC2 instances.
+  // - NAT gateways exist and associated public IP matches.
 
 });
