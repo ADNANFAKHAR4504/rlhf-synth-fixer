@@ -5,7 +5,8 @@
 variable "allowed_ssh_cidr" {
   description = "CIDR blocks allowed for SSH access to public EC2 instances"
   type        = list(string)
-  default     = ["203.0.113.0/32"] # TODO: Set to your trusted office VPN/public IP. Do NOT use broad CIDRs in production.
+  # PRODUCTION: Replace with your trusted office VPN or bastion host CIDR, e.g., 10.0.0.0/24
+  default     = ["10.0.0.0/24"] # Example: office VPN/private network. Do NOT use public IPs in production.
 }
 
 # Security Group for Public EC2 (bastion hosts) - Primary

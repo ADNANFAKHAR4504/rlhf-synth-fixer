@@ -2,8 +2,6 @@
 # KMS Keys for Encryption at Rest (Primary, Secondary, and CloudTrail)
 ########################
 
-# data "aws_caller_identity" "current" {}
-
 resource "aws_kms_key" "primary" {
   provider                = aws.primary
   description             = "${var.name_prefix}-${var.environment}-kms-key-primary"
