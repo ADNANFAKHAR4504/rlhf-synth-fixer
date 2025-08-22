@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import path from "path";
 import dns from "dns";
 import AWS from "aws-sdk";
+import yaml from 'js-yaml'
 
 // Read AWS region from ../lib/AWS_REGION file
 const awsRegionFile = path.resolve(__dirname, "../lib/AWS_REGION");
@@ -13,11 +14,14 @@ const outputs = JSON.parse(
   fs.readFileSync("cfn-outputs/flat-outputs.json", "utf8")
 );
 
-const templatePath = path.resolve(__dirname, '../lib/TapStack.json');
-if (!fs.existsSync(templatePath)) {
-  throw new Error(`CloudFormation template not found at ${templatePath}`);
+const templatePathYaml = path.resolve(__dirname, '../lib/TapStack.yml');
+
+let template;
+if (fs.existsSync(templatePathYaml)) {
+  template = yaml.load(fs.readFileSync(templatePathYaml, 'utf8'));
+} else {
+  throw new Error('CloudFormation template not found in JSON or YAML format.');
 }
-const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
