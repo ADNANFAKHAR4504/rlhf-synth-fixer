@@ -329,7 +329,7 @@ describe('TapStack Integration Tests', () => {
       expect(asg.MinSize).toBe(1);
       expect(asg.MaxSize).toBe(10);
       expect(asg.DesiredCapacity).toBe(1);
-      expect(asg.HealthCheckType).toBe('ELB');
+      expect(asg.HealthCheckType).toBe('EC2');
       expect(asg.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
     });
 
