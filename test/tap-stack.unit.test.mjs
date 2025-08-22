@@ -222,8 +222,8 @@ describe("TapStack Structure", () => {
           ingress: expect.arrayContaining([
             expect.objectContaining({
               protocol: "tcp",
-              fromPort: 3000,
-              toPort: 3000
+              fromPort: 80,
+              toPort: 80
             })
           ])
         }),
@@ -253,12 +253,12 @@ describe("TapStack Structure", () => {
       expect(aws.lb.TargetGroup).toHaveBeenCalledWith(
         "tg-test",
         expect.objectContaining({
-          port: 3000,
+          port: 80,
           protocol: "HTTP",
           targetType: "ip",
           healthCheck: expect.objectContaining({
             enabled: true,
-            path: "/health",
+            path: "/",
             interval: 30,
             timeout: 5
           })

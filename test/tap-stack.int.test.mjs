@@ -23,13 +23,13 @@ const ecrClient = new ECRClient({ region: 'us-west-2' });
 describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
   describe('VPC and Networking', () => {
     test('VPC should exist and be available', async () => {
-      if (!outputs.VPCId) {
+      if (!outputs.vpcId) {
         console.log('Skipping VPC test - no VPC ID in outputs');
         return;
       }
 
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.vpcId]
       });
 
       const response = await ec2Client.send(command);
@@ -40,13 +40,13 @@ describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
 
   describe('ECS Cluster', () => {
     test('ECS cluster should exist and be active', async () => {
-      if (!outputs.ECSClusterName) {
+      if (!outputs.ecsClusterName) {
         console.log('Skipping ECS cluster test - no cluster name in outputs');
         return;
       }
 
       const command = new DescribeClustersCommand({
-        clusters: [outputs.ECSClusterName]
+        clusters: [outputs.ecsClusterName]
       });
 
       const response = await ecsClient.send(command);
@@ -66,15 +66,15 @@ describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
 
   describe('ECS Service', () => {
     test('ECS service should be properly configured', async () => {
-      if (!outputs.ECSClusterName || !outputs.ECSServiceName) {
+      if (!outputs.ecsClusterName || !outputs.ecsServiceName) {
         console.log('Skipping ECS service test - missing outputs');
         return;
       }
 
       try {
         const command = new DescribeServicesCommand({
-          cluster: outputs.ECSClusterName,
-          services: [outputs.ECSServiceName]
+          cluster: outputs.ecsClusterName,
+          services: [outputs.ecsServiceName]
         });
 
         const response = await ecsClient.send(command);
@@ -93,13 +93,13 @@ describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
 
   describe('ECR Repository', () => {
     test('ECR repository should exist', async () => {
-      if (!outputs.ECRRepositoryUrl) {
+      if (!outputs.ecrRepositoryUrl) {
         console.log('Skipping ECR test - no repository URL in outputs');
         return;
       }
 
       // Extract repository name from URL
-      const repoName = outputs.ECRRepositoryUrl.split('/').pop();
+      const repoName = outputs.ecrRepositoryUrl.split('/').pop();
       
       const command = new DescribeRepositoriesCommand({
         repositoryNames: [repoName]
@@ -107,23 +107,26 @@ describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
 
       const response = await ecrClient.send(command);
       expect(response.repositories).toHaveLength(1);
-      expect(response.repositories[0].repositoryUri).toBe(outputs.ECRRepositoryUrl);
+      expect(response.repositories[0].repositoryUri).toBe(outputs.ecrRepositoryUrl);
     });
   });
 
   describe('CloudWatch Logs', () => {
     test('Log group should exist', async () => {
-      if (!outputs.LogGroupName) {
-        console.log('Skipping CloudWatch Logs test - no log group name in outputs');
+      // Derive log group name from ECS cluster name since it's not in outputs
+      if (!outputs.ecsClusterName) {
+        console.log('Skipping CloudWatch Logs test - no cluster name to derive log group');
         return;
       }
 
+      const expectedLogGroupName = `/ecs/ci-cd-pipeline-dev`;
+      
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: outputs.LogGroupName
+        logGroupNamePrefix: expectedLogGroupName
       });
 
       const response = await logsClient.send(command);
-      const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.LogGroupName);
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === expectedLogGroupName);
       
       expect(logGroup).toBeDefined();
       if (logGroup) {
@@ -135,16 +138,16 @@ describe('CI/CD Pipeline with AWS Fargate - Integration Tests', () => {
   describe('Infrastructure Health Check', () => {
     test('All critical resources should be deployed', () => {
       const criticalResources = [
-        'ECSClusterName',
-        'ECRRepositoryUrl',
-        'LogGroupName'
+        'ecsClusterName',
+        'ecrRepositoryUrl',
+        'vpcId'
       ];
 
       const deployedResources = criticalResources.filter(resource => outputs[resource]);
       
       // At least some core resources should be present
       expect(deployedResources.length).toBeGreaterThan(0);
-      expect(outputs.ECSClusterName).toBeDefined();
+      expect(outputs.ecsClusterName).toBeDefined();
     });
   });
 });
