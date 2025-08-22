@@ -122,10 +122,9 @@ describe('TapStack Integration Tests', () => {
         expect(policyObj.Version).toBe('2012-10-17');
         expect(policyObj.Statement).toHaveLength(2); // ← CORRECTED: Now expects 2 statements
         expect(policyObj.Statement[0].Action).toBe('kms:*');
-        
         // Validate the two expected statements
-        const rootStatement = policyObj.Statement.find(s => s.Sid === 'Enable IAM User Permissions');
-        const logsStatement = policyObj.Statement.find(s => s.Sid === 'Allow CloudWatch Logs');
+        const rootStatement = policyObj.Statement.find((s: { Sid: string }) => s.Sid === 'Enable IAM User Permissions');
+        const logsStatement = policyObj.Statement.find((s: { Sid: string }) => s.Sid === 'Allow CloudWatch Logs');
         
         expect(rootStatement).toBeDefined();
         expect(logsStatement).toBeDefined();
