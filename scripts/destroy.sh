@@ -28,50 +28,52 @@ fi
 # Destroy resources based on platform
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK destroy..."
-  # Try to destroy any leftover resources, but don't fail if they don't exist
   npm run cdk:destroy || echo "No resources to destroy or destruction failed"
+
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF destroy..."
   
-  # CDKTF-specific setup based on language
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Setting up Go dependencies for CDKTF..."
-    
+
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
+
+    if [ -d "cdktf.out" ]; then
+      echo "🗑️ Removing cdktf.out for clean CI run..."
+      rm -rf cdktf.out
+    fi
+
     # Generate AWS provider code if not already generated
     if [ ! -d ".gen/aws" ]; then
       echo "📦 Generating AWS provider code..."
       cdktf get || echo "cdktf get failed, but continuing with destroy attempt"
     fi
     
-    # Install Go dependencies
     echo "📦 Installing Go dependencies..."
     go mod tidy || echo "go mod tidy failed, but continuing with destroy attempt"
     
-    # Try to build first to catch compilation errors early
     echo "🔨 Building Go project..."
     go build ./lib || echo "Build failed, but attempting destroy anyway"
   fi
-  
-  # Try to destroy any leftover resources, but don't fail if they don't exist
+
   echo "🚀 Running CDKTF destroy..."
   npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
-  
+
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
-  # Try to destroy any leftover resources, but don't fail if they don't exist
   npm run cfn:destroy || echo "No resources to destroy or destruction failed"
+
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform destroy..."
   
   if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
-    # Set up PR-specific state management
     STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
     echo "Using state key: $STATE_KEY"
     
-    # Try to destroy any leftover resources, but don't fail if they don't exist
     cd lib
-
-    # Initialize backend with lockfile (no DynamoDB)
     export TF_INIT_OPTS="-backend-config=bucket=${TERRAFORM_STATE_BUCKET} \
         -backend-config=key=$STATE_KEY \
         -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
@@ -82,12 +84,12 @@ elif [ "$PLATFORM" = "tf" ]; then
     npm run tf:destroy || echo "No resources to destroy or destruction failed"
     cd ..
     
-    # Clean up PR-specific state file
     echo "Cleaning up PR-specific state file..."
     aws s3 rm "s3://${TERRAFORM_STATE_BUCKET}/$STATE_KEY" || echo "State file not found or already cleaned up"
   else
     echo "⚠️ TERRAFORM_STATE_BUCKET not set, skipping Terraform destroy"
   fi
+
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi destroy..."
   echo "Selecting dev stack..."
@@ -96,6 +98,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
   echo "Removing Pulumi stack..."
   pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
+
 else
   echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
   echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
