@@ -1,4 +1,3 @@
-
 import fs from "fs";
 import path from "path";
 
@@ -53,7 +52,6 @@ describe("Terraform stack: tap_stack.tf - comprehensive unit checks", () => {
     expect(content).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"rds_password_version"/);
   });
 
-
   test("CloudWatch dashboard is present and tags argument is not used", () => {
     expect(content).toMatch(/resource\s+"aws_cloudwatch_dashboard"\s+"secure_prod"/);
     // Only check the dashboard resource block for the absence of tags
@@ -72,5 +70,54 @@ describe("Terraform stack: tap_stack.tf - comprehensive unit checks", () => {
     }
   });
 
-  // Add more tests as needed for additional coverage
+  // -----------------------------------------------------------
+  // Additional tests for coverage of other resources
+  // -----------------------------------------------------------
+
+  test("EC2 Launch Template is present", () => {
+    expect(content).toMatch(/resource\s+"aws_launch_template"\s+"secure_prod_lt"/);
+    expect(content).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+    expect(content).toMatch(/iam_instance_profile\s*{[\s\S]*name\s*=\s*aws_iam_instance_profile\.ec2_profile\.name[\s\S]*}/);
+  });
+
+  test("EC2 Auto Scaling Group and Attachment are present", () => {
+    expect(content).toMatch(/resource\s+"aws_autoscaling_group"\s+"secure_prod_asg"/);
+    expect(content).toMatch(/min_size\s*=\s*3/);
+    expect(content).toMatch(/max_size\s*=\s*6/);
+    expect(content).toMatch(/desired_capacity\s*=\s*3/);
+    expect(content).toMatch(/resource\s+"aws_autoscaling_attachment"\s+"asg_attach"/);
+    expect(content).toMatch(/autoscaling_group_name\s*=\s*aws_autoscaling_group\.secure_prod_asg\.name/);
+  });
+
+  test("Subnets and Route Table Associations are present", () => {
+    expect(content).toMatch(/resource\s+"aws_subnet"\s+"public1"/);
+    expect(content).toMatch(/resource\s+"aws_subnet"\s+"public2"/);
+    expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"public1"/);
+    expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"public2"/);
+  });
+
+  test("Application Load Balancer resources are present", () => {
+    expect(content).toMatch(/resource\s+"aws_lb"\s+"secure_prod_alb"/);
+    expect(content).toMatch(/resource\s+"aws_security_group"\s+"alb_sg_http"/);
+    expect(content).toMatch(/resource\s+"aws_lb_target_group"\s+"secure_prod_tg"/);
+    expect(content).toMatch(/resource\s+"aws_lb_listener"\s+"secure_prod_listener"/);
+  });
+
+  test("RDS Instance and Subnet Group are present", () => {
+    expect(content).toMatch(/resource\s+"aws_db_instance"\s+"secure_prod_db"/);
+    expect(content).toMatch(/engine\s*=\s*"mysql"/);
+    expect(content).toMatch(/multi_az\s*=\s*true/);
+    expect(content).toMatch(/resource\s+"aws_db_subnet_group"\s+"secure_prod_db_subnet"/);
+    expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds_sg"/);
+  });
+
+  test("DynamoDB Table and Autoscaling resources are present", () => {
+    expect(content).toMatch(/resource\s+"aws_dynamodb_table"\s+"secure_prod_table"/);
+    expect(content).toMatch(/resource\s+"aws_appautoscaling_target"\s+"dynamodb_read"/);
+    expect(content).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"dynamodb_read_policy"/);
+    expect(content).toMatch(/resource\s+"aws_appautoscaling_target"\s+"dynamodb_write"/);
+    expect(content).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"dynamodb_write_policy"/);
+  });
+
+  // Add further tests here if new resources are introduced in future!
 });
