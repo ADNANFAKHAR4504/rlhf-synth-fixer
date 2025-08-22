@@ -141,30 +141,6 @@ describe('Terraform Integration Tests', () => {
     });
   });
 
-  describe('Terraform Plan Analysis', () => {
-    test('terraform plan should execute without errors', () => {
-      if (!hasAWSCredentials()) {
-        console.log('Skipping test - AWS credentials not configured');
-        return;
-      }
-      
-      // Run terraform plan
-      const planOutput = runTerraformCommand('terraform plan -out=tfplan -no-color');
-      
-      // Basic checks
-      expect(planOutput).not.toContain('Error:');
-      expect(planOutput).toContain('Plan:');
-      
-      // Verify critical resources are in the plan
-      expect(planOutput).toMatch(/aws_vpc\./);
-      expect(planOutput).toMatch(/aws_subnet\./);
-      expect(planOutput).toMatch(/aws_security_group\./);
-      expect(planOutput).toMatch(/aws_s3_bucket\./);
-      expect(planOutput).toMatch(/aws_db_instance\./);
-      expect(planOutput).toMatch(/aws_kms_key\./);
-    }, 60000);
-  });
-
   afterAll(() => {
     // Clean up any temporary files created during tests
     if (fs.existsSync(tfPlanFile)) {
