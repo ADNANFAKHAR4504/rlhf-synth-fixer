@@ -98,8 +98,10 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/data\s+"aws_region"\s+"current"/);
     });
 
-    test('declares aws_ami data source for latest Amazon Linux', () => {
-      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux"/);
+    test('declares aws_ssm_parameter data source for latest Amazon Linux', () => {
+      expect(stackContent).toMatch(
+        /data\s+"aws_ssm_parameter"\s+"amazon_linux_2023_ami"/
+      );
     });
   });
 
@@ -206,9 +208,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
     });
 
-    test('declares EC2 IAM policy', () => {
+    test('declares EC2 IAM policy attachment', () => {
       expect(stackContent).toMatch(
-        /resource\s+"aws_iam_role_policy"\s+"ec2_policy"/
+        /resource\s+"aws_iam_role_policy_attachment"\s+"ec2_ssm_core"/
       );
     });
 
@@ -251,7 +253,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('EC2 instance uses latest AMI', () => {
-      expect(stackContent).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux\.id/);
+      expect(stackContent).toMatch(
+        /ami\s*=\s*data\.aws_ssm_parameter\.amazon_linux_2023_ami\.value/
+      );
     });
 
     test('EC2 instance has IMDSv2 enabled', () => {
@@ -277,27 +281,28 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Outputs', () => {
-    test('declares KMS key alias output', () => {
-      expect(stackContent).toMatch(/output\s+"kms_key_alias"/);
+    test('declares KMS key ARN output', () => {
+      expect(stackContent).toMatch(/output\s+"kms_key_arn"/);
     });
 
     test('declares S3 bucket outputs', () => {
-      expect(stackContent).toMatch(/output\s+"app_data_bucket"/);
-      expect(stackContent).toMatch(/output\s+"access_logs_bucket"/);
+      expect(stackContent).toMatch(/output\s+"s3_access_logs_bucket"/);
     });
 
-    test('declares RDS identifier output', () => {
-      expect(stackContent).toMatch(/output\s+"rds_identifier"/);
+    test('declares RDS endpoint output', () => {
+      expect(stackContent).toMatch(/output\s+"rds_endpoint"/);
     });
 
-    test('declares CloudTrail name output', () => {
-      expect(stackContent).toMatch(/output\s+"cloudtrail_name"/);
+    test('declares CloudTrail ARN output', () => {
+      expect(stackContent).toMatch(/output\s+"cloudtrail_arn"/);
     });
   });
 
   describe('Security and Compliance', () => {
     test('region guard enforces us-west-2', () => {
-      expect(stackContent).toMatch(/null_resource\s+"region_guard"/);
+      expect(stackContent).toMatch(
+        /resource\s+"null_resource"\s+"region_guard"/
+      );
       expect(stackContent).toMatch(/us-west-2/);
     });
 
@@ -328,3 +333,4 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
   });
 });
+
