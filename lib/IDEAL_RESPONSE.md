@@ -14,6 +14,7 @@ Parameters:
 
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default: TapStack-KeyPair
     Description: Name of an existing EC2 KeyPair to enable SSH access
 
   VpcCIDR:
@@ -259,6 +260,17 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
 
+  MyRDSSecret:
+  Type: AWS::SecretsManager::Secret
+  Properties:
+    Name: MyRDSSecret
+    Description: RDS master user credentials
+    GenerateSecretString:
+      SecretStringTemplate: '{"username": "postgres"}'
+      GenerateStringKey: password
+      PasswordLength: 20
+      ExcludeCharacters: '"@/\'
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -266,8 +278,8 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MultiAZ: true
-      MasterUsername: !Sub '{{resolve:secretsmanager:MyRDSSecret:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:MyRDSSecret:SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${MyRDSSecret}::username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MyRDSSecret}::password}}'
       AllocatedStorage: 20
       DBInstanceIdentifier: WebAppDB
       VPCSecurityGroups:
