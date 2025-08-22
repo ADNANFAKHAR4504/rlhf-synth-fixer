@@ -103,6 +103,15 @@ Parameters:
     MinValue: 7
     MaxValue: 35
 
+  ExistingEC2InstanceRoleArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of an existing IAM Role for EC2 instances (leave blank to create a new one)'
+  ExistingAccessKeyRotationRoleArn:
+    Type: String
+    Default: ''
+    Description: 'ARN of an existing IAM Role for Access Key Rotation Lambda (leave blank to create a new one)'
+
 Conditions:
   CreateKmsKey: !Equals [!Ref KmsKeyId, '']
   IsMasterAccount:
@@ -123,6 +132,9 @@ Conditions:
   CreateVpc: !Equals [!Ref ExistingVpcId, '']
   CreateSecurityHubCondition: !Equals [!Ref CreateSecurityHub, 'true']
   HasValidMasterAccountId: !Not [!Equals [!Ref MasterAccountId, '']]
+  CreateEC2InstanceRole: !Equals [!Ref ExistingEC2InstanceRoleArn, '']
+  CreateAccessKeyRotationRole:
+    !Equals [!Ref ExistingAccessKeyRotationRoleArn, '']
 
 Resources:
   # KMS Key for Encryption with cross-account access
@@ -378,6 +390,7 @@ Resources:
   # IAM Roles with Least Privilege
   EC2InstanceRole:
     Type: AWS::IAM::Role
+    Condition: CreateEC2InstanceRole
     Properties:
       RoleName: !Sub 'EC2-SecurityRole-${Environment}'
       AssumeRolePolicyDocument:
@@ -414,11 +427,16 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - !Ref EC2InstanceRole
+        - !If [
+            CreateEC2InstanceRole,
+            !Ref EC2InstanceRole,
+            !Ref ExistingEC2InstanceRoleArn,
+          ]
 
   # Lambda Role for Access Key Rotation
   AccessKeyRotationRole:
     Type: AWS::IAM::Role
+    Condition: CreateAccessKeyRotationRole
     Properties:
       RoleName: !Sub 'AccessKeyRotation-${Environment}'
       AssumeRolePolicyDocument:
@@ -473,7 +491,12 @@ Resources:
       FunctionName: !Sub 'AccessKeyRotation-${Environment}'
       Runtime: python3.9
       Handler: index.lambda_handler
-      Role: !GetAtt AccessKeyRotationRole.Arn
+      Role:
+        !If [
+          CreateAccessKeyRotationRole,
+          !GetAtt AccessKeyRotationRole.Arn,
+          !Ref ExistingAccessKeyRotationRoleArn,
+        ]
       Timeout: 300
       Environment:
         Variables:
@@ -974,7 +997,12 @@ Outputs:
 
   EC2InstanceRoleArn:
     Description: 'EC2 Instance Role ARN'
-    Value: !GetAtt EC2InstanceRole.Arn
+    Value:
+      !If [
+        CreateEC2InstanceRole,
+        !GetAtt EC2InstanceRole.Arn,
+        !Ref ExistingEC2InstanceRoleArn,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
 

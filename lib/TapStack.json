@@ -116,6 +116,16 @@
             "Description": "RDS backup retention period in days",
             "MinValue": 7,
             "MaxValue": 35
+        },
+        "ExistingEC2InstanceRoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "ARN of an existing IAM Role for EC2 instances (leave blank to create a new one)"
+        },
+        "ExistingAccessKeyRotationRoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "ARN of an existing IAM Role for Access Key Rotation Lambda (leave blank to create a new one)"
         }
     },
     "Conditions": {
@@ -235,6 +245,22 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateEC2InstanceRole": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingEC2InstanceRoleArn"
+                },
+                ""
+            ]
+        },
+        "CreateAccessKeyRotationRole": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingAccessKeyRotationRoleArn"
+                },
+                ""
             ]
         }
     },
@@ -774,6 +800,7 @@
         },
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateEC2InstanceRole",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "EC2-SecurityRole-${Environment}"
@@ -837,13 +864,22 @@
             "Properties": {
                 "Roles": [
                     {
-                        "Ref": "EC2InstanceRole"
+                        "Fn::If": [
+                            "CreateEC2InstanceRole",
+                            {
+                                "Ref": "EC2InstanceRole"
+                            },
+                            {
+                                "Ref": "ExistingEC2InstanceRoleArn"
+                            }
+                        ]
                     }
                 ]
             }
         },
         "AccessKeyRotationRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateAccessKeyRotationRole",
             "Properties": {
                 "RoleName": {
                     "Fn::Sub": "AccessKeyRotation-${Environment}"
@@ -937,9 +973,17 @@
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
                 "Role": {
-                    "Fn::GetAtt": [
-                        "AccessKeyRotationRole",
-                        "Arn"
+                    "Fn::If": [
+                        "CreateAccessKeyRotationRole",
+                        {
+                            "Fn::GetAtt": [
+                                "AccessKeyRotationRole",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "ExistingAccessKeyRotationRoleArn"
+                        }
                     ]
                 },
                 "Timeout": 300,
@@ -1785,9 +1829,17 @@
         "EC2InstanceRoleArn": {
             "Description": "EC2 Instance Role ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "EC2InstanceRole",
-                    "Arn"
+                "Fn::If": [
+                    "CreateEC2InstanceRole",
+                    {
+                        "Fn::GetAtt": [
+                            "EC2InstanceRole",
+                            "Arn"
+                        ]
+                    },
+                    {
+                        "Ref": "ExistingEC2InstanceRoleArn"
+                    }
                 ]
             },
             "Export": {
