@@ -144,8 +144,9 @@ describe("Terraform Stack Integration Tests (Read-only Live Checks)", () => {
   });
 
   // Validate IAM instance profile string
-  it("validates IAM instance profile", () => {
+  it("validates IAM instance profile (should be a non-empty string, usually a name, not an ARN)", () => {
     expect(isNonEmptyString(outputs.iam_instance_profile)).toBe(true);
+    expect(outputs.iam_instance_profile.startsWith("arn:")).toBe(false);
   });
 });
 
