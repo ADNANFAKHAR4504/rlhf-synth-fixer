@@ -40,7 +40,8 @@ describe('TapStack CloudFormation Template', () => {
         'PrivateSubnet2Cidr',
         'DatabaseName',
         'DatabaseUsername',
-        'InstanceType'
+        'InstanceType',
+        'LatestAmiId'
       ];
       
       expectedParams.forEach(param => {

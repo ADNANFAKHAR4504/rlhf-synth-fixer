@@ -50,14 +50,14 @@ The ideal response implements a comprehensive secure web application infrastruct
 ### CloudFormation Template
 
 ```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure Web Application Infrastructure - Security Configuration as Code'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Secure Web Application Infrastructure - Security Configuration as Code"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Network Configuration'
+          default: "Network Configuration"
         Parameters:
           - VpcCidr
           - PublicSubnet1Cidr
@@ -65,388 +65,442 @@ Metadata:
           - PrivateSubnet1Cidr
           - PrivateSubnet2Cidr
       - Label:
-          default: 'Database Configuration'
+          default: "Database Configuration"
         Parameters:
           - DatabaseName
           - DatabaseUsername
       - Label:
-          default: 'Instance Configuration'
+          default: "Instance Configuration"
         Parameters:
           - InstanceType
+          - LatestAmiId
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-    
+    Default: "dev"
+    Description: "Environment suffix for resource naming"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
   VpcCidr:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for VPC'
-    
+    Default: "10.0.0.0/16"
+    Description: "CIDR block for VPC"
+
   PublicSubnet1Cidr:
     Type: String
-    Default: '10.0.1.0/24'
-    Description: 'CIDR block for public subnet 1'
-    
+    Default: "10.0.1.0/24"
+    Description: "CIDR block for public subnet 1"
+
   PublicSubnet2Cidr:
     Type: String
-    Default: '10.0.2.0/24'
-    Description: 'CIDR block for public subnet 2'
-    
+    Default: "10.0.2.0/24"
+    Description: "CIDR block for public subnet 2"
+
   PrivateSubnet1Cidr:
     Type: String
-    Default: '10.0.3.0/24'
-    Description: 'CIDR block for private subnet 1'
-    
+    Default: "10.0.3.0/24"
+    Description: "CIDR block for private subnet 1"
+
   PrivateSubnet2Cidr:
     Type: String
-    Default: '10.0.4.0/24'
-    Description: 'CIDR block for private subnet 2'
-    
+    Default: "10.0.4.0/24"
+    Description: "CIDR block for private subnet 2"
+
   DatabaseName:
     Type: String
-    Default: 'webapp'
-    Description: 'Database name'
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
-    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
-    
+    Default: "prodwebappdb"
+    Description: "Database name"
+
   DatabaseUsername:
     Type: String
-    Default: 'admin'
-    Description: 'Database username'
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
-    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
-    
+    Default: "dbadmin"
+    Description: "Database master username"
+
   InstanceType:
     Type: String
-    Default: 't3.micro'
-    Description: 'EC2 instance type'
-    AllowedValues: ['t3.micro', 't3.small', 't3.medium']
+    Default: "t3.micro"
+    AllowedValues: ["t3.micro", "t3.small", "t3.medium"]
+    Description: "EC2 instance type"
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+    Description: "Latest Amazon Linux 2 AMI ID from Systems Manager Parameter Store"
 
 Resources:
-  # VPC and Network Infrastructure
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub "TurnAroundPromptTable${EnvironmentSuffix}"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+  # KMS Key for encryption
+  AppKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: "KMS Key for application encryption"
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow use of the key for S3 and RDS
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - rds.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: "*"
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service:
+                - !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+          - Sid: Allow SNS
+            Effect: Allow
+            Principal:
+              Service:
+                - sns.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:CreateGrant
+            Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Name
+          Value: prod-app-kms-key
+
+  AppKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/prod-app-key-${EnvironmentSuffix}"
+      TargetKeyId: !Ref AppKMSKey
+
+  # VPC
   AppVPC:
-    Type: 'AWS::EC2::VPC'
+    Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-vpc-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-        - Key: 'Project'
-          Value: 'SecurityConfiguration'
+        - Key: Name
+          Value: prod-webapp-vpc
+        - Key: Environment
+          Value: Production
 
   # Internet Gateway
   InternetGateway:
-    Type: 'AWS::EC2::InternetGateway'
+    Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-igw-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-igw
+        - Key: Environment
+          Value: Production
 
-  AttachGateway:
-    Type: 'AWS::EC2::VPCGatewayAttachment'
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref AppVPC
       InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref AppVPC
 
   # Public Subnets
   PublicSubnet1:
-    Type: 'AWS::EC2::Subnet'
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AppVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref PublicSubnet1Cidr
-      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-public-subnet-1-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-        - Key: 'Type'
-          Value: 'Public'
+        - Key: Name
+          Value: prod-webapp-public-subnet-1
+        - Key: Environment
+          Value: Production
 
   PublicSubnet2:
-    Type: 'AWS::EC2::Subnet'
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AppVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Ref PublicSubnet2Cidr
-      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-public-subnet-2-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-        - Key: 'Type'
-          Value: 'Public'
+        - Key: Name
+          Value: prod-webapp-public-subnet-2
+        - Key: Environment
+          Value: Production
 
   # Private Subnets
   PrivateSubnet1:
-    Type: 'AWS::EC2::Subnet'
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AppVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref PrivateSubnet1Cidr
-      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-private-subnet-1-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-        - Key: 'Type'
-          Value: 'Private'
+        - Key: Name
+          Value: prod-webapp-private-subnet-1
+        - Key: Environment
+          Value: Production
 
   PrivateSubnet2:
-    Type: 'AWS::EC2::Subnet'
+    Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref AppVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Ref PrivateSubnet2Cidr
-      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-private-subnet-2-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-        - Key: 'Type'
-          Value: 'Private'
+        - Key: Name
+          Value: prod-webapp-private-subnet-2
+        - Key: Environment
+          Value: Production
 
   # NAT Gateways
-  NATGateway1EIP:
-    Type: 'AWS::EC2::EIP'
-    DependsOn: AttachGateway
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-nat-eip-1-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-nat-eip-1
+        - Key: Environment
+          Value: Production
 
-  NATGateway2EIP:
-    Type: 'AWS::EC2::EIP'
-    DependsOn: AttachGateway
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-nat-eip-2-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-nat-eip-2
+        - Key: Environment
+          Value: Production
 
-  NATGateway1:
-    Type: 'AWS::EC2::NatGateway'
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-nat-gateway-1-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-nat-1
+        - Key: Environment
+          Value: Production
 
-  NATGateway2:
-    Type: 'AWS::EC2::NatGateway'
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-nat-gateway-2-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-nat-2
+        - Key: Environment
+          Value: Production
 
   # Route Tables
   PublicRouteTable:
-    Type: 'AWS::EC2::RouteTable'
+    Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref AppVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-public-rt-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-public-rt
+        - Key: Environment
+          Value: Production
 
   DefaultPublicRoute:
-    Type: 'AWS::EC2::Route'
-    DependsOn: AttachGateway
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
+      DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
   PublicSubnet1RouteTableAssociation:
-    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
 
   PublicSubnet2RouteTableAssociation:
-    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
   PrivateRouteTable1:
-    Type: 'AWS::EC2::RouteTable'
+    Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref AppVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-private-rt-1-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-private-rt-1
+        - Key: Environment
+          Value: Production
 
   DefaultPrivateRoute1:
-    Type: 'AWS::EC2::Route'
+    Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet1RouteTableAssociation:
-    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet1
 
   PrivateRouteTable2:
-    Type: 'AWS::EC2::RouteTable'
+    Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref AppVPC
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-private-rt-2-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-private-rt-2
+        - Key: Environment
+          Value: Production
 
   DefaultPrivateRoute2:
-    Type: 'AWS::EC2::Route'
+    Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
 
   PrivateSubnet2RouteTableAssociation:
-    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  # KMS Key for Encryption
-  AppKMSKey:
-    Type: 'AWS::KMS::Key'
-    Properties:
-      Description: 'KMS Key for application encryption'
-      KeyPolicy:
-        Statement:
-          - Sid: 'Enable IAM User Permissions'
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: 'Allow CloudWatch Logs'
-            Effect: Allow
-            Principal:
-              Service: logs.us-west-2.amazonaws.com
-            Action:
-              - 'kms:Encrypt'
-              - 'kms:Decrypt'
-              - 'kms:ReEncrypt*'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-app-key-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  AppKMSKeyAlias:
-    Type: 'AWS::KMS::Alias'
-    Properties:
-      AliasName: !Sub 'alias/prod-app-key-${EnvironmentSuffix}'
-      TargetKeyId: !Ref AppKMSKey
-
   # Security Groups
-  LoadBalancerSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'Security group for Application Load Balancer'
-      VpcId: !Ref AppVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP traffic from internet'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS traffic from internet'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-alb-sg-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
   WebServerSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for web servers'
+      GroupName: !Sub "prod-webapp-web-sg-${EnvironmentSuffix}"
+      GroupDescription: Security group for web servers
       VpcId: !Ref AppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: 'HTTP from Load Balancer'
+          Description: HTTP from Load Balancer
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          Description: HTTPS from Load Balancer
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: 'SSH from Bastion'
+          Description: SSH from Bastion
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-web-sg-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-web-sg
+        - Key: Environment
+          Value: Production
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "prod-webapp-alb-sg-${EnvironmentSuffix}"
+      GroupDescription: Security group for load balancer
+      VpcId: !Ref AppVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
+      Tags:
+        - Key: Name
+          Value: prod-webapp-alb-sg
+        - Key: Environment
+          Value: Production
 
   DatabaseSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for database'
+      GroupName: !Sub "prod-webapp-db-sg-${EnvironmentSuffix}"
+      GroupDescription: Security group for database
       VpcId: !Ref AppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'MySQL from web servers'
+          Description: MySQL from web servers
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-db-sg-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-db-sg
+        - Key: Environment
+          Value: Production
 
   BastionSecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for bastion host'
+      GroupName: !Sub "prod-webapp-bastion-sg-${EnvironmentSuffix}"
+      GroupDescription: Security group for bastion host
       VpcId: !Ref AppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: '0.0.0.0/0'
-          Description: 'SSH from internet'
+          CidrIp: 0.0.0.0/0
+          Description: SSH from internet
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-bastion-sg-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-bastion-sg
+        - Key: Environment
+          Value: Production
 
-  # S3 Buckets
+  # S3 Bucket
   AppS3Bucket:
-    Type: 'AWS::S3::Bucket'
+    Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'prod-app-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub "prod-webapp-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -455,229 +509,221 @@ Resources:
             BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: access-logs/
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: 'app-bucket-logs/'
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-app-bucket-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-bucket
+        - Key: Environment
+          Value: Production
 
   LoggingBucket:
-    Type: 'AWS::S3::Bucket'
+    Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'prod-logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub "prod-webapp-logs-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref AppKMSKey
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-logging-bucket-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-logs-bucket
+        - Key: Environment
+          Value: Production
+
+  # IAM Roles - Commented due to quota limit
+  # EC2Role:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'prod-webapp-ec2-role-${EnvironmentSuffix}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: ec2.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+  #     Policies:
+  #       - PolicyName: S3AccessPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #               Resource:
+  #                 - !Sub '${AppS3Bucket.Arn}/*'
+  #             - Effect: Allow
+  #               Action:
+  #                 - s3:ListBucket
+  #               Resource: !GetAtt AppS3Bucket.Arn
+  #       - PolicyName: SecretsManagerPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - secretsmanager:GetSecretValue
+  #               Resource: !Ref DatabaseSecret
+  #       - PolicyName: KMSPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - kms:Decrypt
+  #                 - kms:GenerateDataKey
+  #               Resource: !GetAtt AppKMSKey.Arn
+  #     Tags:
+  #       - Key: Environment
+  #         Value: Production
+
+  # EC2InstanceProfile:
+  #   Type: AWS::IAM::InstanceProfile
+  #   Properties:
+  #     InstanceProfileName: !Sub 'prod-webapp-instance-profile-${EnvironmentSuffix}'
+  #     Roles:
+  #       - !Ref EC2Role
 
   # Database Secret
   DatabaseSecret:
-    Type: 'AWS::SecretsManager::Secret'
+    Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'prod-db-secret-${EnvironmentSuffix}'
-      Description: 'Database credentials'
+      Name: !Sub "prod-webapp-db-credentials-${EnvironmentSuffix}"
+      Description: Database credentials for web application
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DatabaseUsername}"}'
-        GenerateStringKey: 'password'
+        GenerateStringKey: password
         PasswordLength: 32
-        ExcludeCharacters: '"@/\\'
+        ExcludeCharacters: '"@/\'
       KmsKeyId: !Ref AppKMSKey
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-db-secret-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-db-secret
+        - Key: Environment
+          Value: Production
 
-  # RDS Database
-  DatabaseSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
     Properties:
-      DBSubnetGroupName: !Sub 'prod-db-subnet-group-${EnvironmentSuffix}'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SecretId: !Ref DatabaseSecret
+      TargetId: !Ref Database
+      TargetType: AWS::RDS::DBInstance
+
+  # RDS Subnet Group
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "prod-webapp-db-subnet-group-${EnvironmentSuffix}"
+      DBSubnetGroupDescription: Subnet group for database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-db-subnet-group-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-db-subnet-group
+        - Key: Environment
+          Value: Production
 
-  RDSEnhancedMonitoringRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      RoleName: !Sub 'prod-rds-monitoring-role-${EnvironmentSuffix}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: ''
-            Effect: Allow
-            Principal:
-              Service: monitoring.rds.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-rds-monitoring-role-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
+  # RDS Instance
   Database:
-    Type: 'AWS::RDS::DBInstance'
+    Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'prod-database-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !Sub "prod-webapp-database-${EnvironmentSuffix}"
       DBName: !Ref DatabaseName
-      DBInstanceClass: 'db.t3.micro'
-      Engine: MySQL
-      EngineVersion: '8.0.37'
-      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DatabaseSecret, ':SecretString:username}}']]
-      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DatabaseSecret, ':SecretString:password}}']]
-      AllocatedStorage: 20
-      MaxAllocatedStorage: 100
-      StorageType: 'gp2'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0.37"
+      MasterUsername: !Ref DatabaseUsername
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref DatabaseSecret
+        KmsKeyId: !Ref AppKMSKey
+      AllocatedStorage: "20"
+      StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref AppKMSKey
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       MultiAZ: false
       PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref AppKMSKey
       DeletionProtection: false
+      EnablePerformanceInsights: false
+      MonitoringInterval: 0
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-database-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  SecretTargetAttachment:
-    Type: 'AWS::SecretsManager::SecretTargetAttachment'
-    Properties:
-      SecretId: !Ref DatabaseSecret
-      TargetId: !Ref Database
-      TargetType: 'AWS::RDS::DBInstance'
-
-  # IAM Role for EC2
-  EC2Role:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      RoleName: !Sub 'prod-ec2-role-${EnvironmentSuffix}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Policies:
-        - PolicyName: 'S3Access'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
-                  - 's3:DeleteObject'
-                Resource:
-                  - !Sub '${AppS3Bucket}/*'
-              - Effect: Allow
-                Action:
-                  - 's3:ListBucket'
-                Resource: !GetAtt AppS3Bucket.Arn
-        - PolicyName: 'SecretsManagerAccess'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'secretsmanager:GetSecretValue'
-                Resource: !Ref DatabaseSecret
-        - PolicyName: 'KMSAccess'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                Resource: !GetAtt AppKMSKey.Arn
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-ec2-role-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  EC2InstanceProfile:
-    Type: 'AWS::IAM::InstanceProfile'
-    Properties:
-      InstanceProfileName: !Sub 'prod-ec2-profile-${EnvironmentSuffix}'
-      Roles:
-        - !Ref EC2Role
+        - Key: Name
+          Value: prod-webapp-database
+        - Key: Environment
+          Value: Production
 
   # Launch Template
   LaunchTemplate:
-    Type: 'AWS::EC2::LaunchTemplate'
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'prod-launch-template-${EnvironmentSuffix}'
+      LaunchTemplateName: !Sub "prod-webapp-launch-template-${EnvironmentSuffix}"
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          Name: !Ref EC2InstanceProfile
+        # IamInstanceProfile:
+        #   Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            echo "<h1>Secure Web Application - ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
-            # Install CloudWatch agent
-            yum install -y amazon-cloudwatch-agent
-            # Configure CloudWatch agent (basic configuration)
-            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+            yum install -y aws-cli amazon-cloudwatch-agent
+
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             {
+              "metrics": {
+                "namespace": "ProdWebApp/EC2",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": ["used_percent"],
+                    "metrics_collection_interval": 60,
+                    "resources": ["*"]
+                  },
+                  "mem": {
+                    "measurement": ["mem_used_percent"],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              },
               "logs": {
                 "logs_collected": {
                   "files": {
                     "collect_list": [
                       {
-                        "file_path": "/var/log/httpd/access_log",
-                        "log_group_name": "${EC2LogGroup}",
-                        "log_stream_name": "{instance_id}/apache/access.log"
+                        "file_path": "/var/log/messages",
+                        "log_group_name": "/aws/ec2/prod-webapp-${EnvironmentSuffix}",
+                        "log_stream_name": "{instance_id}/messages"
                       }
                     ]
                   }
@@ -685,116 +731,67 @@ Resources:
               }
             }
             EOF
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - Key: 'Name'
-                Value: !Sub 'prod-web-instance-${EnvironmentSuffix}'
-              - Key: 'Environment'
-                Value: !Ref EnvironmentSuffix
-
-  # Application Load Balancer
-  ApplicationLoadBalancer:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    Properties:
-      Name: !Sub 'prod-alb-${EnvironmentSuffix}'
-      Scheme: internet-facing
-      Type: application
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-alb-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  ALBTargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      Name: !Sub 'prod-tg-${EnvironmentSuffix}'
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref AppVPC
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: '/'
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-tg-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  ALBListener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
+              - Key: Name
+                Value: prod-webapp-instance
+              - Key: Environment
+                Value: Production
 
   # Auto Scaling Group
   AutoScalingGroup:
-    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'prod-asg-${EnvironmentSuffix}'
+      AutoScalingGroupName: !Sub "prod-webapp-asg-${EnvironmentSuffix}"
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 5
+      MaxSize: 4
       DesiredCapacity: 2
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
       TargetGroupARNs:
-        - !Ref ALBTargetGroup
+        - !Ref TargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-asg-${EnvironmentSuffix}'
+        - Key: Name
+          Value: prod-webapp-asg
           PropagateAtLaunch: false
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-          PropagateAtLaunch: true
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: false
 
-  # Auto Scaling Policies
+  # Scaling Policies
   ScaleUpPolicy:
-    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      AdjustmentType: PercentChangeInCapacity
+      AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
       Cooldown: 300
-      ScalingAdjustment: 25
-      PolicyType: SimpleScaling
+      ScalingAdjustment: 1
 
   ScaleDownPolicy:
-    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Type: AWS::AutoScaling::ScalingPolicy
     Properties:
-      AdjustmentType: PercentChangeInCapacity
+      AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
       Cooldown: 300
-      ScalingAdjustment: -25
-      PolicyType: SimpleScaling
+      ScalingAdjustment: -1
 
   # CloudWatch Alarms
-  HighCPUAlarm:
-    Type: 'AWS::CloudWatch::Alarm'
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'prod-high-cpu-${EnvironmentSuffix}'
-      AlarmDescription: 'High CPU utilization alarm'
+      AlarmName: prod-webapp-cpu-high
+      AlarmDescription: Scale up on high CPU
       MetricName: CPUUtilization
-      Namespace: AWS/AutoScaling
+      Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
@@ -807,13 +804,13 @@ Resources:
         - !Ref ScaleUpPolicy
         - !Ref SNSTopic
 
-  LowCPUAlarm:
-    Type: 'AWS::CloudWatch::Alarm'
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'prod-low-cpu-${EnvironmentSuffix}'
-      AlarmDescription: 'Low CPU utilization alarm'
+      AlarmName: prod-webapp-cpu-low
+      AlarmDescription: Scale down on low CPU
       MetricName: CPUUtilization
-      Namespace: AWS/AutoScaling
+      Namespace: AWS/EC2
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
@@ -824,68 +821,64 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
-        - !Ref SNSTopic
 
-  # CloudWatch Log Groups
-  EC2LogGroup:
-    Type: 'AWS::Logs::LogGroup'
+  # Application Load Balancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      LogGroupName: !Sub '/aws/ec2/prod-${EnvironmentSuffix}'
-      RetentionInDays: 14
-      KmsKeyId: !GetAtt AppKMSKey.Arn
+      Name: !Sub "prod-webapp-alb-${EnvironmentSuffix}"
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-ec2-logs-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-alb
+        - Key: Environment
+          Value: Production
 
-  S3LogGroup:
-    Type: 'AWS::Logs::LogGroup'
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/prod-${EnvironmentSuffix}'
-      RetentionInDays: 30
-      KmsKeyId: !GetAtt AppKMSKey.Arn
+      Name: !Sub "prod-tg-${EnvironmentSuffix}"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref AppVPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-s3-logs-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-targets
+        - Key: Environment
+          Value: Production
 
-  WAFLogGroup:
-    Type: 'AWS::Logs::LogGroup'
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LogGroupName: !Sub '/aws/waf/prod-${EnvironmentSuffix}'
-      RetentionInDays: 30
-      KmsKeyId: !GetAtt AppKMSKey.Arn
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-waf-logs-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
-
-  # SNS Topic
-  SNSTopic:
-    Type: 'AWS::SNS::Topic'
-    Properties:
-      TopicName: !Sub 'prod-alerts-${EnvironmentSuffix}'
-      DisplayName: 'Production Alerts'
-      KmsMasterKeyId: !Ref AppKMSKey
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-alerts-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
 
   # AWS WAF
   WebACL:
-    Type: 'AWS::WAFv2::WebACL'
+    Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub 'prod-web-acl-${EnvironmentSuffix}'
+      Name: !Sub "prod-webapp-waf-${EnvironmentSuffix}"
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
       Rules:
-        - Name: 'CommonRuleSet'
+        - Name: AWSManagedRulesCommonRuleSet
           Priority: 1
           OverrideAction:
             None: {}
@@ -896,8 +889,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: !Sub 'CommonRuleSet-${EnvironmentSuffix}'
-        - Name: 'KnownBadInputsRuleSet'
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
           Priority: 2
           OverrideAction:
             None: {}
@@ -908,8 +901,8 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: !Sub 'KnownBadInputsRuleSet-${EnvironmentSuffix}'
-        - Name: 'SQLiRuleSet'
+            MetricName: KnownBadInputsRuleSetMetric
+        - Name: AWSManagedRulesSQLiRuleSet
           Priority: 3
           OverrideAction:
             None: {}
@@ -920,59 +913,118 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: !Sub 'SQLiRuleSet-${EnvironmentSuffix}'
+            MetricName: SQLiRuleSetMetric
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'WebACL-${EnvironmentSuffix}'
+        MetricName: prod-webapp-waf
       Tags:
-        - Key: 'Name'
-          Value: !Sub 'prod-web-acl-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: prod-webapp-waf
+        - Key: Environment
+          Value: Production
 
   WebACLAssociation:
-    Type: 'AWS::WAFv2::WebACLAssociation'
+    Type: AWS::WAFv2::WebACLAssociation
     Properties:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
+  # CloudWatch Log Groups
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/ec2/prod-webapp-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt AppKMSKey.Arn
+
+  S3LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/s3/prod-webapp-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt AppKMSKey.Arn
+
+  WAFLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/wafv2/prod-webapp-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt AppKMSKey.Arn
+
+  # SNS Topic for notifications
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "prod-webapp-alerts-${EnvironmentSuffix}"
+      DisplayName: Production Web App Alerts
+      KmsMasterKeyId: !Ref AppKMSKey
+      Tags:
+        - Key: Name
+          Value: prod-webapp-alerts
+        - Key: Environment
+          Value: Production
+
 Outputs:
+  TurnAroundPromptTableName:
+    Description: "Name of the DynamoDB table"
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
+
+  TurnAroundPromptTableArn:
+    Description: "ARN of the DynamoDB table"
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
   VPCId:
-    Description: 'VPC ID'
+    Description: VPC ID
     Value: !Ref AppVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   LoadBalancerDNS:
-    Description: 'Load Balancer DNS Name'
+    Description: Application Load Balancer DNS name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS'
+      Name: !Sub "${AWS::StackName}-LoadBalancerDNS"
 
   DatabaseEndpoint:
-    Description: 'Database Endpoint'
+    Description: RDS database endpoint
     Value: !GetAtt Database.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Endpoint'
+      Name: !Sub "${AWS::StackName}-DatabaseEndpoint"
 
   S3BucketName:
-    Description: 'Application S3 Bucket Name'
+    Description: S3 bucket name
     Value: !Ref AppS3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket'
+      Name: !Sub "${AWS::StackName}-S3BucketName"
 
   KMSKeyId:
-    Description: 'KMS Key ID'
+    Description: KMS Key ID for encryption
     Value: !Ref AppKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMS-Key'
+      Name: !Sub "${AWS::StackName}-KMSKeyId"
 
   WebACLArn:
-    Description: 'WAF Web ACL ARN'
+    Description: WAF Web ACL ARN
     Value: !GetAtt WebACL.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-WebACL-ARN'
+      Name: !Sub "${AWS::StackName}-WebACLArn"
 ```
 
 ### Implementation Notes
@@ -989,4 +1041,6 @@ Outputs:
 
 6. **Environment Parameterization**: All resources are parameterized for easy deployment across different environments.
 
-This implementation meets all security requirements while following AWS Well-Architected Framework principles.
+7. **AMI Management**: Uses AWS Systems Manager Parameter Store to automatically retrieve the latest Amazon Linux 2 AMI, ensuring the template works across regions and stays current.
+
+This implementation meets all security requirements while following AWS Well-Architected Framework principles and includes the latest AMI management best practices to prevent deployment failures.
