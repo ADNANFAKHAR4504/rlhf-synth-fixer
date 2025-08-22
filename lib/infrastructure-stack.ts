@@ -365,16 +365,21 @@ export class InfrastructureStack extends pulumi.ComponentResource {
                   Principal: {
                     Service: 'logdelivery.elb.amazonaws.com',
                   },
-                  Action: ['s3:PutObject', 's3:GetBucketAcl'],
-                  Resource: [
-                    bucketArn,
-                    `${bucketArn}/AWSLogs/${currentAccount.accountId}/*`,
-                  ],
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/AWSLogs/${currentAccount.accountId}/*`,
                   Condition: {
                     StringEquals: {
                       's3:x-amz-acl': 'bucket-owner-full-control',
                     },
                   },
+                },
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'logdelivery.elb.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
                 },
               ],
             })
