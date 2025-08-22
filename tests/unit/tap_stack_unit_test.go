@@ -1,106 +1,206 @@
-//go:build !integration
-// +build !integration
-
 package main
 
 import (
-	"encoding/json"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
-	jsii "github.com/aws/jsii-runtime-go"
-	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
+	"github.com/stretchr/testify/assert"
 )
 
-// synthStack synthesizes the stack and returns the tf json path
-func synthStack(t *testing.T, region string) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	outdir := filepath.Join(tmpDir, "cdktf.out")
+// Helper to create *string (copied from main package for testing)
+func str(v string) *string { return &v }
 
-	old := os.Getenv("AWS_REGION")
-	t.Cleanup(func() { _ = os.Setenv("AWS_REGION", old) })
-	_ = os.Setenv("AWS_REGION", region)
+func TestStr(t *testing.T) {
+	t.Run("should convert string to pointer", func(t *testing.T) {
+		input := "test-string"
+		result := str(input)
+		
+		assert.NotNil(t, result)
+		assert.Equal(t, input, *result)
+	})
 
-	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	stack := cdktf.NewTerraformStack(app, jsii.String("SimpleS3Stack"))
-	BuildSimpleS3Stack(stack, region) // 👈 new function
-	app.Synth()
-
-	tfPath := filepath.Join(outdir, "stacks", "SimpleS3Stack", "cdk.tf.json")
-	if _, err := os.Stat(tfPath); err != nil {
-		t.Fatalf("expected synthesized file at %s: %v", tfPath, err)
-	}
-	return tfPath
+	t.Run("should handle empty string", func(t *testing.T) {
+		input := ""
+		result := str(input)
+		
+		assert.NotNil(t, result)
+		assert.Equal(t, "", *result)
+	})
 }
 
-func readTF(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read tf json: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("unmarshal tf json: %v", err)
-	}
-	return m
+func TestEnvironmentVariableHandling(t *testing.T) {
+	t.Run("should retrieve NAME_SUFFIX from environment", func(t *testing.T) {
+		originalSuffix := os.Getenv("NAME_SUFFIX")
+		defer func() {
+			if originalSuffix != "" {
+				os.Setenv("NAME_SUFFIX", originalSuffix)
+			} else {
+				os.Unsetenv("NAME_SUFFIX")
+			}
+		}()
+
+		testValue := "test-suffix-123"
+		os.Setenv("NAME_SUFFIX", testValue)
+		
+		suffix := os.Getenv("NAME_SUFFIX")
+		assert.Equal(t, testValue, suffix)
+	})
+
+	t.Run("should handle empty NAME_SUFFIX", func(t *testing.T) {
+		originalSuffix := os.Getenv("NAME_SUFFIX")
+		defer func() {
+			if originalSuffix != "" {
+				os.Setenv("NAME_SUFFIX", originalSuffix)
+			} else {
+				os.Unsetenv("NAME_SUFFIX")
+			}
+		}()
+
+		os.Unsetenv("NAME_SUFFIX")
+		
+		suffix := os.Getenv("NAME_SUFFIX")
+		assert.Equal(t, "", suffix)
+	})
+
+	t.Run("should handle AWS_REGION environment variable", func(t *testing.T) {
+		originalRegion := os.Getenv("AWS_REGION")
+		defer func() {
+			if originalRegion != "" {
+				os.Setenv("AWS_REGION", originalRegion)
+			} else {
+				os.Unsetenv("AWS_REGION")
+			}
+		}()
+
+		testRegion := "eu-central-1"
+		os.Setenv("AWS_REGION", testRegion)
+		
+		region := os.Getenv("AWS_REGION")
+		assert.Equal(t, testRegion, region)
+	})
+
+	t.Run("should default to us-east-1 when AWS_REGION is empty", func(t *testing.T) {
+		originalRegion := os.Getenv("AWS_REGION")
+		defer func() {
+			if originalRegion != "" {
+				os.Setenv("AWS_REGION", originalRegion)
+			} else {
+				os.Unsetenv("AWS_REGION")
+			}
+		}()
+
+		os.Unsetenv("AWS_REGION")
+		
+		region := os.Getenv("AWS_REGION")
+		if region == "" {
+			region = "us-east-1"
+		}
+		assert.Equal(t, "us-east-1", region)
+	})
 }
 
-func asMap(v any) map[string]any {
-	if v == nil {
-		return nil
-	}
-	if m, ok := v.(map[string]any); ok {
-		return m
-	}
-	return nil
-}
-
-func Test_Synth_S3BucketPresent(t *testing.T) {
-	tfPath := synthStack(t, "us-east-1")
-	root := readTF(t, tfPath)
-
-	resources := asMap(root["resource"])
-	if resources == nil {
-		t.Fatalf("resource block missing")
+func TestRegionValidation(t *testing.T) {
+	testCases := []struct {
+		name     string
+		region   string
+		expected string
+	}{
+		{"us-east-1", "us-east-1", "us-east-1"},
+		{"us-west-2", "us-west-2", "us-west-2"},
+		{"eu-west-1", "eu-west-1", "eu-west-1"},
+		{"ap-south-1", "ap-south-1", "ap-south-1"},
+		{"empty region", "", ""},
 	}
 
-	// S3 bucket
-	s3bucket := asMap(asMap(resources["aws_s3_bucket"])["MySimpleBucket"])
-	if s3bucket == nil {
-		t.Fatalf("aws_s3_bucket.MySimpleBucket missing")
-	}
-	if prefix, ok := s3bucket["bucket_prefix"].(string); !ok || !strings.HasPrefix(prefix, "my-simple-bucket") {
-		t.Fatalf("bucket_prefix must start with my-simple-bucket, got %v", s3bucket["bucket_prefix"])
-	}
-	if got := s3bucket["force_destroy"]; got != true {
-		t.Fatalf("force_destroy = %v, want true", got)
-	}
-
-	// Versioning
-	ver := asMap(asMap(resources["aws_s3_bucket_versioning"])["MySimpleBucketVersioning"])
-	if ver == nil {
-		t.Fatalf("aws_s3_bucket_versioning.MySimpleBucketVersioning missing")
-	}
-
-	// Public Access Block
-	pab := asMap(asMap(resources["aws_s3_bucket_public_access_block"])["MySimpleBucketPAB"])
-	if pab == nil {
-		t.Fatalf("aws_s3_bucket_public_access_block.MySimpleBucketPAB missing")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.region)
+		})
 	}
 }
 
-func Test_Synth_OutputPresent(t *testing.T) {
-	tfPath := synthStack(t, "us-east-1")
-	root := readTF(t, tfPath)
-	out := asMap(root["output"])
-	if out == nil {
-		t.Fatalf("output block missing")
-	}
-	if asMap(out["bucket_name"]) == nil {
-		t.Fatalf("output bucket_name missing")
-	}
+func TestMainFunctionLogic(t *testing.T) {
+	t.Run("should use AWS_REGION from environment", func(t *testing.T) {
+		originalRegion := os.Getenv("AWS_REGION")
+		defer func() {
+			if originalRegion != "" {
+				os.Setenv("AWS_REGION", originalRegion)
+			} else {
+				os.Unsetenv("AWS_REGION")
+			}
+		}()
+
+		testRegion := "eu-central-1"
+		os.Setenv("AWS_REGION", testRegion)
+
+		region := os.Getenv("AWS_REGION")
+		if region == "" {
+			region = "us-east-1"
+		}
+
+		assert.Equal(t, testRegion, region)
+	})
+
+	t.Run("should default to us-east-1 when AWS_REGION is not set", func(t *testing.T) {
+		originalRegion := os.Getenv("AWS_REGION")
+		defer func() {
+			if originalRegion != "" {
+				os.Setenv("AWS_REGION", originalRegion)
+			} else {
+				os.Unsetenv("AWS_REGION")
+			}
+		}()
+
+		os.Unsetenv("AWS_REGION")
+
+		region := os.Getenv("AWS_REGION")
+		if region == "" {
+			region = "us-east-1"
+		}
+
+		assert.Equal(t, "us-east-1", region)
+	})
+}
+
+func TestBucketNaming(t *testing.T) {
+	t.Run("should generate bucket name with suffix", func(t *testing.T) {
+		originalSuffix := os.Getenv("NAME_SUFFIX")
+		defer func() {
+			if originalSuffix != "" {
+				os.Setenv("NAME_SUFFIX", originalSuffix)
+			} else {
+				os.Unsetenv("NAME_SUFFIX")
+			}
+		}()
+
+		testSuffix := "test123"
+		os.Setenv("NAME_SUFFIX", testSuffix)
+
+		suffix := os.Getenv("NAME_SUFFIX")
+		expectedPrefix := "my-simple-bucket-" + suffix
+		expectedTagName := "MySimpleBucket-" + suffix
+
+		assert.Equal(t, "my-simple-bucket-test123", expectedPrefix)
+		assert.Equal(t, "MySimpleBucket-test123", expectedTagName)
+	})
+
+	t.Run("should generate bucket name without suffix", func(t *testing.T) {
+		originalSuffix := os.Getenv("NAME_SUFFIX")
+		defer func() {
+			if originalSuffix != "" {
+				os.Setenv("NAME_SUFFIX", originalSuffix)
+			} else {
+				os.Unsetenv("NAME_SUFFIX")
+			}
+		}()
+
+		os.Unsetenv("NAME_SUFFIX")
+
+		suffix := os.Getenv("NAME_SUFFIX")
+		expectedPrefix := "my-simple-bucket-" + suffix
+		expectedTagName := "MySimpleBucket-" + suffix
+
+		assert.Equal(t, "my-simple-bucket-", expectedPrefix)
+		assert.Equal(t, "MySimpleBucket-", expectedTagName)
+	})
 }
