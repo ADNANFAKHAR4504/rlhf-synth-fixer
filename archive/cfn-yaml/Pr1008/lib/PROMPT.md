@@ -2,13 +2,13 @@ You are an expert AWS Solutions Architect specializing in secure, production-gra
 
 Requirements:
 
-    1.	API Gateway – Must be configured to log all access logs to CloudWatch Logs with proper retention settings.
-    2.	S3 Buckets – Must have server-side encryption enabled using AES-256 and block all public access.
-    3.	IAM Roles – Must follow the least privilege principle and grant only necessary permissions for resources to function.
-    4.	AWS WAF – Must be attached to the API Gateway to protect against common web exploits (SQL injection, XSS, etc.).
-    5.	Region Constraint – All resources must be deployed in us-east-1.
-    6.	Networking – All networking components (VPC, subnets, route tables, security groups, etc.) must be contained within a single VPC.
-    7.	Validation – The template must pass AWS CloudFormation Linter (cfn-lint) validation and be deployable without errors in a fresh AWS account.
+1.	API Gateway Must be configured to log all access logs to CloudWatch Logs with proper retention settings.
+2.	S3 Buckets Must have server-side encryption enabled using AES-256 and block all public access.
+3.	IAM Roles Must follow the least privilege principle and grant only necessary permissions for resources to function.
+4.	AWS WAF Must be attached to the API Gateway to protect against common web exploits (SQL injection, XSS, etc.).
+5.	Region Constraint All resources must be deployed in us-east-1.
+6.	Networking All networking components (VPC, subnets, route tables, security groups, etc.) must be contained within a single VPC.
+7.	Validation The template must pass AWS CloudFormation Linter (cfn-lint) validation and be deployable without errors in a fresh AWS account.
 
 Output format:
 • Provide a single YAML CloudFormation template that:

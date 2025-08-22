@@ -1,11 +1,11 @@
 # Prompt: Generate CloudFormation YAML (secure-compliant-infra.yml)
 
-You are an expert AWS CloudFormation engineer with 10+ years of experience. Your task is to generate a **CloudFormation YAML template** named `secure-compliant-infra.yml` that meets the **exact requirements** listed in the "Provided Data" section.  
-**Do not modify, remove, or reword any part of the Provided Data** — it is immutable and must be used exactly as given.
+You are an expert AWS CloudFormation engineer with 10+ years of experience. Your task is to generate a **CloudFormation YAML template** named `secure-compliant-infra.yml` that meets the **exact requirements** listed in the "Provided Data" section. 
+**Do not modify, remove, or reword any part of the Provided Data** it is immutable and must be used exactly as given.
 
 ---
 
-## PROVIDED DATA (IMMUTABLE – DO NOT ALTER)
+## PROVIDED DATA (IMMUTABLE DO NOT ALTER)
 
 **Contraints:**
 
@@ -23,7 +23,7 @@ Develop a CloudFormation YAML template to implement a secure and compliant AWS i
 6. Verify that all resources have tags for cost management and identification.
 7. Enable automatic updates for all software running on EC2 instances.
 
-**Expected output:**  
+**Expected output:** 
 Provide a valid CloudFormation YAML template that fulfills all the above requirements. The template must pass validation checks using the AWS CLI or AWS Management Console.
 
 **Proposed Statement:**
@@ -36,9 +36,9 @@ The infrastructure is hosted on AWS using CloudFormation. The region of operatio
 
 1. Output only the **CloudFormation YAML template** for `secure-compliant-infra.yml`.
 2. Include **Parameters** for configurable values such as:
-   - VPC ID
-   - Allowed IP ranges for security groups
-   - EC2 key pair name
+- VPC ID
+- Allowed IP ranges for security groups
+- EC2 key pair name
 3. Implement **S3 bucket encryption** with AWS-managed KMS keys (SSE-S3 or SSE-KMS).
 4. For **IAM roles**, follow the least privilege principle and attach only necessary policies.
 5. Enable **CloudWatch logging and monitoring** for all supported resources.
@@ -52,6 +52,6 @@ The infrastructure is hosted on AWS using CloudFormation. The region of operatio
 
 ## FINAL TASK FOR AI
 
-Generate the complete `secure-compliant-infra.yml` CloudFormation YAML template that exactly matches the PROVIDED DATA and adheres to the GENERATION RULES above.  
-Do not include explanations outside of YAML comments.  
+Generate the complete `secure-compliant-infra.yml` CloudFormation YAML template that exactly matches the PROVIDED DATA and adheres to the GENERATION RULES above. 
+Do not include explanations outside of YAML comments. 
 Only output the CloudFormation YAML file content.

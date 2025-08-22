@@ -74,4 +74,4 @@ It should:
 - Deploy successfully using `pulumi up`
 - Match the structure defined in your existing template
 - Be clean, modular, testable, and production-grade
-- Do not include the `tap.py` entry point — that already exists and will instantiate this `TapStack`
+- Do not include the `tap.py` entry point - that already exists and will instantiate this `TapStack`

@@ -1,69 +1,256 @@
-# IDEAL_RESPONSE.md
+# Infrastructure as Code with CDKTF TypeScript
 
-## Overview
+This project implements a production-grade VPC infrastructure using AWS CDK for Terraform (CDKTF) with TypeScript, following AWS high-availability and security best practices.
 
-This document defines the structure and expectations of an **ideal response** for the IaC stack implemented using CDKTF in TypeScript. It outlines best practices and compliance requirements for provisioning a secure, highly available, and auditable VPC in AWS.
+## tap-stack.ts
 
-## Objective
+```typescript
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 
-Provision a production-grade VPC in the `us-east-1` region with:
+import { S3Backend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
-- Public and private subnets across multiple availability zones
-- Internet access via Internet Gateway and NAT Gateway
-- Flow logs with appropriate retention and IAM roles
-- Proper resource tagging for environment identification
-- Compliance with AWS high-availability and least-privilege principles
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+}
 
----
+// Optional override for region
+const AWS_REGION_OVERRIDE = '';
 
-## Ideal Response Characteristics
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
 
-An ideal IaC response must:
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-- Follow AWS **high availability** best practices (multi-AZ deployment)
-- Include **Internet Gateway** and **NAT Gateway** for appropriate subnets
-- Generate **VPC Flow Logs** using a dedicated IAM role with scoped permissions
-- Apply **Production tags** consistently across all resources
-- Use **default AWS provider tags** to reduce redundancy
-- Maintain **log retention** for at least 30 days (configurable)
-- Avoid overly permissive IAM policies (`Resource: '*'` is prohibited)
+    // Provider
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
 
----
+    // Backend
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
 
-## Example Implementation Highlights
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-✅ VPC CIDR: `10.0.0.0/16`  
-✅ **2 Public Subnets** in `us-east-1a` and `us-east-1b`  
-✅ **2 Private Subnets** in `us-east-1a` and `us-east-1b`  
-✅ **Internet Gateway** for public subnets  
-✅ **NAT Gateway** in public subnet for private subnet egress  
-✅ **CloudWatch Log Group** for VPC flow logs with `30` days retention  
-✅ **IAM Role and Policy** with specific log group ARN  
-✅ **Route Tables** and **Associations** for both subnet types  
-✅ All resources tagged with `Environment: Production`
+    // ──────── VPC Infrastructure ────────
 
----
+    const vpc = new Vpc(this, 'mainVpc', {
+      cidrBlock: '10.0.0.0/16',
+      tags: {
+        Name: 'main-vpc',
+        Environment: 'Production',
+      },
+    });
 
-## Expected Output
+    // Public subnets
+    const publicSubnets = Array.from({ length: 2 }).map(
+      (_, index) =>
+        new Subnet(this, `publicSubnet${index + 1}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index}.0/24`,
+          availabilityZone: `${awsRegion}${String.fromCharCode(97 + index)}`, // a, b
+          mapPublicIpOnLaunch: true,
+          tags: {
+            Name: `public-subnet-${index + 1}`,
+            Environment: 'Production',
+          },
+        })
+    );
 
-- Successfully deploys all required AWS networking components
-- Ensures both internal and external connectivity paths are configured
-- Provides logging for traffic monitoring and auditing
-- Aligns with compliance policies for tagging and logging retention
-- Passes all linting and TypeScript type checks
+    // Private subnets
+    const privateSubnets = Array.from({ length: 2 }).map(
+      (_, index) =>
+        new Subnet(this, `privateSubnet${index + 1}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index + 2}.0/24`,
+          availabilityZone: `${awsRegion}${String.fromCharCode(97 + index)}`,
+          tags: {
+            Name: `private-subnet-${index + 1}`,
+            Environment: 'Production',
+          },
+        })
+    );
 
----
+    const igw = new InternetGateway(this, 'mainIgw', {
+      vpcId: vpc.id,
+      tags: {
+        Name: 'main-igw',
+        Environment: 'Production',
+      },
+    });
 
-## Notes
+    const publicRouteTable = new RouteTable(this, 'publicRouteTable', {
+      vpcId: vpc.id,
+      route: [
+        {
+          cidrBlock: '0.0.0.0/0',
+          gatewayId: igw.id,
+        },
+      ],
+      tags: {
+        Name: 'public-route-table',
+        Environment: 'Production',
+      },
+    });
 
-- The use of dynamic AZ assignment (`String.fromCharCode(97 + index)`) improves fault tolerance.
-- Avoids duplication in provider configuration by using `defaultTags`.
-- IAM policies explicitly reference `logGroup.arn` to ensure least privilege.
-- NAT Gateway costs are considered and provisioned only in one AZ for efficiency.
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `publicRta${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
 
----
+    const eip = new Eip(this, 'natEip', {
+      tags: {
+        Name: 'nat-eip',
+        Environment: 'Production',
+      },
+    });
 
-## Last Updated
+    const natGateway = new NatGateway(this, 'natGateway', {
+      subnetId: publicSubnets[0].id,
+      allocationId: eip.id,
+      tags: {
+        Name: 'nat-gateway',
+        Environment: 'Production',
+      },
+    });
 
-**2025-07-31** — Based on latest implementation in `lib/vpc-stack.ts`
+    const privateRouteTable = new RouteTable(this, 'privateRouteTable', {
+      vpcId: vpc.id,
+      route: [
+        {
+          cidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateway.id,
+        },
+      ],
+      tags: {
+        Name: 'private-route-table',
+        Environment: 'Production',
+      },
+    });
 
+    privateSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `privateRta${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
+    const logGroup = new CloudwatchLogGroup(this, 'vpcFlowLogs', {
+      name: '/aws/vpc/flow-logs',
+      retentionInDays: 30,
+      tags: {
+        Name: 'vpc-flow-logs',
+        Environment: 'Production',
+      },
+    });
+
+    const iamRole = new IamRole(this, 'flowLogRole', {
+      name: 'flow_log_role',
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: {
+        Name: 'flow-log-role',
+        Environment: 'Production',
+      },
+    });
+
+    new IamRolePolicy(this, 'flowLogPolicy', {
+      name: 'flow_log_policy',
+      role: iamRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Effect: 'Allow',
+            Resource: logGroup.arn,
+          },
+        ],
+      }),
+    });
+
+    new FlowLog(this, 'vpcFlowLog', {
+      iamRoleArn: iamRole.arn,
+      logDestination: logGroup.arn,
+      logDestinationType: 'cloud-watch-logs',
+      trafficType: 'ALL',
+      vpcId: vpc.id,
+      tags: {
+        Name: 'vpc-flow-log',
+        Environment: 'Production',
+      },
+    });
+
+    console.log(`Configured ${privateSubnets.length} private subnets`);
+  }
+}
+```
+
+## Key Features
+
+### Network Architecture
+- **VPC CIDR**: `10.0.0.0/16`
+- **2 Public Subnets** in `us-east-1a` and `us-east-1b`
+- **2 Private Subnets** in `us-east-1a` and `us-east-1b`
+- **Internet Gateway** for public subnet internet access
+- **NAT Gateway** in public subnet for private subnet egress
+
+### Security & Compliance
+- **VPC Flow Logs** with CloudWatch Logs destination
+- **IAM Role** with least-privilege permissions for flow logs
+- **30-day log retention** for compliance and auditing
+- **Consistent tagging** with `Environment: Production`
+
+### High Availability
+- Multi-AZ deployment across two availability zones
+- Separate route tables for public and private subnets
+- NAT Gateway for secure outbound internet access from private subnets
+
+This implementation follows AWS best practices for production-grade VPC infrastructure with proper security, monitoring, and high availability configurations.

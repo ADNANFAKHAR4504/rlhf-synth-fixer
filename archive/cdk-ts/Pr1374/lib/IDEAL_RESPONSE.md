@@ -1,25 +1,7 @@
-```typescript
-#!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
+# CDK TypeScript Infrastructure Code
 
-const app = new cdk.App();
 
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-
-Tags.of(app).add('Environment', environmentSuffix);
-
-new TapStack(app, stackName, {
-  stackName,
-  environmentSuffix,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
-});
-```
+## tap-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -246,31 +228,6 @@ export class TapStack extends cdk.Stack {
       value: dbInstance.instanceEndpoint.hostname,
     });
     new cdk.CfnOutput(this, 'DynamoTableName', { value: appTable.tableName });
-  }
-}
-```
-
-```json
-{
-  "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
-  "watch": {
-    "include": ["**"],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "**/*.d.ts",
-      "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
-      "node_modules",
-      "test"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true
   }
 }
 ```

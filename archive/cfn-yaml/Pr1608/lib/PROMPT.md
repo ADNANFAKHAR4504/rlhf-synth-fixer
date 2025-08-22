@@ -7,8 +7,8 @@ Create a CloudFormation template in YAML for a serverless application using AWS 
 Use AWS SAM to define Lambda functions and API Gateway integration. The Lambda functions need environment variables and proper IAM permissions to access DynamoDB.
 
 Set up API Gateway with these routes:
-- POST `/user` → CreateUserFunction Lambda  
-- GET `/user/{id}` → GetUserFunction Lambda
+- POST `/user` CreateUserFunction Lambda 
+- GET `/user/{id}` GetUserFunction Lambda
 
 ### Infrastructure Details
 

@@ -1,67 +1,9 @@
-# Multi-Cloud CDK TypeScript Infrastructure Solution
+# AWS CDK TypeScript Infrastructure
 
-I'll provide a comprehensive CDK TypeScript solution that supports consistent multi-cloud infrastructure deployment across AWS and Azure platforms with proper multi-environment support.
+This solution provides AWS infrastructure using CDK TypeScript.
 
-## Solution Architecture
+## lib/tap-stack.ts
 
-This solution implements a flexible multi-cloud infrastructure framework that can deploy resources on both AWS and Azure while maintaining consistency across development, staging, and production environments. The architecture uses:
-
-- **Environment-specific configuration** through CDK context variables
-- **Cloud provider abstraction** with AWS native resources and Azure placeholders  
-- **Modular design** for reusability and maintainability
-- **Consistent tagging and naming** across all resources
-- **Comprehensive testing** with both unit and integration tests
-
-## Project Structure
-
-```
-.
-├── bin/
-│   └── tap.ts                    # CDK application entry point
-├── lib/
-│   └── tap-stack.ts             # Main multi-cloud stack definition
-├── test/
-│   ├── tap-stack.unit.test.ts   # Unit tests
-│   └── tap-stack.int.test.ts    # Integration tests
-├── cdk.json                     # CDK configuration with context variables
-├── package.json                 # Dependencies and scripts
-└── metadata.json               # Project metadata
-```
-
-## Implementation Files
-
-### bin/tap.ts
-```typescript
-#!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-
-const repositoryName = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
-
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
-
-new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
-});
-```
-
-### lib/tap-stack.ts
 ```typescript
 /* eslint-disable prettier/prettier */
 import * as cdk from 'aws-cdk-lib';
@@ -262,56 +204,3 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-## Key Features
-
-### Multi-Cloud Support
-- **AWS Native Resources**: Implements VPC, EC2, and S3 using AWS CDK constructs
-- **Azure Placeholders**: Provides conceptual placeholders for Azure resources with clear architecture path
-- **Provider Abstraction**: Clean separation between cloud providers through configuration
-
-### Environment Configuration
-- **Legacy Support**: Maintains backward compatibility with `environmentSuffix` parameter
-- **Flexible Configuration**: Supports both simple suffix-based and complex config-based approaches
-- **Context Variables**: Leverages CDK context for environment-specific values
-
-### Resource Management
-- **Consistent Tagging**: All resources tagged with Environment, ManagedBy, Project identifiers
-- **Proper Security**: S3 buckets with encryption and public access blocking
-- **Network Security**: Security groups with controlled SSH access
-- **Cleanup Support**: Resources configured for proper destruction (no Retain policies)
-
-### Testing Strategy
-- **Comprehensive Unit Tests**: Tests for AWS resources, Azure placeholders, configuration handling
-- **Integration Tests**: Real AWS resource verification when deployment outputs are available
-- **Graceful Degradation**: Integration tests skip gracefully when outputs unavailable
-
-## Deployment Commands
-
-```bash
-# Synthesize templates
-npm run cdk:synth
-
-# Deploy to development
-ENVIRONMENT_SUFFIX=dev npm run cdk:deploy
-
-# Deploy to staging  
-ENVIRONMENT_SUFFIX=staging npm run cdk:deploy
-
-# Deploy to production
-ENVIRONMENT_SUFFIX=prod npm run cdk:deploy
-
-# Run tests
-npm run test:unit
-npm run test:integration
-npm test
-```
-
-## Architecture Benefits
-
-1. **Scalability**: Modular design allows easy extension for additional clouds/environments
-2. **Maintainability**: Clear separation of concerns with comprehensive testing
-3. **Security**: Best practices implemented for resource security and access control
-4. **Flexibility**: Supports both simple and complex configuration scenarios
-5. **Consistency**: Standardized naming and tagging across all resources and environments
-
-This solution provides a solid foundation for multi-cloud infrastructure that can be extended and customized as requirements evolve.

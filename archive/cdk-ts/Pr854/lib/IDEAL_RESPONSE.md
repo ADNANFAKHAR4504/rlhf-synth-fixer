@@ -1,18 +1,8 @@
-I'll help you build a secure web application infrastructure on AWS using CDK TypeScript. Here's a comprehensive solution with all the security best practices you requested:
+# AWS CDK TypeScript Infrastructure
 
-## Project Structure
+This solution provides AWS infrastructure using CDK TypeScript.
 
-First, let's set up the project structure:
-
-```bash
-mkdir secure-web-app-cdk
-cd secure-web-app-cdk
-npm init -y
-npm install aws-cdk-lib constructs
-npm install -D @types/node typescript aws-cdk
-```
-
-## 1. Main Stack File (`lib/secure-web-app-stack.ts`)
+## lib/secure-web-app-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -187,6 +177,7 @@ export class SecureWebAppStack extends cdk.Stack {
       }),
     });
   }
+
   private createS3Bucket(
     prefix: string,
     environment: string,
@@ -279,6 +270,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     return { albSecurityGroup, ec2SecurityGroup };
   }
+
   private createEC2Role(
     s3Bucket: s3.Bucket,
     prefix: string,
@@ -391,6 +383,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     return alb;
   }
+
   private createAutoScalingGroup(
     vpc: ec2.Vpc,
     securityGroup: ec2.SecurityGroup,
@@ -508,6 +501,7 @@ export class SecureWebAppStack extends cdk.Stack {
 
     return asg;
   }
+
   private createWAFv2(
     alb: elbv2.ApplicationLoadBalancer,
     prefix: string,
@@ -651,265 +645,44 @@ export class SecureWebAppStack extends cdk.Stack {
   }
 }
 ```
-## 2. Main App File (`bin/secure-web-app.ts`)
+
+## lib/tap-stack.ts
 
 ```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { SecureWebAppStack } from '../lib/secure-web-app-stack';
+import { Construct } from 'constructs';
+import { SecureWebAppStack } from './secure-web-app-stack';
 
-const app = new cdk.App();
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
 
-// Get environment from context or default to 'dev'
-const environment = app.node.tryGetContext('environment') || 'dev';
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, {
+      ...props,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-west-2',
+      },
+    });
 
-new SecureWebAppStack(app, `SecureWebAppStack-${environment}`, {
-  environment,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
-  },
-  description: `Secure Web Application Infrastructure - ${environment}`,
-});
-```
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
-## 3. CDK Configuration (`cdk.json`)
-
-```json
-{
-  "app": "npx ts-node --prefer-ts-exts bin/secure-web-app.ts",
-  "watch": {
-    "include": ["**"],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "**/*.d.ts",
-      "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
-      "node_modules",
-      "test"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
-    "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target": "aws-cdk-lib",
-    "@aws-cdk-v2/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk-v2/aws-iam:minimizePolicies": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
-    "@aws-cdk/aws-kms:aliasNameRef": true,
-    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
-    "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-sns:restrictPublishPolicyToIPProtocol": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
-    "@aws-cdk/core:enablePartitionLiterals": true,
-    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
-    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
-    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
-    "@aws-cdk/aws-sns-subscriptions:restrictPublishPolicyToIPProtocol": true,
-    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true
+    // Instantiate the secure stack (not relying on outputs directly anymore)
+    new SecureWebAppStack(this, 'TfSecureWebAppStack', {
+      environment: environmentSuffix,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: 'us-west-2',
+      },
+      description:
+        'Secure web application infrastructure with production-ready security configurations',
+    });
   }
 }
 ```
 
-## 4. TypeScript Configuration (`tsconfig.json`)
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["es2020", "dom"],
-    "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "typeRoots": ["./node_modules/@types"]
-  },
-  "exclude": ["node_modules", "cdk.out"]
-}
-```
-
-## 5. Package.json
-
-```json
-{
-  "name": "secure-web-app-cdk",
-  "version": "0.1.0",
-  "bin": {
-    "secure-web-app": "bin/secure-web-app.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "test": "jest",
-    "test:unit": "jest --testPathPattern=unit",
-    "test:integration": "jest --testPathPattern=int",
-    "cdk": "cdk",
-    "cdk:synth": "cdk synth",
-    "cdk:deploy": "cdk deploy",
-    "cdk:destroy": "cdk destroy",
-    "deploy": "cdk deploy",
-    "deploy:prod": "cdk deploy --context environment=prod",
-    "deploy:staging": "cdk deploy --context environment=staging",
-    "destroy": "cdk destroy",
-    "diff": "cdk diff",
-    "synth": "cdk synth"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.4.0",
-    "@types/node": "18.14.6",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.0.5",
-    "aws-cdk": "2.87.0",
-    "ts-node": "^10.9.1",
-    "typescript": "~4.9.5"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "2.87.0",
-    "constructs": "^10.0.0",
-    "source-map-support": "^0.5.21"
-  }
-}
-```
-
-## Deployment Instructions
-
-1. **Install dependencies:**
-
-```bash
-npm install
-```
-
-2. **Bootstrap CDK (first time only):**
-
-```bash
-npx cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
-```
-
-3. **Deploy the stack:**
-
-```bash
-# For production environment
-npm run deploy:prod
-
-# For staging environment
-npm run deploy:staging
-
-# Or with custom environment
-npx cdk deploy --context environment=dev
-```
-
-4. **View the synthesized CloudFormation template:**
-
-```bash
-npx cdk synth
-```
-
-## Security Features Implemented
-
-### ✅ **Network Security**
-
-- VPC with public and private subnets across multiple AZs (10.0.0.0/16 CIDR)
-- Security groups with least privilege access
-- VPC Flow Logs enabled with CloudWatch Logs destination
-- Single NAT Gateway for cost optimization
-- DNS hostnames and support enabled
-
-### ✅ **Compute Security**
-
-- EC2 instances in private subnets only
-- SSH access disabled, SSM Session Manager enabled
-- IMDSv2 enforced on EC2 instances (httpTokens: REQUIRED)
-- EBS volumes encrypted with GP3 storage
-- Amazon Linux 2023 AMI with latest security patches
-- Launch template with security best practices
-
-### ✅ **Application Security**
-
-- WAFv2 with managed rule sets:
-  - AWSManagedRulesCommonRuleSet
-  - AWSManagedRulesKnownBadInputsRuleSet
-  - Rate limiting (10,000 requests per IP)
-- Application Load Balancer with security groups
-- HTTP/HTTPS listeners configured
-- Target group health checks enabled
-
-### ✅ **Data Security**
-
-- S3 bucket with KMS encryption using customer-managed key
-- KMS key with automatic rotation enabled
-- S3 bucket policies and public access blocked
-- Versioning enabled with lifecycle policies
-- Server-side encryption enforced (enforceSSL: true)
-- Access logging and EventBridge integration
-
-### ✅ **Identity & Access Management**
-
-- IAM roles with least privilege principles
-- EC2 role with SSM and CloudWatch permissions
-- S3 bucket access permissions for EC2 instances
-- Service-linked roles for AWS services
-
-### ✅ **Monitoring & Logging**
-
-- CloudWatch Dashboard with key metrics:
-  - ALB Request Count and Response Time
-  - Auto Scaling Group Instance Count
-  - HTTP Error rates (4XX/5XX)
-- VPC Flow Logs to CloudWatch
-- ALB Access Logs to S3
-- CloudWatch Agent for instance monitoring
-
-### ✅ **High Availability & Scalability**
-
-- Auto Scaling Group with min: 2, max: 10 instances
-- Multi-AZ deployment across 3 availability zones
-- CPU-based auto scaling (70% target utilization)
-- Rolling update policy for zero-downtime deployments
-- ELB health checks with proper thresholds
-
-### ✅ **Infrastructure Security**
-
-- Resource tagging for compliance (Environment, Project, ManagedBy)
-- Removal policies configured for cleanup
-- Proper resource naming conventions with environment prefixes
-- CDK best practices and security contexts enabled
-
-## Customization Options
-
-You can customize the deployment by modifying the context in `cdk.json` or passing parameters:
-
-```bash
-# Deploy with different environment
-npx cdk deploy --context environment=staging
-
-# Deploy with custom region
-CDK_DEFAULT_REGION=us-east-1 npx cdk deploy
-```
-
-## Infrastructure Outputs
-
-The stack provides the following outputs for integration:
-
-- **LoadBalancerDNS**: Application Load Balancer DNS name for accessing the application
-- **S3BucketName**: S3 bucket name for EC2 data storage
-- **VPCId**: VPC identifier for network integration
-- **KMSKeyId**: KMS key identifier for encryption operations
-- **AutoScalingGroupName**: ASG name for monitoring and management
-
-This infrastructure provides a production-ready, secure foundation for your web application with comprehensive security controls, monitoring, and scalability features implemented according to AWS best practices.

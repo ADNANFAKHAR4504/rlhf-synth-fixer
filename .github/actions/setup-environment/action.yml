@@ -75,6 +75,20 @@ runs:
         restore-keys: |
           ${{ runner.os }}-go-
 
+    - name: Setup Java 17
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Gradle
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-home-cache-cleanup: true
+
+
     - name: Setup Terraform
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
@@ -116,6 +130,8 @@ runs:
         path: |
           bin/
           lib/
+          tests/
+          src/
           package*.json
           Pipfile
           Pipfile.lock
@@ -123,3 +139,12 @@ runs:
           cdk.json
           metadata.json
           lambda/
+          build.gradle
+          settings.gradle
+          gradle.properties
+          gradle/
+          gradlew
+          gradlew.bat
+          config/
+          .gradle/
+          build/

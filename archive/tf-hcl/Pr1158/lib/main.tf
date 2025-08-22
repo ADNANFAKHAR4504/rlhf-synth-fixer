@@ -343,23 +343,23 @@ resource "aws_iam_policy" "ip_restriction_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowFromSpecificIPs"
-        Effect = "Allow"
-        Action = "*"
+        Sid      = "AllowFromSpecificIPs"
+        Effect   = "Allow"
+        Action   = "*"
         Resource = "*"
         Condition = {
           IpAddress = {
             "aws:SourceIp" = [
-              "52.200.0.0/24",    # Production office network
-              "34.195.0.0/24"     # Production VPN network
+              "52.200.0.0/24", # Production office network
+              "34.195.0.0/24"  # Production VPN network
             ]
           }
         }
       },
       {
-        Sid    = "DenyFromOtherIPs"
-        Effect = "Deny"
-        Action = "*"
+        Sid      = "DenyFromOtherIPs"
+        Effect   = "Deny"
+        Action   = "*"
         Resource = "*"
         Condition = {
           IpAddressIfExists = {
@@ -367,8 +367,8 @@ resource "aws_iam_policy" "ip_restriction_policy" {
           }
           StringNotEquals = {
             "aws:SourceIp" = [
-              "52.200.0.0/24",    # Production office network
-              "34.195.0.0/24"     # Production VPN network
+              "52.200.0.0/24", # Production office network
+              "34.195.0.0/24"  # Production VPN network
             ]
           }
         }
@@ -520,7 +520,7 @@ resource "aws_s3_bucket_public_access_block" "content_bucket" {
 
 # S3 bucket policy for CloudFront access
 resource "aws_s3_bucket_policy" "content_bucket_policy" {
-  bucket = aws_s3_bucket.content_bucket.id
+  bucket     = aws_s3_bucket.content_bucket.id
   depends_on = [aws_s3_bucket_public_access_block.content_bucket]
 
   policy = jsonencode({
@@ -549,7 +549,7 @@ resource "aws_s3_object" "index_html" {
   bucket       = aws_s3_bucket.content_bucket.id
   key          = "index.html"
   content_type = "text/html"
-  
+
   content = <<EOF
 <!DOCTYPE html>
 <html>
@@ -696,8 +696,8 @@ resource "aws_wafv2_web_acl" "cloudfront_waf" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -718,15 +718,15 @@ resource "aws_wafv2_web_acl" "cloudfront_waf" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "CloudFrontWAFMetric"
-    sampled_requests_enabled    = true
+    metric_name                = "CloudFrontWAFMetric"
+    sampled_requests_enabled   = true
   }
 
   tags = {
