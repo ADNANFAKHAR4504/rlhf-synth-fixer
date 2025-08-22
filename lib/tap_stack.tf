@@ -4,7 +4,7 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-west-1"
+  default     = "us-west-2"
 }
 
 variable "project_name" {
@@ -871,6 +871,31 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   depends_on = [aws_iam_role.ec2_role]
 }
 
+# SSM Maintenance Window Role
+resource "aws_iam_role" "ssm_maintenance" {
+  name = "${local.name_prefix}-ssm-maintenance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ssm.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_maintenance" {
+  role       = aws_iam_role.ssm_maintenance.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # VPC Flow Logs
 resource "aws_flow_log" "vpc" {
   iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
@@ -1155,7 +1180,7 @@ resource "aws_ssm_maintenance_window_task" "patch_task" {
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"
   priority         = 1
-  service_role_arn = aws_iam_role.ec2_role.arn
+  service_role_arn = aws_iam_role.ssm_maintenance.arn
   max_concurrency  = 1
   max_errors       = 1
 
