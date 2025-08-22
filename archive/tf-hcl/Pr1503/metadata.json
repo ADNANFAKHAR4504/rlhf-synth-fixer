@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr879",
+  "team": "synth",
+  "startedAt": "2025-08-17T21:00:34+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "IaC Optimization",
+    "Access Control",
+    "Performance Optimization",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "Auto Scaling",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

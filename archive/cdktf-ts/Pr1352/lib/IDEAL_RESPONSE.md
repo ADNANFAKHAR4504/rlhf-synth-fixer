@@ -1,3 +1,10 @@
+# Infrastructure as Code with CDKTF TypeScript
+
+This project implements a secure infrastructure stack using AWS CDK for Terraform (CDKTF) with TypeScript, featuring KMS encryption, IAM least-privilege access, and comprehensive S3 security configurations.
+
+## secure-infra-stack.ts
+
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -15,14 +22,14 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 const commonTags = {
-Project: 'SecureInfra',
-Environment: 'Prod',
-Owner: 'Akshat Jain',
+  Project: 'SecureInfra',
+  Environment: 'Prod',
+  Owner: 'Akshat Jain',
 };
 
 export class SecureInfraStack extends TerraformStack {
-constructor(scope: Construct, id: string) {
-super(scope, id);
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
 
     new AwsProvider(this, 'AWS', { region: 'us-east-1' });
 
@@ -30,6 +37,8 @@ super(scope, id);
     const callerIdentity = new DataAwsCallerIdentity(this, 'Deployer');
 
     // --- BACKEND RESOURCES ---
+
+    // FIX: Create a dedicated KMS key for the backend state bucket.
     const backendKmsKey = new KmsKey(this, 'BackendKmsKey', {
       description: 'KMS key for Terraform state bucket',
       enableKeyRotation: true,
@@ -41,6 +50,7 @@ super(scope, id);
       tags: commonTags,
     });
 
+    // FIX: Add complete public access block settings.
     new S3BucketPublicAccessBlock(this, 'StateBucketPublicAccessBlock', {
       bucket: stateBucket.id,
       blockPublicAcls: true,
@@ -49,34 +59,50 @@ super(scope, id);
       restrictPublicBuckets: true,
     });
 
-    new S3BucketServerSideEncryptionConfigurationA(this, 'StateBucketEncryption', {
-      bucket: stateBucket.id,
-      rule: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'aws:kms',
-          kmsMasterKeyId: backendKmsKey.id,
-        },
-      }],
-    });
+    // FIX: Configure the state bucket to use the customer-managed KMS key.
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'StateBucketEncryption',
+      {
+        bucket: stateBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: backendKmsKey.id,
+            },
+          },
+        ],
+      }
+    );
 
     new S3BucketVersioningA(this, 'StateBucketVersioning', {
       bucket: stateBucket.id,
       versioningConfiguration: { status: 'Enabled' },
     });
 
-    const stateBucketPolicyDoc = new DataAwsIamPolicyDocument(this, 'StateBucketPolicyDoc', {
-      statement: [{
-        effect: 'Deny',
-        principals: [{ type: '*', identifiers: ['*'] }],
-        actions: ['s3:*'],
-        resources: [stateBucket.arn, `${stateBucket.arn}/*`],
-        condition: [{
-          test: 'Bool',
-          variable: 'aws:SecureTransport',
-          values: ['false'],
-        }],
-      }],
-    });
+    // FIX: Add a bucket policy to enforce HTTPS (secure transport).
+    const stateBucketPolicyDoc = new DataAwsIamPolicyDocument(
+      this,
+      'StateBucketPolicyDoc',
+      {
+        statement: [
+          {
+            effect: 'Deny',
+            principals: [{ type: '*', identifiers: ['*'] }],
+            actions: ['s3:*'],
+            resources: [stateBucket.arn, `${stateBucket.arn}/*`],
+            condition: [
+              {
+                test: 'Bool',
+                variable: 'aws:SecureTransport',
+                values: ['false'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     new S3BucketPolicy(this, 'StateBucketPolicy', {
       bucket: stateBucket.id,
@@ -107,14 +133,18 @@ super(scope, id);
     const limitedAccessRole = new IamRole(this, 'S3LimitedAccessRole', {
       name: `S3LimitedAccessRole-${uniqueSuffix}`,
       assumeRolePolicy: new DataAwsIamPolicyDocument(this, 'RoleTrustPolicy', {
-        statement: [{
-          effect: 'Allow',
-          actions: ['sts:AssumeRole'],
-          principals: [{
-            type: 'AWS',
-            identifiers: [`arn:aws:iam::${callerIdentity.accountId}:root`],
-          }],
-        }],
+        statement: [
+          {
+            effect: 'Allow',
+            actions: ['sts:AssumeRole'],
+            principals: [
+              {
+                type: 'AWS',
+                identifiers: [`arn:aws:iam::${callerIdentity.accountId}:root`],
+              },
+            ],
+          },
+        ],
       }).json,
       tags: commonTags,
     });
@@ -124,16 +154,23 @@ super(scope, id);
       versioningConfiguration: { status: 'Enabled' },
     });
 
-    new S3BucketServerSideEncryptionConfigurationA(this, 'SensitiveDataBucketEncryption', {
-      bucket: sensitiveDataBucket.id,
-      rule: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'aws:kms',
-          kmsMasterKeyId: kmsKey.id,
-        },
-      }],
-    });
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'SensitiveDataBucketEncryption',
+      {
+        bucket: sensitiveDataBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.id,
+            },
+          },
+        ],
+      }
+    );
 
+    // FIX: Add complete public access block settings.
     new S3BucketPublicAccessBlock(this, 'SensitiveDataPublicAccessBlock', {
       bucket: sensitiveDataBucket.id,
       blockPublicAcls: true,
@@ -142,57 +179,77 @@ super(scope, id);
       restrictPublicBuckets: true,
     });
 
-    const bucketPolicyDocument = new DataAwsIamPolicyDocument(this, 'SensitiveDataBucketPolicyDoc', {
-      statement: [
-        {
-          effect: 'Deny',
-          principals: [{ type: '*', identifiers: ['*'] }],
-          actions: ['s3:*'],
-          resources: [sensitiveDataBucket.arn, `${sensitiveDataBucket.arn}/*`],
-          condition: [{
-            test: 'StringNotEquals',
-            variable: 'aws:PrincipalArn',
-            values: [limitedAccessRole.arn, callerIdentity.arn],
-          }],
-        },
-        {
-          effect: 'Deny',
-          principals: [{ type: '*', identifiers: ['*'] }],
-          actions: ['s3:*'],
-          resources: [sensitiveDataBucket.arn, `${sensitiveDataBucket.arn}/*`],
-          condition: [{
-            test: 'Bool',
-            variable: 'aws:SecureTransport',
-            values: ['false'],
-          }],
-        }
-      ],
-    });
+    const bucketPolicyDocument = new DataAwsIamPolicyDocument(
+      this,
+      'SensitiveDataBucketPolicyDoc',
+      {
+        statement: [
+          {
+            // This is the original Deny statement
+            effect: 'Deny',
+            principals: [{ type: '*', identifiers: ['*'] }],
+            actions: ['s3:*'],
+            resources: [
+              sensitiveDataBucket.arn,
+              `${sensitiveDataBucket.arn}/*`,
+            ],
+            condition: [
+              {
+                test: 'StringNotEquals',
+                variable: 'aws:PrincipalArn',
+                values: [limitedAccessRole.arn, callerIdentity.arn],
+              },
+            ],
+          },
+          // FIX: Add a second statement to enforce HTTPS (secure transport).
+          {
+            effect: 'Deny',
+            principals: [{ type: '*', identifiers: ['*'] }],
+            actions: ['s3:*'],
+            resources: [
+              sensitiveDataBucket.arn,
+              `${sensitiveDataBucket.arn}/*`,
+            ],
+            condition: [
+              {
+                test: 'Bool',
+                variable: 'aws:SecureTransport',
+                values: ['false'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     new S3BucketPolicy(this, 'SensitiveDataBucketPolicy', {
       bucket: sensitiveDataBucket.id,
       policy: bucketPolicyDocument.json,
     });
 
-    const accessPolicyDocument = new DataAwsIamPolicyDocument(this, 'S3AccessPolicyDoc', {
-      statement: [
-        {
-          effect: 'Allow',
-          actions: ['s3:GetObject', 's3:PutObject'],
-          resources: [`${sensitiveDataBucket.arn}/*`],
-        },
-        {
-          effect: 'Allow',
-          actions: ['s3:ListBucket'],
-          resources: [sensitiveDataBucket.arn],
-        },
-        {
-          effect: 'Allow',
-          actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
-          resources: [kmsKey.arn],
-        },
-      ],
-    });
+    const accessPolicyDocument = new DataAwsIamPolicyDocument(
+      this,
+      'S3AccessPolicyDoc',
+      {
+        statement: [
+          {
+            effect: 'Allow',
+            actions: ['s3:GetObject', 's3:PutObject'],
+            resources: [`${sensitiveDataBucket.arn}/*`],
+          },
+          {
+            effect: 'Allow',
+            actions: ['s3:ListBucket'],
+            resources: [sensitiveDataBucket.arn],
+          },
+          {
+            effect: 'Allow',
+            actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
+            resources: [kmsKey.arn],
+          },
+        ],
+      }
+    );
 
     const s3AccessPolicy = new IamPolicy(this, 'S3AccessPolicy', {
       name: `S3LimitedAccessPolicy-${uniqueSuffix}`,
@@ -208,22 +265,29 @@ super(scope, id);
     // --- OUTPUTS ---
     new TerraformOutput(this, 'StateBucketName', { value: stateBucket.bucket });
     new TerraformOutput(this, 'LockTableName', { value: lockTable.name });
-    new TerraformOutput(this, 'SensitiveDataBucketName', { value: sensitiveDataBucket.bucket });
-
+    new TerraformOutput(this, 'SensitiveDataBucketName', {
+      value: sensitiveDataBucket.bucket,
+    });
+  }
 }
-}
-bin/tap.ts
-The entrypoint file simply creates an instance of the single SecureInfraStack.
+```
 
-TypeScript
+## Key Features
 
-#!/usr/bin/env node
-import 'source-map-support/register';
-import { App } from 'cdktf';
-import { SecureInfraStack } from '../lib/secure-infra-stack';
+### Security Best Practices
+- **KMS Encryption**: Customer-managed KMS keys with rotation enabled for both state and sensitive data buckets
+- **Public Access Block**: Complete blocking of public access on all S3 buckets
+- **HTTPS Enforcement**: Bucket policies deny all non-HTTPS requests
+- **Least Privilege IAM**: Role-based access with minimal required permissions
 
-const app = new App();
+### Terraform State Management
+- **S3 Backend**: Secure state storage with encryption
+- **DynamoDB Table**: State locking to prevent concurrent modifications
+- **Versioning**: Enabled on all S3 buckets for state history
 
-new SecureInfraStack(app, 'secure-infra-stack');
+### Compliance Features
+- **Consistent Tagging**: All resources tagged with Project, Environment, and Owner
+- **Unique Resource Names**: Using UUID-based suffixes to avoid conflicts
+- **Audit Trail**: Versioning and encryption on all storage resources
 
-app.synth();
+This implementation provides a production-ready secure infrastructure foundation following AWS and Terraform best practices.

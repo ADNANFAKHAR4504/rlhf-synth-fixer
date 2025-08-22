@@ -79,7 +79,11 @@ These outputs enable downstream stacks or deployments to reference core networki
 - Add `Metadata` and `Description` to individual resources for better documentation.
 - Add `Outputs.Export` fields if the stack is to be referenced by other stacks.
 
-## Template 
+## Template
+
+### TapStack.yml
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to create a VPC with a public subnet, Internet Gateway, and necessary routing and security group rules.
 
@@ -171,6 +175,7 @@ Outputs:
   WebSecurityGroupId:
     Description: The ID of the web security group
     Value: !Ref WebSecurityGroup
+```
 
 ---
 

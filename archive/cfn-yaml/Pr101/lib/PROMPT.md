@@ -2,7 +2,7 @@ You are an AWS CloudFormation expert.
 
 Create a production-ready CloudFormation YAML template that provisions a highly available, secure, and observable serverless API stack with the following requirements:
 
-🧱 Infrastructure Requirements
+Infrastructure Requirements
 AWS Lambda:
 
 Use Lambda for serverless compute.
@@ -33,7 +33,7 @@ Tagging & Security:
 
 All resources must be tagged with env, name, and team.
 Use CloudFormation intrinsic functions for parameterization and environment-specific configuration.
-📦 Template Features
+Template Features
 Use parameters for:
 Environment name (env)
 Application name (name)
@@ -43,7 +43,7 @@ Region (to support multi-region deployment)
 Use CloudFormation intrinsic functions for dynamic resource naming and configuration.
 All IAM policies must follow the principle of least privilege.
 All resource names should be parameterized and include the environment, name, and team where appropriate.
-✅ Outputs
+Outputs
 API Gateway endpoint and custom domain
 Lambda function ARNs
 DynamoDB table name and ARN
