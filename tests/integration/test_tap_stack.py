@@ -477,13 +477,13 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
 
         self.assertEqual(
-          tags.get('Environment'), 'Production',
-          "Should have Environment tag")
+            tags.get('Environment'), 'Production',
+            "Should have Environment tag")
         self.assertEqual(
-          tags.get('Project'), 'MicroservicesCI',
-          "Should have Project tag")
+            tags.get('Project'), 'MicroservicesCI',
+            "Should have Project tag")
         self.assertEqual(
-          tags.get('Owner'), 'DevOps', "Should have Owner tag")
+            tags.get('Owner'), 'DevOps', "Should have Owner tag")
 
     except ClientError as e:
       print(f"Tagging validation skipped - error accessing resources: {e}")
