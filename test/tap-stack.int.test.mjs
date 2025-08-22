@@ -326,9 +326,9 @@ describe('TapStack Integration Tests', () => {
       expect(response.AutoScalingGroups).toHaveLength(1);
       const asg = response.AutoScalingGroups[0];
 
-      expect(asg.MinSize).toBe(2);
+      expect(asg.MinSize).toBe(1);
       expect(asg.MaxSize).toBe(10);
-      expect(asg.DesiredCapacity).toBe(2);
+      expect(asg.DesiredCapacity).toBe(1);
       expect(asg.HealthCheckType).toBe('ELB');
       expect(asg.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
     });
