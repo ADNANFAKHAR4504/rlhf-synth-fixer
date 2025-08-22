@@ -120,7 +120,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub 'webserver-${ProjectName}-${EnvironmentSuffix}'
-      GroupDescription: 'Security group for web server allowing HTTP access'
+      GroupDescription: 'Security group for web server allowing HTTP and SSH access'
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -128,6 +128,11 @@ Resources:
           ToPort: 80
           CidrIp: '0.0.0.0/0'
           Description: 'HTTP access from anywhere'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
+          Description: 'SSH access from anywhere'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
@@ -190,6 +195,7 @@ Resources:
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: t2.micro
+      KeyName: my-key
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
@@ -277,12 +283,12 @@ This CloudFormation template creates a complete AWS infrastructure setup that me
 2. **Two public subnets** with CIDR blocks `10.0.1.0/24` and `10.0.2.0/24`
 3. **Internet Gateway** attached to the VPC for external access
 4. **Route Table** associated with both subnets routing traffic (`0.0.0.0/0`) to the Internet Gateway
-5. **Security Group** allowing inbound HTTP (port 80) access
+5. **Security Group** allowing inbound HTTP (port 80) and SSH (port 22) access
 6. **EC2 instance** (t2.micro) in the first public subnet with Apache HTTP server installed
 7. **Elastic IP** allocated and associated with the EC2 instance
 8. **IAM role** for the EC2 instance with permissions to describe instances
 9. **Proper resource naming convention** following `<resource-type>-<project-name>-<unique-id>` pattern
-10. Uses AWS Systems Manager Session Manager for secure instance access without SSH keys
+10. Uses the existing KeyPair named 'my-key' for SSH access
 
 The template includes modern AWS features:
 - Uses Systems Manager Parameter Store for the latest Amazon Linux 2023 AMI
