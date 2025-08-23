@@ -49,6 +49,7 @@ variable "region_config" {
 variable "environment" {
   description = "Environment name (dev, stage, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = contains(["dev", "stage", "prod"], var.environment)
     error_message = "Environment must be dev, stage, or prod."
@@ -62,7 +63,7 @@ variable "active_color" {
     condition     = contains(["blue", "green"], var.active_color)
     error_message = "Active color must be either blue or green."
   }
-  default     = "blue"
+  default = "blue"
 }
 
 variable "owner" {
@@ -163,11 +164,11 @@ variable "kms_config" {
   description = "Configuration for KMS keys"
   type = object({
     deletion_window_in_days = number
-    enable_key_rotation    = bool
+    enable_key_rotation     = bool
   })
   default = {
     deletion_window_in_days = 7
-    enable_key_rotation    = true
+    enable_key_rotation     = true
   }
 }
 
@@ -254,7 +255,7 @@ variable "cloudfront_cached_methods" {
 variable "blue_green_deployment" {
   description = "Configuration for blue-green deployment"
   type = object({
-    enabled = bool
+    enabled      = bool
     active_color = string
     weights = object({
       blue  = number
@@ -262,7 +263,7 @@ variable "blue_green_deployment" {
     })
   })
   default = {
-    enabled = true
+    enabled      = true
     active_color = "blue"
     weights = {
       blue  = 100
@@ -294,7 +295,7 @@ variable "waf_rate_limit" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-  default     = "example.com"  # Change this to your actual domain in tfvars
+  default     = "example.com" # Change this to your actual domain in tfvars
 }
 
 variable "create_zone" {

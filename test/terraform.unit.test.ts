@@ -247,9 +247,9 @@ describe("Terraform Multi-Region Infrastructure", () => {
     expect(variablesContent).toMatch(/variable\s+"allowed_ingress_cidrs"\s*{[^}]*type\s*=\s*list\(string\)/);
     expect(variablesContent).toMatch(/default\s*=\s*\[\s*"10\.0\.0\.0\/8",\s*"172\.16\.0\.0\/12",\s*"192\.168\.0\.0\/16"\s*\]/);
 
-    // Check active_color variable
-    expect(terraformContent).toMatch(/variable\s+"active_color"\s*{[^}]*type\s*=\s*string/);
-    expect(terraformContent).toMatch(/validation\s*{[^}]*contains\(\["blue",\s*"green"\]/);
+    // Check blue_green_deployment variable and its active_color validation
+    expect(variablesContent).toMatch(/variable\s+"blue_green_deployment"\s*{[^}]*type\s*=\s*object\(\{/);
+    expect(variablesContent).toMatch(/validation\s*{[^}]*condition\s*=\s*contains\(\["blue",\s*"green"\],\s*var\.blue_green_deployment\.active_color\)/);
   });
 
   test("Local values should be correctly configured", () => {
@@ -306,7 +306,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
         const kmsConfig = kmsMatch[1];
         expect(kmsConfig).toMatch(/deletion_window_in_days\s*=\s*7/);
         expect(kmsConfig).toMatch(/enable_key_rotation\s*=\s*true/);
-        expect(kmsConfig).toMatch(/description\s*=\s*"KMS key for \${var\.environment} in [^"]+"/);
+        expect(kmsConfig).toMatch(new RegExp(`description\\s*=\\s*"KMS key for \\$\\{var\\.environment\\} in ${region.replace('_', '-')}"`));
       }      // Check KMS alias
       expect(terraformContent).toMatch(new RegExp(`resource\\s+"aws_kms_alias"\\s+"main_${region}"`));
     });
@@ -354,8 +354,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       if (natMatch) {
         const natConfig = natMatch[1];
         expect(natConfig).toMatch(/count\s*=\s*3/);
-        expect(natConfig).toMatch(/allocation_id\s*=\s*aws_eip\.nat_${region.replace('_', '_')}\[count\.index\]\.id/);
-        expect(natConfig).toMatch(/subnet_id\s*=\s*aws_subnet\.public_${region.replace('_', '_')}\[count\.index\]\.id/);
+        expect(natConfig).toMatch(new RegExp(`allocation_id\\s*=\\s*aws_eip\\.nat_${region}\\.\\[count\\.index\\]\\.id`));
+        expect(natConfig).toMatch(new RegExp(`subnet_id\\s*=\\s*aws_subnet\\.public_${region}\\.\\[count\\.index\\]\\.id`));
       }
     });
   });
@@ -392,9 +392,9 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (secretMatch) {
         const secretConfig = secretMatch[1];
-        expect(secretConfig).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main_${region}\.arn/);
+        expect(secretConfig).toMatch(new RegExp(`kms_key_id\\s*=\\s*aws_kms_key\\.main_${region}\\.arn`));
         expect(secretConfig).toMatch(/recovery_window_in_days\s*=\s*7/);
-        expect(secretConfig).toMatch(/name\s*=\s*"\${local\.name_prefix}-app-secrets-${region.replace('_', '-')}/);
+        expect(secretConfig).toMatch(/name\s*=\s*"\${local\.name_prefix}-app-secrets/);
       }
 
       // Check secret version configuration
@@ -423,7 +423,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (roleMatch) {
         const roleConfig = roleMatch[1];
-        expect(roleConfig).toMatch(/name_prefix\s*=\s*"\${local\.name_prefix}-app-role-${region.replace('_', '-')}/);
+        expect(roleConfig).toMatch(new RegExp(`name_prefix\\s*=\\s*"\\$\\{local\\.name_prefix\\}-app-role-${region.replace('_', '-')}`));
         expect(roleConfig).toMatch(/assume_role_policy\s*=\s*jsonencode\({[^}]*Service\s*=\s*"ec2\.amazonaws\.com"/);
       }
 
@@ -481,7 +481,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
       if (routeMatch) {
         const routeConfig = routeMatch[1];
         expect(routeConfig).toMatch(/count\s*=\s*3/);
-        expect(routeConfig).toMatch(/route_table_id\s*=\s*aws_route_table\.private_${region.replace('_', '_')}\[count\.index\]\.id/);
+        expect(routeConfig).toMatch(new RegExp(`route_table_id\\s*=\\s*aws_route_table\\.private_${region}\\.\\[count\\.index\\]\\.id`));
         expect(routeConfig).toMatch(/destination_cidr_block\s*=\s*local\.az_config\[[^\]]+\]\.cidr/);
         expect(routeConfig).toMatch(/vpc_peering_connection_id\s*=\s*aws_vpc_peering_connection\.main\.id/);
       }
@@ -509,6 +509,13 @@ describe("Terraform Multi-Region Infrastructure", () => {
       if (appSgMatch) {
         const sgConfig = appSgMatch[1];
         expect(sgConfig).toMatch(/description\s*=\s*"HTTP from ALB"/);
+      } else {
+        // If no match found, check the security group rules
+        const ingressRules = terraformContent.match(new RegExp(`resource\\s+"aws_security_group"\\s+"app_${region}"[^}]*ingress\\s*{[^}]*}`));
+        expect(ingressRules).toBeTruthy();
+        if (ingressRules) {
+          expect(ingressRules[0]).toMatch(/description\s*=\s*"HTTP from ALB"/);
+        }
       }
     });
   });

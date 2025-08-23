@@ -166,7 +166,7 @@ resource "aws_internet_gateway" "main_us_east_1" {
 resource "aws_subnet" "public_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id                  = aws_vpc.main_us_east_1.id
   cidr_block              = cidrsubnet(local.az_config["us-east-1"].cidr, 8, count.index)
   availability_zone       = local.az_config["us-east-1"].azs[count.index]
@@ -182,7 +182,7 @@ resource "aws_subnet" "public_us_east_1" {
 resource "aws_subnet" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id            = aws_vpc.main_us_east_1.id
   cidr_block        = cidrsubnet(local.az_config["us-east-1"].cidr, 8, count.index + 10)
   availability_zone = local.az_config["us-east-1"].azs[count.index]
@@ -197,27 +197,27 @@ resource "aws_subnet" "private_us_east_1" {
 resource "aws_eip" "nat_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eip-us-east-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_us_east_1]
 }
 
 resource "aws_nat_gateway" "main_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   allocation_id = aws_eip.nat_us_east_1[count.index].id
   subnet_id     = aws_subnet.public_us_east_1[count.index].id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-us-east-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_us_east_1]
 }
 
@@ -239,7 +239,7 @@ resource "aws_route_table" "public_us_east_1" {
 resource "aws_route_table" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id = aws_vpc.main_us_east_1.id
 
   route {
@@ -256,7 +256,7 @@ resource "aws_route_table" "private_us_east_1" {
 resource "aws_route_table_association" "public_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.public_us_east_1[count.index].id
   route_table_id = aws_route_table.public_us_east_1.id
 }
@@ -264,7 +264,7 @@ resource "aws_route_table_association" "public_us_east_1" {
 resource "aws_route_table_association" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.private_us_east_1[count.index].id
   route_table_id = aws_route_table.private_us_east_1[count.index].id
 }
@@ -299,7 +299,7 @@ resource "aws_internet_gateway" "main_eu_central_1" {
 resource "aws_subnet" "public_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id                  = aws_vpc.main_eu_central_1.id
   cidr_block              = cidrsubnet(local.az_config["eu-central-1"].cidr, 8, count.index)
   availability_zone       = local.az_config["eu-central-1"].azs[count.index]
@@ -315,7 +315,7 @@ resource "aws_subnet" "public_eu_central_1" {
 resource "aws_subnet" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id            = aws_vpc.main_eu_central_1.id
   cidr_block        = cidrsubnet(local.az_config["eu-central-1"].cidr, 8, count.index + 10)
   availability_zone = local.az_config["eu-central-1"].azs[count.index]
@@ -330,27 +330,27 @@ resource "aws_subnet" "private_eu_central_1" {
 resource "aws_eip" "nat_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eip-eu-central-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_eu_central_1]
 }
 
 resource "aws_nat_gateway" "main_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   allocation_id = aws_eip.nat_eu_central_1[count.index].id
   subnet_id     = aws_subnet.public_eu_central_1[count.index].id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eu-central-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_eu_central_1]
 }
 
@@ -372,7 +372,7 @@ resource "aws_route_table" "public_eu_central_1" {
 resource "aws_route_table" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id = aws_vpc.main_eu_central_1.id
 
   route {
@@ -389,7 +389,7 @@ resource "aws_route_table" "private_eu_central_1" {
 resource "aws_route_table_association" "public_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.public_eu_central_1[count.index].id
   route_table_id = aws_route_table.public_eu_central_1.id
 }
@@ -397,7 +397,7 @@ resource "aws_route_table_association" "public_eu_central_1" {
 resource "aws_route_table_association" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.private_eu_central_1[count.index].id
   route_table_id = aws_route_table.private_eu_central_1[count.index].id
 }
@@ -603,7 +603,7 @@ resource "aws_secretsmanager_secret" "app_secrets_us_east_1" {
   provider                = aws.us_east_1
   name                    = "${local.name_prefix}-app-secrets-us-east-1"
   description             = "Application secrets for ${var.environment} in us-east-1"
-  kms_key_id             = aws_kms_key.main_us_east_1.arn
+  kms_key_id              = aws_kms_key.main_us_east_1.arn
   recovery_window_in_days = 7
 
   tags = merge(var.common_tags, {
@@ -800,16 +800,16 @@ locals {
 }
 
 resource "aws_cloudfront_distribution" "main" {
-  depends_on = [aws_lb.app_us_east_1, aws_lb.app_eu_central_1, aws_acm_certificate.main, aws_wafv2_web_acl.cloudfront]
+  depends_on          = [aws_lb.app_us_east_1, aws_lb.app_eu_central_1, aws_acm_certificate.main, aws_wafv2_web_acl.cloudfront]
   provider            = aws.us_east_1
   enabled             = true
-  is_ipv6_enabled    = true
-  http_version       = "http2and3"
-  price_class        = var.cloudfront_price_class
-  retain_on_delete   = false
+  is_ipv6_enabled     = true
+  http_version        = "http2and3"
+  price_class         = var.cloudfront_price_class
+  retain_on_delete    = false
   wait_for_deployment = false
-  aliases            = [var.domain_name]
-  web_acl_id         = aws_wafv2_web_acl.cloudfront.arn
+  aliases             = [var.domain_name]
+  web_acl_id          = aws_wafv2_web_acl.cloudfront.arn
 
   origin {
     domain_name = aws_lb.app_us_east_1.dns_name
@@ -852,7 +852,7 @@ resource "aws_cloudfront_distribution" "main" {
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
-    compress              = true
+    compress               = true
   }
 
   ordered_cache_behavior {
@@ -899,7 +899,7 @@ resource "aws_cloudfront_distribution" "main" {
 resource "aws_route53_zone" "main" {
   count = var.create_zone ? 1 : 0
   name  = var.domain_name
-  
+
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-zone"
   })
@@ -952,7 +952,7 @@ resource "aws_route53_record" "app_blue" {
 
   alias {
     name                   = aws_cloudfront_distribution.main.domain_name
-    zone_id               = aws_cloudfront_distribution.main.hosted_zone_id
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
     evaluate_target_health = true
   }
 }
@@ -964,7 +964,7 @@ resource "aws_route53_record" "app_green" {
 
   alias {
     name                   = aws_cloudfront_distribution.main.domain_name
-    zone_id               = aws_cloudfront_distribution.main.hosted_zone_id
+    zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
     evaluate_target_health = true
   }
 }
@@ -976,7 +976,7 @@ resource "aws_route53_record" "app_main" {
 
   alias {
     name                   = var.blue_green_deployment.active_color == "blue" ? aws_route53_record.app_blue.name : aws_route53_record.app_green.name
-    zone_id               = var.create_zone ? aws_route53_zone.main[0].id : data.aws_route53_zone.existing[0].id
+    zone_id                = var.create_zone ? aws_route53_zone.main[0].id : data.aws_route53_zone.existing[0].id
     evaluate_target_health = true
   }
 }
@@ -1013,8 +1013,8 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-rate-limit"
-      sampled_requests_enabled  = true
+      metric_name                = "${local.name_prefix}-rate-limit"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -1036,15 +1036,15 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-sql-injection"
-      sampled_requests_enabled  = true
+      metric_name                = "${local.name_prefix}-sql-injection"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name               = "${local.name_prefix}-waf"
-    sampled_requests_enabled  = true
+    metric_name                = "${local.name_prefix}-waf"
+    sampled_requests_enabled   = true
   }
 
   tags = merge(var.common_tags, {
@@ -1063,14 +1063,14 @@ resource "aws_lb" "app_us_east_1" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_us_east_1.id]
-  subnets           = aws_subnet.public_us_east_1[*].id
+  subnets            = aws_subnet.public_us_east_1[*].id
 
   enable_deletion_protection = true
-  enable_http2             = true
-  idle_timeout            = 60
+  enable_http2               = true
+  idle_timeout               = 60
 
   tags = merge(var.common_tags, {
-    Name = "${local.name_prefix}-alb-us-east-1"
+    Name   = "${local.name_prefix}-alb-us-east-1"
     Region = "us-east-1"
   })
 }
@@ -1084,7 +1084,7 @@ resource "aws_lb_listener" "https_us_east_1" {
   certificate_arn   = aws_acm_certificate.main.arn
 
   default_action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.app_us_east_1.arn
   }
 }
@@ -1117,15 +1117,15 @@ resource "aws_lb_target_group" "app_us_east_1" {
     enabled             = true
     healthy_threshold   = 2
     interval            = 15
-    matcher            = "200"
-    path               = "/health"
-    port               = "traffic-port"
-    timeout            = 5
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    timeout             = 5
     unhealthy_threshold = 2
   }
 
   tags = merge(var.common_tags, {
-    Name = "${local.name_prefix}-tg-us-east-1"
+    Name   = "${local.name_prefix}-tg-us-east-1"
     Region = "us-east-1"
   })
 }
@@ -1137,14 +1137,14 @@ resource "aws_lb" "app_eu_central_1" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_eu_central_1.id]
-  subnets           = aws_subnet.public_eu_central_1[*].id
+  subnets            = aws_subnet.public_eu_central_1[*].id
 
   enable_deletion_protection = true
-  enable_http2             = true
-  idle_timeout            = 60
+  enable_http2               = true
+  idle_timeout               = 60
 
   tags = merge(var.common_tags, {
-    Name = "${local.name_prefix}-alb-eu-central-1"
+    Name   = "${local.name_prefix}-alb-eu-central-1"
     Region = "eu-central-1"
   })
 }
@@ -1158,7 +1158,7 @@ resource "aws_lb_listener" "https_eu_central_1" {
   certificate_arn   = aws_acm_certificate.main.arn
 
   default_action {
-    type = "forward"
+    type             = "forward"
     target_group_arn = aws_lb_target_group.app_eu_central_1.arn
   }
 }
@@ -1191,15 +1191,15 @@ resource "aws_lb_target_group" "app_eu_central_1" {
     enabled             = true
     healthy_threshold   = 2
     interval            = 15
-    matcher            = "200"
-    path               = "/health"
-    port               = "traffic-port"
-    timeout            = 5
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    timeout             = 5
     unhealthy_threshold = 2
   }
 
   tags = merge(var.common_tags, {
-    Name = "${local.name_prefix}-tg-eu-central-1"
+    Name   = "${local.name_prefix}-tg-eu-central-1"
     Region = "eu-central-1"
   })
 }
