@@ -125,7 +125,11 @@ public class AuditingComponent extends ComponentResource {
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
                                                 .field("eventCategory")
                                                 .equals_("Management")
-                                                .build(),
+                                                .build()
+                                ).build(),
+                        TrailAdvancedEventSelectorArgs.builder()
+                                .name("Security-Critical Events")
+                                .fieldSelectors(
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
                                                 .field("eventName")
                                                 .equals_(List.of(
@@ -134,8 +138,7 @@ public class AuditingComponent extends ComponentResource {
                                                         "CreatePolicy", "DeletePolicy", "CreateAccessKey", "DeleteAccessKey"
                                                 ))
                                                 .build()
-                                )
-                                .build(),
+                                ).build(),
                         TrailAdvancedEventSelectorArgs.builder()
                                 .name("Root Account Usage")
                                 .fieldSelectors(
@@ -210,18 +213,18 @@ public class AuditingComponent extends ComponentResource {
                 .name(name + "-security-events-filter")
                 .logGroupName(cloudTrailLogGroup.name())
                 .pattern("""
-                        { ($.errorCode = "*UnauthorizedOperation") ||\s
-                          ($.errorCode = "AccessDenied*") ||\s
-                          ($.sourceIPAddress != "AWS Internal") ||
-                          ($.userIdentity.type = "Root") ||
-                          ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
-                          ($.eventName = "CreateUser") ||
-                          ($.eventName = "DeleteUser") ||
-                          ($.eventName = "CreateRole") ||
-                          ($.eventName = "DeleteRole") ||
-                          ($.eventName = "AttachRolePolicy") ||
-                          ($.eventName = "DetachRolePolicy") }
-                        """)
+                    { ($.errorCode = "*UnauthorizedOperation") ||\s
+                      ($.errorCode = "AccessDenied*") ||\s
+                      ($.sourceIPAddress != "AWS Internal") ||
+                      ($.userIdentity.type = "Root") ||
+                      ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
+                      ($.eventName = "CreateUser") ||
+                      ($.eventName = "DeleteUser") ||
+                      ($.eventName = "CreateRole") ||
+                      ($.eventName = "DeleteRole") ||
+                      ($.eventName = "AttachRolePolicy") ||
+                      ($.eventName = "DetachRolePolicy") }
+                    """)
                 .metricTransformation(LogMetricFilterMetricTransformationArgs.builder()
                         .name("SecurityEvents")
                         .namespace("SecureInfrastructure/Security")
