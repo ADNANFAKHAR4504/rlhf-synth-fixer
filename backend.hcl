@@ -1,6 +1,6 @@
-bucket         = "tap-terraform-state-291686"
-key            = "tap/terraform.tfstate"
+bucket         = "terraform-state-291686"
+key            = "terraform.tfstate"
 region         = "us-east-1"
-dynamodb_table = "tap-terraform-locks"
+dynamodb_table = "terraform-state-locks"
 encrypt        = true
-kms_key_id     = "alias/tap-terraform-state-key"
+kms_key_id     = "alias/terraform-state-key"
