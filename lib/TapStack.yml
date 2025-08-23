@@ -1,6 +1,45 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application'
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - Environment
+          - EnvironmentSuffix
+          - CostCenter
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - PrimaryRegion
+          - VpcCidr
+      - Label:
+          default: 'Compute Configuration'
+        Parameters:
+          - WebInstanceType
+          - DBInstanceClass
+          - KeyName
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DBMasterUsername
+          - DBName
+          - GlobalClusterIdentifier
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - SSLCertificateArn
+          - NotificationEmail
+      - Label:
+          default: 'Advanced Configuration'
+        Parameters:
+          - LambdaCodeS3Bucket
+          - LambdaCodeS3Key
+          - UseExistingS3Bucket
+          - UseExistingKMSKey
+
 Parameters:
   Environment:
     Type: String
@@ -79,6 +118,22 @@ Parameters:
     Default: ''
     Description: 'S3 key for Lambda function code'
 
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming and isolation'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+
+  UseExistingS3Bucket:
+    Type: String
+    Default: ''
+    Description: 'Existing S3 bucket name to use. Leave empty to create new bucket.'
+
+  UseExistingKMSKey:
+    Type: String
+    Default: ''
+    Description: 'Existing KMS key ARN to use. Leave empty to create new key.'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -111,6 +166,10 @@ Conditions:
       !Not [!Equals [!Ref LambdaCodeS3Key, '']],
     ]
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  CreateS3Bucket: !Equals [!Ref UseExistingS3Bucket, '']
+  CreateKMSKey: !Equals [!Ref UseExistingKMSKey, '']
+  CreateS3BucketAndPrimary:
+    !And [!Condition IsPrimaryRegion, !Condition CreateS3Bucket]
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -119,7 +178,7 @@ Resources:
     Properties:
       TopicName: !Sub '${Environment}-cloudformation-notifications'
       DisplayName: 'CloudFormation Stack Notifications'
-      KmsMasterKeyId: !Ref KMSKey
+      KmsMasterKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -136,6 +195,7 @@ Resources:
   # KMS Key for Encryption
   KMSKey:
     Type: AWS::KMS::Key
+    Condition: CreateKMSKey
     Properties:
       Description: 'KMS Key for HIPAA/PCI DSS Compliant Infrastructure'
       KeyPolicy:
@@ -178,6 +238,7 @@ Resources:
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
+    Condition: CreateKMSKey
     Properties:
       AliasName: !Sub 'alias/${Environment}-secure-app-key'
       TargetKeyId: !Ref KMSKey
@@ -227,7 +288,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKey]
 
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
@@ -247,6 +308,7 @@ Resources:
   # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+
     Properties:
       Tags:
         - Key: Name
@@ -256,6 +318,7 @@ Resources:
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
+
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
@@ -263,6 +326,7 @@ Resources:
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -276,6 +340,7 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -290,6 +355,7 @@ Resources:
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -302,6 +368,7 @@ Resources:
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -315,6 +382,7 @@ Resources:
   # Database Subnets
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -327,6 +395,7 @@ Resources:
 
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
+
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -566,7 +635,8 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              KMSMasterKeyID:
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -585,14 +655,17 @@ Resources:
 
   S3Bucket:
     Type: AWS::S3::Bucket
-    Condition: IsPrimaryRegion
+    Condition: CreateS3BucketAndPrimary
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${Environment}-secure-app-assets-${AWS::AccountId}'
+      BucketName: !Sub '${Environment}-${EnvironmentSuffix}-secure-app-assets-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              KMSMasterKeyID:
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
             BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
@@ -606,9 +679,11 @@ Resources:
         LogFilePrefix: 'access-logs/'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-app-assets'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-secure-app-assets'
         - Key: Environment
           Value: !Ref Environment
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
         - Key: CostCenter
           Value: !Ref CostCenter
 
@@ -630,6 +705,7 @@ Resources:
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-RDS-Monitoring-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -646,16 +722,20 @@ Resources:
   GlobalCluster:
     Type: AWS::RDS::GlobalCluster
     Condition: HasGlobalCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GlobalClusterIdentifier: !Ref GlobalClusterIdentifier
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.08.2'
-      DeletionProtection: !If [IsProduction, true, false]
+      DeletionProtection: false
       StorageEncrypted: true
 
   # RDS Database Cluster
   DatabaseCluster:
     Type: AWS::RDS::DBCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.08.2'
@@ -663,7 +743,7 @@ Resources:
       MasterUsername: !Ref DBMasterUsername
       ManageMasterUserPassword: true
       MasterUserSecret:
-        KmsKeyId: !Ref KMSKey
+        KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
       GlobalClusterIdentifier:
         !If [
           HasGlobalCluster,
@@ -674,7 +754,7 @@ Resources:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
       BackupRetentionPeriod: !If [IsProduction, 30, 7]
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
@@ -682,7 +762,7 @@ Resources:
         - error
         - general
         - slowquery
-      DeletionProtection: !If [IsProduction, true, false]
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-aurora-cluster'
@@ -709,6 +789,8 @@ Resources:
   DatabaseReplicaInstance:
     Type: AWS::RDS::DBInstance
     Condition: IsProduction
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Engine: aurora-mysql
       DBInstanceClass: !Ref DBInstanceClass
@@ -728,26 +810,27 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/webserver/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKey]
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKey]
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKey]
 
   # IAM Roles
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-EC2-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -769,12 +852,24 @@ Resources:
                   Action:
                     - 's3:GetObject'
                     - 's3:PutObject'
-                  Resource: !Sub '${S3Bucket}/*'
+                  Resource: !Sub
+                    - '${BucketName}/*'
+                    - BucketName:
+                        !If [
+                          CreateS3Bucket,
+                          !Ref S3Bucket,
+                          !Ref UseExistingS3Bucket,
+                        ]
                 - Effect: Allow
                   Action:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
-                  Resource: !GetAtt KMSKey.Arn
+                  Resource:
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKey,
+                    ]
           - PolicyName: KMSOnlyAccess
             PolicyDocument:
               Version: '2012-10-17'
@@ -783,7 +878,12 @@ Resources:
                   Action:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
-                  Resource: !GetAtt KMSKey.Arn
+                  Resource:
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKey,
+                    ]
         - PolicyName: ParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -807,6 +907,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-Lambda-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -838,11 +939,13 @@ Resources:
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
-                Resource: !GetAtt KMSKey.Arn
+                Resource:
+                  !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKey]
 
   CodeDeployRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-CodeDeploy-Role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -972,7 +1075,7 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
+              KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
         UserData:
           Fn::Base64: |
             #!/bin/bash
@@ -1046,6 +1149,8 @@ Resources:
   ExampleLambdaFunction:
     Type: AWS::Lambda::Function
     Condition: HasLambdaCode
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       FunctionName: !Sub '${Environment}-example-function'
       Runtime: python3.12
@@ -1117,6 +1222,8 @@ Resources:
   # Bastion Host
   BastionHost:
     Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       InstanceType: t3.micro
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
@@ -1143,7 +1250,8 @@ Outputs:
 
   S3BucketName:
     Description: 'Name of the S3 bucket for assets'
-    Value: !Ref S3Bucket
+    Value:
+      !If [CreateS3BucketAndPrimary, !Ref S3Bucket, !Ref UseExistingS3Bucket]
     Condition: IsPrimaryRegion
 
   GlobalClusterIdentifier:
