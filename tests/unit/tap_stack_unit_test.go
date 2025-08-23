@@ -45,7 +45,7 @@ func synthStack(t *testing.T, stackId string) string {
 // loadTerraformJSON loads and parses the synthesized Terraform JSON
 func loadTerraformJSON(t *testing.T, path string) map[string]interface{} {
 	t.Helper()
-	
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read terraform json: %v", err)
@@ -61,7 +61,7 @@ func loadTerraformJSON(t *testing.T, path string) map[string]interface{} {
 
 func TestStackSynthesis(t *testing.T) {
 	tfPath := synthStack(t, "TapStack")
-	
+
 	if _, err := os.Stat(tfPath); err != nil {
 		t.Errorf("Stack synthesis failed: terraform json not found at %s", tfPath)
 	}
@@ -156,7 +156,7 @@ func TestSecurityGroupConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check security group exists
 	awsSg, ok := resources["aws_security_group"].(map[string]interface{})
 	if !ok {
@@ -208,7 +208,7 @@ func TestS3BucketConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check S3 bucket exists
 	awsS3, ok := resources["aws_s3_bucket"].(map[string]interface{})
 	if !ok {
@@ -265,7 +265,7 @@ func TestIAMConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check IAM role exists
 	awsIamRole, ok := resources["aws_iam_role"].(map[string]interface{})
 	if !ok {
@@ -312,7 +312,7 @@ func TestEC2InstanceConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check EC2 instance exists
 	awsInstance, ok := resources["aws_instance"].(map[string]interface{})
 	if !ok {
@@ -358,7 +358,7 @@ func TestNetworkACLConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check Network ACL exists
 	awsNacl, ok := resources["aws_network_acl"].(map[string]interface{})
 	if !ok {
@@ -401,7 +401,7 @@ func TestVPCEndpointConfiguration(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check VPC Endpoint exists
 	awsVpcEndpoint, ok := resources["aws_vpc_endpoint"].(map[string]interface{})
 	if !ok {
@@ -427,7 +427,7 @@ func TestEC2InstanceConnectEndpoint(t *testing.T) {
 	tfConfig := loadTerraformJSON(t, tfPath)
 
 	resources, _ := tfConfig["resource"].(map[string]interface{})
-	
+
 	// Check EC2 Instance Connect Endpoint exists
 	awsEice, ok := resources["aws_ec2_instance_connect_endpoint"].(map[string]interface{})
 	if !ok {
@@ -455,7 +455,7 @@ func TestProviderConfiguration(t *testing.T) {
 	}
 
 	awsConfig := awsProvider[0].(map[string]interface{})
-	
+
 	if region := awsConfig["region"]; region != "us-west-2" {
 		t.Errorf("expected AWS region 'us-west-2', got %v", region)
 	}

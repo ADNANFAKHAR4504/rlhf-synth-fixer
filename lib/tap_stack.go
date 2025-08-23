@@ -5,6 +5,7 @@ import (
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsavailabilityzones"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/ec2instanceconnectendpoint"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
@@ -29,7 +30,6 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpcendpoint"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/ec2instanceconnectendpoint"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
 
@@ -336,10 +336,10 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// VPC Endpoint for S3
 	_ = vpcendpoint.NewVpcEndpoint(stack, jsii.String("s3-vpc-endpoint"), &vpcendpoint.VpcEndpointConfig{
-		VpcId:       vpcResource.Id(),
-		ServiceName: jsii.String("com.amazonaws.us-west-2.s3"),
+		VpcId:           vpcResource.Id(),
+		ServiceName:     jsii.String("com.amazonaws.us-west-2.s3"),
 		VpcEndpointType: jsii.String("Gateway"),
-		RouteTableIds: &[]*string{privateRt.Id()},
+		RouteTableIds:   &[]*string{privateRt.Id()},
 		Tags: &map[string]*string{
 			"Name":        jsii.String("s3-vpc-endpoint"),
 			"Environment": jsii.String("Production"),
@@ -387,8 +387,8 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 					},
 				},
 				{
-					"Effect": "Allow",
-					"Action": "s3:GetBucketLocation",
+					"Effect":   "Allow",
+					"Action":   "s3:GetBucketLocation",
 					"Resource": logsBucket.Arn(),
 					"Condition": map[string]interface{}{
 						"StringEquals": map[string]interface{}{
@@ -528,7 +528,7 @@ EOF`
 
 	// EC2 Instance
 	webInstance := instance.NewInstance(stack, jsii.String("web-server"), &instance.InstanceConfig{
-		Ami:                    ami.Id(),
+		Ami:                   ami.Id(),
 		InstanceType:          jsii.String("t3.micro"),
 		SubnetId:              privateSubnet1.Id(),
 		VpcSecurityGroupIds:   &[]*string{webSg.Id()},
@@ -546,8 +546,8 @@ EOF`
 			Encrypted:  jsii.Bool(true),
 		},
 		MetadataOptions: &instance.InstanceMetadataOptions{
-			HttpEndpoint: jsii.String("enabled"),
-			HttpTokens:   jsii.String("required"),
+			HttpEndpoint:            jsii.String("enabled"),
+			HttpTokens:              jsii.String("required"),
 			HttpPutResponseHopLimit: jsii.Number(1),
 		},
 	})
@@ -576,24 +576,24 @@ EOF`
 
 	// Allow outbound traffic from EICE to private instances
 	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("eice-outbound"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:                     jsii.String("egress"),
-		FromPort:                 jsii.Number(22),
-		ToPort:                   jsii.Number(22),
-		Protocol:                 jsii.String("tcp"),
-		SourceSecurityGroupId:    webSg.Id(),
-		SecurityGroupId:          eiceSecurityGroup.Id(),
-		Description:              jsii.String("Allow SSH to web servers"),
+		Type:                  jsii.String("egress"),
+		FromPort:              jsii.Number(22),
+		ToPort:                jsii.Number(22),
+		Protocol:              jsii.String("tcp"),
+		SourceSecurityGroupId: webSg.Id(),
+		SecurityGroupId:       eiceSecurityGroup.Id(),
+		Description:           jsii.String("Allow SSH to web servers"),
 	})
 
 	// Allow inbound SSH from EICE to web servers
 	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("web-ssh-from-eice"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:                     jsii.String("ingress"),
-		FromPort:                 jsii.Number(22),
-		ToPort:                   jsii.Number(22),
-		Protocol:                 jsii.String("tcp"),
-		SourceSecurityGroupId:    eiceSecurityGroup.Id(),
-		SecurityGroupId:          webSg.Id(),
-		Description:              jsii.String("Allow SSH from EICE"),
+		Type:                  jsii.String("ingress"),
+		FromPort:              jsii.Number(22),
+		ToPort:                jsii.Number(22),
+		Protocol:              jsii.String("tcp"),
+		SourceSecurityGroupId: eiceSecurityGroup.Id(),
+		SecurityGroupId:       webSg.Id(),
+		Description:           jsii.String("Allow SSH from EICE"),
 	})
 
 	// EC2 Instance Connect Endpoint
