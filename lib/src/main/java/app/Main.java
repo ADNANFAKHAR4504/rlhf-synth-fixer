@@ -15,7 +15,7 @@ import java.util.Map;
 
 
 /**
- * Main class for Java Pulumi infrastructure as code.
+ * Main class for Java Pulumi infrastructure as code. 
  * 
  * This class demonstrates how to create AWS infrastructure using Pulumi's Java SDK.
  * It creates a simple S3 bucket as an example.
