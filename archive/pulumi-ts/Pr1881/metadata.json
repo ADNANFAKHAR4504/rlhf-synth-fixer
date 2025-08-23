@@ -23,5 +23,11 @@
     "IAM",
     "CloudWatch",
     "API Gateway"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
