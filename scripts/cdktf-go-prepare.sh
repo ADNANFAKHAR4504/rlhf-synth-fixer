@@ -44,7 +44,13 @@ export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-
 # Download and tidy modules once in build; do not clear caches
 if [ -f "go.mod" ]; then
   go mod download || true
+  # Ensure CDKTF and AWS SDK v2 deps required by tests are present
   go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+  go get \
+    github.com/aws/aws-sdk-go-v2/config \
+    github.com/aws/aws-sdk-go-v2/service/s3 \
+    github.com/aws/aws-sdk-go-v2/service/lambda \
+    github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs
   go mod tidy
 fi
 
