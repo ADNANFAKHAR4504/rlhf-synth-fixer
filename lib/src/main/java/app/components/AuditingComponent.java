@@ -124,28 +124,23 @@ public class AuditingComponent extends ComponentResource {
                 .enableLogFileValidation(true)
                 .advancedEventSelectors(
                         TrailAdvancedEventSelectorArgs.builder()
-                                .name("Security-Critical Events")
+                                .name("Security-Critical Management Events")
                                 .fieldSelectors(
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
                                                 .field("eventCategory")
                                                 .equals_("Management")
                                                 .build()
-                                ).build(),
-                        TrailAdvancedEventSelectorArgs.builder()
-                                .name("Security-Critical Events")
-                                .fieldSelectors(
-                                        TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("eventName")
-                                                .equals_(List.of(
-                                                        "CreateRole", "DeleteRole", "AttachRolePolicy", "DetachRolePolicy",
-                                                        "CreateUser", "DeleteUser", "AttachUserPolicy", "DetachUserPolicy",
-                                                        "CreatePolicy", "DeletePolicy", "CreateAccessKey", "DeleteAccessKey"
-                                                ))
-                                                .build()
-                                ).build(),
+                                )
+                                .build(),
+
+                        // Root account usage events
                         TrailAdvancedEventSelectorArgs.builder()
                                 .name("Root Account Usage")
                                 .fieldSelectors(
+                                        TrailAdvancedEventSelectorFieldSelectorArgs.builder()
+                                                .field("eventCategory")
+                                                .equals_("Management")
+                                                .build(),
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
                                                 .field("userIdentity.arn")
                                                 .equals_(List.of("arn:aws:iam::" + accountId + ":root"))
