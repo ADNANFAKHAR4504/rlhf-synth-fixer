@@ -77,10 +77,13 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 	}
 
 	// Deploy resources across regions
+	regionalResources := make(map[string]map[string]pulumi.Output)
 	for _, region := range m.config.Regions {
-		if err := m.deployRegionalResources(region, kmsKey, roles); err != nil {
+		resources, err := m.deployRegionalResources(region, roles)
+		if err != nil {
 			return err
 		}
+		regionalResources[region] = resources
 	}
 
 	// Create CloudTrail for auditing
@@ -89,7 +92,7 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 	}
 
 	// Export outputs
-	m.exportOutputs(bucket, distribution)
+	m.exportOutputs(bucket, distribution, roles, regionalResources)
 
 	return nil
 }
@@ -300,7 +303,7 @@ func (m *MultiRegionInfrastructure) createIAMResources() (map[string]*iam.Role, 
 						"logs:CreateLogStream",
 						"logs:PutLogEvents"
 					],
-					"Resource": "arn:aws:logs:us-east-1:*:log-group:/aws/ec2/*"
+					"Resource": "arn:aws:logs:*:*:log-group:/aws/ec2/*"
 				}
 			]
 		}`),
@@ -348,12 +351,12 @@ func (m *MultiRegionInfrastructure) createIAMResources() (map[string]*iam.Role, 
 	return roles, nil
 }
 
-func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKey *kms.Key, roles map[string]*iam.Role) error {
+func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles map[string]*iam.Role) (map[string]pulumi.Output, error) {
 	provider, err := aws.NewProvider(m.ctx, fmt.Sprintf("provider-%s", region), &aws.ProviderArgs{
 		Region: pulumi.String(region),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create VPC
@@ -364,19 +367,28 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKe
 		Tags:               m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	// Create regional KMS key
+	regionalKmsKey, err := kms.NewKey(m.ctx, fmt.Sprintf("%s-kms-%s", m.config.Environment, region), &kms.KeyArgs{
+		Description: pulumi.String(fmt.Sprintf("Regional encryption key for %s", region)),
+		Tags:        m.tags,
+	}, pulumi.Provider(provider))
+	if err != nil {
+		return nil, err
 	}
 
 	// Create subnets
 	subnets, err := m.createSubnets(region, vpc, provider)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create security groups
 	securityGroups, err := m.createSecurityGroups(region, vpc, provider)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create RDS subnet group
@@ -385,27 +397,27 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKe
 		Tags:      m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create RDS instance
-	_, err = m.createRDSInstance(region, dbSubnetGroup, securityGroups["db"], kmsKey, roles["rds"], provider)
+	rdsInstance, err := m.createRDSInstance(region, dbSubnetGroup, securityGroups["db"], regionalKmsKey, roles["rds"], provider)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create CloudWatch Log Groups
-	_, err = cloudwatch.NewLogGroup(m.ctx, fmt.Sprintf("%s-app-logs-%s", m.config.Environment, region), &cloudwatch.LogGroupArgs{
+	logGroup, err := cloudwatch.NewLogGroup(m.ctx, fmt.Sprintf("%s-app-logs-%s", m.config.Environment, region), &cloudwatch.LogGroupArgs{
 		RetentionInDays: pulumi.Int(30),
-		KmsKeyId:        kmsKey.Arn,
+		KmsKeyId:        regionalKmsKey.Arn,
 		Tags:            m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create CloudWatch Dashboard for monitoring
-	_, err = cloudwatch.NewDashboard(m.ctx, fmt.Sprintf("%s-dashboard-%s", m.config.Environment, region), &cloudwatch.DashboardArgs{
+	dashboard, err := cloudwatch.NewDashboard(m.ctx, fmt.Sprintf("%s-dashboard-%s", m.config.Environment, region), &cloudwatch.DashboardArgs{
 		DashboardName: pulumi.String(fmt.Sprintf("%s-dashboard-%s", m.config.Environment, region)),
 		DashboardBody: pulumi.String(`{
 			"widgets": [
@@ -426,10 +438,27 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKe
 		}`),
 	}, pulumi.Provider(provider))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	// Return regional resources for export
+	resources := map[string]pulumi.Output{
+		"vpcId":             vpc.ID().ToStringOutput(),
+		"kmsKeyId":          regionalKmsKey.ID().ToStringOutput(),
+		"kmsKeyArn":         regionalKmsKey.Arn,
+		"rdsInstanceId":     rdsInstance.ID().ToStringOutput(),
+		"rdsEndpoint":       rdsInstance.Endpoint,
+		"dbSubnetGroupName": dbSubnetGroup.Name,
+		"dbSecurityGroupId": securityGroups["db"].ID().ToStringOutput(),
+		"logGroupName":      logGroup.Name,
+		"dashboardName":     dashboard.DashboardName,
+		"publicSubnet1Id":   subnets["public1"].ID().ToStringOutput(),
+		"publicSubnet2Id":   subnets["public2"].ID().ToStringOutput(),
+		"privateSubnet1Id":  subnets["private1"].ID().ToStringOutput(),
+		"privateSubnet2Id":  subnets["private2"].ID().ToStringOutput(),
+	}
+
+	return resources, nil
 }
 
 func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, provider *aws.Provider) (map[string]*ec2.Subnet, error) {
@@ -623,11 +652,23 @@ func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
 	return err
 }
 
-func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, distribution *cloudfront.Distribution) {
+func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, distribution *cloudfront.Distribution, roles map[string]*iam.Role, regionalResources map[string]map[string]pulumi.Output) {
+	// Global resources
 	m.ctx.Export("s3BucketName", bucket.Bucket)
 	m.ctx.Export("s3BucketArn", bucket.Arn)
 	m.ctx.Export("cloudfrontDistributionId", distribution.ID())
 	m.ctx.Export("cloudfrontDomainName", distribution.DomainName)
 	m.ctx.Export("environment", pulumi.String(m.config.Environment))
 	m.ctx.Export("regions", pulumi.ToStringArray(m.config.Regions))
+
+	// IAM resources
+	m.ctx.Export("ec2RoleArn", roles["ec2"].Arn)
+	m.ctx.Export("rdsMonitoringRoleArn", roles["rds"].Arn)
+
+	// Regional resources
+	for region, resources := range regionalResources {
+		for resourceName, resourceOutput := range resources {
+			m.ctx.Export(fmt.Sprintf("%s_%s", region, resourceName), resourceOutput)
+		}
+	}
 }
