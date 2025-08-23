@@ -322,4 +322,28 @@ describe('TapStack', () => {
       // Note: AWS::IAM::AccountPasswordPolicy is account-level, not stack-level
     });
   });
+
+  describe('Stack Output', () => {
+    test('should create API endpoint output with environment suffix', () => {
+      template.hasOutput('TapApiEndpoint', {
+        Description: 'TAP API Gateway endpoint URL',
+        Export: {
+          Name: `TapApiEndpoint${environmentSuffix}`
+        }
+      });
+    });
+
+    test('should create API endpoint output without environment suffix', () => {
+      const appWithoutSuffix = new cdk.App();
+      const stackWithoutSuffix = new TapStack(appWithoutSuffix, 'TestTapStackNoSuffix');
+      const templateWithoutSuffix = Template.fromStack(stackWithoutSuffix);
+      
+      templateWithoutSuffix.hasOutput('TapApiEndpoint', {
+        Description: 'TAP API Gateway endpoint URL',
+        Export: {
+          Name: 'TapApiEndpoint'
+        }
+      });
+    });
+  });
 });
