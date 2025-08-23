@@ -42,15 +42,6 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.mockito:mockito-core:5.11.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
-    
-    // AWS SDK for integration tests
-    testImplementation 'software.amazon.awssdk:ec2:2.28.29'
-    testImplementation 'software.amazon.awssdk:core:2.28.29'
-    
-    // Jackson for JSON parsing in tests
-    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.1'
-    testImplementation 'com.fasterxml.jackson.core:jackson-core:2.18.1'
-    testImplementation 'com.fasterxml.jackson.core:jackson-annotations:2.18.1'
 
 }
 
@@ -178,7 +169,8 @@ jacocoTestReport {
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                    // Now we have testable utility methods, no need to exclude Main.class
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
             ])
         }))
     }
@@ -191,7 +183,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.05
+                minimum = 0.50
             }
         }
         rule {
@@ -199,7 +191,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.05
+                minimum = 0.50
             }
         }
     }
@@ -213,25 +205,18 @@ tasks.register('showCoverage') {
         def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
 
         if (xmlReportFile.exists()) {
-            try {
-                // Parse XML to get coverage percentage with DOCTYPE disabled
-                def xmlParser = new XmlParser()
-                xmlParser.setFeature('http://apache.org/xml/features/disallow-doctype-decl', false)
-                def xml = xmlParser.parse(xmlReportFile)
-                def counter = xml.counter.find { it.@type == 'LINE' }
-                if (counter) {
-                    def covered = counter.@covered.toInteger()
-                    def missed = counter.@missed.toInteger()
-                    def total = covered + missed
-                    def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+            // Parse XML to get coverage percentage
+            def xml = new XmlParser().parse(xmlReportFile)
+            def counter = xml.counter.find { it.@type == 'LINE' }
+            if (counter) {
+                def covered = counter.@covered.toInteger()
+                def missed = counter.@missed.toInteger()
+                def total = covered + missed
+                def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
 
-                    println "\n📊 Code Coverage Summary:"
-                    println "Lines Covered: ${covered}/${total} (${percentage}%)"
-                    println "Coverage Status: ${percentage >= 5 ? '✅ PASSED' : '❌ FAILED'} (minimum: 5%)"
-                }
-            } catch (Exception e) {
-                println "\n⚠️ Could not parse coverage report: ${e.message}"
-                println "Coverage report exists but cannot be parsed."
+                println "\n📊 Code Coverage Summary:"
+                println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
             }
         }
 
