@@ -34,7 +34,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database master username'
 
-  # Removed DBPassword parameter since we'll use dynamic reference
+  # Removed DBPassword parameter - using dynamic reference instead
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
@@ -323,7 +323,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: vpc-flow-logs.amazonaws.com
+              Service: vpc-flow-laws.amazonaws.com
             Action: sts:AssumeRole
       Policies:
         - PolicyName: TapVPCFlowLogDeliveryRolePolicy
@@ -395,26 +395,6 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapDatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub 'TapDatabaseSG-${EnvironmentName}'
-      GroupDescription: 'Security group for database tier'
-      VpcId: !Ref TapVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref TapApplicationSecurityGroup
-          Description: 'PostgreSQL access from application tier'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapDatabaseSG-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
   TapApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -439,7 +419,27 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # S3 Buckets - Fixed naming with lowercase environment names
+  TapDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'TapDatabaseSG-${EnvironmentName}'
+      GroupDescription: 'Security group for database tier'
+      VpcId: !Ref TapVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref TapApplicationSecurityGroup
+          Description: 'PostgreSQL access from application tier'
+      Tags:
+        - Key: Name
+          Value: !Sub 'TapDatabaseSG-${EnvironmentName}'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # S3 Buckets - Fixed naming (removed region and use lowercase)
   TapDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -546,7 +546,7 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
 
-  # DynamoDB Table - Fixed KMS dependency issue
+  # DynamoDB Table - Fixed KMS issue
   TapTransactionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -571,8 +571,7 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-      # Fixed: Removed explicit KMSMasterKeyId to use default AWS-managed key
-      # This resolves the SSEType/KMSMasterKeyId dependency issue
+      # Fixed: Removed explicit KMSMasterKeyId to resolve dependency issue
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -597,16 +596,16 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # RDS Instance - Using dynamic reference for password
+  # RDS Instance - Fixed version and added UpdateReplacePolicy
   TapDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    UpdateReplacePolicy: Snapshot  # Added missing policy
     Properties:
       DBInstanceIdentifier: !Sub 'tap-db-${EnvironmentName}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '13.15'
+      EngineVersion: '13.15'  # Fixed: Changed from invalid '13.7' to valid '13.15'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -743,7 +742,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # Lambda Execution Role
+  # Lambda Execution Role - Fixed S3 action names
   TapLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -766,8 +765,8 @@ Resources:
                 Action:
                   - s3:GetBucketPublicAccessBlock
                   - s3:PutBucketPublicAccessBlock
-                  - s3:GetEncryptionConfiguration
-                  - s3:PutEncryptionConfiguration
+                  - s3:GetEncryptionConfiguration  # Fixed action name
+                  - s3:PutEncryptionConfiguration  # Fixed action name
                   - s3:GetBucketVersioning
                   - s3:PutBucketVersioning
                   - s3:GetBucketTagging
