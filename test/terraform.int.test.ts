@@ -40,6 +40,10 @@ import {
   ACMClient,
   DescribeCertificateCommand
 } from '@aws-sdk/client-acm';
+import {
+  STSClient,
+  GetCallerIdentityCommand
+} from '@aws-sdk/client-sts';
 
 // Read deployment outputs
 const outputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -50,13 +54,18 @@ if (fs.existsSync(outputsPath)) {
   outputs = JSON.parse(outputsContent);
 }
 
-// AWS Clients
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
-const iamClient = new IAMClient({ region: 'us-east-1' });
-const cloudTrailClient = new CloudTrailClient({ region: 'us-east-1' });
-const acmClient = new ACMClient({ region: 'us-east-1' });
+// AWS Clients - use environment credentials or default credential chain
+const awsConfig = {
+  region: process.env.AWS_REGION || 'us-east-1',
+  // Let AWS SDK handle credential resolution automatically
+};
+
+const ec2Client = new EC2Client(awsConfig);
+const elbClient = new ElasticLoadBalancingV2Client(awsConfig);
+const s3Client = new S3Client(awsConfig);
+const iamClient = new IAMClient(awsConfig);
+const cloudTrailClient = new CloudTrailClient(awsConfig);
+const acmClient = new ACMClient(awsConfig);
 
 describe('Terraform Infrastructure Integration Tests', () => {
   describe('VPC and Networking', () => {
@@ -539,8 +548,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('S3 read policy exists with correct permissions', async () => {
       try {
+        // Get current account ID dynamically
+        const stsClient = new STSClient(awsConfig);
+        const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+        const accountId = identity.Account;
+        
         const policyCommand = new GetPolicyCommand({
-          PolicyArn: `arn:aws:iam::712844199622:policy/dev-s3-read-policy-pr1948`
+          PolicyArn: `arn:aws:iam::${accountId}:policy/dev-s3-read-policy-pr1948`
         });
         const policyResponse = await iamClient.send(policyCommand);
         
@@ -553,8 +567,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('MFA enforcement policy exists', async () => {
       try {
+        // Get current account ID dynamically
+        const stsClient = new STSClient(awsConfig);
+        const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+        const accountId = identity.Account;
+        
         const policyCommand = new GetPolicyCommand({
-          PolicyArn: `arn:aws:iam::712844199622:policy/dev-enforce-mfa-pr1948`
+          PolicyArn: `arn:aws:iam::${accountId}:policy/dev-enforce-mfa-pr1948`
         });
         const policyResponse = await iamClient.send(policyCommand);
         
