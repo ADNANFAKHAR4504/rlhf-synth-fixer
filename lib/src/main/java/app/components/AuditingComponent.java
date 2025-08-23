@@ -32,8 +32,6 @@ public class AuditingComponent extends ComponentResource {
     public AuditingComponent(String name, StorageComponent storage, String region, ComponentResourceOptions opts) {
         super("custom:infrastructure:AuditingComponent", name, opts);
 
-        String cloudTrails3BucketPrefix = "cloudtrail-logs/" + region;
-
         var identity = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build());
 
         this.accountId = identity.applyValue(GetCallerIdentityResult::accountId);

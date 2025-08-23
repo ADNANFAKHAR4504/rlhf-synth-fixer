@@ -135,6 +135,7 @@ public class StorageComponent extends ComponentResource {
                         "Encryption", "KMS-CMK",
                         "DataClassification", purpose.contains("critical") ? "Confidential" : "Internal"
                 )))
+                .forceDestroy(true)
                 .build(), CustomResourceOptions.builder().parent(this).build());
 
         // Enable versioning for data protection
