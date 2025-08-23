@@ -7,10 +7,6 @@ Parameters:
     Type: String
     Description: Unique timestamp for resource names
     Default: 'manual-20250822'
-  AWSRegion:
-    Type: String
-    Default: 'us-east-1'
-    Description: AWS region for all resources
 
 Resources:
   VPC:
