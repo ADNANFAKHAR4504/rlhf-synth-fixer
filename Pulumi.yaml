@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: java
+description: Pulumi based infrastructure as code for TAP using Java
+main: lib/src/main/java/app/Main.java
