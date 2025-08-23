@@ -100,7 +100,7 @@ func main() {
 
 	// Add S3 bucket
 	stack.AddOverride(jsii.String("resource.aws_s3_bucket.tap_bucket"), map[string]interface{}{
-		"bucket": "tap-app-data-dev-${random_id.suffix.hex}",
+		"bucket": "tap-app-data-dev",
 		"tags": map[string]string{
 			"Name": "tap-app-bucket-dev",
 		},
@@ -135,7 +135,7 @@ func main() {
 
 	// Add IAM role for EC2
 	stack.AddOverride(jsii.String("resource.aws_iam_role.ec2_role"), map[string]interface{}{
-		"name": "tap-ec2-role-dev-${random_id.suffix.hex}",
+		"name": "tap-ec2-role-dev",
 		"assume_role_policy": `{
 			"Version": "2012-10-17",
 			"Statement": [{
@@ -163,7 +163,7 @@ func main() {
 
 	// Add instance profile
 	stack.AddOverride(jsii.String("resource.aws_iam_instance_profile.ec2_profile"), map[string]interface{}{
-		"name": "tap-ec2-instance-profile-dev-${random_id.suffix.hex}",
+		"name": "tap-ec2-instance-profile-dev",
 		"role": "${aws_iam_role.ec2_role.name}",
 		"tags": map[string]string{
 			"Name": "tap-ec2-instance-profile-dev",
@@ -172,7 +172,7 @@ func main() {
 
 	// Add security group
 	stack.AddOverride(jsii.String("resource.aws_security_group.ec2_sg"), map[string]interface{}{
-		"name":        "tap-ec2-sg-dev-${random_id.suffix.hex}",
+		"name":        "tap-ec2-sg-dev",
 		"vpc_id":      "${aws_vpc.tap_vpc.id}",
 		"description": "Security group for TAP EC2 instances with SSL/TLS enforcement",
 		"ingress": []map[string]interface{}{
@@ -330,7 +330,7 @@ EOF
 
 	// Add CloudTrail S3 bucket
 	stack.AddOverride(jsii.String("resource.aws_s3_bucket.cloudtrail_bucket"), map[string]interface{}{
-		"bucket": "tap-cloudtrail-logs-dev-${random_id.suffix.hex}",
+		"bucket": "tap-cloudtrail-logs-dev",
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-bucket-dev",
 		},

@@ -2,301 +2,259 @@
 package main
 
 import (
-	"os"
-
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
-
-	aws "github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudtrail"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchmetricalarm"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/instance"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketversioning"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/snstopic"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 )
 
-// TapStack represents our secure AWS environment
-type TapStack struct {
-	cdktf.TerraformStack
-}
+func main() {
+	app := cdktf.NewApp(nil)
 
-// NewTapStack creates a new TapStack instance
-func NewTapStack(scope constructs.Construct, id string) *TapStack {
-	this := &TapStack{}
-	cdktf.NewTerraformStack_Override(this, scope, &id)
+	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
 
-	// Get environment configuration
-	environmentSuffix := getEnvVar("ENVIRONMENT_SUFFIX", "dev")
-	awsRegion := getEnvVar("AWS_REGION", "us-east-1")
+	// We'll configure the AWS provider using HCL configuration
+	// This avoids the "module too large" issue with Go CDKTF AWS provider
 
-	// Configure AWS Provider
-	aws.NewAwsProvider(this, jsii.String("aws"), &aws.AwsProviderConfig{
-		Region: jsii.String(awsRegion),
-		DefaultTags: &[]*aws.AwsProviderDefaultTags{
+	// Add AWS provider configuration
+	stack.AddOverride(jsii.String("terraform.required_providers.aws"), map[string]interface{}{
+		"source":  "hashicorp/aws",
+		"version": "~> 6.0",
+	})
+
+	stack.AddOverride(jsii.String("provider.aws.region"), jsii.String("us-east-1"))
+	stack.AddOverride(jsii.String("provider.aws.default_tags.tags"), map[string]string{
+		"Environment": "dev",
+		"Project":     "tap",
+		"ManagedBy":   "cdktf",
+	})
+
+	// Add VPC
+	stack.AddOverride(jsii.String("resource.aws_vpc.tap_vpc"), map[string]interface{}{
+		"cidr_block":           "10.0.0.0/16",
+		"enable_dns_hostnames": true,
+		"enable_dns_support":   true,
+		"tags": map[string]string{
+			"Name": "tap-vpc-dev",
+		},
+	})
+
+	// Add private subnet
+	stack.AddOverride(jsii.String("resource.aws_subnet.private_subnet"), map[string]interface{}{
+		"vpc_id":            "${aws_vpc.tap_vpc.id}",
+		"cidr_block":        "10.0.1.0/24",
+		"availability_zone": "us-east-1a",
+		"tags": map[string]string{
+			"Name": "tap-private-subnet-dev",
+			"Type": "private",
+		},
+	})
+
+	// Add KMS key
+	stack.AddOverride(jsii.String("resource.aws_kms_key.tap_kms_key"), map[string]interface{}{
+		"description": "KMS key for TAP infrastructure encryption",
+		"key_usage":   "ENCRYPT_DECRYPT",
+		"policy": `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+					},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow CloudTrail to encrypt logs",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*",
+					"Condition": {
+						"StringEquals": {
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
+				},
+				{
+					"Sid": "Allow CloudTrail to describe key",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:DescribeKey"
+					],
+					"Resource": "*"
+				}
+			]
+		}`,
+		"tags": map[string]string{
+			"Name": "tap-kms-key-dev",
+		},
+	})
+
+	// Add S3 bucket
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket.tap_bucket"), map[string]interface{}{
+		"bucket": "tap-app-data-dev",
+		"tags": map[string]string{
+			"Name": "tap-app-bucket-dev",
+		},
+	})
+
+	// Add random ID for unique naming
+	stack.AddOverride(jsii.String("resource.random_id.suffix"), map[string]interface{}{
+		"byte_length": 4,
+	})
+
+	// Add S3 bucket encryption
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_server_side_encryption_configuration.tap_bucket_encryption"), map[string]interface{}{
+		"bucket": "${aws_s3_bucket.tap_bucket.id}",
+		"rule": []map[string]interface{}{
 			{
-				Tags: &map[string]*string{
-					"Environment":   jsii.String(environmentSuffix),
-					"Project":       jsii.String("tap"),
-					"ManagedBy":     jsii.String("cdktf"),
-					"Repository":    jsii.String(getEnvVar("REPOSITORY", "iac-test-automations")),
-					"CommitAuthor":  jsii.String(getEnvVar("COMMIT_AUTHOR", "unknown")),
+				"apply_server_side_encryption_by_default": map[string]interface{}{
+					"sse_algorithm":     "aws:kms",
+					"kms_master_key_id": "${aws_kms_key.tap_kms_key.arn}",
 				},
 			},
 		},
 	})
 
-	// Create KMS Key for encryption at rest
-	kmsKey := kmskey.NewKmsKey(this, jsii.String("TapKmsKey"), &kmskey.KmsKeyConfig{
-		Description: jsii.String("KMS key for TAP infrastructure encryption"),
-		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
-		KeySpec:     jsii.String("SYMMETRIC_DEFAULT"),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-kms-key-" + environmentSuffix),
-		},
+	// Add S3 bucket public access block
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_public_access_block.tap_bucket_pab"), map[string]interface{}{
+		"bucket":                  "${aws_s3_bucket.tap_bucket.id}",
+		"block_public_acls":       true,
+		"block_public_policy":     true,
+		"ignore_public_acls":      true,
+		"restrict_public_buckets": true,
 	})
 
-	// Create VPC with private subnets
-	tapVpc := vpc.NewVpc(this, jsii.String("TapVpc"), &vpc.VpcConfig{
-		CidrBlock:          jsii.String("10.0.0.0/16"),
-		EnableDnsHostnames: jsii.Bool(true),
-		EnableDnsSupport:   jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-vpc-" + environmentSuffix),
-		},
-	})
-
-	// Create Internet Gateway for public subnet (needed for NAT Gateway)
-	igw := internetgateway.NewInternetGateway(this, jsii.String("TapIgw"), &internetgateway.InternetGatewayConfig{
-		VpcId: tapVpc.Id(),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-igw-" + environmentSuffix),
-		},
-	})
-
-	// Create public subnet for NAT Gateway
-	publicSubnet := subnet.NewSubnet(this, jsii.String("TapPublicSubnet"), &subnet.SubnetConfig{
-		VpcId:               tapVpc.Id(),
-		CidrBlock:           jsii.String("10.0.1.0/24"),
-		AvailabilityZone:    jsii.String(awsRegion + "a"),
-		MapPublicIpOnLaunch: jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-public-subnet-" + environmentSuffix),
-			"Type": jsii.String("public"),
-		},
-	})
-
-	// Create private subnet for application instances
-	privateSubnet := subnet.NewSubnet(this, jsii.String("TapPrivateSubnet"), &subnet.SubnetConfig{
-		VpcId:            tapVpc.Id(),
-		CidrBlock:        jsii.String("10.0.2.0/24"),
-		AvailabilityZone: jsii.String(awsRegion + "a"),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-private-subnet-" + environmentSuffix),
-			"Type": jsii.String("private"),
-		},
-	})
-
-	// Create route table for public subnet
-	publicRouteTable := routetable.NewRouteTable(this, jsii.String("TapPublicRouteTable"), &routetable.RouteTableConfig{
-		VpcId: tapVpc.Id(),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-public-rt-" + environmentSuffix),
-		},
-	})
-
-	// Create route to Internet Gateway
-	route.NewRoute(this, jsii.String("TapPublicRoute"), &route.RouteConfig{
-		RouteTableId:         publicRouteTable.Id(),
-		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
-		GatewayId:            igw.Id(),
-	})
-
-	// Associate public subnet with public route table
-	routetableassociation.NewRouteTableAssociation(this, jsii.String("TapPublicSubnetAssociation"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     publicSubnet.Id(),
-		RouteTableId: publicRouteTable.Id(),
-	})
-
-	// Create route table for private subnet
-	privateRouteTable := routetable.NewRouteTable(this, jsii.String("TapPrivateRouteTable"), &routetable.RouteTableConfig{
-		VpcId: tapVpc.Id(),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-private-rt-" + environmentSuffix),
-		},
-	})
-
-	// Associate private subnet with private route table
-	routetableassociation.NewRouteTableAssociation(this, jsii.String("TapPrivateSubnetAssociation"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     privateSubnet.Id(),
-		RouteTableId: privateRouteTable.Id(),
-	})
-
-	// Create S3 bucket for application data
-	tapBucket := s3bucket.NewS3Bucket(this, jsii.String("TapS3Bucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String("tap-app-data-" + environmentSuffix + "-" + generateRandomSuffix()),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-app-bucket-" + environmentSuffix),
-		},
-	})
-
-	// Enable versioning on S3 bucket
-	s3bucketversioning.NewS3BucketVersioningA(this, jsii.String("TapS3BucketVersioning"), &s3bucketversioning.S3BucketVersioningAConfig{
-		Bucket: tapBucket.Id(),
-		VersioningConfiguration: &s3bucketversioning.S3BucketVersioningAVersioningConfiguration{
-			Status: jsii.String("Enabled"),
-		},
-	})
-
-	// Enable encryption on S3 bucket
-	s3bucketencryption.NewS3BucketServerSideEncryptionConfigurationA(this, jsii.String("TapS3BucketEncryption"), &s3bucketencryption.S3BucketServerSideEncryptionConfigurationAConfig{
-		Bucket: tapBucket.Id(),
-		Rule: &[]*s3bucketencryption.S3BucketServerSideEncryptionConfigurationARule{
-			{
-				ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketServerSideEncryptionConfigurationARuleApplyServerSideEncryptionByDefault{
-					SseAlgorithm:   jsii.String("aws:kms"),
-					KmsMasterKeyId: kmsKey.Arn(),
-				},
-			},
-		},
-	})
-
-	// Block public access to S3 bucket
-	s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(this, jsii.String("TapS3BucketPublicAccessBlock"), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
-		Bucket:                tapBucket.Id(),
-		BlockPublicAcls:       jsii.Bool(true),
-		BlockPublicPolicy:     jsii.Bool(true),
-		IgnorePublicAcls:      jsii.Bool(true),
-		RestrictPublicBuckets: jsii.Bool(true),
-	})
-
-	// Create IAM role for EC2 instances
-	ec2Role := iamrole.NewIamRole(this, jsii.String("TapEc2Role"), &iamrole.IamRoleConfig{
-		Name: jsii.String("tap-ec2-role-" + environmentSuffix),
-		AssumeRolePolicy: jsii.String(`{
+	// Add IAM role for EC2
+	stack.AddOverride(jsii.String("resource.aws_iam_role.ec2_role"), map[string]interface{}{
+		"name": "tap-ec2-role-dev",
+		"assume_role_policy": `{
 			"Version": "2012-10-17",
 			"Statement": [{
 				"Effect": "Allow",
 				"Principal": {"Service": "ec2.amazonaws.com"},
 				"Action": "sts:AssumeRole"
 			}]
-		}`),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-ec2-role-" + environmentSuffix),
+		}`,
+		"tags": map[string]string{
+			"Name": "tap-ec2-role-dev",
 		},
 	})
 
-	// Attach S3 read-only policy to EC2 role
-	iamrolepolicyattachment.NewIamRolePolicyAttachment(this, jsii.String("TapEc2S3ReadOnlyPolicy"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
-		Role:      ec2Role.Name(),
-		PolicyArn: jsii.String("arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"),
+	// Attach S3 read-only policy
+	stack.AddOverride(jsii.String("resource.aws_iam_role_policy_attachment.s3_readonly"), map[string]interface{}{
+		"role":       "${aws_iam_role.ec2_role.name}",
+		"policy_arn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
 	})
 
-	// Attach CloudWatch agent policy to EC2 role
-	iamrolepolicyattachment.NewIamRolePolicyAttachment(this, jsii.String("TapEc2CloudWatchPolicy"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
-		Role:      ec2Role.Name(),
-		PolicyArn: jsii.String("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"),
+	// Add CloudWatch policy
+	stack.AddOverride(jsii.String("resource.aws_iam_role_policy_attachment.cloudwatch"), map[string]interface{}{
+		"role":       "${aws_iam_role.ec2_role.name}",
+		"policy_arn": "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
 	})
 
-	// Create instance profile for EC2 role
-	ec2InstanceProfile := iaminstanceprofile.NewIamInstanceProfile(this, jsii.String("TapEc2InstanceProfile"), &iaminstanceprofile.IamInstanceProfileConfig{
-		Name: jsii.String("tap-ec2-instance-profile-" + environmentSuffix),
-		Role: ec2Role.Name(),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-ec2-instance-profile-" + environmentSuffix),
+	// Add instance profile
+	stack.AddOverride(jsii.String("resource.aws_iam_instance_profile.ec2_profile"), map[string]interface{}{
+		"name": "tap-ec2-instance-profile-dev",
+		"role": "${aws_iam_role.ec2_role.name}",
+		"tags": map[string]string{
+			"Name": "tap-ec2-instance-profile-dev",
 		},
 	})
 
-	// Create security group for EC2 instances (SSL/TLS enforcement)
-	ec2SecurityGroup := securitygroup.NewSecurityGroup(this, jsii.String("TapEc2SecurityGroup"), &securitygroup.SecurityGroupConfig{
-		Name:  jsii.String("tap-ec2-sg-" + environmentSuffix),
-		VpcId: tapVpc.Id(),
-		Description: jsii.String("Security group for TAP EC2 instances with SSL/TLS enforcement"),
-		
-		// Ingress rules - HTTPS only
-		Ingress: &[]*securitygroup.SecurityGroupIngress{
+	// Add security group
+	stack.AddOverride(jsii.String("resource.aws_security_group.ec2_sg"), map[string]interface{}{
+		"name":        "tap-ec2-sg-dev",
+		"vpc_id":      "${aws_vpc.tap_vpc.id}",
+		"description": "Security group for TAP EC2 instances with SSL/TLS enforcement",
+		"ingress": []map[string]interface{}{
 			{
-				Description: jsii.String("HTTPS"),
-				FromPort:    jsii.Number(443),
-				ToPort:      jsii.Number(443),
-				Protocol:    jsii.String("tcp"),
-				CidrBlocks:  &[]*string{jsii.String("10.0.0.0/16")}, // VPC only
+				"description":      "HTTPS",
+				"from_port":        443,
+				"to_port":          443,
+				"protocol":         "tcp",
+				"cidr_blocks":      []string{"10.0.0.0/16"},
+				"ipv6_cidr_blocks": []string{},
+				"prefix_list_ids":  []string{},
+				"security_groups":  []string{},
+				"self":             false,
 			},
 			{
-				Description: jsii.String("SSH"),
-				FromPort:    jsii.Number(22),
-				ToPort:      jsii.Number(22),
-				Protocol:    jsii.String("tcp"),
-				CidrBlocks:  &[]*string{jsii.String("10.0.0.0/16")}, // VPC only
-			},
-		},
-		
-		// Egress rules - Allow HTTPS outbound
-		Egress: &[]*securitygroup.SecurityGroupEgress{
-			{
-				Description: jsii.String("HTTPS outbound"),
-				FromPort:    jsii.Number(443),
-				ToPort:      jsii.Number(443),
-				Protocol:    jsii.String("tcp"),
-				CidrBlocks:  &[]*string{jsii.String("0.0.0.0/0")},
-			},
-			{
-				Description: jsii.String("HTTP outbound for package updates"),
-				FromPort:    jsii.Number(80),
-				ToPort:      jsii.Number(80),
-				Protocol:    jsii.String("tcp"),
-				CidrBlocks:  &[]*string{jsii.String("0.0.0.0/0")},
+				"description":      "SSH",
+				"from_port":        22,
+				"to_port":          22,
+				"protocol":         "tcp",
+				"cidr_blocks":      []string{"10.0.0.0/16"},
+				"ipv6_cidr_blocks": []string{},
+				"prefix_list_ids":  []string{},
+				"security_groups":  []string{},
+				"self":             false,
 			},
 		},
-		
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-ec2-sg-" + environmentSuffix),
+		"egress": []map[string]interface{}{
+			{
+				"description":      "HTTPS outbound",
+				"from_port":        443,
+				"to_port":          443,
+				"protocol":         "tcp",
+				"cidr_blocks":      []string{"0.0.0.0/0"},
+				"ipv6_cidr_blocks": []string{},
+				"prefix_list_ids":  []string{},
+				"security_groups":  []string{},
+				"self":             false,
+			},
+			{
+				"description":      "HTTP outbound for package updates",
+				"from_port":        80,
+				"to_port":          80,
+				"protocol":         "tcp",
+				"cidr_blocks":      []string{"0.0.0.0/0"},
+				"ipv6_cidr_blocks": []string{},
+				"prefix_list_ids":  []string{},
+				"security_groups":  []string{},
+				"self":             false,
+			},
 		},
-	})
-
-	// Get latest Amazon Linux 2 AMI
-	latestAmi := dataawsami.NewDataAwsAmi(this, jsii.String("TapLatestAmi"), &dataawsami.DataAwsAmiConfig{
-		MostRecent: jsii.Bool(true),
-		Owners:     &[]*string{jsii.String("amazon")},
-		Filter: &[]*dataawsami.DataAwsAmiFilter{
-			{
-				Name:   jsii.String("name"),
-				Values: &[]*string{jsii.String("amzn2-ami-hvm-*-x86_64-gp2")},
-			},
-			{
-				Name:   jsii.String("state"),
-				Values: &[]*string{jsii.String("available")},
-			},
+		"tags": map[string]string{
+			"Name": "tap-ec2-sg-dev",
 		},
 	})
 
-	// Create EC2 instance with detailed monitoring
-	ec2Instance := instance.NewInstance(this, jsii.String("TapEc2Instance"), &instance.InstanceConfig{
-		Ami:                    latestAmi.Id(),
-		InstanceType:          jsii.String("t3.micro"),
-		SubnetId:              privateSubnet.Id(),
-		VpcSecurityGroupIds:   &[]*string{ec2SecurityGroup.Id()},
-		IamInstanceProfile:    ec2InstanceProfile.Name(),
-		Monitoring:            jsii.Bool(true), // Enable detailed monitoring
-		DisableApiTermination: jsii.Bool(true), // Prevent accidental termination
-		
-		// User data script to install CloudWatch agent and configure HTTPS
-		UserData: jsii.String(`#!/bin/bash
+	// Add AMI data source
+	stack.AddOverride(jsii.String("data.aws_ami.latest"), map[string]interface{}{
+		"most_recent": true,
+		"owners":      []string{"amazon"},
+		"filter": []map[string]interface{}{
+			{
+				"name":   "name",
+				"values": []string{"amzn2-ami-hvm-*-x86_64-gp2"},
+			},
+			{
+				"name":   "state",
+				"values": []string{"available"},
+			},
+		},
+	})
+
+	// Add EC2 instance
+	stack.AddOverride(jsii.String("resource.aws_instance.app_instance"), map[string]interface{}{
+		"ami":                     "${data.aws_ami.latest.id}",
+		"instance_type":           "t3.micro",
+		"subnet_id":               "${aws_subnet.private_subnet.id}",
+		"vpc_security_group_ids":  []string{"${aws_security_group.ec2_sg.id}"},
+		"iam_instance_profile":    "${aws_iam_instance_profile.ec2_profile.name}",
+		"monitoring":              true,
+		"disable_api_termination": true,
+		"user_data": `#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
 yum install -y awslogs
@@ -328,127 +286,139 @@ EOF
 # Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
     -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-`),
-		
-		// Root block device encryption
-		RootBlockDevice: &instance.InstanceRootBlockDevice{
-			VolumeType: jsii.String("gp3"),
-			VolumeSize: jsii.Number(20),
-			Encrypted:  jsii.Bool(true),
-			KmsKeyId:   kmsKey.Arn(),
-		},
-		
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-ec2-instance-" + environmentSuffix),
-		},
-	})
-
-	// Create SNS topic for CloudWatch alarms
-	snsTopic := snstopic.NewSnsTopic(this, jsii.String("TapSnsTopic"), &snstopic.SnsTopicConfig{
-		Name: jsii.String("tap-cpu-alarm-topic-" + environmentSuffix),
-		KmsMasterKeyId: kmsKey.Id(),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-sns-topic-" + environmentSuffix),
-		},
-	})
-
-	// Create CloudWatch alarm for CPU utilization > 70%
-	cloudwatchmetricalarm.NewCloudwatchMetricAlarm(this, jsii.String("TapCpuAlarm"), &cloudwatchmetricalarm.CloudwatchMetricAlarmConfig{
-		AlarmName:          jsii.String("tap-cpu-high-alarm-" + environmentSuffix),
-		ComparisonOperator: jsii.String("GreaterThanThreshold"),
-		EvaluationPeriods:  jsii.String("2"),
-		MetricName:         jsii.String("CPUUtilization"),
-		Namespace:          jsii.String("AWS/EC2"),
-		Period:             jsii.String("300"), // 5 minutes
-		Statistic:          jsii.String("Average"),
-		Threshold:          jsii.Number(70),
-		AlarmDescription:   jsii.String("This metric monitors ec2 cpu utilization"),
-		AlarmActions:       &[]*string{snsTopic.Arn()},
-		Dimensions: &map[string]*string{
-			"InstanceId": ec2Instance.Id(),
-		},
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-cpu-alarm-" + environmentSuffix),
-		},
-	})
-
-	// Create S3 bucket for CloudTrail logs
-	cloudTrailBucket := s3bucket.NewS3Bucket(this, jsii.String("TapCloudTrailBucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String("tap-cloudtrail-logs-" + environmentSuffix + "-" + generateRandomSuffix()),
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-cloudtrail-bucket-" + environmentSuffix),
-		},
-	})
-
-	// Enable encryption on CloudTrail S3 bucket
-	s3bucketencryption.NewS3BucketServerSideEncryptionConfigurationA(this, jsii.String("TapCloudTrailBucketEncryption"), &s3bucketencryption.S3BucketServerSideEncryptionConfigurationAConfig{
-		Bucket: cloudTrailBucket.Id(),
-		Rule: &[]*s3bucketencryption.S3BucketServerSideEncryptionConfigurationARule{
+`,
+		"root_block_device": []map[string]interface{}{
 			{
-				ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketServerSideEncryptionConfigurationARuleApplyServerSideEncryptionByDefault{
-					SseAlgorithm:   jsii.String("aws:kms"),
-					KmsMasterKeyId: kmsKey.Arn(),
+				"volume_type": "gp3",
+				"volume_size": 20,
+				"encrypted":   true,
+				"kms_key_id":  "${aws_kms_key.tap_kms_key.arn}",
+			},
+		},
+		"tags": map[string]string{
+			"Name": "tap-ec2-instance-dev",
+		},
+	})
+
+	// Add SNS topic
+	stack.AddOverride(jsii.String("resource.aws_sns_topic.cpu_alarm_topic"), map[string]interface{}{
+		"name":              "tap-cpu-alarm-topic-dev",
+		"kms_master_key_id": "${aws_kms_key.tap_kms_key.id}",
+		"tags": map[string]string{
+			"Name": "tap-sns-topic-dev",
+		},
+	})
+
+	// Add CloudWatch alarm
+	stack.AddOverride(jsii.String("resource.aws_cloudwatch_metric_alarm.cpu_alarm"), map[string]interface{}{
+		"alarm_name":          "tap-cpu-high-alarm-dev",
+		"comparison_operator": "GreaterThanThreshold",
+		"evaluation_periods":  "2",
+		"metric_name":         "CPUUtilization",
+		"namespace":           "AWS/EC2",
+		"period":              "300",
+		"statistic":           "Average",
+		"threshold":           "70",
+		"alarm_description":   "This metric monitors ec2 cpu utilization",
+		"alarm_actions":       []string{"${aws_sns_topic.cpu_alarm_topic.arn}"},
+		"dimensions": map[string]string{
+			"InstanceId": "${aws_instance.app_instance.id}",
+		},
+		"tags": map[string]string{
+			"Name": "tap-cpu-alarm-dev",
+		},
+	})
+
+	// Add CloudTrail S3 bucket
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket.cloudtrail_bucket"), map[string]interface{}{
+		"bucket": "tap-cloudtrail-logs-dev",
+		"tags": map[string]string{
+			"Name": "tap-cloudtrail-bucket-dev",
+		},
+	})
+
+	// Add CloudTrail bucket encryption
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_server_side_encryption_configuration.cloudtrail_bucket_encryption"), map[string]interface{}{
+		"bucket": "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"rule": []map[string]interface{}{
+			{
+				"apply_server_side_encryption_by_default": map[string]interface{}{
+					"sse_algorithm":     "aws:kms",
+					"kms_master_key_id": "${aws_kms_key.tap_kms_key.arn}",
 				},
 			},
 		},
 	})
 
-	// Block public access to CloudTrail S3 bucket
-	s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(this, jsii.String("TapCloudTrailBucketPublicAccessBlock"), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
-		Bucket:                cloudTrailBucket.Id(),
-		BlockPublicAcls:       jsii.Bool(true),
-		BlockPublicPolicy:     jsii.Bool(true),
-		IgnorePublicAcls:      jsii.Bool(true),
-		RestrictPublicBuckets: jsii.Bool(true),
+	// Add CloudTrail bucket public access block
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"), map[string]interface{}{
+		"bucket":                  "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"block_public_acls":       true,
+		"block_public_policy":     true,
+		"ignore_public_acls":      true,
+		"restrict_public_buckets": true,
 	})
 
-	// Enable CloudTrail for auditing
-	cloudtrail.NewCloudtrail(this, jsii.String("TapCloudTrail"), &cloudtrail.CloudtrailConfig{
-		Name:                   jsii.String("tap-cloudtrail-" + environmentSuffix),
-		S3BucketName:           cloudTrailBucket.Id(),
-		IncludeGlobalServiceEvents: jsii.Bool(true),
-		IsMultiRegionTrail:     jsii.Bool(true),
-		EnableLogFileValidation: jsii.Bool(true),
-		KmsKeyId:               kmsKey.Arn(),
-		EventSelector: &[]*cloudtrail.CloudtrailEventSelector{
-			{
-				ReadWriteType:                 jsii.String("All"),
-				IncludeManagementEvents:       jsii.Bool(true),
-				DataResource: &[]*cloudtrail.CloudtrailEventSelectorDataResource{
-					{
-						Type:   jsii.String("AWS::S3::Object"),
-						Values: &[]*string{jsii.String("arn:aws:s3:::*/*")},
+	// Add CloudTrail bucket policy
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_policy.cloudtrail_bucket_policy"), map[string]interface{}{
+		"bucket": "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"policy": `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AWSCloudTrailAclCheck",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
 					},
+					"Action": "s3:GetBucketAcl",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}",
+					"Condition": {
+						"StringEquals": {
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
 				},
-			},
-		},
-		Tags: &map[string]*string{
-			"Name": jsii.String("tap-cloudtrail-" + environmentSuffix),
-		},
+				{
+					"Sid": "AWSCloudTrailWrite",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": "s3:PutObject",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}/*",
+					"Condition": {
+						"StringEquals": {
+							"s3:x-amz-acl": "bucket-owner-full-control",
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
+				}
+			]
+		}`,
 	})
 
-	return this
-}
+	// Add current AWS account data source
+	stack.AddOverride(jsii.String("data.aws_caller_identity.current"), map[string]interface{}{})
 
-// Helper function to get environment variables with default values
-func getEnvVar(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
+	// Add required provider for random
+	stack.AddOverride(jsii.String("terraform.required_providers.random"), map[string]interface{}{
+		"source":  "hashicorp/random",
+		"version": "~> 3.1",
+	})
 
-// Helper function to generate a random suffix for unique resource names
-func generateRandomSuffix() string {
-	// In a real implementation, you might use a UUID or timestamp
-	// For simplicity, we'll use a static suffix that can be made unique via environment
-	return getEnvVar("ENVIRONMENT_SUFFIX", "dev")
-}
-
-func main() {
-	app := cdktf.NewApp(nil)
-
-	NewTapStack(app, "TapStack")
+	// Add CloudTrail
+	stack.AddOverride(jsii.String("resource.aws_cloudtrail.audit_trail"), map[string]interface{}{
+		"name":                          "tap-cloudtrail-dev",
+		"s3_bucket_name":                "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"include_global_service_events": true,
+		"is_multi_region_trail":         true,
+		"enable_log_file_validation":    true,
+		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
+		"tags": map[string]string{
+			"Name": "tap-cloudtrail-dev",
+		},
+	})
 
 	app.Synth()
 }
