@@ -196,18 +196,13 @@ public class AuditingComponent extends ComponentResource {
         new LogMetricFilter(name + "-security-events", LogMetricFilterArgs.builder()
                 .name(name + "-security-events-filter")
                 .logGroupName(cloudTrailLogGroup.name())
-                .pattern("""
-                    { ($.errorCode = "*UnauthorizedOperation") ||
-                      ($.errorCode = "AccessDenied*") ||
-                      ($.userIdentity.arn = "arn:aws:iam::" + accountId + ":root") ||
-                      ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
-                      ($.eventName = "CreateUser") ||
-                      ($.eventName = "DeleteUser") ||
-                      ($.eventName = "CreateRole") ||
-                      ($.eventName = "DeleteRole") ||
-                      ($.eventName = "AttachRolePolicy") ||
-                      ($.eventName = "DetachRolePolicy") }
-                    """)
+                .pattern(accountId.applyValue(account -> 
+                    "[version, account, time, detail={eventName=CreateUser || eventName=DeleteUser " +
+                            "|| eventName=CreateRole || eventName=DeleteRole || eventName=AttachRolePolicy " +
+                            "|| eventName=DetachRolePolicy || errorCode=*UnauthorizedOperation || " +
+                            "errorCode=AccessDenied* || (eventName=ConsoleLogin && responseElements.ConsoleLogin=Failure) " +
+                            "|| userIdentity.arn=arn:aws:iam::" + account + ":root}]"
+                ))
                 .metricTransformation(LogMetricFilterMetricTransformationArgs.builder()
                         .name("SecurityEvents")
                         .namespace("SecureInfrastructure/Security")

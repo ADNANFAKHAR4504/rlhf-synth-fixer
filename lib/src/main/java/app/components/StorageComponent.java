@@ -169,20 +169,10 @@ public class StorageComponent extends ComponentResource {
                 .restrictPublicBuckets(true)
                 .build(), CustomResourceOptions.builder().parent(this).build());
 
-        // Enable logging for bucket access
-        if (!purpose.equals("access-logs")) {
-            createBucketLogging(bucketName, bucket);
-        }
-
         // Add lifecycle configuration for cost optimization
         createBucketLifecycle(bucketName, bucket, purpose);
 
         return bucket;
-    }
-
-    private void createBucketLogging(String bucketName, Bucket bucket) {
-        // Bucket logging configuration would go here
-        // Requires a separate logging bucket
     }
 
     private void createBucketLifecycle(String bucketName, Bucket bucket, String purpose) {
