@@ -24,6 +24,7 @@ type InfrastructureConfig struct {
 	BackupRetention    int
 	MultiAZ            bool
 	EnableInsights     bool
+	tags               map[string]string
 }
 
 type MultiRegionInfrastructure struct {
@@ -33,14 +34,21 @@ type MultiRegionInfrastructure struct {
 }
 
 func NewMultiRegionInfrastructure(ctx *pulumi.Context, config InfrastructureConfig) *MultiRegionInfrastructure {
+	tags := pulumi.StringMap{
+		"environment": pulumi.String(config.Environment),
+		"purpose":     pulumi.String("multi-region-infrastructure"),
+		"managed-by":  pulumi.String("pulumi"),
+	}
+
+	// Add custom tags from config
+	for k, v := range config.tags {
+		tags[k] = pulumi.String(v)
+	}
+
 	return &MultiRegionInfrastructure{
 		config: config,
 		ctx:    ctx,
-		tags: pulumi.StringMap{
-			"environment": pulumi.String(config.Environment),
-			"purpose":     pulumi.String("multi-region-infrastructure"),
-			"managed-by":  pulumi.String("pulumi"),
-		},
+		tags:   tags,
 	}
 }
 
