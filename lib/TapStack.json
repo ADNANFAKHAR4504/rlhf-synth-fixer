@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Fixes applied: EC2 in private subnet, Lambda VPC config, IAM least privilege.\n",
+    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Fixes applied: EC2 moved to private subnet, Lambda VPC-configured, and LambdaRole updated with ENI permissions.\n",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -59,7 +59,7 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "MapPublicIpOnLaunch": false,
+                "MapPublicIpOnLaunch": true,
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -129,13 +129,7 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                }
             }
         },
         "PublicRoute": {
@@ -165,7 +159,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "prod-${EnvironmentSuffix}-sg"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sg"
                 },
                 "VpcId": {
                     "Ref": "VPC"
@@ -194,12 +188,6 @@
                         "IpProtocol": -1,
                         "CidrIp": "0.0.0.0/0"
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
                 ]
             }
         },
@@ -220,7 +208,7 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "EC2LeastPrivilege",
+                        "PolicyName": "EC2Minimal",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -230,26 +218,12 @@
                                         "s3:GetObject",
                                         "s3:ListBucket"
                                     ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "SecureS3Bucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
-                                        }
-                                    ]
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                                    }
                                 }
                             ]
                         }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
                     }
                 ]
             }
@@ -258,7 +232,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "prod-${EnvironmentSuffix}-ec2profile"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
                 },
                 "Roles": [
                     {
@@ -299,12 +273,23 @@
                                 }
                             ]
                         }
-                    }
-                ],
-                "Tags": [
+                    },
                     {
-                        "Key": "Environment",
-                        "Value": "Production"
+                        "PolicyName": "LambdaENI",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ]
             }
@@ -336,12 +321,6 @@
                             "Encrypted": true
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
                 ]
             }
         },
@@ -362,13 +341,7 @@
                     "IgnorePublicAcls": true,
                     "BlockPublicPolicy": true,
                     "RestrictPublicBuckets": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                }
             }
         },
         "SecureS3BucketPolicy": {
@@ -422,20 +395,14 @@
                     "GenerateStringKey": "password",
                     "PasswordLength": 16,
                     "ExcludeCharacters": "\"@/ '"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                }
             }
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "prod-${EnvironmentSuffix}-dbsubnet"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
                 },
                 "DBSubnetGroupDescription": "Private DB subnets",
                 "SubnetIds": [
@@ -444,12 +411,6 @@
                     },
                     {
                         "Ref": "PrivateSubnet2"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
                     }
                 ]
             }
@@ -493,20 +454,14 @@
                             ":SecretString:password}}"
                         ]
                     ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                }
             }
         },
         "MyLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "prod-${EnvironmentSuffix}-lambda"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda"
                 },
                 "Runtime": "python3.9",
                 "Role": {
@@ -518,9 +473,6 @@
                 "Handler": "index.handler",
                 "MemorySize": 128,
                 "Timeout": 30,
-                "Code": {
-                    "ZipFile": "def handler(event, context):\n    return {\"statusCode\":200, \"body\":\"Hello from TapStack\"}\n"
-                },
                 "VpcConfig": {
                     "SubnetIds": [
                         {
@@ -536,24 +488,15 @@
                         }
                     ]
                 },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                "Code": {
+                    "ZipFile": "def handler(event, context):\n    return {\"statusCode\":200, \"body\":\"Hello from TapStack\"}\n"
+                }
             }
         },
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "RetentionInDays": 90,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                "RetentionInDays": 90
             }
         },
         "CloudTrailRole": {
@@ -588,12 +531,6 @@
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
                 ]
             }
         },
@@ -601,7 +538,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "prod-${EnvironmentSuffix}-trail"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-trail"
                 },
                 "S3BucketName": {
                     "Ref": "SecureS3Bucket"
@@ -621,13 +558,7 @@
                 "IsMultiRegionTrail": false,
                 "IncludeGlobalServiceEvents": true,
                 "EnableLogFileValidation": true,
-                "IsLogging": true,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
+                "IsLogging": true
             }
         }
     },
