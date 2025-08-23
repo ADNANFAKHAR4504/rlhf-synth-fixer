@@ -41,7 +41,6 @@ if [ -n "$PULUMI_BACKEND_URL" ]; then
   echo "  Pulumi organization: $PULUMI_ORG"
 fi
 
-# Bootstrap using the dedicated script
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
@@ -50,15 +49,52 @@ echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
   npm run cdk:deploy
+
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
+
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
+
+    if [ -d "cdktf.out" ]; then
+      echo "🗑️ Removing cdktf.out for clean CI run..."
+      rm -rf cdktf.out
+    fi
+
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+
+    # Ensure CDKTF core deps are present to satisfy .gen imports
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    go clean -modcache || true
+    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+    go mod tidy
+  fi
+
   npm run cdktf:deploy
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
   npm run cfn:deploy-yaml
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
+
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
   
@@ -67,25 +103,22 @@ elif [ "$PLATFORM" = "tf" ]; then
     exit 1
   fi
   
-  # Set up PR-specific state management
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
   
-  # Change to lib directory where Terraform files are located
   cd lib
   
-  # Check if plan file exists
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     npm run tf:deploy
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    # Create a new plan and deploy
     terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
     terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
   fi
   
   cd ..
+
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi deploy..."
   
@@ -100,6 +133,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   pipenv run pulumi-create-stack
   echo "Deploying infrastructure ..."
   pipenv run pulumi-deploy
+
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
   echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python"
@@ -111,4 +145,3 @@ echo "✅ Deploy completed successfully"
 # Get outputs using the dedicated script
 echo "📊 Collecting deployment outputs..."
 ./scripts/get-outputs.sh
-

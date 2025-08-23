@@ -9,6 +9,10 @@ inputs:
     description: "Whether to download build artifacts"
     required: false
     default: "true"
+  language:
+    description: "Project language (ts, py, go, yaml, json, hcl)"
+    required: false
+    default: ''
   terraform-version:
     description: "Terraform version to use"
     required: false
@@ -41,7 +45,7 @@ runs:
       if: inputs.download-artifacts == 'true'
       shell: bash
       run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
-        
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -53,6 +57,23 @@ runs:
       with:
         python-version: "3.12.11"
         check-latest: true
+
+    - name: Setup Go 1.23.x
+      if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23.12'
+
+    - name: Cache Go modules
+      if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('lib/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Setup Java 17
       if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
@@ -98,6 +119,7 @@ runs:
         DOWNLOAD_ARTIFACTS: ${{ inputs.download-artifacts }}
         UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
+        LANGUAGE: ${{ inputs.language }}
 
     - name: Upload build artifacts
       if: inputs.upload-artifacts == 'true'
@@ -126,5 +148,3 @@ runs:
           config/
           .gradle/
           build/
-
-
