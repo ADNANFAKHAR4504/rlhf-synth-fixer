@@ -1,7 +1,12 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -185,7 +190,9 @@ public class MainTest {
                         break;
                     }
                 }
-                if (foundDifferent) break;
+                if (foundDifferent) {
+                    break;
+                }
             }
             assertTrue(foundDifferent, "Random suffix generation should produce varied results");
         });
@@ -971,10 +978,10 @@ public class MainTest {
                 mainMethod.invoke(null, (Object) new String[]{});
             } catch (Exception e) {
                 // Expected to fail due to Pulumi context requirements
-                assertTrue(e.getCause() instanceof RuntimeException || 
-                          e.getCause() instanceof IllegalStateException ||
-                          e.getCause() instanceof java.lang.NoClassDefFoundError ||
-                          e instanceof java.lang.reflect.InvocationTargetException);
+                assertTrue(e.getCause() instanceof RuntimeException
+                        || e.getCause() instanceof IllegalStateException
+                        || e.getCause() instanceof java.lang.NoClassDefFoundError
+                        || e instanceof java.lang.reflect.InvocationTargetException);
             }
         });
     }
@@ -1055,5 +1062,229 @@ public class MainTest {
             assertTrue(Modifier.isStatic(suffixField.getModifiers()));
             assertTrue(Modifier.isFinal(suffixField.getModifiers()));
         });
+    }    
+    /**
+     * Test VpcResources inner class.
+     */
+    @Test
+    void testVpcResourcesClass() {
+        // Test that VpcResources class exists and is properly structured
+        assertDoesNotThrow(() -> {
+            Class<?> vpcResourcesClass = Main.VpcResources.class;
+            assertTrue(Modifier.isPublic(vpcResourcesClass.getModifiers()));
+            assertTrue(Modifier.isStatic(vpcResourcesClass.getModifiers()));
+            
+            // Test constructor (parameter names changed to avoid hidden field warnings)
+            var constructor = vpcResourcesClass.getConstructor(
+                com.pulumi.aws.ec2.Vpc.class, 
+                com.pulumi.aws.ec2.Subnet.class, 
+                com.pulumi.aws.ec2.Subnet.class
+            );
+            assertTrue(Modifier.isPublic(constructor.getModifiers()));
+            
+            // Test getter methods exist
+            var getVpcMethod = vpcResourcesClass.getMethod("getVpc");
+            var getPublicSubnetMethod = vpcResourcesClass.getMethod("getPublicSubnet");
+            var getPrivateSubnetMethod = vpcResourcesClass.getMethod("getPrivateSubnet");
+            
+            assertTrue(Modifier.isPublic(getVpcMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.ec2.Vpc.class, getVpcMethod.getReturnType());
+            assertTrue(Modifier.isPublic(getPublicSubnetMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.ec2.Subnet.class, getPublicSubnetMethod.getReturnType());
+            assertTrue(Modifier.isPublic(getPrivateSubnetMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.ec2.Subnet.class, getPrivateSubnetMethod.getReturnType());
+        });
+    }
+    
+    /**
+     * Test IamResources inner class.
+     */
+    @Test
+    void testIamResourcesClass() {
+        // Test that IamResources class exists and is properly structured
+        assertDoesNotThrow(() -> {
+            Class<?> iamResourcesClass = Main.IamResources.class;
+            assertTrue(Modifier.isPublic(iamResourcesClass.getModifiers()));
+            assertTrue(Modifier.isStatic(iamResourcesClass.getModifiers()));
+            
+            // Test constructor (parameter names changed to avoid hidden field warnings)
+            var constructor = iamResourcesClass.getConstructor(
+                com.pulumi.aws.iam.Role.class,
+                com.pulumi.aws.iam.Policy.class,
+                com.pulumi.aws.iam.InstanceProfile.class
+            );
+            assertTrue(Modifier.isPublic(constructor.getModifiers()));
+            
+            // Test getter methods exist
+            var getEc2RoleMethod = iamResourcesClass.getMethod("getEc2Role");
+            var getS3PolicyMethod = iamResourcesClass.getMethod("getS3Policy");
+            var getInstanceProfileMethod = iamResourcesClass.getMethod("getInstanceProfile");
+            
+            assertTrue(Modifier.isPublic(getEc2RoleMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.iam.Role.class, getEc2RoleMethod.getReturnType());
+            assertTrue(Modifier.isPublic(getS3PolicyMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.iam.Policy.class, getS3PolicyMethod.getReturnType());
+            assertTrue(Modifier.isPublic(getInstanceProfileMethod.getModifiers()));
+            assertEquals(com.pulumi.aws.iam.InstanceProfile.class, getInstanceProfileMethod.getReturnType());
+        });
+    }
+    
+    /**
+     * Test various edge cases for helper methods to increase coverage.
+     */
+    @Test
+    void testHelperMethodEdgeCases() {
+        // Test buildResourceName with various inputs
+        assertEquals("prefix-suffix", Main.buildResourceName("prefix", "suffix"));
+        assertEquals("a-1", Main.buildResourceName("a", "1"));
+        
+        // Test region and suffix getters multiple times (for consistency)
+        String region1 = Main.getRegion();
+        String region2 = Main.getRegion();
+        assertEquals(region1, region2);
+        
+        String suffix1 = Main.getRandomSuffix();
+        String suffix2 = Main.getRandomSuffix();
+        assertEquals(suffix1, suffix2); // Should be same since it's static
+        
+        // Test CIDR validation edge cases
+        assertTrue(Main.isValidCidrBlock("0.0.0.0/0"));
+        assertTrue(Main.isValidCidrBlock("255.255.255.255/32"));
+        assertFalse(Main.isValidCidrBlock("256.0.0.0/16"));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0/33"));
+        assertFalse(Main.isValidCidrBlock("10.0.0/16"));
+        
+        // Test instance type validation edge cases
+        assertTrue(Main.isValidInstanceType("t3.micro"));
+        assertTrue(Main.isValidInstanceType("c5n.xlarge"));
+        assertTrue(Main.isValidInstanceType("r5a.24xlarge"));
+        assertFalse(Main.isValidInstanceType("invalid.type"));
+        assertFalse(Main.isValidInstanceType("t3"));
+        
+        // Test port validation edge cases
+        assertTrue(Main.isValidPort(1));
+        assertTrue(Main.isValidPort(65535));
+        assertFalse(Main.isValidPort(0));
+        assertFalse(Main.isValidPort(65536));
+        
+        // Test protocol validation case insensitivity
+        assertTrue(Main.isValidProtocol("TCP"));
+        assertTrue(Main.isValidProtocol("tcp"));
+        assertTrue(Main.isValidProtocol("UDP"));
+        assertTrue(Main.isValidProtocol("udp"));
+        
+        // Test ARN validation edge cases
+        assertTrue(Main.isValidArn("arn:aws:s3:::bucket/key"));
+        assertTrue(Main.isValidArn("arn:aws:ec2:us-east-1:123456789012:instance/i-1234567890abcdef0"));
+        assertFalse(Main.isValidArn("invalid-arn"));
+        assertFalse(Main.isValidArn("arn:aws:s3"));
+        
+        // Test S3 bucket name validation edge cases
+        assertTrue(Main.isValidS3BucketName("abc"));
+        assertTrue(Main.isValidS3BucketName("my-bucket-123"));
+        assertFalse(Main.isValidS3BucketName("ab"));
+        assertFalse(Main.isValidS3BucketName("My-Bucket"));
+        assertFalse(Main.isValidS3BucketName("192.168.1.1"));
+        
+        // Test availability zone generation edge cases
+        assertEquals("us-east-1a", Main.generateAvailabilityZone("us-east-1", "a"));
+        assertEquals("eu-west-1z", Main.generateAvailabilityZone("eu-west-1", "z"));
+        
+        // Test subnet size calculation edge cases
+        assertEquals(1, Main.calculateSubnetSize("10.0.0.0/32"));
+        assertEquals(256, Main.calculateSubnetSize("192.168.1.0/24"));
+        assertEquals(65536, Main.calculateSubnetSize("10.0.0.0/16"));
+        
+        // Test KMS validation edge cases
+        assertTrue(Main.isValidKmsKeyUsage("ENCRYPT_DECRYPT"));
+        assertTrue(Main.isValidKmsKeyUsage("SIGN_VERIFY"));
+        assertFalse(Main.isValidKmsKeyUsage("INVALID"));
+        
+        assertTrue(Main.isValidKmsDeletionWindow(7));
+        assertTrue(Main.isValidKmsDeletionWindow(30));
+        assertFalse(Main.isValidKmsDeletionWindow(6));
+        assertFalse(Main.isValidKmsDeletionWindow(31));
+        
+        // Test EBS validation edge cases
+        assertTrue(Main.isValidEbsVolumeType("gp3"));
+        assertTrue(Main.isValidEbsVolumeType("io2"));
+        assertFalse(Main.isValidEbsVolumeType("invalid"));
+        
+        assertTrue(Main.isValidEbsVolumeSize(1, "gp2"));
+        assertTrue(Main.isValidEbsVolumeSize(16384, "gp3"));
+        assertFalse(Main.isValidEbsVolumeSize(0, "gp2"));
+        assertFalse(Main.isValidEbsVolumeSize(100, null));
+        
+        // Test CloudWatch validation edge cases
+        assertTrue(Main.isValidCloudWatchPeriod(60));
+        assertTrue(Main.isValidCloudWatchPeriod(3600));
+        assertFalse(Main.isValidCloudWatchPeriod(30));
+        assertFalse(Main.isValidCloudWatchPeriod(90));
+        
+        // Test alarm threshold validation edge cases
+        assertTrue(Main.isValidAlarmThreshold(0.0));
+        assertTrue(Main.isValidAlarmThreshold(100.0));
+        assertTrue(Main.isValidAlarmThreshold(50.5));
+        assertFalse(Main.isValidAlarmThreshold(-0.1));
+        assertFalse(Main.isValidAlarmThreshold(100.1));
+    }
+    
+    /**
+     * Test policy generation methods to increase coverage.
+     */
+    @Test
+    void testPolicyGenerationMethods() {
+        // Test CloudTrail bucket policy
+        String cloudtrailPolicy = Main.buildCloudTrailBucketPolicy("test-bucket");
+        assertNotNull(cloudtrailPolicy);
+        assertTrue(cloudtrailPolicy.contains("test-bucket"));
+        assertTrue(cloudtrailPolicy.contains("AWSCloudTrailAclCheck"));
+        assertTrue(cloudtrailPolicy.contains("AWSCloudTrailWrite"));
+        assertTrue(cloudtrailPolicy.contains("s3:GetBucketAcl"));
+        assertTrue(cloudtrailPolicy.contains("s3:PutObject"));
+        assertTrue(cloudtrailPolicy.contains("cloudtrail.amazonaws.com"));
+        
+        // Test S3 read-only policy
+        String s3Policy = Main.buildS3ReadOnlyPolicy("us-east-1");
+        assertNotNull(s3Policy);
+        assertTrue(s3Policy.contains("us-east-1"));
+        assertTrue(s3Policy.contains("s3:GetObject"));
+        assertTrue(s3Policy.contains("s3:ListBucket"));
+        assertTrue(s3Policy.contains("kms:Decrypt"));
+        assertTrue(s3Policy.contains("financial-app-data-*"));
+        
+        // Test EC2 assume role policy
+        String ec2Policy = Main.buildEc2AssumeRolePolicy();
+        assertNotNull(ec2Policy);
+        assertTrue(ec2Policy.contains("sts:AssumeRole"));
+        assertTrue(ec2Policy.contains("ec2.amazonaws.com"));
+        assertTrue(ec2Policy.contains("2012-10-17"));
+        
+        // Test CloudWatch agent config
+        String cloudwatchConfig = Main.buildCloudWatchAgentConfig();
+        assertNotNull(cloudwatchConfig);
+        assertTrue(cloudwatchConfig.contains("FinancialApp/EC2"));
+        assertTrue(cloudwatchConfig.contains("cpu_usage_idle"));
+        assertTrue(cloudwatchConfig.contains("mem_used_percent"));
+        assertTrue(cloudwatchConfig.contains("used_percent"));
+        
+        // Test EC2 user data
+        String userData = Main.buildEc2UserData();
+        assertNotNull(userData);
+        assertTrue(userData.contains("#!/bin/bash"));
+        assertTrue(userData.contains("yum update -y"));
+        assertTrue(userData.contains("amazon-cloudwatch-agent"));
+        assertTrue(userData.contains("FinancialApp/EC2"));
+        
+        // Test KMS key policy
+        String kmsPolicy = Main.buildKmsKeyPolicy();
+        assertNotNull(kmsPolicy);
+        assertTrue(kmsPolicy.contains("2012-10-17"));
+        assertTrue(kmsPolicy.contains("Enable IAM User Permissions"));
+        assertTrue(kmsPolicy.contains("Allow CloudTrail to encrypt logs"));
+        assertTrue(kmsPolicy.contains("Allow S3 service to use the key"));
+        assertTrue(kmsPolicy.contains("kms:GenerateDataKey"));
+        assertTrue(kmsPolicy.contains("cloudtrail.amazonaws.com"));
+        assertTrue(kmsPolicy.contains("s3.amazonaws.com"));
     }
 }

@@ -77,18 +77,35 @@ public final class Main {
     
     // Extracted infrastructure creation method for testing
     public static void createInfrastructure(final com.pulumi.Context ctx) {
-        
-        // Configure AWS Provider for us-east-1
-        var awsProvider = new Provider("aws-provider", ProviderArgs.builder()
+        var awsProvider = createAwsProvider();
+        var providerOptions = createProviderOptions(awsProvider);
+        var kmsKey = createKmsKey(providerOptions);
+        var cloudtrailBucket = createCloudTrailS3Bucket(providerOptions, kmsKey);
+        var appBucket = createApplicationS3Bucket(providerOptions, kmsKey);
+        var vpcResources = createVpcInfrastructure(providerOptions);
+        var securityGroup = createSecurityGroup(providerOptions, vpcResources.getVpc());
+        var iamResources = createIamResources(providerOptions);
+        var snsTopic = createSnsTopic(providerOptions);
+        createEc2Instances(providerOptions, vpcResources, securityGroup, 
+            iamResources, kmsKey, snsTopic);
+        var cloudTrail = createCloudTrail(providerOptions, cloudtrailBucket, kmsKey);
+        exportOutputs(ctx, vpcResources, kmsKey, appBucket, snsTopic, cloudTrail, securityGroup);
+    }
+    
+    private static Provider createAwsProvider() {
+        return new Provider("aws-provider", ProviderArgs.builder()
             .region(REGION)
             .build());
-        
-        var providerOptions = CustomResourceOptions.builder()
+    }
+    
+    private static CustomResourceOptions createProviderOptions(final Provider awsProvider) {
+        return CustomResourceOptions.builder()
             .provider(awsProvider)
             .build();
-        
-        // Create KMS Key for encryption
-        var kmsKey = new Key("financial-app-kms-key-" + RANDOM_SUFFIX, KeyArgs.builder()
+    }
+    
+    private static Key createKmsKey(final CustomResourceOptions providerOptions) {
+        return new Key("financial-app-kms-key-" + RANDOM_SUFFIX, KeyArgs.builder()
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
@@ -99,338 +116,426 @@ public final class Main {
                 "Compliance", "required"
             ))
             .build(), providerOptions);
-            
-            // Create S3 bucket for CloudTrail logs with encryption
-            String cloudtrailBucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
-            var cloudtrailBucket = new Bucket("financial-cloudtrail-logs-" + RANDOM_SUFFIX, 
-                BucketArgs.builder()
-                    .bucket(cloudtrailBucketName)
-                    .forceDestroy(true)
-                    .tags(Map.of(
-                        "Purpose", "CloudTrail-Logs",
-                        "Environment", "production"
-                    ))
-                    .build(), providerOptions);
-            
-            // Configure S3 bucket encryption for CloudTrail
-            var cloudtrailBucketEncryption = new BucketServerSideEncryptionConfiguration(
-                "cloudtrail-bucket-encryption-" + RANDOM_SUFFIX,
-                BucketServerSideEncryptionConfigurationArgs.builder()
-                    .bucket(cloudtrailBucket.id())
-                    .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                        .applyServerSideEncryptionByDefault(
-                            BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                                .sseAlgorithm("aws:kms")
-                                .kmsMasterKeyId(kmsKey.arn())
-                                .build())
-                        .bucketKeyEnabled(true)
-                        .build())
-                    .build(), providerOptions);
-            
-            // Create S3 bucket policy for CloudTrail using exact bucket name
-            var cloudtrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
-                BucketPolicyArgs.builder()
-                    .bucket(cloudtrailBucket.id())
-                    .policy(buildCloudTrailBucketPolicy(cloudtrailBucketName))
-                    .build(), providerOptions);
-            
-            // Create application S3 bucket with encryption
-            var appBucket = new Bucket("financial-app-data-" + RANDOM_SUFFIX, 
-                BucketArgs.builder()
-                    .forceDestroy(true)
-                    .tags(Map.of(
-                        "Purpose", "Application-Data",
-                        "Environment", "production"
-                    ))
-                    .build(), providerOptions);
-            
-            var appBucketEncryption = new BucketServerSideEncryptionConfiguration(
-                "app-bucket-encryption-" + RANDOM_SUFFIX,
-                BucketServerSideEncryptionConfigurationArgs.builder()
-                    .bucket(appBucket.id())
-                    .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                        .applyServerSideEncryptionByDefault(
-                            BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                                .sseAlgorithm("aws:kms")
-                                .kmsMasterKeyId(kmsKey.arn())
-                                .build())
-                        .bucketKeyEnabled(true)
-                        .build())
-                    .build(), providerOptions);
-            
-            // Create VPC with private subnets
-            var vpc = new Vpc("financial-app-vpc-" + RANDOM_SUFFIX, VpcArgs.builder()
-                .cidrBlock("10.0.0.0/16")
-                .enableDnsHostnames(true)
-                .enableDnsSupport(true)
+    }
+    
+    private static Bucket createCloudTrailS3Bucket(final CustomResourceOptions providerOptions, 
+                                                   final Key kmsKey) {
+        String cloudtrailBucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
+        var cloudtrailBucket = new Bucket("financial-cloudtrail-logs-" + RANDOM_SUFFIX, 
+            BucketArgs.builder()
+                .bucket(cloudtrailBucketName)
+                .forceDestroy(true)
                 .tags(Map.of(
-                    "Name", "financial-app-vpc-" + RANDOM_SUFFIX,
+                    "Purpose", "CloudTrail-Logs",
                     "Environment", "production"
                 ))
                 .build(), providerOptions);
-            
-            // Create Internet Gateway
-            var igw = new InternetGateway("financial-app-igw-" + RANDOM_SUFFIX, 
-                InternetGatewayArgs.builder()
-                    .vpcId(vpc.id())
-                    .tags(Map.of(
-                        "Name", "financial-app-igw-" + RANDOM_SUFFIX
-                    ))
-                    .build(), providerOptions);
-            
-            // Create public subnet for NAT Gateway
-            var publicSubnet = new Subnet("financial-app-public-subnet-" + RANDOM_SUFFIX, 
-                SubnetArgs.builder()
-                    .vpcId(vpc.id())
-                    .cidrBlock("10.0.1.0/24")
-                    .availabilityZone(REGION + "a")
-                    .mapPublicIpOnLaunch(true)
-                    .tags(Map.of(
-                        "Name", "financial-app-public-subnet-" + RANDOM_SUFFIX,
-                        "Type", "public"
-                    ))
-                    .build(), providerOptions);
-            
-            // Create private subnet for application
-            var privateSubnet = new Subnet("financial-app-private-subnet-" + RANDOM_SUFFIX, 
-                SubnetArgs.builder()
-                    .vpcId(vpc.id())
-                    .cidrBlock("10.0.2.0/24")
-                    .availabilityZone(REGION + "a")
-                    .tags(Map.of(
-                        "Name", "financial-app-private-subnet-" + RANDOM_SUFFIX,
-                        "Type", "private"
-                    ))
-                    .build(), providerOptions);
-            
-            // Create Elastic IP for NAT Gateway
-            var natEip = new Eip("financial-app-nat-eip-" + RANDOM_SUFFIX, 
-                EipArgs.builder()
-                    .domain("vpc")
-                    .tags(Map.of(
-                        "Name", "financial-app-nat-eip-" + RANDOM_SUFFIX
-                    ))
-                    .build(), providerOptions);
-            
-            // Create NAT Gateway
-            var natGateway = new NatGateway("financial-app-nat-" + RANDOM_SUFFIX, 
-                NatGatewayArgs.builder()
-                    .allocationId(natEip.id())
-                    .subnetId(publicSubnet.id())
-                    .tags(Map.of(
-                        "Name", "financial-app-nat-" + RANDOM_SUFFIX
-                    ))
-                    .build(), providerOptions);
-            
-            // Create route table for public subnet
-            var publicRouteTable = new RouteTable("financial-app-public-rt-" + RANDOM_SUFFIX, 
-                RouteTableArgs.builder()
-                    .vpcId(vpc.id())
-                    .tags(Map.of(
-                        "Name", "financial-app-public-rt-" + RANDOM_SUFFIX
-                    ))
-                    .build(), providerOptions);
-            
-            // Create route for public subnet to internet gateway
-            var publicRoute = new Route("financial-app-public-route-" + RANDOM_SUFFIX, 
-                RouteArgs.builder()
-                    .routeTableId(publicRouteTable.id())
-                    .destinationCidrBlock("0.0.0.0/0")
-                    .gatewayId(igw.id())
-                    .build(), providerOptions);
-            
-            // Associate public subnet with public route table
-            var publicRouteTableAssociation = new RouteTableAssociation(
-                "financial-app-public-rta-" + RANDOM_SUFFIX,
-                RouteTableAssociationArgs.builder()
-                    .subnetId(publicSubnet.id())
-                    .routeTableId(publicRouteTable.id())
-                    .build(), providerOptions);
-            
-            // Create route table for private subnet
-            var privateRouteTable = new RouteTable("financial-app-private-rt-" + RANDOM_SUFFIX, 
-                RouteTableArgs.builder()
-                    .vpcId(vpc.id())
-                    .tags(Map.of(
-                        "Name", "financial-app-private-rt-" + RANDOM_SUFFIX
-                    ))
-                    .build(), providerOptions);
-            
-            // Create route for private subnet to NAT gateway
-            var privateRoute = new Route("financial-app-private-route-" + RANDOM_SUFFIX, 
-                RouteArgs.builder()
-                    .routeTableId(privateRouteTable.id())
-                    .destinationCidrBlock("0.0.0.0/0")
-                    .natGatewayId(natGateway.id())
-                    .build(), providerOptions);
-            
-            // Associate private subnet with private route table
-            var privateRouteTableAssociation = new RouteTableAssociation(
-                "financial-app-private-rta-" + RANDOM_SUFFIX,
-                RouteTableAssociationArgs.builder()
-                    .subnetId(privateSubnet.id())
-                    .routeTableId(privateRouteTable.id())
-                    .build(), providerOptions);
-            
-            // Create security group for EC2 instances
-            var securityGroup = new SecurityGroup("financial-app-sg-" + RANDOM_SUFFIX, 
-                SecurityGroupArgs.builder()
-                    .name("financial-app-sg-" + RANDOM_SUFFIX)
-                    .description("Security group for financial application")
-                    .vpcId(vpc.id())
-                    .ingress(SecurityGroupIngressArgs.builder()
-                        .protocol("tcp")
-                        .fromPort(443)
-                        .toPort(443)
-                        .cidrBlocks("10.0.0.0/16")
-                        .description("HTTPS traffic within VPC")
-                        .build())
-                    .egress(SecurityGroupEgressArgs.builder()
-                        .protocol("tcp")
-                        .fromPort(443)
-                        .toPort(443)
-                        .cidrBlocks("0.0.0.0/0")
-                        .description("HTTPS outbound")
-                        .build())
-                    .egress(SecurityGroupEgressArgs.builder()
-                        .protocol("tcp")
-                        .fromPort(80)
-                        .toPort(80)
-                        .cidrBlocks("0.0.0.0/0")
-                        .description("HTTP outbound for package updates")
-                        .build())
-                    .tags(Map.of(
-                        "Name", "financial-app-sg-" + RANDOM_SUFFIX,
-                        "Environment", "production"
-                    ))
-                    .build(), providerOptions);
-            
-            // Create IAM role for EC2 instances
-            var ec2Role = new Role("financial-app-ec2-role-" + RANDOM_SUFFIX, RoleArgs.builder()
-                .assumeRolePolicy(buildEc2AssumeRolePolicy())
-                .tags(Map.of(
-                    "Name", "financial-app-ec2-role-" + RANDOM_SUFFIX,
-                    "Environment", "production"
-                ))
-                .build(), providerOptions);
-            
-            // Create IAM policy for S3 read-only access
-            var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX, 
-                PolicyArgs.builder()
-                    .description("Read-only access to specific S3 bucket")
-                    .policy(buildS3ReadOnlyPolicy(REGION))
-                    .build(), providerOptions);
-            
-            // Attach S3 policy to EC2 role
-            var s3PolicyAttachment = new RolePolicyAttachment("financial-app-s3-policy-attachment-" + RANDOM_SUFFIX,
-                RolePolicyAttachmentArgs.builder()
-                    .role(ec2Role.name())
-                    .policyArn(s3ReadOnlyPolicy.arn())
-                    .build(), providerOptions);
-            
-            // Attach CloudWatch agent policy to EC2 role
-            var cloudwatchPolicyAttachment = new RolePolicyAttachment("financial-app-cloudwatch-policy-attachment-" + RANDOM_SUFFIX,
-                RolePolicyAttachmentArgs.builder()
-                    .role(ec2Role.name())
-                    .policyArn("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")
-                    .build(), providerOptions);
-            
-            // Create instance profile for EC2 role
-            var instanceProfile = new InstanceProfile("financial-app-instance-profile-" + RANDOM_SUFFIX,
-                InstanceProfileArgs.builder()
-                    .role(ec2Role.name())
-                    .build(), providerOptions);
-            
-            // Get the latest Amazon Linux 2 AMI using static AMI ID for simplicity
-            // In production, you might want to use a data source lookup
-            String amazonLinux2AmiId = "ami-0c02fb55956c7d316"; // Amazon Linux 2 AMI for us-east-1
-            
-            // Create SNS topic for CloudWatch alarms
-            var snsTopic = new Topic("financial-app-cpu-alerts-" + RANDOM_SUFFIX, 
-                TopicArgs.builder()
-                    .name("financial-app-cpu-alerts-" + RANDOM_SUFFIX)
-                    .tags(Map.of(
-                        "Purpose", "CPU-Alerts",
-                        "Environment", "production"
-                    ))
-                    .build(), providerOptions);
-            
-            // Launch EC2 instances
-            for (int i = 1; i <= 2; i++) {
-                final int instanceNumber = i;
                 
-                var instance = new Instance("financial-app-instance-" + instanceNumber + "-" + RANDOM_SUFFIX,
-                    InstanceArgs.builder()
-                        .ami(amazonLinux2AmiId)
-                        .instanceType("t3.micro")
-                        .subnetId(privateSubnet.id())
-                        .vpcSecurityGroupIds(securityGroup.id().apply(id -> Output.of(List.of(id))))
-                        .iamInstanceProfile(instanceProfile.name())
-                        .monitoring(true) // Enable detailed monitoring
-                        .ebsOptimized(true)
-                        .ebsBlockDevices(InstanceEbsBlockDeviceArgs.builder()
-                            .deviceName("/dev/xvda")
-                            .volumeType("gp3")
-                            .volumeSize(20)
-                            .encrypted(true)
-                            .kmsKeyId(kmsKey.arn())
-                            .deleteOnTermination(true)
+        // Configure S3 bucket encryption for CloudTrail
+        new BucketServerSideEncryptionConfiguration(
+            "cloudtrail-bucket-encryption-" + RANDOM_SUFFIX,
+            BucketServerSideEncryptionConfigurationArgs.builder()
+                .bucket(cloudtrailBucket.id())
+                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
+                    .applyServerSideEncryptionByDefault(
+                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
+                            .sseAlgorithm("aws:kms")
+                            .kmsMasterKeyId(kmsKey.arn())
                             .build())
-                        .userData(buildEc2UserData())
-                        .tags(Map.of(
-                            "Name", "financial-app-instance-" + instanceNumber + "-" + RANDOM_SUFFIX,
-                            "Environment", "production",
-                            "Application", "financial-services"
-                        ))
-                        .build(), providerOptions);
+                    .bucketKeyEnabled(true)
+                    .build())
+                .build(), providerOptions);
                 
-                // Create CloudWatch CPU alarm for each instance
-                var cpuAlarm = new MetricAlarm("financial-app-cpu-alarm-" + instanceNumber + "-" + RANDOM_SUFFIX,
-                    MetricAlarmArgs.builder()
-                        .name("financial-app-cpu-alarm-" + instanceNumber + "-" + RANDOM_SUFFIX)
-                        .comparisonOperator("GreaterThanThreshold")
-                        .evaluationPeriods(2)
-                        .metricName("CPUUtilization")
-                        .namespace("AWS/EC2")
-                        .period(300)
-                        .statistic("Average")
-                        .threshold(70.0)
-                        .alarmDescription("This metric monitors ec2 cpu utilization")
-                        .alarmActions(snsTopic.arn().apply(arn -> Output.of(List.of(arn))))
-                        // .dimensions(Map.of("InstanceId", instance.id()))
-                        .tags(Map.of(
-                            "Instance", "financial-app-instance-" + instanceNumber,
-                            "Environment", "production"
-                        ))
-                        .build(), providerOptions);
-            }
-            
-            // Create CloudTrail
-            var cloudTrail = new Trail("financial-app-cloudtrail-" + RANDOM_SUFFIX, TrailArgs.builder()
-                .name("financial-app-cloudtrail-" + RANDOM_SUFFIX)
-                .s3BucketName(cloudtrailBucket.bucket())
-                .includeGlobalServiceEvents(true)
-                .isMultiRegionTrail(true)
-                .enableLogging(true)
-                .kmsKeyId(kmsKey.arn())
+        // Create S3 bucket policy for CloudTrail
+        new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
+            BucketPolicyArgs.builder()
+                .bucket(cloudtrailBucket.id())
+                .policy(buildCloudTrailBucketPolicy(cloudtrailBucketName))
+                .build(), providerOptions);
+                
+        return cloudtrailBucket;
+    }
+    
+    private static Bucket createApplicationS3Bucket(final CustomResourceOptions providerOptions, 
+                                                    final Key kmsKey) {
+        var appBucket = new Bucket("financial-app-data-" + RANDOM_SUFFIX, 
+            BucketArgs.builder()
+                .forceDestroy(true)
                 .tags(Map.of(
-                    "Environment", "production",
-                    "Purpose", "compliance-audit"
+                    "Purpose", "Application-Data",
+                    "Environment", "production"
                 ))
-                .build(), CustomResourceOptions.builder()
-                    .provider(awsProvider)
-                    .dependsOn(cloudtrailBucketPolicy)
-                    .build());
+                .build(), providerOptions);
+                
+        new BucketServerSideEncryptionConfiguration(
+            "app-bucket-encryption-" + RANDOM_SUFFIX,
+            BucketServerSideEncryptionConfigurationArgs.builder()
+                .bucket(appBucket.id())
+                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
+                    .applyServerSideEncryptionByDefault(
+                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
+                            .sseAlgorithm("aws:kms")
+                            .kmsMasterKeyId(kmsKey.arn())
+                            .build())
+                    .bucketKeyEnabled(true)
+                    .build())
+                .build(), providerOptions);
+                
+        return appBucket;
+    }
+    
+    public static class VpcResources {
+        private final Vpc vpc;
+        private final Subnet publicSubnet;
+        private final Subnet privateSubnet;
+        
+        public VpcResources(final Vpc vpcParam, final Subnet publicSubnetParam, final Subnet privateSubnetParam) {
+            this.vpc = vpcParam;
+            this.publicSubnet = publicSubnetParam;
+            this.privateSubnet = privateSubnetParam;
+        }
+        
+        public Vpc getVpc() {
+            return vpc;
+        }
+        
+        public Subnet getPublicSubnet() {
+            return publicSubnet;
+        }
+        
+        public Subnet getPrivateSubnet() {
+            return privateSubnet;
+        }
+    }
+    
+    private static VpcResources createVpcInfrastructure(final CustomResourceOptions providerOptions) {
+        // Create VPC
+        var vpc = new Vpc("financial-app-vpc-" + RANDOM_SUFFIX, VpcArgs.builder()
+            .cidrBlock("10.0.0.0/16")
+            .enableDnsHostnames(true)
+            .enableDnsSupport(true)
+            .tags(Map.of(
+                "Name", "financial-app-vpc-" + RANDOM_SUFFIX,
+                "Environment", "production"
+            ))
+            .build(), providerOptions);
             
-            // Export important resource information
-            ctx.export("vpcId", vpc.id());
-            ctx.export("privateSubnetId", privateSubnet.id());
-            ctx.export("kmsKeyId", kmsKey.id());
-            ctx.export("appBucketName", appBucket.bucket());
-            ctx.export("snsTopicArn", snsTopic.arn());
-            ctx.export("cloudtrailArn", cloudTrail.arn());
-            ctx.export("securityGroupId", securityGroup.id());
-            ctx.export("randomSuffix", Output.of(RANDOM_SUFFIX));
+        // Create Internet Gateway
+        var igw = new InternetGateway("financial-app-igw-" + RANDOM_SUFFIX, 
+            InternetGatewayArgs.builder()
+                .vpcId(vpc.id())
+                .tags(Map.of(
+                    "Name", "financial-app-igw-" + RANDOM_SUFFIX
+                ))
+                .build(), providerOptions);
+                
+        // Create public subnet
+        var publicSubnet = new Subnet("financial-app-public-subnet-" + RANDOM_SUFFIX, 
+            SubnetArgs.builder()
+                .vpcId(vpc.id())
+                .cidrBlock("10.0.1.0/24")
+                .availabilityZone(REGION + "a")
+                .mapPublicIpOnLaunch(true)
+                .tags(Map.of(
+                    "Name", "financial-app-public-subnet-" + RANDOM_SUFFIX,
+                    "Type", "public"
+                ))
+                .build(), providerOptions);
+                
+        // Create private subnet
+        var privateSubnet = new Subnet("financial-app-private-subnet-" + RANDOM_SUFFIX, 
+            SubnetArgs.builder()
+                .vpcId(vpc.id())
+                .cidrBlock("10.0.2.0/24")
+                .availabilityZone(REGION + "a")
+                .tags(Map.of(
+                    "Name", "financial-app-private-subnet-" + RANDOM_SUFFIX,
+                    "Type", "private"
+                ))
+                .build(), providerOptions);
+                
+        // Create NAT Gateway infrastructure
+        createNatGatewayInfrastructure(providerOptions, igw, publicSubnet, privateSubnet);
+        
+        return new VpcResources(vpc, publicSubnet, privateSubnet);
+    }
+    
+    private static void createNatGatewayInfrastructure(final CustomResourceOptions providerOptions,
+                                                       final InternetGateway igw,
+                                                       final Subnet publicSubnet,
+                                                       final Subnet privateSubnet) {
+        // Create Elastic IP for NAT Gateway
+        var natEip = new Eip("financial-app-nat-eip-" + RANDOM_SUFFIX, 
+            EipArgs.builder()
+                .domain("vpc")
+                .tags(Map.of(
+                    "Name", "financial-app-nat-eip-" + RANDOM_SUFFIX
+                ))
+                .build(), providerOptions);
+                
+        // Create NAT Gateway
+        var natGateway = new NatGateway("financial-app-nat-" + RANDOM_SUFFIX, 
+            NatGatewayArgs.builder()
+                .allocationId(natEip.id())
+                .subnetId(publicSubnet.id())
+                .tags(Map.of(
+                    "Name", "financial-app-nat-" + RANDOM_SUFFIX
+                ))
+                .build(), providerOptions);
+                
+        // Create route tables and associations
+        createRouteTables(providerOptions, igw, natGateway, publicSubnet, privateSubnet);
+    }
+    
+    private static void createRouteTables(final CustomResourceOptions providerOptions,
+                                          final InternetGateway igw,
+                                          final NatGateway natGateway,
+                                          final Subnet publicSubnet,
+                                          final Subnet privateSubnet) {
+        // Public route table
+        var publicRouteTable = new RouteTable("financial-app-public-rt-" + RANDOM_SUFFIX, 
+            RouteTableArgs.builder()
+                .vpcId(publicSubnet.vpcId())
+                .tags(Map.of(
+                    "Name", "financial-app-public-rt-" + RANDOM_SUFFIX
+                ))
+                .build(), providerOptions);
+                
+        new Route("financial-app-public-route-" + RANDOM_SUFFIX, 
+            RouteArgs.builder()
+                .routeTableId(publicRouteTable.id())
+                .destinationCidrBlock("0.0.0.0/0")
+                .gatewayId(igw.id())
+                .build(), providerOptions);
+                
+        new RouteTableAssociation("financial-app-public-rta-" + RANDOM_SUFFIX,
+            RouteTableAssociationArgs.builder()
+                .subnetId(publicSubnet.id())
+                .routeTableId(publicRouteTable.id())
+                .build(), providerOptions);
+                
+        // Private route table
+        var privateRouteTable = new RouteTable("financial-app-private-rt-" + RANDOM_SUFFIX, 
+            RouteTableArgs.builder()
+                .vpcId(privateSubnet.vpcId())
+                .tags(Map.of(
+                    "Name", "financial-app-private-rt-" + RANDOM_SUFFIX
+                ))
+                .build(), providerOptions);
+                
+        new Route("financial-app-private-route-" + RANDOM_SUFFIX, 
+            RouteArgs.builder()
+                .routeTableId(privateRouteTable.id())
+                .destinationCidrBlock("0.0.0.0/0")
+                .natGatewayId(natGateway.id())
+                .build(), providerOptions);
+                
+        new RouteTableAssociation("financial-app-private-rta-" + RANDOM_SUFFIX,
+            RouteTableAssociationArgs.builder()
+                .subnetId(privateSubnet.id())
+                .routeTableId(privateRouteTable.id())
+                .build(), providerOptions);
+    }
+    
+    private static SecurityGroup createSecurityGroup(final CustomResourceOptions providerOptions, 
+                                                     final Vpc vpc) {
+        return new SecurityGroup("financial-app-sg-" + RANDOM_SUFFIX, 
+            SecurityGroupArgs.builder()
+                .name("financial-app-sg-" + RANDOM_SUFFIX)
+                .description("Security group for financial application")
+                .vpcId(vpc.id())
+                .ingress(SecurityGroupIngressArgs.builder()
+                    .protocol("tcp")
+                    .fromPort(443)
+                    .toPort(443)
+                    .cidrBlocks("10.0.0.0/16")
+                    .description("HTTPS traffic within VPC")
+                    .build())
+                .egress(SecurityGroupEgressArgs.builder()
+                    .protocol("tcp")
+                    .fromPort(443)
+                    .toPort(443)
+                    .cidrBlocks("0.0.0.0/0")
+                    .description("HTTPS outbound")
+                    .build())
+                .egress(SecurityGroupEgressArgs.builder()
+                    .protocol("tcp")
+                    .fromPort(80)
+                    .toPort(80)
+                    .cidrBlocks("0.0.0.0/0")
+                    .description("HTTP outbound for package updates")
+                    .build())
+                .tags(Map.of(
+                    "Name", "financial-app-sg-" + RANDOM_SUFFIX,
+                    "Environment", "production"
+                ))
+                .build(), providerOptions);
+    }
+    
+    public static class IamResources {
+        private final Role ec2Role;
+        private final Policy s3Policy;
+        private final InstanceProfile instanceProfile;
+        
+        public IamResources(final Role ec2RoleParam, final Policy s3PolicyParam, 
+                           final InstanceProfile instanceProfileParam) {
+            this.ec2Role = ec2RoleParam;
+            this.s3Policy = s3PolicyParam;
+            this.instanceProfile = instanceProfileParam;
+        }
+        
+        public Role getEc2Role() {
+            return ec2Role;
+        }
+        
+        public Policy getS3Policy() {
+            return s3Policy;
+        }
+        
+        public InstanceProfile getInstanceProfile() {
+            return instanceProfile;
+        }
+    }
+    
+    private static IamResources createIamResources(final CustomResourceOptions providerOptions) {
+        // Create IAM role for EC2 instances
+        var ec2Role = new Role("financial-app-ec2-role-" + RANDOM_SUFFIX, RoleArgs.builder()
+            .assumeRolePolicy(buildEc2AssumeRolePolicy())
+            .tags(Map.of(
+                "Name", "financial-app-ec2-role-" + RANDOM_SUFFIX,
+                "Environment", "production"
+            ))
+            .build(), providerOptions);
+            
+        // Create IAM policy for S3 read-only access
+        var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX, 
+            PolicyArgs.builder()
+                .description("Read-only access to specific S3 bucket")
+                .policy(buildS3ReadOnlyPolicy(REGION))
+                .build(), providerOptions);
+                
+        // Attach policies to role
+        new RolePolicyAttachment("financial-app-s3-policy-attachment-" + RANDOM_SUFFIX,
+            RolePolicyAttachmentArgs.builder()
+                .role(ec2Role.name())
+                .policyArn(s3ReadOnlyPolicy.arn())
+                .build(), providerOptions);
+                
+        new RolePolicyAttachment("financial-app-cloudwatch-policy-attachment-" + RANDOM_SUFFIX,
+            RolePolicyAttachmentArgs.builder()
+                .role(ec2Role.name())
+                .policyArn("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")
+                .build(), providerOptions);
+                
+        // Create instance profile
+        var instanceProfile = new InstanceProfile("financial-app-instance-profile-" + RANDOM_SUFFIX,
+            InstanceProfileArgs.builder()
+                .role(ec2Role.name())
+                .build(), providerOptions);
+                
+        return new IamResources(ec2Role, s3ReadOnlyPolicy, instanceProfile);
+    }
+    
+    private static Topic createSnsTopic(final CustomResourceOptions providerOptions) {
+        return new Topic("financial-app-cpu-alerts-" + RANDOM_SUFFIX, 
+            TopicArgs.builder()
+                .name("financial-app-cpu-alerts-" + RANDOM_SUFFIX)
+                .tags(Map.of(
+                    "Purpose", "CPU-Alerts",
+                    "Environment", "production"
+                ))
+                .build(), providerOptions);
+    }
+    
+    private static void createEc2Instances(final CustomResourceOptions providerOptions,
+                                           final VpcResources vpcResources,
+                                           final SecurityGroup securityGroup,
+                                           final IamResources iamResources,
+                                           final Key kmsKey,
+                                           final Topic snsTopic) {
+        String amazonLinux2AmiId = "ami-0c02fb55956c7d316";
+        
+        for (int i = 1; i <= 2; i++) {
+            final int instanceNumber = i;
+            
+            var instance = new Instance("financial-app-instance-" + instanceNumber 
+                + "-" + RANDOM_SUFFIX, InstanceArgs.builder()
+                .ami(amazonLinux2AmiId)
+                .instanceType("t3.micro")
+                .subnetId(vpcResources.getPrivateSubnet().id())
+                .vpcSecurityGroupIds(securityGroup.id().apply(id -> Output.of(List.of(id))))
+                .iamInstanceProfile(iamResources.getInstanceProfile().name())
+                .monitoring(true)
+                .ebsOptimized(true)
+                .ebsBlockDevices(InstanceEbsBlockDeviceArgs.builder()
+                    .deviceName("/dev/xvda")
+                    .volumeType("gp3")
+                    .volumeSize(20)
+                    .encrypted(true)
+                    .kmsKeyId(kmsKey.arn())
+                    .deleteOnTermination(true)
+                    .build())
+                .userData(buildEc2UserData())
+                .tags(Map.of(
+                    "Name", "financial-app-instance-" + instanceNumber + "-" + RANDOM_SUFFIX,
+                    "Environment", "production",
+                    "Application", "financial-services"
+                ))
+                .build(), providerOptions);
+                
+            // Create CloudWatch CPU alarm for each instance
+            new MetricAlarm("financial-app-cpu-alarm-" + instanceNumber + "-" + RANDOM_SUFFIX,
+                MetricAlarmArgs.builder()
+                    .name("financial-app-cpu-alarm-" + instanceNumber + "-" + RANDOM_SUFFIX)
+                    .comparisonOperator("GreaterThanThreshold")
+                    .evaluationPeriods(2)
+                    .metricName("CPUUtilization")
+                    .namespace("AWS/EC2")
+                    .period(300)
+                    .statistic("Average")
+                    .threshold(70.0)
+                    .alarmDescription("This metric monitors ec2 cpu utilization")
+                    .alarmActions(snsTopic.arn().apply(arn -> Output.of(List.of(arn))))
+                    .tags(Map.of(
+                        "Instance", "financial-app-instance-" + instanceNumber,
+                        "Environment", "production"
+                    ))
+                    .build(), providerOptions);
+        }
+    }
+    
+    private static Trail createCloudTrail(final CustomResourceOptions providerOptions,
+                                          final Bucket cloudtrailBucket,
+                                          final Key kmsKey) {
+        return new Trail("financial-app-cloudtrail-" + RANDOM_SUFFIX, TrailArgs.builder()
+            .name("financial-app-cloudtrail-" + RANDOM_SUFFIX)
+            .s3BucketName(cloudtrailBucket.bucket())
+            .includeGlobalServiceEvents(true)
+            .isMultiRegionTrail(true)
+            .enableLogging(true)
+            .kmsKeyId(kmsKey.arn())
+            .tags(Map.of(
+                "Environment", "production",
+                "Purpose", "compliance-audit"
+            ))
+            .build(), providerOptions);
+    }
+    
+    private static void exportOutputs(final com.pulumi.Context ctx,
+                                      final VpcResources vpcResources,
+                                      final Key kmsKey,
+                                      final Bucket appBucket,
+                                      final Topic snsTopic,
+                                      final Trail cloudTrail,
+                                      final SecurityGroup securityGroup) {
+        ctx.export("vpcId", vpcResources.getVpc().id());
+        ctx.export("privateSubnetId", vpcResources.getPrivateSubnet().id());
+        ctx.export("kmsKeyId", kmsKey.id());
+        ctx.export("appBucketName", appBucket.bucket());
+        ctx.export("snsTopicArn", snsTopic.arn());
+        ctx.export("cloudtrailArn", cloudTrail.arn());
+        ctx.export("securityGroupId", securityGroup.id());
+        ctx.export("randomSuffix", Output.of(RANDOM_SUFFIX));
     }
     
     private static String generateRandomSuffix() {
@@ -850,7 +955,8 @@ public final class Main {
     }
 
     // Helper method to build resource tags map
-    public static Map<String, String> buildResourceTags(final String environment, final String application) {
+    public static Map<String, String> buildResourceTags(final String environment, 
+                                                        final String application) {
         if (environment == null || environment.isEmpty()) {
             throw new IllegalArgumentException("Environment cannot be null or empty");
         }
