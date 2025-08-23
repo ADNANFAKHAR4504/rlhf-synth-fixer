@@ -79,33 +79,53 @@ public class AuditingComponent extends ComponentResource {
         return """
             {
                 "Version": "2012-10-17",
-                 "Statement": [
-                     {
-                         "Sid": "AWSCloudTrailAclCheck",
-                         "Effect": "Allow",
-                         "Principal": {
-                             "Service": "cloudtrail.amazonaws.com"
-                         },
-                         "Action": "s3:GetBucketAcl",
-                         "Resource": "arn:aws:s3:::%s"
-                     },
-                     {
-                         "Sid": "AWSCloudTrailWrite",
-                         "Effect": "Allow",
-                         "Principal": {
-                             "Service": "cloudtrail.amazonaws.com"
-                         },
-                         "Action": "s3:PutObject",
-                         "Resource": "arn:aws:s3:::%s/%s*/AWSLogs/%s/*",
-                         "Condition": {
-                             "StringEquals": {
-                                 "s3:x-amz-acl": "bucket-owner-full-control"
-                             }
-                         }
-                     }
-                 ]
+                "Statement": [
+                    {
+                        "Sid": "AWSCloudTrailAclCheck",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": "arn:aws:s3:::%s",
+                        "Condition": {
+                            "StringEquals": {
+                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
+                            }
+                        }
+                    },
+                    {
+                        "Sid": "AWSCloudTrailWrite",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": "s3:PutObject",
+                        "Resource": "arn:aws:s3:::%s/%s/AWSLogs/%s/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control",
+                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
+                            }
+                        }
+                    },
+                    {
+                        "Sid": "AWSCloudTrailDeliveryRolePolicy",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": "s3:GetBucketLocation",
+                        "Resource": "arn:aws:s3:::%s",
+                        "Condition": {
+                            "StringEquals": {
+                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
+                            }
+                        }
+                    }
+                ]
             }
-            """.formatted(bucketName, bucketName, cloudTrails3BucketPrefix, accountId);
+            """.formatted(bucketName, accountId, bucketName, cloudTrails3BucketPrefix, accountId, accountId, bucketName, accountId);
     }
 
     private Trail createCloudTrail(String name, StorageComponent storage, String region) {
@@ -143,8 +163,8 @@ public class AuditingComponent extends ComponentResource {
                                 .name("Root Account Usage")
                                 .fieldSelectors(
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("userIdentity.arn")
-                                                .equals_(List.of("arn:aws:iam::" + accountId + ":root"))
+                                                .field("userIdentity.type")
+                                                .equals_(List.of("Root"))
                                                 .build()
                                 )
                                 .build()
