@@ -16,6 +16,8 @@ import com.pulumi.aws.kms.Key;
 import com.pulumi.aws.kms.KeyArgs;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.s3.BucketPolicy;
+import com.pulumi.aws.s3.BucketPolicyArgs;
 import com.pulumi.aws.s3.BucketServerSideEncryptionConfiguration;
 import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationArgs;
 import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleArgs;
@@ -90,6 +92,44 @@ public final class Main {
                                 .build())
                         .bucketKeyEnabled(true)
                         .build())
+                    .build(), providerOptions);
+            
+            // Create S3 bucket policy for CloudTrail
+            String cloudtrailBucketPolicyDoc = String.format("""
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": "arn:aws:s3:::financial-cloudtrail-logs-%s"
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": "arn:aws:s3:::financial-cloudtrail-logs-%s/*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+                """, RANDOM_SUFFIX, RANDOM_SUFFIX);
+
+            var cloudtrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
+                BucketPolicyArgs.builder()
+                    .bucket(cloudtrailBucket.id())
+                    .policy(cloudtrailBucketPolicyDoc)
                     .build(), providerOptions);
             
             // Create application S3 bucket with encryption
@@ -462,7 +502,10 @@ public final class Main {
                     "Environment", "production",
                     "Purpose", "compliance-audit"
                 ))
-                .build(), providerOptions);
+                .build(), CustomResourceOptions.builder()
+                    .provider(awsProvider)
+                    .dependsOn(cloudtrailBucketPolicy)
+                    .build());
             
             // Export important resource information
             ctx.export("vpcId", vpc.id());
