@@ -76,6 +76,14 @@ We can use something like this for imports:
 ## Example code snippet
 
 ```go
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"path/filepath"
+
 	jsii "github.com/aws/jsii-runtime-go"
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 

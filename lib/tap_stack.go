@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/aws/constructs-go/constructs/v10"
-	jsii "github.com/aws/jsii-runtime-go"
-	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
+	"github.com/aws/jsii-runtime-go"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
 	_ "github.com/aws/constructs-go/constructs/v10/jsii"
 	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 
+	// AWS constructs imports
 	alb "github.com/TuringGpt/iac-test-automations/.gen/aws/applicationloadbalancer"
 	asg "github.com/TuringGpt/iac-test-automations/.gen/aws/autoscalinggroup"
 	logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"
@@ -23,9 +24,9 @@ import (
 	tg "github.com/TuringGpt/iac-test-automations/.gen/aws/lbtargetgroup"
 	listener "github.com/TuringGpt/iac-test-automations/.gen/aws/lblistener"
 	provider "github.com/TuringGpt/iac-test-automations/.gen/aws/provider"
-	healthcheck "github.com/TuringGpt/iac-test-automations/.gen/aws/route53healthcheck"
-	hostedzone "github.com/TuringGpt/iac-test-automations/.gen/aws/route53hostedzone"
-	record "github.com/TuringGpt/iac-test-automations/.gen/aws/route53record"
+	hc "github.com/TuringGpt/iac-test-automations/.gen/aws/route53healthcheck"
+	hz "github.com/TuringGpt/iac-test-automations/.gen/aws/route53hostedzone"
+	r53record "github.com/TuringGpt/iac-test-automations/.gen/aws/route53record"
 	rt "github.com/TuringGpt/iac-test-automations/.gen/aws/routetable"
 	rta "github.com/TuringGpt/iac-test-automations/.gen/aws/routetableassociation"
 	sg "github.com/TuringGpt/iac-test-automations/.gen/aws/securitygroup"
@@ -101,7 +102,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create Route 53 hosted zone for DNS failover
 	// Using a fake domain for testing purposes - Route 53 allows this for validation
-	hostedZone := hostedzone.NewRoute53HostedZone(stack, jsii.String("main-hosted-zone"), &hostedzone.Route53HostedZoneConfig{
+	hostedZone := hz.NewRoute53HostedZone(stack, jsii.String("main-hosted-zone"), &hz.Route53HostedZoneConfig{
 		Name:     jsii.String("fake-domain.com"),
 		Comment:  jsii.String("Hosted zone for multi-region application with DNS failover"),
 		Provider: providers["us-east-1"], // Primary provider for Route 53
@@ -377,9 +378,9 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 
 	// Create Route 53 health checks for each region
 	// These monitor the health of each ELB and enable automatic failover
-	healthChecks := make(map[string]healthcheck.Route53HealthCheck)
+	healthChecks := make(map[string]hc.Route53HealthCheck)
 	for region, dnsName := range elbDnsNames {
-		healthCheckResource := healthcheck.NewRoute53HealthCheck(stack, jsii.String(fmt.Sprintf("health-check-%s", region)), &healthcheck.Route53HealthCheckConfig{
+		healthCheck := hc.NewRoute53HealthCheck(stack, jsii.String(fmt.Sprintf("health-check-%s", region)), &hc.Route53HealthCheckConfig{
 			Fqdn:                         dnsName,
 			Port:                         jsii.Number(80),
 			Type:                         jsii.String("HTTP"),
@@ -393,22 +394,22 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 			},
 			Provider: providers["us-east-1"], // Health checks must be created in us-east-1
 		})
-		healthChecks[region] = healthCheckResource
+		healthChecks[region] = healthCheck
 	}
 
 	// Create Route 53 records with failover routing
 	// Primary record points to us-east-1, with failover to other regions
 	primaryRegion := "us-east-1"
-	record.NewRoute53Record(stack, jsii.String("primary-record"), &record.Route53RecordConfig{
+	r53record.NewRoute53Record(stack, jsii.String("primary-record"), &r53record.Route53RecordConfig{
 		ZoneId:        hostedZone.ZoneId(),
 		Name:          jsii.String("app.fake-domain.com"),
 		Type:          jsii.String("A"),
 		SetIdentifier: jsii.String("primary"),
-		FailoverRoutingPolicy: &record.Route53RecordFailoverRoutingPolicy{
+		FailoverRoutingPolicy: &r53record.Route53RecordFailoverRoutingPolicy{
 			Type: jsii.String("PRIMARY"),
 		},
 		HealthCheckId: healthChecks[primaryRegion].Id(),
-		Alias: &record.Route53RecordAlias{
+		Alias: &r53record.Route53RecordAlias{
 			Name:                 elbDnsNames[primaryRegion],
 			ZoneId:               elbZoneIds[primaryRegion],
 			EvaluateTargetHealth: jsii.Bool(true),
@@ -419,16 +420,16 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 	// Create secondary failover records for other regions
 	secondaryRegions := []string{"us-west-2", "eu-central-1"}
 	for i, region := range secondaryRegions {
-		record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("secondary-record-%s", region)), &record.Route53RecordConfig{
+		r53record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("secondary-record-%s", region)), &r53record.Route53RecordConfig{
 			ZoneId:        hostedZone.ZoneId(),
 			Name:          jsii.String("app.fake-domain.com"),
 			Type:          jsii.String("A"),
 			SetIdentifier: jsii.String(fmt.Sprintf("secondary-%d", i+1)),
-			FailoverRoutingPolicy: &record.Route53RecordFailoverRoutingPolicy{
+			FailoverRoutingPolicy: &r53record.Route53RecordFailoverRoutingPolicy{
 				Type: jsii.String("SECONDARY"),
 			},
 			HealthCheckId: healthChecks[region].Id(),
-			Alias: &record.Route53RecordAlias{
+			Alias: &r53record.Route53RecordAlias{
 				Name:                 elbDnsNames[region],
 				ZoneId:               elbZoneIds[region],
 				EvaluateTargetHealth: jsii.Bool(true),
@@ -445,16 +446,16 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 			weight = 200 // Give primary region higher weight
 		}
 
-		record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("weighted-record-%s", region)), &record.Route53RecordConfig{
+		r53record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("weighted-record-%s", region)), &r53record.Route53RecordConfig{
 			ZoneId:        hostedZone.ZoneId(),
 			Name:          jsii.String("weighted.fake-domain.com"),
 			Type:          jsii.String("A"),
 			SetIdentifier: jsii.String(fmt.Sprintf("weighted-%s", region)),
-			WeightedRoutingPolicy: &record.Route53RecordWeightedRoutingPolicy{
+			WeightedRoutingPolicy: &r53record.Route53RecordWeightedRoutingPolicy{
 				Weight: jsii.Number(float64(weight)),
 			},
 			HealthCheckId: healthChecks[region].Id(),
-			Alias: &record.Route53RecordAlias{
+			Alias: &r53record.Route53RecordAlias{
 				Name:                 dnsName,
 				ZoneId:               elbZoneIds[region],
 				EvaluateTargetHealth: jsii.Bool(true),
