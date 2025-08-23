@@ -84,24 +84,26 @@ const rds = new RDSClient({ region });
 // ------------------------------
 describe("TapStack Integration Tests", () => {
   // ------------------------------
-  // Basic outputs presence
+  // Basic outputs presence + regex
   // ------------------------------
-  test("all required outputs are present", () => {
-    const required = [
-      "RDS",
-      "PrivateSubnet1",
-      "PrivateSubnet2",
-      "EC2Instance",
-      "S3Bucket",
-      "DBSecret",
-      "VPC",
-      "Lambda",
-      "CloudTrail",
-      "PublicSubnet1",
-    ];
-    for (const key of required) {
+  test("all required outputs are present and formatted", () => {
+    const required = {
+      RDS: /^[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/,
+      PrivateSubnet1: /^subnet-[0-9a-f]{8,17}$/,
+      PrivateSubnet2: /^subnet-[0-9a-f]{8,17}$/,
+      PublicSubnet1: /^subnet-[0-9a-f]{8,17}$/,
+      EC2Instance: /^i-[0-9a-f]{8,17}$/,
+      S3Bucket: /^[a-z0-9.-]{3,63}$/,
+      DBSecret: /^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$/,
+      VPC: /^vpc-[0-9a-f]{8,17}$/,
+      Lambda: /^[A-Za-z0-9-_]{1,64}$/,
+      CloudTrail: /^[A-Za-z0-9-_]{3,128}$/,
+    };
+
+    for (const [key, regex] of Object.entries(required)) {
       expect(outputs[key]).toBeDefined();
       expect(typeof outputs[key]).toBe("string");
+      expect(outputs[key]).toMatch(regex);
     }
   });
 
@@ -188,10 +190,15 @@ describe("TapStack Integration Tests", () => {
   // ------------------------------
   test("CloudTrail exists and is logging to S3", async () => {
     const trailName = outputs["CloudTrail"];
-    const res = await cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [trailName] }));
-    expect(res.trailList?.[0]).toBeDefined();
-    expect(res.trailList?.[0].Name).toBe(trailName);
-    expect(res.trailList?.[0].S3BucketName).toBe(outputs["S3Bucket"]);
+    const res = await cloudtrail.send(new DescribeTrailsCommand({}));
+    expect(res.trailList?.length).toBeGreaterThan(0);
+
+    // Find the trail by name (some stacks append IDs)
+    const found = res.trailList?.find(
+      (t) => t.Name === trailName || t.Name?.includes(trailName)
+    );
+    expect(found).toBeDefined();
+    expect(found?.S3BucketName).toBe(outputs["S3Bucket"]);
   });
 
   // ------------------------------
