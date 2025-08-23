@@ -64,7 +64,7 @@ resource "random_password" "db_password" {
 ########################
 locals {
   name_prefix = "${var.project_name}-${var.environment}-${random_string.suffix.result}"
-  
+
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
@@ -368,6 +368,39 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 ########################
 # IAM Roles and Policies
 ########################
+
+# IAM Policy for Terraform ENI cleanup permissions
+resource "aws_iam_policy" "terraform_eni_cleanup" {
+  name = "${local.name_prefix}-terraform-eni-cleanup"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DetachNetworkInterface",
+          "ec2:DeleteNetworkInterface",
+          "ec2:DescribeNetworkInterfaceAttribute",
+          "ec2:DescribeInstances",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach the ENI cleanup policy to your existing role
+resource "aws_iam_role_policy_attachment" "terraform_eni_cleanup" {
+  role       = "iac-rlhf-trainer-instances-role"
+  policy_arn = aws_iam_policy.terraform_eni_cleanup.arn
+}
+
 resource "aws_iam_role" "ec2_role" {
   name_prefix = "${local.name_prefix}-ec2-role-"
 
@@ -664,6 +697,11 @@ resource "aws_db_instance" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database"
   })
+
+  # Ensure proper deletion order
+  depends_on = [
+    aws_subnet.database
+  ]
 }
 
 ########################
