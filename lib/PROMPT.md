@@ -1,6 +1,6 @@
 Hey folks, we’ve got a pretty important job to tackle: let’s build out a secure AWS infrastructure using CloudFormation. The big picture here is to make sure our setup is not just scalable and resilient, but also locked down tight from a security perspective.
 
-Everything should land in the `us-west-2` region, and let’s keep our resource names consistent—something like `{team}-{environment}-{component}` so it’s easy to spot what belongs to who and where.
+Everything should land in `us-west-2` region, and let’s keep our resource names consistent—something like `{team}-{environment}-{component}` so it’s easy to spot what belongs to who and where.
 
 Logging needs to be switched on everywhere. We want to see what’s happening across all our AWS services, so if anything weird pops up, we’ll catch it early. And don’t forget: any data at rest—whether it’s in S3, RDS, or anywhere else—has to be encrypted with AWS KMS. No exceptions. 
 
