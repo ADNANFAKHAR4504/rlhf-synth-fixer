@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -12,11 +15,15 @@ import (
 type mocks struct{}
 
 func (mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
+	if strings.HasPrefix(args.Name, "fail") {
+		return "", nil, fmt.Errorf("mocked failure for %s", args.Name)
+	}
 	outs := args.Inputs
 
 	switch string(args.TypeToken) {
 	case "aws:cloudfront/distribution:Distribution":
 		outs["domainName"] = resource.NewStringProperty("mock-distribution-domain.example.com")
+		outs["arn"] = resource.NewStringProperty("arn:aws:cloudfront::123456789012:distribution/" + args.Name)
 	case "aws:ec2/vpc:Vpc":
 		outs["cidrBlock"] = resource.NewStringProperty("10.0.0.0/16")
 	case "aws:iam/role:Role":
@@ -26,6 +33,21 @@ func (mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.Propert
 		outs["role"] = resource.NewStringProperty(args.Name + "-role")
 	case "aws:iam/instanceProfile:InstanceProfile":
 		outs["role"] = resource.NewStringProperty(args.Name + "-profile")
+	case "aws:s3/bucket:Bucket":
+		outs["bucket"] = resource.NewStringProperty(args.Name + "-bucket")
+		outs["arn"] = resource.NewStringProperty("arn:aws:s3:::" + args.Name + "-bucket")
+		outs["bucketDomainName"] = resource.NewStringProperty(args.Name + "-bucket.s3.amazonaws.com")
+	case "aws:kms/key:Key":
+		outs["arn"] = resource.NewStringProperty("arn:aws:kms:us-east-1:123456789012:key/" + args.Name)
+		outs["keyId"] = resource.NewStringProperty(args.Name + "-key-id")
+	case "aws:rds/instance:Instance":
+		outs["endpoint"] = resource.NewStringProperty(args.Name + ".cluster-xyz.us-east-1.rds.amazonaws.com")
+	case "aws:rds/subnetGroup:SubnetGroup":
+		outs["name"] = resource.NewStringProperty(args.Name + "-subnet-group")
+	case "aws:cloudwatch/logGroup:LogGroup":
+		outs["name"] = resource.NewStringProperty("/aws/lambda/" + args.Name)
+	case "aws:cloudwatch/dashboard:Dashboard":
+		outs["dashboardName"] = resource.NewStringProperty(args.Name + "-dashboard")
 	}
 
 	outs["__type"] = resource.NewStringProperty(string(args.TypeToken))
@@ -38,6 +60,7 @@ func (mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 			"names": resource.NewArrayProperty([]resource.PropertyValue{
 				resource.NewStringProperty("us-east-1a"),
 				resource.NewStringProperty("us-east-1b"),
+				resource.NewStringProperty("us-east-1c"),
 			}),
 		}, nil
 	}
@@ -425,6 +448,251 @@ func TestNewMultiRegionInfrastructureConstructor(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			infra := NewMultiRegionInfrastructure(ctx, config)
 			assert.NotNil(t, infra)
+			return nil
+		}, pulumi.WithMocks("proj", "stack", mocks{}))
+		assert.NoError(t, err)
+	})
+}
+
+// Test main function logic by simulating environment variables
+func TestMainFunctionLogic(t *testing.T) {
+	// Save original environment variables
+	originalEnv := os.Getenv("ENVIRONMENT_SUFFIX")
+	originalRepo := os.Getenv("REPOSITORY")
+	originalAuthor := os.Getenv("COMMIT_AUTHOR")
+
+	// Test with empty environment variables (default values)
+	os.Unsetenv("ENVIRONMENT_SUFFIX")
+	os.Unsetenv("REPOSITORY")
+	os.Unsetenv("COMMIT_AUTHOR")
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		env := os.Getenv("ENVIRONMENT_SUFFIX")
+		if env == "" {
+			env = "dev"
+		}
+
+		repo := os.Getenv("REPOSITORY")
+		if repo == "" {
+			repo = "unknown"
+		}
+
+		author := os.Getenv("COMMIT_AUTHOR")
+		if author == "" {
+			author = "unknown"
+		}
+
+		tags := map[string]string{
+			"Environment": env,
+			"Repository":  repo,
+			"Author":      author,
+		}
+
+		config := InfrastructureConfig{
+			Environment:        env,
+			Regions:            []string{"us-east-1", "us-west-2", "eu-west-1"},
+			InstanceType:       "t3.medium",
+			DBInstanceClass:    "db.t3.micro",
+			DBAllocatedStorage: 20,
+			BackupRetention:    7,
+			MultiAZ:            true,
+			EnableInsights:     true,
+			Tags:               tags,
+		}
+
+		infrastructure := NewMultiRegionInfrastructure(ctx, config)
+		return infrastructure.Deploy()
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+
+	// Test with set environment variables
+	os.Setenv("ENVIRONMENT_SUFFIX", "test-env")
+	os.Setenv("REPOSITORY", "test-repo")
+	os.Setenv("COMMIT_AUTHOR", "test-author")
+
+	err = pulumi.RunErr(func(ctx *pulumi.Context) error {
+		env := os.Getenv("ENVIRONMENT_SUFFIX")
+		if env == "" {
+			env = "dev"
+		}
+
+		repo := os.Getenv("REPOSITORY")
+		if repo == "" {
+			repo = "unknown"
+		}
+
+		author := os.Getenv("COMMIT_AUTHOR")
+		if author == "" {
+			author = "unknown"
+		}
+
+		tags := map[string]string{
+			"Environment": env,
+			"Repository":  repo,
+			"Author":      author,
+		}
+
+		config := InfrastructureConfig{
+			Environment:        env,
+			Regions:            []string{"us-east-1", "us-west-2", "eu-west-1"},
+			InstanceType:       "t3.medium",
+			DBInstanceClass:    "db.t3.micro",
+			DBAllocatedStorage: 20,
+			BackupRetention:    7,
+			MultiAZ:            true,
+			EnableInsights:     true,
+			Tags:               tags,
+		}
+
+		infrastructure := NewMultiRegionInfrastructure(ctx, config)
+		return infrastructure.Deploy()
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+
+	// Restore original environment variables
+	if originalEnv != "" {
+		os.Setenv("ENVIRONMENT_SUFFIX", originalEnv)
+	} else {
+		os.Unsetenv("ENVIRONMENT_SUFFIX")
+	}
+	if originalRepo != "" {
+		os.Setenv("REPOSITORY", originalRepo)
+	} else {
+		os.Unsetenv("REPOSITORY")
+	}
+	if originalAuthor != "" {
+		os.Setenv("COMMIT_AUTHOR", originalAuthor)
+	} else {
+		os.Unsetenv("COMMIT_AUTHOR")
+	}
+}
+
+// Additional comprehensive tests to cover all code paths
+func TestCompleteInfrastructureDeployment(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		config := InfrastructureConfig{
+			Environment:        "comprehensive-test",
+			Regions:            []string{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"},
+			InstanceType:       "t3.large",
+			DBInstanceClass:    "db.r5.large",
+			DBAllocatedStorage: 200,
+			BackupRetention:    30,
+			MultiAZ:            true,
+			EnableInsights:     true,
+			Tags: map[string]string{
+				"Environment": "production",
+				"Team":        "infrastructure",
+				"Project":     "multi-region-app",
+				"CostCenter":  "engineering",
+			},
+		}
+
+		infra := NewMultiRegionInfrastructure(ctx, config)
+
+		// Test individual components
+		key, err := infra.CreateKMSKey()
+		assert.NoError(t, err)
+		assert.NotNil(t, key)
+
+		bucket, err := infra.CreateS3Bucket(key)
+		assert.NoError(t, err)
+		assert.NotNil(t, bucket)
+
+		distribution, err := infra.CreateCloudFrontDistribution(bucket)
+		assert.NoError(t, err)
+		assert.NotNil(t, distribution)
+
+		roles, err := infra.CreateIAMResources()
+		assert.NoError(t, err)
+		assert.Contains(t, roles, "ec2")
+		assert.Contains(t, roles, "rds")
+
+		cloudtrailBucket, err := infra.CreateCloudTrailBucket(key)
+		assert.NoError(t, err)
+		assert.NotNil(t, cloudtrailBucket)
+
+		err = infra.CreateCloudTrail(cloudtrailBucket)
+		assert.NoError(t, err)
+
+		// Test regional deployment for all regions
+		for _, region := range config.Regions {
+			resources, err := infra.DeployRegionalResources(region, roles)
+			assert.NoError(t, err)
+			assert.NotEmpty(t, resources)
+
+			// Verify all expected resources are present
+			expectedKeys := []string{
+				"vpcId", "kmsKeyId", "kmsKeyArn", "rdsInstanceId", "rdsEndpoint",
+				"dbSubnetGroupName", "dbSecurityGroupId", "logGroupName", "dashboardName",
+				"publicSubnet1Id", "publicSubnet2Id", "privateSubnet1Id", "privateSubnet2Id",
+			}
+			for _, key := range expectedKeys {
+				assert.Contains(t, resources, key, "Missing resource key: %s for region: %s", key, region)
+			}
+		}
+
+		// Test complete deployment
+		err = infra.Deploy()
+		assert.NoError(t, err)
+
+		return nil
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+}
+
+// Test edge cases and boundary conditions
+func TestEdgeCasesAndBoundaryConditions(t *testing.T) {
+	t.Run("single region deployment", func(t *testing.T) {
+		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+			config := baseConfig()
+			config.Regions = []string{"us-east-1"}
+			infra := NewMultiRegionInfrastructure(ctx, config)
+			err := infra.Deploy()
+			assert.NoError(t, err)
+			return nil
+		}, pulumi.WithMocks("proj", "stack", mocks{}))
+		assert.NoError(t, err)
+	})
+
+	t.Run("maximum configuration", func(t *testing.T) {
+		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+			config := InfrastructureConfig{
+				Environment:        "max-config",
+				Regions:            []string{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ca-central-1"},
+				InstanceType:       "m5.24xlarge",
+				DBInstanceClass:    "db.r5.24xlarge",
+				DBAllocatedStorage: 65536,
+				BackupRetention:    35,
+				MultiAZ:            true,
+				EnableInsights:     true,
+				Tags: map[string]string{
+					"Environment":     "production",
+					"Team":            "platform",
+					"Project":         "enterprise-app",
+					"CostCenter":      "engineering",
+					"Compliance":      "required",
+					"DataClass":       "confidential",
+					"BackupRequired":  "true",
+					"MonitoringLevel": "enhanced",
+				},
+			}
+			infra := NewMultiRegionInfrastructure(ctx, config)
+			err := infra.Deploy()
+			assert.NoError(t, err)
+			return nil
+		}, pulumi.WithMocks("proj", "stack", mocks{}))
+		assert.NoError(t, err)
+	})
+
+	t.Run("minimal configuration", func(t *testing.T) {
+		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+			config := InfrastructureConfig{
+				Environment: "minimal",
+				Regions:     []string{"us-east-1"},
+			}
+			infra := NewMultiRegionInfrastructure(ctx, config)
+			err := infra.Deploy()
+			assert.NoError(t, err)
 			return nil
 		}, pulumi.WithMocks("proj", "stack", mocks{}))
 		assert.NoError(t, err)

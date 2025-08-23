@@ -42,6 +42,7 @@ type DeploymentOutputs struct {
 	S3BucketArn              string                            `json:"s3BucketArn"`
 	CloudfrontDistributionId string                            `json:"cloudfrontDistributionId"`
 	CloudfrontDomainName     string                            `json:"cloudfrontDomainName"`
+	CloudtrailBucketName     string                            `json:"cloudtrailBucketName"`
 	Environment              string                            `json:"environment"`
 	Regions                  []string                          `json:"regions"`
 	EC2RoleArn               string                            `json:"ec2RoleArn"`
@@ -89,10 +90,8 @@ func loadDeploymentOutputs() {
 
 	// Try to load from cfn-outputs/flat-outputs.json
 	if data, err := ioutil.ReadFile("../cfn-outputs/flat-outputs.json"); err == nil {
-		// Parse stringified JSON
 		var stringifiedOutputs map[string]string
 		if err := json.Unmarshal(data, &stringifiedOutputs); err == nil {
-			// Convert stringified values to proper types
 			if val, ok := stringifiedOutputs["s3BucketName"]; ok {
 				outputs.S3BucketName = val
 			}
@@ -105,6 +104,9 @@ func loadDeploymentOutputs() {
 			if val, ok := stringifiedOutputs["cloudfrontDomainName"]; ok {
 				outputs.CloudfrontDomainName = val
 			}
+			if val, ok := stringifiedOutputs["cloudtrailBucketName"]; ok {
+				outputs.CloudtrailBucketName = val
+			}
 			if val, ok := stringifiedOutputs["environment"]; ok {
 				outputs.Environment = val
 			}
@@ -114,7 +116,6 @@ func loadDeploymentOutputs() {
 			if val, ok := stringifiedOutputs["rdsMonitoringRoleArn"]; ok {
 				outputs.RdsMonitoringRoleArn = val
 			}
-			// Parse regions if present
 			if val, ok := stringifiedOutputs["regions"]; ok {
 				var regions []string
 				if err := json.Unmarshal([]byte(val), &regions); err == nil {
@@ -175,10 +176,14 @@ func TestS3BucketIntegration(t *testing.T) {
 			Bucket: aws.String(outputs.S3BucketName),
 		})
 		require.NoError(t, err)
-		assert.True(t, pab.PublicAccessBlockConfiguration.BlockPublicAcls)
-		assert.True(t, pab.PublicAccessBlockConfiguration.BlockPublicPolicy)
-		assert.True(t, pab.PublicAccessBlockConfiguration.IgnorePublicAcls)
-		assert.True(t, pab.PublicAccessBlockConfiguration.RestrictPublicBuckets)
+		assert.NotNil(t, pab.PublicAccessBlockConfiguration.BlockPublicAcls)
+		assert.True(t, *pab.PublicAccessBlockConfiguration.BlockPublicAcls)
+		assert.NotNil(t, pab.PublicAccessBlockConfiguration.BlockPublicPolicy)
+		assert.True(t, *pab.PublicAccessBlockConfiguration.BlockPublicPolicy)
+		assert.NotNil(t, pab.PublicAccessBlockConfiguration.IgnorePublicAcls)
+		assert.True(t, *pab.PublicAccessBlockConfiguration.IgnorePublicAcls)
+		assert.NotNil(t, pab.PublicAccessBlockConfiguration.RestrictPublicBuckets)
+		assert.True(t, *pab.PublicAccessBlockConfiguration.RestrictPublicBuckets)
 	})
 }
 
@@ -193,8 +198,11 @@ func TestCloudFrontIntegration(t *testing.T) {
 		})
 		require.NoError(t, err, "CloudFront distribution should exist")
 
-		assert.True(t, dist.Distribution.DistributionConfig.Enabled)
-		assert.True(t, dist.Distribution.DistributionConfig.IsIPV6Enabled)
+		assert.NotNil(t, dist.Distribution.DistributionConfig.Enabled)
+		assert.True(t, *dist.Distribution.DistributionConfig.Enabled)
+		assert.NotNil(t, dist.Distribution.DistributionConfig.IsIPV6Enabled)
+		assert.True(t, *dist.Distribution.DistributionConfig.IsIPV6Enabled)
+		assert.NotNil(t, dist.Distribution.DistributionConfig.DefaultRootObject)
 		assert.Equal(t, "index.html", *dist.Distribution.DistributionConfig.DefaultRootObject)
 	})
 }
@@ -211,10 +219,14 @@ func TestRDSIntegration(t *testing.T) {
 
 			for _, instance := range instances.DBInstances {
 				if strings.Contains(*instance.DBInstanceIdentifier, outputs.Environment) {
-					assert.True(t, instance.MultiAZ, "RDS should be Multi-AZ")
-					assert.True(t, instance.StorageEncrypted, "RDS should be encrypted")
+					assert.NotNil(t, instance.MultiAZ)
+					assert.True(t, *instance.MultiAZ, "RDS should be Multi-AZ")
+					assert.NotNil(t, instance.StorageEncrypted)
+					assert.True(t, *instance.StorageEncrypted, "RDS should be encrypted")
+					assert.NotNil(t, instance.Engine)
 					assert.Equal(t, "mysql", *instance.Engine)
-					assert.GreaterOrEqual(t, int(instance.BackupRetentionPeriod), 7)
+					assert.NotNil(t, instance.BackupRetentionPeriod)
+					assert.GreaterOrEqual(t, int(*instance.BackupRetentionPeriod), 7)
 					break
 				}
 			}
@@ -244,7 +256,6 @@ func TestIAMRolesIntegration(t *testing.T) {
 	})
 }
 
-// E2E Tests - These validate the complete PROMPT.md requirements
 func TestE2EMultiRegionDeployment(t *testing.T) {
 	t.Run("e2e: should deploy infrastructure across at least three AWS regions", func(t *testing.T) {
 		assert.GreaterOrEqual(t, len(outputs.Regions), 3, "Should deploy to at least 3 regions")
@@ -318,11 +329,16 @@ func TestE2ERDSConfiguration(t *testing.T) {
 
 			for _, instance := range instances.DBInstances {
 				if strings.Contains(*instance.DBInstanceIdentifier, outputs.Environment) {
-					assert.True(t, instance.MultiAZ, "RDS should have Multi-AZ enabled")
-					assert.True(t, instance.StorageEncrypted, "RDS should be encrypted")
-					assert.True(t, instance.AutoMinorVersionUpgrade, "RDS should have auto minor version upgrade enabled")
-					assert.GreaterOrEqual(t, int(instance.BackupRetentionPeriod), 7, "RDS should have backup retention >= 7 days")
-					assert.Greater(t, int(instance.MonitoringInterval), 0, "RDS should have enhanced monitoring enabled")
+					assert.NotNil(t, instance.MultiAZ)
+					assert.True(t, *instance.MultiAZ, "RDS should have Multi-AZ enabled")
+					assert.NotNil(t, instance.StorageEncrypted)
+					assert.True(t, *instance.StorageEncrypted, "RDS should be encrypted")
+					assert.NotNil(t, instance.AutoMinorVersionUpgrade)
+					assert.True(t, *instance.AutoMinorVersionUpgrade, "RDS should have auto minor version upgrade enabled")
+					assert.NotNil(t, instance.BackupRetentionPeriod)
+					assert.GreaterOrEqual(t, int(*instance.BackupRetentionPeriod), 7, "RDS should have backup retention >= 7 days")
+					assert.NotNil(t, instance.MonitoringInterval)
+					assert.Greater(t, int(*instance.MonitoringInterval), 0, "RDS should have enhanced monitoring enabled")
 					break
 				}
 			}
@@ -375,11 +391,11 @@ func TestE2ECloudWatchMonitoring(t *testing.T) {
 				connectionAlarmFound := false
 
 				for _, alarm := range alarms.MetricAlarms {
-					if strings.Contains(*alarm.MetricName, "CPUUtilization") {
+					if alarm.MetricName != nil && strings.Contains(*alarm.MetricName, "CPUUtilization") {
 						cpuAlarmFound = true
 						assert.Equal(t, float64(80), alarm.Threshold)
 					}
-					if strings.Contains(*alarm.MetricName, "DatabaseConnections") {
+					if alarm.MetricName != nil && strings.Contains(*alarm.MetricName, "DatabaseConnections") {
 						connectionAlarmFound = true
 						assert.Equal(t, float64(50), alarm.Threshold)
 					}
