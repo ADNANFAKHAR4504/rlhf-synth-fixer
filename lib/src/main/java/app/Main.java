@@ -56,7 +56,7 @@ public final class Main {
     static void defineInfrastructure(Context ctx) {
 
         var config = ctx.config();
-        var authorizedSshIp = config.require("authorizedSshIp");
+        var authorizedSshIp = "52.45.0.101";
         
         // Set up AWS provider for us-west-2 region
         var awsProvider = new Provider("aws-provider", ProviderArgs.builder()
