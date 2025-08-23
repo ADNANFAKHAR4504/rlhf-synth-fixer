@@ -15,4 +15,3 @@ index.d.ts(229, 22): 'S3BucketLoggingA' is declared here.
 'backupPlan' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.ts(7022)
 ```
 
-can you please fix this error
