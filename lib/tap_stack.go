@@ -10,6 +10,13 @@ func main() {
 
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
 
+	// Configure S3 backend for state management
+	stack.AddOverride(jsii.String("terraform.backend.s3"), map[string]interface{}{
+		"bucket": "iac-rlhf-cfn-states-us-east-1",
+		"key":    "cdktf/TapStack-dev/terraform.tfstate",
+		"region": "us-east-1",
+	})
+
 	// We'll configure the AWS provider using HCL configuration
 	// This avoids the "module too large" issue with Go CDKTF AWS provider
 
