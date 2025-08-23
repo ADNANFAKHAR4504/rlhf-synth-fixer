@@ -441,7 +441,7 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
-  key_name      = "default"
+  key_name      = "iac-rlhf-aws-trainer-instance"
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
