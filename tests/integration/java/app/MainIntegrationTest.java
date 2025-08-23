@@ -1,7 +1,6 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Assumptions;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -67,13 +66,17 @@ public class MainIntegrationTest {
      * It will read stack outputs from Pulumi CLI and assert values/structure.
      */
     @Test
-    @Disabled("Enable for live integration test! Requires Pulumi CLI, AWS creds, and deployed stack")
     void testLivePulumiStackOutputs() throws Exception {
         // --- Setup: Check env and CLI ---
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        // Set this to your deployed stack name:
-        String stackName = "TapStackpr2127";
+
+        // Use ENVIRONMENT_SUFFIX to determine stack name if present
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        assertNotNull(environmentSuffix, "ENVIRONMENT_SUFFIX environment variable must be set");
+        // Compose stack name dynamically using ENVIRONMENT_SUFFIX
+        // e.g., stack name = TapStack + environmentSuffix
+        String stackName = "TapStack" + environmentSuffix;
 
         // --- Fetch outputs from Pulumi CLI ---
         ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", stackName)
@@ -153,10 +156,7 @@ public class MainIntegrationTest {
         assertTrue(((String) outputs.get("us-west-1-dashboardUrl")).startsWith("https://us-west-1.console.aws.amazon.com/cloudwatch/home"));
     }
 
-    // ... (existing utility and disabled test methods below) ...
-
     @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
     void testPulumiPreview() throws Exception {
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
@@ -175,13 +175,18 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Disabled("Enable for actual infrastructure testing - creates real AWS resources")
     void testInfrastructureDeployment() throws Exception {
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
 
-        ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", "integration-test")
+        // Use ENVIRONMENT_SUFFIX for stack name if present
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        assertNotNull(environmentSuffix, "ENVIRONMENT_SUFFIX environment variable must be set");
+        String stackName = "integration-test";
+        // Optionally, stackName could use environmentSuffix as well if your convention matches
+
+        ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", stackName)
                 .directory(Paths.get("lib").toFile())
                 .redirectErrorStream(true);
 
@@ -192,7 +197,7 @@ public class MainIntegrationTest {
         assertEquals(0, deployProcess.exitValue(), "Deployment should succeed");
 
         try {
-            ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "integration-test")
+            ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", stackName)
                     .directory(Paths.get("lib").toFile())
                     .redirectErrorStream(true);
 
@@ -203,7 +208,7 @@ public class MainIntegrationTest {
             assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
 
         } finally {
-            ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", "integration-test")
+            ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", stackName)
                     .directory(Paths.get("lib").toFile())
                     .redirectErrorStream(true);
 

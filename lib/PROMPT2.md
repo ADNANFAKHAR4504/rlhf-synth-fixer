@@ -1,57 +1,124 @@
-# My Pulumi Java project is completely broken - help!
+# Gradle Build Errors; urgent Fix is required
 
-Hey, so I'm having a really frustrating time with this Pulumi Java project. I tried to follow the previous response but the code you gave me is incomplete and won't even compile. When I run `./gradlew build -x test` (well actually `pipenv run ./gradlew build -x test` since we're using pipenv), I get like 78 different compilation errors.
+## Context
+Your recent Pulumi Java project has incomplete response code. It also fails to compile due to multiple errors when you run `./gradlew build -x test`.
 
-I'm pretty sure there's missing imports or dependencies because it can't find basic Pulumi classes like ComponentResource and ComponentResourceOptions. Here's what I'm seeing:
+## Build Command Used
+```bash
+pipenv run ./gradlew build -x test
+```
 
-The build is failing with errors like:
+## Error Summary
+- **Incomplete Code**: Your recent code is incomplete.
+- **Total Errors**: 78 compilation errors.
+- **Main Issues**:
+  - Missing Pulumi core classes (`ComponentResource`, `ComponentResourceOptions`).
+  - Type conversion issues between different resource types.
+  - Missing security group argument builders.
+  - Lambda expression return type mismatches.
+  - Constructor argument mismatches.
+
+## Detailed Error Categories
+
+### 1. Missing Core Pulumi Classes
+**Files Affected**: NetworkingInfrastructure.java, IdentityInfrastructure.java, MonitoringInfrastructure.java, TapStack.java
+
 ```
 error: cannot find symbol
 import com.pulumi.core.ComponentResource;
+                      ^
+  symbol:   class ComponentResource
+  location: package com.pulumi.core
+
+error: cannot find symbol
+import com.pulumi.core.ComponentResourceOptions;
+                      ^
+  symbol:   class ComponentResourceOptions
+  location: package com.pulumi.core
 ```
 
-And then all my infrastructure classes that try to extend ComponentResource are failing:
+### 2. Class Extension Issues
+All infrastructure classes fail to extend ComponentResource:
 ```
 error: cannot find symbol
 public class NetworkingInfrastructure extends ComponentResource {
+                                              ^
+  symbol: class ComponentResource
 ```
 
-There's also weird type conversion issues where it says things like "NetworkingInfrastructure cannot be converted to Resource" which doesn't make sense to me.
+### 3. Type Conversion Errors
+There are multiple instances where infrastructure classes are not convertible to Resource:
+```
+error: incompatible types: NetworkingInfrastructure cannot be converted to Resource
+                .parent(this)  // Fixed: removed cast, ComponentResource implements Resource
+                        ^
+```
 
-The security group stuff is broken too:
+### 4. Missing Security Group Argument Builders
 ```
 error: cannot find symbol
-SecurityGroupIngressArgs.builder()
+                    SecurityGroupIngressArgs.builder()
+                    ^
+  symbol:   variable SecurityGroupIngressArgs
+  location: class NetworkingInfrastructure
 ```
 
-And I'm getting these lambda expression errors that I don't really understand:
+### 5. Lambda Expression Type Issues
 ```
 error: incompatible types: cannot infer type-variable(s) U
-return Output.all(ids).apply(list -> {
+        return Output.all(ids).apply(list -> {
+                                    ^
+    (argument mismatch; bad return type in lambda expression
+      List<String> cannot be converted to Output<U>)
 ```
 
-There's also some constructor problems where it expects a bunch of arguments but I'm not passing any:
+### 6. Method Not Found Errors
+```
+error: cannot find symbol
+        this.registerOutputs(java.util.Map.of(
+            ^
+  symbol: method registerOutputs(Map<String,Output<? extends Object>>)
+```
+
+### 7. Constructor Argument Mismatch
 ```
 error: constructor ElasticBeanstalkInfrastructureArgs in class ElasticBeanstalkInfrastructureArgs cannot be applied to given types;
-required: String,boolean,String,String,Output<String>,Output<List<String>>,Output<List<String>>,Output<String>,Output<String>,Output<String>,Output<String>,Map<String,String>
-found: no arguments
+                new ElasticBeanstalkInfrastructure.ElasticBeanstalkInfrastructureArgs()
+                ^
+  required: String,boolean,String,String,Output<String>,Output<List<String>>,Output<List<String>>,Output<String>,Output<String>,Output<String>,Output<String>,Map<String,String>
+  found:    no arguments
 ```
 
-The CloudWatch alarm stuff is also messed up - it wants a List<String> but I'm giving it a String:
+### 8. Alarm Actions Type Mismatch
+Multiple CloudWatch alarms have issues with alarm actions:
 ```
 error: no suitable method found for alarmActions(Output<String>)
-method Builder.alarmActions(Output<List<String>>) is not applicable
+                .alarmActions(this.snsTopic.arn())
+                ^
+    method Builder.alarmActions(Output<List<String>>) is not applicable
+      (argument mismatch; Output<String> cannot be converted to Output<List<String>>)
 ```
 
-I'm getting errors in basically every file:
-- NetworkingInfrastructure.java has 32 errors
-- IdentityInfrastructure.java has 12 errors
-- MonitoringInfrastructure.java has 18 errors  
-- TapStack.java has 12 errors
-- ElasticBeanstalkInfrastructure.java has 4 errors
+## Files With Errors
+1. **NetworkingInfrastructure.java** - 32 errors
+2. **IdentityInfrastructure.java** - 12 errors  
+3. **MonitoringInfrastructure.java** - 18 errors
+4. **TapStack.java** - 12 errors
+5. **ElasticBeanstalkInfrastructure.java** - 4 errors
 
-I really need this to work and I'm not sure what's missing. Are there dependencies I need to add to my build.gradle? Are the imports wrong? 
+## Request
+Please review these compilation errors and provide fixes for:
 
-Can you look at these errors and give me a complete, working version that will actually compile? I'm using Gradle 8.12 and everything is running through pipenv for some reason (that's just how our CI is set up).
+1. **Missing Dependencies**: Identify any missing Pulumi dependencies in the build configuration.
+2. **Import Issues**: Correct the import statements for Pulumi core classes.
+3. **Type Conversion**: Fix the Resource type conversion problems.
+4. **Lambda Expressions**: Resolve the Output type handling in lambda expressions.
+5. **Constructor Issues**: Adjust the constructor calls with the correct arguments.
+6. **Method Signatures**: Verify that all method calls match the expected signatures.
 
-This needs to be a proper Pulumi Java project that can deploy AWS infrastructure without any compilation errors. Thanks!
+## Expected Outcome
+A complete and functioning Pulumi Java project that compiles without errors and can be used for AWS infrastructure provisioning.
+
+## Additional Notes
+- The project uses pipenv for managing the Python environment.
+- Gradle version is set to 8.12.
