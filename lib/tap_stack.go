@@ -38,7 +38,7 @@ func main() {
 			BackupRetention:    7,
 			MultiAZ:            true,
 			EnableInsights:     true,
-			tags:               tags,
+			Tags:               tags,
 		}
 
 		infrastructure := NewMultiRegionInfrastructure(ctx, config)

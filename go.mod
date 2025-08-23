@@ -4,11 +4,42 @@ go 1.23.12
 
 require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
+	github.com/aws/aws-sdk-go-v2 v1.38.1
+	github.com/aws/aws-sdk-go-v2/config v1.27.11
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.48.2
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.245.2
+	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.30.1
+	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
 	github.com/pulumi/pulumi/sdk/v3 v3.191.0
+	github.com/stretchr/testify v1.10.0
+)
+
+require (
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.3.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.17.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.20.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.6 // indirect
+	github.com/aws/smithy-go v1.22.5 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 )
 
 require (
@@ -70,14 +101,12 @@ require (
 	github.com/pkg/term v1.1.0 // indirect
 	github.com/pulumi/appdash v0.0.0-20231130102222-75f619a67231 // indirect
 	github.com/pulumi/esc v0.17.0 // indirect
-	github.com/pulumi/pulumi-aws/sdk/v7 v7.5.0
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
 	github.com/santhosh-tekuri/jsonschema/v5 v5.0.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.0 // indirect
-	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
