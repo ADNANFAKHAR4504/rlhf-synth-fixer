@@ -11,6 +11,10 @@ You are tasked with developing a `tap_stack.go` file to ensure multi-environment
 
 Expected output: A single `tap_stack.go` file written in CDKTF Go that, when executed, provisions this setup across the specified regions. Ensure it includes detailed comments explaining each section of the code.
 
+- Single Go source file: `lib/tap_stack.go`.
+- Use only `cdktf`, `constructs`, and packages under `.gen/aws/*` (e.g. `github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup`).
+- Initialize the AWS provider for `us-east-1` in the stack.
+
 Contraints:
 
 Utilize a single `tap_stack.go` file in CDKTF Go to deploy resources consistently across multiple AWS regions. For DNS failover, configure a Route 53 hosted zone with a fake domain, along with health checks and failover records pointing to the ELBs.

@@ -2,9 +2,9 @@ module github.com/TuringGpt/iac-test-automations
 
 go 1.23.12
 
+require github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
+
 require (
-	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
-	github.com/cdktf/cdktf-provider-aws-go/aws/v18 v18.0.0
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/aws/constructs-go/constructs/v10 v10.4.2 // indirect
 	github.com/aws/jsii-runtime-go v1.112.0 // indirect
