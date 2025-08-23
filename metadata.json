@@ -5,5 +5,9 @@
   "turn_type": "multi",
   "po_id": "291624",
   "team": "2",
-  "startedAt": "2025-08-23T07:56:18.156Z"
+  "startedAt": "2025-08-23T07:56:18.156Z",
+  "subtask": "security-infrastructure",
+  "subject_labels": ["aws", "cloudformation", "security", "kms", "s3", "rds", "vpc", "cloudtrail", "sns", "lambda"],
+  "training_quality": "high",
+  "aws_services": ["S3", "VPC", "EC2", "RDS", "KMS", "CloudTrail", "SNS", "Lambda", "SecretsManager", "CloudWatch", "IAM"]
 }
