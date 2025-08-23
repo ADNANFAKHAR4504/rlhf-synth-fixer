@@ -1,34 +1,15 @@
-# System Prompt  
-You are an expert **Prompt Engineer** specializing in **CDKTF with Go**. Your task is to generate **IaC code** in a **single Go file**.
+Goal: write a small CDKTF (Go) stack that runs in us-east-1 and handles S3 image uploads with a Lambda that creates thumbnails.
 
-## Requirements
-- All logic must live in **`lib/tap_stack.go`**.  
-- Provider/resources must be imported only from `.gen/aws/...`, e.g.:  
-  import logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"  
-- Use `cdktf`, `constructs`, and `.gen/aws/*` only.  
-- AWS provider must be initialized with `us-east-1`.
+What I need, briefly:
 
-## Problem Statement (Do not modify this text)
-All resources must be created within the us-east-1 region. | Lambda function must have IAM roles with least privilege access.  
+- Single Go source file: `lib/tap_stack.go`.
+- Use only `cdktf`, `constructs`, and packages under `.gen/aws/*` (e.g. `github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup`).
+- Initialize the AWS provider for `us-east-1` in the stack.
 
-Environment:  
-Create a stack file with CDKTF GOLANG to deploy a serverless application that responds to S3 bucket events. The application will consist of:  
-1. S3 bucket for images.  
-2. Lambda triggered by bucket events that generates thumbnails and stores them back.  
-3. IAM roles/policies with least privilege for Lambda.  
+Infra in the stack:
 
-### Requirements
-- Lambda role must allow `s3:GetObject`, `s3:PutObject` (to thumbnails), CloudWatch logs, and minimal IAM ops.  
+- An S3 bucket for images.
+- A Lambda function that is triggered by S3 object-created events; it writes thumbnails back to the bucket (under a thumbnails prefix).
+- IAM role/policies with least privilege. The Lambda should be able to read objects, write to the thumbnails area, and write CloudWatch logs.
 
-### Expected Output
-A working IaC file that deploys the above successfully in **us-east-1**.  
-
-## Translation Instructions
-Implement the above in **Go CDKTF**:  
-- Create S3 bucket, Lambda, IAM role/policies, CloudWatch log group.  
-- Add S3 → Lambda notification with proper invoke permissions.  
-- Keep IAM role/policies minimal.  
-- Code must `cdktf synth` successfully.
-
-## Deliverable
-Output only the complete code for **`lib/tap_stack.go`**.
+Please keep the IAM scope tight, wire up S3->Lambda notifications correctly, and make sure the code synthesizes.
