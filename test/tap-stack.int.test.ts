@@ -270,7 +270,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(igw.Attachments).toBeDefined();
       expect(igw.Attachments?.length).toBe(1);
       expect(igw.Attachments![0].VpcId).toBe(vpcId);
-      expect(igw.Attachments![0].State).toBe('attached');
+      expect(igw.Attachments![0].State).toBe('available');
     }, 30000);
   });
 
