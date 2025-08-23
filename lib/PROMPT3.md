@@ -75,11 +75,7 @@ A valid and tested CloudFormation YAML template that satisfies all requirements,
 
 # CloudTrail Configuration Error - Need Fix
 
-I'm setting up audit logging for our security infrastructure but the CloudFormation deployment is failing with a validation error:
-
-```
-#: required key [IsLogging] not found
-```
+I'm setting up audit logging for our security infrastructure but the CloudFormation deployment is failing with a validation error.
 
 I need help fixing this CloudTrail configuration. The requirements are:
 
