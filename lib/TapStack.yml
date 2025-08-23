@@ -102,8 +102,8 @@ Parameters:
 
   DBMasterPasswordParameter:
     Type: String
-    Default: '/tapstack/database/master-password'
-    Description: 'SSM Parameter Store path for database master password'
+    Default: ''
+    Description: 'SSM Parameter Store path for database master password. Leave empty to use default password.'
 
   DBName:
     Type: String
@@ -201,6 +201,7 @@ Conditions:
     !And [!Condition HasGlobalCluster, !Condition CreateGlobalCluster]
   CreateALB: !Equals [!Ref UseExistingALB, '']
   CreateALBAndHasSSL: !And [!Condition CreateALB, !Condition HasSSLCertificate]
+  HasDBPasswordParameter: !Not [!Equals [!Ref DBMasterPasswordParameter, '']]
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -778,7 +779,10 @@ Resources:
       EngineVersion: '8.0.mysql_aurora.3.08.2'
       DatabaseName: !Ref DBName
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBMasterPasswordParameter}:1}}'
+      MasterUserPassword: !If
+        - HasDBPasswordParameter
+        - !Sub '{{resolve:ssm-secure:${DBMasterPasswordParameter}:1}}'
+        - 'SecurePass123!'
       GlobalClusterIdentifier:
         !If [
           HasGlobalCluster,
