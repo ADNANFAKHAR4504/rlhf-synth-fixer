@@ -190,7 +190,7 @@ public final class Main {
                             {
                                 "Effect": "Allow",
                                 "Principal": {
-                                    "AWS": "arn:aws:iam::123456789012:root"
+                                    "AWS": "arn:aws:iam::*:root"
                                 },
                                 "Action": "sts:AssumeRole",
                                 "Condition": {
