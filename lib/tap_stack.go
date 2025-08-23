@@ -429,5 +429,7 @@ EOF
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
-	})	app.Synth()
+	})
+
+	app.Synth()
 }
