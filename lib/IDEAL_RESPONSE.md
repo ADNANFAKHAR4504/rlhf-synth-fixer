@@ -1,6 +1,6 @@
-<<<<<<< HEAD
-Insert here the ideal response
-=======
+# Ideal Response
+
+This file contains the ideal response format and content for the Terraform infrastructure project.
 # Ideal Response
 
 ```yaml
@@ -641,4 +641,3 @@ export class TapStack extends TerraformStack {
     });
   }
 }
->>>>>>> 043468c0d4b28b69cdfe06caec11670886894d9d

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Secure AWS Environment - Complete Infrastructure
 
 Below is a comprehensive Terraform configuration that implements all the security requirements in a single file. This configuration follows AWS security best practices and implements advanced security controls.
@@ -1821,6 +1820,3 @@ class SecureEnterpriseStack extends TerraformStack {
 const app = new App();
 new SecureEnterpriseStack(app, "prod-sec");
 app.synth();
-```
->>>>>>> 043468c0d4b28b69cdfe06caec11670886894d9d
->>>>>>> fd84bb97236aede126d4c5ce65eb8939810561fc
