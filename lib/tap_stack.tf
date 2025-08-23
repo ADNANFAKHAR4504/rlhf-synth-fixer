@@ -51,21 +51,27 @@ variable "domain_name" {
   default     = "tap-stack.example.com"
 }
 
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
 #==============================================================================
 # LOCAL VALUES
 #==============================================================================
 
 locals {
   name_prefix = "${var.environment}-tap-stack"
-  
+
   # AZ configuration per region
   az_config = {
     "us-east-1" = {
-      azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
+      azs  = ["us-east-1a", "us-east-1b", "us-east-1c"]
       cidr = "10.0.0.0/16"
     }
     "eu-central-1" = {
-      azs = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+      azs  = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
       cidr = "10.1.0.0/16"
     }
   }
@@ -206,7 +212,7 @@ resource "aws_internet_gateway" "main_us_east_1" {
 resource "aws_subnet" "public_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id                  = aws_vpc.main_us_east_1.id
   cidr_block              = cidrsubnet(local.az_config["us-east-1"].cidr, 8, count.index)
   availability_zone       = local.az_config["us-east-1"].azs[count.index]
@@ -222,7 +228,7 @@ resource "aws_subnet" "public_us_east_1" {
 resource "aws_subnet" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id            = aws_vpc.main_us_east_1.id
   cidr_block        = cidrsubnet(local.az_config["us-east-1"].cidr, 8, count.index + 10)
   availability_zone = local.az_config["us-east-1"].azs[count.index]
@@ -237,27 +243,27 @@ resource "aws_subnet" "private_us_east_1" {
 resource "aws_eip" "nat_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eip-us-east-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_us_east_1]
 }
 
 resource "aws_nat_gateway" "main_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   allocation_id = aws_eip.nat_us_east_1[count.index].id
   subnet_id     = aws_subnet.public_us_east_1[count.index].id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-us-east-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_us_east_1]
 }
 
@@ -279,7 +285,7 @@ resource "aws_route_table" "public_us_east_1" {
 resource "aws_route_table" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   vpc_id = aws_vpc.main_us_east_1.id
 
   route {
@@ -296,7 +302,7 @@ resource "aws_route_table" "private_us_east_1" {
 resource "aws_route_table_association" "public_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.public_us_east_1[count.index].id
   route_table_id = aws_route_table.public_us_east_1.id
 }
@@ -304,7 +310,7 @@ resource "aws_route_table_association" "public_us_east_1" {
 resource "aws_route_table_association" "private_us_east_1" {
   provider = aws.us_east_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.private_us_east_1[count.index].id
   route_table_id = aws_route_table.private_us_east_1[count.index].id
 }
@@ -339,7 +345,7 @@ resource "aws_internet_gateway" "main_eu_central_1" {
 resource "aws_subnet" "public_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id                  = aws_vpc.main_eu_central_1.id
   cidr_block              = cidrsubnet(local.az_config["eu-central-1"].cidr, 8, count.index)
   availability_zone       = local.az_config["eu-central-1"].azs[count.index]
@@ -355,7 +361,7 @@ resource "aws_subnet" "public_eu_central_1" {
 resource "aws_subnet" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id            = aws_vpc.main_eu_central_1.id
   cidr_block        = cidrsubnet(local.az_config["eu-central-1"].cidr, 8, count.index + 10)
   availability_zone = local.az_config["eu-central-1"].azs[count.index]
@@ -370,27 +376,27 @@ resource "aws_subnet" "private_eu_central_1" {
 resource "aws_eip" "nat_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eip-eu-central-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_eu_central_1]
 }
 
 resource "aws_nat_gateway" "main_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   allocation_id = aws_eip.nat_eu_central_1[count.index].id
   subnet_id     = aws_subnet.public_eu_central_1[count.index].id
 
   tags = merge(var.common_tags, {
     Name = "${local.name_prefix}-nat-eu-central-1-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main_eu_central_1]
 }
 
@@ -412,7 +418,7 @@ resource "aws_route_table" "public_eu_central_1" {
 resource "aws_route_table" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   vpc_id = aws_vpc.main_eu_central_1.id
 
   route {
@@ -429,7 +435,7 @@ resource "aws_route_table" "private_eu_central_1" {
 resource "aws_route_table_association" "public_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.public_eu_central_1[count.index].id
   route_table_id = aws_route_table.public_eu_central_1.id
 }
@@ -437,7 +443,7 @@ resource "aws_route_table_association" "public_eu_central_1" {
 resource "aws_route_table_association" "private_eu_central_1" {
   provider = aws.eu_central_1
   count    = 3
-  
+
   subnet_id      = aws_subnet.private_eu_central_1[count.index].id
   route_table_id = aws_route_table.private_eu_central_1[count.index].id
 }
@@ -815,4 +821,6 @@ resource "aws_iam_policy" "app_secrets_policy_eu_central_1" {
 
 resource "aws_iam_role_policy_attachment" "app_secrets_eu_central_1" {
   provider   = aws.eu_central_1
-  role       = aws_iam_role.app_role_eu_central
+  role       = aws_iam_role.app_role_eu_central_1.name
+  policy_arn = aws_iam_policy.app_secrets_policy_eu_central_1.arn
+}
