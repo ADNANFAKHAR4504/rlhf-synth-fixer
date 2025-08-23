@@ -1,3 +1,6 @@
+I'll create a complete, deployable CloudFormation template that meets all your requirements. This template follows AWS best practices and includes proper dependencies to ensure successful deployment.
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with VPC, ALB, and Auto Scaling'
 
@@ -436,3 +439,33 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
+```
+
+## Important Notes for Deployment:
+
+### 1. **Dynamic AMI Resolution**
+The template uses AWS Systems Manager Parameter Store to automatically resolve the latest Amazon Linux 2 AMI, ensuring you always get the most recent and secure AMI without manual updates.
+
+### 2. **Security Consideration**
+Change the `SSHAllowedCIDR` parameter to your specific IP range instead of `0.0.0.0/0` for better security.
+
+### 3. **Deployment Command**
+Deploy with:
+```bash
+aws cloudformation create-stack \
+  --stack-name webapp-infrastructure \
+  --template-body file://template.yaml \
+  --parameters ParameterKey=SSHAllowedCIDR,ParameterValue=YOUR_IP/32 \
+  --capabilities CAPABILITY_IAM \
+  --region us-west-2
+```
+
+## Key Features Implemented:
+
+✅ **High Availability**: Resources span multiple AZs  
+✅ **Security**: Least-privilege security groups, private subnets for compute  
+✅ **Scalability**: Auto Scaling with CloudWatch alarms  
+✅ **Best Practices**: Proper tagging, IAM roles, health checks  
+✅ **Production Ready**: Includes monitoring and proper dependencies  
+
+The template creates a simple web server that displays the hostname and instance ID, which helps verify the load balancer is working correctly. You can replace the UserData script with your actual application deployment code.
