@@ -25,8 +25,6 @@ public class AuditingComponent extends ComponentResource {
     private final LogGroup cloudTrailLogGroup;
     private final Output<String> accountId;
 
-    private final String cloudTrails3BucketPrefix;
-
     public AuditingComponent(String name, StorageComponent storage, String region) {
         this(name, storage, region, null);
     }
@@ -34,7 +32,7 @@ public class AuditingComponent extends ComponentResource {
     public AuditingComponent(String name, StorageComponent storage, String region, ComponentResourceOptions opts) {
         super("custom:infrastructure:AuditingComponent", name, opts);
 
-        this.cloudTrails3BucketPrefix = "cloudtrail-logs/" + region;
+        String cloudTrails3BucketPrefix = "cloudtrail-logs/" + region;
 
         var identity = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build());
 
@@ -44,10 +42,10 @@ public class AuditingComponent extends ComponentResource {
         this.cloudTrailLogGroup = createCloudTrailLogGroup(name);
 
         // Configure CloudTrail bucket policy
-        configureBucketPolicy(name, storage);
+        var bucketPolicy = configureBucketPolicy(name, storage);
 
-        // Create CloudTrail with comprehensive logging
-        this.cloudTrail = createCloudTrail(name, storage, region);
+        // Create CloudTrail with comprehensive logging (depends on bucket policy)
+        this.cloudTrail = createCloudTrail(name, storage, region, bucketPolicy);
 
         // Create security monitoring
         createSecurityEventFilter(name);
@@ -63,8 +61,8 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private void configureBucketPolicy(String name, StorageComponent storage) {
-        new BucketPolicy(name + "-cloudtrail-bucket-policy", BucketPolicyArgs.builder()
+    private BucketPolicy configureBucketPolicy(String name, StorageComponent storage) {
+        return new BucketPolicy(name + "-cloudtrail-bucket-policy", BucketPolicyArgs.builder()
                 .bucket(storage.getCloudTrailBucketName())
                 .policy(Output.all(storage.getCloudTrailBucketName(), accountId)
                         .applyValue(values -> {
@@ -87,12 +85,7 @@ public class AuditingComponent extends ComponentResource {
                             "Service": "cloudtrail.amazonaws.com"
                         },
                         "Action": "s3:GetBucketAcl",
-                        "Resource": "arn:aws:s3:::%s",
-                        "Condition": {
-                            "StringEquals": {
-                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
-                            }
-                        }
+                        "Resource": "arn:aws:s3:::%s"
                     },
                     {
                         "Sid": "AWSCloudTrailWrite",
@@ -101,11 +94,10 @@ public class AuditingComponent extends ComponentResource {
                             "Service": "cloudtrail.amazonaws.com"
                         },
                         "Action": "s3:PutObject",
-                        "Resource": "arn:aws:s3:::%s/%s/AWSLogs/%s/*",
+                        "Resource": "arn:aws:s3:::%s/AWSLogs/%s/*",
                         "Condition": {
                             "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control",
-                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
+                                "s3:x-amz-acl": "bucket-owner-full-control"
                             }
                         }
                     },
@@ -116,23 +108,17 @@ public class AuditingComponent extends ComponentResource {
                             "Service": "cloudtrail.amazonaws.com"
                         },
                         "Action": "s3:GetBucketLocation",
-                        "Resource": "arn:aws:s3:::%s",
-                        "Condition": {
-                            "StringEquals": {
-                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
-                            }
-                        }
+                        "Resource": "arn:aws:s3:::%s"
                     }
                 ]
             }
-            """.formatted(bucketName, accountId, bucketName, cloudTrails3BucketPrefix, accountId, accountId, bucketName, accountId);
+            """.formatted(bucketName, bucketName, accountId, bucketName);
     }
 
-    private Trail createCloudTrail(String name, StorageComponent storage, String region) {
+    private Trail createCloudTrail(String name, StorageComponent storage, String region, BucketPolicy bucketPolicy) {
         return new Trail(name + "-cloudtrail", TrailArgs.builder()
                 .name(name + "-security-audit-trail")
                 .s3BucketName(storage.getCloudTrailBucketName())
-                .s3KeyPrefix(cloudTrails3BucketPrefix)
                 .kmsKeyId(storage.getKmsKeyArn())
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true)
@@ -175,7 +161,7 @@ public class AuditingComponent extends ComponentResource {
                         "Purpose", "SecurityAudit",
                         "Compliance", "Required"
                 )))
-                .build(), CustomResourceOptions.builder().parent(this).build());
+                .build(), CustomResourceOptions.builder().parent(this).dependsOn(bucketPolicy).build());
     }
 
     private Output<String> createCloudTrailRole() {
@@ -233,9 +219,8 @@ public class AuditingComponent extends ComponentResource {
                 .name(name + "-security-events-filter")
                 .logGroupName(cloudTrailLogGroup.name())
                 .pattern("""
-                    { ($.errorCode = "*UnauthorizedOperation") ||\s
-                      ($.errorCode = "AccessDenied*") ||\s
-                      ($.sourceIPAddress != "AWS Internal") ||
+                    { ($.errorCode = "*UnauthorizedOperation") ||
+                      ($.errorCode = "AccessDenied*") ||
                       ($.userIdentity.arn = "Root") ||
                       ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
                       ($.eventName = "CreateUser") ||
