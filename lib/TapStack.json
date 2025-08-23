@@ -162,6 +162,9 @@
         "AppSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sg"
+                },
                 "VpcId": {
                     "Ref": "VPC"
                 },
@@ -230,6 +233,9 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
+                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -380,6 +386,9 @@
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
+                },
                 "DBSubnetGroupDescription": "Private DB subnets",
                 "SubnetIds": [
                     {
@@ -436,6 +445,9 @@
         "MyLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda"
+                },
                 "Runtime": "python3.9",
                 "Role": {
                     "Fn::GetAtt": [
@@ -496,7 +508,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${NamePrefix}-${EnvironmentSuffix}-trail"
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-trail"
                 },
                 "S3BucketName": {
                     "Ref": "SecureS3Bucket"

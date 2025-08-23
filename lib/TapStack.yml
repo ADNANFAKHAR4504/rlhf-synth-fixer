@@ -3,6 +3,7 @@ Description: >
   TapStack.yml — Secure, production-ready environment in us-east-1.
   Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy,
   RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.
+
 Parameters:
   NamePrefix:
     Type: String
@@ -16,6 +17,7 @@ Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
 Resources:
   ##############################################
   # Networking
@@ -29,17 +31,20 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Environment
           Value: Production
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -50,6 +55,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -60,6 +66,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -70,27 +77,32 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+
   PublicRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+
   PublicSubnet1Assoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
+
   ##############################################
   # Security Group
   ##############################################
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-sg"
       VpcId: !Ref VPC
       GroupDescription: App security group (no SSH, restricted HTTP/HTTPS)
       SecurityGroupIngress:
@@ -105,6 +117,7 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+
   ##############################################
   # IAM Roles
   ##############################################
@@ -125,10 +138,13 @@ Resources:
               - Effect: Allow
                 Action: [ "s3:GetObject", "s3:ListBucket" ]
                 Resource: "*"
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
+      InstanceProfileName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
       Roles: [!Ref EC2Role]
+
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -146,6 +162,7 @@ Resources:
               - Effect: Allow
                 Action: [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ]
                 Resource: "*"
+
   ##############################################
   # EC2 Instance
   ##############################################
@@ -160,6 +177,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs: { VolumeSize: 8, VolumeType: gp3, Encrypted: true }
+
   ##############################################
   # S3 Bucket for CloudTrail + Policy
   ##############################################
@@ -174,6 +192,7 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -196,6 +215,7 @@ Resources:
             Condition:
               StringEquals:
                 "s3:x-amz-acl": "bucket-owner-full-control"
+
   ##############################################
   # RDS + Secret
   ##############################################
@@ -207,13 +227,16 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 16
         ExcludeCharacters: "\"@/ '"
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
+      DBSubnetGroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
       DBSubnetGroupDescription: Private DB subnets
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -226,12 +249,14 @@ Resources:
       VPCSecurityGroups: [!Ref AppSecurityGroup]
       MasterUsername: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:username}}"]]
       MasterUserPassword: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:password}}"]]
+
   ##############################################
   # Lambda
   ##############################################
   MyLambda:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-lambda"
       Runtime: python3.9
       Role: !GetAtt LambdaRole.Arn
       Handler: index.handler
@@ -241,6 +266,7 @@ Resources:
         ZipFile: |
           def handler(event, context):
               return {"statusCode":200, "body":"Hello from TapStack"}
+
   ##############################################
   # CloudTrail
   ##############################################
@@ -248,6 +274,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 90
+
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
@@ -265,10 +292,11 @@ Resources:
               - Effect: Allow
                 Action: [ "logs:CreateLogStream", "logs:PutLogEvents" ]
                 Resource: "*"
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub "${NamePrefix}-${EnvironmentSuffix}-trail"
+      TrailName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-trail"
       S3BucketName: !Ref SecureS3Bucket
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
@@ -276,6 +304,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       IsLogging: true
+
 Outputs:
   VPC: { Value: !Ref VPC }
   PublicSubnet1: { Value: !Ref PublicSubnet1 }
