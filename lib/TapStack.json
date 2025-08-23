@@ -2,10 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy, RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.\n",
     "Parameters": {
-        "NamePrefix": {
-            "Type": "String",
-            "Default": "prod"
-        },
         "EnvironmentSuffix": {
             "Type": "String",
             "Default": "env"

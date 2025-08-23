@@ -24,8 +24,7 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have NamePrefix, EnvironmentSuffix, AllowedIpCidr, LatestAmiId parameters', () => {
-      expect(template.Parameters.NamePrefix).toBeDefined();
+    test('should have EnvironmentSuffix, AllowedIpCidr, LatestAmiId parameters', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.AllowedIpCidr).toBeDefined();
       expect(template.Parameters.LatestAmiId).toBeDefined();
@@ -35,8 +34,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.AllowedIpCidr.Default).toBe('192.168.0.0/16');
     });
 
-    test('should have exactly 4 parameters', () => {
-      expect(Object.keys(template.Parameters).length).toBe(4);
+    test('should have exactly 3 parameters', () => {
+      expect(Object.keys(template.Parameters).length).toBe(3);
     });
   });
 

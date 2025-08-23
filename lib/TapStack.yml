@@ -5,9 +5,6 @@ Description: >
   RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.
 
 Parameters:
-  NamePrefix:
-    Type: String
-    Default: prod
   EnvironmentSuffix:
     Type: String
     Default: env
