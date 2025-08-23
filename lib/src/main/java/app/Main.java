@@ -1,42 +1,25 @@
 package app;
 
-
-import com.pulumi.Context;
 import com.pulumi.Pulumi;
-
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.ProviderArgs;
-
 import com.pulumi.aws.ec2.*;
-import com.pulumi.aws.ec2.inputs.GetAmiFilterArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
-
-import com.pulumi.resources.ComponentResourceOptions;
+import com.pulumi.aws.ec2.inputs.GetAvailabilityZonesArgs;
+import com.pulumi.aws.ec2.inputs.GetAmiArgs;
+import com.pulumi.aws.ec2.inputs.GetAmiFilterArgs;
+import com.pulumi.core.Output;
+import com.pulumi.resources.CustomResourceOptions;
 
 import java.util.List;
 import java.util.Map;
 
-
-import com.pulumi.Pulumi;
-import com.pulumi.aws.ec2.inputs.GetAvailabilityZonesArgs;
-import com.pulumi.aws.ec2.inputs.GetAmiArgs;
-import com.pulumi.core.Output;
-import com.pulumi.resources.CustomResourceOptions;
-
-
-
-
 public class Main {
-
+    
     public static void main(String[] args) {
-        Pulumi.run(ctx -> defineInfrastructure(ctx));
-    }
-
-
-    static void defineInfrastructure(Context ctx) {
-// Get configuration values
-
+        Pulumi.run(ctx -> {
+            // Get configuration values
             var config = ctx.config();
             var authorizedSshIp = config.require("authorizedSshIp");
             
