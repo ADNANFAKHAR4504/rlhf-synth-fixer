@@ -2,10 +2,18 @@ package app;
 
 import com.pulumi.Context;
 import com.pulumi.Pulumi;
-import com.pulumi.aws.iam.*;
-import com.pulumi.aws.kms.*;
-import com.pulumi.aws.s3.*;
-import com.pulumi.aws.sns.*;
+import com.pulumi.aws.iam.Role;
+import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
+import com.pulumi.aws.iam.RolePolicyAttachment;
+import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
+import com.pulumi.aws.kms.Key;
+import com.pulumi.aws.kms.KeyArgs;
+import com.pulumi.aws.s3.Bucket;
+import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.sns.Topic;
+import com.pulumi.aws.sns.TopicArgs;
 import com.pulumi.core.Output;
 
 import java.util.Map;
@@ -37,7 +45,7 @@ public final class Main {
      * 
      * @param args Command line arguments
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         Pulumi.run(Main::defineInfrastructure);
     }
 
@@ -46,22 +54,22 @@ public final class Main {
      * 
      * @param ctx The Pulumi context for exporting outputs
      */
-    static void defineInfrastructure(Context ctx) {
+    static void defineInfrastructure(final Context ctx) {
         // Get account ID for naming convention
-        Output<String> accountId = Output.of("${aws:accountId}");
+        final Output<String> accountId = Output.of("${aws:accountId}");
         
         // 1. Create KMS Key for encryption
-        Key kmsKey = createKmsKey(accountId);
+        final Key kmsKey = createKmsKey(accountId);
         
         // 2. Create S3 Bucket with encryption
-        Bucket secureBucket = createSecureS3Bucket(accountId, kmsKey);
+        final Bucket secureBucket = createSecureS3Bucket(accountId, kmsKey);
         
         // 3. Create IAM Roles and Policies
-        Role securityRole = createSecurityRole(accountId);
-        Role crossAccountRole = createCrossAccountRole(accountId);
+        final Role securityRole = createSecurityRole(accountId);
+        final Role crossAccountRole = createCrossAccountRole(accountId);
         
         // 4. Create SNS Topic for alerts
-        Topic securityTopic = createSecurityTopic(accountId);
+        final Topic securityTopic = createSecurityTopic(accountId);
         
         // Export outputs
         ctx.export("kmsKeyId", kmsKey.id());
@@ -74,7 +82,7 @@ public final class Main {
     /**
      * Creates a KMS key for encrypting sensitive data.
      */
-    private static Key createKmsKey(Output<String> accountId) {
+    private static Key createKmsKey(final Output<String> accountId) {
         return new Key("security-kms-key", KeyArgs.builder()
                 .description("KMS key for encrypting sensitive data across services")
                 .keyUsage("ENCRYPT_DECRYPT")
@@ -91,7 +99,7 @@ public final class Main {
     /**
      * Creates a secure S3 bucket with encryption.
      */
-    private static Bucket createSecureS3Bucket(Output<String> accountId, Key kmsKey) {
+    private static Bucket createSecureS3Bucket(final Output<String> accountId, final Key kmsKey) {
         return new Bucket("secure-data-bucket", BucketArgs.builder()
                 .forceDestroy(false)
                 .tags(Map.of(
@@ -104,9 +112,9 @@ public final class Main {
     /**
      * Creates IAM role with least privilege security policies.
      */
-    private static Role createSecurityRole(Output<String> accountId) {
+    private static Role createSecurityRole(final Output<String> accountId) {
         // Create the security role
-        Role role = new Role("security-role", RoleArgs.builder()
+        final Role role = new Role("security-role", RoleArgs.builder()
                 .assumeRolePolicy("""
                     {
                         "Version": "2012-10-17",
@@ -128,7 +136,7 @@ public final class Main {
                 .build());
         
         // Create least privilege policy
-        Policy securityPolicy = new Policy("security-policy", PolicyArgs.builder()
+        final Policy securityPolicy = new Policy("security-policy", PolicyArgs.builder()
                 .policy("""
                     {
                         "Version": "2012-10-17",
@@ -173,7 +181,7 @@ public final class Main {
     /**
      * Creates IAM role for cross-account access.
      */
-    private static Role createCrossAccountRole(Output<String> accountId) {
+    private static Role createCrossAccountRole(final Output<String> accountId) {
         return new Role("cross-account-role", RoleArgs.builder()
                 .assumeRolePolicy("""
                     {
@@ -182,7 +190,7 @@ public final class Main {
                             {
                                 "Effect": "Allow",
                                 "Principal": {
-                                    "AWS": "arn:aws:iam::*:root"
+                                    "AWS": "arn:aws:iam::123456789012:root"
                                 },
                                 "Action": "sts:AssumeRole",
                                 "Condition": {
@@ -204,7 +212,7 @@ public final class Main {
     /**
      * Creates SNS Topic for security alerts.
      */
-    private static Topic createSecurityTopic(Output<String> accountId) {
+    private static Topic createSecurityTopic(final Output<String> accountId) {
         return new Topic("security-alerts", TopicArgs.builder()
                 .displayName("Security Alerts")
                 .tags(Map.of(
