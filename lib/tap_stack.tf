@@ -45,6 +45,12 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+resource "random_string" "unique_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 resource "random_password" "db_password" {
   length  = 16
   special = false
@@ -539,7 +545,7 @@ resource "aws_lb_listener" "main" {
 # Auto Scaling Group
 ########################
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg"
+  name                = "${local.name_prefix}-${random_string.unique_suffix.result}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
@@ -556,7 +562,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${local.name_prefix}-asg-instance"
+    value               = "${local.name_prefix}-${random_string.unique_suffix.result}-asg-instance"
     propagate_at_launch = true
   }
 

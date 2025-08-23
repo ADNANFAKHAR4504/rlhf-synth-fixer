@@ -1,74 +1,58 @@
-Task Description:
-Using Terraform, design and deploy a highly available and secure AWS environment that meets the following specifications:
+# AWS Infrastructure Deployment Challenge
 
-Requirements:
+## Objective
+Build a production-ready, highly available AWS infrastructure using Terraform that can handle web application traffic with proper security and scalability.
 
-Virtual Private Cloud (VPC)
+## Infrastructure Requirements
 
-Create a VPC that spans at least two availability zones (AZs).
+### Network Architecture
+- **VPC Design**: Create a VPC spanning multiple availability zones for redundancy
+- **Subnet Strategy**: Deploy both public and private subnets across at least 2 AZs
+- **Routing**: Configure proper internet connectivity for public resources while keeping private resources secure
 
-Implement one public subnet and one private subnet in each AZ.
+### Load Balancing & Traffic Distribution
+- **Application Load Balancer**: Deploy in public subnets to handle incoming web traffic
+- **Health Monitoring**: Implement proper health checks for backend instances
+- **Traffic Routing**: Distribute requests across multiple backend servers
 
-Networking and Load Balancing
+### Compute Resources
+- **Auto Scaling Group**: Deploy EC2 instances in private subnets for security
+- **Instance Management**: Maintain minimum 2 instances for high availability
+- **Scaling Policies**: Allow automatic scaling based on demand
+- **IAM Integration**: Attach appropriate roles for secure AWS service access
 
-Deploy an Application Load Balancer (ALB) in the public subnets to distribute incoming traffic.
+### Database Layer
+- **RDS Instance**: Deploy managed database in private subnets
+- **Multi-AZ**: Enable high availability with automatic failover
+- **Security**: Isolate database from direct internet access
 
-Ensure security groups allow only necessary inbound and outbound traffic.
+### Security Implementation
+- **Encryption**: Use AWS KMS customer-managed keys for all data at rest
+- **Network Security**: Configure security groups with least privilege access
+- **Access Control**: Implement proper IAM roles and policies
 
-Compute
+## Technical Constraints
 
-Create an Auto Scaling Group (ASG) for EC2 instances in the private subnets.
+- **Cloud Platform**: AWS only
+- **Multi-AZ Deployment**: Required across minimum 2 availability zones
+- **Network Isolation**: Public subnets for internet-facing resources, private for backend
+- **Security**: All data must be encrypted, minimal port exposure
+- **Scalability**: Auto-scaling capabilities for handling traffic variations
 
-Configure the ASG to maintain a minimum of two instances at all times.
+## Deliverables
 
-Attach IAM roles to EC2 instances for secure access to necessary S3 buckets.
+1. **Complete Terraform Configuration**: Single main.tf file containing all infrastructure
+2. **Resource Naming**: Use random suffixes to prevent naming conflicts
+3. **Documentation**: Clear comments explaining resource purposes and configurations
+4. **Deployment Ready**: Configuration must deploy successfully with `terraform apply`
+5. **Production Standards**: Follow AWS best practices for security, reliability, and cost optimization
 
-Database
+## Success Criteria
 
-Deploy a managed RDS instance in a private subnet.
-
-Ensure it is isolated from external traffic and fully managed by AWS.
-
-Security & Encryption
-
-Encrypt all data at rest for both EC2 volumes and RDS using AWS KMS customer-managed keys (CMK).
-
-Ensure security configurations follow best practices and only necessary ports are exposed to the internet.
-
-Output Requirements:
-
-Define the Terraform configuration using HCL.
-
-The environment must be deployable using a single terraform apply command.
-
-Adhere strictly to AWS best practices for high availability, security, and scalability.
-
-Constraints:
-
-Cloud Provider: AWS
-
-Multi-AZ: Yes, at least two AZs
-
-Subnets: Public + Private per AZ
-
-ALB: Public subnets only
-
-ASG: Private subnets, minimum 2 EC2 instances
-
-IAM: Roles attached to EC2 for S3 access
-
-RDS: Private subnet only
-
-Encryption: AWS KMS CMK
-
-Security: Restrict inbound/outbound access to only what is necessary
-
-Deliverables:
-
-Fully functional Terraform configuration files (.tf) for the entire environment.
-
-Documentation or comments in HCL explaining each resource and its purpose.
-
-The solution must be idempotent, regionally redundant, and production-ready.
-Use random generated Names and variables . 
-Create main.tf with all infrastructure in single file.
+- Infrastructure deploys without errors
+- All resources properly encrypted and secured
+- High availability achieved through multi-AZ deployment
+- Auto-scaling group maintains minimum instance count
+- Load balancer successfully routes traffic to healthy instances
+- Database accessible only from private subnets
+- All resources properly tagged and documented
