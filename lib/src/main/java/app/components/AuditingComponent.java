@@ -121,22 +121,6 @@ public class AuditingComponent extends ComponentResource {
                 .isMultiRegionTrail(true)
                 .enableLogging(true)
                 .enableLogFileValidation(true)
-                .eventSelectors(
-                        TrailEventSelectorArgs.builder()
-                                .readWriteType("All")
-                                .includeManagementEvents(true)
-                                .dataResources(
-                                        TrailEventSelectorDataResourceArgs.builder()
-                                                .type("AWS::S3::Object")
-                                                .values("*")
-                                                .build(),
-                                        TrailEventSelectorDataResourceArgs.builder()
-                                                .type("AWS::KMS::Key")
-                                                .values("*")
-                                                .build()
-                                )
-                                .build()
-                )
                 .advancedEventSelectors(
                         TrailAdvancedEventSelectorArgs.builder()
                                 .name("Security-Critical Events")
