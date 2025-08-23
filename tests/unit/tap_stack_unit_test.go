@@ -218,3 +218,151 @@ func Test_Synth_OutputsPresent(t *testing.T) {
 		}
 	}
 }
+
+func Test_IAMPolicy_LeastPrivilegeJSON(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	root := readTF(t, tfPath)
+	resources := asMap(root["resource"])
+	pol := asMap(asMap(resources["aws_iam_policy"])["LambdaS3CloudWatchPolicy"])
+	policyStr, _ := pol["policy"].(string)
+	if policyStr == "" {
+		t.Fatalf("policy JSON missing")
+	}
+	var p map[string]any
+	if err := json.Unmarshal([]byte(policyStr), &p); err != nil {
+		t.Fatalf("policy JSON invalid: %v", err)
+	}
+	stmts, _ := p["Statement"].([]any)
+	if len(stmts) == 0 {
+		t.Fatalf("policy has no statements")
+	}
+	var hasGet, hasPut, logsScoped bool
+	for _, s := range stmts {
+		sm := asMap(s)
+		// actions
+		var acts []string
+		switch a := sm["Action"].(type) {
+		case []any:
+			for _, v := range a {
+				if vv, ok := v.(string); ok {
+					acts = append(acts, vv)
+				}
+			}
+		case string:
+			acts = []string{a}
+		}
+		// resources
+		var res []string
+		switch r := sm["Resource"].(type) {
+		case []any:
+			for _, v := range r {
+				if vv, ok := v.(string); ok {
+					res = append(res, vv)
+				}
+			}
+		case string:
+			res = []string{r}
+		}
+		// checks
+		for _, a := range acts {
+			if a == "s3:GetObject" || a == "s3:GetObjectVersion" {
+				hasGet = true
+			}
+			if a == "s3:PutObject" || a == "s3:PutObjectAcl" {
+				hasPut = true
+				// ensure put is restricted to thumbnails/ or errors/
+				okPrefix := false
+				for _, r := range res {
+					if strings.Contains(r, "/thumbnails/*") || strings.Contains(r, "/errors/*") {
+						okPrefix = true
+					}
+				}
+				if !okPrefix {
+					t.Fatalf("Put actions are not restricted to thumbnails/ or errors/: %v", res)
+				}
+			}
+			if a == "logs:CreateLogStream" || a == "logs:PutLogEvents" {
+				// ensure not wildcard across all logs
+				for _, r := range res {
+					if r == "*" || strings.HasPrefix(r, "arn:aws:logs:*") {
+						t.Fatalf("logs permissions are too broad: %v", res)
+					} else {
+						logsScoped = true
+					}
+				}
+			}
+		}
+	}
+	if !hasGet {
+		t.Fatalf("missing s3 get permissions")
+	}
+	if !hasPut {
+		t.Fatalf("missing s3 put permissions")
+	}
+	if !logsScoped {
+		t.Fatalf("logs permissions not scoped to log group")
+	}
+}
+
+func Test_Provider_Region_SetProperly(t *testing.T) {
+	tfPath := synthStack(t, "eu-west-1")
+	root := readTF(t, tfPath)
+	prov := asMap(root["provider"])
+	if prov == nil {
+		t.Fatalf("provider block missing")
+	}
+	// provider.aws can be a list or map depending on emitter; handle common list form
+	v := prov["aws"]
+	switch vv := v.(type) {
+	case []any:
+		if len(vv) == 0 || asMap(vv[0])["region"] != "eu-west-1" {
+			t.Fatalf("aws provider region not set to eu-west-1: %v", v)
+		}
+	case map[string]any:
+		if vv["region"] != "eu-west-1" {
+			t.Fatalf("aws provider region not set to eu-west-1: %v", v)
+		}
+	default:
+		t.Fatalf("unexpected provider.aws type: %T", v)
+	}
+}
+
+func Test_Names_With_Suffix(t *testing.T) {
+	old := os.Getenv("NAME_SUFFIX")
+	t.Cleanup(func() { _ = os.Setenv("NAME_SUFFIX", old) })
+	_ = os.Setenv("NAME_SUFFIX", "test")
+
+	tfPath := synthStack(t, "us-east-1")
+	root := readTF(t, tfPath)
+	resources := asMap(root["resource"])
+
+	fn := asMap(asMap(resources["aws_lambda_function"])["ImageThumbnailProcessor"])
+	if fn["function_name"] != "image-thumbnail-processor-test" {
+		t.Fatalf("function_name = %v, want image-thumbnail-processor-test", fn["function_name"])
+	}
+	role := asMap(asMap(resources["aws_iam_role"])["LambdaExecutionRole"])
+	if role["name"] != "image-thumbnail-processor-role-test" {
+		t.Fatalf("role name = %v, want image-thumbnail-processor-role-test", role["name"])
+	}
+	lg := asMap(asMap(resources["aws_cloudwatch_log_group"])["LambdaLogGroup"])
+	name, _ := lg["name"].(string)
+	if !strings.HasSuffix(name, "image-thumbnail-processor-test") {
+		t.Fatalf("log group name should include suffix, got %v", name)
+	}
+}
+
+func Test_Lambda_Settings_SourceCodeHash_Concurrency(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	root := readTF(t, tfPath)
+	resources := asMap(root["resource"])
+	fn := asMap(asMap(resources["aws_lambda_function"])["ImageThumbnailProcessor"])
+	if fn["source_code_hash"] == nil {
+		t.Fatalf("source_code_hash missing")
+	}
+	if fn["reserved_concurrent_executions"] != float64(10) {
+		t.Fatalf("reserved_concurrent_executions = %v, want 10", fn["reserved_concurrent_executions"])
+	}
+	if fn["memory_size"] != float64(256) {
+		t.Fatalf("memory_size = %v, want 256", fn["memory_size"])
+	}
+}
