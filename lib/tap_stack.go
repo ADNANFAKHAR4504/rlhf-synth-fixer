@@ -316,6 +316,48 @@ EOF
 		"restrict_public_buckets": true,
 	})
 
+	// Add CloudTrail bucket policy
+	stack.AddOverride(jsii.String("resource.aws_s3_bucket_policy.cloudtrail_bucket_policy"), map[string]interface{}{
+		"bucket": "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"policy": `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "AWSCloudTrailAclCheck",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": "s3:GetBucketAcl",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}",
+					"Condition": {
+						"StringEquals": {
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
+				},
+				{
+					"Sid": "AWSCloudTrailWrite",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": "s3:PutObject",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}/*",
+					"Condition": {
+						"StringEquals": {
+							"s3:x-amz-acl": "bucket-owner-full-control",
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
+				}
+			]
+		}`,
+	})
+
+	// Add current AWS account data source
+	stack.AddOverride(jsii.String("data.aws_caller_identity.current"), map[string]interface{}{})
+
 	// Add required provider for random
 	stack.AddOverride(jsii.String("terraform.required_providers.random"), map[string]interface{}{
 		"source":  "hashicorp/random",
