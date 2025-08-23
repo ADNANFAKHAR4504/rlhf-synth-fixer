@@ -409,7 +409,6 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles
 	// Create CloudWatch Log Groups
 	logGroup, err := cloudwatch.NewLogGroup(m.ctx, fmt.Sprintf("%s-app-logs-%s", m.config.Environment, region), &cloudwatch.LogGroupArgs{
 		RetentionInDays: pulumi.Int(30),
-		KmsKeyId:        regionalKmsKey.Arn,
 		Tags:            m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
