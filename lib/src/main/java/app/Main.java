@@ -989,15 +989,6 @@ public final class Main {
                 "Version": "2012-10-17",
                 "Statement": [
                     {
-                        "Sid": "Enable IAM User Permissions",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "AWS": "arn:aws:iam::*:root"
-                        },
-                        "Action": "kms:*",
-                        "Resource": "*"
-                    },
-                    {
                         "Sid": "Allow CloudTrail to encrypt logs",
                         "Effect": "Allow",
                         "Principal": {

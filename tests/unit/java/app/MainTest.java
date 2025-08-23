@@ -799,9 +799,9 @@ public class MainTest {
         assertTrue(policy.contains("2012-10-17"));
         assertTrue(policy.contains("Statement"));
         
-        // Verify it allows root account permissions
-        assertTrue(policy.contains("arn:aws:iam::*:root"));
-        assertTrue(policy.contains("kms:*"));
+        // Verify it contains CloudTrail and S3 service permissions
+        assertTrue(policy.contains("Allow CloudTrail to encrypt logs"));
+        assertTrue(policy.contains("Allow S3 service to use the key"));
         
         // Verify it allows CloudTrail permissions
         assertTrue(policy.contains("cloudtrail.amazonaws.com"));
@@ -820,7 +820,7 @@ public class MainTest {
         
         // Verify policy structure contains multiple statements
         int statementCount = policy.split("\"Sid\"").length - 1;
-        assertTrue(statementCount >= 3, "Policy should have at least 3 statements");
+        assertTrue(statementCount >= 2, "Policy should have at least 2 statements for CloudTrail and S3");
     }
     
     /**
@@ -1280,11 +1280,12 @@ public class MainTest {
         String kmsPolicy = Main.buildKmsKeyPolicy();
         assertNotNull(kmsPolicy);
         assertTrue(kmsPolicy.contains("2012-10-17"));
-        assertTrue(kmsPolicy.contains("Enable IAM User Permissions"));
         assertTrue(kmsPolicy.contains("Allow CloudTrail to encrypt logs"));
         assertTrue(kmsPolicy.contains("Allow S3 service to use the key"));
         assertTrue(kmsPolicy.contains("kms:GenerateDataKey"));
         assertTrue(kmsPolicy.contains("cloudtrail.amazonaws.com"));
         assertTrue(kmsPolicy.contains("s3.amazonaws.com"));
+        assertTrue(kmsPolicy.contains("kms:DescribeKey"));
+        assertTrue(kmsPolicy.contains("kms:Encrypt"));
     }
 }
