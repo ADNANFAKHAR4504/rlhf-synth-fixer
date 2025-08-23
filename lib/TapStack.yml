@@ -48,8 +48,8 @@ Parameters:
     Default: ''
 
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'Name of an existing EC2 KeyPair to enable SSH access to instances'
+    Type: String
+    Description: 'Name of an existing EC2 KeyPair to enable SSH access to instances. Leave empty if no SSH access is needed.'
     Default: ''
 
   DBMasterUsername:
@@ -110,6 +110,7 @@ Conditions:
       !Not [!Equals [!Ref LambdaCodeS3Bucket, '']],
       !Not [!Equals [!Ref LambdaCodeS3Key, '']],
     ]
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -960,7 +961,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref WebInstanceType
-        KeyName: !Ref KeyName
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         IamInstanceProfile:
@@ -1119,7 +1120,7 @@ Resources:
     Properties:
       InstanceType: t3.micro
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      KeyName: !Ref KeyName
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId: !Ref PublicSubnet1
