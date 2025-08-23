@@ -1,62 +1,60 @@
-We want a clean YAML template that won’t fight cfn‑lint or security reviews.
+## General
 
-Template name: `TapStack.yaml`
-Region: `us-east-1`
-Naming convention: `<resource_type>-<project_name>-<environment>`
-Parameters: `ProjectName`, `Environment` (use in names) + others noted below
+- **Template name**: `TapStack.yaml`
+- **Region**: `us-east-1`
+- **Naming**: `<resource_type>-<project_name>-<environment>`
+- **Parameters**: `ProjectName`, `Environment`, plus others below
 
-## What to build
+## What to Build
 
-- VPC with public/private subnets across two AZs
-- IGW + public route table; NAT Gateway (EIP) + private route table
-- S3 bucket for app data (SSE‑KMS, BPA on)
-- RDS MySQL Multi‑AZ, private only, in a DBSubnetGroup that spans private subnets
-- Lambda “hello world” (Python or Node.js) running in private subnets
-- CloudFront + WAFv2 WebACL using `AWSManagedRulesCommonRuleSet`
-- CloudTrail for management events -> encrypted S3, LFV enabled
-- AWS Config recorder + one managed rule (e.g., `s3-bucket-public-read-prohibited` or `rds-instance-public-access-check`)
-- IAM role for Lambda with only `logs:CreateLogStream` and `logs:PutLogEvents` to its Log Group
+- **VPC** with public + private subnets across 2 AZs
+- **Internet setup**: IGW + public route table; NAT Gateway (EIP) + private route table
+- **S3 bucket** for app data:
+  - SSE-KMS encryption
+  - Block Public Access on
+
+- **RDS MySQL**:
+  - Multi-AZ
+  - Private only
+  - DBSubnetGroup spanning private subnets
+
+- **Lambda**: Hello World (Python/Node.js) in private subnets
+- **CloudFront + WAFv2 WebACL** using `AWSManagedRulesCommonRuleSet`
+- **CloudTrail**: management events → encrypted S3, log file validation on
+- **AWS Config**: recorder + 1 managed rule (S3 or RDS check)
+- **IAM role for Lambda** → only `logs:CreateLogStream` + `logs:PutLogEvents`
 
 ## Parameters
 
-- Required: `ProjectName`, `Environment`
-- Network: `VpcCidr` (default allowed), `PublicSubnetCidrs`, `PrivateSubnetCidrs`
-- Compliance/alerts: `NotificationEmail`
-- DB: `DBEngineVersion` (MySQL — allowed list; default like `8.0.43`), `DbUsername` (non‑secret)
+- **Required**: `ProjectName`, `Environment`
+- **Network**: `VpcCidr`, `PublicSubnetCidrs`, `PrivateSubnetCidrs`
+- **Compliance/Alerts**: `NotificationEmail`
+- **Database**:
+  - `DBEngineVersion` (MySQL, allowed list, default `8.0.43`)
+  - `DbUsername` (non-secret)
 
-## Linter‑friendly guidance
+## Linter-Friendly Guidance
 
-1. Availability Zones
+1. **AZs** → use `GetAZs` + `Select`, don’t hardcode `us-east-1a/b`
+2. **Fn::Sub** → use only for substitution, otherwise plain strings
+3. **Secrets** → no `DBPassword` param, use Secrets Manager + dynamic refs
+4. **CloudTrail** → `IsMultiRegionTrail: true`, `IsLogging: true`, encrypted S3 delivery, CW Logs enabled
+5. **Tags**:
+   - Allowed → VPC, Subnet, SG, EC2, RDS, DBSubnetGroup, S3, CloudTrail, LogGroup, Alarm, KMS Key, IAM Role, Secret
+   - Not allowed → Logs MetricFilter, Lambda Permission, some EC2 associations, IAM InstanceProfile
 
-- Don’t hardcode `us-east-1a/b`. Use `GetAZs` + `Select`.
+## Guardrails
 
-2. `Fn::Sub`
+- **Region**: All resources in `us-east-1`
+- **Naming**: `<resource_type>-<project_name>-<environment>` always
+- **AMI**: Use SSM param `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2`
+- **IAM**: No named IAM, no wildcards in `Action`/`Resource`
+- **S3 policies**: Use full ARNs (`arn:aws:s3:::bucket/*`)
+- **CloudTrail**: `CloudWatchLogsLogGroupArn` must be actual ARN (not `:*`)
+- **AWS Config**: Valid resources only (`Recorder`, `DeliveryChannel`, `ConfigRule`)
 
-- Only when substituting. Otherwise plain strings.
+## Expected Output
 
-3. Secrets
-
-- No `DBPassword` parameter. Use Secrets Manager and dynamic refs in RDS.
-
-4. CloudTrail
-
-- `IsMultiRegionTrail: true`, `IsLogging: true`, log file validation on, S3 delivery encrypted, CW Logs wired up.
-
-5. Tags
-
-- Tag only where supported: VPC, Subnet, SG, EC2, RDS, DBSubnetGroup, S3, CloudTrail Trail, Logs LogGroup, CloudWatch Alarm, KMS Key, IAM Role, Secret.
-- Do not tag: Logs MetricFilter, Lambda Permission, some EC2 associations, IAM InstanceProfile.
-
-## Validation guardrails (bake these in)
-
-- Region consistency: everything targets `us-east-1`.
-- Naming: use `<resource_type>-<project_name>-<environment>` via `ProjectName` and `Environment`.
-- AMI resolution: use SSM `/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2` (type `AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>`).
-- IAM: no named IAM; no wildcards in `Action` or `Resource`.
-- S3 policy resources: use full ARNs for objects/prefixes (e.g., `arn:aws:s3:::bucket/*`).
-- CloudTrail: `CloudWatchLogsLogGroupArn` must be the log group ARN (no `:*`).
-- AWS Config: use valid resources only (Recorder, DeliveryChannel, ConfigRule).
-
-## Expected output
-
-- A single file `TapStack.yaml`, parameterized, deployable, cfn‑lint clean.
+- One file `TapStack.yaml`
+- Parameterized, clean, deployable
+- Must pass `cfn-lint` without issues
