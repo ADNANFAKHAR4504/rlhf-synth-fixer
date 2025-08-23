@@ -18,7 +18,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Initialize AWS clients for live resource testing."""
-        cls.region = os.environ.get('AWS_REGION', 'us-west-2')
+        cls.region = os.environ.get('AWS_REGION', 'us-east-1')
         cls.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
 
         # Initialize AWS clients

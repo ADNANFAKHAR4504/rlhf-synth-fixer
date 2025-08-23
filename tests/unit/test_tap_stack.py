@@ -296,7 +296,7 @@ class TestTapStack(unittest.TestCase):
         # Check RDS configuration
         rds_kwargs = rds_call_args[1]
         self.assertEqual(rds_kwargs['engine'], "postgres")
-        self.assertEqual(rds_kwargs['engine_version'], "15.4")
+        self.assertEqual(rds_kwargs['engine_version'], "15")
         self.assertEqual(rds_kwargs['instance_class'], "db.t3.micro")
         self.assertTrue(rds_kwargs['storage_encrypted'])
         self.assertTrue(rds_kwargs['multi_az'])
@@ -452,8 +452,8 @@ class TestTapStack(unittest.TestCase):
     
         # Verify S3 buckets were created
         mock_aws.s3.Bucket.assert_called()
-        # Should create 3 buckets (artifacts, static, cloudtrail)
-        self.assertEqual(mock_aws.s3.Bucket.call_count, 3)
+        # Should create 2 buckets (artifacts, static) - CloudTrail optional
+        self.assertEqual(mock_aws.s3.Bucket.call_count, 2)
     
         # Verify bucket public access block
         mock_aws.s3.BucketPublicAccessBlock.assert_called()
@@ -495,13 +495,20 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(mock_aws.cloudwatch.MetricAlarm.call_count, 2)
 
     def test_cloudtrail_creation(self):
-        """Test CloudTrail creation."""
-        stack = TapStack("test-stack", self.args)
+        """Test CloudTrail creation when enabled."""
+        # Enable CloudTrail in args
+        cloudtrail_args = TapStackArgs(
+            environment_suffix="test",
+            tags={"TestTag": "TestValue"},
+            enable_cloudtrail=True
+        )
+        
+        stack = TapStack("test-stack", cloudtrail_args)
     
-        # Verify CloudTrail bucket policy was created
+        # Verify CloudTrail bucket policy was created when enabled
         mock_aws.s3.BucketPolicy.assert_called()
     
-        # Verify CloudTrail was created
+        # Verify CloudTrail was created when enabled
         mock_aws.cloudtrail.Trail.assert_called()
         trail_call_args = mock_aws.cloudtrail.Trail.call_args
     
@@ -539,8 +546,12 @@ class TestTapStack(unittest.TestCase):
         # This is ensured by the depends_on parameter in the actual implementation
         mock_aws.ecs.Service.assert_called()
     
-        # Verify CloudTrail has dependency on bucket policy
-        mock_aws.cloudtrail.Trail.assert_called()
+        # Verify ALB has dependency on target group  
+        mock_aws.lb.LoadBalancer.assert_called()
+        mock_aws.lb.TargetGroup.assert_called()
+        
+        # CloudTrail should NOT be called by default (disabled)
+        mock_aws.cloudtrail.Trail.assert_not_called()
 
     def test_outputs_registration(self):
         """Test that stack outputs are properly registered."""
@@ -638,9 +649,9 @@ class TestTapStack(unittest.TestCase):
         """Test that S3 buckets use random suffix for unique naming."""
         stack = TapStack("test-stack", self.args)
         
-        # Verify S3 buckets were created (should be 3 buckets)
+        # Verify S3 buckets were created (should be 2 buckets when CloudTrail disabled)
         mock_aws.s3.Bucket.assert_called()
-        self.assertEqual(mock_aws.s3.Bucket.call_count, 3)
+        self.assertEqual(mock_aws.s3.Bucket.call_count, 2)
         
         # Check that buckets use the random suffix for naming
         # The random suffix should be applied via .apply() method
@@ -684,7 +695,7 @@ class TestTapStack(unittest.TestCase):
         """Test that resources are created in correct dependency order."""
         stack = TapStack("test-stack", self.args)
         
-        # Verify all major resource types were created
+        # Verify all major resource types were created (excluding optional CloudTrail)
         resource_creations = [
             mock_aws.ec2.Vpc,
             mock_aws.ec2.SecurityGroup,
@@ -695,12 +706,14 @@ class TestTapStack(unittest.TestCase):
             mock_aws.lb.LoadBalancer,
             mock_aws.s3.Bucket,
             mock_aws.cloudfront.Distribution,
-            mock_aws.cloudwatch.MetricAlarm,
-            mock_aws.cloudtrail.Trail
+            mock_aws.cloudwatch.MetricAlarm
         ]
         
         for resource_type in resource_creations:
             resource_type.assert_called()
+            
+        # CloudTrail should NOT be called by default (disabled)
+        mock_aws.cloudtrail.Trail.assert_not_called()
 
     def test_error_handling_graceful_degradation(self):
         """Test graceful handling of missing optional components."""
