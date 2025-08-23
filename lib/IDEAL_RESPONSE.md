@@ -319,76 +319,8 @@ public final class Main {
 }
 ```
 
-## Security Features Implemented
-
-### 1. KMS Key for Data Encryption
-- **Purpose**: Encrypts sensitive data at rest across all services
-- **Features**: 
-  - Automatic key rotation enabled
-  - 7-day deletion window for safe key management
-  - Symmetric encryption for optimal performance
-  - Consistent tagging for resource management
-
-### 2. S3 Bucket with Security Configuration
-- **Purpose**: Secure data storage with encryption requirements
-- **Features**:
-  - Force destroy disabled to prevent accidental data loss
-  - Consistent tagging for compliance and cost tracking
-  - Ready for encryption configuration (limited by SDK version)
-
-### 3. IAM Roles with Least Privilege
-- **Security Role**: 
-  - Assumes Lambda service principal
-  - Minimal permissions for CloudWatch Logs, SNS publishing, and metrics
-  - Attached custom policy with specific resource access
-- **Cross-Account Role**:
-  - Allows cross-account access with external ID requirement
-  - Restricted to root accounts only
-  - Additional security through conditional access
-
-### 4. SNS Topic for Security Alerts
-- **Purpose**: Centralized notification system for security events
-- **Features**:
-  - Display name for easy identification
-  - Consistent tagging for resource management
-  - Ready for subscription configuration
-
-## Security Best Practices Implemented
-
-### 1. Principle of Least Privilege
-- IAM policies grant only necessary permissions
-- Role-based access control with specific service principals
-- Resource-level permissions where applicable
-
-### 2. Data Encryption
-- KMS key for encrypting sensitive data
-- Automatic key rotation for enhanced security
-- Secure key management practices
-
-### 3. Consistent Tagging
-- All resources tagged with Environment, Project, and Purpose
-- Enables cost tracking, compliance, and resource management
-- Supports automated governance and policy enforcement
-
-### 4. Cross-Account Security
-- External ID requirement for cross-account access
-- Conditional access policies
-- Restricted to trusted root accounts
-
-### 5. Infrastructure as Code
-- Version-controlled infrastructure
-- Reproducible deployments
-- Automated security configuration
-
-## Deployment Instructions
-
-### Prerequisites
-1. Java 17 or higher
-2. Pulumi CLI installed
-3. AWS credentials configured
-4. Gradle build system
-
 ### Build and Deploy
+
 ```bash
 # Build the project
 ./gradlew build
@@ -401,6 +333,7 @@ pulumi up
 ```
 
 ### Testing
+
 ```bash
 # Run unit tests
 ./gradlew test
@@ -411,45 +344,3 @@ pulumi up
 # Check code coverage
 ./gradlew jacocoTestReport
 ```
-
-## Compliance and Governance
-
-### Security Standards
-- Follows AWS Well-Architected Framework security pillar
-- Implements NIST cybersecurity framework principles
-- Compliant with SOC 2 Type II requirements
-
-### Monitoring and Alerting
-- SNS topic ready for security alert subscriptions
-- CloudWatch integration for metrics and logging
-- Centralized notification system
-
-### Resource Management
-- Consistent tagging for cost allocation
-- Automated resource lifecycle management
-- Compliance reporting capabilities
-
-## Next Steps for Production
-
-### Enhanced Security Features
-1. **CloudTrail Integration**: Enable comprehensive audit logging
-2. **CloudWatch Alarms**: Set up automated alerting for security events
-3. **Lambda Functions**: Implement automated security responses
-4. **Step Functions**: Create security incident response workflows
-
-### Advanced Monitoring
-1. **GuardDuty**: Enable threat detection
-2. **Config**: Continuous compliance monitoring
-3. **Security Hub**: Centralized security findings
-
-### Compliance Enhancements
-1. **Encryption Policies**: Enforce encryption for all data
-2. **Access Reviews**: Regular permission audits
-3. **Backup Strategies**: Automated data protection
-
-### Multi-Account Management
-1. **Organizations**: Centralized account management
-2. **Control Tower**: Automated governance
-3. **Service Control Policies**: Account-level restrictions
-
-This implementation provides a solid foundation for secure AWS infrastructure with room for enhancement based on specific organizational requirements and compliance needs.
