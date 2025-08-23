@@ -66,6 +66,7 @@ jobs:
           download-artifacts: 'false'
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Build
         run: ./scripts/build.sh
@@ -93,6 +94,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -129,6 +131,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -194,6 +197,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       # Python setup is handled by the setup-environment action
 
@@ -217,10 +221,50 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
         run: ./scripts/unit-tests.sh
 
+      - name: Prepare coverage reports for Java projects
+        if: ${{ needs.detect-metadata.outputs.language == 'java' }}
+        run: |
+          echo "Preparing Java coverage reports for upload..."
+          echo "Debug: Checking current directory structure:"
+          ls -la
+          
+          echo "Debug: Checking build directory:"
+          if [ -d "build" ]; then
+            ls -la build/
+            if [ -d "build/reports" ]; then
+              echo "Reports directory contents:"
+              ls -la build/reports/
+              if [ -d "build/reports/jacoco" ]; then
+                echo "JaCoCo directory contents:"
+                find build/reports/jacoco -type f | head -10
+              fi
+            fi
+          else
+            echo "No build directory found"
+          fi
+          
+          mkdir -p coverage
+          
+          # Try different possible locations for JaCoCo reports
+          if [ -d "build/reports/jacoco/test/" ]; then
+            cp -r build/reports/jacoco/test/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/test/ to coverage/ directory"
+          elif [ -d "build/reports/jacoco/" ]; then
+            cp -r build/reports/jacoco/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/ to coverage/ directory"
+          else
+            echo "⚠️ JaCoCo reports not found in expected locations"
+            # Create a placeholder to avoid upload failure
+            echo "No coverage reports generated" > coverage/no-reports.txt
+          fi
+          
+          echo "Final coverage directory contents:"
+          ls -la coverage/
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -397,6 +441,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws

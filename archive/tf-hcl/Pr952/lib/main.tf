@@ -231,7 +231,7 @@ resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public_subnets[0].id
-  key_name                   = aws_key_pair.bastion_key_pair.key_name
+  key_name                    = aws_key_pair.bastion_key_pair.key_name
   vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
   associate_public_ip_address = true
 
@@ -241,12 +241,12 @@ resource "aws_instance" "bastion" {
 }
 
 resource "aws_instance" "private_instances" {
-  count                      = length(aws_subnet.private_subnets)
-  ami                        = data.aws_ami.amazon_linux.id
-  instance_type              = var.instance_type
-  subnet_id                  = aws_subnet.private_subnets[count.index].id
-  key_name                   = aws_key_pair.bastion_key_pair.key_name
-  vpc_security_group_ids     = [aws_security_group.private_sg.id]
+  count                       = length(aws_subnet.private_subnets)
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.private_subnets[count.index].id
+  key_name                    = aws_key_pair.bastion_key_pair.key_name
+  vpc_security_group_ids      = [aws_security_group.private_sg.id]
   associate_public_ip_address = false
 
   tags = {

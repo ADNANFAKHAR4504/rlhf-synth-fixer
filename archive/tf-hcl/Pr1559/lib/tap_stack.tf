@@ -22,9 +22,9 @@ variable "aws_region" {
 resource "aws_s3_bucket" "main" {
   bucket = "${var.projectname}-s3-${random_id.suffix.hex}"
   tags = {
-    Name        = "${var.projectname}-s3"
-    Project     = var.projectname
-    ManagedBy   = "terraform"
+    Name      = "${var.projectname}-s3"
+    Project   = var.projectname
+    ManagedBy = "terraform"
   }
 }
 
@@ -55,9 +55,9 @@ resource "aws_dynamodb_table" "main" {
     type = "S"
   }
   tags = {
-    Name        = "${var.projectname}-dynamodb"
-    Project     = var.projectname
-    ManagedBy   = "terraform"
+    Name      = "${var.projectname}-dynamodb"
+    Project   = var.projectname
+    ManagedBy = "terraform"
   }
 }
 
