@@ -333,7 +333,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       PubliclyAccessible: false
       MultiAZ: false
-      StorageEncrypted: true
+      # StorageEncrypted: true   # <-- Removed KMS encryption requirement
       Tags:
         - Key: Name
           Value: !Sub 'db-${TimestampSuffix}'
