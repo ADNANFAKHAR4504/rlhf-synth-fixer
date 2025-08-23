@@ -113,7 +113,7 @@ describe('TapStack', () => {
     test('creates VPC with public and private subnets', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
+        CidrBlock: '10.1.0.0/16',
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
       });
@@ -265,7 +265,7 @@ describe('TapStack', () => {
     test('creates VPC in secondary region', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
+        CidrBlock: '10.1.0.0/16',
       });
     });
 
