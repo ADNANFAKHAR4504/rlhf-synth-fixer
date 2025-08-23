@@ -653,7 +653,7 @@ resource "aws_secretsmanager_secret_version" "app_secrets_eu_central_1" {
 
 resource "aws_iam_role" "app_role_us_east_1" {
   provider    = aws.us_east_1
-  name_prefix = "${local.name_prefix}-app-role-us-east-1-${random_id.suffix.hex}"
+  name_prefix = "${var.environment}-app-${random_id.suffix.hex}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -723,7 +723,7 @@ resource "aws_iam_instance_profile" "app_profile_us_east_1" {
 
 resource "aws_iam_role" "app_role_eu_central_1" {
   provider    = aws.eu_central_1
-  name_prefix = "${local.name_prefix}-app-role-eu-central-1-"
+  name_prefix = "${var.environment}-app-${random_id.suffix.hex}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
