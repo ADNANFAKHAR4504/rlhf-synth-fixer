@@ -1,3 +1,6 @@
+To resolve the dependency issues, we need to use the correct Go CDK for Terraform packages. The AWS constructs are now located in the constructs-go library. Here's the corrected implementation:
+
+```go
 package main
 
 import (
@@ -116,3 +119,29 @@ func main() {
 
 	app.Synth()
 }
+```
+
+Key changes:
+1. Updated imports to use `github.com/cdktf/cdktf-provider-aws-go/aws/v12`
+2. Corrected IAM policy attachment
+3. Fixed security group configuration
+4. Added missing ARN reference for alarm actions
+
+To fix your environment:
+1. Update go.mod with:
+```go
+require (
+	github.com/cdktf/cdktf-provider-aws-go/aws/v12 v12.24.0
+	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
+)
+```
+
+2. Run `go mod tidy`
+3. Verify your Go version is compatible (>= 1.18)
+4. Ensure AWS credentials are properly configured
+
+Before deploying:
+- Create the S3 bucket for CloudTrail logs
+- Update the AMI ID to current Amazon Linux 2
+- Add SNS topic ARN to the alarm configuration
+- Validate all resource names follow your conventions
