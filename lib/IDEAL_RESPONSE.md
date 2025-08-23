@@ -670,7 +670,7 @@ encrypt        = true
 
 ### One-time State Backend Bootstrap
 ```bash
-# Create S3 bucket and DynamoDB table for state management
+# Create S3 bucket and DynamoDB tables for state management
 terraform init
 terraform apply -var-file="terraform.tfvars"
 ```
