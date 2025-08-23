@@ -4,13 +4,41 @@ import yaml from 'js-yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Custom YAML schema that handles CloudFormation intrinsic functions
+const CF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
+  new yaml.Type('!Ref', {
+    kind: 'scalar',
+    construct: (data: string) => ({ Ref: data }),
+  }),
+  new yaml.Type('!Sub', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::Sub': data }),
+  }),
+  new yaml.Type('!GetAtt', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::GetAtt': data.split('.') }),
+  }),
+  new yaml.Type('!Join', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Join': data }),
+  }),
+  new yaml.Type('!Select', {
+    kind: 'sequence',
+    construct: (data: any[]) => ({ 'Fn::Select': data }),
+  }),
+  new yaml.Type('!GetAZs', {
+    kind: 'scalar',
+    construct: (data: string) => ({ 'Fn::GetAZs': data || '' }),
+  }),
+]);
+
 describe('TapStack CloudFormation Template - Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+    template = yaml.load(templateContent, { schema: CF_SCHEMA });
   });
 
   describe('Template Structure', () => {
@@ -99,7 +127,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(cloudTrail.EventSelectors[0].DataResources).toBeDefined();
       
       const dataResource = cloudTrail.EventSelectors[0].DataResources[0];
-      expect(dataResource.Values[0]).toMatch(/^!Sub 'arn:aws:s3:::\${.*}\*'$/);
+      // Check that it's a proper CloudFormation Sub function with S3 ARN format
+      expect(dataResource.Values[0]).toEqual({"Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"});
     });
 
     test('should have CloudTrail bucket policy', () => {
@@ -195,8 +224,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         const bucket = template.Resources[bucketName];
         const bucketNameValue = bucket.Properties.BucketName;
         
-        expect(bucketNameValue).toMatch(/\${EnvironmentSuffix}/);
-        expect(bucketNameValue).toMatch(/\${AWS::AccountId}/);
+        // Check that it's a CloudFormation Sub function with EnvironmentSuffix and AccountId
+        expect(bucketNameValue).toEqual(expect.objectContaining({"Fn::Sub": expect.stringContaining("${EnvironmentSuffix}")}));
+        expect(bucketNameValue).toEqual(expect.objectContaining({"Fn::Sub": expect.stringContaining("${AWS::AccountId}")}));
       });
     });
   });
