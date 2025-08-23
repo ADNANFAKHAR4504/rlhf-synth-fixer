@@ -199,12 +199,18 @@ public final class Main {
                             {
                                 "Effect": "Allow",
                                 "Principal": {
-                                    "AWS": "arn:aws:iam::*:root"
+                                    "AWS": [
+                                        "arn:aws:iam::123456789012:root",
+                                        "arn:aws:iam::987654321098:root"
+                                    ]
                                 },
                                 "Action": "sts:AssumeRole",
                                 "Condition": {
                                     "StringEquals": {
                                         "sts:ExternalId": "security-framework"
+                                    },
+                                    "StringLike": {
+                                        "aws:userid": "*:security-framework-*"
                                     }
                                 }
                             }
@@ -229,6 +235,97 @@ public final class Main {
                         "Project", PROJECT,
                         "Purpose", "security-notifications"))
                 .build());
+    }
+    
+    /**
+     * Gets the region configuration.
+     * 
+     * @return The configured region
+     */
+    public static String getRegion() {
+        return REGION;
+    }
+    
+    /**
+     * Gets the environment configuration.
+     * 
+     * @return The configured environment
+     */
+    public static String getEnvironment() {
+        return ENVIRONMENT;
+    }
+    
+    /**
+     * Gets the project configuration.
+     * 
+     * @return The configured project name
+     */
+    public static String getProject() {
+        return PROJECT;
+    }
+    
+    /**
+     * Validates if a given string is a valid AWS region format.
+     * 
+     * @param region The region string to validate
+     * @return true if valid, false otherwise
+     */
+    public static boolean isValidRegion(final String region) {
+        if (region == null || region.trim().isEmpty()) {
+            return false;
+        }
+        // Basic validation for AWS region format (e.g., us-east-1, eu-west-1)
+        return region.matches("^[a-z]{2}-[a-z]+-[0-9]+$");
+    }
+    
+    /**
+     * Validates if a given string is a valid environment name.
+     * 
+     * @param environment The environment string to validate
+     * @return true if valid, false otherwise
+     */
+    public static boolean isValidEnvironment(final String environment) {
+        if (environment == null || environment.trim().isEmpty()) {
+            return false;
+        }
+        // Valid environments: production, staging, development, test
+        return environment.matches("^(production|staging|development|test)$");
+    }
+    
+    /**
+     * Validates if a given string is a valid project name.
+     * 
+     * @param project The project string to validate
+     * @return true if valid, false otherwise
+     */
+    public static boolean isValidProject(final String project) {
+        if (project == null || project.trim().isEmpty()) {
+            return false;
+        }
+        // Project name should be alphanumeric with hyphens, 3-50 characters
+        return project.matches("^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$");
+    }
+    
+    /**
+     * Generates a resource name with standard naming convention.
+     * 
+     * @param resourceType The type of resource
+     * @param suffix Additional suffix for the name
+     * @return The generated resource name
+     */
+    public static String generateResourceName(final String resourceType, final String suffix) {
+        if (resourceType == null || resourceType.trim().isEmpty()) {
+            throw new IllegalArgumentException("Resource type cannot be null or empty");
+        }
+        
+        final StringBuilder name = new StringBuilder();
+        name.append(PROJECT).append("-").append(resourceType);
+        
+        if (suffix != null && !suffix.trim().isEmpty()) {
+            name.append("-").append(suffix);
+        }
+        
+        return name.toString();
     }
 }
 ```
