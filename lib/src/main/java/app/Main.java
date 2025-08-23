@@ -190,20 +190,9 @@ public final class Main {
                             {
                                 "Effect": "Allow",
                                 "Principal": {
-                                    "AWS": [
-                                        "arn:aws:iam::123456789012:root",
-                                        "arn:aws:iam::987654321098:root"
-                                    ]
+                                    "Service": "lambda.amazonaws.com"
                                 },
-                                "Action": "sts:AssumeRole",
-                                "Condition": {
-                                    "StringEquals": {
-                                        "sts:ExternalId": "security-framework"
-                                    },
-                                    "StringLike": {
-                                        "aws:userid": "*:security-framework-*"
-                                    }
-                                }
+                                "Action": "sts:AssumeRole"
                             }
                         ]
                     }
