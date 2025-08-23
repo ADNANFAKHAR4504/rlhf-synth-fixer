@@ -1,9 +1,9 @@
 {
-  "platform": "cdk",
-  "language": "py",
+  "platform": "pulumi",
+  "language": "java",
   "complexity": "hard",
   "turn_type": "multi",
   "po_id": "291611",
   "team": "6",
-  "startedAt": "2025-08-22T10:24:27.573Z"
+  "startedAt": "2025-08-23T06:58:42.432Z"
 }

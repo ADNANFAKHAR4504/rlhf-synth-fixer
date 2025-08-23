@@ -1,76 +1,31 @@
-I'll help you create a scalable web application infrastructure using Pulumi in Java. Here's a complete implementation that meets all your requirements:
+package app;
 
-## Project Structure
 
-First, let's set up the Maven dependencies in `pom.xml`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    
-    <groupId>com.example</groupId>
-    <artifactId>scalable-web-app</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    
-    <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
-        <pulumi.version>0.9.9</pulumi.version>
-    </properties>
-    
-    <dependencies>
-        <dependency>
-            <groupId>com.pulumi</groupId>
-            <artifactId>pulumi</artifactId>
-            <version>${pulumi.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.pulumi</groupId>
-            <artifactId>aws</artifactId>
-            <version>6.15.0</version>
-        </dependency>
-    </dependencies>
-    
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
-                <configuration>
-                    <source>11</source>
-                    <target>11</target>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-```
-
-## Main Application Code
-
-```java
-package com.example;
-
+import com.pulumi.Context;
 import com.pulumi.Pulumi;
+
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.ProviderArgs;
+
 import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.inputs.GetAmiFilterArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
-import com.pulumi.core.Output;
+import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
+
 import com.pulumi.resources.ComponentResourceOptions;
 
 import java.util.List;
 import java.util.Map;
 
-public class ScalableWebApp {
-    
+public class Main {
+
     public static void main(String[] args) {
-        Pulumi.run(ctx -> {
-            // Get configuration values
+        Pulumi.run(ctx -> defineInfrastructure(ctx));
+    }
+
+
+    static void defineInfrastructure(Context ctx) {
+// Get configuration values
             var config = ctx.config();
             var authorizedSshIp = config.require("authorizedSshIp");
             
@@ -321,10 +276,9 @@ public class ScalableWebApp {
             ctx.export("webServer1PrivateIp", webServer1.privateIp());
             ctx.export("webServer2PrivateIp", webServer2.privateIp());
             ctx.export("securityGroupId", webSecurityGroup.id());
-        });
     }
-    
-    private static String getUserData() {
+
+private static String getUserData() {
         return """
             #!/bin/bash
             yum update -y
@@ -356,72 +310,4 @@ public class ScalableWebApp {
             """;
     }
 }
-```
-
-## Configuration File
-
-Create a `Pulumi.yaml` file:
-
-```yaml
-name: scalable-web-app
-runtime: java
-description: A scalable web application infrastructure on AWS
-```
-
-Create a `Pulumi.dev.yaml` file for configuration:
-
-```yaml
-config:
-  scalable-web-app:authorizedSshIp: "YOUR_IP_ADDRESS_HERE"
-```
-
-## Key Features and Best Practices
-
-### 1. **Security**
-- Security group restricts SSH access to only the authorized IP address
-- Private subnets are completely isolated from the internet
-- VPC communication is allowed internally for service-to-service communication
-- Proper egress rules for outbound traffic
-
-### 2. **High Availability**
-- Resources are distributed across multiple Availability Zones (us-west-2a and us-west-2b)
-- Each AZ has both public and private subnets for flexibility
-- Load balancing can be easily added later
-
-### 3. **Network Architecture**
-- VPC with proper CIDR segmentation (10.0.0.0/16)
-- Public subnets (10.0.1.0/24, 10.0.2.0/24) for internet-facing resources
-- Private subnets (10.0.3.0/24, 10.0.4.0/24) for backend services
-- Internet Gateway with proper routing for public subnet internet access
-
-### 4. **Resource Management**
-- Consistent naming conventions
-- Comprehensive tagging strategy
-- Proper resource dependencies and ordering
-
-## Deployment Instructions
-
-1. **Install Pulumi CLI** and configure AWS credentials
-2. **Set the authorized SSH IP**:
-   ```bash
-   pulumi config set authorizedSshIp "YOUR_PUBLIC_IP"
-   ```
-3. **Deploy the stack**:
-   ```bash
-   pulumi up
-   ```
-
-## Testing Connectivity
-
-After deployment, you can test:
-
-1. **SSH to instances** (from authorized IP only):
-   ```bash
-   ssh -i your-key.pem ec2-user@<ELASTIC_IP>
-   ```
-
-2. **Test internal communication** between instances using their private IPs
-
-3. **Access web application** via the Elastic IP addresses on port 80
-
-This implementation provides a solid foundation for a scalable web application with proper security, high availability, and network isolation following AWS best practices.
+}

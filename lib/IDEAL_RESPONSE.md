@@ -1,1 +1,1 @@
-Insert here the ideal response
+Provide your ideal response here
