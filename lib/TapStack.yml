@@ -70,7 +70,7 @@ Resources:
         - Key: Team
           Value: !Ref TeamName
 
-  # KMS Key for encryption
+  # KMS Key for encryptions
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
