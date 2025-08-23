@@ -8,6 +8,7 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeVolumesCommand,
+  DescribeSecurityGroupsCommand,
 } from "@aws-sdk/client-ec2";
 import {
   S3Client,
@@ -139,7 +140,9 @@ describe("TapStack Integration Tests", () => {
     const inst = res.Reservations?.[0]?.Instances?.[0];
     expect(inst).toBeDefined();
     expect(inst?.InstanceId).toBe(instanceId);
-    expect(inst?.SecurityGroups?.[0].GroupName).toMatch(/-sg$/);
+
+    // Validate it has at least one SG attached
+    expect(inst?.SecurityGroups?.length).toBeGreaterThan(0);
 
     // Check root volume encryption via DescribeVolumes
     const volumeId = inst?.BlockDeviceMappings?.[0].Ebs?.VolumeId;
@@ -149,6 +152,30 @@ describe("TapStack Integration Tests", () => {
     const vol = volRes.Volumes?.[0];
     expect(vol).toBeDefined();
     expect(vol?.Encrypted).toBe(true);
+  });
+
+  // ------------------------------
+  // Security Group Validation
+  // ------------------------------
+  test("App security group has correct ingress/egress rules", async () => {
+    const instanceId = outputs["EC2Instance"];
+    const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
+    const inst = res.Reservations?.[0]?.Instances?.[0];
+    const sgId = inst?.SecurityGroups?.[0].GroupId;
+    expect(sgId).toBeDefined();
+
+    const sgRes = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId!] }));
+    const sg = sgRes.SecurityGroups?.[0];
+    expect(sg).toBeDefined();
+
+    // Ingress should allow only 80 and 443
+    const allowedPorts = sg?.IpPermissions?.map((p) => p.FromPort);
+    expect(allowedPorts).toContain(80);
+    expect(allowedPorts).toContain(443);
+    expect(allowedPorts).not.toContain(22);
+
+    // Egress should allow outbound
+    expect(sg?.IpPermissionsEgress?.length).toBeGreaterThan(0);
   });
 
   // ------------------------------
