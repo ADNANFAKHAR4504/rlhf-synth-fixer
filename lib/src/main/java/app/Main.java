@@ -109,7 +109,8 @@ public final class Main {
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
-            .policy(buildKmsKeyPolicy())
+            // Removed custom policy to use AWS default policy which allows root access
+            // and proper CloudTrail service permissions
             .tags(Map.of(
                 "Environment", "production",
                 "Application", "financial-services",
@@ -988,6 +989,15 @@ public final class Main {
             {
                 "Version": "2012-10-17",
                 "Statement": [
+                    {
+                        "Sid": "Enable IAM User Permissions",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "arn:aws:iam::*:root"
+                        },
+                        "Action": "kms:*",
+                        "Resource": "*"
+                    },
                     {
                         "Sid": "Allow CloudTrail to encrypt logs",
                         "Effect": "Allow",
