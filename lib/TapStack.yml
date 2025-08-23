@@ -39,6 +39,7 @@ Metadata:
           - LambdaCodeS3Key
           - UseExistingS3Bucket
           - UseExistingKMSKey
+          - UseExistingGlobalCluster
 
 Parameters:
   Environment:
@@ -134,6 +135,11 @@ Parameters:
     Default: ''
     Description: 'Existing KMS key ARN to use. Leave empty to create new key.'
 
+  UseExistingGlobalCluster:
+    Type: String
+    Default: ''
+    Description: 'Existing global cluster identifier to use. Leave empty to create new cluster.'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -178,6 +184,9 @@ Conditions:
   CreateKMSKey: !Equals [!Ref UseExistingKMSKey, '']
   CreateS3BucketAndPrimary:
     !And [!Condition IsPrimaryRegion, !Condition CreateS3Bucket]
+  CreateGlobalCluster: !Equals [!Ref UseExistingGlobalCluster, '']
+  CreateGlobalClusterAndHasGlobal:
+    !And [!Condition HasGlobalCluster, !Condition CreateGlobalCluster]
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -735,7 +744,7 @@ Resources:
   # Aurora Global Cluster (only in primary region)
   GlobalCluster:
     Type: AWS::RDS::GlobalCluster
-    Condition: HasGlobalCluster
+    Condition: CreateGlobalClusterAndHasGlobal
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -761,7 +770,11 @@ Resources:
       GlobalClusterIdentifier:
         !If [
           HasGlobalCluster,
-          !Ref GlobalClusterIdentifier,
+          !If [
+            CreateGlobalCluster,
+            !Ref GlobalClusterIdentifier,
+            !Ref UseExistingGlobalCluster,
+          ],
           !Ref 'AWS::NoValue',
         ]
       VpcSecurityGroupIds:
