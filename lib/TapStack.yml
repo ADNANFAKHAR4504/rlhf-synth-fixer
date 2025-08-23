@@ -37,7 +37,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.0.0/24
-      AvailabilityZone: !Select [0, !GetAZs, !Ref AWSRegion]
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -50,7 +50,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [1, !GetAZs, !Ref AWSRegion]
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -63,7 +63,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.10.0/24
-      AvailabilityZone: !Select [0, !GetAZs, !Ref AWSRegion]
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -76,7 +76,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: !Select [1, !GetAZs, !Ref AWSRegion]
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
