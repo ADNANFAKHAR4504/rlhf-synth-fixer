@@ -24,4 +24,4 @@ E3680 expected minimum item count: 2, found: 1 lib\TapStack.yml:600:7
 
 E3006 Resource type 'AWS::EC2::EBSEncryptionByDefault' does not exist in 'us-east-1' lib\TapStack.yml:670:5
 
-E3006 Resource type 'AWS::EC2::EBSDefaultKmsKey' does not exist in 'us-east-1' lib\TapStack.yml:675:5
+

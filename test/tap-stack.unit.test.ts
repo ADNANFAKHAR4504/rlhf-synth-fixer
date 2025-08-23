@@ -367,4 +367,236 @@ describe('TapStack CloudFormation Template', () => {
       expect(def.Export.Name).toBeDefined();
     });
   });
+
+  it('should validate parameter constraints for Environment and CreateSecurityHub', () => {
+    const env = (template.Parameters as any).Environment;
+    expect(env).toBeDefined();
+    expect(Array.isArray(env.AllowedValues)).toBe(true);
+    expect(env.AllowedValues).toEqual(
+      expect.arrayContaining(['development', 'staging', 'production'])
+    );
+    const csh = (template.Parameters as any).CreateSecurityHub;
+    expect(csh).toBeDefined();
+    expect(Array.isArray(csh.AllowedValues)).toBe(true);
+    expect(csh.AllowedValues).toEqual(
+      expect.arrayContaining(['true', 'false'])
+    );
+    const backup = (template.Parameters as any).DBBackupRetentionPeriod;
+    expect(backup.MinValue).toBe(7);
+    expect(backup.MaxValue).toBe(35);
+  });
+
+  it('should validate complex condition structures', () => {
+    const conds = template.Conditions as any;
+    expect(
+      conds.CreateConfigDeliveryChannelAndRecorder['Fn::And']
+    ).toBeDefined();
+    const andParts = conds.CreateConfigDeliveryChannelAndRecorder['Fn::And'];
+    expect(Array.isArray(andParts)).toBe(true);
+    expect(andParts.map((p: any) => Object.values(p)[0])).toEqual(
+      expect.arrayContaining([
+        'CreateConfigDeliveryChannel',
+        'CreateConfigRecorder',
+      ])
+    );
+    const hvca = conds.HasValidCertificateArn['Fn::And'];
+    expect(Array.isArray(hvca)).toBe(true);
+    expect(hvca.length).toBe(2);
+  });
+
+  it('should validate KMS Key policy statements include CloudTrail and Config principals', () => {
+    const key = (template.Resources as any).SecurityKmsKey;
+    if (key) {
+      const statements = key.Properties.KeyPolicy.Statement;
+      expect(Array.isArray(statements)).toBe(true);
+      const hasCt = statements.some(
+        (s: any) =>
+          s.Principal && s.Principal.Service === 'cloudtrail.amazonaws.com'
+      );
+      const hasCfg = statements.some(
+        (s: any) =>
+          s.Principal && s.Principal.Service === 'config.amazonaws.com'
+      );
+      expect(hasCt).toBe(true);
+      expect(hasCfg).toBe(true);
+    }
+  });
+
+  it('should validate CloudTrail bucket encryption and KMS usage', () => {
+    const b = (template.Resources as any).CloudTrailLogsBucket;
+    if (b) {
+      const enc =
+        b.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault;
+      expect(enc.SSEAlgorithm).toBe('aws:kms');
+      expect(enc.KMSMasterKeyID['Fn::If']).toBeDefined();
+    }
+  });
+
+  it('should validate CloudTrail trail core properties', () => {
+    const t = (template.Resources as any).SecurityCloudTrail;
+    expect(t.Properties.IsMultiRegionTrail).toBe(true);
+    expect(t.Properties.EnableLogFileValidation).toBe(true);
+    expect(t.Properties.IncludeGlobalServiceEvents).toBe(true);
+  });
+
+  it('should validate ConfigBucketPolicy includes required statements', () => {
+    const p = (template.Resources as any).ConfigBucketPolicy;
+    const stmts = p.Properties.PolicyDocument.Statement;
+    const actions = stmts.flatMap((s: any) =>
+      Array.isArray(s.Action) ? s.Action : [s.Action]
+    );
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        's3:GetBucketAcl',
+        's3:ListBucket',
+        's3:PutObject',
+      ])
+    );
+    const hasAclCondition = stmts.some(
+      (s: any) =>
+        s.Condition &&
+        s.Condition.StringEquals &&
+        s.Condition.StringEquals['s3:x-amz-acl'] === 'bucket-owner-full-control'
+    );
+    expect(hasAclCondition).toBe(true);
+  });
+
+  it('should validate EC2SecurityGroup allows ports 80 and 443 to 0.0.0.0/0', () => {
+    const sg = (template.Resources as any).EC2SecurityGroup;
+    const ingress = sg.Properties.SecurityGroupIngress;
+    const has80 = ingress.some(
+      (r: any) =>
+        r.FromPort === 80 && r.ToPort === 80 && r.CidrIp === '0.0.0.0/0'
+    );
+    const has443 = ingress.some(
+      (r: any) =>
+        r.FromPort === 443 && r.ToPort === 443 && r.CidrIp === '0.0.0.0/0'
+    );
+    expect(has80).toBe(true);
+    expect(has443).toBe(true);
+  });
+
+  it('should validate ALBSecurityGroup allows ports 80 and 443 to 0.0.0.0/0', () => {
+    const sg = (template.Resources as any).ALBSecurityGroup;
+    const ingress = sg.Properties.SecurityGroupIngress;
+    const has80 = ingress.some(
+      (r: any) =>
+        r.FromPort === 80 && r.ToPort === 80 && r.CidrIp === '0.0.0.0/0'
+    );
+    const has443 = ingress.some(
+      (r: any) =>
+        r.FromPort === 443 && r.ToPort === 443 && r.CidrIp === '0.0.0.0/0'
+    );
+    expect(has80).toBe(true);
+    expect(has443).toBe(true);
+  });
+
+  it('should validate listeners configuration for HTTP and HTTPS', () => {
+    const http = (template.Resources as any).HTTPListener;
+    const https = (template.Resources as any).HTTPSListener;
+    expect(http.Properties.DefaultActions[0].Type).toBe('redirect');
+    expect(http.Properties.DefaultActions[0].RedirectConfig.Protocol).toBe(
+      'HTTPS'
+    );
+    expect(http.Properties.DefaultActions[0].RedirectConfig.Port).toBe(443);
+    if (https) {
+      expect(https.Condition).toBe('HasValidCertificateArn');
+      expect(https.Properties.Port).toBe(443);
+      expect(https.Properties.Certificates[0].CertificateArn.Ref).toBe(
+        'CertificateArn'
+      );
+    }
+  });
+
+  it('should validate AccessKeyRotationFunction environment and runtime', () => {
+    const fn = (template.Resources as any).AccessKeyRotationFunction;
+    expect(fn.Properties.Runtime).toBe('python3.9');
+    expect(fn.Properties.Handler).toBe('index.lambda_handler');
+    expect(fn.Properties.Code.ZipFile.length).toBeGreaterThan(100);
+    expect(fn.Properties.Environment.Variables.SNS_TOPIC_ARN.Ref).toBe(
+      'SecurityNotificationTopic'
+    );
+    expect(fn.Properties.Role['Fn::If']).toBeDefined();
+  });
+
+  it('should validate Outputs include expected keys', () => {
+    const expected = [
+      'VpcId',
+      'PublicSubnetId',
+      'PublicSubnet2Id',
+      'PrivateSubnetId',
+      'PrivateSubnet2Id',
+      'CloudTrailBucketName',
+      'SecurityHubArn',
+      'KmsKeyId',
+      'EC2InstanceRoleArn',
+      'LoadBalancerDNS',
+      'SecurityNotificationTopicArn',
+      'ConfigBucketName',
+      'DatabaseSecretArn',
+      'RDSInstanceEndpoint',
+      'ConfigAggregatorName',
+      'MFAPolicyArn',
+      'ConfigDeliveryChannelName',
+      'ConfigRecorderName',
+    ];
+    expected.forEach(k => expect((template.Outputs as any)[k]).toBeDefined());
+  });
+
+  it('should validate RDS instance wiring and encryption settings', () => {
+    const db = (template.Resources as any).RDSInstance;
+    expect(db.Properties.VPCSecurityGroups[0].Ref).toBe('RDSSecurityGroup');
+    expect(db.Properties.KmsKeyId['Fn::If']).toBeDefined();
+    expect(db.Properties.DBSubnetGroupName['Fn::If']).toBeDefined();
+    expect(db.Properties.MasterUsername['Fn::Sub']).toContain(
+      'resolve:secretsmanager'
+    );
+    expect(db.Properties.MasterUserPassword['Fn::Sub']).toContain(
+      'resolve:secretsmanager'
+    );
+  });
+
+  it('should validate MFA policy contains deny without MFA and core actions', () => {
+    const pol = (template.Resources as any).MFAEnforcementPolicy;
+    const stmts = pol.Properties.PolicyDocument.Statement;
+    const deny = stmts.find((s: any) => s.Sid === 'DenyAccessWithoutMFA');
+    expect(deny).toBeDefined();
+    const actions = Array.isArray(deny.Action) ? deny.Action : [deny.Action];
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        's3:*',
+        'ec2:*',
+        'rds:*',
+        'lambda:*',
+        'cloudformation:*',
+      ])
+    );
+    expect(deny.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(
+      'false'
+    );
+  });
+
+  it('should validate Config rules identifiers', () => {
+    const sgRule = (template.Resources as any).SecurityGroupConfigRule;
+    const ebsRule = (template.Resources as any).EBSEncryptionConfigRule;
+    expect(sgRule.Properties.Source.SourceIdentifier).toBe(
+      'INCOMING_SSH_DISABLED'
+    );
+    expect(ebsRule.Properties.Source.SourceIdentifier).toBe(
+      'EC2_EBS_ENCRYPTION_BY_DEFAULT'
+    );
+  });
+
+  it('should validate ALB subnets and security group references', () => {
+    const alb = (template.Resources as any).ApplicationLoadBalancer;
+    expect(alb.Properties.Subnets[0].Ref).toBe('PublicSubnet');
+    expect(alb.Properties.Subnets[1].Ref).toBe('PublicSubnet2');
+    expect(alb.Properties.SecurityGroups[0].Ref).toBe('ALBSecurityGroup');
+  });
+
+  it('should validate InstanceProfile roles wiring', () => {
+    const ip = (template.Resources as any).EC2InstanceProfile;
+    expect(ip.Properties.Roles[0]['Fn::If']).toBeDefined();
+  });
 });
