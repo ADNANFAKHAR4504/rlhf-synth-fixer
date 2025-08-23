@@ -116,6 +116,7 @@ resource "random_string" "primary_db_username" {
 resource "random_password" "primary_db_password" {
   length  = 16
   special = true
+  override_special = "!#$%&()*+-=:?@^_"
 }
 
 resource "random_string" "secondary_db_username" {
@@ -128,6 +129,7 @@ resource "random_string" "secondary_db_username" {
 resource "random_password" "secondary_db_password" {
   length  = 16
   special = true
+  override_special = "!#$%&()*+-=:?@^_"
 }
 
 # =============================================================================
