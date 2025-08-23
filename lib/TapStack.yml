@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   TapStack.yml — Secure, production-ready environment in us-east-1.
-  Fixes applied: EC2 moved to private subnet, Lambda VPC-configured,
-  and LambdaRole updated with ENI permissions.
+  Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy,
+  RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.
 
 Parameters:
   EnvironmentSuffix:
@@ -79,6 +79,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Environment
+          Value: Production
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -99,7 +102,6 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-sg"
       VpcId: !Ref VPC
       GroupDescription: App security group (no SSH, restricted HTTP/HTTPS)
       SecurityGroupIngress:
@@ -114,6 +116,9 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: Production
 
   ##############################################
   # IAM Roles
@@ -128,7 +133,7 @@ Resources:
             Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: EC2Minimal
+        - PolicyName: EC2S3Access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -139,7 +144,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
       Roles: [!Ref EC2Role]
 
   LambdaRole:
@@ -152,7 +156,7 @@ Resources:
             Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: LambdaLogs
+        - PolicyName: LambdaLogsAndVPC
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -162,16 +166,33 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-        - PolicyName: LambdaENI
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
                   - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
                 Resource: "*"
+
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailToCW
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ "logs:CreateLogStream", "logs:PutLogEvents" ]
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Production
 
   ##############################################
   # EC2 Instance
@@ -181,18 +202,23 @@ Resources:
     Properties:
       InstanceType: t3.micro
       ImageId: !Ref LatestAmiId
-      SubnetId: !Ref PrivateSubnet1   # ✅ moved to private subnet
+      SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds: [!Ref AppSecurityGroup]
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs: { VolumeSize: 8, VolumeType: gp3, Encrypted: true }
+      Tags:
+        - Key: Environment
+          Value: Production
 
   ##############################################
   # S3 Bucket for CloudTrail + Policy
   ##############################################
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -202,6 +228,9 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: Production
 
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -237,15 +266,20 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 16
         ExcludeCharacters: "\"@/ '"
+      Tags:
+        - Key: Environment
+          Value: Production
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
       DBSubnetGroupDescription: Private DB subnets
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: Production
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -259,6 +293,9 @@ Resources:
       VPCSecurityGroups: [!Ref AppSecurityGroup]
       MasterUsername: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:username}}"]]
       MasterUserPassword: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:password}}"]]
+      Tags:
+        - Key: Environment
+          Value: Production
 
   ##############################################
   # Lambda
@@ -272,7 +309,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Timeout: 30
-      VpcConfig:                    # ✅ Added VPCConfig
+      VpcConfig:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
@@ -282,6 +319,9 @@ Resources:
         ZipFile: |
           def handler(event, context):
               return {"statusCode":200, "body":"Hello from TapStack"}
+      Tags:
+        - Key: Environment
+          Value: Production
 
   ##############################################
   # CloudTrail
@@ -290,24 +330,9 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 90
-
-  CloudTrailRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudTrailToCW
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: [ "logs:CreateLogStream", "logs:PutLogEvents" ]
-                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Production
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -320,6 +345,9 @@ Resources:
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       IsLogging: true
+      Tags:
+        - Key: Environment
+          Value: Production
 
 Outputs:
   VPC: { Value: !Ref VPC }

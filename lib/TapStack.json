@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Fixes applied: EC2 moved to private subnet, Lambda VPC-configured, and LambdaRole updated with ENI permissions.\n",
+    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy, RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.\n",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -129,7 +129,13 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "PublicRoute": {
@@ -158,9 +164,6 @@
         "AppSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sg"
-                },
                 "VpcId": {
                     "Ref": "VPC"
                 },
@@ -188,6 +191,12 @@
                         "IpProtocol": -1,
                         "CidrIp": "0.0.0.0/0"
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
                 ]
             }
         },
@@ -208,7 +217,7 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "EC2Minimal",
+                        "PolicyName": "EC2S3Access",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -231,9 +240,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -258,7 +264,7 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "LambdaLogs",
+                        "PolicyName": "LambdaLogsAndVPC",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -270,15 +276,7 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": "*"
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "LambdaENI",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
+                                },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
@@ -290,6 +288,47 @@
                                 }
                             ]
                         }
+                    }
+                ]
+            }
+        },
+        "CloudTrailRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudTrailToCW",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -321,11 +360,19 @@
                             "Encrypted": true
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
                 ]
             }
         },
         "SecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -341,7 +388,13 @@
                     "IgnorePublicAcls": true,
                     "BlockPublicPolicy": true,
                     "RestrictPublicBuckets": true
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "SecureS3BucketPolicy": {
@@ -395,15 +448,18 @@
                     "GenerateStringKey": "password",
                     "PasswordLength": 16,
                     "ExcludeCharacters": "\"@/ '"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
-                },
                 "DBSubnetGroupDescription": "Private DB subnets",
                 "SubnetIds": [
                     {
@@ -411,6 +467,12 @@
                     },
                     {
                         "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -454,7 +516,13 @@
                             ":SecretString:password}}"
                         ]
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "MyLambda": {
@@ -490,46 +558,23 @@
                 },
                 "Code": {
                     "ZipFile": "def handler(event, context):\n    return {\"statusCode\":200, \"body\":\"Hello from TapStack\"}\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "RetentionInDays": 90
-            }
-        },
-        "CloudTrailRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
+                "RetentionInDays": 90,
+                "Tags": [
                     {
-                        "PolicyName": "CloudTrailToCW",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -558,7 +603,13 @@
                 "IsMultiRegionTrail": false,
                 "IncludeGlobalServiceEvents": true,
                 "EnableLogFileValidation": true,
-                "IsLogging": true
+                "IsLogging": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         }
     },
