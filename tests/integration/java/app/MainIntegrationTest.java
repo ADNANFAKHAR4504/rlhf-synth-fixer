@@ -1,30 +1,41 @@
 package app;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Assumptions;
-import static org.junit.jupiter.api.Assertions.*;
-
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pulumi.Context;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
 import java.util.Map;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.ec2.model.DescribeAddressesRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeAddressesResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
 
-import com.pulumi.Context;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration tests for the Main Pulumi program.
- * 
+ *
  * This is a minimal example showing how to write integration tests for Pulumi Java programs.
  * Add more specific tests based on your infrastructure requirements.
- * 
+ *
  * Run with: ./gradlew integrationTest
  */
 public class MainIntegrationTest {
@@ -62,7 +73,7 @@ public class MainIntegrationTest {
                 "Pulumi.yaml should exist");
         assertTrue(Files.exists(Paths.get("build.gradle")),
                 "build.gradle should exist");
-        
+
         // Check for deployment outputs if they exist
         if (Files.exists(Paths.get("cfn-outputs/flat-outputs.json"))) {
             System.out.println("Found deployment outputs - integration tests can validate real resources");
@@ -89,28 +100,28 @@ public class MainIntegrationTest {
     void testVpcCidrBlockFromOutputs() {
         // Skip if outputs file doesn't exist
         var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
-        Assumptions.assumeTrue(Files.exists(outputsPath), 
+        Assumptions.assumeTrue(Files.exists(outputsPath),
             "cfn-outputs/flat-outputs.json should exist from deployment");
 
         assertDoesNotThrow(() -> {
             // Read deployment outputs
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
-                outputsPath.toFile(), 
+                outputsPath.toFile(),
                 new TypeReference<Map<String, Object>>() {}
             );
 
             // Validate VPC exists and configuration
             assertNotNull(outputs.get("VpcId"), "VPC should be created");
             String vpcId = outputs.get("VpcId").toString();
-            
+
             try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
                 DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
                     DescribeVpcsRequest.builder()
                         .vpcIds(vpcId)
                         .build()
                 );
-                
+
                 assertEquals(1, vpcsResponse.vpcs().size(), "Should find exactly one VPC");
                 Vpc vpc = vpcsResponse.vpcs().get(0);
                 assertEquals("10.0.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block");
@@ -126,41 +137,41 @@ public class MainIntegrationTest {
     void testInstanceDistributionAcrossAZs() {
         // Skip if outputs file doesn't exist
         var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
-        Assumptions.assumeTrue(Files.exists(outputsPath), 
+        Assumptions.assumeTrue(Files.exists(outputsPath),
             "cfn-outputs/flat-outputs.json should exist from deployment");
 
         assertDoesNotThrow(() -> {
             // Read deployment outputs
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
-                outputsPath.toFile(), 
+                outputsPath.toFile(),
                 new TypeReference<Map<String, Object>>() {}
             );
 
             // Validate instances exist
             assertNotNull(outputs.get("WebServer1Id"), "Web server 1 should exist");
             assertNotNull(outputs.get("WebServer2Id"), "Web server 2 should exist");
-            
+
             String instance1Id = outputs.get("WebServer1Id").toString();
             String instance2Id = outputs.get("WebServer2Id").toString();
-            
+
             try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
                 DescribeInstancesResponse instancesResponse = ec2.describeInstances(
                     DescribeInstancesRequest.builder()
                         .instanceIds(instance1Id, instance2Id)
                         .build()
                 );
-                
+
                 // Collect availability zones
                 var availabilityZones = instancesResponse.reservations().stream()
                     .flatMap(reservation -> reservation.instances().stream())
                     .map(instance -> instance.placement().availabilityZone())
                     .collect(java.util.stream.Collectors.toSet());
-                
-                assertEquals(2, availabilityZones.size(), 
+
+                assertEquals(2, availabilityZones.size(),
                     "Instances should be distributed across 2 different availability zones");
-                assertTrue(availabilityZones.contains("us-west-2a") || 
-                          availabilityZones.contains("us-west-2b"), 
+                assertTrue(availabilityZones.contains("us-west-2a") ||
+                          availabilityZones.contains("us-west-2b"),
                     "Instances should be in us-west-2a or us-west-2b");
             }
         });
@@ -203,14 +214,14 @@ public class MainIntegrationTest {
     void testAwsInfrastructureWithRealOutputs() {
         // Skip if outputs file doesn't exist
         var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
-        Assumptions.assumeTrue(Files.exists(outputsPath), 
+        Assumptions.assumeTrue(Files.exists(outputsPath),
             "cfn-outputs/flat-outputs.json should exist from deployment");
 
         assertDoesNotThrow(() -> {
             // Read deployment outputs
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
-                outputsPath.toFile(), 
+                outputsPath.toFile(),
                 new TypeReference<Map<String, Object>>() {}
             );
 
@@ -224,19 +235,19 @@ public class MainIntegrationTest {
             assertNotNull(outputs.get("PublicSubnet2Id"), "Public subnet 2 should exist");
             assertNotNull(outputs.get("PrivateSubnet1Id"), "Private subnet 1 should exist");
             assertNotNull(outputs.get("PrivateSubnet2Id"), "Private subnet 2 should exist");
-            
+
             validateSubnetsConfiguration(outputs);
 
             // Validate EC2 instances exist and are properly configured
             assertNotNull(outputs.get("WebServer1Id"), "Web server 1 should exist");
             assertNotNull(outputs.get("WebServer2Id"), "Web server 2 should exist");
-            
+
             validateEc2Instances(outputs);
 
             // Validate Elastic IPs are assigned
             assertNotNull(outputs.get("WebServer1PublicIp"), "Web server 1 should have public IP");
             assertNotNull(outputs.get("WebServer2PublicIp"), "Web server 2 should have public IP");
-            
+
             validateElasticIps(outputs);
 
             // Validate Security Group configuration
@@ -258,9 +269,9 @@ public class MainIntegrationTest {
                     .vpcIds(vpcId)
                     .build()
             );
-            
+
             assertEquals(1, vpcsResponse.vpcs().size(), "Should find exactly one VPC");
-            
+
             Vpc vpc = vpcsResponse.vpcs().get(0);
             assertEquals("10.0.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block");
             assertEquals("available", vpc.state().toString().toLowerCase(), "VPC should be available");
@@ -277,29 +288,29 @@ public class MainIntegrationTest {
             String publicSubnet2Id = outputs.get("PublicSubnet2Id").toString();
             String privateSubnet1Id = outputs.get("PrivateSubnet1Id").toString();
             String privateSubnet2Id = outputs.get("PrivateSubnet2Id").toString();
-            
+
             DescribeSubnetsResponse subnetsResponse = ec2.describeSubnets(
                 DescribeSubnetsRequest.builder()
                     .subnetIds(publicSubnet1Id, publicSubnet2Id, privateSubnet1Id, privateSubnet2Id)
                     .build()
             );
-            
+
             assertEquals(4, subnetsResponse.subnets().size(), "Should have 4 subnets");
-            
+
             // Validate subnet configurations
             for (Subnet subnet : subnetsResponse.subnets()) {
                 assertEquals("available", subnet.state().toString().toLowerCase(), "All subnets should be available");
-                assertTrue(subnet.cidrBlock().startsWith("10.0."), 
+                assertTrue(subnet.cidrBlock().startsWith("10.0."),
                     "All subnets should be within VPC CIDR range");
             }
-            
+
             // Verify subnets are in different AZs
             var subnetIds = java.util.List.of(publicSubnet1Id, publicSubnet2Id);
             var azSet = subnetsResponse.subnets().stream()
                 .filter(s -> subnetIds.contains(s.subnetId()))
                 .map(Subnet::availabilityZone)
                 .collect(java.util.stream.Collectors.toSet());
-            
+
             assertEquals(2, azSet.size(), "Public subnets should be in different AZs");
         }
     }
@@ -311,13 +322,13 @@ public class MainIntegrationTest {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             String instance1Id = outputs.get("WebServer1Id").toString();
             String instance2Id = outputs.get("WebServer2Id").toString();
-            
+
             DescribeInstancesResponse instancesResponse = ec2.describeInstances(
                 DescribeInstancesRequest.builder()
                     .instanceIds(instance1Id, instance2Id)
                     .build()
             );
-            
+
             int instanceCount = 0;
             for (Reservation reservation : instancesResponse.reservations()) {
                 for (Instance instance : reservation.instances()) {
@@ -331,7 +342,7 @@ public class MainIntegrationTest {
                         "Private IP should be within VPC range");
                 }
             }
-            
+
             assertEquals(2, instanceCount, "Should have exactly 2 EC2 instances");
         }
     }
@@ -343,15 +354,15 @@ public class MainIntegrationTest {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             String publicIp1 = outputs.get("WebServer1PublicIp").toString();
             String publicIp2 = outputs.get("WebServer2PublicIp").toString();
-            
+
             DescribeAddressesResponse addressesResponse = ec2.describeAddresses(
                 DescribeAddressesRequest.builder()
                     .publicIps(publicIp1, publicIp2)
                     .build()
             );
-            
+
             assertEquals(2, addressesResponse.addresses().size(), "Should have 2 Elastic IPs");
-            
+
             for (Address address : addressesResponse.addresses()) {
                 assertEquals("vpc", address.domain().toString(), "EIP should be VPC domain");
                 assertNotNull(address.instanceId(), "EIP should be associated with instance");
@@ -369,19 +380,19 @@ public class MainIntegrationTest {
                     .groupIds(securityGroupId)
                     .build()
             );
-            
+
             assertEquals(1, sgResponse.securityGroups().size(), "Should find security group");
-            
+
             SecurityGroup sg = sgResponse.securityGroups().get(0);
-            
+
             // Check ingress rules
             assertTrue(sg.ipPermissions().size() >= 3, "Should have at least SSH, HTTP, HTTPS rules");
-            
+
             // Verify SSH rule exists and is restricted
             boolean hasSshRule = sg.ipPermissions().stream()
                 .anyMatch(rule -> rule.fromPort() != null && rule.fromPort() == 22);
             assertTrue(hasSshRule, "Should have SSH rule on port 22");
-            
+
             // Verify egress allows outbound traffic
             assertTrue(sg.ipPermissionsEgress().size() >= 1, "Should have egress rules");
         }
@@ -393,13 +404,13 @@ public class MainIntegrationTest {
     private void validatePrivateIpsInVpcRange(Map<String, Object> outputs) {
         String privateIp1 = outputs.get("WebServer1PrivateIp").toString();
         String privateIp2 = outputs.get("WebServer2PrivateIp").toString();
-        
-        assertTrue(privateIp1.startsWith("10.0."), 
+
+        assertTrue(privateIp1.startsWith("10.0."),
             "Private IP 1 should be within VPC range: " + privateIp1);
-        assertTrue(privateIp2.startsWith("10.0."), 
+        assertTrue(privateIp2.startsWith("10.0."),
             "Private IP 2 should be within VPC range: " + privateIp2);
-        
-        assertNotEquals(privateIp1, privateIp2, 
+
+        assertNotEquals(privateIp1, privateIp2,
             "Instances should have different private IPs");
     }
 
@@ -411,43 +422,43 @@ public class MainIntegrationTest {
     void testElasticIpAllocationFromOutputs() {
         // Skip if outputs file doesn't exist
         var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
-        Assumptions.assumeTrue(Files.exists(outputsPath), 
+        Assumptions.assumeTrue(Files.exists(outputsPath),
             "cfn-outputs/flat-outputs.json should exist from deployment");
 
         assertDoesNotThrow(() -> {
             // Read deployment outputs
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
-                outputsPath.toFile(), 
+                outputsPath.toFile(),
                 new TypeReference<Map<String, Object>>() {}
             );
 
             // Validate Elastic IPs exist
             assertNotNull(outputs.get("WebServer1PublicIp"), "Web server 1 should have public IP");
             assertNotNull(outputs.get("WebServer2PublicIp"), "Web server 2 should have public IP");
-            
+
             String publicIp1 = outputs.get("WebServer1PublicIp").toString();
             String publicIp2 = outputs.get("WebServer2PublicIp").toString();
-            
+
             // Validate IP format
-            assertTrue(isValidPublicIpFormat(publicIp1), 
+            assertTrue(isValidPublicIpFormat(publicIp1),
                 "Public IP 1 should be valid format: " + publicIp1);
-            assertTrue(isValidPublicIpFormat(publicIp2), 
+            assertTrue(isValidPublicIpFormat(publicIp2),
                 "Public IP 2 should be valid format: " + publicIp2);
-            
+
             // Validate IPs are different
-            assertNotEquals(publicIp1, publicIp2, 
+            assertNotEquals(publicIp1, publicIp2,
                 "Each instance should have unique public IP");
-            
+
             try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
                 DescribeAddressesResponse addressesResponse = ec2.describeAddresses(
                     DescribeAddressesRequest.builder()
                         .publicIps(publicIp1, publicIp2)
                         .build()
                 );
-                
+
                 assertEquals(2, addressesResponse.addresses().size(), "Should have 2 Elastic IPs");
-                
+
                 for (Address address : addressesResponse.addresses()) {
                     assertEquals("vpc", address.domain().toString(), "EIP should be VPC domain");
                     assertNotNull(address.instanceId(), "EIP should be associated with instance");
@@ -464,42 +475,42 @@ public class MainIntegrationTest {
     void testEnvironmentSuffixIsolation() {
         // Skip if outputs file doesn't exist
         var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
-        Assumptions.assumeTrue(Files.exists(outputsPath), 
+        Assumptions.assumeTrue(Files.exists(outputsPath),
             "cfn-outputs/flat-outputs.json should exist from deployment");
 
         assertDoesNotThrow(() -> {
             // Read deployment outputs
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
-                outputsPath.toFile(), 
+                outputsPath.toFile(),
                 new TypeReference<Map<String, Object>>() {}
             );
 
             // Validate Environment Suffix is exported
             assertNotNull(outputs.get("EnvironmentSuffix"), "Environment suffix should be exported");
             String environmentSuffix = outputs.get("EnvironmentSuffix").toString();
-            
+
             // Validate suffix is not empty or default only
             assertFalse(environmentSuffix.trim().isEmpty(), "Environment suffix should not be empty");
-            
+
             // Validate VPC name includes environment suffix
             String vpcId = outputs.get("VpcId").toString();
-            
+
             try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
                 DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
                     DescribeVpcsRequest.builder()
                         .vpcIds(vpcId)
                         .build()
                 );
-                
+
                 Vpc vpc = vpcsResponse.vpcs().get(0);
                 String vpcName = vpc.tags().stream()
                     .filter(tag -> "Name".equals(tag.key()))
                     .map(Tag::value)
                     .findFirst()
                     .orElse("");
-                
-                assertTrue(vpcName.contains(environmentSuffix), 
+
+                assertTrue(vpcName.contains(environmentSuffix),
                     "VPC name should contain environment suffix: " + vpcName + " should contain " + environmentSuffix);
             }
         });
@@ -512,10 +523,10 @@ public class MainIntegrationTest {
         if (ip == null || ip.trim().isEmpty()) {
             return false;
         }
-        
+
         // Basic IP address validation regex
         String ipPattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
-        return ip.matches(ipPattern) && !ip.startsWith("10.") && 
+        return ip.matches(ipPattern) && !ip.startsWith("10.") &&
                !ip.startsWith("192.168.") && !ip.startsWith("172.");
     }
 }
