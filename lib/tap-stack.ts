@@ -14,9 +14,16 @@ import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  isPrimary?: boolean;
+  primaryRegion?: string;
+  primaryBucketArn?: string;
+  primaryDatabaseIdentifier?: string;
 }
 
 export class TapStack extends cdk.Stack {
+  public readonly primaryBucketArn: string;
+  public readonly databaseInstanceIdentifier: string;
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
@@ -354,5 +361,9 @@ export class TapStack extends cdk.Stack {
       value: api.url,
       description: 'TAP API Gateway endpoint URL',
     });
+
+    // Set public properties for cross-stack references
+    this.primaryBucketArn = bucket.bucketArn;
+    this.databaseInstanceIdentifier = database.instanceIdentifier;
   }
 }
