@@ -131,21 +131,6 @@ public class AuditingComponent extends ComponentResource {
                                                 .equals_("Management")
                                                 .build()
                                 )
-                                .build(),
-
-                        // Root account usage events
-                        TrailAdvancedEventSelectorArgs.builder()
-                                .name("Root Account Usage")
-                                .fieldSelectors(
-                                        TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("eventCategory")
-                                                .equals_("Management")
-                                                .build(),
-                                        TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("userIdentity.arn")
-                                                .equals_(List.of("arn:aws:iam::" + accountId + ":root"))
-                                                .build()
-                                )
                                 .build()
                 )
                 .cloudWatchLogsGroupArn(Output.format("%s:*", cloudTrailLogGroup.arn()))
@@ -214,7 +199,7 @@ public class AuditingComponent extends ComponentResource {
                 .pattern("""
                     { ($.errorCode = "*UnauthorizedOperation") ||
                       ($.errorCode = "AccessDenied*") ||
-                      ($.userIdentity.arn = "Root") ||
+                      ($.userIdentity.arn = "arn:aws:iam::" + accountId + ":root") ||
                       ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
                       ($.eventName = "CreateUser") ||
                       ($.eventName = "DeleteUser") ||
