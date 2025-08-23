@@ -25,12 +25,16 @@ public class AuditingComponent extends ComponentResource {
     private final LogGroup cloudTrailLogGroup;
     private final Output<String> accountId;
 
+    private final String cloudTrails3BucketPrefix;
+
     public AuditingComponent(String name, StorageComponent storage, String region) {
         this(name, storage, region, null);
     }
 
     public AuditingComponent(String name, StorageComponent storage, String region, ComponentResourceOptions opts) {
         super("custom:infrastructure:AuditingComponent", name, opts);
+
+        this.cloudTrails3BucketPrefix = "cloudtrail-logs/" + region;
 
         var identity = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build());
 
@@ -92,7 +96,7 @@ public class AuditingComponent extends ComponentResource {
                              "Service": "cloudtrail.amazonaws.com"
                          },
                          "Action": "s3:PutObject",
-                         "Resource": "arn:aws:s3:::%s/*",
+                         "Resource": "arn:aws:s3:::%s/%s*/AWSLogs/%s/*"
                          "Condition": {
                              "StringEquals": {
                                  "s3:x-amz-acl": "bucket-owner-full-control"
@@ -101,14 +105,14 @@ public class AuditingComponent extends ComponentResource {
                      }
                  ]
             }
-            """.formatted(bucketName, bucketName);
+            """.formatted(bucketName, bucketName, cloudTrails3BucketPrefix, accountId);
     }
 
     private Trail createCloudTrail(String name, StorageComponent storage, String region) {
         return new Trail(name + "-cloudtrail", TrailArgs.builder()
                 .name(name + "-security-audit-trail")
                 .s3BucketName(storage.getCloudTrailBucketName())
-                .s3KeyPrefix("cloudtrail-logs/")
+                .s3KeyPrefix(cloudTrails3BucketPrefix)
                 .kmsKeyId(storage.getKmsKeyArn())
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true)
