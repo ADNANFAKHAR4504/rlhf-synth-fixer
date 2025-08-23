@@ -479,4 +479,196 @@ public final class Main {
     private static String generateRandomSuffix() {
         return String.valueOf(new Random().nextInt(10000));
     }
+    
+    // Helper method to build resource name with suffix
+    public static String buildResourceName(String prefix, String suffix) {
+        if (prefix == null || prefix.isEmpty()) {
+            throw new IllegalArgumentException("Prefix cannot be null or empty");
+        }
+        if (suffix == null || suffix.isEmpty()) {
+            throw new IllegalArgumentException("Suffix cannot be null or empty");
+        }
+        return prefix + "-" + suffix;
+    }
+    
+    // Helper method to get AWS region
+    public static String getRegion() {
+        return REGION;
+    }
+    
+    // Helper method to get random suffix
+    public static String getRandomSuffix() {
+        return RANDOM_SUFFIX;
+    }
+    
+    // Helper method to validate resource tags
+    public static boolean isValidResourceTag(String key, String value) {
+        if (key == null || key.isEmpty() || value == null || value.isEmpty()) {
+            return false;
+        }
+        // AWS tag key/value constraints
+        return key.length() <= 128 && value.length() <= 256 && 
+               !key.startsWith("aws:") && !key.startsWith("AWS:");
+    }
+    
+    // Helper method to validate CIDR blocks
+    public static boolean isValidCidrBlock(String cidr) {
+        if (cidr == null || cidr.isEmpty()) {
+            return false;
+        }
+        
+        String[] parts = cidr.split("/");
+        if (parts.length != 2) {
+            return false;
+        }
+        
+        try {
+            String ip = parts[0];
+            int prefixLength = Integer.parseInt(parts[1]);
+            
+            // Validate prefix length
+            if (prefixLength < 0 || prefixLength > 32) {
+                return false;
+            }
+            
+            // Validate IP address format
+            String[] ipParts = ip.split("\\.");
+            if (ipParts.length != 4) {
+                return false;
+            }
+            
+            for (String part : ipParts) {
+                int octet = Integer.parseInt(part);
+                if (octet < 0 || octet > 255) {
+                    return false;
+                }
+            }
+            
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+    
+    // Helper method to validate AWS region format
+    public static boolean isValidAwsRegion(String region) {
+        if (region == null || region.isEmpty()) {
+            return false;
+        }
+        
+        // AWS region format: us-east-1, eu-west-1, ap-southeast-2, etc.
+        return region.matches("^[a-z]{2,3}-[a-z]+-\\d+$");
+    }
+    
+    // Helper method to validate instance types
+    public static boolean isValidInstanceType(String instanceType) {
+        if (instanceType == null || instanceType.isEmpty()) {
+            return false;
+        }
+        
+        // Common AWS instance type formats: t3.micro, m5.large, c5n.xlarge, r5a.2xlarge, etc.
+        return instanceType.matches("^[a-z][0-9][a-z]?\\.[0-9]*[a-z]+$");
+    }
+    
+    // Helper method to generate availability zone name
+    public static String generateAvailabilityZone(String region, String zone) {
+        if (region == null || region.isEmpty()) {
+            throw new IllegalArgumentException("Region cannot be null or empty");
+        }
+        if (zone == null || zone.isEmpty()) {
+            throw new IllegalArgumentException("Zone cannot be null or empty");
+        }
+        if (!zone.matches("^[a-z]$")) {
+            throw new IllegalArgumentException("Zone must be a single lowercase letter");
+        }
+        
+        return region + zone;
+    }
+    
+    // Helper method to validate port numbers
+    public static boolean isValidPort(int port) {
+        return port >= 1 && port <= 65535;
+    }
+    
+    // Helper method to validate security group protocols
+    public static boolean isValidProtocol(String protocol) {
+        if (protocol == null || protocol.isEmpty()) {
+            return false;
+        }
+        
+        String[] validProtocols = {"tcp", "udp", "icmp", "all", "-1"};
+        for (String valid : validProtocols) {
+            if (valid.equalsIgnoreCase(protocol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // Helper method to format resource names consistently
+    public static String formatResourceName(String type, String name, String suffix) {
+        if (type == null || type.isEmpty()) {
+            throw new IllegalArgumentException("Type cannot be null or empty");
+        }
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("Name cannot be null or empty");
+        }
+        if (suffix == null || suffix.isEmpty()) {
+            throw new IllegalArgumentException("Suffix cannot be null or empty");
+        }
+        
+        return String.format("%s-%s-%s", type, name, suffix);
+    }
+    
+    // Helper method to validate AWS ARN format
+    public static boolean isValidArn(String arn) {
+        if (arn == null || arn.isEmpty()) {
+            return false;
+        }
+        
+        // Basic AWS ARN format: arn:partition:service:region:account-id:resource-type/resource-id
+        // or arn:partition:service:region:account-id:resource-type:resource-id
+        return arn.matches("^arn:[^:]+:[^:]+:[^:]*:[^:]*:.+$");
+    }
+    
+    // Helper method to calculate subnet size from CIDR
+    public static int calculateSubnetSize(String cidr) {
+        if (!isValidCidrBlock(cidr)) {
+            throw new IllegalArgumentException("Invalid CIDR block: " + cidr);
+        }
+        
+        String[] parts = cidr.split("/");
+        int prefixLength = Integer.parseInt(parts[1]);
+        
+        return (int) Math.pow(2, 32 - prefixLength);
+    }
+    
+    // Helper method to validate bucket names
+    public static boolean isValidS3BucketName(String bucketName) {
+        if (bucketName == null || bucketName.isEmpty()) {
+            return false;
+        }
+        
+        // S3 bucket naming rules (simplified)
+        if (bucketName.length() < 3 || bucketName.length() > 63) {
+            return false;
+        }
+        
+        // Must start and end with lowercase letter or number
+        if (!bucketName.matches("^[a-z0-9].*[a-z0-9]$")) {
+            return false;
+        }
+        
+        // Cannot contain uppercase letters, spaces, or certain special characters
+        if (!bucketName.matches("^[a-z0-9.-]+$")) {
+            return false;
+        }
+        
+        // Cannot be formatted as IP address
+        if (bucketName.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+            return false;
+        }
+        
+        return true;
+    }
 }
