@@ -37,7 +37,7 @@ public class AuditingComponent extends ComponentResource {
         this.accountId = identity.applyValue(GetCallerIdentityResult::accountId);
 
         // Create CloudWatch Log Group for CloudTrail
-        this.cloudTrailLogGroup = createCloudTrailLogGroup(name);
+        this.cloudTrailLogGroup = createCloudTrailLogGroup(name, storage.getKmsKeyArn());
 
         // Configure CloudTrail bucket policy
         configureBucketPolicy(name, storage);
@@ -51,11 +51,11 @@ public class AuditingComponent extends ComponentResource {
         createSecurityEventAlarm(name);
     }
 
-    private LogGroup createCloudTrailLogGroup(String name) {
+    private LogGroup createCloudTrailLogGroup(String name, Output<String> kmsKeyArn) {
         return new LogGroup(name + "-cloudtrail-logs", LogGroupArgs.builder()
                 .name("/aws/cloudtrail/" + name)
                 .retentionInDays(90)
-                .kmsKeyId("alias/aws/logs")
+                .kmsKeyId(kmsKeyArn)
                 .tags(getTags(name + "-cloudtrail-logs", "LogGroup", Map.of("Purpose", "AuditLogs")))
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
