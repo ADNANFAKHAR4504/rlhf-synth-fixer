@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade multi-account security CloudFormation template with advanced AWS security measures'
 
@@ -1069,3 +1070,4 @@ CreateConfigRecorder,
 ]
 Export:
 Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
+```
