@@ -35,7 +35,7 @@ Core Requirements
    - Log all management events to a dedicated S3 bucket (`prod-sec-logs-bucket`) with access logging enabled.
    - Protect logs with S3 bucket policies and KMS encryption.
 
-7. **Compliance & Configuration Management**
+7. Compliance & Configuration Management
    - Enable AWS Config with a rule set to enforce:
      - S3 buckets are private
      - EC2 instances have required tags

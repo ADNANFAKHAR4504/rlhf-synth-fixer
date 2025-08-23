@@ -1,13 +1,13 @@
-# Secure AWS Environment - Complete Infrastructure
+Secure AWS Environment - Complete Infrastructure
 
 Below is a comprehensive Terraform configuration that implements all the security requirements in a single file. This configuration follows AWS security best practices and implements advanced security controls.
 
-## tap_stack.tf
+tap_stack.tf
 
 ````hcl
-# =============================================================================
-# TERRAFORM CONFIGURATION
-# =============================================================================
+=============================================================================
+TERRAFORM CONFIGURATION
+=============================================================================
 
 terraform {
   required_version = ">= 1.0"
@@ -33,9 +33,9 @@ terraform {
   }
 }
 
-# =============================================================================
-# PROVIDERS
-# =============================================================================
+=============================================================================
+PROVIDERS
+=============================================================================
 
 provider "aws" {
   region = var.aws_region
@@ -50,9 +50,9 @@ provider "aws" {
   }
 }
 
-# =============================================================================
-# VARIABLES
-# =============================================================================
+=============================================================================
+VARIABLES
+=============================================================================
 
 variable "aws_region" {
   description = "AWS region for resources"
