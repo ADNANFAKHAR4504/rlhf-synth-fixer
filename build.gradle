@@ -183,16 +183,15 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.42
+                minimum = 0.50
             }
         }
         rule {
             element = 'CLASS'
-            excludes = ['app.Main$VpcResources', 'app.Main$IamResources']
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.32
+                minimum = 0.50
             }
         }
     }
