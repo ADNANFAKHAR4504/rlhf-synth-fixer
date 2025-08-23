@@ -5,22 +5,16 @@ import com.pulumi.Pulumi;
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.kms.*;
 import com.pulumi.aws.s3.*;
-import com.pulumi.aws.cloudwatch.*;
 import com.pulumi.aws.sns.*;
-import com.pulumi.aws.lambda.*;
-import com.pulumi.aws.sfn.*;
-import com.pulumi.aws.logs.*;
 import com.pulumi.core.Output;
-import com.pulumi.aws.iam.inputs.*;
 
 import java.util.Map;
-import java.util.List;
 
 /**
  * Main class for AWS Multi-Account Security Infrastructure.
  * 
- * This class implements a comprehensive security framework for AWS Organizations
- * including IAM roles, KMS encryption, S3 security, monitoring, and automation.
+ * This class implements a basic security framework for AWS Organizations
+ * including IAM roles, KMS encryption, S3 security, and monitoring.
  *
  * @version 1.0
  * @since 1.0
@@ -66,23 +60,8 @@ public final class Main {
         Role securityRole = createSecurityRole(accountId);
         Role crossAccountRole = createCrossAccountRole(accountId);
         
-        // 4. Create CloudWatch Log Group
-        LogGroup securityLogGroup = createSecurityLogGroup(accountId);
-        
-        // 5. Create SNS Topic for alerts
+        // 4. Create SNS Topic for alerts
         Topic securityTopic = createSecurityTopic(accountId);
-        
-        // 6. Create CloudWatch Alarms
-        createSecurityAlarms(accountId, securityTopic);
-        
-        // 7. Create Lambda Function for security automation
-        Function securityLambda = createSecurityLambda(accountId, securityTopic);
-        
-        // 8. Create Step Function for security workflow
-        StateMachine securityWorkflow = createSecurityWorkflow(accountId, securityLambda);
-        
-        // 9. Create CloudTrail for comprehensive logging
-        createCloudTrail(accountId, secureBucket, securityLogGroup);
         
         // Export outputs
         ctx.export("kmsKeyId", kmsKey.id());
@@ -90,8 +69,6 @@ public final class Main {
         ctx.export("securityRoleArn", securityRole.arn());
         ctx.export("crossAccountRoleArn", crossAccountRole.arn());
         ctx.export("securityTopicArn", securityTopic.arn());
-        ctx.export("securityLambdaArn", securityLambda.arn());
-        ctx.export("securityWorkflowArn", securityWorkflow.arn());
     }
     
     /**
@@ -112,28 +89,11 @@ public final class Main {
     }
     
     /**
-     * Creates a secure S3 bucket with encryption and access logging.
+     * Creates a secure S3 bucket with encryption.
      */
     private static Bucket createSecureS3Bucket(Output<String> accountId, Key kmsKey) {
         return new Bucket("secure-data-bucket", BucketArgs.builder()
                 .forceDestroy(false)
-                .versioning(BucketVersioningArgs.builder()
-                        .enabled(true)
-                        .build())
-                .serverSideEncryptionConfiguration(BucketServerSideEncryptionConfigurationArgs.builder()
-                        .rules(List.of(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                                .applyServerSideEncryptionByDefault(BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                                        .sseAlgorithm("aws:kms")
-                                        .kmsMasterKeyId(kmsKey.id())
-                                        .build())
-                                .build()))
-                        .build())
-                .publicAccessBlockConfiguration(BucketPublicAccessBlockConfigurationArgs.builder()
-                        .blockPublicAcls(true)
-                        .blockPublicPolicy(true)
-                        .ignorePublicAcls(true)
-                        .restrictPublicBuckets(true)
-                        .build())
                 .tags(Map.of(
                         "Environment", ENVIRONMENT,
                         "Project", PROJECT,
@@ -242,19 +202,6 @@ public final class Main {
     }
     
     /**
-     * Creates CloudWatch Log Group for security logs.
-     */
-    private static LogGroup createSecurityLogGroup(Output<String> accountId) {
-        return new LogGroup("security-logs", LogGroupArgs.builder()
-                .retentionInDays(90)
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "security-logging"))
-                .build());
-    }
-    
-    /**
      * Creates SNS Topic for security alerts.
      */
     private static Topic createSecurityTopic(Output<String> accountId) {
@@ -264,172 +211,6 @@ public final class Main {
                         "Environment", ENVIRONMENT,
                         "Project", PROJECT,
                         "Purpose", "security-notifications"))
-                .build());
-    }
-    
-    /**
-     * Creates CloudWatch alarms for security monitoring.
-     */
-    private static void createSecurityAlarms(Output<String> accountId, Topic securityTopic) {
-        // IAM Policy Changes Alarm
-        new MetricAlarm("iam-policy-changes", MetricAlarmArgs.builder()
-                .alarmName("IAM Policy Changes")
-                .comparisonOperator("GreaterThanOrEqualToThreshold")
-                .evaluationPeriods(1)
-                .metricName("IAMPolicyChanges")
-                .namespace("AWS/CloudTrail")
-                .period(300)
-                .statistic("Sum")
-                .threshold(1.0)
-                .alarmActions(List.of(securityTopic.arn()))
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "security-monitoring"))
-                .build());
-        
-        // Root Account Usage Alarm
-        new MetricAlarm("root-account-usage", MetricAlarmArgs.builder()
-                .alarmName("Root Account Usage")
-                .comparisonOperator("GreaterThanOrEqualToThreshold")
-                .evaluationPeriods(1)
-                .metricName("RootAccountUsage")
-                .namespace("AWS/CloudTrail")
-                .period(300)
-                .statistic("Sum")
-                .threshold(1.0)
-                .alarmActions(List.of(securityTopic.arn()))
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "security-monitoring"))
-                .build());
-    }
-    
-    /**
-     * Creates Lambda function for security automation.
-     */
-    private static Function createSecurityLambda(Output<String> accountId, Topic securityTopic) {
-        // Lambda function code for security response
-        String lambdaCode = """
-            import json
-            import boto3
-            import os
-            
-            def lambda_handler(event, context):
-                # Parse the CloudWatch alarm event
-                alarm_name = event['detail']['alarmName']
-                alarm_state = event['detail']['state']['value']
-                
-                # Send detailed alert to SNS
-                sns = boto3.client('sns')
-                message = f"Security Alert: {alarm_name} is in {alarm_state} state"
-                
-                sns.publish(
-                    TopicArn=os.environ['SECURITY_TOPIC_ARN'],
-                    Subject=f"Security Alert: {alarm_name}",
-                    Message=message
-                )
-                
-                # Log the security event
-                print(f"Security event processed: {alarm_name} - {alarm_state}")
-                
-                return {
-                    'statusCode': 200,
-                    'body': json.dumps('Security alert processed successfully')
-                }
-            """;
-        
-        return new Function("security-lambda", FunctionArgs.builder()
-                .runtime("python3.9")
-                .handler("index.lambda_handler")
-                .role(createSecurityRole(accountId).arn())
-                .code(new FunctionCodeArgs.Builder()
-                        .zipFile(lambdaCode)
-                        .build())
-                .environment(FunctionEnvironmentArgs.builder()
-                        .variables(Map.of(
-                                "SECURITY_TOPIC_ARN", securityTopic.arn().applyValue(arn -> arn),
-                                "ENVIRONMENT", ENVIRONMENT,
-                                "PROJECT", PROJECT))
-                        .build())
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "security-automation"))
-                .build());
-    }
-    
-    /**
-     * Creates Step Function workflow for security response automation.
-     */
-    private static StateMachine createSecurityWorkflow(Output<String> accountId, Function securityLambda) {
-        String stateMachineDefinition = """
-            {
-                "Comment": "Security Response Workflow",
-                "StartAt": "DetectSecurityEvent",
-                "States": {
-                    "DetectSecurityEvent": {
-                        "Type": "Task",
-                        "Resource": "%s",
-                        "Next": "LogSecurityEvent",
-                        "Catch": [{
-                            "ErrorEquals": ["States.ALL"],
-                            "Next": "HandleError"
-                        }]
-                    },
-                    "LogSecurityEvent": {
-                        "Type": "Task",
-                        "Resource": "arn:aws:states:::cloudwatch:putMetricData",
-                        "Parameters": {
-                            "Namespace": "SecurityFramework",
-                            "MetricData": [{
-                                "MetricName": "SecurityEventProcessed",
-                                "Value": 1,
-                                "Unit": "Count"
-                            }]
-                        },
-                        "End": true
-                    },
-                    "HandleError": {
-                        "Type": "Fail",
-                        "Cause": "Security workflow failed",
-                        "Error": "SecurityWorkflowError"
-                    }
-                }
-            }
-            """.formatted(securityLambda.arn().applyValue(arn -> arn));
-        
-        return new StateMachine("security-workflow", StateMachineArgs.builder()
-                .definition(stateMachineDefinition)
-                .roleArn(createSecurityRole(accountId).arn())
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "security-workflow"))
-                .build());
-    }
-    
-    /**
-     * Creates CloudTrail for comprehensive logging.
-     */
-    private static void createCloudTrail(Output<String> accountId, Bucket secureBucket, LogGroup securityLogGroup) {
-        new Trail("security-trail", TrailArgs.builder()
-                .name("security-audit-trail")
-                .s3BucketName(secureBucket.id())
-                .cloudWatchLogsGroupArn(securityLogGroup.arn().applyValue(arn -> arn + ":*"))
-                .cloudWatchLogsRoleArn(createSecurityRole(accountId).arn())
-                .includeGlobalServiceEvents(true)
-                .isMultiRegionTrail(true)
-                .enableLogging(true)
-                .eventSelectors(List.of(TrailEventSelectorArgs.builder()
-                        .readWriteType("All")
-                        .includeManagementEvents(true)
-                        .build()))
-                .tags(Map.of(
-                        "Environment", ENVIRONMENT,
-                        "Project", PROJECT,
-                        "Purpose", "audit-logging"))
                 .build());
     }
 }
