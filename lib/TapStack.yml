@@ -695,7 +695,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub
-        - '${EnvironmentLower}-${EnvironmentSuffix}-secure-app-assets-${AWS::AccountId}-${AWS::Region}'
+        - '${EnvironmentLower}-${EnvironmentSuffix}-secure-app-assets-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
         - EnvironmentLower:
             !FindInMap [EnvironmentLowerMap, !Ref Environment, Name]
       BucketEncryption:
