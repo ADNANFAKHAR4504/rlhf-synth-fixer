@@ -72,32 +72,38 @@ public final class Main {
     }
     
     public static void main(final String[] args) {
-        Pulumi.run(ctx -> {
-            
-            // Configure AWS Provider for us-east-1
-            var awsProvider = new Provider("aws-provider", ProviderArgs.builder()
-                .region(REGION)
-                .build());
-            
-            var providerOptions = CustomResourceOptions.builder()
-                .provider(awsProvider)
-                .build();
-            
-            // Create KMS Key for encryption
-            var kmsKey = new Key("financial-app-kms-key-" + RANDOM_SUFFIX, KeyArgs.builder()
-                .description("KMS key for financial application encryption")
-                .keyUsage("ENCRYPT_DECRYPT")
-                .deletionWindowInDays(7)
-                .tags(Map.of(
-                    "Environment", "production",
-                    "Application", "financial-services",
-                    "Compliance", "required"
-                ))
-                .build(), providerOptions);
+        Pulumi.run(ctx -> createInfrastructure(ctx));
+    }
+    
+    // Extracted infrastructure creation method for testing
+    public static void createInfrastructure(final com.pulumi.Context ctx) {
+        
+        // Configure AWS Provider for us-east-1
+        var awsProvider = new Provider("aws-provider", ProviderArgs.builder()
+            .region(REGION)
+            .build());
+        
+        var providerOptions = CustomResourceOptions.builder()
+            .provider(awsProvider)
+            .build();
+        
+        // Create KMS Key for encryption
+        var kmsKey = new Key("financial-app-kms-key-" + RANDOM_SUFFIX, KeyArgs.builder()
+            .description("KMS key for financial application encryption")
+            .keyUsage("ENCRYPT_DECRYPT")
+            .deletionWindowInDays(7)
+            .tags(Map.of(
+                "Environment", "production",
+                "Application", "financial-services",
+                "Compliance", "required"
+            ))
+            .build(), providerOptions);
             
             // Create S3 bucket for CloudTrail logs with encryption
+            String cloudtrailBucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
             var cloudtrailBucket = new Bucket("financial-cloudtrail-logs-" + RANDOM_SUFFIX, 
                 BucketArgs.builder()
+                    .bucket(cloudtrailBucketName)
                     .forceDestroy(true)
                     .tags(Map.of(
                         "Purpose", "CloudTrail-Logs",
@@ -120,43 +126,11 @@ public final class Main {
                         .build())
                     .build(), providerOptions);
             
-            // Create S3 bucket policy for CloudTrail
-            String bucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
-            String cloudtrailBucketPolicyDoc = String.format("""
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": "arn:aws:s3:::%s"
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": "arn:aws:s3:::%s/*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-                """, bucketName, bucketName);
-
+            // Create S3 bucket policy for CloudTrail using exact bucket name
             var cloudtrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
                 BucketPolicyArgs.builder()
                     .bucket(cloudtrailBucket.id())
-                    .policy(cloudtrailBucketPolicyDoc)
+                    .policy(buildCloudTrailBucketPolicy(cloudtrailBucketName))
                     .build(), providerOptions);
             
             // Create application S3 bucket with encryption
@@ -332,20 +306,7 @@ public final class Main {
             
             // Create IAM role for EC2 instances
             var ec2Role = new Role("financial-app-ec2-role-" + RANDOM_SUFFIX, RoleArgs.builder()
-                .assumeRolePolicy("""
-                    {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Action": "sts:AssumeRole",
-                                "Effect": "Allow",
-                                "Principal": {
-                                    "Service": "ec2.amazonaws.com"
-                                }
-                            }
-                        ]
-                    }
-                    """)
+                .assumeRolePolicy(buildEc2AssumeRolePolicy())
                 .tags(Map.of(
                     "Name", "financial-app-ec2-role-" + RANDOM_SUFFIX,
                     "Environment", "production"
@@ -356,38 +317,7 @@ public final class Main {
             var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX, 
                 PolicyArgs.builder()
                     .description("Read-only access to specific S3 bucket")
-                    .policy(String.format("""
-                        {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject",
-                                        "s3:GetObjectVersion",
-                                        "s3:ListBucket"
-                                    ],
-                                    "Resource": [
-                                        "arn:aws:s3:::financial-app-data-*",
-                                        "arn:aws:s3:::financial-app-data-*/*"
-                                    ]
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "kms:Decrypt",
-                                        "kms:GenerateDataKey"
-                                    ],
-                                    "Resource": "arn:aws:kms:%s:*:key/*",
-                                    "Condition": {
-                                        "StringEquals": {
-                                            "kms:ViaService": "s3.%s.amazonaws.com"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                        """, REGION, REGION))
+                    .policy(buildS3ReadOnlyPolicy(REGION))
                     .build(), providerOptions);
             
             // Attach S3 policy to EC2 role
@@ -445,53 +375,7 @@ public final class Main {
                             .kmsKeyId(kmsKey.arn())
                             .deleteOnTermination(true)
                             .build())
-                        .userData("""
-                            #!/bin/bash
-                            yum update -y
-                            yum install -y amazon-cloudwatch-agent
-                            
-                            # Configure CloudWatch agent
-                            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-                            {
-                                "metrics": {
-                                    "namespace": "FinancialApp/EC2",
-                                    "metrics_collected": {
-                                        "cpu": {
-                                            "measurement": [
-                                                "cpu_usage_idle",
-                                                "cpu_usage_iowait",
-                                                "cpu_usage_user",
-                                                "cpu_usage_system"
-                                            ],
-                                            "metrics_collection_interval": 60,
-                                            "totalcpu": true
-                                        },
-                                        "disk": {
-                                            "measurement": [
-                                                "used_percent"
-                                            ],
-                                            "metrics_collection_interval": 60,
-                                            "resources": [
-                                                "*"
-                                            ]
-                                        },
-                                        "mem": {
-                                            "measurement": [
-                                                "mem_used_percent"
-                                            ],
-                                            "metrics_collection_interval": 60
-                                        }
-                                    }
-                                }
-                            }
-                            EOF
-                            
-                            # Start CloudWatch agent
-                            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
-                                -a fetch-config -m ec2 \\
-                                -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\
-                                -s
-                            """)
+                        .userData(buildEc2UserData())
                         .tags(Map.of(
                             "Name", "financial-app-instance-" + instanceNumber + "-" + RANDOM_SUFFIX,
                             "Environment", "production",
@@ -546,7 +430,6 @@ public final class Main {
             ctx.export("cloudtrailArn", cloudTrail.arn());
             ctx.export("securityGroupId", securityGroup.id());
             ctx.export("randomSuffix", Output.of(RANDOM_SUFFIX));
-        });
     }
     
     private static String generateRandomSuffix() {
@@ -743,5 +626,252 @@ public final class Main {
         }
         
         return true;
+    }
+
+    // Helper method to build CloudTrail bucket policy JSON
+    public static String buildCloudTrailBucketPolicy(final String bucketName) {
+        if (bucketName == null || bucketName.isEmpty()) {
+            throw new IllegalArgumentException("Bucket name cannot be null or empty");
+        }
+        
+        return String.format("""
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AWSCloudTrailAclCheck",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": "s3:GetBucketAcl",
+                        "Resource": "arn:aws:s3:::%s"
+                    },
+                    {
+                        "Sid": "AWSCloudTrailWrite",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": "s3:PutObject",
+                        "Resource": "arn:aws:s3:::%s/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "s3:x-amz-acl": "bucket-owner-full-control"
+                            }
+                        }
+                    }
+                ]
+            }
+            """, bucketName, bucketName);
+    }
+
+    // Helper method to build S3 read-only IAM policy JSON
+    public static String buildS3ReadOnlyPolicy(final String region) {
+        if (region == null || region.isEmpty()) {
+            throw new IllegalArgumentException("Region cannot be null or empty");
+        }
+        if (!isValidAwsRegion(region)) {
+            throw new IllegalArgumentException("Invalid AWS region format: " + region);
+        }
+        
+        return String.format("""
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:GetObjectVersion",
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            "arn:aws:s3:::financial-app-data-*",
+                            "arn:aws:s3:::financial-app-data-*/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "kms:Decrypt",
+                            "kms:GenerateDataKey"
+                        ],
+                        "Resource": "arn:aws:kms:%s:*:key/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "kms:ViaService": "s3.%s.amazonaws.com"
+                            }
+                        }
+                    }
+                ]
+            }
+            """, region, region);
+    }
+
+    // Helper method to build EC2 assume role policy JSON
+    public static String buildEc2AssumeRolePolicy() {
+        return """
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        }
+                    }
+                ]
+            }
+            """;
+    }
+
+    // Helper method to build CloudWatch agent configuration JSON
+    public static String buildCloudWatchAgentConfig() {
+        return """
+            {
+                "metrics": {
+                    "namespace": "FinancialApp/EC2",
+                    "metrics_collected": {
+                        "cpu": {
+                            "measurement": [
+                                "cpu_usage_idle",
+                                "cpu_usage_iowait",
+                                "cpu_usage_user",
+                                "cpu_usage_system"
+                            ],
+                            "metrics_collection_interval": 60,
+                            "totalcpu": true
+                        },
+                        "disk": {
+                            "measurement": [
+                                "used_percent"
+                            ],
+                            "metrics_collection_interval": 60,
+                            "resources": [
+                                "*"
+                            ]
+                        },
+                        "mem": {
+                            "measurement": [
+                                "mem_used_percent"
+                            ],
+                            "metrics_collection_interval": 60
+                        }
+                    }
+                }
+            }
+            """;
+    }
+
+    // Helper method to build EC2 user data script
+    public static String buildEc2UserData() {
+        return String.format("""
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+            %s
+            EOF
+            
+            # Start CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
+                -a fetch-config -m ec2 \\
+                -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\
+                -s
+            """, buildCloudWatchAgentConfig());
+    }
+
+    // Helper method to validate KMS key usage
+    public static boolean isValidKmsKeyUsage(final String keyUsage) {
+        if (keyUsage == null || keyUsage.isEmpty()) {
+            return false;
+        }
+        
+        return "ENCRYPT_DECRYPT".equals(keyUsage) || "SIGN_VERIFY".equals(keyUsage);
+    }
+
+    // Helper method to validate KMS deletion window
+    public static boolean isValidKmsDeletionWindow(final int deletionWindowInDays) {
+        return deletionWindowInDays >= 7 && deletionWindowInDays <= 30;
+    }
+
+    // Helper method to validate EBS volume types
+    public static boolean isValidEbsVolumeType(final String volumeType) {
+        if (volumeType == null || volumeType.isEmpty()) {
+            return false;
+        }
+        
+        String[] validTypes = {"gp2", "gp3", "io1", "io2", "st1", "sc1", "standard"};
+        for (String valid : validTypes) {
+            if (valid.equals(volumeType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Helper method to validate EBS volume size
+    public static boolean isValidEbsVolumeSize(final int volumeSize, final String volumeType) {
+        if (volumeType == null || volumeSize <= 0) {
+            return false;
+        }
+        
+        switch (volumeType) {
+            case "gp2":
+            case "gp3":
+                return volumeSize >= 1 && volumeSize <= 16384;
+            case "io1":
+            case "io2":
+                return volumeSize >= 4 && volumeSize <= 16384;
+            case "st1":
+            case "sc1":
+                return volumeSize >= 125 && volumeSize <= 16384;
+            case "standard":
+                return volumeSize >= 1 && volumeSize <= 1024;
+            default:
+                return false;
+        }
+    }
+
+    // Helper method to validate CloudWatch metric period
+    public static boolean isValidCloudWatchPeriod(final int period) {
+        // CloudWatch periods must be 60 seconds or a multiple of 60 seconds
+        return period > 0 && period % 60 == 0;
+    }
+
+    // Helper method to validate alarm threshold
+    public static boolean isValidAlarmThreshold(final double threshold) {
+        return threshold >= 0.0 && threshold <= 100.0;
+    }
+
+    // Helper method to build resource tags map
+    public static Map<String, String> buildResourceTags(final String environment, final String application) {
+        if (environment == null || environment.isEmpty()) {
+            throw new IllegalArgumentException("Environment cannot be null or empty");
+        }
+        if (application == null || application.isEmpty()) {
+            throw new IllegalArgumentException("Application cannot be null or empty");
+        }
+        
+        Map<String, String> tags = new java.util.HashMap<>();
+        tags.put("Environment", environment);
+        tags.put("Application", application);
+        return tags;
+    }
+
+    // Helper method to build resource tags map with additional tag
+    public static Map<String, String> buildResourceTags(final String environment, 
+                                                       final String application, 
+                                                       final String key, 
+                                                       final String value) {
+        Map<String, String> tags = buildResourceTags(environment, application);
+        if (key != null && !key.isEmpty() && value != null && !value.isEmpty()) {
+            tags.put(key, value);
+        }
+        return tags;
     }
 }

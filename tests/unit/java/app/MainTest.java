@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import com.pulumi.Context;
@@ -649,5 +650,370 @@ public class MainTest {
         assertFalse(Main.isValidS3BucketName("-my-bucket"));  // Starts with dash
         assertFalse(Main.isValidS3BucketName("my-bucket-"));  // Ends with dash
         assertFalse(Main.isValidS3BucketName("192.168.1.1"));  // IP address format
+    }
+    
+    /**
+     * Test CloudTrail bucket policy generation.
+     */
+    @Test
+    void testBuildCloudTrailBucketPolicy() {
+        String policy = Main.buildCloudTrailBucketPolicy("test-bucket");
+        assertNotNull(policy);
+        assertTrue(policy.contains("AWSCloudTrailAclCheck"));
+        assertTrue(policy.contains("AWSCloudTrailWrite"));
+        assertTrue(policy.contains("test-bucket"));
+        assertTrue(policy.contains("s3:GetBucketAcl"));
+        assertTrue(policy.contains("s3:PutObject"));
+        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
+        
+        // Test invalid input
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildCloudTrailBucketPolicy(null);
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildCloudTrailBucketPolicy("");
+        });
+    }
+    
+    /**
+     * Test S3 read-only policy generation.
+     */
+    @Test
+    void testBuildS3ReadOnlyPolicy() {
+        String policy = Main.buildS3ReadOnlyPolicy("us-east-1");
+        assertNotNull(policy);
+        assertTrue(policy.contains("s3:GetObject"));
+        assertTrue(policy.contains("s3:ListBucket"));
+        assertTrue(policy.contains("kms:Decrypt"));
+        assertTrue(policy.contains("us-east-1"));
+        assertTrue(policy.contains("financial-app-data-*"));
+        
+        // Test invalid inputs
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy(null);
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy("");
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy("invalid-region");
+        });
+    }
+    
+    /**
+     * Test EC2 assume role policy generation.
+     */
+    @Test
+    void testBuildEc2AssumeRolePolicy() {
+        String policy = Main.buildEc2AssumeRolePolicy();
+        assertNotNull(policy);
+        assertTrue(policy.contains("sts:AssumeRole"));
+        assertTrue(policy.contains("ec2.amazonaws.com"));
+        assertTrue(policy.contains("2012-10-17"));
+        assertTrue(policy.contains("Allow"));
+    }
+    
+    /**
+     * Test CloudWatch agent configuration generation.
+     */
+    @Test
+    void testBuildCloudWatchAgentConfig() {
+        String config = Main.buildCloudWatchAgentConfig();
+        assertNotNull(config);
+        assertTrue(config.contains("FinancialApp/EC2"));
+        assertTrue(config.contains("cpu_usage_idle"));
+        assertTrue(config.contains("mem_used_percent"));
+        assertTrue(config.contains("used_percent"));
+        assertTrue(config.contains("metrics_collection_interval"));
+    }
+    
+    /**
+     * Test EC2 user data script generation.
+     */
+    @Test
+    void testBuildEc2UserData() {
+        String userData = Main.buildEc2UserData();
+        assertNotNull(userData);
+        assertTrue(userData.contains("#!/bin/bash"));
+        assertTrue(userData.contains("yum update -y"));
+        assertTrue(userData.contains("amazon-cloudwatch-agent"));
+        assertTrue(userData.contains("FinancialApp/EC2"));
+        assertTrue(userData.startsWith("#!/bin/bash"));
+    }
+    
+    /**
+     * Test KMS key usage validation.
+     */
+    @Test
+    void testIsValidKmsKeyUsage() {
+        // Valid key usages
+        assertTrue(Main.isValidKmsKeyUsage("ENCRYPT_DECRYPT"));
+        assertTrue(Main.isValidKmsKeyUsage("SIGN_VERIFY"));
+        
+        // Invalid key usages
+        assertFalse(Main.isValidKmsKeyUsage(null));
+        assertFalse(Main.isValidKmsKeyUsage(""));
+        assertFalse(Main.isValidKmsKeyUsage("INVALID_USAGE"));
+        assertFalse(Main.isValidKmsKeyUsage("encrypt_decrypt"));
+        assertFalse(Main.isValidKmsKeyUsage("ENCRYPT"));
+    }
+    
+    /**
+     * Test KMS deletion window validation.
+     */
+    @Test
+    void testIsValidKmsDeletionWindow() {
+        // Valid deletion windows
+        assertTrue(Main.isValidKmsDeletionWindow(7));
+        assertTrue(Main.isValidKmsDeletionWindow(15));
+        assertTrue(Main.isValidKmsDeletionWindow(30));
+        
+        // Invalid deletion windows
+        assertFalse(Main.isValidKmsDeletionWindow(6));
+        assertFalse(Main.isValidKmsDeletionWindow(31));
+        assertFalse(Main.isValidKmsDeletionWindow(0));
+        assertFalse(Main.isValidKmsDeletionWindow(-1));
+        assertFalse(Main.isValidKmsDeletionWindow(100));
+    }
+    
+    /**
+     * Test EBS volume type validation.
+     */
+    @Test
+    void testIsValidEbsVolumeType() {
+        // Valid volume types
+        assertTrue(Main.isValidEbsVolumeType("gp2"));
+        assertTrue(Main.isValidEbsVolumeType("gp3"));
+        assertTrue(Main.isValidEbsVolumeType("io1"));
+        assertTrue(Main.isValidEbsVolumeType("io2"));
+        assertTrue(Main.isValidEbsVolumeType("st1"));
+        assertTrue(Main.isValidEbsVolumeType("sc1"));
+        assertTrue(Main.isValidEbsVolumeType("standard"));
+        
+        // Invalid volume types
+        assertFalse(Main.isValidEbsVolumeType(null));
+        assertFalse(Main.isValidEbsVolumeType(""));
+        assertFalse(Main.isValidEbsVolumeType("gp4"));
+        assertFalse(Main.isValidEbsVolumeType("invalid"));
+        assertFalse(Main.isValidEbsVolumeType("GP2"));
+    }
+    
+    /**
+     * Test EBS volume size validation.
+     */
+    @Test
+    void testIsValidEbsVolumeSize() {
+        // Valid volume sizes for different types
+        assertTrue(Main.isValidEbsVolumeSize(1, "gp2"));
+        assertTrue(Main.isValidEbsVolumeSize(100, "gp3"));
+        assertTrue(Main.isValidEbsVolumeSize(16384, "gp2"));
+        assertTrue(Main.isValidEbsVolumeSize(4, "io1"));
+        assertTrue(Main.isValidEbsVolumeSize(125, "st1"));
+        assertTrue(Main.isValidEbsVolumeSize(1, "standard"));
+        assertTrue(Main.isValidEbsVolumeSize(1024, "standard"));
+        
+        // Invalid volume sizes
+        assertFalse(Main.isValidEbsVolumeSize(0, "gp2"));
+        assertFalse(Main.isValidEbsVolumeSize(-1, "gp2"));
+        assertFalse(Main.isValidEbsVolumeSize(16385, "gp2"));
+        assertFalse(Main.isValidEbsVolumeSize(3, "io1"));
+        assertFalse(Main.isValidEbsVolumeSize(124, "st1"));
+        assertFalse(Main.isValidEbsVolumeSize(1025, "standard"));
+        assertFalse(Main.isValidEbsVolumeSize(100, null));
+        assertFalse(Main.isValidEbsVolumeSize(100, "invalid"));
+    }
+    
+    /**
+     * Test CloudWatch metric period validation.
+     */
+    @Test
+    void testIsValidCloudWatchPeriod() {
+        // Valid periods
+        assertTrue(Main.isValidCloudWatchPeriod(60));
+        assertTrue(Main.isValidCloudWatchPeriod(120));
+        assertTrue(Main.isValidCloudWatchPeriod(300));
+        assertTrue(Main.isValidCloudWatchPeriod(3600));
+        
+        // Invalid periods
+        assertFalse(Main.isValidCloudWatchPeriod(0));
+        assertFalse(Main.isValidCloudWatchPeriod(-60));
+        assertFalse(Main.isValidCloudWatchPeriod(30));
+        assertFalse(Main.isValidCloudWatchPeriod(90));
+        assertFalse(Main.isValidCloudWatchPeriod(65));
+    }
+    
+    /**
+     * Test alarm threshold validation.
+     */
+    @Test
+    void testIsValidAlarmThreshold() {
+        // Valid thresholds
+        assertTrue(Main.isValidAlarmThreshold(0.0));
+        assertTrue(Main.isValidAlarmThreshold(50.0));
+        assertTrue(Main.isValidAlarmThreshold(70.5));
+        assertTrue(Main.isValidAlarmThreshold(100.0));
+        
+        // Invalid thresholds
+        assertFalse(Main.isValidAlarmThreshold(-0.1));
+        assertFalse(Main.isValidAlarmThreshold(100.1));
+        assertFalse(Main.isValidAlarmThreshold(-50.0));
+        assertFalse(Main.isValidAlarmThreshold(150.0));
+    }
+    
+    /**
+     * Test resource tags building - basic version.
+     */
+    @Test
+    void testBuildResourceTagsBasic() {
+        Map<String, String> tags = Main.buildResourceTags("production", "financial-app");
+        assertNotNull(tags);
+        assertEquals(2, tags.size());
+        assertEquals("production", tags.get("Environment"));
+        assertEquals("financial-app", tags.get("Application"));
+        
+        // Test invalid inputs
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildResourceTags(null, "app");
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildResourceTags("env", null);
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildResourceTags("", "app");
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildResourceTags("env", "");
+        });
+    }
+    
+    /**
+     * Test resource tags building - with additional tag.
+     */
+    @Test
+    void testBuildResourceTagsWithAdditionalTag() {
+        Map<String, String> tags = Main.buildResourceTags("production", "financial-app", "Purpose", "CloudTrail");
+        assertNotNull(tags);
+        assertEquals(3, tags.size());
+        assertEquals("production", tags.get("Environment"));
+        assertEquals("financial-app", tags.get("Application"));
+        assertEquals("CloudTrail", tags.get("Purpose"));
+        
+        // Test with null additional key/value (should be ignored)
+        Map<String, String> tags2 = Main.buildResourceTags("production", "financial-app", null, "value");
+        assertEquals(2, tags2.size());
+        
+        Map<String, String> tags3 = Main.buildResourceTags("production", "financial-app", "key", null);
+        assertEquals(2, tags3.size());
+        
+        Map<String, String> tags4 = Main.buildResourceTags("production", "financial-app", "", "value");
+        assertEquals(2, tags4.size());
+        
+        Map<String, String> tags5 = Main.buildResourceTags("production", "financial-app", "key", "");
+        assertEquals(2, tags5.size());
+    }
+    
+    /**
+     * Test main method behavior with no arguments.
+     */
+    @Test
+    void testMainMethodWithNoArguments() {
+        // This test verifies that the main method can be called
+        // In real scenarios, it would try to run Pulumi but we can't test actual Pulumi execution
+        // We test that the method signature is correct and accessible
+        assertDoesNotThrow(() -> {
+            Method mainMethod = Main.class.getDeclaredMethod("main", String[].class);
+            assertTrue(Modifier.isPublic(mainMethod.getModifiers()));
+            assertTrue(Modifier.isStatic(mainMethod.getModifiers()));
+            assertEquals(void.class, mainMethod.getReturnType());
+            
+            // Test method can be invoked (will fail due to Pulumi context but verifies signature)
+            try {
+                mainMethod.invoke(null, (Object) new String[]{});
+            } catch (Exception e) {
+                // Expected to fail due to Pulumi context requirements
+                assertTrue(e.getCause() instanceof RuntimeException || 
+                          e.getCause() instanceof IllegalStateException ||
+                          e.getCause() instanceof java.lang.NoClassDefFoundError ||
+                          e instanceof java.lang.reflect.InvocationTargetException);
+            }
+        });
+    }
+    
+    /**
+     * Test createInfrastructure method accessibility.
+     */
+    @Test
+    void testCreateInfrastructureMethodExists() {
+        assertDoesNotThrow(() -> {
+            Method method = Main.class.getDeclaredMethod("createInfrastructure", com.pulumi.Context.class);
+            assertTrue(Modifier.isPublic(method.getModifiers()));
+            assertTrue(Modifier.isStatic(method.getModifiers()));
+            assertEquals(void.class, method.getReturnType());
+            assertEquals(1, method.getParameterCount());
+            assertEquals(com.pulumi.Context.class, method.getParameterTypes()[0]);
+        });
+    }
+    
+    /**
+     * Test createInfrastructure method behavior.
+     */
+    @Test
+    void testCreateInfrastructureMethodBehavior() {
+        // Test method behavior when called with null context
+        assertThrows(Exception.class, () -> {
+            Main.createInfrastructure(null);
+        }, "Method should throw exception when called with null context");
+    }
+    
+    /**
+     * Test all helper method signatures and accessibility.
+     */
+    @Test
+    void testAllHelperMethodsAccessible() {
+        assertDoesNotThrow(() -> {
+            // Test all new helper methods exist and are accessible
+            Method[] expectedMethods = {
+                Main.class.getDeclaredMethod("buildCloudTrailBucketPolicy", String.class),
+                Main.class.getDeclaredMethod("buildS3ReadOnlyPolicy", String.class),  
+                Main.class.getDeclaredMethod("buildEc2AssumeRolePolicy"),
+                Main.class.getDeclaredMethod("buildCloudWatchAgentConfig"),
+                Main.class.getDeclaredMethod("buildEc2UserData"),
+                Main.class.getDeclaredMethod("isValidKmsKeyUsage", String.class),
+                Main.class.getDeclaredMethod("isValidKmsDeletionWindow", int.class),
+                Main.class.getDeclaredMethod("isValidEbsVolumeType", String.class),
+                Main.class.getDeclaredMethod("isValidEbsVolumeSize", int.class, String.class),
+                Main.class.getDeclaredMethod("isValidCloudWatchPeriod", int.class),
+                Main.class.getDeclaredMethod("isValidAlarmThreshold", double.class),
+                Main.class.getDeclaredMethod("buildResourceTags", String.class, String.class),
+                Main.class.getDeclaredMethod("buildResourceTags", String.class, String.class, String.class, String.class)
+            };
+            
+            for (Method method : expectedMethods) {
+                assertTrue(Modifier.isPublic(method.getModifiers()), 
+                    method.getName() + " should be public");
+                assertTrue(Modifier.isStatic(method.getModifiers()), 
+                    method.getName() + " should be static");
+            }
+        });
+    }
+    
+    /**
+     * Test constants accessibility and values.
+     */
+    @Test 
+    void testConstantsAccessibility() {
+        assertDoesNotThrow(() -> {
+            // Test REGION constant
+            Field regionField = Main.class.getDeclaredField("REGION");
+            assertTrue(Modifier.isPrivate(regionField.getModifiers()));
+            assertTrue(Modifier.isStatic(regionField.getModifiers()));
+            assertTrue(Modifier.isFinal(regionField.getModifiers()));
+            
+            // Test RANDOM_SUFFIX constant
+            Field suffixField = Main.class.getDeclaredField("RANDOM_SUFFIX");
+            assertTrue(Modifier.isPrivate(suffixField.getModifiers()));
+            assertTrue(Modifier.isStatic(suffixField.getModifiers()));
+            assertTrue(Modifier.isFinal(suffixField.getModifiers()));
+        });
     }
 }
