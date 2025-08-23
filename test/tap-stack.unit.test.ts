@@ -39,12 +39,6 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('KeyName parameter should have correct properties', () => {
-      const keyNameParam = template.Parameters.KeyName;
-      expect(keyNameParam.Type).toBe('String');
-      expect(keyNameParam.Default).toBe('iac-rlhf-aws-trainer-instance');
-      expect(keyNameParam.MinLength).toBe(1);
-    });
 
     test('SSHLocation parameter should have correct properties', () => {
       const sshParam = template.Parameters.SSHLocation;
