@@ -82,6 +82,6 @@ Style & quality
 Now produce:
 	•	A complete lib/provide.tf tree, then the key tap_stack.tf files 
 	•	Where code would be too long, summarizing repetitive blocks once, then show one full representative block.
-	•	Ensure the result is directly usable after backend bootstrap and variable population.
+	•	Ensure the result is directly usable after backend bootstrap and variables population.
 
 Use this prompt verbatim with your values for tags, CIDRs, and any service choices you prefer (ALB vs. Route 53 weighting) and Claude should return a clean, compliant Terraform setup.
