@@ -460,15 +460,34 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              set -e
+              
+              # Update system packages
+              yum update -y
+              
+              # Install Apache
               yum install -y httpd
+              
+              # Start and enable Apache
               systemctl start httpd
               systemctl enable httpd
-              echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
-              echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-              echo "<p>Health check endpoint is working!</p>" >> /var/www/html/index.html
-              # Create a simple health check file
+              
+              # Create web content
+              cat > /var/www/html/index.html << 'HTML'
+              <h1>Hello from ${local.name_prefix}</h1>
+              <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+              <p>Health check endpoint is working!</p>
+              <p>Timestamp: $(date)</p>
+              HTML
+              
+              # Create health check endpoint
               echo "OK" > /var/www/html/health
               chmod 644 /var/www/html/health
+              
+              # Test the web server
+              curl -f http://localhost/health || exit 1
+              
+              echo "Web server setup completed successfully"
               EOF
   )
 
@@ -514,13 +533,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 60
+    interval            = 90
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 10
-    unhealthy_threshold = 3
+    timeout             = 15
+    unhealthy_threshold = 5
   }
 
   tags = merge(local.common_tags, {
@@ -549,7 +568,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 600
+  health_check_grace_period = 900
 
   min_size         = 1
   max_size         = 3
@@ -559,6 +578,8 @@ resource "aws_autoscaling_group" "main" {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
+
+  depends_on = [aws_nat_gateway.main]
 
   tag {
     key                 = "Name"
