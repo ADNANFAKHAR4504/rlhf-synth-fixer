@@ -777,6 +777,46 @@ public class MainTest {
     }
     
     /**
+     * Test KMS key policy generation.
+     */
+    @Test
+    void testBuildKmsKeyPolicy() {
+        String policy = Main.buildKmsKeyPolicy();
+        
+        // Verify it's valid JSON-like structure
+        assertNotNull(policy);
+        assertFalse(policy.isEmpty());
+        
+        // Verify it contains required components
+        assertTrue(policy.contains("Version"));
+        assertTrue(policy.contains("2012-10-17"));
+        assertTrue(policy.contains("Statement"));
+        
+        // Verify it allows root account permissions
+        assertTrue(policy.contains("arn:aws:iam::*:root"));
+        assertTrue(policy.contains("kms:*"));
+        
+        // Verify it allows CloudTrail permissions
+        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
+        assertTrue(policy.contains("kms:GenerateDataKey"));
+        assertTrue(policy.contains("kms:DescribeKey"));
+        assertTrue(policy.contains("kms:Encrypt"));
+        assertTrue(policy.contains("kms:Decrypt"));
+        
+        // Verify it allows S3 service permissions
+        assertTrue(policy.contains("s3.amazonaws.com"));
+        assertTrue(policy.contains("s3.us-east-1.amazonaws.com"));
+        
+        // Verify CloudTrail condition exists
+        assertTrue(policy.contains("aws:cloudtrail:arn"));
+        assertTrue(policy.contains("arn:aws:cloudtrail:*:*:trail/*"));
+        
+        // Verify policy structure contains multiple statements
+        int statementCount = policy.split("\"Sid\"").length - 1;
+        assertTrue(statementCount >= 3, "Policy should have at least 3 statements");
+    }
+    
+    /**
      * Test EBS volume type validation.
      */
     @Test
