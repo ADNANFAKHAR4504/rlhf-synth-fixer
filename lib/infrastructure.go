@@ -574,34 +574,75 @@ func (m *MultiRegionInfrastructure) createSecurityGroups(region string, vpc *ec2
 }
 
 func (m *MultiRegionInfrastructure) createRDSInstance(region string, subnetGroup *rds.SubnetGroup, securityGroup *ec2.SecurityGroup, kmsKey *kms.Key, monitoringRole *iam.Role, provider *aws.Provider) (*rds.Instance, error) {
-	return rds.NewInstance(m.ctx, fmt.Sprintf("%s-database-%s", m.config.Environment, region), &rds.InstanceArgs{
-		AllocatedStorage:                   pulumi.Int(m.config.DBAllocatedStorage),
-		StorageType:                        pulumi.String("gp3"),
-		Engine:                             pulumi.String("mysql"),
-		EngineVersion:                      pulumi.String("8.0"),
-		InstanceClass:                      pulumi.String(m.config.DBInstanceClass),
-		DbName:                             pulumi.String(fmt.Sprintf("%sdb", m.config.Environment)),
-		Username:                           pulumi.String(fmt.Sprintf("dbadmin_%s", m.config.Environment)),
-		ManageMasterUserPassword:           pulumi.Bool(true),
-		VpcSecurityGroupIds:                pulumi.StringArray{securityGroup.ID()},
-		DbSubnetGroupName:                  subnetGroup.Name,
-		BackupRetentionPeriod:              pulumi.Int(m.config.BackupRetention),
-		BackupWindow:                       pulumi.String("03:00-04:00"),
-		MaintenanceWindow:                  pulumi.String("sun:04:00-sun:05:00"),
-		MultiAz:                            pulumi.Bool(m.config.MultiAZ),
-		StorageEncrypted:                   pulumi.Bool(true),
-		KmsKeyId:                           kmsKey.Arn,
-		MonitoringInterval:                 pulumi.Int(60),
-		MonitoringRoleArn:                  monitoringRole.Arn,
-		PerformanceInsightsEnabled:         pulumi.Bool(m.config.EnableInsights),
-		PerformanceInsightsKmsKeyId:        kmsKey.Arn,
-		PerformanceInsightsRetentionPeriod: pulumi.Int(7),
-		AutoMinorVersionUpgrade:            pulumi.Bool(true),
-		DeletionProtection:                 pulumi.Bool(false),
-		SkipFinalSnapshot:                  pulumi.Bool(false),
-		FinalSnapshotIdentifier:            pulumi.String(fmt.Sprintf("%s-final-snapshot-%s", m.config.Environment, region)),
-		Tags:                               m.tags,
+	rdsInstance, err := rds.NewInstance(m.ctx, fmt.Sprintf("%s-database-%s", m.config.Environment, region), &rds.InstanceArgs{
+		AllocatedStorage:         pulumi.Int(m.config.DBAllocatedStorage),
+		StorageType:              pulumi.String("gp3"),
+		Engine:                   pulumi.String("mysql"),
+		EngineVersion:            pulumi.String("8.0"),
+		InstanceClass:            pulumi.String(m.config.DBInstanceClass),
+		DbName:                   pulumi.String(fmt.Sprintf("%sdb", m.config.Environment)),
+		Username:                 pulumi.String(fmt.Sprintf("dbadmin_%s", m.config.Environment)),
+		ManageMasterUserPassword: pulumi.Bool(true),
+		VpcSecurityGroupIds:      pulumi.StringArray{securityGroup.ID()},
+		DbSubnetGroupName:        subnetGroup.Name,
+		BackupRetentionPeriod:    pulumi.Int(m.config.BackupRetention),
+		BackupWindow:             pulumi.String("03:00-04:00"),
+		MaintenanceWindow:        pulumi.String("sun:04:00-sun:05:00"),
+		MultiAz:                  pulumi.Bool(m.config.MultiAZ),
+		StorageEncrypted:         pulumi.Bool(true),
+		KmsKeyId:                 kmsKey.Arn,
+		MonitoringInterval:       pulumi.Int(60),
+		MonitoringRoleArn:        monitoringRole.Arn,
+		AutoMinorVersionUpgrade:  pulumi.Bool(true),
+		DeletionProtection:       pulumi.Bool(false),
+		SkipFinalSnapshot:        pulumi.Bool(false),
+		FinalSnapshotIdentifier:  pulumi.String(fmt.Sprintf("%s-final-snapshot-%s", m.config.Environment, region)),
+		Tags:                     m.tags,
 	}, pulumi.Provider(provider))
+	if err != nil {
+		return nil, err
+	}
+
+	// Create CloudWatch alarms for RDS monitoring
+	_, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-cpu-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.String(fmt.Sprintf("%s-rds-cpu-high-%s", m.config.Environment, region)),
+		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+		EvaluationPeriods:  pulumi.Int(2),
+		MetricName:         pulumi.String("CPUUtilization"),
+		Namespace:          pulumi.String("AWS/RDS"),
+		Period:             pulumi.Int(300),
+		Statistic:          pulumi.String("Average"),
+		Threshold:          pulumi.Float64(80),
+		AlarmDescription:   pulumi.String("RDS CPU utilization is too high"),
+		Dimensions: pulumi.StringMap{
+			"DBInstanceIdentifier": rdsInstance.ID(),
+		},
+		Tags: m.tags,
+	}, pulumi.Provider(provider))
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-connections-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.String(fmt.Sprintf("%s-rds-connections-high-%s", m.config.Environment, region)),
+		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+		EvaluationPeriods:  pulumi.Int(2),
+		MetricName:         pulumi.String("DatabaseConnections"),
+		Namespace:          pulumi.String("AWS/RDS"),
+		Period:             pulumi.Int(300),
+		Statistic:          pulumi.String("Average"),
+		Threshold:          pulumi.Float64(50),
+		AlarmDescription:   pulumi.String("RDS connection count is too high"),
+		Dimensions: pulumi.StringMap{
+			"DBInstanceIdentifier": rdsInstance.ID(),
+		},
+		Tags: m.tags,
+	}, pulumi.Provider(provider))
+	if err != nil {
+		return nil, err
+	}
+
+	return rdsInstance, nil
 }
 
 func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
