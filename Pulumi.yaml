@@ -1,7 +1,3 @@
 name: TapStack
-runtime:
-  name: java
-  options:
-    binary: ./gradlew
-description: A minimal Java Pulumi program
-main: lib/src/main/java/app/Main.java
+runtime: java
+description: Java-based infrastructure as code for TAP using Pulumi
