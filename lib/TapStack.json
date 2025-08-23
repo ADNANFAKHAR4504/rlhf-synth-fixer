@@ -1,162 +1,66 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secure Infrastructure Stack with comprehensive security controls, high availability, and CIS compliance",
+  "Description": "TAP Stack - Task Assignment Platform Infrastructure\nDevelopment-ready web hosting environment with multi-AZ networking,\nsecure EC2 instances, S3 bucket, IAM roles, and comprehensive monitoring.\n",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
         {
           "Label": {
+            "default": "Security Configuration"
+          },
+          "Parameters": [
+            "KeyName",
+            "SSHLocation"
+          ]
+        },
+        {
+          "Label": {
             "default": "Environment Configuration"
           },
           "Parameters": [
-            "TeamName",
-            "EnvironmentSuffix",
-            "InstanceType",
-            "AllowedCIDR"
+            "Environment"
           ]
         }
-      ]
+      ],
+      "ParameterLabels": {
+        "KeyName": {
+          "default": "EC2 Key Pair"
+        },
+        "SSHLocation": {
+          "default": "SSH Access CIDR"
+        },
+        "Environment": {
+          "default": "Environment Tag"
+        }
+      }
     }
   },
   "Parameters": {
-    "TeamName": {
+    "KeyName": {
       "Type": "String",
-      "Default": "devops",
-      "Description": "Team name for resource naming convention",
-      "AllowedPattern": "^[a-z0-9-]+$",
-      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+      "Default": "iac-rlhf-aws-trainer-instance",
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+      "MinLength": 1
     },
-    "EnvironmentSuffix": {
+    "SSHLocation": {
       "Type": "String",
-      "Default": "dev",
-      "Description": "Environment suffix for resource naming"
-    },
-    "InstanceType": {
-      "Type": "String",
-      "Default": "t3.medium",
-      "Description": "EC2 instance type for Auto Scaling Group",
-      "AllowedValues": [
-        "t3.micro",
-        "t3.small",
-        "t3.medium",
-        "t3.large"
-      ]
-    },
-    "AllowedCIDR": {
-      "Type": "String",
+      "Description": "The IP address range that can be used to SSH to the EC2 instances",
       "Default": "0.0.0.0/0",
-      "Description": "CIDR block allowed to access the application",
-      "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
-    }
-  },
-  "Mappings": {
-    "RegionMap": {
-      "us-east-1": {
-        "AMI": "ami-00ca32bbc84273381"
-      },
-      "us-west-2": {
-        "AMI": "ami-04c82466a6fab80eb"
-      }
+      "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "Development",
+      "Description": "Environment designation for resource tagging",
+      "AllowedValues": [
+        "Development",
+        "Staging",
+        "Production"
+      ]
     }
   },
   "Resources": {
-    "TurnAroundPromptTable": {
-      "Type": "AWS::DynamoDB::Table",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
-      "Properties": {
-        "TableName": {
-          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
-        },
-        "AttributeDefinitions": [
-          {
-            "AttributeName": "id",
-            "AttributeType": "S"
-          }
-        ],
-        "KeySchema": [
-          {
-            "AttributeName": "id",
-            "KeyType": "HASH"
-          }
-        ],
-        "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false,
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Team",
-            "Value": {
-              "Ref": "TeamName"
-            }
-          }
-        ]
-      }
-    },
-    "KMSKey": {
-      "Type": "AWS::KMS::Key",
-      "Properties": {
-        "Description": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix} KMS key for encryption"
-        },
-        "KeyPolicy": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "Enable IAM User Permissions",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow CloudTrail to encrypt logs",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": [
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow S3 service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
-              "Resource": "*"
-            }
-          ]
-        }
-      }
-    },
-    "KMSKeyAlias": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": {
-          "Fn::Sub": "alias/${TeamName}-${EnvironmentSuffix}-key"
-        },
-        "TargetKeyId": {
-          "Ref": "KMSKey"
-        }
-      }
-    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -167,8 +71,90 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-vpc"
+              "Fn::Sub": "VPC-${Environment}-TAP"
             }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "TAP Platform Infrastructure"
+          }
+        ]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "Subnet-${Environment}-TAP-Public-1"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Public"
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "Subnet-${Environment}-TAP-Public-2"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Public"
           }
         ]
       }
@@ -180,13 +166,19 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-igw"
+              "Fn::Sub": "IGW-${Environment}-TAP"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
             }
           }
         ]
       }
     },
-    "AttachGateway": {
+    "InternetGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
         "VpcId": {
@@ -195,108 +187,6 @@
         "InternetGatewayId": {
           "Ref": "InternetGateway"
         }
-      }
-    },
-    "PublicSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-public-subnet-1"
-            }
-          }
-        ]
-      }
-    },
-    "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-public-subnet-2"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-private-subnet-1"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.4.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-private-subnet-2"
-            }
-          }
-        ]
       }
     },
     "PublicRouteTable": {
@@ -309,15 +199,21 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-public-rt"
+              "Fn::Sub": "RT-${Environment}-TAP-Public"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
             }
           }
         ]
       }
     },
-    "PublicRoute": {
+    "DefaultPublicRoute": {
       "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
+      "DependsOn": "InternetGatewayAttachment",
       "Properties": {
         "RouteTableId": {
           "Ref": "PublicRouteTable"
@@ -328,171 +224,35 @@
         }
       }
     },
-    "PublicSubnetRouteTableAssociation1": {
+    "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
         "RouteTableId": {
           "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PublicSubnetRouteTableAssociation2": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-    "NATGateway2EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway1EIP",
-            "AllocationId"
-          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-nat-1"
-            }
-          }
-        ]
+        }
       }
     },
-    "NATGateway2": {
-      "Type": "AWS::EC2::NatGateway",
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway2EIP",
-            "AllocationId"
-          ]
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
         },
         "SubnetId": {
           "Ref": "PublicSubnet2"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-nat-2"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRouteTable1": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-private-rt-1"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRouteTable2": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-private-rt-2"
-            }
-          }
-        ]
-      }
-    },
-    "DefaultPrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway1"
         }
       }
     },
-    "DefaultPrivateRoute2": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway2"
-        }
-      }
-    },
-    "PrivateSubnetRouteTableAssociation1": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        },
-        "SubnetId": {
-          "Ref": "PrivateSubnet1"
-        }
-      }
-    },
-    "PrivateSubnetRouteTableAssociation2": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        },
-        "SubnetId": {
-          "Ref": "PrivateSubnet2"
-        }
-      }
-    },
-    "ALBSecurityGroup": {
+    "WebServerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-alb-sg"
+          "Fn::Sub": "SG-${Environment}-TAP-WebServer"
         },
-        "GroupDescription": "Security group for Application Load Balancer",
+        "GroupDescription": "Enable SSH and HTTP access",
         "VpcId": {
           "Ref": "VPC"
         },
@@ -501,71 +261,37 @@
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "CidrIp": {
-              "Ref": "AllowedCIDR"
-            },
-            "Description": "HTTP access"
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from anywhere"
           },
           {
             "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
+            "FromPort": 22,
+            "ToPort": 22,
             "CidrIp": {
-              "Ref": "AllowedCIDR"
+              "Ref": "SSHLocation"
             },
-            "Description": "HTTPS access"
+            "Description": "Allow SSH from specified CIDR"
           }
         ],
         "SecurityGroupEgress": [
           {
-            "IpProtocol": -1,
+            "IpProtocol": "-1",
             "CidrIp": "0.0.0.0/0",
-            "Description": "All outbound traffic"
+            "Description": "Allow all outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-alb-sg"
+              "Fn::Sub": "SG-${Environment}-TAP-WebServer"
             }
-          }
-        ]
-      }
-    },
-    "EC2SecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-ec2-sg"
-        },
-        "GroupDescription": "Security group for EC2 instances",
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "SecurityGroupIngress": [
+          },
           {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "SourceSecurityGroupId": {
-              "Ref": "ALBSecurityGroup"
-            },
-            "Description": "HTTP from ALB"
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": -1,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "All outbound traffic"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
+            "Key": "Environment",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-ec2-sg"
+              "Ref": "Environment"
             }
           }
         ]
@@ -587,12 +313,11 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
         ],
         "Policies": [
           {
-            "PolicyName": "S3Access",
+            "PolicyName": "S3BucketAccess",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -600,22 +325,34 @@
                   "Effect": "Allow",
                   "Action": [
                     "s3:GetObject",
-                    "s3:PutObject"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
+                    "s3:PutObject",
+                    "s3:DeleteObject",
                     "s3:ListBucket"
                   ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
-                  }
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
+                    }
+                  ]
                 }
               ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "Role-${Environment}-TAP-EC2"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
             }
           }
         ]
@@ -631,333 +368,20 @@
         ]
       }
     },
-    "LaunchTemplate": {
-      "Type": "AWS::EC2::LaunchTemplate",
-      "Properties": {
-        "LaunchTemplateName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-launch-template"
-        },
-        "LaunchTemplateData": {
-          "ImageId": {
-            "Fn::FindInMap": [
-              "RegionMap",
-              {
-                "Ref": "AWS::Region"
-              },
-              "AMI"
-            ]
-          },
-          "InstanceType": {
-            "Ref": "InstanceType"
-          },
-          "IamInstanceProfile": {
-            "Name": {
-              "Ref": "EC2InstanceProfile"
-            }
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "EC2SecurityGroup"
-            }
-          ],
-          "BlockDeviceMappings": [
-            {
-              "DeviceName": "/dev/xvda",
-              "Ebs": {
-                "VolumeSize": 20,
-                "VolumeType": "gp3",
-                "Encrypted": true,
-                "DeleteOnTermination": true
-              }
-            }
-          ],
-          "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Secure Infrastructure - ${TeamName}-${EnvironmentSuffix}</h1>\" > /var/www/html/index.html\n\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/${TeamName}/${EnvironmentSuffix}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd/access_log\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/${TeamName}/${EnvironmentSuffix}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd/error_log\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
-            }
-          },
-          "TagSpecifications": [
-            {
-              "ResourceType": "instance",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-instance"
-                  }
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "AutoScalingGroup": {
-      "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-asg"
-        },
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          }
-        ],
-        "LaunchTemplate": {
-          "LaunchTemplateId": {
-            "Ref": "LaunchTemplate"
-          },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
-        },
-        "MinSize": 1,
-        "MaxSize": 2,
-        "DesiredCapacity": 1,
-        "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 300,
-        "TargetGroupARNs": [
-          {
-            "Ref": "TargetGroup"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-asg-instance"
-            },
-            "PropagateAtLaunch": true
-          }
-        ]
-      }
-    },
-    "ApplicationLoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-alb"
-        },
-        "Scheme": "internet-facing",
-        "Type": "application",
-        "SecurityGroups": [
-          {
-            "Ref": "ALBSecurityGroup"
-          }
-        ],
-        "Subnets": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-alb"
-            }
-          }
-        ]
-      }
-    },
-    "TargetGroup": {
-      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-tg"
-        },
-        "Port": 80,
-        "Protocol": "HTTP",
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "HealthCheckPath": "/",
-        "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-tg"
-            }
-          }
-        ]
-      }
-    },
-    "ALBListener": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Properties": {
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "TargetGroup"
-            }
-          }
-        ],
-        "LoadBalancerArn": {
-          "Ref": "ApplicationLoadBalancer"
-        },
-        "Port": 80,
-        "Protocol": "HTTP"
-      }
-    },
-    "WebACL": {
-      "Type": "AWS::WAFv2::WebACL",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-waf"
-        },
-        "Scope": "REGIONAL",
-        "DefaultAction": {
-          "Allow": {}
-        },
-        "Rules": [
-          {
-            "Name": "AWSManagedRulesCommonRuleSet",
-            "Priority": 1,
-            "OverrideAction": {
-              "None": {}
-            },
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesCommonRuleSet"
-              }
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "CommonRuleSetMetric"
-            }
-          },
-          {
-            "Name": "AWSManagedRulesKnownBadInputsRuleSet",
-            "Priority": 2,
-            "OverrideAction": {
-              "None": {}
-            },
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
-              }
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "KnownBadInputsRuleSetMetric"
-            }
-          },
-          {
-            "Name": "AWSManagedRulesSQLiRuleSet",
-            "Priority": 3,
-            "OverrideAction": {
-              "None": {}
-            },
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesSQLiRuleSet"
-              }
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "SQLiRuleSetMetric"
-            }
-          }
-        ],
-        "VisibilityConfig": {
-          "SampledRequestsEnabled": true,
-          "CloudWatchMetricsEnabled": true,
-          "MetricName": {
-            "Fn::Sub": "${TeamName}${EnvironmentSuffix}WebACL"
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-waf"
-            }
-          }
-        ]
-      }
-    },
-    "WebACLAssociation": {
-      "Type": "AWS::WAFv2::WebACLAssociation",
-      "Properties": {
-        "ResourceArn": {
-          "Fn::GetAtt": [
-            "ApplicationLoadBalancer",
-            "LoadBalancerArn"
-          ]
-        },
-        "WebACLArn": {
-          "Fn::GetAtt": [
-            "WebACL",
-            "Arn"
-          ]
-        }
-      }
-    },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {
-                  "Ref": "KMSKey"
-                }
-              },
-              "BucketKeyEnabled": true
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
+        "BucketName": {
+          "Fn::Sub": "tap-development-bucket-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
-        "LoggingConfiguration": {
-          "DestinationBucketName": {
-            "Ref": "AccessLogsBucket"
-          },
-          "LogFilePrefix": "access-logs/"
-        }
-      }
-    },
-    "AccessLogsBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {
-                  "Ref": "KMSKey"
-                }
+                "SSEAlgorithm": "AES256"
               }
             }
           ]
@@ -967,392 +391,305 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
-        }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "S3-${Environment}-TAP-Data"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "TAP Application Data Storage"
+          }
+        ]
       }
     },
-    "CloudWatchLogGroup": {
+    "WebServerLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/${TeamName}/${EnvironmentSuffix}/application"
+          "Fn::Sub": "/aws/ec2/${Environment}/tap/webserver"
         },
-        "RetentionInDays": 30
-      }
-    },
-    "CloudTrail": {
-      "Type": "AWS::CloudTrail::Trail",
-      "Properties": {
-        "TrailName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-cloudtrail"
-        },
-        "S3BucketName": {
-          "Ref": "CloudTrailBucket"
-        },
-        "S3KeyPrefix": "cloudtrail-logs/",
-        "IncludeGlobalServiceEvents": true,
-        "IsLogging": true,
-        "IsMultiRegionTrail": true,
-        "EnableLogFileValidation": true,
-        "KMSKeyId": {
-          "Ref": "KMSKey"
-        },
-        "EventSelectors": [
+        "RetentionInDays": 14,
+        "Tags": [
           {
-            "ReadWriteType": "All",
-            "IncludeManagementEvents": true,
-            "DataResources": [
-              {
-                "Type": "AWS::S3::Object",
-                "Values": [
-                  {
-                    "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "CloudTrailBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {
-                  "Ref": "KMSKey"
-                }
-              }
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "LogGroup-${Environment}-TAP-WebServer"
             }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        }
-      }
-    },
-    "CloudTrailBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {
-          "Ref": "CloudTrailBucket"
-        },
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "AWSCloudTrailAclCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "CloudTrailBucket",
-                  "Arn"
-                ]
-              }
-            },
-            {
-              "Sid": "AWSCloudTrailWrite",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    "DBSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-db-subnet-group"
-        },
-        "DBSubnetGroupDescription": "Subnet group for RDS database",
-        "SubnetIds": [
-          {
-            "Ref": "PrivateSubnet1"
           },
           {
-            "Ref": "PrivateSubnet2"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
+            "Key": "Environment",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-db-subnet-group"
+              "Ref": "Environment"
             }
           }
         ]
       }
     },
-    "DBSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
+    "CPUAlarmInstance1": {
+      "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-db-sg"
+        "AlarmName": {
+          "Fn::Sub": "CPUAlarm-${Environment}-TAP-Instance1"
         },
-        "GroupDescription": "Security group for RDS database",
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "SecurityGroupIngress": [
+        "AlarmDescription": "CPU utilization alarm for EC2 Instance 1",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 70,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
           {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "EC2SecurityGroup"
-            },
-            "Description": "MySQL access from EC2 instances"
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "WebServerInstance1"
+            }
           }
         ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "CPUAlarmInstance2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "CPUAlarm-${Environment}-TAP-Instance2"
+        },
+        "AlarmDescription": "CPU utilization alarm for EC2 Instance 2",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 70,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": {
+              "Ref": "WebServerInstance2"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "WebServerInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
+        "InstanceType": "t3.micro",
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "WebServerSecurityGroup"
+          }
+        ],
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Monitoring": true,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd awscli\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>TAP Platform - Instance 1</h1>\" > /var/www/html/index.html\necho \"<p>Environment: ${Environment}</p>\" >> /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\necho \"<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\" >> /var/www/html/index.html\necho \"<p>S3 Bucket: ${S3Bucket}</p>\" >> /var/www/html/index.html\n"
+          }
+        },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-db-sg"
+              "Fn::Sub": "EC2-${Environment}-TAP-WebServer-1"
             }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "TAP Web Server"
           }
         ]
       }
     },
-    "Database": {
-      "Type": "AWS::RDS::DBInstance",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
+    "WebServerInstance2": {
+      "Type": "AWS::EC2::Instance",
       "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-database"
+        "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}",
+        "InstanceType": "t3.micro",
+        "KeyName": {
+          "Ref": "KeyName"
         },
-        "DBInstanceClass": "db.t3.micro",
-        "Engine": "mysql",
-        "EngineVersion": "8.0.37",
-        "AllocatedStorage": 20,
-        "StorageType": "gp3",
-        "StorageEncrypted": true,
-        "KmsKeyId": {
-          "Ref": "KMSKey"
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
         },
-        "MasterUsername": "admin",
-        "ManageMasterUserPassword": true,
-        "MultiAZ": true,
-        "VPCSecurityGroups": [
+        "SecurityGroupIds": [
           {
-            "Ref": "DBSecurityGroup"
+            "Ref": "WebServerSecurityGroup"
           }
         ],
-        "DBSubnetGroupName": {
-          "Ref": "DBSubnetGroup"
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
         },
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "EnableCloudwatchLogsExports": [
-          "error",
-          "general"
-        ],
-        "MonitoringInterval": 60,
-        "MonitoringRoleArn": {
-          "Fn::GetAtt": [
-            "RDSEnhancedMonitoringRole",
-            "Arn"
-          ]
+        "Monitoring": true,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd awscli\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>TAP Platform - Instance 2</h1>\" > /var/www/html/index.html\necho \"<p>Environment: ${Environment}</p>\" >> /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\necho \"<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\" >> /var/www/html/index.html\necho \"<p>S3 Bucket: ${S3Bucket}</p>\" >> /var/www/html/index.html\n"
+          }
         },
-        "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-database"
+              "Fn::Sub": "EC2-${Environment}-TAP-WebServer-2"
             }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "TAP Web Server"
           }
-        ]
-      }
-    },
-    "RDSEnhancedMonitoringRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "monitoring.rds.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
         ]
       }
     }
   },
   "Outputs": {
-    "TurnAroundPromptTableName": {
-      "Description": "Name of the DynamoDB table",
-      "Value": {
-        "Ref": "TurnAroundPromptTable"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
-        }
-      }
-    },
-    "TurnAroundPromptTableArn": {
-      "Description": "ARN of the DynamoDB table",
-      "Value": {
-        "Fn::GetAtt": [
-          "TurnAroundPromptTable",
-          "Arn"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
-        }
-      }
-    },
-    "StackName": {
-      "Description": "Name of this CloudFormation stack",
-      "Value": {
-        "Ref": "AWS::StackName"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-StackName"
-        }
-      }
-    },
-    "EnvironmentSuffix": {
-      "Description": "Environment suffix used for this deployment",
-      "Value": {
-        "Ref": "EnvironmentSuffix"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
-        }
-      }
-    },
     "VPCId": {
-      "Description": "VPC ID",
+      "Description": "ID of the VPC",
       "Value": {
         "Ref": "VPC"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-vpc-id"
+          "Fn::Sub": "${AWS::StackName}-VPC-ID"
         }
       }
     },
-    "AutoScalingGroupName": {
-      "Description": "Auto Scaling Group Name",
+    "PublicSubnet1Id": {
+      "Description": "ID of the first public subnet",
       "Value": {
-        "Ref": "AutoScalingGroup"
+        "Ref": "PublicSubnet1"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-asg-name"
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet1-ID"
         }
       }
     },
-    "WebACLArn": {
-      "Description": "WAF Web ACL ARN",
+    "PublicSubnet2Id": {
+      "Description": "ID of the second public subnet",
       "Value": {
-        "Fn::GetAtt": [
-          "WebACL",
-          "Arn"
-        ]
+        "Ref": "PublicSubnet2"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-waf-arn"
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet2-ID"
         }
       }
     },
-    "LoadBalancerDNS": {
-      "Description": "Application Load Balancer DNS Name",
+    "SecurityGroupId": {
+      "Description": "ID of the web server security group",
       "Value": {
-        "Fn::GetAtt": [
-          "ApplicationLoadBalancer",
-          "DNSName"
-        ]
+        "Ref": "WebServerSecurityGroup"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-alb-dns"
+          "Fn::Sub": "${AWS::StackName}-SecurityGroup-ID"
         }
       }
     },
     "S3BucketName": {
-      "Description": "S3 Bucket Name",
+      "Description": "Name of the S3 bucket for application data",
       "Value": {
         "Ref": "S3Bucket"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-s3-bucket"
+          "Fn::Sub": "${AWS::StackName}-S3-Bucket"
         }
       }
     },
-    "KMSKeyId": {
-      "Description": "KMS Key ID",
+    "Instance1Id": {
+      "Description": "ID of the first EC2 instance",
       "Value": {
-        "Ref": "KMSKey"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-kms-key"
-        }
+        "Ref": "WebServerInstance1"
       }
     },
-    "DatabaseEndpoint": {
-      "Description": "RDS Database Endpoint",
+    "Instance2Id": {
+      "Description": "ID of the second EC2 instance",
+      "Value": {
+        "Ref": "WebServerInstance2"
+      }
+    },
+    "Instance1PublicIp": {
+      "Description": "Public IP address of the first EC2 instance",
       "Value": {
         "Fn::GetAtt": [
-          "Database",
-          "Endpoint.Address"
+          "WebServerInstance1",
+          "PublicIp"
         ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-db-endpoint"
-        }
       }
     },
-    "CloudWatchLogGroupName": {
-      "Description": "CloudWatch Log Group Name",
+    "Instance2PublicIp": {
+      "Description": "Public IP address of the second EC2 instance",
       "Value": {
-        "Ref": "CloudWatchLogGroup"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${TeamName}-${EnvironmentSuffix}-log-group"
-        }
+        "Fn::GetAtt": [
+          "WebServerInstance2",
+          "PublicIp"
+        ]
+      }
+    },
+    "Instance1PublicDNS": {
+      "Description": "Public DNS name of the first EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServerInstance1",
+          "PublicDnsName"
+        ]
+      }
+    },
+    "Instance2PublicDNS": {
+      "Description": "Public DNS name of the second EC2 instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServerInstance2",
+          "PublicDnsName"
+        ]
+      }
+    },
+    "WebSite1URL": {
+      "Description": "URL of the first web server",
+      "Value": {
+        "Fn::Sub": "http://${WebServerInstance1.PublicDnsName}"
+      }
+    },
+    "WebSite2URL": {
+      "Description": "URL of the second web server",
+      "Value": {
+        "Fn::Sub": "http://${WebServerInstance2.PublicDnsName}"
       }
     }
   }
