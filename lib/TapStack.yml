@@ -375,9 +375,15 @@ Resources:
 
   TapVPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${EnvironmentName}-${AWS::StackName}'
       RetentionInDays: !Ref FlowLogRetentionDays
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   TapVPCFlowLog:
     Type: AWS::EC2::FlowLog
@@ -547,7 +553,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub 'TapTransactions-${EnvironmentName}'
-      BillingMode: ON_DEMAND
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: TransactionId
           AttributeType: S
