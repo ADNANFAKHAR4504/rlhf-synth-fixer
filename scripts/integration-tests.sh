@@ -50,15 +50,7 @@ elif [ "$LANGUAGE" = "go" ]; then
       echo "❌ .gen/aws missing after cdktf get; aborting"
       exit 1
     fi
-
-    # Ensure CDKTF core deps are present to satisfy .gen imports
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    go clean -modcache || true
-    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-    go mod tidy
+    # Go modules prepared during build; skipping go get/tidy here
   fi
 
   if [ -d "lib" ]; then
