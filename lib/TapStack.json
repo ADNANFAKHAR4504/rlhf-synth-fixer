@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Includes least-privilege IAM roles, EC2 with encrypted EBS, S3 bucket with SSE + CloudTrail bucket policy, RDS with Secrets Manager credentials across 2 AZs, Lambda with inline code, CloudTrail logging, and no public SSH.\n",
+    "Description": "TapStack.yml — Secure, production-ready environment in us-east-1. Fixes applied: EC2 in private subnet, Lambda VPC config, IAM least privilege.\n",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -59,7 +59,7 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "MapPublicIpOnLaunch": true,
+                "MapPublicIpOnLaunch": false,
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -129,7 +129,13 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "PublicRoute": {
@@ -159,7 +165,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sg"
+                    "Fn::Sub": "prod-${EnvironmentSuffix}-sg"
                 },
                 "VpcId": {
                     "Ref": "VPC"
@@ -188,6 +194,12 @@
                         "IpProtocol": -1,
                         "CidrIp": "0.0.0.0/0"
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
                 ]
             }
         },
@@ -208,7 +220,7 @@
                 },
                 "Policies": [
                     {
-                        "PolicyName": "EC2Minimal",
+                        "PolicyName": "EC2LeastPrivilege",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -218,10 +230,26 @@
                                         "s3:GetObject",
                                         "s3:ListBucket"
                                     ],
-                                    "Resource": "*"
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SecureS3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${SecureS3Bucket.Arn}/*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -230,7 +258,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
+                    "Fn::Sub": "prod-${EnvironmentSuffix}-ec2profile"
                 },
                 "Roles": [
                     {
@@ -272,6 +300,12 @@
                             ]
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
                 ]
             }
         },
@@ -283,7 +317,7 @@
                     "Ref": "LatestAmiId"
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet1"
+                    "Ref": "PrivateSubnet1"
                 },
                 "IamInstanceProfile": {
                     "Ref": "EC2InstanceProfile"
@@ -301,6 +335,12 @@
                             "VolumeType": "gp3",
                             "Encrypted": true
                         }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -322,7 +362,13 @@
                     "IgnorePublicAcls": true,
                     "BlockPublicPolicy": true,
                     "RestrictPublicBuckets": true
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "SecureS3BucketPolicy": {
@@ -376,14 +422,20 @@
                     "GenerateStringKey": "password",
                     "PasswordLength": 16,
                     "ExcludeCharacters": "\"@/ '"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-dbsubnet"
+                    "Fn::Sub": "prod-${EnvironmentSuffix}-dbsubnet"
                 },
                 "DBSubnetGroupDescription": "Private DB subnets",
                 "SubnetIds": [
@@ -392,6 +444,12 @@
                     },
                     {
                         "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
                     }
                 ]
             }
@@ -435,14 +493,20 @@
                             ":SecretString:password}}"
                         ]
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "MyLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda"
+                    "Fn::Sub": "prod-${EnvironmentSuffix}-lambda"
                 },
                 "Runtime": "python3.9",
                 "Role": {
@@ -456,13 +520,40 @@
                 "Timeout": 30,
                 "Code": {
                     "ZipFile": "def handler(event, context):\n    return {\"statusCode\":200, \"body\":\"Hello from TapStack\"}\n"
-                }
+                },
+                "VpcConfig": {
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ],
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "RetentionInDays": 90
+                "RetentionInDays": 90,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         },
         "CloudTrailRole": {
@@ -497,6 +588,12 @@
                             ]
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
                 ]
             }
         },
@@ -504,7 +601,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-trail"
+                    "Fn::Sub": "prod-${EnvironmentSuffix}-trail"
                 },
                 "S3BucketName": {
                     "Ref": "SecureS3Bucket"
@@ -524,7 +621,13 @@
                 "IsMultiRegionTrail": false,
                 "IncludeGlobalServiceEvents": true,
                 "EnableLogFileValidation": true,
-                "IsLogging": true
+                "IsLogging": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
             }
         }
     },
