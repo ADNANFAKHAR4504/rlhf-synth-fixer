@@ -7,11 +7,37 @@ import com.pulumi.aws.cloudtrail.Trail;
 import com.pulumi.aws.cloudtrail.TrailArgs;
 import com.pulumi.aws.cloudwatch.MetricAlarm;
 import com.pulumi.aws.cloudwatch.MetricAlarmArgs;
-import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.Eip;
+import com.pulumi.aws.ec2.EipArgs;
+import com.pulumi.aws.ec2.Instance;
+import com.pulumi.aws.ec2.InstanceArgs;
+import com.pulumi.aws.ec2.InternetGateway;
+import com.pulumi.aws.ec2.InternetGatewayArgs;
+import com.pulumi.aws.ec2.NatGateway;
+import com.pulumi.aws.ec2.NatGatewayArgs;
+import com.pulumi.aws.ec2.Route;
+import com.pulumi.aws.ec2.RouteArgs;
+import com.pulumi.aws.ec2.RouteTable;
+import com.pulumi.aws.ec2.RouteTableArgs;
+import com.pulumi.aws.ec2.RouteTableAssociation;
+import com.pulumi.aws.ec2.RouteTableAssociationArgs;
+import com.pulumi.aws.ec2.SecurityGroup;
+import com.pulumi.aws.ec2.SecurityGroupArgs;
+import com.pulumi.aws.ec2.Subnet;
+import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.ec2.Vpc;
+import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.ec2.inputs.InstanceEbsBlockDeviceArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
-import com.pulumi.aws.iam.*;
+import com.pulumi.aws.iam.InstanceProfile;
+import com.pulumi.aws.iam.InstanceProfileArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
+import com.pulumi.aws.iam.Role;
+import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.RolePolicyAttachment;
+import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
 import com.pulumi.aws.kms.Key;
 import com.pulumi.aws.kms.KeyArgs;
 import com.pulumi.aws.s3.Bucket;
@@ -40,12 +66,12 @@ public final class Main {
     private static final String REGION = "us-east-1";
     private static final String RANDOM_SUFFIX = generateRandomSuffix();
     
-    public static void defineInfrastructure(com.pulumi.Context ctx) {
+    public static void defineInfrastructure(final com.pulumi.Context ctx) {
         // Method stub for testing - actual infrastructure is defined in main()
         throw new RuntimeException("This method is only for testing purposes");
     }
     
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         Pulumi.run(ctx -> {
             
             // Configure AWS Provider for us-east-1
@@ -95,6 +121,7 @@ public final class Main {
                     .build(), providerOptions);
             
             // Create S3 bucket policy for CloudTrail
+            String bucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
             String cloudtrailBucketPolicyDoc = String.format("""
                 {
                     "Version": "2012-10-17",
@@ -106,7 +133,7 @@ public final class Main {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
                             "Action": "s3:GetBucketAcl",
-                            "Resource": "arn:aws:s3:::financial-cloudtrail-logs-%s"
+                            "Resource": "arn:aws:s3:::%s"
                         },
                         {
                             "Sid": "AWSCloudTrailWrite",
@@ -115,7 +142,7 @@ public final class Main {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
-                            "Resource": "arn:aws:s3:::financial-cloudtrail-logs-%s/*",
+                            "Resource": "arn:aws:s3:::%s/*",
                             "Condition": {
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control"
@@ -124,7 +151,7 @@ public final class Main {
                         }
                     ]
                 }
-                """, RANDOM_SUFFIX, RANDOM_SUFFIX);
+                """, bucketName, bucketName);
 
             var cloudtrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
                 BucketPolicyArgs.builder()
@@ -460,7 +487,10 @@ public final class Main {
                             EOF
                             
                             # Start CloudWatch agent
-                            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+                            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
+                                -a fetch-config -m ec2 \\
+                                -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\
+                                -s
                             """)
                         .tags(Map.of(
                             "Name", "financial-app-instance-" + instanceNumber + "-" + RANDOM_SUFFIX,
@@ -524,7 +554,7 @@ public final class Main {
     }
     
     // Helper method to build resource name with suffix
-    public static String buildResourceName(String prefix, String suffix) {
+    public static String buildResourceName(final String prefix, final String suffix) {
         if (prefix == null || prefix.isEmpty()) {
             throw new IllegalArgumentException("Prefix cannot be null or empty");
         }
@@ -545,17 +575,17 @@ public final class Main {
     }
     
     // Helper method to validate resource tags
-    public static boolean isValidResourceTag(String key, String value) {
+    public static boolean isValidResourceTag(final String key, final String value) {
         if (key == null || key.isEmpty() || value == null || value.isEmpty()) {
             return false;
         }
         // AWS tag key/value constraints
-        return key.length() <= 128 && value.length() <= 256 && 
-               !key.startsWith("aws:") && !key.startsWith("AWS:");
+        return key.length() <= 128 && value.length() <= 256
+               && !key.startsWith("aws:") && !key.startsWith("AWS:");
     }
     
     // Helper method to validate CIDR blocks
-    public static boolean isValidCidrBlock(String cidr) {
+    public static boolean isValidCidrBlock(final String cidr) {
         if (cidr == null || cidr.isEmpty()) {
             return false;
         }
@@ -594,7 +624,7 @@ public final class Main {
     }
     
     // Helper method to validate AWS region format
-    public static boolean isValidAwsRegion(String region) {
+    public static boolean isValidAwsRegion(final String region) {
         if (region == null || region.isEmpty()) {
             return false;
         }
@@ -604,7 +634,7 @@ public final class Main {
     }
     
     // Helper method to validate instance types
-    public static boolean isValidInstanceType(String instanceType) {
+    public static boolean isValidInstanceType(final String instanceType) {
         if (instanceType == null || instanceType.isEmpty()) {
             return false;
         }
@@ -614,7 +644,7 @@ public final class Main {
     }
     
     // Helper method to generate availability zone name
-    public static String generateAvailabilityZone(String region, String zone) {
+    public static String generateAvailabilityZone(final String region, final String zone) {
         if (region == null || region.isEmpty()) {
             throw new IllegalArgumentException("Region cannot be null or empty");
         }
@@ -629,12 +659,12 @@ public final class Main {
     }
     
     // Helper method to validate port numbers
-    public static boolean isValidPort(int port) {
+    public static boolean isValidPort(final int port) {
         return port >= 1 && port <= 65535;
     }
     
     // Helper method to validate security group protocols
-    public static boolean isValidProtocol(String protocol) {
+    public static boolean isValidProtocol(final String protocol) {
         if (protocol == null || protocol.isEmpty()) {
             return false;
         }
@@ -649,7 +679,7 @@ public final class Main {
     }
     
     // Helper method to format resource names consistently
-    public static String formatResourceName(String type, String name, String suffix) {
+    public static String formatResourceName(final String type, final String name, final String suffix) {
         if (type == null || type.isEmpty()) {
             throw new IllegalArgumentException("Type cannot be null or empty");
         }
@@ -664,7 +694,7 @@ public final class Main {
     }
     
     // Helper method to validate AWS ARN format
-    public static boolean isValidArn(String arn) {
+    public static boolean isValidArn(final String arn) {
         if (arn == null || arn.isEmpty()) {
             return false;
         }
@@ -675,7 +705,7 @@ public final class Main {
     }
     
     // Helper method to calculate subnet size from CIDR
-    public static int calculateSubnetSize(String cidr) {
+    public static int calculateSubnetSize(final String cidr) {
         if (!isValidCidrBlock(cidr)) {
             throw new IllegalArgumentException("Invalid CIDR block: " + cidr);
         }
@@ -687,7 +717,7 @@ public final class Main {
     }
     
     // Helper method to validate bucket names
-    public static boolean isValidS3BucketName(String bucketName) {
+    public static boolean isValidS3BucketName(final String bucketName) {
         if (bucketName == null || bucketName.isEmpty()) {
             return false;
         }
