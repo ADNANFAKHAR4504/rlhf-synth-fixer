@@ -194,6 +194,21 @@ describe('TapStack Unit Tests', () => {
       expect(templateContent).toContain('!Ref');
       expect(templateContent).toContain('!GetAtt');
     });
+
+    test('should not use deprecated managed policies', () => {
+      // Check that we don't use the deprecated AWSCodePipelineServiceRole
+      expect(templateContent).not.toContain('arn:aws:iam::aws:policy/AWSCodePipelineServiceRole');
+
+      // Should use custom policies instead
+      expect(templateContent).toContain('PipelineExecutionPolicy');
+      expect(templateContent).toContain('CodeBuildExecutionPolicy');
+    });
+
+    test('should have CloudWatch Logs permissions for CodeBuild', () => {
+      expect(templateContent).toContain('logs:CreateLogGroup');
+      expect(templateContent).toContain('logs:CreateLogStream');
+      expect(templateContent).toContain('logs:PutLogEvents');
+    });
   });
 
   describe('Template Validation', () => {

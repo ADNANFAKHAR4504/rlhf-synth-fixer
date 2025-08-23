@@ -99,8 +99,6 @@ Resources:
             Principal:
               Service: codepipeline.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSCodePipelineServiceRole
       Policies:
         - PolicyName: PipelineExecutionPolicy
           PolicyDocument:
@@ -165,8 +163,6 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
       Policies:
         - PolicyName: CodeBuildExecutionPolicy
           PolicyDocument:
