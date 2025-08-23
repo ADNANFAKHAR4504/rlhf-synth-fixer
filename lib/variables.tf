@@ -50,13 +50,25 @@ variable "cost_center" {
 # Networking Variables
 ###################
 
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
+variable "vpc_config" {
+  description = "VPC configuration for each region"
+  type = map(object({
+    cidr = string
+    azs  = list(string)
+  }))
+  default = {
+    us-east-1 = {
+      cidr = "10.0.0.0/16"
+      azs  = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+    eu-central-1 = {
+      cidr = "10.1.0.0/16"
+      azs  = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+    }
+  }
   validation {
-    condition     = can(cidrhost(var.vpc_cidr, 0))
-    error_message = "VPC CIDR must be a valid IPv4 CIDR block."
+    condition     = alltrue([for k, v in var.vpc_config : can(cidrhost(v.cidr, 0))])
+    error_message = "All VPC CIDRs must be valid IPv4 CIDR blocks."
   }
 }
 
@@ -100,92 +112,7 @@ variable "desired_capacity" {
   default     = 3
 }
 
-###################
-# Database Variables
-###################
 
-variable "db_engine" {
-  description = "Database engine"
-  type        = string
-  default     = "mysql"
-}
-
-variable "db_engine_version" {
-  description = "Database engine version"
-  type        = string
-  default     = "8.0"
-}
-
-variable "db_family" {
-  description = "Database parameter group family"
-  type        = string
-  default     = "mysql8.0"
-}
-
-variable "db_instance_class" {
-  description = "Database instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "Initial database storage in GB"
-  type        = number
-  default     = 20
-}
-
-variable "db_max_allocated_storage" {
-  description = "Maximum database storage in GB"
-  type        = number
-  default     = 100
-}
-
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "appdb"
-}
-
-variable "db_username" {
-  description = "Database username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-  validation {
-    condition     = length(var.db_password) >= 8
-    error_message = "Database password must be at least 8 characters long."
-  }
-}
-
-variable "db_port" {
-  description = "Database port"
-  type        = number
-  default     = 3306
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
 
 ###################
 # Security Variables
@@ -345,5 +272,4 @@ variable "allowed_ingress_cidrs" {
   description = "List of CIDR blocks allowed for ingress"
   type        = list(string)
   default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-}
 }

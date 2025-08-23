@@ -16,16 +16,20 @@ output "cloudfront_domain_name" {
 # Blue-Green Deployment Outputs
 ###################
 
-output "active_environment" {
-  description = "Currently active environment (blue or green)"
-  value       = var.deployment_target
+output "active_region" {
+  description = "Currently active region (us-east-1 or eu-central-1)"
+  value       = var.blue_green_deployment.active_color == "blue" ? "us-east-1" : "eu-central-1"
 }
 
-output "environment_weights" {
-  description = "Current traffic distribution between blue and green"
+###################
+# Load Balancer Outputs
+###################
+
+output "load_balancer_dns_names" {
+  description = "DNS names of the load balancers in each region"
   value = {
-    blue  = var.blue_green_deployment_config.blue_weight
-    green = var.blue_green_deployment_config.green_weight
+    us_east_1    = aws_lb.app_us_east_1.dns_name
+    eu_central_1 = aws_lb.app_eu_central_1.dns_name
   }
 }
 
@@ -33,28 +37,41 @@ output "environment_weights" {
 # DNS Outputs
 ###################
 
-output "application_url" {
-  description = "URL of the application"
-  value       = var.create_dns_zone ? "https://${var.domain_name}" : aws_cloudfront_distribution.main.domain_name
+output "application_urls" {
+  description = "URLs for accessing the application"
+  value = {
+    main  = var.create_zone ? "https://${var.domain_name}" : aws_cloudfront_distribution.main.domain_name
+    blue  = "https://blue.${var.domain_name}"
+    green = "https://green.${var.domain_name}"
+  }
 }
 
 ###################
 # VPC Outputs
 ###################
 
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.main.id
+output "vpc_ids" {
+  description = "IDs of the VPCs in each region"
+  value = {
+    us_east_1    = aws_vpc.main_us_east_1.id
+    eu_central_1 = aws_vpc.main_eu_central_1.id
+  }
 }
 
 output "private_subnet_ids" {
-  description = "IDs of private subnets"
-  value       = aws_subnet.private[*].id
+  description = "IDs of private subnets in each region"
+  value = {
+    us_east_1    = aws_subnet.private_us_east_1[*].id
+    eu_central_1 = aws_subnet.private_eu_central_1[*].id
+  }
 }
 
 output "public_subnet_ids" {
-  description = "IDs of public subnets"
-  value       = aws_subnet.public[*].id
+  description = "IDs of public subnets in each region"
+  value = {
+    us_east_1    = aws_subnet.public_us_east_1[*].id
+    eu_central_1 = aws_subnet.public_eu_central_1[*].id
+  }
 }
 
 ###################
@@ -62,10 +79,15 @@ output "public_subnet_ids" {
 ###################
 
 output "security_group_ids" {
-  description = "IDs of security groups"
+  description = "IDs of security groups in each region"
   value = {
-    alb     = aws_security_group.alb.id
-    app     = aws_security_group.app.id
-    db      = aws_security_group.db.id
+    us_east_1 = {
+      alb = aws_security_group.alb_us_east_1.id
+      app = aws_security_group.app_us_east_1.id
+    }
+    eu_central_1 = {
+      alb = aws_security_group.alb_eu_central_1.id
+      app = aws_security_group.app_eu_central_1.id
+    }
   }
 }
