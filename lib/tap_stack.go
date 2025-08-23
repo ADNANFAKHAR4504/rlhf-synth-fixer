@@ -22,7 +22,7 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketserversideencryptionconfiguration"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketversioning"
@@ -413,11 +413,11 @@ func NewS3Component(scope constructs.Construct, id string, cfg *EnvironmentConfi
 	})
 
 	// Enable encryption
-	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String(fmt.Sprintf("%s-logging-encryption", id)), &s3bucketencryption.S3BucketEncryptionConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfiguration(scope, jsii.String(fmt.Sprintf("%s-logging-encryption", id)), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationConfig{
 		Bucket: loggingBucket.Id(),
-		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
-			Rule: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
-				ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+		Rule: []*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRule{
+			{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
 					SseAlgorithm: jsii.String("AES256"),
 				},
 			},
@@ -455,11 +455,11 @@ func NewS3Component(scope constructs.Construct, id string, cfg *EnvironmentConfi
 		},
 	})
 
-	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String(fmt.Sprintf("%s-replication-encryption", id)), &s3bucketencryption.S3BucketEncryptionConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfiguration(scope, jsii.String(fmt.Sprintf("%s-replication-encryption", id)), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationConfig{
 		Bucket: replicationBucket.Id(),
-		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
-			Rule: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
-				ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+		Rule: []*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRule{
+			{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
 					SseAlgorithm: jsii.String("AES256"),
 				},
 			},
