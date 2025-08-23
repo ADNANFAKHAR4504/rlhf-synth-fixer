@@ -10,6 +10,7 @@ terraform {
     }
   }
 
+
   # Partial backend config: values are injected at `terraform init` time
  backend "s3" {}
 }

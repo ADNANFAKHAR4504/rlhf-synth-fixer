@@ -249,6 +249,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
     });
 
+    
     test('Public subnets exist and are properly configured', async () => {
       if (skipIfNoCredentials('Public subnets exist and are properly configured')) return;
 

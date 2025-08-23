@@ -17,6 +17,7 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     expect(exists).toBe(true);
   });
 
+  
   // --- Optional sanity checks (keep lightweight) ---
 
   test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
