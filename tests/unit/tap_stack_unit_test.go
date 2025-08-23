@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/aws/jsii-runtime-go"
-	main "github.com/example/tap/lib"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,13 +32,13 @@ func synthStack(t *testing.T, stackName string, region string) string {
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	
 	if strings.Contains(stackName, "SecurityHub") {
-		main.NewSecurityHubSecondaryStack(app, jsii.String(stackName), &main.SecurityHubSecondaryStackConfig{
+		NewSecurityHubSecondaryStack(app, jsii.String(stackName), &SecurityHubSecondaryStackConfig{
 			Region:      jsii.String(region),
 			Environment: jsii.String("test"),
 			Project:     jsii.String("security-test"),
 		})
 	} else {
-		main.NewTapStack(app, jsii.String(stackName), &main.TapStackConfig{
+		NewTapStack(app, jsii.String(stackName), &TapStackConfig{
 			Region:      jsii.String(region),
 			Environment: jsii.String("test"),
 			Project:     jsii.String("security-test"),
