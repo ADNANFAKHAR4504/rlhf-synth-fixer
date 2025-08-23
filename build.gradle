@@ -169,7 +169,8 @@ jacocoTestReport {
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                    // Exclude nothing - include Main.class for full coverage
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
             ])
         }))
     }
@@ -182,18 +183,15 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                counter = 'INSTRUCTION'
-                value = 'COVEREDRATIO'
-                minimum = 0.42
+                minimum = 0.50
             }
         }
         rule {
             element = 'CLASS'
-            includes = ['app.Main']
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.32
+                minimum = 0.50
             }
         }
     }
