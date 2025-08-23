@@ -30,7 +30,7 @@ func synthStack(t *testing.T, stackName string, region string) string {
 	_ = os.Setenv("AWS_REGION", region)
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	if strings.Contains(stackName, "SecurityHub") {
 		NewSecurityHubSecondaryStack(app, jsii.String(stackName), &SecurityHubSecondaryStackConfig{
 			Region:      jsii.String(region),
@@ -46,7 +46,7 @@ func synthStack(t *testing.T, stackName string, region string) string {
 			CostCenter:  jsii.String("test-center"),
 		})
 	}
-	
+
 	app.Synth()
 
 	tfPath := filepath.Join(outdir, "stacks", stackName, "cdk.tf.json")
@@ -58,14 +58,14 @@ func synthStack(t *testing.T, stackName string, region string) string {
 
 func loadSynthesizedStack(t *testing.T, tfPath string) map[string]interface{} {
 	t.Helper()
-	
+
 	data, err := os.ReadFile(tfPath)
 	require.NoError(t, err)
-	
+
 	var tfConfig map[string]interface{}
 	err = json.Unmarshal(data, &tfConfig)
 	require.NoError(t, err)
-	
+
 	return tfConfig
 }
 
@@ -73,7 +73,7 @@ func TestTapStackCreation(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Verify basic structure
 	assert.Contains(t, tfConfig, "provider")
 	assert.Contains(t, tfConfig, "resource")
@@ -85,11 +85,11 @@ func TestSecurityHubSecondaryStackCreation(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "SecurityHubTest", "us-east-1")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Verify basic structure
 	assert.Contains(t, tfConfig, "provider")
 	assert.Contains(t, tfConfig, "resource")
-	
+
 	// Verify Security Hub resource
 	resources := tfConfig["resource"].(map[string]interface{})
 	assert.Contains(t, resources, "aws_securityhub_account")
@@ -99,11 +99,11 @@ func TestVPCConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackVPCTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get VPC resource
 	resources := tfConfig["resource"].(map[string]interface{})
 	vpcResources := resources["aws_vpc"].(map[string]interface{})
-	
+
 	// Verify VPC exists with correct configuration
 	assert.Contains(t, vpcResources, "security-vpc")
 	vpc := vpcResources["security-vpc"].(map[string]interface{})
@@ -116,26 +116,26 @@ func TestSubnetConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackSubnetTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get subnet resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	subnetResources := resources["aws_subnet"].(map[string]interface{})
-	
+
 	// Test public subnets
 	assert.Contains(t, subnetResources, "public-subnet-1")
 	publicSubnet1 := subnetResources["public-subnet-1"].(map[string]interface{})
 	assert.Equal(t, "10.0.1.0/24", publicSubnet1["cidr_block"])
 	assert.Equal(t, true, publicSubnet1["map_public_ip_on_launch"])
-	
+
 	assert.Contains(t, subnetResources, "public-subnet-2")
 	publicSubnet2 := subnetResources["public-subnet-2"].(map[string]interface{})
 	assert.Equal(t, "10.0.2.0/24", publicSubnet2["cidr_block"])
-	
+
 	// Test private subnets
 	assert.Contains(t, subnetResources, "private-subnet-1")
 	privateSubnet1 := subnetResources["private-subnet-1"].(map[string]interface{})
 	assert.Equal(t, "10.0.11.0/24", privateSubnet1["cidr_block"])
-	
+
 	assert.Contains(t, subnetResources, "private-subnet-2")
 	privateSubnet2 := subnetResources["private-subnet-2"].(map[string]interface{})
 	assert.Equal(t, "10.0.12.0/24", privateSubnet2["cidr_block"])
@@ -145,29 +145,29 @@ func TestSecurityGroups(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackSGTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get security group resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	sgResources := resources["aws_security_group"].(map[string]interface{})
-	
+
 	// Verify security groups exist
 	assert.Contains(t, sgResources, "web-sg")
 	assert.Contains(t, sgResources, "app-sg")
 	assert.Contains(t, sgResources, "db-sg")
-	
+
 	// Check security group rules
 	sgRules := resources["aws_security_group_rule"].(map[string]interface{})
-	
+
 	// Web ingress rules
 	assert.Contains(t, sgRules, "web-ingress-http")
 	httpRule := sgRules["web-ingress-http"].(map[string]interface{})
 	assert.Equal(t, "ingress", httpRule["type"])
 	assert.Equal(t, float64(80), httpRule["from_port"])
-	
+
 	assert.Contains(t, sgRules, "web-ingress-https")
 	httpsRule := sgRules["web-ingress-https"].(map[string]interface{})
 	assert.Equal(t, float64(443), httpsRule["from_port"])
-	
+
 	// Database ingress rule
 	assert.Contains(t, sgRules, "db-ingress-mysql")
 	dbRule := sgRules["db-ingress-mysql"].(map[string]interface{})
@@ -178,18 +178,18 @@ func TestKMSConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackKMSTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get KMS resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	kmsKeys := resources["aws_kms_key"].(map[string]interface{})
 	kmsAliases := resources["aws_kms_alias"].(map[string]interface{})
-	
+
 	// Verify KMS key configuration
 	assert.Contains(t, kmsKeys, "security-kms-key")
 	kmsKey := kmsKeys["security-kms-key"].(map[string]interface{})
 	assert.Equal(t, true, kmsKey["enable_key_rotation"])
 	assert.Equal(t, "ENCRYPT_DECRYPT", kmsKey["key_usage"])
-	
+
 	// Verify KMS alias
 	assert.Contains(t, kmsAliases, "security-kms-alias")
 	kmsAlias := kmsAliases["security-kms-alias"].(map[string]interface{})
@@ -200,24 +200,24 @@ func TestS3BucketConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackS3Test", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get S3 resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	s3Buckets := resources["aws_s3_bucket"].(map[string]interface{})
-	
+
 	// Verify S3 buckets exist
 	assert.Contains(t, s3Buckets, "secure-data-bucket")
 	assert.Contains(t, s3Buckets, "cloudtrail-logs-bucket")
-	
+
 	// Check bucket names contain "secure-data"
 	secureDataBucket := s3Buckets["secure-data-bucket"].(map[string]interface{})
 	bucketName := secureDataBucket["bucket"].(string)
 	assert.Contains(t, bucketName, "secure-data")
-	
+
 	cloudtrailBucket := s3Buckets["cloudtrail-logs-bucket"].(map[string]interface{})
 	cloudtrailName := cloudtrailBucket["bucket"].(string)
 	assert.Contains(t, cloudtrailName, "secure-data-cloudtrail")
-	
+
 	// Verify force_destroy is set for cleanup
 	assert.Equal(t, true, secureDataBucket["force_destroy"])
 	assert.Equal(t, true, cloudtrailBucket["force_destroy"])
@@ -227,11 +227,11 @@ func TestS3BucketEncryption(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackS3EncTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get S3 encryption resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	s3Encryption := resources["aws_s3_bucket_server_side_encryption_configuration"].(map[string]interface{})
-	
+
 	// Verify encryption configuration exists
 	assert.Contains(t, s3Encryption, "secure-data-encryption")
 }
@@ -240,15 +240,15 @@ func TestS3BucketPolicies(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackS3PolicyTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get S3 bucket policy resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	s3Policies := resources["aws_s3_bucket_policy"].(map[string]interface{})
-	
+
 	// Verify bucket policies exist
 	assert.Contains(t, s3Policies, "secure-data-policy")
 	assert.Contains(t, s3Policies, "cloudtrail-bucket-policy")
-	
+
 	// Check that policies use jsonencode
 	securePolicy := s3Policies["secure-data-policy"].(map[string]interface{})
 	assert.Contains(t, securePolicy["policy"].(string), "jsonencode")
@@ -258,22 +258,22 @@ func TestIAMRolesAndPolicies(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackIAMTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get IAM resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	iamRoles := resources["aws_iam_role"].(map[string]interface{})
 	iamPolicies := resources["aws_iam_policy"].(map[string]interface{})
-	
+
 	// Verify IAM role exists
 	assert.Contains(t, iamRoles, "ec2-role")
 	ec2Role := iamRoles["ec2-role"].(map[string]interface{})
 	assert.Equal(t, "EC2SecurityRole", ec2Role["name"])
-	
+
 	// Verify IAM policy exists
 	assert.Contains(t, iamPolicies, "ec2-policy")
 	ec2Policy := iamPolicies["ec2-policy"].(map[string]interface{})
 	assert.Equal(t, "EC2SecurityPolicy", ec2Policy["name"])
-	
+
 	// Verify policy attachment
 	attachments := resources["aws_iam_role_policy_attachment"].(map[string]interface{})
 	assert.Contains(t, attachments, "ec2-policy-attachment")
@@ -283,12 +283,12 @@ func TestRDSConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackRDSTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get RDS resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	dbInstances := resources["aws_db_instance"].(map[string]interface{})
 	dbSubnetGroups := resources["aws_db_subnet_group"].(map[string]interface{})
-	
+
 	// Verify RDS instance configuration
 	assert.Contains(t, dbInstances, "security-database")
 	rdsInstance := dbInstances["security-database"].(map[string]interface{})
@@ -297,7 +297,7 @@ func TestRDSConfiguration(t *testing.T) {
 	assert.Equal(t, false, rdsInstance["deletion_protection"])
 	assert.Equal(t, "mysql", rdsInstance["engine"])
 	assert.Equal(t, "8.0", rdsInstance["engine_version"])
-	
+
 	// Verify DB subnet group
 	assert.Contains(t, dbSubnetGroups, "db-subnet-group")
 }
@@ -306,11 +306,11 @@ func TestCloudTrailConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackCloudTrailTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get CloudTrail resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	cloudtrails := resources["aws_cloudtrail"].(map[string]interface{})
-	
+
 	// Verify CloudTrail configuration
 	assert.Contains(t, cloudtrails, "security-cloudtrail")
 	cloudtrail := cloudtrails["security-cloudtrail"].(map[string]interface{})
@@ -323,16 +323,16 @@ func TestNATGatewayConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackNATTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get NAT Gateway resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	natGateways := resources["aws_nat_gateway"].(map[string]interface{})
 	eips := resources["aws_eip"].(map[string]interface{})
-	
+
 	// Verify NAT Gateways exist
 	assert.Contains(t, natGateways, "nat-gateway-1")
 	assert.Contains(t, natGateways, "nat-gateway-2")
-	
+
 	// Verify EIPs for NAT Gateways
 	assert.Contains(t, eips, "nat-eip-1")
 	assert.Contains(t, eips, "nat-eip-2")
@@ -342,17 +342,17 @@ func TestRouteTableConfiguration(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackRouteTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get route table resources
 	resources := tfConfig["resource"].(map[string]interface{})
 	routeTables := resources["aws_route_table"].(map[string]interface{})
 	routes := resources["aws_route"].(map[string]interface{})
-	
+
 	// Verify route tables exist
 	assert.Contains(t, routeTables, "public-route-table")
 	assert.Contains(t, routeTables, "private-route-table-1")
 	assert.Contains(t, routeTables, "private-route-table-2")
-	
+
 	// Verify routes exist
 	assert.Contains(t, routes, "public-route")
 	assert.Contains(t, routes, "private-route-1")
@@ -363,10 +363,10 @@ func TestStackOutputs(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackOutputTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get outputs
 	outputs := tfConfig["output"].(map[string]interface{})
-	
+
 	// Verify all expected outputs exist
 	expectedOutputs := []string{
 		"VpcId",
@@ -377,7 +377,7 @@ func TestStackOutputs(t *testing.T) {
 		"PublicSubnet1Id",
 		"PrivateSubnet1Id",
 	}
-	
+
 	for _, outputName := range expectedOutputs {
 		assert.Contains(t, outputs, outputName, "Output %s should exist", outputName)
 	}
@@ -387,16 +387,16 @@ func TestResourceTagging(t *testing.T) {
 	// Synthesize the stack
 	tfPath := synthStack(t, "TapStackTagTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get provider configuration
 	provider := tfConfig["provider"].(map[string]interface{})
 	awsProvider := provider["aws"].([]interface{})[0].(map[string]interface{})
-	
+
 	// Verify default tags are configured
 	assert.Contains(t, awsProvider, "default_tags")
 	defaultTags := awsProvider["default_tags"].([]interface{})[0].(map[string]interface{})
 	tags := defaultTags["tags"].(map[string]interface{})
-	
+
 	// Check required tags
 	assert.Contains(t, tags, "Environment")
 	assert.Contains(t, tags, "Project")
@@ -409,10 +409,10 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 	// Test with custom environment suffix
 	os.Setenv("ENVIRONMENT_SUFFIX", "customtest123")
 	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
-	
+
 	tfPath := synthStack(t, "TapStackEnvTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Verify resources are created
 	assert.Contains(t, tfConfig, "resource")
 	resources := tfConfig["resource"].(map[string]interface{})
@@ -423,14 +423,14 @@ func TestSecurityHubProviderConfiguration(t *testing.T) {
 	// Synthesize the Security Hub stack
 	tfPath := synthStack(t, "SecurityHubProviderTest", "us-east-1")
 	tfConfig := loadSynthesizedStack(t, tfPath)
-	
+
 	// Get provider configuration
 	provider := tfConfig["provider"].(map[string]interface{})
 	awsProvider := provider["aws"].([]interface{})[0].(map[string]interface{})
-	
+
 	// Verify region is correct
 	assert.Equal(t, "us-east-1", awsProvider["region"])
-	
+
 	// Verify alias is set
 	assert.Equal(t, "east", awsProvider["alias"])
 }
