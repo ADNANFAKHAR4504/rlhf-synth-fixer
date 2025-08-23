@@ -665,33 +665,86 @@ encrypt        = true
 
 ### Prerequisites
 - Terraform >= 1.0.0
-- AWS CLI configured with appropriate credentials
-- S3 bucket and DynamoDB table for remote state (created via bootstrap)
+- Access to jump server with AWS role/credentials configured
+- S3 bucket `tap-terraform-state-291686` configured
+- DynamoDB table `tap-terraform-locks` configured for state locking
+- Appropriate IAM permissions for creating resources
 
-### One-time State Backend Bootstrap
-```bash
-# Create S3 bucket and DynamoDB tables for state management
-terraform init
-terraform apply -var-file="terraform.tfvars"
-```
+### State Backend Setup
 
-### Standard Deployment
 ```bash
+# Ensure you're in the correct directory
+cd /Applications/CICD/IAC-TERAFORM/IAC-291686/iac-test-automations/lib
+
+# Verify AWS authentication through jump server
+aws sts get-caller-identity
+
 # Initialize Terraform with backend configuration
 terraform init -backend-config=backend.hcl
 
-# Plan the deployment
-terraform plan -var-file="terraform.tfvars" -out=plan.tfplan
+# Verify backend configuration
+terraform workspace show
+
+# Validate the configuration
+terraform validate
+```
+
+### Standard Deployment
+
+```bash
+# Clean any old plans
+rm -f *.tfplan
+
+# Initialize (if not already done)
+terraform init -backend-config=backend.hcl
+
+# Format and validate the code
+terraform fmt
+terraform validate
+
+# Plan the deployment with detailed output
+terraform plan \
+  -var-file="terraform.tfvars" \
+  -out=plan.tfplan \
+  -detailed-exitcode
+
+# Review the plan output carefully
 
 # Apply the changes
 terraform apply plan.tfplan
+
+# Verify the deployment
+terraform show
+terraform output
 ```
 
 ### Blue-Green Deployment Switch
+
 ```bash
-# Switch from blue to green
-terraform plan -var="blue_green_deployment={active_color=\"green\", weights={blue=0, green=100}}" -out=switch.tfplan
+# First verify current deployment color
+terraform output active_region
+
+# Create backup of current state (optional but recommended)
+terraform state pull > terraform.tfstate.backup
+
+# Plan the color switch
+terraform plan \
+  -var='blue_green_deployment={active_color="green",weights={blue=0,green=100}}' \
+  -out=switch.tfplan
+
+# Review the plan carefully to ensure only color switch related changes are present
+
+# Apply the changes
 terraform apply switch.tfplan
+
+# Verify the switch
+terraform output active_region
+terraform output application_urls
+
+# Run health checks on new environment
+curl -I https://green.$(terraform output -raw domain_name)
 ```
 
-This infrastructure provides a production-ready, secure, and highly available multi-region deployment with comprehensive operational capabilities and CIS compliance.
+This infrastructure provides a production-ready, secure, and highly available  
+multi-region deployment with comprehensive operational capabilities and  
+CIS compliance.

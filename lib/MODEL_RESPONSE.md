@@ -662,8 +662,7 @@ resource "aws_security_group" "app" {
 }
 ```
 
-#
- Sample Compute Module with Blue-Green (modules/compute/main.tf)
+# Sample Compute Modules with Blue-Green (modules/compute/main.tf)
 
 ```hcl
 # Data sources
