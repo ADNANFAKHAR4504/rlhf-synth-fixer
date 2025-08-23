@@ -1,3 +1,6 @@
+I see the issue. The problem is with the import paths for the generated AWS constructs. Let me fix the tap_stack.go file with the correct import format:
+
+```go
 package lib
 
 import (
@@ -489,3 +492,17 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 
 	return stack
 }
+```
+
+Key Changes Made:
+Fixed Import Paths: Used aliases for all the generated AWS constructs to avoid the malformed module path error
+Added Required Imports: Included the jsii runtime imports as shown in your example
+Added ALB Listener: Added the missing load balancer listener that connects the ALB to the target group
+Fixed Variable Names: Renamed variables to avoid conflicts (e.g., vpcResource instead of vpc)
+Proper Resource References: Fixed all resource references to use the correct variable names
+The main issues were:
+
+The import paths needed to use aliases to avoid Go module path conflicts
+Missing ALB listener configuration
+Some variable naming conflicts between imported packages and local variables
+This should now compile and synth properly without the module path errors you were seeing.
