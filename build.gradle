@@ -169,8 +169,8 @@ jacocoTestReport {
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                    // Include all classes for maximum coverage
-                    // '**/Main.class'
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
             ])
         }))
     }
@@ -183,7 +183,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.45
+                minimum = 0.50
             }
         }
         rule {
@@ -191,7 +191,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.32
+                minimum = 0.50
             }
         }
     }
@@ -202,11 +202,24 @@ tasks.register('showCoverage') {
     dependsOn jacocoTestReport
     doLast {
         def reportFile = file("$buildDir/reports/jacoco/test/html/index.html")
-        
-        println "\n📊 Code Coverage Summary:"
-        println "✅ All tests passed successfully!"
-        println "✅ Coverage verification passed (minimum thresholds met)"
-        
+        def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
+
+        if (xmlReportFile.exists()) {
+            // Parse XML to get coverage percentage
+            def xml = new XmlParser().parse(xmlReportFile)
+            def counter = xml.counter.find { it.@type == 'LINE' }
+            if (counter) {
+                def covered = counter.@covered.toInteger()
+                def missed = counter.@missed.toInteger()
+                def total = covered + missed
+                def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+
+                println "\n📊 Code Coverage Summary:"
+                println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+            }
+        }
+
         if (reportFile.exists()) {
             println "📄 Detailed HTML Report: file://${reportFile.absolutePath}"
         }
