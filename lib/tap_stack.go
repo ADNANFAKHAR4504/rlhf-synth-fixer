@@ -421,11 +421,7 @@ EOF
 				"data_resource": []map[string]interface{}{
 					{
 						"type":   "AWS::S3::Object",
-						"values": []string{"${aws_s3_bucket.tap_bucket.arn}/*"},
-					},
-					{
-						"type":   "AWS::S3::Bucket",
-						"values": []string{"${aws_s3_bucket.tap_bucket.arn}"},
+						"values": []string{"arn:aws:s3:::*/*"},
 					},
 				},
 			},
@@ -433,7 +429,5 @@ EOF
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
-	})
-
-	app.Synth()
+	})	app.Synth()
 }
