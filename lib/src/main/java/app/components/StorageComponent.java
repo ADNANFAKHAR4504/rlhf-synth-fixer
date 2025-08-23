@@ -194,6 +194,20 @@ public class StorageComponent extends ComponentResource {
                 )
                 .build());
 
+        // Add cleanup rules for versioned objects and multipart uploads
+        lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
+                .id("cleanup-versions")
+                .status("Enabled")
+                .noncurrentVersionExpiration(
+                        BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs.builder()
+                        .noncurrentDays(1)
+                        .build())
+                .abortIncompleteMultipartUpload(
+                        BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs.builder()
+                        .daysAfterInitiation(1)
+                        .build())
+                .build());
+
         // Add retention rules for compliance data
         if (purpose.contains("compliance") || purpose.contains("audit")) {
             // Keep compliance data for 7 years
@@ -202,6 +216,15 @@ public class StorageComponent extends ComponentResource {
                     .status("Enabled")
                     .expiration(BucketLifecycleConfigurationRuleExpirationArgs.builder()
                             .days(2555) // 7 years
+                            .build())
+                    .build());
+        } else if (purpose.contains("cloudtrail")) {
+            // For CloudTrail buckets, keep logs for 90 days for testing
+            lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
+                    .id("cloudtrail-cleanup")
+                    .status("Enabled")
+                    .expiration(BucketLifecycleConfigurationRuleExpirationArgs.builder()
+                            .days(90)
                             .build())
                     .build());
         }
