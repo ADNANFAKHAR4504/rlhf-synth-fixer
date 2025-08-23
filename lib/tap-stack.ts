@@ -10,9 +10,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }

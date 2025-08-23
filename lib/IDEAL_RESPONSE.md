@@ -31,7 +31,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: process.env.CDK_DEFAULT_REGION,
   },
 });
 ```

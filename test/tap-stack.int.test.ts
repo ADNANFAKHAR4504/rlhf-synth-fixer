@@ -21,7 +21,7 @@ const isCI = process.env.CI === '1' || process.env.CI === 'true';
 console.log(`Running in ${isCI ? 'CI' : 'local'} environment with suffix: ${environmentSuffix}`);
 
 // AWS SDK configuration
-AWS.config.update({ region: 'us-west-2' });
+AWS.config.update({ region: 'us-east-1' });
 const ec2 = new AWS.EC2();
 const rds = new AWS.RDS();
 const s3 = new AWS.S3();
