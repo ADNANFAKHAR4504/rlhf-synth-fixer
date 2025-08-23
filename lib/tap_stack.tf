@@ -47,7 +47,10 @@ resource "random_string" "suffix" {
 
 resource "random_password" "db_password" {
   length  = 16
-  special = true
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
 
 ########################
@@ -449,7 +452,6 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
               #!/bin/bash
-              yum update -y
               yum install -y httpd
               systemctl start httpd
               systemctl enable httpd
@@ -535,11 +537,11 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
-  min_size         = 2
-  max_size         = 6
-  desired_capacity = 2
+  min_size         = 1
+  max_size         = 3
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.main.id
