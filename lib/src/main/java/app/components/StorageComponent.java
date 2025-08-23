@@ -138,13 +138,15 @@ public class StorageComponent extends ComponentResource {
                 .forceDestroy(true)
                 .build(), CustomResourceOptions.builder().parent(this).build());
 
-        // Enable versioning for data protection
-        new BucketVersioning(bucketName + "-versioning", BucketVersioningArgs.builder()
-                .bucket(bucket.id())
-                .versioningConfiguration(BucketVersioningVersioningConfigurationArgs.builder()
-                        .status("Enabled")
-                        .build())
-                .build(), CustomResourceOptions.builder().parent(this).build());
+        // Enable versioning for data protection (but not for CloudTrail buckets to ease deletion)
+        if (!purpose.equals("cloudtrail")) {
+            new BucketVersioning(bucketName + "-versioning", BucketVersioningArgs.builder()
+                    .bucket(bucket.id())
+                    .versioningConfiguration(BucketVersioningVersioningConfigurationArgs.builder()
+                            .status("Enabled")
+                            .build())
+                    .build(), CustomResourceOptions.builder().parent(this).build());
+        }
 
         // Configure server-side encryption with KMS CMK
         new BucketServerSideEncryptionConfiguration(bucketName + "-encryption",
@@ -194,19 +196,32 @@ public class StorageComponent extends ComponentResource {
                 )
                 .build());
 
-        // Add cleanup rules for versioned objects and multipart uploads
-        lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
-                .id("cleanup-versions")
-                .status("Enabled")
-                .noncurrentVersionExpiration(
-                        BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs.builder()
-                        .noncurrentDays(1)
-                        .build())
-                .abortIncompleteMultipartUpload(
-                        BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs.builder()
-                        .daysAfterInitiation(1)
-                        .build())
-                .build());
+        // Add cleanup rules for multipart uploads and optionally versioned objects
+        if (purpose.equals("cloudtrail")) {
+            // For CloudTrail buckets, only clean up multipart uploads since versioning is disabled
+            lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
+                    .id("cleanup-multipart")
+                    .status("Enabled")
+                    .abortIncompleteMultipartUpload(
+                            BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs.builder()
+                            .daysAfterInitiation(1)
+                            .build())
+                    .build());
+        } else {
+            // For other buckets with versioning enabled, clean up versions and multipart uploads
+            lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
+                    .id("cleanup-versions")
+                    .status("Enabled")
+                    .noncurrentVersionExpiration(
+                            BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs.builder()
+                            .noncurrentDays(1)
+                            .build())
+                    .abortIncompleteMultipartUpload(
+                            BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs.builder()
+                            .daysAfterInitiation(1)
+                            .build())
+                    .build());
+        }
 
         // Add retention rules for compliance data
         if (purpose.contains("compliance") || purpose.contains("audit")) {
