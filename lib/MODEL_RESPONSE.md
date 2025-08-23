@@ -4,7 +4,7 @@ Below is a comprehensive Terraform configuration that implements all the securit
 
 ## tap_stack.tf
 
-```hcl
+````hcl
 # =============================================================================
 # TERRAFORM CONFIGURATION
 # =============================================================================
@@ -39,7 +39,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = var.project_name
@@ -135,7 +135,7 @@ resource "aws_kms_key" "main" {
   description             = "Customer managed key for ${var.project_name}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1820,3 +1820,4 @@ class SecureEnterpriseStack extends TerraformStack {
 const app = new App();
 new SecureEnterpriseStack(app, "prod-sec");
 app.synth();
+````
