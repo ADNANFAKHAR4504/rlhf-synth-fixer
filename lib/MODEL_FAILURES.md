@@ -2,7 +2,7 @@
 
 This document analyzes the infrastructure issues found in the initial model response and explains the fixes needed to achieve the ideal solution.
 
-## Primary Failures : Incomplete Resource Definition
+## Primary Failures : Incomplete Resource Definitions
 
 ### Issue Description
 The Terraform configuration contained an incomplete resource definition that caused validation failures:
