@@ -38,6 +38,7 @@ Parameters:
 
   NotificationEmail:
     Type: String
+    Default: 'admin@example.com'
     Description: 'Email address for CloudFormation notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
