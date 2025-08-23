@@ -1,7 +1,7 @@
 # IDEAL_RESPONSE
 
-This file contains the complete expected CloudFormation templates used in this repository.  
-Both YAML and JSON variants are provided for validation.
+This file contains the complete expected CloudFormation templates for the TapStack infrastructure.  
+Both YAML and JSON variants are included.
 
 ---
 
@@ -38,17 +38,20 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Environment
           Value: Production
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -59,6 +62,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -69,6 +73,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,16 +84,19 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+
   PublicRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+
   PublicSubnet1Assoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -137,11 +145,13 @@ Resources:
               - Effect: Allow
                 Action: [ "s3:GetObject", "s3:ListBucket" ]
                 Resource: "*"
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-ec2profile"
       Roles: [!Ref EC2Role]
+
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -189,6 +199,7 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -223,6 +234,7 @@ Resources:
         GenerateStringKey: password
         PasswordLength: 16
         ExcludeCharacters: "\"@/ '"
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -231,6 +243,7 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -268,6 +281,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 90
+
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
@@ -285,6 +299,7 @@ Resources:
               - Effect: Allow
                 Action: [ "logs:CreateLogStream", "logs:PutLogEvents" ]
                 Resource: "*"
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
