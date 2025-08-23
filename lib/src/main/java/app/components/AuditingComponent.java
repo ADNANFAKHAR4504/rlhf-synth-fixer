@@ -163,8 +163,8 @@ public class AuditingComponent extends ComponentResource {
                                 .name("Root Account Usage")
                                 .fieldSelectors(
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("userIdentity.type")
-                                                .equals_(List.of("Root"))
+                                                .field("userIdentity.arn")
+                                                .equals_(List.of("arn:aws:iam::" + accountId + ":root"))
                                                 .build()
                                 )
                                 .build()
@@ -236,7 +236,7 @@ public class AuditingComponent extends ComponentResource {
                     { ($.errorCode = "*UnauthorizedOperation") ||\s
                       ($.errorCode = "AccessDenied*") ||\s
                       ($.sourceIPAddress != "AWS Internal") ||
-                      ($.userIdentity.type = "Root") ||
+                      ($.userIdentity.arn = "Root") ||
                       ($.eventName = "ConsoleLogin" && $.responseElements.ConsoleLogin = "Failure") ||
                       ($.eventName = "CreateUser") ||
                       ($.eventName = "DeleteUser") ||
