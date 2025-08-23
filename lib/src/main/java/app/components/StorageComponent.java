@@ -197,7 +197,7 @@ public class StorageComponent extends ComponentResource {
                 .build());
 
         // Add cleanup rules for multipart uploads and optionally versioned objects
-        if (purpose.equals("cloudtrail")) {
+        if (purpose.equalsIgnoreCase("cloudtrail")) {
             // For CloudTrail buckets, only clean up multipart uploads since versioning is disabled
             lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
                     .id("cleanup-multipart")
@@ -224,7 +224,7 @@ public class StorageComponent extends ComponentResource {
         }
 
         // Add retention rules for compliance data
-        if (purpose.contains("compliance") || purpose.contains("audit")) {
+        if (purpose.toLowerCase().contains("compliance") || purpose.contains("audit")) {
             // Keep compliance data for 7 years
             lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
                     .id("compliance-retention")
@@ -233,7 +233,7 @@ public class StorageComponent extends ComponentResource {
                             .days(2555) // 7 years
                             .build())
                     .build());
-        } else if (purpose.contains("cloudtrail")) {
+        } else if (purpose.toLowerCase().contains("cloudtrail")) {
             // For CloudTrail buckets, keep logs for 90 days for testing
             lifecycleRules.add(BucketLifecycleConfigurationRuleArgs.builder()
                     .id("cloudtrail-cleanup")
@@ -241,6 +241,10 @@ public class StorageComponent extends ComponentResource {
                     .expiration(BucketLifecycleConfigurationRuleExpirationArgs.builder()
                             .days(90)
                             .build())
+                    .noncurrentVersionExpiration(
+                            BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs.builder()
+                                    .noncurrentDays(90) // keep old versions for retention
+                                    .build())
                     .build());
         }
 
