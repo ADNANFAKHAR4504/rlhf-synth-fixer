@@ -1,46 +1,37 @@
-# CloudFormation Secure Environment Setup - User Prompt
+# CloudFormation Secure Environment Setup
 
-## Objective
-Design a **CloudFormation template** in **YAML** that provisions a **secure and compliant production environment** in the `us-east-1` region. The template must strictly adhere to security, compliance, and organizational standards, ensuring that resources are deployed following Amazon’s best practices.
-
----
-
-## Requirements
-
-### Security & Compliance
-1. **IAM Roles**
-   - Must adhere strictly to the principle of least privilege.
-   - Avoid granting excessive permissions.
-
-2. **EC2 Instances**
-   - Deploy with **encrypted EBS volumes**.
-   - Launch only within secure subnets.
-   - Restrict access to a specific IP range (`192.168.0.0/16`).
-
-3. **S3 Buckets**
-   - Must have **Server-Side Encryption (SSE)** enabled by default.
-   - Access restricted to specific IP range (`192.168.0.0/16`).
-
-4. **RDS Instances**
-   - Must be deployed within a **pre-defined VPC**.
-   - Enforce encryption at rest and in transit.
-
-5. **Lambda Functions**
-   - Minimum **128MB memory** allocation.
-   - Run inside the pre-defined VPC for security.
-   - Tagged appropriately.
-
-6. **Security Groups**
-   - **Block public SSH access** completely.
-   - Restrict inbound rules to `192.168.0.0/16`.
-
-7. **CloudWatch Logging**
-   - Enable **CloudTrail integration** to capture all API activity.
-   - Store logs securely with encryption.
+### Goal
+We want a CloudFormation template written in YAML that builds a production-ready environment in `us-east-1`.  
+The setup should follow security best practices and meet our internal compliance rules.
 
 ---
 
-## Resource Tagging & Naming
-- All resources must be tagged with:
-  ```yaml
-  Environment: Production
+### What we need
+- IAM roles should only have the permissions they actually require. No broad policies.
+- EC2 instances:
+  - must use encrypted EBS volumes
+  - should only launch in controlled subnets
+  - network access limited to our internal CIDR: 192.168.0.0/16
+- S3 buckets:
+  - encryption turned on by default
+  - no open/public access
+- RDS:
+  - placed inside the VPC we define
+  - storage encrypted
+- Lambda:
+  - allocate at least 128 MB memory
+  - run inside the VPC
+- Security groups:
+  - never allow public SSH
+  - only allow inbound traffic from 192.168.0.0/16
+- CloudWatch/CloudTrail:
+  - capture all API calls
+  - log data should be encrypted
+
+---
+
+### Tagging and naming
+All resources should be tagged with:
+
+```yaml
+Environment: Production
