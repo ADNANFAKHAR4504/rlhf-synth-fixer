@@ -1,7 +1,12 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -91,7 +96,7 @@ public class MainTest {
     }
     
     /**
-     * Test environment suffix logic.
+     * Test environment suffix logic with various scenarios.
      */
     @Test
     void testGetEnvironmentSuffix() {
@@ -99,6 +104,9 @@ public class MainTest {
         String suffix = Main.getEnvironmentSuffix();
         assertNotNull(suffix);
         assertTrue(suffix.length() > 0);
+        
+        // The method should return a non-empty string
+        assertFalse(suffix.trim().isEmpty());
     }
     
     /**

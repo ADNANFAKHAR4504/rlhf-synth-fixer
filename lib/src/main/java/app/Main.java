@@ -4,7 +4,24 @@ import com.pulumi.Context;
 import com.pulumi.Pulumi;
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.ProviderArgs;
-import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.Eip;
+import com.pulumi.aws.ec2.EipArgs;
+import com.pulumi.aws.ec2.Instance;
+import com.pulumi.aws.ec2.InstanceArgs;
+import com.pulumi.aws.ec2.InternetGateway;
+import com.pulumi.aws.ec2.InternetGatewayArgs;
+import com.pulumi.aws.ec2.Route;
+import com.pulumi.aws.ec2.RouteArgs;
+import com.pulumi.aws.ec2.RouteTable;
+import com.pulumi.aws.ec2.RouteTableArgs;
+import com.pulumi.aws.ec2.RouteTableAssociation;
+import com.pulumi.aws.ec2.RouteTableAssociationArgs;
+import com.pulumi.aws.ec2.SecurityGroup;
+import com.pulumi.aws.ec2.SecurityGroupArgs;
+import com.pulumi.aws.ec2.Subnet;
+import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.ec2.Vpc;
+import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
 import com.pulumi.core.Output;
@@ -41,7 +58,7 @@ public final class Main {
      * 
      * @param args Command line arguments (not used in this example)
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         Pulumi.run(Main::defineInfrastructure);
     }
 
@@ -53,7 +70,7 @@ public final class Main {
      * 
      * @param ctx The Pulumi context for exporting outputs
      */
-    static void defineInfrastructure(Context ctx) {
+    static void defineInfrastructure(final Context ctx) {
 
         var config = ctx.config();
         var authorizedSshIp = "52.45.0.101";
@@ -383,7 +400,7 @@ public final class Main {
      * Validates the authorized SSH IP address format.
      * This method is package-private for testing.
      */
-    static boolean isValidIpAddress(String ipAddress) {
+    static boolean isValidIpAddress(final String ipAddress) {
         if (ipAddress == null || ipAddress.trim().isEmpty()) {
             return false;
         }
@@ -397,7 +414,7 @@ public final class Main {
      * Validates CIDR block format.
      * This method is package-private for testing.
      */
-    static boolean isValidCidrBlock(String cidrBlock) {
+    static boolean isValidCidrBlock(final String cidrBlock) {
         if (cidrBlock == null || cidrBlock.trim().isEmpty()) {
             return false;
         }

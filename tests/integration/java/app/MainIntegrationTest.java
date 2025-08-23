@@ -3,7 +3,6 @@ package app;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pulumi.Context;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -22,6 +21,13 @@ import software.amazon.awssdk.services.ec2.model.DescribeSubnetsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
+import software.amazon.awssdk.services.ec2.model.Vpc;
+import software.amazon.awssdk.services.ec2.model.Subnet;
+import software.amazon.awssdk.services.ec2.model.Reservation;
+import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.ec2.model.Address;
+import software.amazon.awssdk.services.ec2.model.SecurityGroup;
+import software.amazon.awssdk.services.ec2.model.Tag;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,7 +114,7 @@ public class MainIntegrationTest {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
                 outputsPath.toFile(),
-                new TypeReference<Map<String, Object>>() {}
+                new TypeReference<Map<String, Object>>() { }
             );
 
             // Validate VPC exists and configuration
@@ -145,7 +151,7 @@ public class MainIntegrationTest {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
                 outputsPath.toFile(),
-                new TypeReference<Map<String, Object>>() {}
+                new TypeReference<Map<String, Object>>() { }
             );
 
             // Validate instances exist
@@ -170,8 +176,8 @@ public class MainIntegrationTest {
 
                 assertEquals(2, availabilityZones.size(),
                     "Instances should be distributed across 2 different availability zones");
-                assertTrue(availabilityZones.contains("us-west-2a") ||
-                          availabilityZones.contains("us-west-2b"),
+                assertTrue(availabilityZones.contains("us-west-2a")
+                          || availabilityZones.contains("us-west-2b"),
                     "Instances should be in us-west-2a or us-west-2b");
             }
         });
@@ -194,8 +200,8 @@ public class MainIntegrationTest {
      * Helper method to check if AWS credentials are configured.
      */
     private boolean hasAwsCredentials() {
-        return System.getenv("AWS_ACCESS_KEY_ID") != null &&
-                System.getenv("AWS_SECRET_ACCESS_KEY") != null;
+        return System.getenv("AWS_ACCESS_KEY_ID") != null
+                && System.getenv("AWS_SECRET_ACCESS_KEY") != null;
     }
 
     /**
@@ -222,7 +228,7 @@ public class MainIntegrationTest {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
                 outputsPath.toFile(),
-                new TypeReference<Map<String, Object>>() {}
+                new TypeReference<Map<String, Object>>() { }
             );
 
             // Validate VPC exists and has expected CIDR
@@ -262,7 +268,7 @@ public class MainIntegrationTest {
     /**
      * Validates that the VPC has the correct configuration.
      */
-    private void validateVpcConfiguration(String vpcId) {
+    private void validateVpcConfiguration(final String vpcId) {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
                 DescribeVpcsRequest.builder()
@@ -281,7 +287,7 @@ public class MainIntegrationTest {
     /**
      * Validates subnet configuration and availability zones.
      */
-    private void validateSubnetsConfiguration(Map<String, Object> outputs) {
+    private void validateSubnetsConfiguration(final Map<String, Object> outputs) {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             // Get all subnets
             String publicSubnet1Id = outputs.get("PublicSubnet1Id").toString();
@@ -318,7 +324,7 @@ public class MainIntegrationTest {
     /**
      * Validates EC2 instances configuration.
      */
-    private void validateEc2Instances(Map<String, Object> outputs) {
+    private void validateEc2Instances(final Map<String, Object> outputs) {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             String instance1Id = outputs.get("WebServer1Id").toString();
             String instance2Id = outputs.get("WebServer2Id").toString();
@@ -350,7 +356,7 @@ public class MainIntegrationTest {
     /**
      * Validates Elastic IP configuration.
      */
-    private void validateElasticIps(Map<String, Object> outputs) {
+    private void validateElasticIps(final Map<String, Object> outputs) {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             String publicIp1 = outputs.get("WebServer1PublicIp").toString();
             String publicIp2 = outputs.get("WebServer2PublicIp").toString();
@@ -373,7 +379,7 @@ public class MainIntegrationTest {
     /**
      * Validates Security Group rules.
      */
-    private void validateSecurityGroupRules(String securityGroupId) {
+    private void validateSecurityGroupRules(final String securityGroupId) {
         try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
             DescribeSecurityGroupsResponse sgResponse = ec2.describeSecurityGroups(
                 DescribeSecurityGroupsRequest.builder()
@@ -401,7 +407,7 @@ public class MainIntegrationTest {
     /**
      * Validates that private IPs are within the VPC CIDR range.
      */
-    private void validatePrivateIpsInVpcRange(Map<String, Object> outputs) {
+    private void validatePrivateIpsInVpcRange(final Map<String, Object> outputs) {
         String privateIp1 = outputs.get("WebServer1PrivateIp").toString();
         String privateIp2 = outputs.get("WebServer2PrivateIp").toString();
 
@@ -430,7 +436,7 @@ public class MainIntegrationTest {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
                 outputsPath.toFile(),
-                new TypeReference<Map<String, Object>>() {}
+                new TypeReference<Map<String, Object>>() { }
             );
 
             // Validate Elastic IPs exist
@@ -483,7 +489,7 @@ public class MainIntegrationTest {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> outputs = mapper.readValue(
                 outputsPath.toFile(),
-                new TypeReference<Map<String, Object>>() {}
+                new TypeReference<Map<String, Object>>() { }
             );
 
             // Validate Environment Suffix is exported
@@ -519,14 +525,14 @@ public class MainIntegrationTest {
     /**
      * Helper method to validate public IP address format.
      */
-    private boolean isValidPublicIpFormat(String ip) {
+    private boolean isValidPublicIpFormat(final String ip) {
         if (ip == null || ip.trim().isEmpty()) {
             return false;
         }
 
         // Basic IP address validation regex
         String ipPattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
-        return ip.matches(ipPattern) && !ip.startsWith("10.") &&
-               !ip.startsWith("192.168.") && !ip.startsWith("172.");
+        return ip.matches(ipPattern) && !ip.startsWith("10.")
+               && !ip.startsWith("192.168.") && !ip.startsWith("172.");
     }
 }
