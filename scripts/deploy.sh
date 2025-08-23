@@ -80,7 +80,62 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
+  
+  # Pre-deployment checks
+  echo "🔍 Pre-deployment checks:"
+  echo "  Template file: lib/TapStack.yml"
+  echo "  Stack name: TapStack${ENVIRONMENT_SUFFIX}"
+  echo "  Environment suffix: ${ENVIRONMENT_SUFFIX}"
+  echo "  AWS Region: ${AWS_REGION}"
+  echo "  Repository: ${REPOSITORY}"
+  echo "  Commit Author: ${COMMIT_AUTHOR}"
+  
+  # Check if template file exists
+  if [ ! -f "lib/TapStack.yml" ]; then
+    echo "❌ Template file lib/TapStack.yml not found!"
+    exit 1
+  fi
+  
+  # Validate template before deployment
+  echo "🔍 Validating CloudFormation template..."
+  if aws cloudformation validate-template --template-body file://lib/TapStack.yml > /dev/null 2>&1; then
+    echo "✅ Template validation successful"
+  else
+    echo "❌ Template validation failed!"
+    aws cloudformation validate-template --template-body file://lib/TapStack.yml
+    exit 1
+  fi
+  
+  # Check S3 bucket exists
+  S3_BUCKET="iac-rlhf-cfn-states-${AWS_REGION}"
+  echo "🔍 Checking S3 bucket: ${S3_BUCKET}"
+  if aws s3 ls "s3://${S3_BUCKET}/" > /dev/null 2>&1; then
+    echo "✅ S3 bucket accessible"
+  else
+    echo "❌ S3 bucket ${S3_BUCKET} not accessible!"
+    exit 1
+  fi
+  
+  # Deploy with verbose output
+  echo "🚀 Starting CloudFormation deployment..."
+  echo "Command: npm run cfn:deploy-yaml"
   npm run cfn:deploy-yaml
+  
+  # Check deployment result
+  DEPLOY_EXIT_CODE=$?
+  if [ $DEPLOY_EXIT_CODE -eq 0 ]; then
+    echo "✅ CloudFormation deployment completed successfully"
+    
+    # Get stack outputs
+    echo "📊 Stack outputs:"
+    aws cloudformation describe-stacks --stack-name "TapStack${ENVIRONMENT_SUFFIX}" --query 'Stacks[0].Outputs' --output table || echo "No outputs found"
+    
+  else
+    echo "❌ CloudFormation deployment failed with exit code: $DEPLOY_EXIT_CODE"
+    echo "📊 Checking stack events for errors..."
+    aws cloudformation describe-stack-events --stack-name "TapStack${ENVIRONMENT_SUFFIX}" --max-items 10 --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].{Time:Timestamp,Status:ResourceStatus,Type:ResourceType,Reason:ResourceStatusReason}' --output table || echo "Stack may not exist or no events found"
+    exit $DEPLOY_EXIT_CODE
+  fi
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
