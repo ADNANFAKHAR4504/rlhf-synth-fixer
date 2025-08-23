@@ -109,7 +109,7 @@ public final class Main {
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
-            .policy(buildKmsKeyPolicy())
+            // Removed custom policy to allow AWS default policy with proper root account permissions
             .tags(Map.of(
                 "Environment", "production",
                 "Application", "financial-services",
@@ -982,61 +982,5 @@ public final class Main {
         return tags;
     }
 
-    // Helper method to build KMS key policy JSON
-    public static String buildKmsKeyPolicy() {
-        return """
-            {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "Enable IAM User Permissions",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "AWS": "arn:aws:iam::*:root"
-                        },
-                        "Action": "kms:*",
-                        "Resource": "*"
-                    },
-                    {
-                        "Sid": "Allow CloudTrail to encrypt logs",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": [
-                            "kms:GenerateDataKey*",
-                            "kms:DescribeKey",
-                            "kms:Encrypt",
-                            "kms:ReEncrypt*",
-                            "kms:Decrypt"
-                        ],
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "kms:EncryptionContext:aws:cloudtrail:arn": "arn:aws:cloudtrail:*:*:trail/*"
-                            }
-                        }
-                    },
-                    {
-                        "Sid": "Allow S3 service to use the key",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "s3.amazonaws.com"
-                        },
-                        "Action": [
-                            "kms:Decrypt",
-                            "kms:GenerateDataKey"
-                        ],
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "kms:ViaService": "s3.us-east-1.amazonaws.com"
-                            }
-                        }
-                    }
-                ]
-            }
-            """;
-    }
 
 }

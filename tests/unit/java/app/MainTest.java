@@ -783,45 +783,6 @@ public class MainTest {
         assertFalse(Main.isValidKmsDeletionWindow(100));
     }
     
-    /**
-     * Test KMS key policy generation.
-     */
-    @Test
-    void testBuildKmsKeyPolicy() {
-        String policy = Main.buildKmsKeyPolicy();
-        
-        // Verify it's valid JSON-like structure
-        assertNotNull(policy);
-        assertFalse(policy.isEmpty());
-        
-        // Verify it contains required components
-        assertTrue(policy.contains("Version"));
-        assertTrue(policy.contains("2012-10-17"));
-        assertTrue(policy.contains("Statement"));
-        
-        // Verify it contains CloudTrail and S3 service permissions
-        assertTrue(policy.contains("Allow CloudTrail to encrypt logs"));
-        assertTrue(policy.contains("Allow S3 service to use the key"));
-        
-        // Verify it allows CloudTrail permissions
-        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
-        assertTrue(policy.contains("kms:GenerateDataKey"));
-        assertTrue(policy.contains("kms:DescribeKey"));
-        assertTrue(policy.contains("kms:Encrypt"));
-        assertTrue(policy.contains("kms:Decrypt"));
-        
-        // Verify it allows S3 service permissions
-        assertTrue(policy.contains("s3.amazonaws.com"));
-        assertTrue(policy.contains("s3.us-east-1.amazonaws.com"));
-        
-        // Verify CloudTrail condition exists
-        assertTrue(policy.contains("aws:cloudtrail:arn"));
-        assertTrue(policy.contains("arn:aws:cloudtrail:*:*:trail/*"));
-        
-        // Verify policy structure contains multiple statements
-        int statementCount = policy.split("\"Sid\"").length - 1;
-        assertTrue(statementCount >= 2, "Policy should have at least 2 statements for CloudTrail and S3");
-    }
     
     /**
      * Test EBS volume type validation.
@@ -1275,18 +1236,6 @@ public class MainTest {
         assertTrue(userData.contains("yum update -y"));
         assertTrue(userData.contains("amazon-cloudwatch-agent"));
         assertTrue(userData.contains("FinancialApp/EC2"));
-        
-        // Test KMS key policy
-        String kmsPolicy = Main.buildKmsKeyPolicy();
-        assertNotNull(kmsPolicy);
-        assertTrue(kmsPolicy.contains("2012-10-17"));
-        assertTrue(kmsPolicy.contains("Allow CloudTrail to encrypt logs"));
-        assertTrue(kmsPolicy.contains("Allow S3 service to use the key"));
-        assertTrue(kmsPolicy.contains("kms:GenerateDataKey"));
-        assertTrue(kmsPolicy.contains("cloudtrail.amazonaws.com"));
-        assertTrue(kmsPolicy.contains("s3.amazonaws.com"));
-        assertTrue(kmsPolicy.contains("kms:DescribeKey"));
-        assertTrue(kmsPolicy.contains("kms:Encrypt"));
     }
     
     /**
