@@ -44,12 +44,12 @@ func Test_Live_Verify_InfrastructureResourcesExist(t *testing.T) {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-	
+
 	cfg, err := GetConfig("dev")
 	if err != nil {
 		t.Fatalf("failed to get config: %v", err)
 	}
-	
+
 	BuildInfrastructureStack(stack, cfg)
 	app.Synth()
 
@@ -87,15 +87,15 @@ func Test_Live_Verify_InfrastructureResourcesExist(t *testing.T) {
 	if err := json.Unmarshal(outJSON, &outputs); err != nil {
 		t.Fatalf("parse outputs json: %v", err)
 	}
-	
+
 	vpcID, _ := outputs["vpc_id"].Value.(string)
 	loggingBucketName, _ := outputs["logging_bucket_name"].Value.(string)
 	replicationBucketName, _ := outputs["replication_bucket_name"].Value.(string)
 	ec2RoleArn, _ := outputs["ec2_role_arn"].Value.(string)
 	lambdaRoleArn, _ := outputs["lambda_role_arn"].Value.(string)
-	
+
 	if vpcID == "" || loggingBucketName == "" || replicationBucketName == "" || ec2RoleArn == "" || lambdaRoleArn == "" {
-		t.Fatalf("missing required outputs: vpc=%q logging=%q replication=%q ec2role=%q lambdarole=%q", 
+		t.Fatalf("missing required outputs: vpc=%q logging=%q replication=%q ec2role=%q lambdarole=%q",
 			vpcID, loggingBucketName, replicationBucketName, ec2RoleArn, lambdaRoleArn)
 	}
 

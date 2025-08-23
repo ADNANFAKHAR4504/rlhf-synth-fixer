@@ -35,20 +35,20 @@ import (
 
 // EnvironmentConfig holds all environment-specific configuration
 type EnvironmentConfig struct {
-	Environment        string
-	Region             string
-	AccountID          string
+	Environment string
+	Region      string
+	AccountID   string
 	// Networking
 	VPCCidr            string
 	PublicSubnetCidrs  []string
 	PrivateSubnetCidrs []string
 	// S3
-	LoggingBucket      string
-	ReplicationBucket  string
+	LoggingBucket     string
+	ReplicationBucket string
 	// IAM
-	RolePrefix         string
+	RolePrefix string
 	// Tags
-	CommonTags         map[string]string
+	CommonTags map[string]string
 }
 
 // VPCComponent represents a complete VPC setup
@@ -120,12 +120,12 @@ func GetConfig(env string) (*EnvironmentConfig, error) {
 		"staging": getStagingConfig(),
 		"prod":    getProdConfig(),
 	}
-	
+
 	config, exists := configs[env]
 	if !exists {
 		return nil, fmt.Errorf("unknown environment: %s", env)
 	}
-	
+
 	return config, nil
 }
 
@@ -288,7 +288,7 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 		publicSubnet := subnet.NewSubnet(stack, str(fmt.Sprintf("PublicSubnet%d", i)), &subnet.SubnetConfig{
 			VpcId:               mainVPC.Id(),
 			CidrBlock:           str(cidr),
-			AvailabilityZone:    availabilityZones.Names().Get(jsii.Number(i)),
+			AvailabilityZone:    jsii.String(cdktf.Fn_Element(availabilityZones.Names(), jsii.Number(i)).(string)),
 			MapPublicIpOnLaunch: jsii.Bool(true),
 			Tags: &map[string]*string{
 				"Name":        str(fmt.Sprintf("%s-public-subnet-%d", cfg.Environment, i)),
@@ -357,7 +357,7 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 		privateSubnet := subnet.NewSubnet(stack, str(fmt.Sprintf("PrivateSubnet%d", i)), &subnet.SubnetConfig{
 			VpcId:            mainVPC.Id(),
 			CidrBlock:        str(cidr),
-			AvailabilityZone: availabilityZones.Names().Get(jsii.Number(i)),
+			AvailabilityZone: jsii.String(cdktf.Fn_Element(availabilityZones.Names(), jsii.Number(i)).(string)),
 			Tags: &map[string]*string{
 				"Name":        str(fmt.Sprintf("%s-private-subnet-%d", cfg.Environment, i)),
 				"Type":        str("private"),
@@ -379,11 +379,20 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 			},
 		})
 
-		// Add route to NAT gateway
+		// Add route to NAT gateway (use element function to get the corresponding NAT gateway)
+		// For simplicity, we'll use the same index as the subnet (assuming 1:1 mapping)
+		var natGatewayId *string
+		if i < len(natGateways) {
+			natGatewayId = natGateways[i].Id()
+		} else {
+			// If we have more private subnets than NAT gateways, use modulo
+			natGatewayId = natGateways[i%len(natGateways)].Id()
+		}
+
 		route.NewRoute(stack, str(fmt.Sprintf("PrivateRoute%d", i)), &route.RouteConfig{
 			RouteTableId:         privateRouteTable.Id(),
 			DestinationCidrBlock: str("0.0.0.0/0"),
-			NatGatewayId:         natGateways[i].Id(),
+			NatGatewayId:         natGatewayId,
 		})
 
 		// Associate private subnet with private route table
@@ -615,8 +624,8 @@ func buildS3Component(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *S3Com
 		"Version": "2012-10-17",
 		"Statement": []map[string]interface{}{
 			{
-				"Sid":    "DenyInsecureConnections",
-				"Effect": "Deny",
+				"Sid":       "DenyInsecureConnections",
+				"Effect":    "Deny",
 				"Principal": "*",
 				"Action":    "s3:*",
 				"Resource": []string{

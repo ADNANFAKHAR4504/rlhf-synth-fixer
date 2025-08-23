@@ -42,12 +42,12 @@ func Test_Live_Deploy_InfrastructureApplyAndDestroy(t *testing.T) {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-	
+
 	cfg, err := GetConfig("dev")
 	if err != nil {
 		t.Fatalf("failed to get config: %v", err)
 	}
-	
+
 	BuildInfrastructureStack(stack, cfg)
 	app.Synth()
 
@@ -86,10 +86,10 @@ func Test_Live_Deploy_InfrastructureApplyAndDestroy(t *testing.T) {
 		_, _ = run(context.Background(), "destroy", "-auto-approve", "-no-color")
 		t.Fatalf("parse outputs json: %v", err)
 	}
-	
+
 	expectedOutputs := []string{
-		"vpc_id", "public_subnet_ids", "private_subnet_ids", 
-		"logging_bucket_name", "replication_bucket_name", 
+		"vpc_id", "public_subnet_ids", "private_subnet_ids",
+		"logging_bucket_name", "replication_bucket_name",
 		"ec2_role_arn", "lambda_role_arn",
 	}
 	for _, key := range expectedOutputs {

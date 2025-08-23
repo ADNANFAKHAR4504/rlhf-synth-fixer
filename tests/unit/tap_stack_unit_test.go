@@ -29,12 +29,12 @@ func synthStack(t *testing.T, environment string) string {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-	
+
 	cfg, err := GetConfig(environment)
 	if err != nil {
 		t.Fatalf("failed to get config: %v", err)
 	}
-	
+
 	BuildInfrastructureStack(stack, cfg)
 	app.Synth()
 
@@ -321,8 +321,8 @@ func Test_Synth_OutputsPresent(t *testing.T) {
 		t.Fatalf("output block missing")
 	}
 	expectedOutputs := []string{
-		"vpc_id", "public_subnet_ids", "private_subnet_ids", 
-		"logging_bucket_name", "replication_bucket_name", 
+		"vpc_id", "public_subnet_ids", "private_subnet_ids",
+		"logging_bucket_name", "replication_bucket_name",
 		"ec2_role_arn", "lambda_role_arn",
 	}
 	for _, k := range expectedOutputs {
@@ -357,10 +357,10 @@ func Test_Provider_Region_SetProperly(t *testing.T) {
 
 func Test_Environment_Specific_Configuration(t *testing.T) {
 	tests := []struct {
-		env            string
-		expectedRegion string
+		env             string
+		expectedRegion  string
 		expectedVPCCidr string
-		expectedBucket string
+		expectedBucket  string
 	}{
 		{"dev", "us-east-1", "10.0.0.0/16", "my-company-logs-dev"},
 		{"staging", "us-east-2", "10.1.0.0/16", "my-company-logs-staging"},

@@ -26,12 +26,12 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-	
+
 	cfg, err := GetConfig("dev")
 	if err != nil {
 		t.Fatalf("failed to get config: %v", err)
 	}
-	
+
 	BuildInfrastructureStack(stack, cfg)
 	app.Synth()
 
@@ -51,7 +51,7 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 	if !ok {
 		t.Fatalf("resource block missing")
 	}
-	
+
 	// VPC Infrastructure
 	mustHaveVPC := []struct{ typeName, name string }{
 		{"aws_vpc", "MainVPC"},
@@ -75,7 +75,7 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 		{"aws_route_table_association", "PrivateRouteTableAssociation0"},
 		{"aws_route_table_association", "PrivateRouteTableAssociation1"},
 	}
-	
+
 	// IAM Infrastructure
 	mustHaveIAM := []struct{ typeName, name string }{
 		{"aws_iam_role", "EC2Role"},
@@ -86,7 +86,7 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 		{"aws_iam_role_policy_attachment", "EC2S3PolicyAttachment"},
 		{"aws_iam_role_policy_attachment", "LambdaS3PolicyAttachment"},
 	}
-	
+
 	// S3 Infrastructure
 	mustHaveS3 := []struct{ typeName, name string }{
 		{"aws_s3_bucket", "LoggingBucket"},
@@ -115,8 +115,8 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 		t.Fatalf("output block missing")
 	}
 	expectedOutputs := []string{
-		"vpc_id", "public_subnet_ids", "private_subnet_ids", 
-		"logging_bucket_name", "replication_bucket_name", 
+		"vpc_id", "public_subnet_ids", "private_subnet_ids",
+		"logging_bucket_name", "replication_bucket_name",
 		"ec2_role_arn", "lambda_role_arn",
 	}
 	for _, k := range expectedOutputs {
@@ -128,10 +128,10 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 
 func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 	environments := []struct {
-		env            string
-		expectedRegion string
-		expectedVPCCidr string
-		expectedBucket string
+		env                string
+		expectedRegion     string
+		expectedVPCCidr    string
+		expectedBucket     string
 		expectedRolePrefix string
 	}{
 		{"dev", "us-east-1", "10.0.0.0/16", "my-company-logs-dev", "dev"},
@@ -149,12 +149,12 @@ func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 
 			app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 			stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-			
+
 			cfg, err := GetConfig(env.env)
 			if err != nil {
 				t.Fatalf("failed to get config: %v", err)
 			}
-			
+
 			BuildInfrastructureStack(stack, cfg)
 			app.Synth()
 
