@@ -1,3 +1,4 @@
-We are working on setting up AWS infrastructure using CDK for Terraform and running into some issues with the imports and configuration.
-we need to build a complete infrastructure stack but I'm having trouble with the provider imports.
-we need to use dataAwsCallerIdentity instead of DataAwsCallerIdentity.
+# PROMPT2.md
+
+The model response failed at this step, please make sure to fix this with suitable solution
+'"@cdktf/provider-aws"' has no exported member named 'DataAwsCallerIdentity'. Did you mean 'dataAwsCallerIdentity'?ts(2724)
