@@ -19,16 +19,10 @@ variable "common_tags" {
 # General Variables
 ###################
 
-variable "aws_region_primary" {
-  description = "Primary AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "aws_region_secondary" {
-  description = "Secondary AWS region"
-  type        = string
-  default     = "eu-central-1"
+variable "regions" {
+  description = "List of AWS regions to deploy to"
+  type        = list(string)
+  default     = ["us-east-1", "eu-central-1"]
 }
 
 variable "environment" {
@@ -287,48 +281,11 @@ variable "cloudfront_cached_methods" {
 # Blue-Green Deployment Variables
 ###################
 
-variable "enable_blue_green" {
-  description = "Enable blue-green deployment"
-  type        = bool
-  default     = true
-}
-
-variable "blue_green_deployment_config" {
-  description = "Configuration for blue-green deployment"
-  type = object({
-    blue_weight  = number
-    green_weight = number
-  })
-  default = {
-    blue_weight  = 100
-    green_weight = 0
-  }
-  validation {
-    condition     = var.blue_green_deployment_config.blue_weight + var.blue_green_deployment_config.green_weight == 100
-    error_message = "Blue and green weights must sum to 100."
-  }
-}
-
-variable "deployment_target" {
-  description = "Current deployment target (blue or green)"
-  type        = string
-  default     = "blue"
-  validation {
-    condition     = contains(["blue", "green"], var.deployment_target)
-    error_message = "Deployment target must be either 'blue' or 'green'."
-  }
-}
-
-variable "waf_rate_limit" {
-  description = "Number of requests allowed per 5-minute period per IP address"
-  type        = number
-  default     = 2000
-}
-
 variable "blue_green_deployment" {
   description = "Configuration for blue-green deployment"
   type = object({
     enabled = bool
+    active_color = string
     weights = object({
       blue  = number
       green = number
@@ -336,6 +293,7 @@ variable "blue_green_deployment" {
   })
   default = {
     enabled = true
+    active_color = "blue"
     weights = {
       blue  = 100
       green = 0
@@ -346,6 +304,17 @@ variable "blue_green_deployment" {
     condition     = var.blue_green_deployment.weights.blue + var.blue_green_deployment.weights.green == 100
     error_message = "Blue and green weights must sum to 100."
   }
+
+  validation {
+    condition     = contains(["blue", "green"], var.blue_green_deployment.active_color)
+    error_message = "Active color must be either 'blue' or 'green'."
+  }
+}
+
+variable "waf_rate_limit" {
+  description = "Number of requests allowed per 5-minute period per IP address"
+  type        = number
+  default     = 2000
 }
 
 ###################
@@ -355,12 +324,6 @@ variable "blue_green_deployment" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-}
-
-variable "create_dns_zone" {
-  description = "Create Route53 zone for domain"
-  type        = bool
-  default     = false
 }
 
 variable "create_zone" {
@@ -374,15 +337,13 @@ variable "key_pair_name" {
   type        = string
 }
 
-# Load balancer names
-variable "aws_lb" {
-  description = "Map of load balancer names"
-  type = object({
-    app_us_east_1 = string
-    app_eu_central_1 = string
-  })
-  default = {
-    app_us_east_1 = "app-us-east-1"
-    app_eu_central_1 = "app-eu-central-1"
-  }
+###################
+# Network Access Variables
+###################
+
+variable "allowed_ingress_cidrs" {
+  description = "List of CIDR blocks allowed for ingress"
+  type        = list(string)
+  default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+}
 }

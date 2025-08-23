@@ -1,61 +1,6 @@
 #==============================================================================
-# VARIABLES
+# TERRAFORM CONFIGURATION
 #==============================================================================
-
-variable "environment" {
-  description = "Environment name (dev, stage, prod)"
-  type        = string
-  validation {
-    condition     = contains(["dev", "stage", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, stage, prod."
-  }
-}
-
-variable "regions" {
-  description = "List of AWS regions to deploy to"
-  type        = list(string)
-  default     = ["us-east-1", "eu-central-1"]
-}
-
-variable "allowed_ingress_cidrs" {
-  description = "List of CIDR blocks allowed for ingress"
-  type        = list(string)
-  default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-}
-
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
-  type        = map(string)
-  default = {
-    Owner       = "platform-team"
-    Purpose     = "multi-region-web-app"
-    Environment = "dev"
-    CostCenter  = "engineering"
-    Project     = "tap-stack"
-  }
-}
-
-variable "active_color" {
-  description = "Active deployment color for blue-green deployment"
-  type        = string
-  default     = "blue"
-  validation {
-    condition     = contains(["blue", "green"], var.active_color)
-    error_message = "Active color must be either 'blue' or 'green'."
-  }
-}
-
-variable "domain_name" {
-  description = "Domain name for the application"
-  type        = string
-  default     = "tap-stack.example.com"
-}
-
-variable "create_zone" {
-  description = "Whether to create a new Route 53 zone"
-  type        = bool
-  default     = true
-}
 
 #==============================================================================
 # LOCAL VALUES
@@ -656,7 +601,7 @@ resource "aws_secretsmanager_secret" "app_secrets_us_east_1" {
   provider                = aws.us_east_1
   name                    = "${local.name_prefix}-app-secrets-us-east-1"
   description             = "Application secrets for ${var.environment} in us-east-1"
-  kms_key_id              = aws_kms_key.main_us_east_1.arn
+  kms_key_id             = aws_kms_key.main_us_east_1.arn
   recovery_window_in_days = 7
 
   tags = merge(var.common_tags, {
@@ -854,22 +799,20 @@ resource "aws_cloudfront_distribution" "main" {
   wait_for_deployment = false
 
   # Origin for US East region
-  origin {
-    domain_name = aws_lb.app_us_east_1.dns_name
-    origin_id   = "us-east-1"
+  dynamic "origin" {
+    for_each = toset(["us-east-1", "eu-central-1"])
+    content {
+      domain_name = origin.value == "us-east-1" ? aws_lb.app_us_east_1.dns_name : aws_lb.app_eu_central_1.dns_name
+      origin_id   = origin.value
 
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
     }
   }
-
-  # Origin for EU Central region
-  origin {
-    domain_name = aws_lb.app_eu_central_1.dns_name
-    origin_id   = "eu-central-1"
 
     custom_origin_config {
       http_port              = 80
@@ -883,7 +826,7 @@ resource "aws_cloudfront_distribution" "main" {
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = var.active_color == "blue" ? "us-east-1" : "eu-central-1"
+    target_origin_id = var.blue_green_deployment.active_color == "blue" ? "us-east-1" : "eu-central-1"
 
     forwarded_values {
       query_string = true
@@ -1000,7 +943,7 @@ resource "aws_route53_record" "app_main" {
   type    = "A"
 
   alias {
-    name                   = var.active_color == "blue" ? aws_route53_record.app_blue.name : aws_route53_record.app_green.name
+    name                   = var.blue_green_deployment.active_color == "blue" ? aws_route53_record.app_blue.name : aws_route53_record.app_green.name
     zone_id               = var.create_zone ? aws_route53_zone.main[0].id : data.aws_route53_zone.existing[0].id
     evaluate_target_health = true
   }
@@ -1031,7 +974,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     statement {
       rate_based_statement {
-        limit              = 2000
+        limit              = var.waf_rate_limit
         aggregate_key_type = "IP"
       }
     }

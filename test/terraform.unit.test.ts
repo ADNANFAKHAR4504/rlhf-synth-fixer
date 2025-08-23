@@ -126,7 +126,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
       const wafContent = wafMatch[1];
       
       // Check default action
-      expect(wafContent).toMatch(/default_action\s*{[^}]*allow\s*{}/);
+      expect(wafContent).toMatch(/default_action\s*{[^}]*allow\s*{[^}]*}}/);
       
       // Check rate limiting rule
       const rateLimitMatch = wafContent.match(/rule\s*{[^}]*name\s*=\s*"rate-limit"([\s\S]*?)}/);
@@ -170,7 +170,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       // Origins configuration
       ["us-east-1", "eu-central-1"].forEach(region => {
-        const originMatch = cfContent.match(new RegExp(`origin\\s*{[^}]*domain_name\\s*=\\s*aws_lb\\.app_${region.replace(/-/g, '_')}\\.dns_name[^}]*}`));
+        const regionKey = region.replace(/-/g, '_');
+        const originMatch = cfContent.match(new RegExp(`origin\\s*{[^}]*content\\s*{[^}]*domain_name\\s*=\\s*aws_lb\\.app_${regionKey}\\.dns_name[^}]*}[^}]*}`));
         expect(originMatch).toBeTruthy();
         if (originMatch) {
           const origin = originMatch[0];
@@ -266,8 +267,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       expect(azConfigContent).toMatch(/"us-east-1"\s*=\s*{[^}]*cidr\s*=\s*"10\.0\.0\.0\/16"/);
       
       // EU Central config
-      expect(azConfigContent).toMatch(/"eu-central-1"\s*=\s*{[^}]*azs\s*=\s*\[\s*"eu-central-1a",\s*"eu-central-1b",\s*"eu-central-1c"\s*\]/);
-      expect(azConfigContent).toMatch(/"eu-central-1"\s*=\s*{[^}]*cidr\s*=\s*"10\.1\.0\.0\/16"/);
+      expect(azConfigContent).toMatch(/["']eu-central-1["']\s*=\s*{[^}]*azs\s*=\s*\[\s*["']eu-central-1a["'],\s*["']eu-central-1b["'],\s*["']eu-central-1c["']\s*\]/);
+      expect(azConfigContent).toMatch(/["']eu-central-1["']\s*=\s*{[^}]*cidr\s*=\s*["']10\.1\.0\.0\/16["']/);
     }
   });
 
@@ -311,9 +312,9 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (kmsMatch) {
         const kmsConfig = kmsMatch[1];
-        expect(kmsConfig).toMatch(/deletion_window_in_days\s*=\s*7/);
-        expect(kmsConfig).toMatch(/enable_key_rotation\s*=\s*true/);
-        expect(kmsConfig).toMatch(/description\s*=\s*"KMS key for \${var\.environment}/);
+        expect(kmsConfig).toMatch(/\s+deletion_window_in_days\s*=\s*7\s*/);
+        expect(kmsConfig).toMatch(/\s+enable_key_rotation\s*=\s*true\s*/);
+        expect(kmsConfig).toMatch(/\s+description\s*=\s*"KMS key for \${var\.environment}/);
       }
 
       // Check KMS alias
@@ -362,9 +363,9 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (natMatch) {
         const natConfig = natMatch[1];
-        expect(natConfig).toMatch(/count\s*=\s*3/); // One NAT Gateway per AZ
-        expect(natConfig).toMatch(/allocation_id\s*=\s*aws_eip\.nat_${region}\[count\.index\]\.id/);
-        expect(natConfig).toMatch(/subnet_id\s*=\s*aws_subnet\.public_${region}\[count\.index\]\.id/);
+        expect(natConfig).toMatch(/\s+count\s*=\s*3\s*/); // One NAT Gateway per AZ
+        expect(natConfig).toMatch(/\s+allocation_id\s*=\s*aws_eip\.nat_${region}\[count\.index\]\.id\s*/);
+        expect(natConfig).toMatch(/\s+subnet_id\s*=\s*aws_subnet\.public_${region}\[count\.index\]\.id\s*/);
       }
     });
   });
@@ -401,9 +402,9 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (secretMatch) {
         const secretConfig = secretMatch[1];
-        expect(secretConfig).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main_${region}\.arn/);
-        expect(secretConfig).toMatch(/recovery_window_in_days\s*=\s*7/);
-        expect(secretConfig).toMatch(/name\s*=\s*"\${local\.name_prefix}-app-secrets-${region.replace('_', '-')}"/);
+        expect(secretConfig).toMatch(/\s+kms_key_id\s*=\s*aws_kms_key\.main_${region}\.arn\s*/);
+        expect(secretConfig).toMatch(/\s+recovery_window_in_days\s*=\s*7\s*/);
+        expect(secretConfig).toMatch(/\s+name\s*=\s*"\${local\.name_prefix}-app-secrets-${region.replace('_', '-')}"\s*/);
       }
 
       // Check secret version configuration
@@ -432,8 +433,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (roleMatch) {
         const roleConfig = roleMatch[1];
-        expect(roleConfig).toMatch(/name_prefix\s*=\s*"\${local\.name_prefix}-app-role-${region.replace('_', '-')}-"/);
-        expect(roleConfig).toMatch(/assume_role_policy\s*=\s*jsonencode\({[^}]*Service\s*=\s*"ec2\.amazonaws\.com"/);
+        expect(roleConfig).toMatch(/\s+name_prefix\s*=\s*"\${local\.name_prefix}-app-role-${region.replace('_', '-')}-(.*?)"\s*/);
+        expect(roleConfig).toMatch(/\s+assume_role_policy\s*=\s*jsonencode\({[^}]*Service\s*=\s*"ec2\.amazonaws\.com"/);
       }
 
       // Check IAM policy configuration
