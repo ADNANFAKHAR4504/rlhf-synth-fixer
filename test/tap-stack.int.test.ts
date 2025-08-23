@@ -5,7 +5,7 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 // Stack configuration
-const STACK_NAME = 'TapStackpr119';
+const STACK_NAME = 'TapStackpr1889';
 const REGION = 'us-east-1';
 
 interface StackOutput {
