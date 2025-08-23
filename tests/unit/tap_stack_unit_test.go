@@ -294,7 +294,7 @@ func loadTerraformJSON(t *testing.T, path string) *TerraformManifest {
 // TestStackSynthesis tests that the stack synthesizes without errors
 func TestStackSynthesis(t *testing.T) {
 	tfPath := synthStack(t, "us-east-1")
-	
+
 	// Verify the file exists
 	if _, err := os.Stat(tfPath); os.IsNotExist(err) {
 		t.Fatalf("Terraform JSON file was not created: %s", tfPath)
@@ -607,7 +607,7 @@ func TestResourceTags(t *testing.T) {
 
 	for _, resource := range resourcesWithTags {
 		resourceType, resourceName := resource[0], resource[1]
-		
+
 		res, exists := manifest.Resource[resourceType][resourceName]
 		if !exists {
 			t.Errorf("Resource %s.%s not found", resourceType, resourceName)

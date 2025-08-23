@@ -591,7 +591,7 @@ func TestResourceCleanup(t *testing.T) {
 	// This test can be used to verify that resources can be properly destroyed
 	// In a real scenario, you might want to test terraform destroy or similar
 	t.Log("Resource cleanup test - verify all resources can be destroyed cleanly")
-	
+
 	// Add specific cleanup validation logic here if needed
 	// For example, checking for dependencies that might prevent cleanup
 }
