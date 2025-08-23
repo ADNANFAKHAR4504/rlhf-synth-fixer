@@ -1053,6 +1053,368 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 }
 
 #==============================================================================
+# LAUNCH TEMPLATES AND AUTO SCALING GROUPS
+#==============================================================================
+
+# Launch Template - US East 1
+resource "aws_launch_template" "app_us_east_1" {
+  provider      = aws.us_east_1
+  name_prefix   = "${local.name_prefix}-lt-us-east-1-"
+  image_id      = data.aws_ami.amazon_linux_us_east_1.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  vpc_security_group_ids = [aws_security_group.app_us_east_1.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.app_profile_us_east_1.name
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main_us_east_1.arn
+      delete_on_termination = true
+    }
+  }
+
+  monitoring {
+    enabled = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    region = "us-east-1"
+    environment = var.environment
+    secrets_arn = aws_secretsmanager_secret.app_secrets_us_east_1.arn
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(var.common_tags, {
+      Name = "${local.name_prefix}-instance-us-east-1"
+      Environment = var.environment
+      Region = "us-east-1"
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(var.common_tags, {
+      Name = "${local.name_prefix}-volume-us-east-1"
+      Environment = var.environment
+      Region = "us-east-1"
+    })
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-lt-us-east-1"
+  })
+}
+
+# Launch Template - EU Central 1
+resource "aws_launch_template" "app_eu_central_1" {
+  provider      = aws.eu_central_1
+  name_prefix   = "${local.name_prefix}-lt-eu-central-1-"
+  image_id      = data.aws_ami.amazon_linux_eu_central_1.id
+  instance_type = var.instance_type
+  key_name      = var.key_name
+
+  vpc_security_group_ids = [aws_security_group.app_eu_central_1.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.app_profile_eu_central_1.name
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main_eu_central_1.arn
+      delete_on_termination = true
+    }
+  }
+
+  monitoring {
+    enabled = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    region = "eu-central-1"
+    environment = var.environment
+    secrets_arn = aws_secretsmanager_secret.app_secrets_eu_central_1.arn
+  }))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(var.common_tags, {
+      Name = "${local.name_prefix}-instance-eu-central-1"
+      Environment = var.environment
+      Region = "eu-central-1"
+    })
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(var.common_tags, {
+      Name = "${local.name_prefix}-volume-eu-central-1"
+      Environment = var.environment
+      Region = "eu-central-1"
+    })
+  }
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-lt-eu-central-1"
+  })
+}
+
+# Auto Scaling Group - US East 1 (Blue)
+resource "aws_autoscaling_group" "app_blue_us_east_1" {
+  provider            = aws.us_east_1
+  name                = "${local.name_prefix}-asg-blue-us-east-1"
+  vpc_zone_identifier = aws_subnet.private_us_east_1[*].id
+  target_group_arns   = [aws_lb_target_group.app_us_east_1.arn]
+  health_check_type   = "ELB"
+  health_check_grace_period = 300
+
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.blue_green_deployment.active_color == "blue" ? var.asg_desired_capacity : var.asg_min_size
+
+  launch_template {
+    id      = aws_launch_template.app_us_east_1.id
+    version = "$Latest"
+  }
+
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize", 
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+    triggers = ["tag"]
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-asg-blue-us-east-1"
+    propagate_at_launch = false
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Region"
+    value               = "us-east-1"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Color"
+    value               = "blue"
+    propagate_at_launch = true
+  }
+
+  depends_on = [aws_lb_target_group.app_us_east_1]
+}
+
+# Auto Scaling Group - EU Central 1 (Green)
+resource "aws_autoscaling_group" "app_green_eu_central_1" {
+  provider            = aws.eu_central_1
+  name                = "${local.name_prefix}-asg-green-eu-central-1"
+  vpc_zone_identifier = aws_subnet.private_eu_central_1[*].id
+  target_group_arns   = [aws_lb_target_group.app_eu_central_1.arn]
+  health_check_type   = "ELB"
+  health_check_grace_period = 300
+
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.blue_green_deployment.active_color == "green" ? var.asg_desired_capacity : var.asg_min_size
+
+  launch_template {
+    id      = aws_launch_template.app_eu_central_1.id
+    version = "$Latest"
+  }
+
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity", 
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+    triggers = ["tag"]
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-asg-green-eu-central-1"
+    propagate_at_launch = false
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Region"
+    value               = "eu-central-1"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Color"
+    value               = "green"
+    propagate_at_launch = true
+  }
+
+  depends_on = [aws_lb_target_group.app_eu_central_1]
+}
+
+# Auto Scaling Policies - US East 1
+resource "aws_autoscaling_policy" "scale_up_us_east_1" {
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-scale-up-us-east-1"
+  scaling_adjustment = 2
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
+  autoscaling_group_name = aws_autoscaling_group.app_blue_us_east_1.name
+}
+
+resource "aws_autoscaling_policy" "scale_down_us_east_1" {
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-scale-down-us-east-1"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
+  autoscaling_group_name = aws_autoscaling_group.app_blue_us_east_1.name
+}
+
+# Auto Scaling Policies - EU Central 1
+resource "aws_autoscaling_policy" "scale_up_eu_central_1" {
+  provider           = aws.eu_central_1
+  name               = "${local.name_prefix}-scale-up-eu-central-1"
+  scaling_adjustment = 2
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
+  autoscaling_group_name = aws_autoscaling_group.app_green_eu_central_1.name
+}
+
+resource "aws_autoscaling_policy" "scale_down_eu_central_1" {
+  provider           = aws.eu_central_1
+  name               = "${local.name_prefix}-scale-down-eu-central-1"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
+  autoscaling_group_name = aws_autoscaling_group.app_green_eu_central_1.name
+}
+
+# CloudWatch Alarms - US East 1
+resource "aws_cloudwatch_metric_alarm" "high_cpu_us_east_1" {
+  provider            = aws.us_east_1
+  alarm_name          = "${local.name_prefix}-high-cpu-us-east-1"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "75"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up_us_east_1.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_blue_us_east_1.name
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu_us_east_1" {
+  provider            = aws.us_east_1
+  alarm_name          = "${local.name_prefix}-low-cpu-us-east-1"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "25"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down_us_east_1.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_blue_us_east_1.name
+  }
+
+  tags = var.common_tags
+}
+
+# CloudWatch Alarms - EU Central 1
+resource "aws_cloudwatch_metric_alarm" "high_cpu_eu_central_1" {
+  provider            = aws.eu_central_1
+  alarm_name          = "${local.name_prefix}-high-cpu-eu-central-1"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "75"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up_eu_central_1.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_green_eu_central_1.name
+  }
+
+  tags = var.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu_eu_central_1" {
+  provider            = aws.eu_central_1
+  alarm_name          = "${local.name_prefix}-low-cpu-eu-central-1"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "25"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down_eu_central_1.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app_green_eu_central_1.name
+  }
+
+  tags = var.common_tags
+}
+
+#==============================================================================
 # APPLICATION LOAD BALANCERS
 #==============================================================================
 
@@ -1203,3 +1565,189 @@ resource "aws_lb_target_group" "app_eu_central_1" {
     Region = "eu-central-1"
   })
 }
+
+#==============================================================================
+# CLOUDTRAIL AUDIT LOGGING
+#==============================================================================
+
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  provider = aws.us_east_1
+  bucket   = "${local.name_prefix}-cloudtrail-logs-${data.aws_caller_identity.current.account_id}-${random_id.suffix.hex}"
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-logs"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.cloudtrail_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main_us_east_1.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail_logs" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.cloudtrail_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.cloudtrail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail_logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-trail"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-trail"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.cloudtrail_logs]
+}
+
+# CloudTrail - Multi-region trail with CloudWatch integration
+resource "aws_cloudtrail" "main" {
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-trail"
+  s3_bucket_name     = aws_s3_bucket.cloudtrail_logs.id
+  s3_key_prefix      = "cloudtrail-logs"
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
+  enable_log_file_validation    = true
+  kms_key_id                    = aws_kms_key.main_us_east_1.arn
+  
+  cloud_watch_logs_group_arn = aws_cloudwatch_log_group.cloudtrail.arn
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch_role.arn
+
+  event_selector {
+    read_write_type                 = "All"
+    include_management_events       = true
+    exclude_management_event_sources = []
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:${data.aws_partition.current.partition}:s3:::*/*"]
+    }
+
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:${data.aws_partition.current.partition}:lambda:*"]
+    }
+  }
+
+  insight_selector {
+    insight_type = "ApiCallRateInsight"
+  }
+
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail_logs,
+    aws_iam_role_policy.cloudtrail_cloudwatch_logs_policy
+  ]
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+# CloudWatch Log Group for CloudTrail
+resource "aws_cloudwatch_log_group" "cloudtrail" {
+  provider          = aws.us_east_1
+  name              = "/aws/cloudtrail/${local.name_prefix}"
+  retention_in_days = 90
+  kms_key_id        = aws_kms_key.main_us_east_1.arn
+
+  tags = merge(var.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-logs"
+  })
+}
+
+# IAM role for CloudTrail CloudWatch integration
+resource "aws_iam_role" "cloudtrail_cloudwatch_role" {
+  provider = aws.us_east_1
+  name     = "${local.name_prefix}-cloudtrail-cloudwatch-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch_logs_policy" {
+  provider = aws.us_east_1
+  name     = "${local.name_prefix}-cloudtrail-cloudwatch-logs-policy"
+  role     = aws_iam_role.cloudtrail_cloudwatch_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+      }
+    ]
+  })
+}
+

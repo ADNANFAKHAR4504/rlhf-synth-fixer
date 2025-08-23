@@ -309,6 +309,50 @@ variable "key_pair_name" {
   type        = string
 }
 
+variable "key_name" {
+  description = "EC2 Key Pair name for SSH access"
+  type        = string
+  default     = null
+}
+
+###################
+# Auto Scaling Group Variables
+###################
+
+variable "asg_min_size" {
+  description = "Minimum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_size" {
+  description = "Maximum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 6
+}
+
+variable "asg_desired_capacity" {
+  description = "Desired number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "asg_health_check_grace_period" {
+  description = "Time after instance launch before checking health"
+  type        = number
+  default     = 300
+}
+
+variable "asg_health_check_type" {
+  description = "Type of health check (EC2 or ELB)"
+  type        = string
+  default     = "ELB"
+  validation {
+    condition     = contains(["EC2", "ELB"], var.asg_health_check_type)
+    error_message = "Health check type must be either EC2 or ELB."
+  }
+}
+
 ###################
 # Network Access Variables
 ###################

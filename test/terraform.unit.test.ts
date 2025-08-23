@@ -500,4 +500,108 @@ describe("Terraform Multi-Region Infrastructure", () => {
       }
     });
   });
+
+  test("Auto Scaling Groups must be properly configured", () => {
+    // Check for ASG resources with extended regex to capture full resource blocks
+    const asgBlueMatch = terraformContent.match(/resource\s+"aws_autoscaling_group"\s+"app_blue_us_east_1"\s*{[\s\S]*?(?=^resource\s|^}$|\n}$)/m);
+    const asgGreenMatch = terraformContent.match(/resource\s+"aws_autoscaling_group"\s+"app_green_eu_central_1"\s*{[\s\S]*?(?=^resource\s|^}$|\n}$)/m);
+    
+    expect(asgBlueMatch).toBeTruthy();
+    expect(asgGreenMatch).toBeTruthy();
+    
+    if (asgBlueMatch) {
+      expect(asgBlueMatch[0]).toMatch(/health_check_type\s*=\s*"ELB"/);
+      expect(asgBlueMatch[0]).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.app_us_east_1\.arn\]/);
+    }
+    
+    if (asgGreenMatch) {
+      expect(asgGreenMatch[0]).toMatch(/health_check_type\s*=\s*"ELB"/);
+      expect(asgGreenMatch[0]).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.app_eu_central_1\.arn\]/);
+    }
+  });
+
+  test("Launch Templates must be properly configured with security features", () => {
+    // Check for launch template resources
+    const ltUsEast1Match = terraformContent.match(/resource\s+"aws_launch_template"\s+"app_us_east_1"\s*{[\s\S]*?(?=resource\s|$)/);
+    const ltEuCentral1Match = terraformContent.match(/resource\s+"aws_launch_template"\s+"app_eu_central_1"\s*{[\s\S]*?(?=resource\s|$)/);
+    
+    expect(ltUsEast1Match).toBeTruthy();
+    expect(ltEuCentral1Match).toBeTruthy();
+    
+    [ltUsEast1Match, ltEuCentral1Match].forEach((ltMatch, index) => {
+      if (ltMatch) {
+        const ltConfig = ltMatch[0];
+        // Check for encrypted EBS volumes
+        expect(ltConfig).toMatch(/encrypted\s*=\s*true/);
+        // Check for monitoring enabled
+        expect(ltConfig).toMatch(/monitoring\s*{[\s\S]*?enabled\s*=\s*true/);
+        // Check for IAM instance profile
+        expect(ltConfig).toMatch(/iam_instance_profile\s*{/);
+        // Check for security group association
+        expect(ltConfig).toMatch(/vpc_security_group_ids\s*=\s*\[/);
+      }
+    });
+  });
+
+  test("Auto Scaling Policies and CloudWatch Alarms must be configured", () => {
+    // Check for scaling policies
+    const scaleUpPolicies = terraformContent.match(/resource\s+"aws_autoscaling_policy"\s+"scale_up_[^"]*"/g) || [];
+    const scaleDownPolicies = terraformContent.match(/resource\s+"aws_autoscaling_policy"\s+"scale_down_[^"]*"/g) || [];
+    
+    expect(scaleUpPolicies.length).toBeGreaterThanOrEqual(2); // One for each region
+    expect(scaleDownPolicies.length).toBeGreaterThanOrEqual(2); // One for each region
+    
+    // Check for CloudWatch alarms
+    const highCpuAlarms = terraformContent.match(/resource\s+"aws_cloudwatch_metric_alarm"\s+"high_cpu_[^"]*"/g) || [];
+    const lowCpuAlarms = terraformContent.match(/resource\s+"aws_cloudwatch_metric_alarm"\s+"low_cpu_[^"]*"/g) || [];
+    
+    expect(highCpuAlarms.length).toBeGreaterThanOrEqual(2); // One for each region
+    expect(lowCpuAlarms.length).toBeGreaterThanOrEqual(2); // One for each region
+  });
+
+  test("CloudTrail must be properly configured for audit compliance", () => {
+    // Check for CloudTrail resource
+    const cloudTrailMatch = terraformContent.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?(?=resource\s|$)/);
+    expect(cloudTrailMatch).toBeTruthy();
+    
+    if (cloudTrailMatch) {
+      const cloudTrailConfig = cloudTrailMatch[0];
+      // Check multi-region trail
+      expect(cloudTrailConfig).toMatch(/is_multi_region_trail\s*=\s*true/);
+      // Check log file validation
+      expect(cloudTrailConfig).toMatch(/enable_log_file_validation\s*=\s*true/);
+      // Check KMS encryption
+      expect(cloudTrailConfig).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main_us_east_1\.arn/);
+      // Check S3 bucket
+      expect(cloudTrailConfig).toMatch(/s3_bucket_name\s*=\s*aws_s3_bucket\.cloudtrail_logs\.id/);
+      // Check CloudWatch integration
+      expect(cloudTrailConfig).toMatch(/cloud_watch_logs_group_arn/);
+    }
+  });
+
+  test("CloudTrail S3 bucket must be properly secured", () => {
+    // Check for S3 bucket for CloudTrail
+    const s3BucketMatch = terraformContent.match(/resource\s+"aws_s3_bucket"\s+"cloudtrail_logs"\s*{[\s\S]*?(?=resource\s|$)/);
+    expect(s3BucketMatch).toBeTruthy();
+    
+    // Check for S3 encryption
+    const s3EncryptionMatch = terraformContent.match(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"cloudtrail_logs"/);
+    expect(s3EncryptionMatch).toBeTruthy();
+    
+    // Check for S3 public access block
+    const s3PublicBlockMatch = terraformContent.match(/resource\s+"aws_s3_bucket_public_access_block"\s+"cloudtrail_logs"/);
+    expect(s3PublicBlockMatch).toBeTruthy();
+    
+    // Check for S3 versioning
+    const s3VersioningMatch = terraformContent.match(/resource\s+"aws_s3_bucket_versioning"\s+"cloudtrail_logs"/);
+    expect(s3VersioningMatch).toBeTruthy();
+  });
+
+  test("ASG variables must be properly defined", () => {
+    // Check for ASG-specific variables
+    expect(variablesContent).toMatch(/variable\s+"asg_min_size"/);
+    expect(variablesContent).toMatch(/variable\s+"asg_max_size"/);
+    expect(variablesContent).toMatch(/variable\s+"asg_desired_capacity"/);
+    expect(variablesContent).toMatch(/variable\s+"asg_health_check_type"/);
+  });
 });
