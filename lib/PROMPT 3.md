@@ -1,24 +1,6 @@
-You are an expert AWS CloudFormation architect specializing in secure, compliant infrastructure for FinTech applications handling sensitive financial data. Your task is to generate a complete AWS CloudFormation template in YAML format, named TapStack.yml, that deploys a brand-new stack in a multi-account, multi-region AWS environment. The template must adhere to rigorous security standards, best practices, and all specified requirements below. Do not reference or point to any existing resources; create all resources from scratch within the template, including VPCs, subnets, security groups, IAM roles/users/policies, S3 buckets, DynamoDB tables, RDS instances, CloudTrail, Lambda functions, and any other necessary components.
+Your code failed at deploy stage again and the error message is:
 
-### Key Requirements for the Infrastructure:
-- **Overall Environment**: Deploy in multiple AWS regions (e.g., us-east-1 as primary, with multi-region support for services like CloudTrail). Ensure consistency across accounts (use AWS Organizations if needed, but simulate multi-account via assume-role if applicable). All resources must be created within designated VPCs. Prioritize security, compliance, least-privilege access, and automation for a FinTech app managing sensitive data.
-- **S3 Buckets**: All S3 buckets must be private by default (no public access), with versioning enabled. Implement lifecycle policies to manage old versions (e.g., transition non-current versions to Glacier after 30 days and delete after 365 days). Enable server-side encryption with AWS-managed keys (SSE-S3) or KMS.
-- **DynamoDB Tables**: Create at least one DynamoDB table with encryption at rest enabled using AWS-managed KMS keys. Use on-demand capacity mode for scalability.
-- **RDS Instances**: Create at least one RDS instance (e.g., PostgreSQL) with encryption at rest enabled. Ensure it's deployed in a private subnet within the VPC, with Multi-AZ for high availability.
-- **IAM Policies and Users**: Create IAM users, roles, and policies following least-privilege principles. Enable multi-factor authentication (MFA) for all IAM users. Limit access based on roles and responsibilities (e.g., admin vs. developer roles). Include policies for S3, DynamoDB, RDS, Lambda, etc.
-- **CloudTrail**: Enable CloudTrail logging in all regions, storing logs in a secure S3 bucket with encryption and access logging. Integrate with CloudWatch for monitoring.
-- **VPC and Networking**: Create a new VPC with public and private subnets across multiple availability zones. Enable VPC flow logs to CloudWatch Logs for monitoring IP traffic. All EC2 instances (if any) must be within the VPC.
-- **Security Groups**: Create security groups with descriptive names/labels. Restrict ingress/egress to only necessary ports: allow inbound on 80 (HTTP) and 443 (HTTPS) from specific CIDRs (e.g., 0.0.0.0/0 for web access, but prefer ALB/ELB fronting). No open ports to the world otherwise; use least-privilege rules.
-- **Tagging**: Automatically tag all resources with 'Environment' (e.g., values like 'Production', 'Staging') and 'CostCenter' (e.g., 'Finance', 'IT') for cost allocation and troubleshooting.
-- **Automation and Remediation**: Use AWS Lambda functions to automate remediation of non-compliant configurations (e.g., a Lambda triggered by CloudWatch Events or Config rules to enforce bucket privacy, encryption, or tagging). Include necessary IAM roles for Lambda.
-- **Other Security Features**: Ensure all data in transit uses TLS. Use AWS Config for compliance checks if applicable. Include outputs for key resource ARNs/IDs.
-
-### Template Structure and Best Practices:
-- **Format**: YAML only. Use intrinsic functions (e.g., !Ref, !Sub, !Join) for dynamic logic. Follow AWS best practices: modular structure with sections for Parameters, Mappings, Conditions, Resources, and Outputs.
-- **Parameters**: Declare all necessary parameters at the top (e.g., EnvironmentName, CostCenter, VPC CIDR, etc.) with default values, descriptions, and constraints (e.g., AllowedValues for Environment: ['Production', 'Staging', 'Development']).
-- **Resources**: Create all resources anew (no imports or references to external stacks). Use dependsOn where needed for ordering.
-- **Outputs**: Export key values like VPC ID, S3 Bucket Names, RDS Endpoint, Lambda ARN, etc., for cross-stack references or validation.
-- **Compliance and Validation**: The template must comply with all constraints: private S3, versioning, encryption (DynamoDB/RDS/S3), MFA on IAM, multi-region CloudTrail, VPC flow logs, tags, lifecycle policies, Lambda remediation, restricted security groups (only 80/443 open where needed). Assume the template will be tested for deployment success and compliance checks.
-- **Edge Cases**: Handle multi-region with globals where possible (e.g., CloudTrail multi-region trail). Use KMS for custom encryption if needed. Avoid hardcoding sensitive values; use parameters or secrets.
-
-Generate the complete TapStack.yml file as your output, enclosed in a code block. Ensure it's deployable and passes comprehensive tests for security constraints. Do not include any explanatory text outside the YAML; the YAML should be self-documenting with comments where helpful.
+Failed to create/update the stack. Run the following command
+to fetch the list of events leading up to the failure
+aws cloudformation describe-stack-events --stack-name TapStackpr2053
+Error: Process completed with exit code 255.
