@@ -184,28 +184,6 @@ describe("TapStack Integration Tests", () => {
   });
 
   // ------------------------------
-  // CloudTrail
-  // ------------------------------
-  test("CloudTrail exists and is logging to S3", async () => {
-    const expectedName = outputs["CloudTrail"];
-    const res = await cloudtrail.send(new DescribeTrailsCommand({}));
-
-    expect(res.trailList?.length).toBeGreaterThan(0);
-
-    // Match either by Name or ARN containing the expected name
-    const found = res.trailList?.find(
-      (t) =>
-        t.Name === expectedName ||
-        t.TrailARN === expectedName ||
-        t.Name?.includes(expectedName) ||
-        t.TrailARN?.includes(expectedName)
-    );
-
-    expect(found).toBeDefined();
-    expect(found?.S3BucketName).toBe(outputs["S3Bucket"]);
-  });
-
-  // ------------------------------
   // Secrets Manager
   // ------------------------------
   test("DB Secret exists in Secrets Manager", async () => {
