@@ -10,13 +10,13 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "prod"
 }
 
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "secure-webapp"
+  default     = "webapp"
 }
 
 ########################
@@ -40,7 +40,7 @@ data "aws_ami" "amazon_linux" {
 # Random Resources
 ########################
 resource "random_string" "suffix" {
-  length  = 8
+  length  = 6
   special = false
   upper   = false
 }
