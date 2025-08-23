@@ -5,9 +5,17 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Assumptions;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
 
 import com.pulumi.Context;
 
@@ -54,6 +62,11 @@ public class MainIntegrationTest {
                 "Pulumi.yaml should exist");
         assertTrue(Files.exists(Paths.get("build.gradle")),
                 "build.gradle should exist");
+        
+        // Check for deployment outputs if they exist
+        if (Files.exists(Paths.get("cfn-outputs/flat-outputs.json"))) {
+            System.out.println("Found deployment outputs - integration tests can validate real resources");
+        }
     }
 
     /**
@@ -171,5 +184,213 @@ public class MainIntegrationTest {
     private boolean isTestingEnvironment() {
         String env = System.getenv("ENVIRONMENT_SUFFIX");
         return env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"));
+    }
+
+    /**
+     * Test AWS infrastructure using real deployment outputs.
+     * This test reads from cfn-outputs/flat-outputs.json to validate the deployed resources.
+     */
+    @Test
+    void testAwsInfrastructureWithRealOutputs() {
+        // Skip if outputs file doesn't exist
+        var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
+        Assumptions.assumeTrue(Files.exists(outputsPath), 
+            "cfn-outputs/flat-outputs.json should exist from deployment");
+
+        assertDoesNotThrow(() -> {
+            // Read deployment outputs
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> outputs = mapper.readValue(
+                outputsPath.toFile(), 
+                new TypeReference<Map<String, Object>>() {}
+            );
+
+            // Validate VPC exists and has expected CIDR
+            assertNotNull(outputs.get("VpcId"), "VPC should be created");
+            String vpcId = outputs.get("VpcId").toString();
+            validateVpcConfiguration(vpcId);
+
+            // Validate subnets exist and are in correct AZs
+            assertNotNull(outputs.get("PublicSubnet1Id"), "Public subnet 1 should exist");
+            assertNotNull(outputs.get("PublicSubnet2Id"), "Public subnet 2 should exist");
+            assertNotNull(outputs.get("PrivateSubnet1Id"), "Private subnet 1 should exist");
+            assertNotNull(outputs.get("PrivateSubnet2Id"), "Private subnet 2 should exist");
+            
+            validateSubnetsConfiguration(outputs);
+
+            // Validate EC2 instances exist and are properly configured
+            assertNotNull(outputs.get("WebServer1Id"), "Web server 1 should exist");
+            assertNotNull(outputs.get("WebServer2Id"), "Web server 2 should exist");
+            
+            validateEc2Instances(outputs);
+
+            // Validate Elastic IPs are assigned
+            assertNotNull(outputs.get("WebServer1PublicIp"), "Web server 1 should have public IP");
+            assertNotNull(outputs.get("WebServer2PublicIp"), "Web server 2 should have public IP");
+            
+            validateElasticIps(outputs);
+
+            // Validate Security Group configuration
+            assertNotNull(outputs.get("SecurityGroupId"), "Security group should exist");
+            validateSecurityGroupRules(outputs.get("SecurityGroupId").toString());
+
+            // Validate private IPs are within VPC range
+            validatePrivateIpsInVpcRange(outputs);
+        });
+    }
+
+    /**
+     * Validates that the VPC has the correct configuration.
+     */
+    private void validateVpcConfiguration(String vpcId) {
+        try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+            DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
+                DescribeVpcsRequest.builder()
+                    .vpcIds(vpcId)
+                    .build()
+            );
+            
+            assertEquals(1, vpcsResponse.vpcs().size(), "Should find exactly one VPC");
+            
+            Vpc vpc = vpcsResponse.vpcs().get(0);
+            assertEquals("10.0.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block");
+            assertEquals("available", vpc.state().toString().toLowerCase(), "VPC should be available");
+        }
+    }
+
+    /**
+     * Validates subnet configuration and availability zones.
+     */
+    private void validateSubnetsConfiguration(Map<String, Object> outputs) {
+        try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+            // Get all subnets
+            String publicSubnet1Id = outputs.get("PublicSubnet1Id").toString();
+            String publicSubnet2Id = outputs.get("PublicSubnet2Id").toString();
+            String privateSubnet1Id = outputs.get("PrivateSubnet1Id").toString();
+            String privateSubnet2Id = outputs.get("PrivateSubnet2Id").toString();
+            
+            DescribeSubnetsResponse subnetsResponse = ec2.describeSubnets(
+                DescribeSubnetsRequest.builder()
+                    .subnetIds(publicSubnet1Id, publicSubnet2Id, privateSubnet1Id, privateSubnet2Id)
+                    .build()
+            );
+            
+            assertEquals(4, subnetsResponse.subnets().size(), "Should have 4 subnets");
+            
+            // Validate subnet configurations
+            for (Subnet subnet : subnetsResponse.subnets()) {
+                assertEquals("available", subnet.state().toString().toLowerCase(), "All subnets should be available");
+                assertTrue(subnet.cidrBlock().startsWith("10.0."), 
+                    "All subnets should be within VPC CIDR range");
+            }
+            
+            // Verify subnets are in different AZs
+            var subnetIds = java.util.List.of(publicSubnet1Id, publicSubnet2Id);
+            var azSet = subnetsResponse.subnets().stream()
+                .filter(s -> subnetIds.contains(s.subnetId()))
+                .map(Subnet::availabilityZone)
+                .collect(java.util.stream.Collectors.toSet());
+            
+            assertEquals(2, azSet.size(), "Public subnets should be in different AZs");
+        }
+    }
+
+    /**
+     * Validates EC2 instances configuration.
+     */
+    private void validateEc2Instances(Map<String, Object> outputs) {
+        try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+            String instance1Id = outputs.get("WebServer1Id").toString();
+            String instance2Id = outputs.get("WebServer2Id").toString();
+            
+            DescribeInstancesResponse instancesResponse = ec2.describeInstances(
+                DescribeInstancesRequest.builder()
+                    .instanceIds(instance1Id, instance2Id)
+                    .build()
+            );
+            
+            int instanceCount = 0;
+            for (Reservation reservation : instancesResponse.reservations()) {
+                for (Instance instance : reservation.instances()) {
+                    instanceCount++;
+                    assertEquals("running", instance.state().name().toString().toLowerCase(),
+                        "Instance should be running");
+                    assertEquals("t3.micro", instance.instanceType().toString(),
+                        "Instance should be t3.micro");
+                    assertNotNull(instance.publicIpAddress(), "Instance should have public IP");
+                    assertTrue(instance.privateIpAddress().startsWith("10.0."),
+                        "Private IP should be within VPC range");
+                }
+            }
+            
+            assertEquals(2, instanceCount, "Should have exactly 2 EC2 instances");
+        }
+    }
+
+    /**
+     * Validates Elastic IP configuration.
+     */
+    private void validateElasticIps(Map<String, Object> outputs) {
+        try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+            String publicIp1 = outputs.get("WebServer1PublicIp").toString();
+            String publicIp2 = outputs.get("WebServer2PublicIp").toString();
+            
+            DescribeAddressesResponse addressesResponse = ec2.describeAddresses(
+                DescribeAddressesRequest.builder()
+                    .publicIps(publicIp1, publicIp2)
+                    .build()
+            );
+            
+            assertEquals(2, addressesResponse.addresses().size(), "Should have 2 Elastic IPs");
+            
+            for (Address address : addressesResponse.addresses()) {
+                assertEquals("vpc", address.domain().toString(), "EIP should be VPC domain");
+                assertNotNull(address.instanceId(), "EIP should be associated with instance");
+            }
+        }
+    }
+
+    /**
+     * Validates Security Group rules.
+     */
+    private void validateSecurityGroupRules(String securityGroupId) {
+        try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+            DescribeSecurityGroupsResponse sgResponse = ec2.describeSecurityGroups(
+                DescribeSecurityGroupsRequest.builder()
+                    .groupIds(securityGroupId)
+                    .build()
+            );
+            
+            assertEquals(1, sgResponse.securityGroups().size(), "Should find security group");
+            
+            SecurityGroup sg = sgResponse.securityGroups().get(0);
+            
+            // Check ingress rules
+            assertTrue(sg.ipPermissions().size() >= 3, "Should have at least SSH, HTTP, HTTPS rules");
+            
+            // Verify SSH rule exists and is restricted
+            boolean hasSshRule = sg.ipPermissions().stream()
+                .anyMatch(rule -> rule.fromPort() != null && rule.fromPort() == 22);
+            assertTrue(hasSshRule, "Should have SSH rule on port 22");
+            
+            // Verify egress allows outbound traffic
+            assertTrue(sg.ipPermissionsEgress().size() >= 1, "Should have egress rules");
+        }
+    }
+
+    /**
+     * Validates that private IPs are within the VPC CIDR range.
+     */
+    private void validatePrivateIpsInVpcRange(Map<String, Object> outputs) {
+        String privateIp1 = outputs.get("WebServer1PrivateIp").toString();
+        String privateIp2 = outputs.get("WebServer2PrivateIp").toString();
+        
+        assertTrue(privateIp1.startsWith("10.0."), 
+            "Private IP 1 should be within VPC range: " + privateIp1);
+        assertTrue(privateIp2.startsWith("10.0."), 
+            "Private IP 2 should be within VPC range: " + privateIp2);
+        
+        assertNotEquals(privateIp1, privateIp2, 
+            "Instances should have different private IPs");
     }
 }

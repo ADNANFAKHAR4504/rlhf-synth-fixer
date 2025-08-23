@@ -89,4 +89,65 @@ public class MainTest {
             Main.defineInfrastructure(null);
         });
     }
+    
+    /**
+     * Test environment suffix logic.
+     */
+    @Test
+    void testGetEnvironmentSuffix() {
+        // Test with default value when environment variable is not set
+        String suffix = Main.getEnvironmentSuffix();
+        assertNotNull(suffix);
+        assertTrue(suffix.length() > 0);
+    }
+    
+    /**
+     * Test IP address validation logic.
+     */
+    @Test
+    void testIsValidIpAddress() {
+        // Valid IP addresses
+        assertTrue(Main.isValidIpAddress("192.168.1.1"));
+        assertTrue(Main.isValidIpAddress("10.0.0.1"));
+        assertTrue(Main.isValidIpAddress("172.16.0.1"));
+        assertTrue(Main.isValidIpAddress("8.8.8.8"));
+        assertTrue(Main.isValidIpAddress("0.0.0.0"));
+        assertTrue(Main.isValidIpAddress("255.255.255.255"));
+        
+        // Invalid IP addresses
+        assertFalse(Main.isValidIpAddress(null));
+        assertFalse(Main.isValidIpAddress(""));
+        assertFalse(Main.isValidIpAddress("   "));
+        assertFalse(Main.isValidIpAddress("256.1.1.1"));
+        assertFalse(Main.isValidIpAddress("1.1.1"));
+        assertFalse(Main.isValidIpAddress("1.1.1.1.1"));
+        assertFalse(Main.isValidIpAddress("abc.def.ghi.jkl"));
+        assertFalse(Main.isValidIpAddress("192.168.1.256"));
+    }
+    
+    /**
+     * Test CIDR block validation logic.
+     */
+    @Test
+    void testIsValidCidrBlock() {
+        // Valid CIDR blocks
+        assertTrue(Main.isValidCidrBlock("10.0.0.0/16"));
+        assertTrue(Main.isValidCidrBlock("192.168.1.0/24"));
+        assertTrue(Main.isValidCidrBlock("172.16.0.0/12"));
+        assertTrue(Main.isValidCidrBlock("0.0.0.0/0"));
+        assertTrue(Main.isValidCidrBlock("10.0.1.0/24"));
+        assertTrue(Main.isValidCidrBlock("10.0.2.0/24"));
+        
+        // Invalid CIDR blocks
+        assertFalse(Main.isValidCidrBlock(null));
+        assertFalse(Main.isValidCidrBlock(""));
+        assertFalse(Main.isValidCidrBlock("   "));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0"));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0/"));
+        assertFalse(Main.isValidCidrBlock("/24"));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0/33"));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0/-1"));
+        assertFalse(Main.isValidCidrBlock("256.0.0.0/24"));
+        assertFalse(Main.isValidCidrBlock("10.0.0.0/abc"));
+    }
 }

@@ -1,13 +1,6 @@
-
-
-import com.pulumi.Context;
-
-import com.pulumi.aws.s3.Bucket;
-import com.pulumi.aws.s3.BucketArgs;
-
-
 package app;
 
+import com.pulumi.Context;
 import com.pulumi.Pulumi;
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.ProviderArgs;
@@ -74,14 +67,22 @@ public final class Main {
             .provider(awsProvider)
             .build();
         
-        // Create VPC
-        var vpc = new Vpc("scalable-web-vpc", VpcArgs.builder()
+        // Create VPC with environment suffix to avoid conflicts
+        var environmentSuffix = getEnvironmentSuffix();
+        
+        // Validate the authorized SSH IP
+        if (!isValidIpAddress(authorizedSshIp)) {
+            throw new IllegalArgumentException("Invalid authorized SSH IP address: " + authorizedSshIp);
+        }
+        
+        var vpc = new Vpc("scalable-web-vpc-" + environmentSuffix, VpcArgs.builder()
             .cidrBlock("10.0.0.0/16")
             .enableDnsHostnames(true)
             .enableDnsSupport(true)
             .tags(Map.of(
-                "Name", "scalable-web-vpc",
-                "Environment", "production"
+                "Name", "scalable-web-vpc-" + environmentSuffix,
+                "Environment", environmentSuffix,
+                "Project", "TapStack"
             ))
             .build(), providerOptions);
         
@@ -90,107 +91,120 @@ public final class Main {
         String az2 = "us-west-2b";
         
         // Create Internet Gateway
-        var internetGateway = new InternetGateway("scalable-web-igw", 
+        var internetGateway = new InternetGateway("scalable-web-igw-" + environmentSuffix, 
             InternetGatewayArgs.builder()
                 .vpcId(vpc.id())
-                .tags(Map.of("Name", "scalable-web-igw"))
+                .tags(Map.of(
+                    "Name", "scalable-web-igw-" + environmentSuffix,
+                    "Environment", environmentSuffix
+                ))
                 .build(), providerOptions);
         
         // Create public subnets in different AZs
-        var publicSubnet1 = new Subnet("public-subnet-1", SubnetArgs.builder()
+        var publicSubnet1 = new Subnet("public-subnet-1-" + environmentSuffix, SubnetArgs.builder()
             .vpcId(vpc.id())
             .cidrBlock("10.0.1.0/24")
             .availabilityZone(az1)
             .mapPublicIpOnLaunch(true)
             .tags(Map.of(
-                "Name", "public-subnet-1",
-                "Type", "public"
+                "Name", "public-subnet-1-" + environmentSuffix,
+                "Type", "public",
+                "Environment", environmentSuffix
             ))
             .build(), providerOptions);
         
-        var publicSubnet2 = new Subnet("public-subnet-2", SubnetArgs.builder()
+        var publicSubnet2 = new Subnet("public-subnet-2-" + environmentSuffix, SubnetArgs.builder()
             .vpcId(vpc.id())
             .cidrBlock("10.0.2.0/24")
             .availabilityZone(az2)
             .mapPublicIpOnLaunch(true)
             .tags(Map.of(
-                "Name", "public-subnet-2",
-                "Type", "public"
+                "Name", "public-subnet-2-" + environmentSuffix,
+                "Type", "public",
+                "Environment", environmentSuffix
             ))
             .build(), providerOptions);
         
         // Create private subnets in different AZs
-        var privateSubnet1 = new Subnet("private-subnet-1", SubnetArgs.builder()
+        var privateSubnet1 = new Subnet("private-subnet-1-" + environmentSuffix, SubnetArgs.builder()
             .vpcId(vpc.id())
             .cidrBlock("10.0.3.0/24")
             .availabilityZone(az1)
             .tags(Map.of(
-                "Name", "private-subnet-1",
-                "Type", "private"
+                "Name", "private-subnet-1-" + environmentSuffix,
+                "Type", "private",
+                "Environment", environmentSuffix
             ))
             .build(), providerOptions);
         
-        var privateSubnet2 = new Subnet("private-subnet-2", SubnetArgs.builder()
+        var privateSubnet2 = new Subnet("private-subnet-2-" + environmentSuffix, SubnetArgs.builder()
             .vpcId(vpc.id())
             .cidrBlock("10.0.4.0/24")
             .availabilityZone(az2)
             .tags(Map.of(
-                "Name", "private-subnet-2",
-                "Type", "private"
+                "Name", "private-subnet-2-" + environmentSuffix,
+                "Type", "private",
+                "Environment", environmentSuffix
             ))
             .build(), providerOptions);
         
         // Create public route table
-        var publicRouteTable = new RouteTable("public-route-table", 
+        var publicRouteTable = new RouteTable("public-route-table-" + environmentSuffix, 
             RouteTableArgs.builder()
                 .vpcId(vpc.id())
-                .tags(Map.of("Name", "public-route-table"))
+                .tags(Map.of(
+                    "Name", "public-route-table-" + environmentSuffix,
+                    "Environment", environmentSuffix
+                ))
                 .build(), providerOptions);
         
         // Create route to Internet Gateway for public subnets
-        var publicRoute = new Route("public-route", RouteArgs.builder()
+        var publicRoute = new Route("public-route-" + environmentSuffix, RouteArgs.builder()
             .routeTableId(publicRouteTable.id())
             .destinationCidrBlock("0.0.0.0/0")
             .gatewayId(internetGateway.id())
             .build(), providerOptions);
         
         // Associate public subnets with public route table
-        var publicSubnet1Association = new RouteTableAssociation("public-subnet-1-association",
+        var publicSubnet1Association = new RouteTableAssociation("public-subnet-1-association-" + environmentSuffix,
             RouteTableAssociationArgs.builder()
                 .subnetId(publicSubnet1.id())
                 .routeTableId(publicRouteTable.id())
                 .build(), providerOptions);
         
-        var publicSubnet2Association = new RouteTableAssociation("public-subnet-2-association",
+        var publicSubnet2Association = new RouteTableAssociation("public-subnet-2-association-" + environmentSuffix,
             RouteTableAssociationArgs.builder()
                 .subnetId(publicSubnet2.id())
                 .routeTableId(publicRouteTable.id())
                 .build(), providerOptions);
         
         // Create private route table (isolated - no internet access)
-        var privateRouteTable = new RouteTable("private-route-table",
+        var privateRouteTable = new RouteTable("private-route-table-" + environmentSuffix,
             RouteTableArgs.builder()
                 .vpcId(vpc.id())
-                .tags(Map.of("Name", "private-route-table"))
+                .tags(Map.of(
+                    "Name", "private-route-table-" + environmentSuffix,
+                    "Environment", environmentSuffix
+                ))
                 .build(), providerOptions);
         
         // Associate private subnets with private route table
-        var privateSubnet1Association = new RouteTableAssociation("private-subnet-1-association",
+        var privateSubnet1Association = new RouteTableAssociation("private-subnet-1-association-" + environmentSuffix,
             RouteTableAssociationArgs.builder()
                 .subnetId(privateSubnet1.id())
                 .routeTableId(privateRouteTable.id())
                 .build(), providerOptions);
         
-        var privateSubnet2Association = new RouteTableAssociation("private-subnet-2-association",
+        var privateSubnet2Association = new RouteTableAssociation("private-subnet-2-association-" + environmentSuffix,
             RouteTableAssociationArgs.builder()
                 .subnetId(privateSubnet2.id())
                 .routeTableId(privateRouteTable.id())
                 .build(), providerOptions);
         
         // Create Security Group with restricted SSH access
-        var webSecurityGroup = new SecurityGroup("web-security-group",
+        var webSecurityGroup = new SecurityGroup("web-security-group-" + environmentSuffix,
             SecurityGroupArgs.builder()
-                .name("web-security-group")
+                .name("web-security-group-" + environmentSuffix)
                 .description("Security group for web servers with restricted SSH access")
                 .vpcId(vpc.id())
                 .ingress(List.of(
@@ -237,67 +251,81 @@ public final class Main {
                         .description("All outbound traffic")
                         .build()
                 ))
-                .tags(Map.of("Name", "web-security-group"))
+                .tags(Map.of(
+                    "Name", "web-security-group-" + environmentSuffix,
+                    "Environment", environmentSuffix
+                ))
                 .build(), providerOptions);
         
-        // Use a known Amazon Linux 2 AMI ID for us-west-2
-        String amiId = "ami-0c2d3e23b7e3c7bd4"; // Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+        // Use Amazon Linux 2023 AMI ID for us-west-2 (more current and maintained)
+        String amiId = "ami-0cf2b4e024cdb6960"; // Amazon Linux 2023 AMI
         
         // Create EC2 instance in first public subnet
-        var webServer1 = new Instance("web-server-1", InstanceArgs.builder()
+        var webServer1 = new Instance("web-server-1-" + environmentSuffix, InstanceArgs.builder()
             .instanceType("t3.micro")
             .ami(amiId)
             .subnetId(publicSubnet1.id())
             .vpcSecurityGroupIds(webSecurityGroup.id().applyValue(id -> List.of(id)))
             .userData(getUserData())
             .tags(Map.of(
-                "Name", "web-server-1",
-                "Environment", "production",
-                "AZ", "us-west-2a"
+                "Name", "web-server-1-" + environmentSuffix,
+                "Environment", environmentSuffix,
+                "AZ", "us-west-2a",
+                "Project", "TapStack"
             ))
             .build(), providerOptions);
         
         // Create EC2 instance in second public subnet
-        var webServer2 = new Instance("web-server-2", InstanceArgs.builder()
+        var webServer2 = new Instance("web-server-2-" + environmentSuffix, InstanceArgs.builder()
             .instanceType("t3.micro")
             .ami(amiId)
             .subnetId(publicSubnet2.id())
             .vpcSecurityGroupIds(webSecurityGroup.id().applyValue(id -> List.of(id)))
             .userData(getUserData())
             .tags(Map.of(
-                "Name", "web-server-2",
-                "Environment", "production",
-                "AZ", "us-west-2b"
+                "Name", "web-server-2-" + environmentSuffix,
+                "Environment", environmentSuffix,
+                "AZ", "us-west-2b",
+                "Project", "TapStack"
             ))
             .build(), providerOptions);
         
         // Allocate and attach Elastic IP to first instance
-        var eip1 = new Eip("web-server-1-eip", EipArgs.builder()
+        var eip1 = new Eip("web-server-1-eip-" + environmentSuffix, EipArgs.builder()
             .instance(webServer1.id())
             .domain("vpc")
-            .tags(Map.of("Name", "web-server-1-eip"))
+            .tags(Map.of(
+                "Name", "web-server-1-eip-" + environmentSuffix,
+                "Environment", environmentSuffix
+            ))
             .build(), providerOptions);
         
         // Allocate and attach Elastic IP to second instance
-        var eip2 = new Eip("web-server-2-eip", EipArgs.builder()
+        var eip2 = new Eip("web-server-2-eip-" + environmentSuffix, EipArgs.builder()
             .instance(webServer2.id())
             .domain("vpc")
-            .tags(Map.of("Name", "web-server-2-eip"))
+            .tags(Map.of(
+                "Name", "web-server-2-eip-" + environmentSuffix,
+                "Environment", environmentSuffix
+            ))
             .build(), providerOptions);
         
-        // Export important values
-        ctx.export("vpcId", vpc.id());
-        ctx.export("publicSubnet1Id", publicSubnet1.id());
-        ctx.export("publicSubnet2Id", publicSubnet2.id());
-        ctx.export("privateSubnet1Id", privateSubnet1.id());
-        ctx.export("privateSubnet2Id", privateSubnet2.id());
-        ctx.export("webServer1Id", webServer1.id());
-        ctx.export("webServer2Id", webServer2.id());
-        ctx.export("webServer1PublicIp", eip1.publicIp());
-        ctx.export("webServer2PublicIp", eip2.publicIp());
-        ctx.export("webServer1PrivateIp", webServer1.privateIp());
-        ctx.export("webServer2PrivateIp", webServer2.privateIp());
-        ctx.export("securityGroupId", webSecurityGroup.id());
+        // Export important values with environment suffix to avoid conflicts
+        
+        ctx.export("VpcId", vpc.id());
+        ctx.export("PublicSubnet1Id", publicSubnet1.id());
+        ctx.export("PublicSubnet2Id", publicSubnet2.id());
+        ctx.export("PrivateSubnet1Id", privateSubnet1.id());
+        ctx.export("PrivateSubnet2Id", privateSubnet2.id());
+        ctx.export("WebServer1Id", webServer1.id());
+        ctx.export("WebServer2Id", webServer2.id());
+        ctx.export("WebServer1PublicIp", eip1.publicIp());
+        ctx.export("WebServer2PublicIp", eip2.publicIp());
+        ctx.export("WebServer1PrivateIp", webServer1.privateIp());
+        ctx.export("WebServer2PrivateIp", webServer2.privateIp());
+        ctx.export("SecurityGroupId", webSecurityGroup.id());
+        ctx.export("InternetGatewayId", internetGateway.id());
+        ctx.export("EnvironmentSuffix", Output.of(environmentSuffix));
     };     
     private static String getUserData() {
         return """
@@ -337,5 +365,59 @@ public final class Main {
             chown apache:apache /var/www/html/index.html
             chmod 644 /var/www/html/index.html
             """;
+    }
+    
+    /**
+     * Gets the environment suffix for resource naming isolation.
+     * This method is package-private for testing.
+     */
+    static String getEnvironmentSuffix() {
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        if (environmentSuffix == null || environmentSuffix.trim().isEmpty()) {
+            environmentSuffix = "dev";
         }
+        return environmentSuffix;
+    }
+    
+    /**
+     * Validates the authorized SSH IP address format.
+     * This method is package-private for testing.
+     */
+    static boolean isValidIpAddress(String ipAddress) {
+        if (ipAddress == null || ipAddress.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Basic IP address validation regex
+        String ipPattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+        return ipAddress.matches(ipPattern);
+    }
+    
+    /**
+     * Validates CIDR block format.
+     * This method is package-private for testing.
+     */
+    static boolean isValidCidrBlock(String cidrBlock) {
+        if (cidrBlock == null || cidrBlock.trim().isEmpty()) {
+            return false;
+        }
+        
+        String[] parts = cidrBlock.split("/");
+        if (parts.length != 2) {
+            return false;
+        }
+        
+        try {
+            // Validate IP part
+            if (!isValidIpAddress(parts[0])) {
+                return false;
+            }
+            
+            // Validate prefix length
+            int prefixLength = Integer.parseInt(parts[1]);
+            return prefixLength >= 0 && prefixLength <= 32;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
 }
