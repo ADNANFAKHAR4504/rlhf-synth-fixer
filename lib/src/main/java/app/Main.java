@@ -109,7 +109,8 @@ public final class Main {
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
-            .policy(buildKmsKeyPolicy())
+            // Remove custom policy to allow AWS to set the default policy
+            // .policy(buildKmsKeyPolicy())
             .tags(Map.of(
                 "Environment", "production",
                 "Application", "financial-services",

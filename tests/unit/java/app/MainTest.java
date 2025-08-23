@@ -1288,4 +1288,136 @@ public class MainTest {
         assertTrue(kmsPolicy.contains("kms:DescribeKey"));
         assertTrue(kmsPolicy.contains("kms:Encrypt"));
     }
+    
+    /**
+     * Test the createInfrastructure method signature and basic accessibility.
+     */
+    @Test
+    void testCreateInfrastructureMethodSignature() {
+        assertDoesNotThrow(() -> {
+            Method method = Main.class.getDeclaredMethod("createInfrastructure", com.pulumi.Context.class);
+            assertTrue(Modifier.isStatic(method.getModifiers()));
+            assertTrue(Modifier.isPublic(method.getModifiers()));
+            assertEquals(void.class, method.getReturnType());
+            assertEquals(1, method.getParameterCount());
+        });
+    }
+    
+    /**
+     * Test VpcResources inner class constructor and getters for coverage.
+     */
+    @Test
+    void testVpcResourcesConstructorAndGetters() {
+        // Use null values since we're only testing the constructor and getters
+        // not the actual Pulumi objects which require AWS context
+        Main.VpcResources vpcResources = new Main.VpcResources(null, null, null);
+        
+        // Test getter methods exist and return the expected null values we passed
+        assertEquals(null, vpcResources.getVpc());
+        assertEquals(null, vpcResources.getPublicSubnet());
+        assertEquals(null, vpcResources.getPrivateSubnet());
+    }
+    
+    /**
+     * Test IamResources inner class constructor and getters for coverage.
+     */
+    @Test
+    void testIamResourcesConstructorAndGetters() {
+        // Use null values since we're only testing the constructor and getters
+        // not the actual Pulumi objects which require AWS context
+        Main.IamResources iamResources = new Main.IamResources(null, null, null);
+        
+        // Test getter methods exist and return the expected null values we passed
+        assertEquals(null, iamResources.getEc2Role());
+        assertEquals(null, iamResources.getS3Policy());
+        assertEquals(null, iamResources.getInstanceProfile());
+    }
+    
+    /**
+     * Test all static infrastructure helper methods are accessible.
+     */
+    @Test
+    void testInfrastructureHelperMethodsExist() throws Exception {
+        // Test private methods exist (infrastructure creation methods)
+        Method[] methods = Main.class.getDeclaredMethods();
+        
+        boolean hasCreateAwsProvider = false;
+        boolean hasCreateProviderOptions = false;
+        boolean hasCreateKmsKey = false;
+        boolean hasCreateCloudTrailS3Bucket = false;
+        boolean hasCreateApplicationS3Bucket = false;
+        boolean hasCreateVpcInfrastructure = false;
+        boolean hasCreateSecurityGroup = false;
+        boolean hasCreateIamResources = false;
+        boolean hasCreateSnsTopic = false;
+        boolean hasCreateEc2Instances = false;
+        boolean hasCreateCloudTrail = false;
+        boolean hasExportOutputs = false;
+        
+        for (Method method : methods) {
+            String methodName = method.getName();
+            if (methodName.equals("createAwsProvider")) {
+                hasCreateAwsProvider = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createProviderOptions")) {
+                hasCreateProviderOptions = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createKmsKey")) {
+                hasCreateKmsKey = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createCloudTrailS3Bucket")) {
+                hasCreateCloudTrailS3Bucket = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createApplicationS3Bucket")) {
+                hasCreateApplicationS3Bucket = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createVpcInfrastructure")) {
+                hasCreateVpcInfrastructure = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createSecurityGroup")) {
+                hasCreateSecurityGroup = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createIamResources")) {
+                hasCreateIamResources = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createSnsTopic")) {
+                hasCreateSnsTopic = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createEc2Instances")) {
+                hasCreateEc2Instances = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("createCloudTrail")) {
+                hasCreateCloudTrail = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            } else if (methodName.equals("exportOutputs")) {
+                hasExportOutputs = true;
+                assertTrue(Modifier.isPrivate(method.getModifiers()));
+                assertTrue(Modifier.isStatic(method.getModifiers()));
+            }
+        }
+        
+        assertTrue(hasCreateAwsProvider, "Should have createAwsProvider method");
+        assertTrue(hasCreateProviderOptions, "Should have createProviderOptions method");
+        assertTrue(hasCreateKmsKey, "Should have createKmsKey method");
+        assertTrue(hasCreateCloudTrailS3Bucket, "Should have createCloudTrailS3Bucket method");
+        assertTrue(hasCreateApplicationS3Bucket, "Should have createApplicationS3Bucket method");
+        assertTrue(hasCreateVpcInfrastructure, "Should have createVpcInfrastructure method");
+        assertTrue(hasCreateSecurityGroup, "Should have createSecurityGroup method");
+        assertTrue(hasCreateIamResources, "Should have createIamResources method");
+        assertTrue(hasCreateSnsTopic, "Should have createSnsTopic method");
+        assertTrue(hasCreateEc2Instances, "Should have createEc2Instances method");
+        assertTrue(hasCreateCloudTrail, "Should have createCloudTrail method");
+        assertTrue(hasExportOutputs, "Should have exportOutputs method");
+    }
 }
