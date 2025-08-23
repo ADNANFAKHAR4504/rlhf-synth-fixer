@@ -281,6 +281,14 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  ingress {
+    description = "SSH for debugging"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -433,6 +441,7 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
+  key_name      = "default"
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
@@ -457,6 +466,10 @@ resource "aws_launch_template" "main" {
               systemctl enable httpd
               echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
               echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+              echo "<p>Health check endpoint is working!</p>" >> /var/www/html/index.html
+              # Create a simple health check file
+              echo "OK" > /var/www/html/health
+              chmod 644 /var/www/html/health
               EOF
   )
 
@@ -502,13 +515,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
-    path                = "/"
+    path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = merge(local.common_tags, {
