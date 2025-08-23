@@ -75,39 +75,33 @@ public class AuditingComponent extends ComponentResource {
         return """
             {
                 "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AWSCloudTrailAclCheck",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": "arn:aws:s3:::%s",
-                        "Condition": {
-                            "StringEquals": {
-                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
-                            }
-                        }
-                    },
-                    {
-                        "Sid": "AWSCloudTrailWrite",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:PutObject",
-                        "Resource": "arn:aws:s3:::%s/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control",
-                                "AWS:SourceArn": "arn:aws:cloudtrail:*:%s:trail/*"
-                            }
-                        }
-                    }
-                ]
+                 "Statement": [
+                     {
+                         "Sid": "AWSCloudTrailAclCheck",
+                         "Effect": "Allow",
+                         "Principal": {
+                             "Service": "cloudtrail.amazonaws.com"
+                         },
+                         "Action": "s3:GetBucketAcl",
+                         "Resource": "arn:aws:s3:::%s"
+                     },
+                     {
+                         "Sid": "AWSCloudTrailWrite",
+                         "Effect": "Allow",
+                         "Principal": {
+                             "Service": "cloudtrail.amazonaws.com"
+                         },
+                         "Action": "s3:PutObject",
+                         "Resource": "arn:aws:s3:::%s/*",
+                         "Condition": {
+                             "StringEquals": {
+                                 "s3:x-amz-acl": "bucket-owner-full-control"
+                             }
+                         }
+                     }
+                 ]
             }
-            """.formatted(bucketName, accountId, bucketName, accountId);
+            """.formatted(bucketName, bucketName);
     }
 
     private Trail createCloudTrail(String name, StorageComponent storage, String region) {
@@ -162,18 +156,18 @@ public class AuditingComponent extends ComponentResource {
                 RoleArgs.builder()
                         .name("CloudTrail-LogsRole")
                         .assumeRolePolicy("""
-                    {
-                        "Version": "2012-10-17",
-                        "Statement": [
                             {
-                                "Effect": "Allow",
-                                "Principal": {
-                                    "Service": "cloudtrail.amazonaws.com"
-                                },
-                                "Action": "sts:AssumeRole"
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Principal": {
+                                            "Service": "cloudtrail.amazonaws.com"
+                                        },
+                                        "Action": "sts:AssumeRole"
+                                    }
+                                ]
                             }
-                        ]
-                    }
                     """)
                         .build(), CustomResourceOptions.builder().parent(this).build());
 
