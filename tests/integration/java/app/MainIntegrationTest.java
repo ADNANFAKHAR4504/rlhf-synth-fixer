@@ -82,79 +82,88 @@ public class MainIntegrationTest {
     }
 
     /**
-     * Example test for Pulumi program validation using Pulumi CLI.
-     * Disabled by default as it requires Pulumi CLI and AWS setup.
-     * 
-     * Uncomment @Disabled and configure environment to run this test.
+     * Test that validates deployed VPC CIDR block matches expected configuration.
+     * This test uses real deployment outputs from flat-outputs.json.
      */
     @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
-    void testPulumiPreview() throws Exception {
-        // Skip if Pulumi CLI is not available
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+    void testVpcCidrBlockFromOutputs() {
+        // Skip if outputs file doesn't exist
+        var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
+        Assumptions.assumeTrue(Files.exists(outputsPath), 
+            "cfn-outputs/flat-outputs.json should exist from deployment");
 
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", "test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
+        assertDoesNotThrow(() -> {
+            // Read deployment outputs
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> outputs = mapper.readValue(
+                outputsPath.toFile(), 
+                new TypeReference<Map<String, Object>>() {}
+            );
 
-        Process process = pb.start();
-        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-
-        assertTrue(finished, "Pulumi preview should complete within 60 seconds");
-
-        // Preview should succeed (exit code 0) or show changes needed (exit code 1)
-        int exitCode = process.exitValue();
-        assertTrue(exitCode == 0 || exitCode == 1,
-                "Pulumi preview should succeed or show pending changes");
+            // Validate VPC exists and configuration
+            assertNotNull(outputs.get("VpcId"), "VPC should be created");
+            String vpcId = outputs.get("VpcId").toString();
+            
+            try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+                DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
+                    DescribeVpcsRequest.builder()
+                        .vpcIds(vpcId)
+                        .build()
+                );
+                
+                assertEquals(1, vpcsResponse.vpcs().size(), "Should find exactly one VPC");
+                Vpc vpc = vpcsResponse.vpcs().get(0);
+                assertEquals("10.0.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block");
+            }
+        });
     }
 
     /**
-     * Example test for actual infrastructure deployment.
-     * Disabled by default to prevent accidental resource creation.
-     * 
-     * IMPORTANT: This creates real AWS resources. Only enable in test environments.
+     * Test that validates EC2 instances are properly distributed across availability zones.
+     * This test uses real deployment outputs from flat-outputs.json.
      */
     @Test
-    @Disabled("Enable for actual infrastructure testing - creates real AWS resources")
-    void testInfrastructureDeployment() throws Exception {
-        // Skip if environment is not properly configured
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
+    void testInstanceDistributionAcrossAZs() {
+        // Skip if outputs file doesn't exist
+        var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
+        Assumptions.assumeTrue(Files.exists(outputsPath), 
+            "cfn-outputs/flat-outputs.json should exist from deployment");
 
-        // Deploy infrastructure
-        ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", "integration-test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
+        assertDoesNotThrow(() -> {
+            // Read deployment outputs
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> outputs = mapper.readValue(
+                outputsPath.toFile(), 
+                new TypeReference<Map<String, Object>>() {}
+            );
 
-        Process deployProcess = deployPb.start();
-        boolean deployFinished = deployProcess.waitFor(300, TimeUnit.SECONDS);
-
-        assertTrue(deployFinished, "Deployment should complete within 5 minutes");
-        assertEquals(0, deployProcess.exitValue(), "Deployment should succeed");
-
-        try {
-            // Verify deployment worked by checking stack outputs
-            ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process outputsProcess = outputsPb.start();
-            boolean outputsFinished = outputsProcess.waitFor(30, TimeUnit.SECONDS);
-
-            assertTrue(outputsFinished, "Getting outputs should complete quickly");
-            assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
-
-        } finally {
-            // Clean up - destroy the stack
-            ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process destroyProcess = destroyPb.start();
-            destroyProcess.waitFor(300, TimeUnit.SECONDS);
-        }
+            // Validate instances exist
+            assertNotNull(outputs.get("WebServer1Id"), "Web server 1 should exist");
+            assertNotNull(outputs.get("WebServer2Id"), "Web server 2 should exist");
+            
+            String instance1Id = outputs.get("WebServer1Id").toString();
+            String instance2Id = outputs.get("WebServer2Id").toString();
+            
+            try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+                DescribeInstancesResponse instancesResponse = ec2.describeInstances(
+                    DescribeInstancesRequest.builder()
+                        .instanceIds(instance1Id, instance2Id)
+                        .build()
+                );
+                
+                // Collect availability zones
+                var availabilityZones = instancesResponse.reservations().stream()
+                    .flatMap(reservation -> reservation.instances().stream())
+                    .map(instance -> instance.placement().availabilityZone())
+                    .collect(java.util.stream.Collectors.toSet());
+                
+                assertEquals(2, availabilityZones.size(), 
+                    "Instances should be distributed across 2 different availability zones");
+                assertTrue(availabilityZones.contains("us-west-2a") || 
+                          availabilityZones.contains("us-west-2b"), 
+                    "Instances should be in us-west-2a or us-west-2b");
+            }
+        });
     }
 
     /**
@@ -392,5 +401,121 @@ public class MainIntegrationTest {
         
         assertNotEquals(privateIp1, privateIp2, 
             "Instances should have different private IPs");
+    }
+
+    /**
+     * Test that validates Elastic IPs are properly allocated and associated.
+     * This test uses real deployment outputs from flat-outputs.json.
+     */
+    @Test
+    void testElasticIpAllocationFromOutputs() {
+        // Skip if outputs file doesn't exist
+        var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
+        Assumptions.assumeTrue(Files.exists(outputsPath), 
+            "cfn-outputs/flat-outputs.json should exist from deployment");
+
+        assertDoesNotThrow(() -> {
+            // Read deployment outputs
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> outputs = mapper.readValue(
+                outputsPath.toFile(), 
+                new TypeReference<Map<String, Object>>() {}
+            );
+
+            // Validate Elastic IPs exist
+            assertNotNull(outputs.get("WebServer1PublicIp"), "Web server 1 should have public IP");
+            assertNotNull(outputs.get("WebServer2PublicIp"), "Web server 2 should have public IP");
+            
+            String publicIp1 = outputs.get("WebServer1PublicIp").toString();
+            String publicIp2 = outputs.get("WebServer2PublicIp").toString();
+            
+            // Validate IP format
+            assertTrue(isValidPublicIpFormat(publicIp1), 
+                "Public IP 1 should be valid format: " + publicIp1);
+            assertTrue(isValidPublicIpFormat(publicIp2), 
+                "Public IP 2 should be valid format: " + publicIp2);
+            
+            // Validate IPs are different
+            assertNotEquals(publicIp1, publicIp2, 
+                "Each instance should have unique public IP");
+            
+            try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+                DescribeAddressesResponse addressesResponse = ec2.describeAddresses(
+                    DescribeAddressesRequest.builder()
+                        .publicIps(publicIp1, publicIp2)
+                        .build()
+                );
+                
+                assertEquals(2, addressesResponse.addresses().size(), "Should have 2 Elastic IPs");
+                
+                for (Address address : addressesResponse.addresses()) {
+                    assertEquals("vpc", address.domain().toString(), "EIP should be VPC domain");
+                    assertNotNull(address.instanceId(), "EIP should be associated with instance");
+                }
+            }
+        });
+    }
+
+    /**
+     * Test that validates environment suffix isolation is working properly.
+     * This test uses real deployment outputs from flat-outputs.json.
+     */
+    @Test
+    void testEnvironmentSuffixIsolation() {
+        // Skip if outputs file doesn't exist
+        var outputsPath = Paths.get("cfn-outputs/flat-outputs.json");
+        Assumptions.assumeTrue(Files.exists(outputsPath), 
+            "cfn-outputs/flat-outputs.json should exist from deployment");
+
+        assertDoesNotThrow(() -> {
+            // Read deployment outputs
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> outputs = mapper.readValue(
+                outputsPath.toFile(), 
+                new TypeReference<Map<String, Object>>() {}
+            );
+
+            // Validate Environment Suffix is exported
+            assertNotNull(outputs.get("EnvironmentSuffix"), "Environment suffix should be exported");
+            String environmentSuffix = outputs.get("EnvironmentSuffix").toString();
+            
+            // Validate suffix is not empty or default only
+            assertFalse(environmentSuffix.trim().isEmpty(), "Environment suffix should not be empty");
+            
+            // Validate VPC name includes environment suffix
+            String vpcId = outputs.get("VpcId").toString();
+            
+            try (Ec2Client ec2 = Ec2Client.builder().region(Region.US_WEST_2).build()) {
+                DescribeVpcsResponse vpcsResponse = ec2.describeVpcs(
+                    DescribeVpcsRequest.builder()
+                        .vpcIds(vpcId)
+                        .build()
+                );
+                
+                Vpc vpc = vpcsResponse.vpcs().get(0);
+                String vpcName = vpc.tags().stream()
+                    .filter(tag -> "Name".equals(tag.key()))
+                    .map(Tag::value)
+                    .findFirst()
+                    .orElse("");
+                
+                assertTrue(vpcName.contains(environmentSuffix), 
+                    "VPC name should contain environment suffix: " + vpcName + " should contain " + environmentSuffix);
+            }
+        });
+    }
+
+    /**
+     * Helper method to validate public IP address format.
+     */
+    private boolean isValidPublicIpFormat(String ip) {
+        if (ip == null || ip.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Basic IP address validation regex
+        String ipPattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+        return ip.matches(ipPattern) && !ip.startsWith("10.") && 
+               !ip.startsWith("192.168.") && !ip.startsWith("172.");
     }
 }
