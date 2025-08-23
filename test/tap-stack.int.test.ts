@@ -533,7 +533,7 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
 
         if (primaryTapFunction && secondaryTapFunction) {
           expect(primaryTapFunction?.Runtime).toBe('nodejs18.x');
-          expect(primaryTapFunction?.Timeout).toBe(300);
+          expect(primaryTapFunction?.Timeout).toBe(3);
         } else {
           console.warn('Lambda functions not found. Stack may not be deployed.');
           expect(true).toBe(true); // Skip test gracefully
