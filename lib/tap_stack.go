@@ -51,6 +51,48 @@ func main() {
 	stack.AddOverride(jsii.String("resource.aws_kms_key.tap_kms_key"), map[string]interface{}{
 		"description": "KMS key for TAP infrastructure encryption",
 		"key_usage":   "ENCRYPT_DECRYPT",
+		"policy": `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+					},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow CloudTrail to encrypt logs",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*",
+					"Condition": {
+						"StringEquals": {
+							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+						}
+					}
+				},
+				{
+					"Sid": "Allow CloudTrail to describe key",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:DescribeKey"
+					],
+					"Resource": "*"
+				}
+			]
+		}`,
 		"tags": map[string]string{
 			"Name": "tap-kms-key-dev",
 		},
@@ -93,7 +135,7 @@ func main() {
 
 	// Add IAM role for EC2
 	stack.AddOverride(jsii.String("resource.aws_iam_role.ec2_role"), map[string]interface{}{
-		"name": "tap-ec2-role-dev",
+		"name": "tap-ec2-role-dev-${random_id.suffix.hex}",
 		"assume_role_policy": `{
 			"Version": "2012-10-17",
 			"Statement": [{
@@ -121,7 +163,7 @@ func main() {
 
 	// Add instance profile
 	stack.AddOverride(jsii.String("resource.aws_iam_instance_profile.ec2_profile"), map[string]interface{}{
-		"name": "tap-ec2-instance-profile-dev",
+		"name": "tap-ec2-instance-profile-dev-${random_id.suffix.hex}",
 		"role": "${aws_iam_role.ec2_role.name}",
 		"tags": map[string]string{
 			"Name": "tap-ec2-instance-profile-dev",
@@ -130,7 +172,7 @@ func main() {
 
 	// Add security group
 	stack.AddOverride(jsii.String("resource.aws_security_group.ec2_sg"), map[string]interface{}{
-		"name":        "tap-ec2-sg-dev",
+		"name":        "tap-ec2-sg-dev-${random_id.suffix.hex}",
 		"vpc_id":      "${aws_vpc.tap_vpc.id}",
 		"description": "Security group for TAP EC2 instances with SSL/TLS enforcement",
 		"ingress": []map[string]interface{}{
