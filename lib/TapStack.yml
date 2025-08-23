@@ -25,6 +25,7 @@ Metadata:
           default: 'Database Configuration'
         Parameters:
           - DBMasterUsername
+          - DBMasterPasswordParameter
           - DBName
           - GlobalClusterIdentifier
       - Label:
@@ -98,6 +99,11 @@ Parameters:
     Default: 'admin'
     Description: 'Master username for database'
     NoEcho: true
+
+  DBMasterPasswordParameter:
+    Type: String
+    Default: '/tapstack/database/master-password'
+    Description: 'SSM Parameter Store path for database master password'
 
   DBName:
     Type: String
@@ -772,9 +778,7 @@ Resources:
       EngineVersion: '8.0.mysql_aurora.3.08.2'
       DatabaseName: !Ref DBName
       MasterUsername: !Ref DBMasterUsername
-      ManageMasterUserPassword: true
-      MasterUserSecret:
-        KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBMasterPasswordParameter}:1}}'
       GlobalClusterIdentifier:
         !If [
           HasGlobalCluster,
