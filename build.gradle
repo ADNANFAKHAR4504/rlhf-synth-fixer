@@ -35,7 +35,7 @@ configurations.all {
 
 dependencies {
     implementation 'com.pulumi:pulumi:1.16.1'
-    implementation 'com.pulumi:aws:7.4.0'
+    implementation 'com.pulumi:aws:7.5.0'
     implementation 'com.pulumi:tls:5.2.0'
 
     // Test dependencies

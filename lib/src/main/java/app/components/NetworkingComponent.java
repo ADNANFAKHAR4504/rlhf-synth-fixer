@@ -1,6 +1,8 @@
 package app.components;
 
+import com.pulumi.aws.AwsFunctions;
 import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
 import com.pulumi.core.Output;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
@@ -37,15 +39,20 @@ public class NetworkingComponent extends ComponentResource {
                 .tags(getTags(name + "-igw", "InternetGateway", Map.of()))
                 .build(), CustomResourceOptions.builder().parent(this).build());
 
-        // Create public subnets across multiple AZs for high availability
+        // Get available AZs dynamically
+        var availabilityZones = AwsFunctions.getAvailabilityZones(GetAvailabilityZonesArgs.builder()
+                .state("available")
+                .build());
+
+        // Create public subnets across first 2 available AZs for high availability
         this.publicSubnets = createSubnets(name, "public",
                 List.of("10.0.1.0/24", "10.0.2.0/24"),
-                List.of("a", "b"), region, true);
+                availabilityZones, true);
 
-        // Create private subnets across multiple AZs
+        // Create private subnets across first 2 available AZs
         this.privateSubnets = createSubnets(name, "private",
                 List.of("10.0.10.0/24", "10.0.20.0/24"),
-                List.of("a", "b"), region, false);
+                availabilityZones, false);
 
         // Create and configure public route table
         RouteTable publicRouteTable = new RouteTable(name + "-public-rt", RouteTableArgs.builder()
@@ -76,22 +83,23 @@ public class NetworkingComponent extends ComponentResource {
         createVpcFlowLogs(name);
     }
 
-    private List<Subnet> createSubnets(String baseName, String type,
-                                       List<String> cidrs, List<String> azSuffixes,
-                                       String region, boolean mapPublicIp) {
+    private List<Subnet> createSubnets(String baseName, String type, List<String> cidrs,
+                                       Output<com.pulumi.aws.outputs.GetAvailabilityZonesResult> azs,
+                                       boolean mapPublicIp) {
         var subnets = new ArrayList<Subnet>();
 
         for (int i = 0; i < cidrs.size(); i++) {
+            final int index = i; // for lambda capture
             var subnetName = "%s-%s-subnet-%d".formatted(baseName, type, i + 1);
+            
+            var availabilityZone = azs.applyValue(zones -> zones.names().get(index));
+            
             var subnet = new Subnet(subnetName, SubnetArgs.builder()
                     .vpcId(vpc.id())
                     .cidrBlock(cidrs.get(i))
-                    .availabilityZone(region + azSuffixes.get(i))
+                    .availabilityZone(availabilityZone)
                     .mapPublicIpOnLaunch(mapPublicIp)
-                    .tags(getTags(subnetName, "Subnet", Map.of(
-                            "Type", type,
-                            "AZ", region + azSuffixes.get(i)
-                    )))
+                    .tags(getTags(subnetName, "Subnet", Map.of("Type", type)))
                     .build(), CustomResourceOptions.builder().parent(this).build());
             subnets.add(subnet);
         }
