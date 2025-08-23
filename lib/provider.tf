@@ -12,14 +12,9 @@ terraform {
     }
   }
 
-  backend "s3" {
-    # These values will be provided via backend config file or -backend-config flags
-    # bucket         = "terraform-state-bucket-name"
-    # key            = "terraform.tfstate"
-    # region         = "us-east-1"
-    # dynamodb_table = "terraform-locks"
-    # encrypt        = true
-    # kms_key_id     = "alias/terraform-state-key"
+  # Use local backend for development and testing
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 
