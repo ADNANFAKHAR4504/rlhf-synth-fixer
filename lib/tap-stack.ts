@@ -352,7 +352,6 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch Logs and Metrics for monitoring
     new logs.LogGroup(this, 'TapVpcFlowLogs', {
-      logGroupName: '/aws/vpc/flowlogs',
       retention: logs.RetentionDays.TWO_WEEKS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
