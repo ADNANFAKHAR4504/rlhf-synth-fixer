@@ -40,6 +40,7 @@ Metadata:
           - UseExistingS3Bucket
           - UseExistingKMSKey
           - UseExistingGlobalCluster
+          - UseExistingALB
 
 Parameters:
   Environment:
@@ -140,6 +141,11 @@ Parameters:
     Default: ''
     Description: 'Existing global cluster identifier to use. Leave empty to create new cluster.'
 
+  UseExistingALB:
+    Type: String
+    Default: ''
+    Description: 'Existing Application Load Balancer ARN to use. Leave empty to create new ALB.'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -187,6 +193,8 @@ Conditions:
   CreateGlobalCluster: !Equals [!Ref UseExistingGlobalCluster, '']
   CreateGlobalClusterAndHasGlobal:
     !And [!Condition HasGlobalCluster, !Condition CreateGlobalCluster]
+  CreateALB: !Equals [!Ref UseExistingALB, '']
+  CreateALBAndHasSSL: !And [!Condition CreateALB, !Condition HasSSLCertificate]
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -1010,6 +1018,7 @@ Resources:
   # Application Load Balancer
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: CreateALB
     Properties:
       Name: !Sub '${Environment}-alb'
       Scheme: internet-facing
@@ -1061,6 +1070,7 @@ Resources:
   # ALB Listeners
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateALB
     Properties:
       LoadBalancerArn: !Ref ALB
       Port: 80
@@ -1071,7 +1081,7 @@ Resources:
 
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasSSLCertificate
+    Condition: CreateALBAndHasSSL
     Properties:
       LoadBalancerArn: !Ref ALB
       Port: 443
@@ -1129,6 +1139,8 @@ Resources:
         - !Ref PrivateSubnet2
       TargetGroupARNs:
         - !Ref ALBTargetGroupBlue
+      LoadBalancerNames:
+        - !If [CreateALB, !Ref ALB, !Ref UseExistingALB]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-instance'
@@ -1269,7 +1281,7 @@ Resources:
 Outputs:
   ALBDNSName:
     Description: 'DNS name of the Application Load Balancer'
-    Value: !GetAtt ALB.DNSName
+    Value: !If [CreateALB, !GetAtt ALB.DNSName, !Ref UseExistingALB]
 
   DatabaseEndpoint:
     Description: 'Endpoint of the database cluster'
