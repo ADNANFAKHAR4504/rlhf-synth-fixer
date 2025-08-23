@@ -38,23 +38,31 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   npm run cdktf:get
 
-  if [ -d ".gen/providers" ] && [ ! -d ".gen/aws" ]; then
-    # Find the actual AWS provider directory
-    AWS_DIR=$(find .gen/providers -name "*aws*" -type d | head -1)
-    if [ -n "$AWS_DIR" ]; then
-      ln -sf "$AWS_DIR" .gen/aws
-      echo "✅ Created symlink .gen/aws -> $AWS_DIR"
-    fi
-  fi
-
   ensure_gen() {
     if [ ! -d ".gen" ]; then
       echo "❌ .gen not found; generating..."
       npx --yes cdktf get
     fi
+    
+    # Check for AWS provider and create symlink if needed
+    if [ ! -d ".gen/aws" ]; then
+      if [ -d ".gen/providers" ]; then
+        # Find the actual AWS provider directory
+        AWS_DIR=$(find .gen/providers -name "*aws*" -type d | head -1)
+        if [ -n "$AWS_DIR" ]; then
+          # Create relative symlink (remove .gen/ prefix)
+          REL_PATH=$(echo "$AWS_DIR" | sed 's|^\.gen/||')
+          ln -sf "$REL_PATH" .gen/aws
+          echo "✅ Created symlink .gen/aws -> $REL_PATH"
+        fi
+      fi
+    fi
+    
+    # Final check
     if [ ! -d ".gen/aws" ]; then
       echo "❌ .gen/aws missing after cdktf get"
       echo "Contents of .gen:"; ls -la .gen || true
+      echo "Contents of .gen/providers:"; ls -la .gen/providers 2>/dev/null || echo "No providers directory"
       exit 1
     fi
   }
