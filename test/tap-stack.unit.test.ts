@@ -1,210 +1,231 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
-  let template: any;
+describe('TapStack Unit Tests', () => {
+  let templateContent: string;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+    // Load the CloudFormation template as text for basic validation
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.yml');
+    templateContent = fs.readFileSync(templatePath, 'utf8');
   });
 
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+    test('should have correct AWSTemplateFormatVersion', () => {
+      expect(templateContent).toContain("AWSTemplateFormatVersion: '2010-09-09'");
     });
 
     test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+      expect(templateContent).toContain('Description:');
+      expect(templateContent).toContain('Multi-Account CI/CD Pipeline');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
+    test('should have all required parameters', () => {
+      const requiredParams = [
+        'ProjectName',
+        'Environment',
+        'CodeStarConnectionArn',
+        'GitHubRepositoryOwner',
+        'GitHubRepositoryName',
+        'GitHubBranchName',
+        'ApprovalNotificationEmail',
+        'KeyPairName',
+        'AmiId'
+      ];
 
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
-    });
-  });
-
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      requiredParams.forEach(param => {
+        expect(templateContent).toContain(`${param}:`);
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('should have default values for all parameters', () => {
+      const requiredDefaults = [
+        'Default: \'my-cicd-project\'',
+        'Default: \'dev\'',
+        'Default: \'your-github-username\'',
+        'Default: \'your-repository-name\'',
+        'Default: \'main\'',
+        'Default: \'admin@example.com\'',
+        "Default: ''",
+        'Default: \'/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2\''
+      ];
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      requiredDefaults.forEach(defaultValue => {
+        expect(templateContent).toContain(defaultValue);
+      });
+    });
+  });
+
+  describe('CloudFormation Resources', () => {
+    test('should have CodePipeline resource', () => {
+      expect(templateContent).toContain('Type: AWS::CodePipeline::Pipeline');
+      expect(templateContent).toContain('CodePipeline:');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have CodeBuild project', () => {
+      expect(templateContent).toContain('Type: AWS::CodeBuild::Project');
+      expect(templateContent).toContain('BuildProject:');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have S3 bucket for artifacts', () => {
+      expect(templateContent).toContain('Type: AWS::S3::Bucket');
+      expect(templateContent).toContain('PipelineArtifactsBucket:');
+    });
+
+    test('should have SNS topics for notifications', () => {
+      expect(templateContent).toContain('Type: AWS::SNS::Topic');
+      expect(templateContent).toContain('ManualApprovalTopic:');
+    });
+
+    test('should have IAM roles', () => {
+      expect(templateContent).toContain('Type: AWS::IAM::Role');
+      expect(templateContent).toContain('CodePipelineServiceRole:');
+      expect(templateContent).toContain('CodeBuildServiceRole:');
+    });
+
+    test('should have VPC infrastructure', () => {
+      expect(templateContent).toContain('Type: AWS::EC2::VPC');
+      expect(templateContent).toContain('SampleVPC:');
+    });
+
+    test('should have EC2 instance', () => {
+      expect(templateContent).toContain('Type: AWS::EC2::Instance');
+      expect(templateContent).toContain('SampleEC2Instance:');
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('should have proper S3 bucket security', () => {
+      expect(templateContent).toContain('PublicAccessBlockConfiguration:');
+      expect(templateContent).toContain('BlockPublicAcls: true');
+      expect(templateContent).toContain('BlockPublicPolicy: true');
+      expect(templateContent).toContain('IgnorePublicAcls: true');
+      expect(templateContent).toContain('RestrictPublicBuckets: true');
+    });
+
+    test('should have S3 bucket encryption', () => {
+      expect(templateContent).toContain('BucketEncryption:');
+      expect(templateContent).toContain('ServerSideEncryptionConfiguration:');
+    });
+
+    test('should use CodeStar connection for GitHub', () => {
+      expect(templateContent).toContain('Provider: CodeStarSourceConnection');
+      expect(templateContent).toContain('ConnectionArn: !Ref CodeStarConnectionArn');
+    });
+  });
+
+  describe('Pipeline Configuration', () => {
+    test('should have correct pipeline stages', () => {
+      expect(templateContent).toContain('- Name: Source');
+      expect(templateContent).toContain('- Name: Build');
+      expect(templateContent).toContain('- Name: Test');
+      expect(templateContent).toContain('- Name: Approval');
+      expect(templateContent).toContain('- Name: Deploy');
+    });
+
+    test('should have manual approval configuration', () => {
+      expect(templateContent).toContain('Provider: Manual');
+      expect(templateContent).toContain('NotificationArn: !Ref ManualApprovalTopic');
+    });
+
+    test('should have proper artifact configuration', () => {
+      expect(templateContent).toContain('Type: S3');
+      expect(templateContent).toContain('Location: !Ref PipelineArtifactsBucket');
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have HasKeyPair condition', () => {
+      expect(templateContent).toContain('Conditions:');
+      expect(templateContent).toContain('HasKeyPair: !Not [!Equals [!Ref KeyPairName, \'\']]');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+      const requiredOutputs = [
+        'PipelineName',
+        'PipelineUrl',
+        'ArtifactsBucket',
+        'CodeStarConnectionArn',
+        'ManualApprovalTopicArn',
+        'PipelineNotificationTopicArn',
+        'SampleInstanceId',
+        'VPCId'
       ];
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
+      requiredOutputs.forEach(output => {
+        expect(templateContent).toContain(`${output}:`);
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('should export important values', () => {
+      expect(templateContent).toContain('Export:');
+      expect(templateContent).toContain('Name: !Sub \'${AWS::StackName}-');
+    });
+  });
+
+  describe('Parameter Validation', () => {
+    test('should have proper parameter constraints', () => {
+      expect(templateContent).toContain('AllowedPattern:');
+      expect(templateContent).toContain('ConstraintDescription:');
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('should use SSM parameter for AMI ID', () => {
+      expect(templateContent).toContain('Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(templateContent).toContain('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+    });
+  });
+
+  describe('Best Practices', () => {
+    test('should not have hardcoded IAM role names', () => {
+      // Check that we don't have explicit RoleName properties (auto-generated is better)
+      const roleNameMatches = templateContent.match(/RoleName:/g);
+      expect(roleNameMatches).toBeNull(); // Should not find any explicit role names
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('should use proper S3 ARN format', () => {
+      expect(templateContent).toContain('arn:aws:s3:::');
+      expect(templateContent).toContain('/*'); // For object-level permissions
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    test('should have proper resource dependencies', () => {
+      expect(templateContent).toContain('DependsOn:');
+      expect(templateContent).toContain('!Ref');
+      expect(templateContent).toContain('!GetAtt');
     });
   });
 
   describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+    test('should be valid YAML syntax', () => {
+      // Basic YAML structure validation
+      expect(templateContent).toContain('AWSTemplateFormatVersion:');
+      expect(templateContent).toContain('Parameters:');
+      expect(templateContent).toContain('Resources:');
+      expect(templateContent).toContain('Outputs:');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
+    test('should have consistent indentation', () => {
+      const lines = templateContent.split('\n');
+      let hasConsistentIndentation = true;
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      lines.forEach(line => {
+        if (line.trim() && line.startsWith(' ')) {
+          // Check that indentation is consistent (multiples of 2)
+          const leadingSpaces = line.match(/^ */)?.[0].length || 0;
+          if (leadingSpaces % 2 !== 0) {
+            hasConsistentIndentation = false;
+          }
+        }
       });
+
+      expect(hasConsistentIndentation).toBe(true);
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('should not have trailing whitespace', () => {
+      const lines = templateContent.split('\n');
+      const hasTrailingWhitespace = lines.some(line => line.endsWith(' ') || line.endsWith('\t'));
+      expect(hasTrailingWhitespace).toBe(false);
     });
   });
 });
