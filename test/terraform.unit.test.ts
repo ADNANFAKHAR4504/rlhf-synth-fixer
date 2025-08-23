@@ -4,8 +4,7 @@ interface ResourceChange {
   type: string;
   change: {
     after: {
-      tags?: {
-        [key: string]: string;
+      tags?: Record<string, string | undefined> & {
         Name?: string;
       };
       enable_dns_support?: boolean;
@@ -19,6 +18,8 @@ interface ResourceChange {
     };
   };
 }
+
+
 
 interface TerraformPlan {
   resource_changes: ResourceChange[];
