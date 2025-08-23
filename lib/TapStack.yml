@@ -15,6 +15,13 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource naming and tagging'
 
+  EnvironmentSuffix:
+    Type: String
+    Default: ''
+    Description: 'Suffix to append to resource names to avoid conflicts during parallel deployments'
+    AllowedPattern: '^[a-z0-9-]*$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
   CodeStarConnectionArn:
     Type: String
     Description: 'ARN of the CodeStar Connection for GitHub integration'
@@ -61,6 +68,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  HasEnvironmentSuffix: !Not [!Equals [!Ref EnvironmentSuffix, '']]
 
 Resources:
   # =====================================================
@@ -184,7 +192,10 @@ Resources:
   BuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${AWS::StackName}-Build'
+      Name: !If
+        - HasEnvironmentSuffix
+        - !Sub '${AWS::StackName}-Build-${EnvironmentSuffix}'
+        - !Sub '${AWS::StackName}-Build'
       Description: 'Build stage for web application'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
@@ -192,12 +203,18 @@ Resources:
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_MEDIUM
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
         EnvironmentVariables:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
+          - Name: ENVIRONMENT_SUFFIX
+            Value: !Ref EnvironmentSuffix
+          - Name: PROJECT_NAME
+            Value: !Ref ProjectName
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -224,7 +241,10 @@ Resources:
   TestProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub '${AWS::StackName}-Test'
+      Name: !If
+        - HasEnvironmentSuffix
+        - !Sub '${AWS::StackName}-Test-${EnvironmentSuffix}'
+        - !Sub '${AWS::StackName}-Test'
       Description: 'Test stage for web application'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
@@ -232,7 +252,18 @@ Resources:
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_MEDIUM
-        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: ENVIRONMENT_SUFFIX
+            Value: !Ref EnvironmentSuffix
+          - Name: PROJECT_NAME
+            Value: !Ref ProjectName
+          - Name: ENVIRONMENT
+            Value: !Ref Environment
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -298,13 +329,34 @@ Resources:
         - Arn: !Ref PipelineNotificationTopic
           Id: PipelineNotificationTarget
 
+  # EventBridge permission to publish to SNS topic
+  EventBridgeToSNSPermission:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref PipelineNotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref PipelineNotificationTopic
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
+
   # =====================================================
   # THE MAIN CODEPIPELINE
   # =====================================================
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub '${AWS::StackName}-Pipeline'
+      Name: !If
+        - HasEnvironmentSuffix
+        - !Sub '${AWS::StackName}-Pipeline-${EnvironmentSuffix}'
+        - !Sub '${AWS::StackName}-Pipeline'
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3

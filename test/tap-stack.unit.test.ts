@@ -24,6 +24,7 @@ describe('TapStack Unit Tests', () => {
       const requiredParams = [
         'ProjectName',
         'Environment',
+        'EnvironmentSuffix',
         'CodeStarConnectionArn',
         'GitHubRepositoryOwner',
         'GitHubRepositoryName',
@@ -139,6 +140,28 @@ describe('TapStack Unit Tests', () => {
       expect(templateContent).toContain('Conditions:');
       expect(templateContent).toContain('HasKeyPair: !Not [!Equals [!Ref KeyPairName, \'\']]');
     });
+
+    test('should have HasEnvironmentSuffix condition', () => {
+      expect(templateContent).toContain('HasEnvironmentSuffix: !Not [!Equals [!Ref EnvironmentSuffix, \'\']]');
+    });
+
+    test('should use conditional logic for resource naming', () => {
+      // Check that resources use conditional naming with EnvironmentSuffix
+      expect(templateContent).toContain('!If');
+      expect(templateContent).toContain('HasEnvironmentSuffix');
+    });
+
+    test('should conditionally include SSH access in security group', () => {
+      // Check that SSH port 22 is conditionally included
+      expect(templateContent).toContain('!If');
+      expect(templateContent).toContain('HasKeyPair');
+      expect(templateContent).toContain('FromPort: 22');
+    });
+
+    test('should conditionally set KeyName in EC2 instance', () => {
+      // Check that KeyName is conditionally set
+      expect(templateContent).toContain('KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]');
+    });
   });
 
   describe('Outputs', () => {
@@ -208,6 +231,26 @@ describe('TapStack Unit Tests', () => {
       expect(templateContent).toContain('logs:CreateLogGroup');
       expect(templateContent).toContain('logs:CreateLogStream');
       expect(templateContent).toContain('logs:PutLogEvents');
+    });
+
+    test('should use latest CodeBuild image version', () => {
+      // Should use the latest amazonlinux2-x86_64-standard:5.0 image
+      expect(templateContent).toContain('aws/codebuild/amazonlinux2-x86_64-standard:5.0');
+
+      // Should not use the old 3.0 version
+      expect(templateContent).not.toContain('aws/codebuild/amazonlinux2-x86_64-standard:3.0');
+    });
+
+    test('should pass environment variables to CodeBuild', () => {
+      expect(templateContent).toContain('ENVIRONMENT_SUFFIX');
+      expect(templateContent).toContain('PROJECT_NAME');
+      expect(templateContent).toContain('ENVIRONMENT');
+    });
+
+    test('should have EventBridge permissions for SNS', () => {
+      expect(templateContent).toContain('EventBridgeToSNSPermission');
+      expect(templateContent).toContain('events.amazonaws.com');
+      expect(templateContent).toContain('sns:Publish');
     });
   });
 
