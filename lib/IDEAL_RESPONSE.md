@@ -3,6 +3,7 @@
 Here's a complete, production-ready Pulumi Go implementation that meets all your requirements:
 
 ```go
+
 package main
 
 import (
@@ -29,7 +30,7 @@ type InfrastructureConfig struct {
 	BackupRetention    int
 	MultiAZ            bool
 	EnableInsights     bool
-	tags               map[string]string
+	Tags               map[string]string
 }
 
 type MultiRegionInfrastructure struct {
@@ -45,7 +46,7 @@ func NewMultiRegionInfrastructure(ctx *pulumi.Context, config InfrastructureConf
 	}
 
 	// Add custom tags from config (these take precedence)
-	for k, v := range config.tags {
+	for k, v := range config.Tags {
 		tags[k] = pulumi.String(v)
 	}
 
@@ -58,25 +59,25 @@ func NewMultiRegionInfrastructure(ctx *pulumi.Context, config InfrastructureConf
 
 func (m *MultiRegionInfrastructure) Deploy() error {
 	// Create KMS key for encryption
-	kmsKey, err := m.createKMSKey()
+	kmsKey, err := m.CreateKMSKey()
 	if err != nil {
 		return err
 	}
 
 	// Create S3 bucket for static files
-	bucket, err := m.createS3Bucket(kmsKey)
+	bucket, err := m.CreateS3Bucket(kmsKey)
 	if err != nil {
 		return err
 	}
 
 	// Create CloudFront distribution
-	distribution, err := m.createCloudFrontDistribution(bucket)
+	distribution, err := m.CreateCloudFrontDistribution(bucket)
 	if err != nil {
 		return err
 	}
 
 	// Create IAM roles and policies
-	roles, err := m.createIAMResources()
+	roles, err := m.CreateIAMResources()
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 	// Deploy resources across regions
 	regionalResources := make(map[string]map[string]pulumi.Output)
 	for _, region := range m.config.Regions {
-		resources, err := m.deployRegionalResources(region, roles)
+		resources, err := m.DeployRegionalResources(region, roles)
 		if err != nil {
 			return err
 		}
@@ -92,17 +93,22 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 	}
 
 	// Create CloudTrail for auditing
-	if err := m.createCloudTrail(bucket); err != nil {
+	cloudtrailBucket, err := m.CreateCloudTrailBucket(kmsKey)
+	if err != nil {
+		return err
+	}
+
+	if err := m.CreateCloudTrail(cloudtrailBucket); err != nil {
 		return err
 	}
 
 	// Export outputs
-	m.exportOutputs(bucket, distribution, roles, regionalResources)
+	m.exportOutputs(bucket, cloudtrailBucket, distribution, roles, regionalResources)
 
 	return nil
 }
 
-func (m *MultiRegionInfrastructure) createKMSKey() (*kms.Key, error) {
+func (m *MultiRegionInfrastructure) CreateKMSKey() (*kms.Key, error) {
 	key, err := kms.NewKey(m.ctx, fmt.Sprintf("%s-encryption-key", m.config.Environment), &kms.KeyArgs{
 		Description: pulumi.String("Multi-region infrastructure encryption key"),
 
@@ -123,7 +129,7 @@ func (m *MultiRegionInfrastructure) createKMSKey() (*kms.Key, error) {
 	return key, nil
 }
 
-func (m *MultiRegionInfrastructure) createS3Bucket(kmsKey *kms.Key) (*s3.Bucket, error) {
+func (m *MultiRegionInfrastructure) CreateS3Bucket(kmsKey *kms.Key) (*s3.Bucket, error) {
 	bucket, err := s3.NewBucket(m.ctx, fmt.Sprintf("%s-static-assets", m.config.Environment), &s3.BucketArgs{
 		Tags: m.tags,
 	})
@@ -188,7 +194,7 @@ func (m *MultiRegionInfrastructure) createS3Bucket(kmsKey *kms.Key) (*s3.Bucket,
 	return bucket, err
 }
 
-func (m *MultiRegionInfrastructure) createCloudFrontDistribution(bucket *s3.Bucket) (*cloudfront.Distribution, error) {
+func (m *MultiRegionInfrastructure) CreateCloudFrontDistribution(bucket *s3.Bucket) (*cloudfront.Distribution, error) {
 	// Create Origin Access Control
 	oac, err := cloudfront.NewOriginAccessControl(m.ctx, fmt.Sprintf("%s-oac", m.config.Environment), &cloudfront.OriginAccessControlArgs{
 		Name:                          pulumi.String(fmt.Sprintf("%s-oac", m.config.Environment)),
@@ -265,7 +271,7 @@ func (m *MultiRegionInfrastructure) createCloudFrontDistribution(bucket *s3.Buck
 	return distribution, err
 }
 
-func (m *MultiRegionInfrastructure) createIAMResources() (map[string]*iam.Role, error) {
+func (m *MultiRegionInfrastructure) CreateIAMResources() (map[string]*iam.Role, error) {
 	roles := make(map[string]*iam.Role)
 
 	// EC2 Instance Role
@@ -356,7 +362,7 @@ func (m *MultiRegionInfrastructure) createIAMResources() (map[string]*iam.Role, 
 	return roles, nil
 }
 
-func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles map[string]*iam.Role) (map[string]pulumi.Output, error) {
+func (m *MultiRegionInfrastructure) DeployRegionalResources(region string, roles map[string]*iam.Role) (map[string]pulumi.Output, error) {
 	provider, err := aws.NewProvider(m.ctx, fmt.Sprintf("provider-%s", region), &aws.ProviderArgs{
 		Region: pulumi.String(region),
 	})
@@ -385,13 +391,13 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles
 	}
 
 	// Create subnets
-	subnets, err := m.createSubnets(region, vpc, provider)
+	subnets, err := m.CreateSubnets(region, vpc, provider)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create security groups
-	securityGroups, err := m.createSecurityGroups(region, vpc, provider)
+	securityGroups, err := m.CreateSecurityGroups(region, vpc, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +412,7 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles
 	}
 
 	// Create RDS instance
-	rdsInstance, err := m.createRDSInstance(region, dbSubnetGroup, securityGroups["db"], regionalKmsKey, roles["rds"], provider)
+	rdsInstance, err := m.CreateRDSInstance(region, dbSubnetGroup, securityGroups["db"], regionalKmsKey, roles["rds"], provider)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +471,7 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, roles
 	return resources, nil
 }
 
-func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, provider *aws.Provider) (map[string]*ec2.Subnet, error) {
+func (m *MultiRegionInfrastructure) CreateSubnets(region string, vpc *ec2.Vpc, provider *aws.Provider) (map[string]*ec2.Subnet, error) {
 	subnets := make(map[string]*ec2.Subnet)
 
 	// Get availability zones
@@ -543,7 +549,7 @@ func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, p
 	return subnets, nil
 }
 
-func (m *MultiRegionInfrastructure) createSecurityGroups(region string, vpc *ec2.Vpc, provider *aws.Provider) (map[string]*ec2.SecurityGroup, error) {
+func (m *MultiRegionInfrastructure) CreateSecurityGroups(region string, vpc *ec2.Vpc, provider *aws.Provider) (map[string]*ec2.SecurityGroup, error) {
 	securityGroups := make(map[string]*ec2.SecurityGroup)
 
 	// Database security group
@@ -577,7 +583,7 @@ func (m *MultiRegionInfrastructure) createSecurityGroups(region string, vpc *ec2
 	return securityGroups, nil
 }
 
-func (m *MultiRegionInfrastructure) createRDSInstance(region string, subnetGroup *rds.SubnetGroup, securityGroup *ec2.SecurityGroup, kmsKey *kms.Key, monitoringRole *iam.Role, provider *aws.Provider) (*rds.Instance, error) {
+func (m *MultiRegionInfrastructure) CreateRDSInstance(region string, subnetGroup *rds.SubnetGroup, securityGroup *ec2.SecurityGroup, kmsKey *kms.Key, monitoringRole *iam.Role, provider *aws.Provider) (*rds.Instance, error) {
 	rdsInstance, err := rds.NewInstance(m.ctx, fmt.Sprintf("%s-database-%s", m.config.Environment, region), &rds.InstanceArgs{
 		AllocatedStorage:         pulumi.Int(m.config.DBAllocatedStorage),
 		StorageType:              pulumi.String("gp3"),
@@ -649,9 +655,45 @@ func (m *MultiRegionInfrastructure) createRDSInstance(region string, subnetGroup
 	return rdsInstance, nil
 }
 
-func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
+func (m *MultiRegionInfrastructure) CreateCloudTrailBucket(kmsKey *kms.Key) (*s3.Bucket, error) {
+	// Create dedicated S3 bucket for CloudTrail logs
+	bucket, err := s3.NewBucket(m.ctx, fmt.Sprintf("%s-cloudtrail-logs", m.config.Environment), &s3.BucketArgs{
+		Tags: m.tags,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure bucket encryption
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-encryption", m.config.Environment), &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: bucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					KmsMasterKeyId: kmsKey.Arn,
+					SseAlgorithm:   pulumi.String("aws:kms"),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Block public access
+	_, err = s3.NewBucketPublicAccessBlock(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-pab", m.config.Environment), &s3.BucketPublicAccessBlockArgs{
+		Bucket:                bucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// S3 bucket policy for CloudTrail
-	_, err := s3.NewBucketPolicy(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-policy", m.config.Environment), &s3.BucketPolicyArgs{
+	_, err = s3.NewBucketPolicy(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-policy", m.config.Environment), &s3.BucketPolicyArgs{
 		Bucket: bucket.ID(),
 		Policy: pulumi.Sprintf(`{
 			"Version": "2012-10-17",
@@ -662,7 +704,7 @@ func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
 						"Service": "cloudtrail.amazonaws.com"
 					},
 					"Action": "s3:PutObject",
-					"Resource": "%s/cloudtrail/*",
+					"Resource": "%s/*",
 					"Condition": {
 						"StringEquals": {
 							"s3:x-amz-acl": "bucket-owner-full-control"
@@ -681,13 +723,16 @@ func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
 		}`, bucket.Arn, bucket.Arn),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	return bucket, nil
+}
+
+func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
 	// CloudTrail for auditing
-	_, err = cloudtrail.NewTrail(m.ctx, fmt.Sprintf("%s-cloudtrail", m.config.Environment), &cloudtrail.TrailArgs{
+	_, err := cloudtrail.NewTrail(m.ctx, fmt.Sprintf("%s-cloudtrail", m.config.Environment), &cloudtrail.TrailArgs{
 		S3BucketName:               bucket.Bucket,
-		S3KeyPrefix:                pulumi.String("cloudtrail/"),
 		IncludeGlobalServiceEvents: pulumi.Bool(true),
 		IsMultiRegionTrail:         pulumi.Bool(true),
 		EnableLogFileValidation:    pulumi.Bool(true),
@@ -697,10 +742,12 @@ func (m *MultiRegionInfrastructure) createCloudTrail(bucket *s3.Bucket) error {
 	return err
 }
 
-func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, distribution *cloudfront.Distribution, roles map[string]*iam.Role, regionalResources map[string]map[string]pulumi.Output) {
+func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, cloudtrailBucket *s3.Bucket, distribution *cloudfront.Distribution, roles map[string]*iam.Role, regionalResources map[string]map[string]pulumi.Output) {
 	// Global resources
 	m.ctx.Export("s3BucketName", bucket.Bucket)
 	m.ctx.Export("s3BucketArn", bucket.Arn)
+	m.ctx.Export("cloudtrailBucketName", cloudtrailBucket.Bucket)
+	m.ctx.Export("cloudtrailBucketArn", cloudtrailBucket.Arn)
 	m.ctx.Export("cloudfrontDistributionId", distribution.ID())
 	m.ctx.Export("cloudfrontDomainName", distribution.DomainName)
 	m.ctx.Export("environment", pulumi.String(m.config.Environment))
