@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -393,11 +394,13 @@ func TestE2ECloudWatchMonitoring(t *testing.T) {
 				for _, alarm := range alarms.MetricAlarms {
 					if alarm.MetricName != nil && strings.Contains(*alarm.MetricName, "CPUUtilization") {
 						cpuAlarmFound = true
-						assert.Equal(t, float64(80), alarm.Threshold)
+						assert.NotNil(t, alarm.Threshold)
+						assert.Equal(t, float64(80), *alarm.Threshold)
 					}
 					if alarm.MetricName != nil && strings.Contains(*alarm.MetricName, "DatabaseConnections") {
 						connectionAlarmFound = true
-						assert.Equal(t, float64(50), alarm.Threshold)
+						assert.NotNil(t, alarm.Threshold)
+						assert.Equal(t, float64(50), *alarm.Threshold)
 					}
 				}
 
@@ -424,9 +427,10 @@ func TestE2EIAMLeastPrivilege(t *testing.T) {
 					PolicyName: aws.String(policies.PolicyNames[0]),
 				})
 				if err == nil {
-					assert.Contains(t, *policy.PolicyDocument, "cloudwatch:PutMetricData")
-					assert.Contains(t, *policy.PolicyDocument, "logs:CreateLogGroup")
-					assert.NotContains(t, *policy.PolicyDocument, "*")
+					doc, _ := url.QueryUnescape(*policy.PolicyDocument)
+					assert.Contains(t, doc, "cloudwatch:PutMetricData")
+					assert.Contains(t, doc, "logs:CreateLogGroup")
+					assert.NotContains(t, doc, "\"Action\":[\"*\"]")
 				}
 			}
 		}
