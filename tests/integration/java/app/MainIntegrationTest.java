@@ -8,22 +8,22 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.List;
+import java.util.Arrays;
 
 import com.pulumi.Context;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+
 /**
  * Integration tests for the Main Pulumi program.
- * 
- * This is a minimal example showing how to write integration tests for Pulumi Java programs.
- * Add more specific tests based on your infrastructure requirements.
- * 
+ *
  * Run with: ./gradlew integrationTest
  */
 public class MainIntegrationTest {
 
-    /**
-     * Test that the application can be compiled and the main class loads.
-     */
     @Test
     void testApplicationLoads() {
         assertDoesNotThrow(() -> {
@@ -31,9 +31,6 @@ public class MainIntegrationTest {
         });
     }
 
-    /**
-     * Test that Pulumi dependencies are available on classpath.
-     */
     @Test
     void testPulumiDependenciesAvailable() {
         assertDoesNotThrow(() -> {
@@ -43,9 +40,6 @@ public class MainIntegrationTest {
         }, "Pulumi dependencies should be available on classpath");
     }
 
-    /**
-     * Test that required project files exist.
-     */
     @Test
     void testProjectStructure() {
         assertTrue(Files.exists(Paths.get("lib/src/main/java/app/Main.java")),
@@ -56,9 +50,6 @@ public class MainIntegrationTest {
                 "build.gradle should exist");
     }
 
-    /**
-     * Test that defineInfrastructure method exists and is accessible.
-     */
     @Test
     void testDefineInfrastructureMethodAccessible() {
         assertDoesNotThrow(() -> {
@@ -69,15 +60,104 @@ public class MainIntegrationTest {
     }
 
     /**
-     * Example test for Pulumi program validation using Pulumi CLI.
-     * Disabled by default as it requires Pulumi CLI and AWS setup.
-     * 
-     * Uncomment @Disabled and configure environment to run this test.
+     * Integration test: Validate outputs from a live Pulumi stack deployment.
+     * Requires Pulumi CLI, AWS credentials, and a deployed stack.
+     *
+     * Enable this test for live deployment validation.
+     * It will read stack outputs from Pulumi CLI and assert values/structure.
      */
+    @Test
+    @Disabled("Enable for live integration test! Requires Pulumi CLI, AWS creds, and deployed stack")
+    void testLivePulumiStackOutputs() throws Exception {
+        // --- Setup: Check env and CLI ---
+        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+        // Set this to your deployed stack name:
+        String stackName = "TapStackpr2127";
+
+        // --- Fetch outputs from Pulumi CLI ---
+        ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", stackName)
+                .directory(Paths.get("lib").toFile())
+                .redirectErrorStream(true);
+        Process outputsProcess = outputsPb.start();
+        boolean outputsFinished = outputsProcess.waitFor(30, TimeUnit.SECONDS);
+
+        assertTrue(outputsFinished, "Getting outputs should complete quickly");
+        assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
+
+        // --- Parse outputs JSON ---
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> outputs;
+        try (var is = outputsProcess.getInputStream()) {
+            outputs = mapper.readValue(is, new TypeReference<Map<String, Object>>() {});
+        }
+
+        // --- Example assertions matching your deployment ---
+        assertNotNull(outputs);
+
+        // deployedRegions
+        assertTrue(outputs.containsKey("deployedRegions"), "deployedRegions should be present");
+        List<String> deployedRegions = (List<String>) outputs.get("deployedRegions");
+        assertTrue(deployedRegions.containsAll(Arrays.asList("us-east-1", "us-west-1")));
+        assertEquals(2, deployedRegions.size());
+
+        // environmentSuffix
+        assertEquals("prod", outputs.get("environmentSuffix"));
+
+        // identityRoleArn and instanceProfileName
+        assertTrue(((String) outputs.get("identityRoleArn")).contains("nova-eb-service-role-default"));
+        assertTrue(((String) outputs.get("instanceProfileName")).contains("nova-eb-instance-profile-default"));
+
+        // primaryApplicationUrl and primaryRegion
+        assertEquals("us-east-1", outputs.get("primaryRegion"));
+        assertTrue(((String) outputs.get("primaryApplicationUrl")).contains("us-east-1.elb.amazonaws.com"));
+
+        // stackTags assertions
+        assertTrue(outputs.containsKey("stackTags"));
+        Map<String, String> stackTags = (Map<String, String>) outputs.get("stackTags");
+        assertEquals("nova-web-app", stackTags.get("Application"));
+        assertEquals("production", stackTags.get("Environment"));
+
+        // totalRegions
+        assertEquals(2, (int) outputs.get("totalRegions"));
+
+        // us-east-1 checks
+        assertTrue(((String) outputs.get("us-east-1-albSecurityGroupId")).startsWith("sg-"));
+        assertEquals("nova-app-useast1", outputs.get("us-east-1-applicationName"));
+        assertTrue(((String) outputs.get("us-east-1-applicationUrl")).contains("us-east-1.elb.amazonaws.com"));
+        assertEquals("nova-env-useast1-prod", outputs.get("us-east-1-environmentName"));
+        assertTrue(((String) outputs.get("us-east-1-loadBalancerUrl")).contains("elasticbeanstalk.com"));
+        assertEquals("/aws/elasticbeanstalk/nova-useast1", outputs.get("us-east-1-logGroupName"));
+        assertEquals("vpc-085ddea60db5908e4", outputs.get("us-east-1-vpcId"));
+        // subnet arrays are present and non-empty
+        List<String> usEast1Priv = (List<String>) outputs.get("us-east-1-privateSubnetIds");
+        List<String> usEast1Pub = (List<String>) outputs.get("us-east-1-publicSubnetIds");
+        assertEquals(2, usEast1Priv.size());
+        assertEquals(2, usEast1Pub.size());
+
+        // us-west-1 checks
+        assertTrue(((String) outputs.get("us-west-1-albSecurityGroupId")).startsWith("sg-"));
+        assertEquals("nova-app-uswest1", outputs.get("us-west-1-applicationName"));
+        assertTrue(((String) outputs.get("us-west-1-applicationUrl")).contains("us-west-1.elb.amazonaws.com"));
+        assertEquals("nova-env-uswest1-prod", outputs.get("us-west-1-environmentName"));
+        assertTrue(((String) outputs.get("us-west-1-loadBalancerUrl")).contains("elasticbeanstalk.com"));
+        assertEquals("/aws/elasticbeanstalk/nova-uswest1", outputs.get("us-west-1-logGroupName"));
+        assertEquals("vpc-046da5e751bef00ae", outputs.get("us-west-1-vpcId"));
+        List<String> usWest1Priv = (List<String>) outputs.get("us-west-1-privateSubnetIds");
+        List<String> usWest1Pub = (List<String>) outputs.get("us-west-1-publicSubnetIds");
+        assertEquals(2, usWest1Priv.size());
+        assertEquals(2, usWest1Pub.size());
+
+        // Dashboard URLs
+        assertTrue(((String) outputs.get("us-east-1-dashboardUrl")).startsWith("https://us-east-1.console.aws.amazon.com/cloudwatch/home"));
+        assertTrue(((String) outputs.get("us-west-1-dashboardUrl")).startsWith("https://us-west-1.console.aws.amazon.com/cloudwatch/home"));
+    }
+
+    // ... (existing utility and disabled test methods below) ...
+
     @Test
     @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
     void testPulumiPreview() throws Exception {
-        // Skip if Pulumi CLI is not available
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
 
@@ -89,28 +169,18 @@ public class MainIntegrationTest {
         boolean finished = process.waitFor(60, TimeUnit.SECONDS);
 
         assertTrue(finished, "Pulumi preview should complete within 60 seconds");
-
-        // Preview should succeed (exit code 0) or show changes needed (exit code 1)
         int exitCode = process.exitValue();
         assertTrue(exitCode == 0 || exitCode == 1,
                 "Pulumi preview should succeed or show pending changes");
     }
 
-    /**
-     * Example test for actual infrastructure deployment.
-     * Disabled by default to prevent accidental resource creation.
-     * 
-     * IMPORTANT: This creates real AWS resources. Only enable in test environments.
-     */
     @Test
     @Disabled("Enable for actual infrastructure testing - creates real AWS resources")
     void testInfrastructureDeployment() throws Exception {
-        // Skip if environment is not properly configured
         Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
 
-        // Deploy infrastructure
         ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", "integration-test")
                 .directory(Paths.get("lib").toFile())
                 .redirectErrorStream(true);
@@ -122,7 +192,6 @@ public class MainIntegrationTest {
         assertEquals(0, deployProcess.exitValue(), "Deployment should succeed");
 
         try {
-            // Verify deployment worked by checking stack outputs
             ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "integration-test")
                     .directory(Paths.get("lib").toFile())
                     .redirectErrorStream(true);
@@ -134,7 +203,6 @@ public class MainIntegrationTest {
             assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
 
         } finally {
-            // Clean up - destroy the stack
             ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", "integration-test")
                     .directory(Paths.get("lib").toFile())
                     .redirectErrorStream(true);
@@ -144,9 +212,6 @@ public class MainIntegrationTest {
         }
     }
 
-    /**
-     * Helper method to check if Pulumi CLI is available.
-     */
     private boolean isPulumiAvailable() {
         try {
             ProcessBuilder pb = new ProcessBuilder("pulumi", "version");
@@ -157,17 +222,11 @@ public class MainIntegrationTest {
         }
     }
 
-    /**
-     * Helper method to check if AWS credentials are configured.
-     */
     private boolean hasAwsCredentials() {
         return System.getenv("AWS_ACCESS_KEY_ID") != null &&
                 System.getenv("AWS_SECRET_ACCESS_KEY") != null;
     }
 
-    /**
-     * Helper method to check if we're in a testing environment (not production).
-     */
     private boolean isTestingEnvironment() {
         String env = System.getenv("ENVIRONMENT_SUFFIX");
         return env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"));
