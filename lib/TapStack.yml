@@ -44,6 +44,22 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
 
 Resources:
+  # Secrets Manager Secret for RDS Password
+  TapDBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'tap-db-password-${EnvironmentName}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"''\/@'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # KMS Key for encryption
   TapKMSKey:
     Type: AWS::KMS::Key
@@ -474,6 +490,7 @@ Resources:
   # S3 Buckets
   TapDataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'tap-data-${AWS::AccountId}-${EnvironmentName}-${AWS::Region}'
       BucketEncryption:
@@ -504,6 +521,7 @@ Resources:
 
   TapCloudTrailBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'tap-cloudtrail-${AWS::AccountId}-${EnvironmentName}-${AWS::Region}'
       BucketEncryption:
@@ -614,7 +632,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref TapKMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:tap-db-password:SecretString}}'
+      MasterUserPassword: '{{resolve:secretsmanager:TapDBPasswordSecret:SecretString:password}}'
       DBSubnetGroupName: !Ref TapDBSubnetGroup
       VPCSecurityGroups:
         - !Ref TapDatabaseSecurityGroup
