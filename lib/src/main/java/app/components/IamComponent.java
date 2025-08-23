@@ -302,7 +302,7 @@ public class IamComponent extends ComponentResource {
         return buildResourceTags(name, resourceType, additional);
     }
 
-    static Map<String, String> buildResourceTags(String name, String resourceType, Map<String, String> additional) {
+    public static Map<String, String> buildResourceTags(String name, String resourceType, Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,

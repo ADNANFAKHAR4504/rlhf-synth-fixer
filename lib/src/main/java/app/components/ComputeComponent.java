@@ -268,7 +268,7 @@ public class ComputeComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private String createWebServerUserData() {
+    public static String createWebServerUserData() {
         return """
             #!/bin/bash
             yum update -y
@@ -324,7 +324,7 @@ public class ComputeComponent extends ComponentResource {
             """;
     }
 
-    private String createAppServerUserData() {
+    public static String createAppServerUserData() {
         return """
             #!/bin/bash
             yum update -y
@@ -386,7 +386,7 @@ public class ComputeComponent extends ComponentResource {
             """;
     }
 
-    private Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    public static Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,
