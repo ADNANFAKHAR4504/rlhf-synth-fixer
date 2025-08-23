@@ -109,8 +109,7 @@ public final class Main {
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
-            // Removed custom policy to use AWS default policy which allows root access
-            // and proper CloudTrail service permissions
+            .policy(buildKmsKeyPolicy())
             .tags(Map.of(
                 "Environment", "production",
                 "Application", "financial-services",
