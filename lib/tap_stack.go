@@ -12,13 +12,13 @@ func main() {
 
 	// We'll configure the AWS provider using HCL configuration
 	// This avoids the "module too large" issue with Go CDKTF AWS provider
-	
+
 	// Add AWS provider configuration
 	stack.AddOverride(jsii.String("terraform.required_providers.aws"), map[string]interface{}{
 		"source":  "hashicorp/aws",
 		"version": "~> 6.0",
 	})
-	
+
 	stack.AddOverride(jsii.String("provider.aws.region"), jsii.String("us-east-1"))
 	stack.AddOverride(jsii.String("provider.aws.default_tags.tags"), map[string]string{
 		"Environment": "dev",
@@ -85,11 +85,11 @@ func main() {
 
 	// Add S3 bucket public access block
 	stack.AddOverride(jsii.String("resource.aws_s3_bucket_public_access_block.tap_bucket_pab"), map[string]interface{}{
-		"bucket":                   "${aws_s3_bucket.tap_bucket.id}",
-		"block_public_acls":        true,
-		"block_public_policy":      true,
-		"ignore_public_acls":       true,
-		"restrict_public_buckets":  true,
+		"bucket":                  "${aws_s3_bucket.tap_bucket.id}",
+		"block_public_acls":       true,
+		"block_public_policy":     true,
+		"ignore_public_acls":      true,
+		"restrict_public_buckets": true,
 	})
 
 	// Add IAM role for EC2
@@ -131,8 +131,8 @@ func main() {
 
 	// Add security group
 	stack.AddOverride(jsii.String("resource.aws_security_group.ec2_sg"), map[string]interface{}{
-		"name":   "tap-ec2-sg-dev",
-		"vpc_id": "${aws_vpc.tap_vpc.id}",
+		"name":        "tap-ec2-sg-dev",
+		"vpc_id":      "${aws_vpc.tap_vpc.id}",
 		"description": "Security group for TAP EC2 instances with SSL/TLS enforcement",
 		"ingress": []map[string]interface{}{
 			{
@@ -244,7 +244,7 @@ EOF
 
 	// Add SNS topic
 	stack.AddOverride(jsii.String("resource.aws_sns_topic.cpu_alarm_topic"), map[string]interface{}{
-		"name":             "tap-cpu-alarm-topic-dev",
+		"name":              "tap-cpu-alarm-topic-dev",
 		"kms_master_key_id": "${aws_kms_key.tap_kms_key.id}",
 		"tags": map[string]string{
 			"Name": "tap-sns-topic-dev",
@@ -294,11 +294,11 @@ EOF
 
 	// Add CloudTrail bucket public access block
 	stack.AddOverride(jsii.String("resource.aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"), map[string]interface{}{
-		"bucket":                   "${aws_s3_bucket.cloudtrail_bucket.id}",
-		"block_public_acls":        true,
-		"block_public_policy":      true,
-		"ignore_public_acls":       true,
-		"restrict_public_buckets":  true,
+		"bucket":                  "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"block_public_acls":       true,
+		"block_public_policy":     true,
+		"ignore_public_acls":      true,
+		"restrict_public_buckets": true,
 	})
 
 	// Add required provider for random
@@ -309,16 +309,16 @@ EOF
 
 	// Add CloudTrail
 	stack.AddOverride(jsii.String("resource.aws_cloudtrail.audit_trail"), map[string]interface{}{
-		"name":                           "tap-cloudtrail-dev",
-		"s3_bucket_name":                 "${aws_s3_bucket.cloudtrail_bucket.id}",
-		"include_global_service_events":  true,
-		"is_multi_region_trail":          true,
-		"enable_log_file_validation":     true,
-		"kms_key_id":                     "${aws_kms_key.tap_kms_key.arn}",
+		"name":                          "tap-cloudtrail-dev",
+		"s3_bucket_name":                "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"include_global_service_events": true,
+		"is_multi_region_trail":         true,
+		"enable_log_file_validation":    true,
+		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
 		"event_selector": []map[string]interface{}{
 			{
-				"read_write_type":                 "All",
-				"include_management_events":       true,
+				"read_write_type":           "All",
+				"include_management_events": true,
 				"data_resource": []map[string]interface{}{
 					{
 						"type":   "AWS::S3::Object",
