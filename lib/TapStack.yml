@@ -7,6 +7,10 @@ Parameters:
     Type: String
     Description: Unique timestamp for resource names
     Default: 'manual-20250822'
+  AWSRegion:
+    Type: String
+    Default: 'us-east-1'
+    Description: AWS region for all resources
 
 Resources:
   VPC:
@@ -33,7 +37,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.0.0/24
-      AvailabilityZone: !Sub '${AWS::Region}a'
+      AvailabilityZone: !Select [0, !GetAZs !Ref AWSRegion]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -46,7 +50,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Sub '${AWS::Region}b'
+      AvailabilityZone: !Select [1, !GetAZs !Ref AWSRegion]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -59,7 +63,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.10.0/24
-      AvailabilityZone: !Sub '${AWS::Region}a'
+      AvailabilityZone: !Select [0, !GetAZs !Ref AWSRegion]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -67,13 +71,12 @@ Resources:
         - Key: Environment
           Value: Production
 
-  #Testing
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: !Sub '${AWS::Region}b'
+      AvailabilityZone: !Select [1, !GetAZs !Ref AWSRegion]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
