@@ -49,7 +49,7 @@ const hasAwsCredentials = (): boolean => {
 // Helper function to skip tests if no credentials
 const skipIfNoCredentials = (testName: string) => {
   if (!hasAwsCredentials()) {
-    console.log(`⚠️ ${testName} skipped: No AWS credentials available`);
+    console.log(` ${testName} skipped: No AWS credentials available`);
     return true;
   }
   return false;
@@ -70,7 +70,7 @@ const getActualResourceIds = async (): Promise<TestConfig> => {
     const vpcId = vpcs.Vpcs?.[0]?.VpcId;
 
     if (!vpcId) {
-      console.log('⚠️ No VPC found with expected naming pattern');
+      console.log(' No VPC found with expected naming pattern');
       return {};
     }
 
@@ -108,7 +108,7 @@ const getActualResourceIds = async (): Promise<TestConfig> => {
       environmentInfo: `Environment: ${process.env.AWS_REGION || 'us-east-1'}`
     };
   } catch (error) {
-    console.log('⚠️ Error discovering resources:', error);
+    console.log(' Error discovering resources:', error);
     return {};
   }
 };
@@ -123,21 +123,21 @@ beforeAll(async () => {
     try {
       const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
       TEST_CONFIG = outputs;
-      console.log('✅ Loaded configuration from outputs.json');
+      console.log(' Loaded configuration from outputs.json');
     } catch (error) {
-      console.log('⚠️ Failed to parse outputs.json, will discover resources dynamically');
+      console.log(' Failed to parse outputs.json, will discover resources dynamically');
     }
   } else {
-    console.log('ℹ️ outputs.json not found — will discover resources dynamically');
+    console.log(' outputs.json not found — will discover resources dynamically');
   }
 
   // If we have AWS credentials, discover actual resources
   if (hasAwsCredentials()) {
-    console.log('✅ AWS credentials verified');
+    console.log(' AWS credentials verified');
     const discoveredConfig = await getActualResourceIds();
     TEST_CONFIG = { ...TEST_CONFIG, ...discoveredConfig };
   } else {
-    console.log('⚠️ No AWS credentials found — running in validation mode');
+    console.log(' No AWS credentials found — running in validation mode');
   }
 });
 
@@ -158,7 +158,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
         expect(vpc.State).toBe('available');
       } catch (error) {
-        console.log('⚠️ VPC test skipped due to missing resources');
+        console.log(' VPC test skipped due to missing resources');
       }
     });
 
@@ -167,7 +167,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       try {
         if (!TEST_CONFIG.publicSubnetIds?.length) {
-          console.log('⚠️ No public subnet IDs available');
+          console.log(' No public subnet IDs available');
           return;
         }
 
@@ -183,7 +183,7 @@ describe('AWS Infrastructure Integration Tests', () => {
           expect(subnet.State).toBe('available');
         });
       } catch (error) {
-        console.log('⚠️ Public subnets test skipped due to missing resources');
+        console.log(' Public subnets test skipped due to missing resources');
       }
     });
 
@@ -192,7 +192,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       try {
         if (!TEST_CONFIG.privateSubnetIds?.length) {
-          console.log('⚠️ No private subnet IDs available');
+          console.log(' No private subnet IDs available');
           return;
         }
 
@@ -208,7 +208,7 @@ describe('AWS Infrastructure Integration Tests', () => {
           expect(subnet.State).toBe('available');
         });
       } catch (error) {
-        console.log('⚠️ Private subnets test skipped due to missing resources');
+        console.log(' Private subnets test skipped due to missing resources');
       }
     });
   });
@@ -219,7 +219,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       try {
         if (!TEST_CONFIG.albDnsName) {
-          console.log('⚠️ No ALB DNS name available');
+          console.log(' No ALB DNS name available');
           return;
         }
 
@@ -232,7 +232,7 @@ describe('AWS Infrastructure Integration Tests', () => {
           expect(alb.Type).toBe('application');
         }
       } catch (error) {
-        console.log('⚠️ ALB test skipped due to missing resources');
+        console.log(' ALB test skipped due to missing resources');
       }
     });
 
@@ -248,7 +248,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(targetGroup.Protocol).toBe('HTTP');
         expect(targetGroup.Port).toBe(80);
       } catch (error) {
-        console.log('⚠️ ALB target group test skipped due to missing resources');
+        console.log(' ALB target group test skipped due to missing resources');
       }
     });
   });
@@ -259,7 +259,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       try {
         if (!TEST_CONFIG.rdsEndpoint) {
-          console.log('⚠️ No RDS endpoint available');
+          console.log(' No RDS endpoint available');
           return;
         }
 
@@ -273,7 +273,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(instance!.Engine).toBe('postgres');
         expect(instance!.StorageEncrypted).toBe(true);
       } catch (error) {
-        console.log('⚠️ RDS test skipped due to missing resources');
+        console.log(' RDS test skipped due to missing resources');
       }
     });
 
@@ -289,7 +289,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(subnetGroup.Subnets).toBeDefined();
         expect(subnetGroup.Subnets!.length).toBeGreaterThan(0);
       } catch (error) {
-        console.log('⚠️ RDS subnet group test skipped due to missing resources');
+        console.log(' RDS subnet group test skipped due to missing resources');
       }
     });
   });
@@ -300,7 +300,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       try {
         if (!TEST_CONFIG.asgName) {
-          console.log('⚠️ No ASG name available');
+          console.log(' No ASG name available');
           return;
         }
 
@@ -316,7 +316,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(asg.MinSize).toBeGreaterThan(0);
         expect(asg.MaxSize).toBeGreaterThan(0);
       } catch (error) {
-        console.log('⚠️ ASG test skipped due to missing resources');
+        console.log(' ASG test skipped due to missing resources');
       }
     });
   });
@@ -345,7 +345,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         );
         expect(rdsSg).toBeDefined();
       } catch (error) {
-        console.log('⚠️ Security groups test skipped due to missing resources');
+        console.log(' Security groups test skipped due to missing resources');
       }
     });
   });
@@ -364,7 +364,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         );
         expect(cpuAlarm).toBeDefined();
       } catch (error) {
-        console.log('⚠️ CloudWatch alarms test skipped due to missing resources');
+        console.log(' CloudWatch alarms test skipped due to missing resources');
       }
     });
   });
@@ -383,7 +383,7 @@ describe('AWS Infrastructure Integration Tests', () => {
         );
         expect(ec2Role).toBeDefined();
       } catch (error) {
-        console.log('⚠️ IAM roles test skipped due to missing resources');
+        console.log(' IAM roles test skipped due to missing resources');
       }
     });
   });
@@ -406,13 +406,13 @@ describe('AWS Infrastructure Integration Tests', () => {
       );
 
       if (missingResources.length > 0) {
-        console.log('⚠️ Missing resources:', missingResources);
-        console.log('ℹ️ This may be expected if infrastructure is not fully deployed');
+        console.log(' Missing resources:', missingResources);
+        console.log(' This may be expected if infrastructure is not fully deployed');
       }
 
       // If we have AWS credentials but no VPC, the infrastructure is not deployed
       if (hasAwsCredentials() && !TEST_CONFIG.vpcId) {
-        console.log('ℹ️ Infrastructure not deployed - this is expected for testing');
+        console.log(' Infrastructure not deployed - this is expected for testing');
         expect(true).toBe(true); // Test passes when infrastructure is not deployed
       } else {
         // At minimum, we should have a VPC if infrastructure is deployed
