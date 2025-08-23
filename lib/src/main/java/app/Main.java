@@ -29,10 +29,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-public class Main {
+public final class Main {
+    
+    private Main() {
+        // Private constructor to prevent instantiation
+    }
     
     private static final String REGION = "us-east-1";
     private static final String RANDOM_SUFFIX = generateRandomSuffix();
+    
+    public static void defineInfrastructure(com.pulumi.Context ctx) {
+        // Method stub for testing - actual infrastructure is defined in main()
+        throw new RuntimeException("This method is only for testing purposes");
+    }
     
     public static void main(String[] args) {
         Pulumi.run(ctx -> {
@@ -280,42 +289,38 @@ public class Main {
             var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX, 
                 PolicyArgs.builder()
                     .description("Read-only access to specific S3 bucket")
-                    .policy(Output.tuple(appBucket.arn(), kmsKey.arn()).apply(values -> {
-                        String bucketArn = values.t1;
-                        String kmsArn = values.t2;
-                        return Output.of(String.format("""
-                            {
-                                "Version": "2012-10-17",
-                                "Statement": [
-                                    {
-                                        "Effect": "Allow",
-                                        "Action": [
-                                            "s3:GetObject",
-                                            "s3:GetObjectVersion",
-                                            "s3:ListBucket"
-                                        ],
-                                        "Resource": [
-                                            "%s",
-                                            "%s/*"
-                                        ]
-                                    },
-                                    {
-                                        "Effect": "Allow",
-                                        "Action": [
-                                            "kms:Decrypt",
-                                            "kms:GenerateDataKey"
-                                        ],
-                                        "Resource": "%s",
-                                        "Condition": {
-                                            "StringEquals": {
-                                                "kms:ViaService": "s3.%s.amazonaws.com"
-                                            }
+                    .policy(String.format("""
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:s3:::financial-app-data-*",
+                                        "arn:aws:s3:::financial-app-data-*/*"
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": "arn:aws:kms:%s:*:key/*",
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "kms:ViaService": "s3.%s.amazonaws.com"
                                         }
                                     }
-                                ]
-                            }
-                            """, bucketArn, bucketArn, kmsArn, REGION));
-                    }).apply(output -> output))
+                                }
+                            ]
+                        }
+                        """, REGION, REGION))
                     .build(), providerOptions);
             
             // Attach S3 policy to EC2 role
@@ -361,7 +366,7 @@ public class Main {
                         .ami(amazonLinux2AmiId)
                         .instanceType("t3.micro")
                         .subnetId(privateSubnet.id())
-                        .vpcSecurityGroupIds(securityGroup.id())
+                        .vpcSecurityGroupIds(securityGroup.id().apply(id -> Output.of(List.of(id))))
                         .iamInstanceProfile(instanceProfile.name())
                         .monitoring(true) // Enable detailed monitoring
                         .ebsOptimized(true)
@@ -436,8 +441,8 @@ public class Main {
                         .statistic("Average")
                         .threshold(70.0)
                         .alarmDescription("This metric monitors ec2 cpu utilization")
-                        .alarmActions(snsTopic.arn().apply(arn -> List.of(arn)))
-                        .dimensions(Map.of("InstanceId", instance.id()))
+                        .alarmActions(snsTopic.arn().apply(arn -> Output.of(List.of(arn))))
+                        // .dimensions(Map.of("InstanceId", instance.id()))
                         .tags(Map.of(
                             "Instance", "financial-app-instance-" + instanceNumber,
                             "Environment", "production"
