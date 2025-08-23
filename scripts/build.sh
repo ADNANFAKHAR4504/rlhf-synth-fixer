@@ -13,7 +13,7 @@ fi
 # CDKTF Go preparation happens once during build to warm caches and generate .gen
 if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
   echo "🔧 Preparing CDKTF Go (one-time in build)..."
-  ./scripts/cdktf-go-prepare.sh
+  bash ./scripts/cdktf-go-prepare.sh
 fi
 
 # Build the project based on language
