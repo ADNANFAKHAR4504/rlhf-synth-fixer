@@ -1,6 +1,3 @@
-I'll create a complete, deployable CloudFormation template that meets all your requirements. This template follows AWS best practices and includes proper dependencies to ensure successful deployment.
-
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with VPC, ALB, and Auto Scaling'
 
@@ -20,11 +17,6 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
-
-Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: ami-0c2d3e23b7e7c7c7e  # Amazon Linux 2 AMI (will need to be updated)
 
 Resources:
   # VPC and Networking
@@ -318,13 +310,13 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # Launch Template
+  # Launch Template with dynamic AMI lookup
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: WebApp-LaunchTemplate
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -339,6 +331,7 @@ Resources:
             systemctl enable httpd
             echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
             echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+            echo "<p>Stack Name: ${AWS::StackName}</p>" >> /var/www/html/index.html
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -430,49 +423,16 @@ Outputs:
     Description: ID of the VPC
     Value: !Ref VPC
     Export:
-      Name: !Sub ${AWS::StackName}-VPC-ID
+      Name: !Sub '${AWS::StackName}-VPC-ID'
 
   LoadBalancerURL:
     Description: URL of the Application Load Balancer
     Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
-      Name: !Sub ${AWS::StackName}-ALB-URL
+      Name: !Sub '${AWS::StackName}-ALB-URL'
 
   LoadBalancerDNS:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub ${AWS::StackName}-ALB-DNS
-```
-
-## Important Notes for Deployment:
-
-### 1. **AMI ID Update Required**
-The AMI ID in the template needs to be updated with the latest Amazon Linux 2 AMI for us-west-2. You can find the current AMI ID by running:
-```bash
-aws ec2 describe-images --owners amazon --filters "Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2" --query 'Images[*].[ImageId,CreationDate]' --output table --region us-west-2
-```
-
-### 2. **Security Consideration**
-Change the `SSHAllowedCIDR` parameter to your specific IP range instead of `0.0.0.0/0` for better security.
-
-### 3. **Deployment Command**
-Deploy with:
-```bash
-aws cloudformation create-stack \
-  --stack-name webapp-infrastructure \
-  --template-body file://template.yaml \
-  --parameters ParameterKey=SSHAllowedCIDR,ParameterValue=YOUR_IP/32 \
-  --capabilities CAPABILITY_IAM \
-  --region us-west-2
-```
-
-## Key Features Implemented:
-
-✅ **High Availability**: Resources span multiple AZs  
-✅ **Security**: Least-privilege security groups, private subnets for compute  
-✅ **Scalability**: Auto Scaling with CloudWatch alarms  
-✅ **Best Practices**: Proper tagging, IAM roles, health checks  
-✅ **Production Ready**: Includes monitoring and proper dependencies  
-
-The template creates a simple web server that displays the hostname and instance ID, which helps verify the load balancer is working correctly. You can replace the UserData script with your actual application deployment code.
+      Name: !Sub '${AWS::StackName}-ALB-DNS'
