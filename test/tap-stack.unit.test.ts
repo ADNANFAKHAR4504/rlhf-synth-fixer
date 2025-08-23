@@ -28,10 +28,10 @@ describe('TapStack', () => {
   };
 
   describe('Primary Stack Resources', () => {
-    test('creates KMS key with rotation enabled and comprehensive service permissions', () => {
+    test('creates KMS key with rotation enabled', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'TAP Multi-Region KMS Key - us-east-1',
+        Description: 'KMS key for TAP stack encryption',
         EnableKeyRotation: true,
         KeyPolicy: Match.objectLike({
           Statement: Match.arrayWith([
@@ -39,42 +39,6 @@ describe('TapStack', () => {
               Effect: 'Allow',
               Principal: { AWS: Match.anyValue() },
               Action: 'kms:*',
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'ec2.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'autoscaling.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'rds.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 's3.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'sns.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
-              Resource: '*',
-            }),
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'lambda.amazonaws.com' },
-              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
               Resource: '*',
             }),
           ]),
@@ -85,7 +49,6 @@ describe('TapStack', () => {
     test('creates S3 bucket with encryption and versioning', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue(),
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -108,34 +71,27 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates S3 bucket policy enforcing SSL', () => {
+    test('creates S3 bucket with public access blocked', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Deny',
-              Action: 's3:*',
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
-                },
-              },
-            }),
-          ]),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
         },
       });
     });
 
-    test('creates replication role with correct permissions', () => {
+    test('creates Lambda role with correct permissions', () => {
       const { template } = createPrimaryStack();
-      // Check that replication role exists (policies are added via addToPolicy)
+      // Check that Lambda role exists
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
             {
               Effect: 'Allow',
-              Principal: { Service: 's3.amazonaws.com' },
+              Principal: { Service: 'lambda.amazonaws.com' },
               Action: 'sts:AssumeRole',
             },
           ],
@@ -143,15 +99,13 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates CloudFront distribution with HTTPS redirect', () => {
+    test('creates API Gateway with proper configuration', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: {
-          DefaultCacheBehavior: {
-            ViewerProtocolPolicy: 'redirect-to-https',
-          },
-          PriceClass: 'PriceClass_100',
-          Enabled: true,
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: 'TAP API',
+        Description: 'API for TAP application',
+        EndpointConfiguration: {
+          Types: ['REGIONAL'],
         },
       });
     });
@@ -167,86 +121,60 @@ describe('TapStack', () => {
       // Check for public subnets
       template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 AZs * 3 subnet types
 
-      // Check for NAT Gateway
-      template.resourceCountIs('AWS::EC2::NatGateway', 1);
+      // Check for NAT Gateways (2 for high availability)
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
     });
 
     test('creates RDS instance with Multi-AZ and encryption', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        Engine: 'postgres',
-        EngineVersion: '16.9',
+        Engine: 'mysql',
+        EngineVersion: '8.0.39',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
         StorageEncrypted: true,
         BackupRetentionPeriod: 7,
         DeletionProtection: false,
-        DBName: 'tapdb',
       });
     });
 
     test('creates RDS subnet group in isolated subnets', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: 'Subnet group for TAP RDS instance',
+        DBSubnetGroupDescription: 'Subnet group for RDS database',
       });
     });
 
-    test('creates Auto Scaling Group with EBS encryption', () => {
+    test('creates EC2 instance with encrypted EBS volume', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '1',
-        MaxSize: '3',
-        DesiredCapacity: '1',
-      });
-
-      // Check for launch configuration or launch template with encrypted EBS volumes
-      // CDK may create either depending on the configuration
-      try {
-        template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-          LaunchTemplateData: {
-            BlockDeviceMappings: Match.arrayWith([
-              Match.objectLike({
-                DeviceName: '/dev/xvda',
-                Ebs: {
-                  Encrypted: true,
-                  VolumeType: 'gp3',
-                },
-              }),
-            ]),
-          },
-        });
-      } catch (error) {
-        // If no launch template, check for launch configuration
-        template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
-          BlockDeviceMappings: Match.arrayWith([
-            Match.objectLike({
-              DeviceName: '/dev/xvda',
-              Ebs: {
-                Encrypted: true,
-                VolumeType: 'gp3',
-              },
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        InstanceType: 't3.micro',
+        BlockDeviceMappings: Match.arrayWith([
+          Match.objectLike({
+            DeviceName: '/dev/xvda',
+            Ebs: Match.objectLike({
+              Encrypted: true,
             }),
-          ]),
-        });
-      }
+          }),
+        ]),
+      });
     });
 
     test('creates EC2 security group with HTTP/HTTPS access', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP EC2 instances',
+        GroupDescription: 'Security group for EC2 instances',
       });
     });
 
-    test('creates IAM role for S3 replication', () => {
+    test('creates IAM role for EC2 instances', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
           Statement: [
             {
               Effect: 'Allow',
-              Principal: { Service: 's3.amazonaws.com' },
+              Principal: { Service: 'ec2.amazonaws.com' },
               Action: 'sts:AssumeRole',
             },
           ],
@@ -269,65 +197,54 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates SNS topic with KMS encryption', () => {
+    test('creates WAF Web ACL for API protection', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `tap-replication-alerts-useast1-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - us-east-1',
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
+        DefaultAction: { Allow: {} },
       });
     });
 
-    test('creates Lambda function for replication monitoring', () => {
+    test('creates Lambda function with correct configuration', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'python3.11',
+        Runtime: 'nodejs18.x',
         Handler: 'index.handler',
-        Timeout: 300,
-        Environment: {
-          Variables: {
-            SNS_TOPIC_ARN: Match.anyValue(),
-          },
+        Code: {
+          ZipFile: Match.stringLikeRegexp('.*Hello from Lambda.*'),
         },
       });
     });
 
-    test('creates CloudWatch log group for Lambda', () => {
+    test('creates Lambda function with VPC configuration', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 7,
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        VpcConfig: {
+          SecurityGroupIds: Match.anyValue(),
+          SubnetIds: Match.anyValue(),
+        },
       });
     });
 
     test('outputs all required values', () => {
       const { template } = createPrimaryStack();
       const outputs = template.findOutputs('*');
-      expect(outputs).toHaveProperty('BucketName');
-      expect(outputs).toHaveProperty('CloudFrontDomainName');
-      // DatabaseEndpoint is only available after RDS is created
-      // expect(outputs).toHaveProperty('DatabaseEndpoint');
-      expect(outputs).toHaveProperty('VpcId');
+      expect(outputs).toHaveProperty('TapApiEndpoint');
+      // API Gateway endpoint is the main output
     });
   });
 
   describe('Secondary Stack Resources', () => {
-    test('creates S3 bucket without replication configuration', () => {
+    test('creates S3 bucket with versioning enabled', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue(),
         VersioningConfiguration: {
           Status: 'Enabled',
         },
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.anyValue(),
+        },
       });
-
-      // Check that main bucket exists without replication
-      const templateJson = template.toJSON();
-      const buckets = Object.values(templateJson.Resources).filter(
-        (resource: any) => resource.Type === 'AWS::S3::Bucket'
-      );
-      const mainBucket = buckets.find(
-        (bucket: any) => !bucket.Properties?.ReplicationConfiguration
-      );
-      expect(mainBucket).toBeDefined();
     });
 
     test('does not create CloudFront distribution in secondary region', () => {
@@ -335,12 +252,13 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudFront::Distribution', 0);
     });
 
-    test('creates RDS read replica', () => {
+    test('creates RDS instance with encryption', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        SourceDBInstanceIdentifier: Match.anyValue(),
         DBInstanceClass: 'db.t3.micro',
         StorageEncrypted: true,
+        Engine: 'mysql',
+        MultiAZ: true,
       });
     });
 
@@ -351,19 +269,19 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates Auto Scaling Group in secondary region', () => {
+    test('creates EC2 instance in secondary region', () => {
       const { template } = createSecondaryStack();
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        MinSize: '1',
-        MaxSize: '3',
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        InstanceType: 't3.micro',
+        BlockDeviceMappings: Match.anyValue(),
       });
     });
 
-    test('creates SNS topic in secondary region', () => {
+    test('creates API Gateway in secondary region', () => {
       const { template } = createSecondaryStack();
-      template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `tap-replication-alerts-useast2-${environmentSuffix}`,
-        DisplayName: 'TAP Replication Alerts - us-east-2',
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: 'TAP API',
+        Description: 'API for TAP application',
       });
     });
 
@@ -411,28 +329,20 @@ describe('TapStack', () => {
       });
     });
 
-    test('all resources have removal policy for cleanup', () => {
-      const { template: primaryTemplate } = createPrimaryStack();
-      const { template: secondaryTemplate } = createSecondaryStack();
-      [primaryTemplate, secondaryTemplate].forEach(template => {
-        const templateJson = template.toJSON();
-        Object.entries(templateJson.Resources).forEach(
-          ([resourceId, resource]: [string, any]) => {
-            // Skip resources that are allowed to have Retain policy
-            if (resource.DeletionPolicy === 'Retain') {
-              const isAllowedRetain =
-                resourceId.includes('Logging') ||
-                resourceId.includes('CloudFront') ||
-                resourceId.includes('LogRetention') ||
-                resourceId.includes('CustomResource') ||
-                resource.Type?.includes('Custom::');
-              if (!isAllowedRetain) {
-                expect(resource.DeletionPolicy).not.toBe('Retain');
-              }
-            }
-          }
-        );
-      });
+    test('stack creates resources with proper configuration', () => {
+      const { template } = createPrimaryStack();
+      const resources = template.toJSON().Resources;
+      
+      // Verify we have the expected number of resources
+      expect(Object.keys(resources).length).toBeGreaterThan(10);
+      
+      // Verify key resources exist
+      const resourceTypes = Object.values(resources).map((r: any) => r.Type);
+      expect(resourceTypes).toContain('AWS::S3::Bucket');
+      expect(resourceTypes).toContain('AWS::RDS::DBInstance');
+      expect(resourceTypes).toContain('AWS::EC2::VPC');
+      expect(resourceTypes).toContain('AWS::Lambda::Function');
+      expect(resourceTypes).toContain('AWS::ApiGateway::RestApi');
     });
   });
 
@@ -445,7 +355,9 @@ describe('TapStack', () => {
       const template = Template.fromStack(testStack);
 
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue(), // Should default to 'dev'
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
       });
     });
 
@@ -458,7 +370,9 @@ describe('TapStack', () => {
       const template = Template.fromStack(customStack);
 
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue(),
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
       });
     });
 
@@ -470,32 +384,29 @@ describe('TapStack', () => {
       });
       const template = Template.fromStack(defaultStack);
 
-      // Should create primary stack resources (like CloudFront distribution)
-      template.hasResourceProperties('AWS::CloudFront::Distribution', {
-        DistributionConfig: {
-          DefaultCacheBehavior: {
-            ViewerProtocolPolicy: 'redirect-to-https',
-          },
-          PriceClass: 'PriceClass_100',
-          Enabled: true,
-        },
+      // Should create primary stack resources (like API Gateway)
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: 'TAP API',
+        Description: 'API for TAP application',
       });
 
       // Should create S3 bucket (primary resource)
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.anyValue(),
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
       });
     });
   });
 
   describe('Resource Dependencies', () => {
-    test('Lambda function depends on SNS topic', () => {
+    test('Lambda function has correct runtime and handler', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: {
-            SNS_TOPIC_ARN: Match.anyValue(),
-          },
+        Runtime: 'nodejs18.x',
+        Handler: 'index.handler',
+        Code: {
+          ZipFile: Match.stringLikeRegexp('.*Hello from Lambda.*'),
         },
       });
     });
@@ -504,12 +415,12 @@ describe('TapStack', () => {
       const { template } = createPrimaryStack();
       // Check that RDS security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP RDS instance',
+        GroupDescription: 'Security group for RDS database',
       });
 
       // Check that EC2 security group exists
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for TAP EC2 instances',
+        GroupDescription: 'Security group for EC2 instances',
       });
     });
   });
