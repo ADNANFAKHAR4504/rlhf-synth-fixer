@@ -1,4 +1,4 @@
-module github.com/example/tap
+module github.com/example/tap/lib
 
 go 1.23
 

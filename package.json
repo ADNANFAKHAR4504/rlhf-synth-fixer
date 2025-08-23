@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "CDKTF Go Infrastructure",
   "scripts": {
-    "build": "echo 'Go build handled by go build'",
+    "build": "cd lib && go build -o ../tap-stack .",
     "cdktf:get": "cdktf get",
     "cdktf:synth": "cdktf synth",
     "cdktf:deploy": "cdktf deploy",

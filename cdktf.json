@@ -1,6 +1,6 @@
 {
   "language": "go",
-  "app": "go run .",
+  "app": "./run-cdktf.sh",
   "projectId": "tap-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [

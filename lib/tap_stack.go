@@ -33,19 +33,19 @@ type EnvironmentConfig struct {
 	Environment string
 	Region      string
 	AccountID   string
-	
+
 	// Networking
-	VPCCidr           string
-	PublicSubnetCidrs []string
+	VPCCidr            string
+	PublicSubnetCidrs  []string
 	PrivateSubnetCidrs []string
-	
+
 	// S3
 	LoggingBucket     string
 	ReplicationBucket string
-	
+
 	// IAM
 	RolePrefix string
-	
+
 	// Tags
 	CommonTags map[string]string
 }
@@ -74,10 +74,10 @@ type S3Component struct {
 // InfrastructureStack represents the main infrastructure stack
 type InfrastructureStack struct {
 	cdktf.TerraformStack
-	Config     *EnvironmentConfig
-	VPC        *VPCComponent
-	IAM        *IAMComponent
-	Storage    *S3Component
+	Config  *EnvironmentConfig
+	VPC     *VPCComponent
+	IAM     *IAMComponent
+	Storage *S3Component
 }
 
 // GetConfig returns the configuration for the specified environment
@@ -110,16 +110,16 @@ func getDevConfig() *EnvironmentConfig {
 		Environment: "dev",
 		Region:      "us-east-1",
 		AccountID:   "123456789012", // Replace with your dev account ID
-		
+
 		VPCCidr:            "10.0.0.0/16",
 		PublicSubnetCidrs:  []string{"10.0.1.0/24", "10.0.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.0.10.0/24", "10.0.20.0/24"},
-		
+
 		LoggingBucket:     "my-company-logs-dev",
 		ReplicationBucket: "my-company-logs-dev-replica",
-		
+
 		RolePrefix: "dev",
-		
+
 		CommonTags: map[string]string{
 			"Environment": "dev",
 			"Project":     "infrastructure",
@@ -133,16 +133,16 @@ func getStagingConfig() *EnvironmentConfig {
 		Environment: "staging",
 		Region:      "us-east-2",
 		AccountID:   "123456789013", // Replace with your staging account ID
-		
+
 		VPCCidr:            "10.1.0.0/16",
 		PublicSubnetCidrs:  []string{"10.1.1.0/24", "10.1.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.1.10.0/24", "10.1.20.0/24"},
-		
+
 		LoggingBucket:     "my-company-logs-staging",
 		ReplicationBucket: "my-company-logs-staging-replica",
-		
+
 		RolePrefix: "staging",
-		
+
 		CommonTags: map[string]string{
 			"Environment": "staging",
 			"Project":     "infrastructure",
@@ -156,16 +156,16 @@ func getProdConfig() *EnvironmentConfig {
 		Environment: "prod",
 		Region:      "us-west-1",
 		AccountID:   "123456789014", // Replace with your prod account ID
-		
+
 		VPCCidr:            "10.2.0.0/16",
 		PublicSubnetCidrs:  []string{"10.2.1.0/24", "10.2.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.2.10.0/24", "10.2.20.0/24"},
-		
+
 		LoggingBucket:     "my-company-logs-prod",
 		ReplicationBucket: "my-company-logs-prod-replica",
-		
+
 		RolePrefix: "prod",
-		
+
 		CommonTags: map[string]string{
 			"Environment": "prod",
 			"Project":     "infrastructure",
