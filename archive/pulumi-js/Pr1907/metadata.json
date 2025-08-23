@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr233",
+  "team": "synth",
+  "startedAt": "2025-08-21T21:03:13+05:30",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Serverless Computing",
+    "API Gateway Configuration",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon S3",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

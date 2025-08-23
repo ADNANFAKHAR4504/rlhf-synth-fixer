@@ -112,7 +112,9 @@ in structure to the latest MODEL_RESPONSE file.
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
-initial latest MODEL_RESPONSE file. Do not mention the QA process. only focus in the infrastructure changes needed to fix the latest MODEL_RESPONSE.
+conversation logged in the PROMPT and MODEL_RESPONSE files(`lib/MODEL_PROMPT.md` => `lib/MODEL_RESPONSE.md`,
+`lib/MODEL_PROMPT2.md` => `lib/MODEL_RESPONSE2.md`...) file. Do not mention the QA process. Only focus in
+the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 
 ### 6. Cleanup
 
@@ -134,3 +136,12 @@ Use your best judgement to decide.
 - Do not create specific github actions or workflows. Those are already created.
 - Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
 the lib/ folder
+
+### Agent-Specific Reporting
+- Report start of each QA pipeline stage with current infrastructure being tested
+- Report deployment attempt results (success/failure with attempt number)
+- Report any deployment blockers (missing dependencies, AWS access issues, resource conflicts)
+- Report test execution progress and coverage metrics with current test being run
+- Report cleanup completion status and any cleanup failures
+- Report blocking conditions if infrastructure deployment fails repeatedly
+- Report unit-test coverage.
