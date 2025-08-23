@@ -1,36 +1,42 @@
-package lib
+package main
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aws/constructs-go/constructs/v10"
-	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
+	jsii "github.com/aws/jsii-runtime-go"
+	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
 	_ "github.com/aws/constructs-go/constructs/v10/jsii"
 	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 
-	alb "github.com/TuringGpt/iac-test-automations/gen/aws/applicationloadbalancer"
-	asg "github.com/TuringGpt/iac-test-automations/gen/aws/autoscalinggroup"
-	logs "github.com/TuringGpt/iac-test-automations/gen/aws/cloudwatchloggroup"
-	amidata "github.com/TuringGpt/iac-test-automations/gen/aws/dataamiids"
-	azdata "github.com/TuringGpt/iac-test-automations/gen/aws/dataawsavailabilityzones"
-	subnetdata "github.com/TuringGpt/iac-test-automations/gen/aws/dataawssubnets"
-	vpcdata "github.com/TuringGpt/iac-test-automations/gen/aws/dataawsvpc"
-	igw "github.com/TuringGpt/iac-test-automations/gen/aws/internetgateway"
-	lt "github.com/TuringGpt/iac-test-automations/gen/aws/launchtemplate"
-	tg "github.com/TuringGpt/iac-test-automations/gen/aws/lbtargetgroup"
-	lbListener "github.com/TuringGpt/iac-test-automations/gen/aws/lblistener"
-	provider "github.com/TuringGpt/iac-test-automations/gen/aws/provider"
-	r53hc "github.com/TuringGpt/iac-test-automations/gen/aws/route53healthcheck"
-	r53zone "github.com/TuringGpt/iac-test-automations/gen/aws/route53hostedzone"
-	r53record "github.com/TuringGpt/iac-test-automations/gen/aws/route53record"
-	rt "github.com/TuringGpt/iac-test-automations/gen/aws/routetable"
-	rta "github.com/TuringGpt/iac-test-automations/gen/aws/routetableassociation"
-	sg "github.com/TuringGpt/iac-test-automations/gen/aws/securitygroup"
-	subnet "github.com/TuringGpt/iac-test-automations/gen/aws/subnet"
-	vpc "github.com/TuringGpt/iac-test-automations/gen/aws/vpc"
+	alb "github.com/TuringGpt/iac-test-automations/.gen/aws/alb"
+	asg "github.com/TuringGpt/iac-test-automations/.gen/aws/autoscalinggroup"
+	logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"
+	amidata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsamiids"
+	azdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsavailabilityzones"
+	subnetdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawssubnets"
+	vpcdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsvpc"
+	igw "github.com/TuringGpt/iac-test-automations/.gen/aws/internetgateway"
+	lt "github.com/TuringGpt/iac-test-automations/.gen/aws/launchtemplate"
+	tg "github.com/TuringGpt/iac-test-automations/.gen/aws/albtargetgroup"
+	lbListener "github.com/TuringGpt/iac-test-automations/.gen/aws/alblistener"
+	provider "github.com/TuringGpt/iac-test-automations/.gen/aws/provider"
+	r53hc "github.com/TuringGpt/iac-test-automations/.gen/aws/route53healthcheck"
+	r53zone "github.com/TuringGpt/iac-test-automations/.gen/aws/route53zone"
+	r53record "github.com/TuringGpt/iac-test-automations/.gen/aws/route53record"
+	rt "github.com/TuringGpt/iac-test-automations/.gen/aws/routetable"
+	rta "github.com/TuringGpt/iac-test-automations/.gen/aws/routetableassociation"
+	sg "github.com/TuringGpt/iac-test-automations/.gen/aws/securitygroup"
+	subnet "github.com/TuringGpt/iac-test-automations/.gen/aws/subnet"
+	vpc "github.com/TuringGpt/iac-test-automations/.gen/aws/vpc"
 )
 
 // RegionConfig holds configuration specific to each AWS region
@@ -488,4 +494,10 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 	}
 
 	return stack
+}
+
+func main() {
+	app := cdktf.NewApp(nil)
+	NewTapStack(app, "TapStack")
+	app.Synth()
 }
