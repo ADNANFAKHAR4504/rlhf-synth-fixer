@@ -1,31 +1,35 @@
 package lib
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
 
-	"github.com/aws/constructs-go/constructs/v10"
-	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
+	jsii "github.com/aws/jsii-runtime-go"
+	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
 	_ "github.com/aws/constructs-go/constructs/v10/jsii"
 	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 
-	// AWS constructs imports
 	alb "github.com/TuringGpt/iac-test-automations/.gen/aws/applicationloadbalancer"
 	asg "github.com/TuringGpt/iac-test-automations/.gen/aws/autoscalinggroup"
 	logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"
-	ami "github.com/TuringGpt/iac-test-automations/.gen/aws/dataamiids"
-	azs "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsavailabilityzones"
-	subnets "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawssubnets"
-	vpc_data "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsvpc"
+	amidata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataamiids"
+	azdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsavailabilityzones"
+	subnetdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawssubnets"
+	vpcdata "github.com/TuringGpt/iac-test-automations/.gen/aws/dataawsvpc"
 	igw "github.com/TuringGpt/iac-test-automations/.gen/aws/internetgateway"
 	lt "github.com/TuringGpt/iac-test-automations/.gen/aws/launchtemplate"
 	tg "github.com/TuringGpt/iac-test-automations/.gen/aws/lbtargetgroup"
-	listener "github.com/TuringGpt/iac-test-automations/.gen/aws/lblistener"
+	lbListener "github.com/TuringGpt/iac-test-automations/.gen/aws/lblistener"
 	provider "github.com/TuringGpt/iac-test-automations/.gen/aws/provider"
-	hc "github.com/TuringGpt/iac-test-automations/.gen/aws/route53healthcheck"
-	hz "github.com/TuringGpt/iac-test-automations/.gen/aws/route53hostedzone"
+	r53hc "github.com/TuringGpt/iac-test-automations/.gen/aws/route53healthcheck"
+	r53zone "github.com/TuringGpt/iac-test-automations/.gen/aws/route53hostedzone"
 	r53record "github.com/TuringGpt/iac-test-automations/.gen/aws/route53record"
 	rt "github.com/TuringGpt/iac-test-automations/.gen/aws/routetable"
 	rta "github.com/TuringGpt/iac-test-automations/.gen/aws/routetableassociation"
@@ -102,7 +106,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create Route 53 hosted zone for DNS failover
 	// Using a fake domain for testing purposes - Route 53 allows this for validation
-	hostedZone := hz.NewRoute53HostedZone(stack, jsii.String("main-hosted-zone"), &hz.Route53HostedZoneConfig{
+	hostedZone := r53zone.NewRoute53HostedZone(stack, jsii.String("main-hosted-zone"), &r53zone.Route53HostedZoneConfig{
 		Name:     jsii.String("fake-domain.com"),
 		Comment:  jsii.String("Hosted zone for multi-region application with DNS failover"),
 		Provider: providers["us-east-1"], // Primary provider for Route 53
@@ -147,7 +151,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		})
 
 		// Get availability zones for the region to ensure high availability
-		azsData := azs.NewDataAwsAvailabilityZones(stack, jsii.String(fmt.Sprintf("azs-%s", config.Region)), &azs.DataAwsAvailabilityZonesConfig{
+		azs := azdata.NewDataAwsAvailabilityZones(stack, jsii.String(fmt.Sprintf("azs-%s", config.Region)), &azdata.DataAwsAvailabilityZonesConfig{
 			State:    jsii.String("available"),
 			Provider: regionProvider,
 		})
@@ -158,7 +162,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 			subnetResource := subnet.NewSubnet(stack, jsii.String(fmt.Sprintf("subnet-%s-%d", config.Region, i)), &subnet.SubnetConfig{
 				VpcId:               vpcResource.Id(),
 				CidrBlock:           jsii.String(subnetCidr),
-				AvailabilityZone:    cdktf.Fn_Element(azsData.Names(), jsii.Number(float64(i))),
+				AvailabilityZone:    cdktf.Fn_Element(azs.Names(), jsii.Number(float64(i))),
 				MapPublicIpOnLaunch: jsii.Bool(true),
 				Tags: &map[string]*string{
 					"Name": jsii.String(fmt.Sprintf("tap-subnet-%s-%d", config.Region, i)),
@@ -249,9 +253,9 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		})
 
 		// Get latest Amazon Linux AMI for the region
-		amiData := ami.NewDataAmiIds(stack, jsii.String(fmt.Sprintf("ami-%s", config.Region)), &ami.DataAmiIdsConfig{
+		ami := amidata.NewDataAmiIds(stack, jsii.String(fmt.Sprintf("ami-%s", config.Region)), &amidata.DataAmiIdsConfig{
 			Owners: &[]*string{jsii.String("amazon")},
-			Filter: &[]*ami.DataAmiIdsFilter{
+			Filter: &[]*amidata.DataAmiIdsFilter{
 				{
 					Name:   jsii.String("name"),
 					Values: &[]*string{jsii.String("amzn2-ami-hvm-*-x86_64-gp2")},
@@ -269,7 +273,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		// Includes user data to install and start a simple web server
 		launchTemplate := lt.NewLaunchTemplate(stack, jsii.String(fmt.Sprintf("lt-%s", config.Region)), &lt.LaunchTemplateConfig{
 			Name:         jsii.String(fmt.Sprintf("tap-lt-%s", config.Region)),
-			ImageId:      cdktf.Fn_Element(amiData.Ids(), jsii.Number(0)),
+			ImageId:      cdktf.Fn_Element(ami.Ids(), jsii.Number(0)),
 			InstanceType: jsii.String(config.InstanceType),
 			VpcSecurityGroupIds: &[]*string{ec2Sg.Id()},
 			UserData: jsii.String(cdktf.Fn_Base64encode(jsii.String(`#!/bin/bash
@@ -316,10 +320,10 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 		// Create Application Load Balancer
 		// Distributes traffic across multiple availability zones
 		albResource := alb.NewApplicationLoadBalancer(stack, jsii.String(fmt.Sprintf("alb-%s", config.Region)), &alb.ApplicationLoadBalancerConfig{
-			Name:             jsii.String(fmt.Sprintf("tap-alb-%s", config.Region)),
+			Name:           jsii.String(fmt.Sprintf("tap-alb-%s", config.Region)),
 			LoadBalancerType: jsii.String("application"),
-			Subnets:          &subnetIds,
-			SecurityGroups:   &[]*string{elbSg.Id()},
+			Subnets:        &subnetIds,
+			SecurityGroups: &[]*string{elbSg.Id()},
 			Tags: &map[string]*string{
 				"Name":   jsii.String(fmt.Sprintf("tap-alb-%s", config.Region)),
 				"Region": jsii.String(config.Region),
@@ -327,12 +331,12 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 			Provider: regionProvider,
 		})
 
-		// Create ALB listener
-		listener.NewLbListener(stack, jsii.String(fmt.Sprintf("alb-listener-%s", config.Region)), &listener.LbListenerConfig{
+		// Create ALB listener to forward traffic to target group
+		lbListener.NewLbListener(stack, jsii.String(fmt.Sprintf("alb-listener-%s", config.Region)), &lbListener.LbListenerConfig{
 			LoadBalancerArn: albResource.Arn(),
 			Port:            jsii.String("80"),
 			Protocol:        jsii.String("HTTP"),
-			DefaultAction: &[]*listener.LbListenerDefaultAction{
+			DefaultAction: &[]*lbListener.LbListenerDefaultAction{
 				{
 					Type:           jsii.String("forward"),
 					TargetGroupArn: targetGroup.Arn(),
@@ -348,14 +352,14 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 		// Create Auto Scaling Group
 		// Maintains minimum instances and scales based on demand
 		asg.NewAutoscalingGroup(stack, jsii.String(fmt.Sprintf("asg-%s", config.Region)), &asg.AutoscalingGroupConfig{
-			Name:                   jsii.String(fmt.Sprintf("tap-asg-%s", config.Region)),
-			VpcZoneIdentifier:      &subnetIds,
-			MinSize:                jsii.Number(float64(config.MinSize)),
-			MaxSize:                jsii.Number(float64(config.MaxSize)),
-			DesiredCapacity:        jsii.Number(float64(config.DesiredCapacity)),
-			HealthCheckType:        jsii.String("ELB"),
+			Name:               jsii.String(fmt.Sprintf("tap-asg-%s", config.Region)),
+			VpcZoneIdentifier:  &subnetIds,
+			MinSize:            jsii.Number(float64(config.MinSize)),
+			MaxSize:            jsii.Number(float64(config.MaxSize)),
+			DesiredCapacity:    jsii.Number(float64(config.DesiredCapacity)),
+			HealthCheckType:    jsii.String("ELB"),
 			HealthCheckGracePeriod: jsii.Number(300),
-			TargetGroupArns:        &[]*string{targetGroup.Arn()},
+			TargetGroupArns:    &[]*string{targetGroup.Arn()},
 			LaunchTemplate: &asg.AutoscalingGroupLaunchTemplate{
 				Id:      launchTemplate.Id(),
 				Version: jsii.String("$Latest"),
@@ -378,16 +382,16 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 
 	// Create Route 53 health checks for each region
 	// These monitor the health of each ELB and enable automatic failover
-	healthChecks := make(map[string]hc.Route53HealthCheck)
+	healthChecks := make(map[string]r53hc.Route53HealthCheck)
 	for region, dnsName := range elbDnsNames {
-		healthCheck := hc.NewRoute53HealthCheck(stack, jsii.String(fmt.Sprintf("health-check-%s", region)), &hc.Route53HealthCheckConfig{
-			Fqdn:                         dnsName,
-			Port:                         jsii.Number(80),
-			Type:                         jsii.String("HTTP"),
-			ResourcePath:                 jsii.String("/"),
-			FailureThreshold:             jsii.Number(3),
-			RequestInterval:              jsii.Number(30),
-			CloudwatchAlarmRegion:        jsii.String("us-east-1"),
+		healthCheck := r53hc.NewRoute53HealthCheck(stack, jsii.String(fmt.Sprintf("health-check-%s", region)), &r53hc.Route53HealthCheckConfig{
+			Fqdn:                        dnsName,
+			Port:                        jsii.Number(80),
+			Type:                        jsii.String("HTTP"),
+			ResourcePath:                jsii.String("/"),
+			FailureThreshold:            jsii.Number(3),
+			RequestInterval:             jsii.Number(30),
+			CloudwatchAlarmRegion:       jsii.String("us-east-1"),
 			InsufficientDataHealthStatus: jsii.String("Failure"),
 			Tags: &map[string]*string{
 				"Name": jsii.String(fmt.Sprintf("Health check for %s", region)),
@@ -401,9 +405,9 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 	// Primary record points to us-east-1, with failover to other regions
 	primaryRegion := "us-east-1"
 	r53record.NewRoute53Record(stack, jsii.String("primary-record"), &r53record.Route53RecordConfig{
-		ZoneId:        hostedZone.ZoneId(),
-		Name:          jsii.String("app.fake-domain.com"),
-		Type:          jsii.String("A"),
+		ZoneId: hostedZone.ZoneId(),
+		Name:   jsii.String("app.fake-domain.com"),
+		Type:   jsii.String("A"),
 		SetIdentifier: jsii.String("primary"),
 		FailoverRoutingPolicy: &r53record.Route53RecordFailoverRoutingPolicy{
 			Type: jsii.String("PRIMARY"),
@@ -421,9 +425,9 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 	secondaryRegions := []string{"us-west-2", "eu-central-1"}
 	for i, region := range secondaryRegions {
 		r53record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("secondary-record-%s", region)), &r53record.Route53RecordConfig{
-			ZoneId:        hostedZone.ZoneId(),
-			Name:          jsii.String("app.fake-domain.com"),
-			Type:          jsii.String("A"),
+			ZoneId: hostedZone.ZoneId(),
+			Name:   jsii.String("app.fake-domain.com"),
+			Type:   jsii.String("A"),
 			SetIdentifier: jsii.String(fmt.Sprintf("secondary-%d", i+1)),
 			FailoverRoutingPolicy: &r53record.Route53RecordFailoverRoutingPolicy{
 				Type: jsii.String("SECONDARY"),
@@ -447,9 +451,9 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 		}
 
 		r53record.NewRoute53Record(stack, jsii.String(fmt.Sprintf("weighted-record-%s", region)), &r53record.Route53RecordConfig{
-			ZoneId:        hostedZone.ZoneId(),
-			Name:          jsii.String("weighted.fake-domain.com"),
-			Type:          jsii.String("A"),
+			ZoneId: hostedZone.ZoneId(),
+			Name:   jsii.String("weighted.fake-domain.com"),
+			Type:   jsii.String("A"),
 			SetIdentifier: jsii.String(fmt.Sprintf("weighted-%s", region)),
 			WeightedRoutingPolicy: &r53record.Route53RecordWeightedRoutingPolicy{
 				Weight: jsii.Number(float64(weight)),

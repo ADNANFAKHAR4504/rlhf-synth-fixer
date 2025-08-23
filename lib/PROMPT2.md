@@ -71,7 +71,7 @@ go: github.com/TuringGpt/iac-test-automations/lib imports
 Error: Process completed with exit code 1.
 ```
 
-We can use something like this for imports:
+We can use something like the following for imports:
 
 ## Example code snippet
 
@@ -92,4 +92,16 @@ We can use something like this for imports:
 	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 
 	logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"
+```
+
+and skips these:
+
+## Imports to skips
+
+```go
+	"fmt"
+
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
 ```
