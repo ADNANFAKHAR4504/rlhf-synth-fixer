@@ -421,7 +421,11 @@ EOF
 				"data_resource": []map[string]interface{}{
 					{
 						"type":   "AWS::S3::Object",
-						"values": []string{"arn:aws:s3:::*/*"},
+						"values": []string{"${aws_s3_bucket.tap_bucket.arn}/*"},
+					},
+					{
+						"type":   "AWS::S3::Bucket",
+						"values": []string{"${aws_s3_bucket.tap_bucket.arn}"},
 					},
 				},
 			},
