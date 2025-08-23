@@ -96,7 +96,7 @@ public class AuditingComponent extends ComponentResource {
                              "Service": "cloudtrail.amazonaws.com"
                          },
                          "Action": "s3:PutObject",
-                         "Resource": "arn:aws:s3:::%s/%s*/AWSLogs/%s/*"
+                         "Resource": "arn:aws:s3:::%s/%s*/AWSLogs/%s/*",
                          "Condition": {
                              "StringEquals": {
                                  "s3:x-amz-acl": "bucket-owner-full-control"
