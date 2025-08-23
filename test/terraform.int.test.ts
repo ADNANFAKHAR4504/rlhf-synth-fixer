@@ -94,6 +94,7 @@ async function discoverInfrastructureResources() {
     // Discover Load Balancer
     const { LoadBalancers } = await elbv2.describeLoadBalancers().promise();
     const alb = LoadBalancers?.find(lb => 
+      // Use type assertion for Tags property which may not be in the type definition
       (lb as any).Tags?.some((tag: any) => 
         tag.Key === 'Name' && 
         (tag.Value?.includes('webapp') || tag.Value?.includes('prod'))
@@ -388,6 +389,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const { LoadBalancers } = await elbv2.describeLoadBalancers().promise();
         const alb = LoadBalancers?.find(lb => 
           lb.DNSName === TEST_CONFIG.loadBalancerDns ||
+          // Use type assertion for Tags property which may not be in the type definition
           (lb as any).Tags?.some((tag: any) => 
             tag.Key === 'Name' && 
             (tag.Value?.includes('webapp') || tag.Value?.includes('prod'))
@@ -413,6 +415,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       try {
         const { TargetGroups } = await elbv2.describeTargetGroups().promise();
         const targetGroup = TargetGroups?.find(tg => 
+          // Use type assertion for Tags property which may not be in the type definition
           (tg as any).Tags?.some((tag: any) => 
             tag.Key === 'Name' && 
             (tag.Value?.includes('webapp') || tag.Value?.includes('prod'))
@@ -420,10 +423,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         );
 
         expect(targetGroup).toBeDefined();
-        expect(targetGroup!.Protocol).toBe('HTTP');
-        expect(targetGroup!.Port).toBe(80);
-        expect(targetGroup!.HealthCheckPath).toBe('/health');
-        console.log(`✅ Target Group ${targetGroup!.TargetGroupArn} is properly configured`);
+        if (targetGroup) {
+          expect(targetGroup.Protocol).toBe('HTTP');
+          expect(targetGroup.Port).toBe(80);
+          expect(targetGroup.HealthCheckPath).toBe('/health');
+          console.log(`✅ Target Group ${targetGroup.TargetGroupArn} is properly configured`);
+        }
       } catch (error) {
         console.log(`⚠️  Target Group test skipped: ${error instanceof Error ? error.message : 'Unknown error'}`);
         expect(true).toBe(true);
