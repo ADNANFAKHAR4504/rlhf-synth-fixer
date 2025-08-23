@@ -1,334 +1,355 @@
-  # Remote backend configuration - assumes S3 bucket and DynamoDB table exist
-  backend "s3" {
-    bucket         = "prod-sec-terraform-state"
-    key            = "infrastructure/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    kms_key_id     = "alias/prod-sec-terraform-state-key"
-    dynamodb_table = "prod-sec-terraform-locks"
-  }
+############################################################
+# tap_stack.tf — Single-file AWS Infrastructure Stack
+# Comprehensive cloud environment setup with state locking and modular design
+# Supports multi-region deployment and environment separation
+############################################################
 
-
-# =============================================================================
-# PROVIDERS
-# =============================================================================
-
-provider "aws" {
-  region = var.aws_region
-  
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      CreatedBy   = "Security-Team"
-    }
-  }
-}
-
-# =============================================================================
-# VARIABLES
-# =============================================================================
+########################
+# Variables
+########################
 
 variable "aws_region" {
-  description = "AWS region for resources"
+  description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"
+
+  validation {
+    condition     = length(trimspace(var.aws_region)) > 0
+    error_message = "aws_region must be a non-empty string."
+  }
 }
 
 variable "project_name" {
-  description = "Project name for tagging"
+  description = "Project name (used for namespacing)"
   type        = string
-  default     = "prod-sec"
+  default     = "iac-aws-nova"
+
+  validation {
+    condition     = length(trimspace(var.project_name)) > 0
+    error_message = "project_name must be a non-empty string."
+  }
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Deployment environment (test|production)"
   type        = string
-  default     = "production"
+  default     = "test"
+
+  validation {
+    condition     = contains(["test", "production"], var.environment)
+    error_message = "environment must be either 'test' or 'production'."
+  }
 }
 
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.100.0.0/16"
-}
+  default     = "10.0.0.0/16"
 
-variable "availability_zones" {
-  description = "List of availability zones"
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
-}
-
-variable "iam_users" {
-  description = "List of IAM users to create"
-  type = map(object({
-    name   = string
-    role   = string
-    groups = list(string)
-  }))
-  default = {
-    developer = {
-      name   = "prod-sec-developer"
-      role   = "developer"
-      groups = ["developers"]
-    }
-    admin = {
-      name   = "prod-sec-admin"
-      role   = "admin"
-      groups = ["administrators"]
-    }
-    auditor = {
-      name   = "prod-sec-auditor"
-      role   = "auditor"
-      groups = ["auditors"]
-    }
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "vpc_cidr must be a valid CIDR."
   }
 }
 
-# =============================================================================
-# DATA SOURCES
-# =============================================================================
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+
+  validation {
+    condition     = length(var.public_subnet_cidrs) == 2 && alltrue([for c in var.public_subnet_cidrs : can(cidrhost(c, 0))])
+    error_message = "public_subnet_cidrs must be a list of exactly two valid CIDRs."
+  }
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.3.0/24", "10.0.4.0/24"]
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) == 2 && alltrue([for c in var.private_subnet_cidrs : can(cidrhost(c, 0))])
+    error_message = "private_subnet_cidrs must be a list of exactly two valid CIDRs."
+  }
+}
+
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
+}
+
+variable "rds_engine_version" {
+  description = "RDS engine version"
+  type        = string
+  default     = "17.6"
+}
+
+variable "rds_username" {
+  description = "RDS master username"
+  type        = string
+  sensitive   = true
+  default     = "dbadmin"
+}
+
+variable "rds_password" {
+  description = "RDS master password"
+  type        = string
+  sensitive   = true
+  default     = "changeme123!"
+}
+
+variable "app_instance_type" {
+  description = "EC2 instance type for application servers"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "app_desired_capacity" {
+  description = "Desired capacity for Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "app_max_size" {
+  description = "Maximum size for Auto Scaling Group"
+  type        = number
+  default     = 4
+}
+
+variable "app_min_size" {
+  description = "Minimum size for Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed to SSH to instances"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = alltrue([for c in var.allowed_ssh_cidrs : can(cidrhost(c, 0))])
+    error_message = "Every item in allowed_ssh_cidrs must be a valid CIDR."
+  }
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "dev"
+}
+
+########################
+# Data Sources
+########################
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
 data "aws_caller_identity" "current" {}
 
-data "aws_partition" "current" {}
+# Amazon Linux 2023 AMI
+data "aws_ami" "al2023" {
+  owners      = ["amazon"]
+  most_recent = true
 
-# =============================================================================
-# RANDOM RESOURCES
-# =============================================================================
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
 
-resource "random_password" "db_password" {
-  length  = 32
-  special = true
-}
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 
-# =============================================================================
-# KMS KEY FOR ENCRYPTION
-# =============================================================================
-
-resource "aws_kms_key" "main" {
-  description             = "Customer managed key for ${var.project_name}"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudTrail to encrypt logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow Config to use the key"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey*"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = {
-    Name = "${var.project_name}-cmk"
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
   }
 }
 
-resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}-cmk"
-  target_key_id = aws_kms_key.main.key_id
+########################
+# Locals
+########################
+
+locals {
+  # Environment-specific configurations
+  is_production = var.environment == "production"
+  is_test       = var.environment == "test"
+
+  # Feature toggles based on environment
+  enable_detailed_monitoring = local.is_production
+  enable_bucket_versioning   = local.is_production
+  enable_nat_gateway         = local.is_production
+
+  # Availability zones
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+
+  # Naming conventions with environment suffix
+  name_prefix = "${var.project_name}-${var.environment}-${var.environment_suffix}"
+
+  # Environment-specific resource configurations
+  rds_instance_class   = local.is_production ? "db.r5.large" : var.rds_instance_class
+  rds_storage          = local.is_production ? 100 : var.rds_allocated_storage
+  app_instance_type    = local.is_production ? "t3.small" : var.app_instance_type
+  app_desired_capacity = local.is_production ? 3 : var.app_desired_capacity
 }
 
-# =============================================================================
-# VPC AND NETWORKING
-# =============================================================================
+########################
+# VPC and Networking
+########################
 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
   enable_dns_support   = true
+  enable_dns_hostnames = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name = "${local.name_prefix}-vpc"
   }
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
+resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
+  depends_on = [aws_vpc.main]
+
   tags = {
-    Name = "${var.project_name}-igw"
+    Name = "${local.name_prefix}-igw"
   }
 }
 
-# Public Subnets
+# Public subnets
 resource "aws_subnet" "public" {
-  count = length(var.availability_zones)
+  for_each = {
+    "0" = { cidr = var.public_subnet_cidrs[0], az = local.azs[0] }
+    "1" = { cidr = var.public_subnet_cidrs[1], az = local.azs[1] }
+  }
 
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = var.availability_zones[count.index]
+  cidr_block              = each.value.cidr
+  availability_zone       = each.value.az
   map_public_ip_on_launch = true
 
+  depends_on = [aws_vpc.main]
+
   tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "Public"
+    Name = "${local.name_prefix}-public-${each.key}"
+    Tier = "public"
   }
 }
 
-# Private Subnets
+# Private subnets
 resource "aws_subnet" "private" {
-  count = length(var.availability_zones)
+  for_each = {
+    "0" = { cidr = var.private_subnet_cidrs[0], az = local.azs[0] }
+    "1" = { cidr = var.private_subnet_cidrs[1], az = local.azs[1] }
+  }
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = var.availability_zones[count.index]
+  cidr_block        = each.value.cidr
+  availability_zone = each.value.az
+
+  depends_on = [aws_vpc.main]
 
   tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "Private"
+    Name = "${local.name_prefix}-private-${each.key}"
+    Tier = "private"
   }
 }
 
-# Database Subnets
-resource "aws_subnet" "database" {
-  count = length(var.availability_zones)
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
-  availability_zone = var.availability_zones[count.index]
-
-  tags = {
-    Name = "${var.project_name}-database-subnet-${count.index + 1}"
-    Type = "Database"
-  }
-}
-
-# Elastic IPs for NAT Gateways
-resource "aws_eip" "nat" {
-  count = length(var.availability_zones)
-
-  domain = "vpc"
-  depends_on = [aws_internet_gateway.main]
-
-  tags = {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}"
-  }
-}
-
-# NAT Gateways
-resource "aws_nat_gateway" "main" {
-  count = length(var.availability_zones)
-
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-
-  tags = {
-    Name = "${var.project_name}-nat-gateway-${count.index + 1}"
-  }
-
-  depends_on = [aws_internet_gateway.main]
-}
-
-# Route Tables
+# Public route table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+    gateway_id = aws_internet_gateway.igw.id
   }
 
+  depends_on = [aws_vpc.main, aws_internet_gateway.igw]
+
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Name = "${local.name_prefix}-rt-public"
   }
 }
 
-resource "aws_route_table" "private" {
-  count = length(var.availability_zones)
-
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
-  }
-
-  tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
-  }
-}
-
-resource "aws_route_table" "database" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-database-rt"
-  }
-}
-
-# Route Table Associations
+# Associate public subnets
 resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
-  subnet_id      = aws_subnet.public[count.index].id
+  for_each       = aws_subnet.public
+  subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
 }
 
+# NAT Gateway (production only)
+resource "aws_eip" "nat" {
+  count  = local.enable_nat_gateway ? 1 : 0
+  domain = "vpc"
+
+  tags = {
+    Name = "${local.name_prefix}-nat-eip"
+  }
+}
+
+resource "aws_nat_gateway" "ngw" {
+  count         = local.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
+  subnet_id     = element([for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id], 0)
+
+  tags = {
+    Name = "${local.name_prefix}-nat"
+  }
+
+  depends_on = [aws_internet_gateway.igw]
+}
+
+# Private route tables
+resource "aws_route_table" "private" {
+  for_each = aws_subnet.private
+  vpc_id   = aws_vpc.main.id
+
+  dynamic "route" {
+    for_each = local.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.ngw[0].id
+    }
+  }
+
+  depends_on = [aws_vpc.main]
+
+  tags = {
+    Name = "${local.name_prefix}-rt-private-${each.key}"
+  }
+}
+
 resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
+  for_each       = aws_subnet.private
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[each.key].id
 }
 
-resource "aws_route_table_association" "database" {
-  count = length(aws_subnet.database)
+########################
+# Security Groups
+########################
 
-  subnet_id      = aws_subnet.database[count.index].id
-  route_table_id = aws_route_table.database.id
-}
-
-# =============================================================================
-# SECURITY GROUPS
-# =============================================================================
-
-# Web Tier Security Group
-resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
-  description = "Security group for web tier"
+# Application Load Balancer Security Group
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb-sg"
+  description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  depends_on = [aws_vpc.main]
 
   ingress {
     description = "HTTP"
@@ -338,8 +359,16 @@ resource "aws_security_group" "web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
-    description = "All outbound traffic"
+    description = "Allow all egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -347,39 +376,36 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "${var.project_name}-web-sg"
-    Tier = "Web"
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    Name = "${local.name_prefix}-alb-sg"
   }
 }
 
-# Application Tier Security Group
+# Application Security Group
 resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
-  description = "Security group for application tier"
+  name        = "${local.name_prefix}-app-sg"
+  description = "Security group for application instances"
   vpc_id      = aws_vpc.main.id
 
+  depends_on = [aws_vpc.main]
+
   ingress {
-    description     = "HTTP from web tier"
-    from_port       = 8080
-    to_port         = 8080
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+    security_groups = [aws_security_group.alb.id]
   }
 
   ingress {
-    description     = "SSH from bastion"
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.bastion.id]
+    description = "SSH access"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidrs
   }
 
   egress {
-    description = "All outbound traffic"
+    description = "Allow all egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -387,31 +413,28 @@ resource "aws_security_group" "app" {
   }
 
   tags = {
-    Name = "${var.project_name}-app-sg"
-    Tier = "Application"
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    Name = "${local.name_prefix}-app-sg"
   }
 }
 
-# Database Tier Security Group
-resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
-  description = "Security group for database tier"
+# RDS Security Group
+resource "aws_security_group" "rds" {
+  name        = "${local.name_prefix}-rds-sg"
+  description = "Security group for RDS instance"
   vpc_id      = aws_vpc.main.id
 
+  depends_on = [aws_vpc.main]
+
   ingress {
-    description     = "MySQL/Aurora from app tier"
-    from_port       = 3306
-    to_port         = 3306
+    description     = "PostgreSQL from app instances"
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
 
   egress {
-    description = "All outbound traffic"
+    description = "Allow all egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -419,610 +442,327 @@ resource "aws_security_group" "database" {
   }
 
   tags = {
-    Name = "${var.project_name}-database-sg"
-    Tier = "Database"
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    Name = "${local.name_prefix}-rds-sg"
   }
 }
 
-# Bastion Host Security Group
-resource "aws_security_group" "bastion" {
-  name_prefix = "${var.project_name}-bastion-"
-  description = "Security group for bastion host"
-  vpc_id      = aws_vpc.main.id
+########################
+# RDS Database
+########################
 
-  ingress {
-    description = "SSH from trusted networks only"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"] # Restrict to corporate network
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = [for k in sort(keys(aws_subnet.private)) : aws_subnet.private[k].id]
+
+  tags = {
+    Name = "${local.name_prefix}-db-subnet-group"
   }
+}
 
-  egress {
-    description = "All outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+resource "aws_db_instance" "main" {
+  identifier = "${local.name_prefix}-db"
+
+  engine         = "postgres"
+  engine_version = var.rds_engine_version
+  instance_class = local.rds_instance_class
+
+  allocated_storage     = local.rds_storage
+  max_allocated_storage = local.is_production ? 1000 : 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
+
+  db_name  = "appdb"
+  username = var.rds_username
+  password = var.rds_password
+
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = local.is_production ? 7 : 1
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  skip_final_snapshot       = true # Skip final snapshot for easier cleanup
+  final_snapshot_identifier = "${local.name_prefix}-final-snapshot"
+
+  deletion_protection = false # Always allow deletion for testing
+
+  tags = {
+    Name = "${local.name_prefix}-db"
+  }
+}
+
+########################
+# Application Load Balancer
+########################
+
+resource "aws_lb" "main" {
+  name               = "${local.name_prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id]
+
+  enable_deletion_protection = false # Always allow deletion for testing
+
+  tags = {
+    Name = "${local.name_prefix}-alb"
+  }
+}
+
+resource "aws_lb_target_group" "main" {
+  name     = "${local.name_prefix}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  depends_on = [aws_vpc.main]
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
   }
 
   tags = {
-    Name = "${var.project_name}-bastion-sg"
-    Tier = "Management"
-  }
-
-  lifecycle {
-    create_before_destroy = true
+    Name = "${local.name_prefix}-tg"
   }
 }
 
-# =============================================================================
-# S3 BUCKETS
-# =============================================================================
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
 
-# CloudTrail Logs Bucket
-resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "${var.project_name}-logs-bucket-${random_id.bucket_suffix.hex}"
-
-  tags = {
-    Name    = "${var.project_name}-logs-bucket"
-    Purpose = "CloudTrail Logs"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
   }
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
+########################
+# Auto Scaling Group
+########################
 
-resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
-  versioning_configuration {
-    status = "Enabled"
+resource "aws_launch_template" "main" {
+  name_prefix   = "${local.name_prefix}-lt"
+  image_id      = data.aws_ami.al2023.id
+  instance_type = local.app_instance_type
+
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.app.id]
   }
-}
 
-resource "aws_s3_bucket_encryption" "cloudtrail_logs" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${local.name_prefix}!</h1>" > /var/www/html/index.html
+              EOF
+  )
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.main.arn
-        sse_algorithm     = "aws:kms"
-      }
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${local.name_prefix}-instance"
     }
   }
-}
-
-resource "aws_s3_bucket_public_access_block" "cloudtrail_logs" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_policy" "cloudtrail_logs" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSCloudTrailAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.cloudtrail_logs.arn
-      },
-      {
-        Sid    = "AWSCloudTrailWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# Config Bucket
-resource "aws_s3_bucket" "config" {
-  bucket = "${var.project_name}-config-bucket-${random_id.config_bucket_suffix.hex}"
 
   tags = {
-    Name    = "${var.project_name}-config-bucket"
-    Purpose = "AWS Config"
+    Name = "${local.name_prefix}-lt"
   }
 }
 
-resource "random_id" "config_bucket_suffix" {
-  byte_length = 4
-}
+resource "aws_autoscaling_group" "main" {
+  name                = "${local.name_prefix}-asg"
+  desired_capacity    = local.app_desired_capacity
+  max_size            = var.app_max_size
+  min_size            = var.app_min_size
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  vpc_zone_identifier = [for k in sort(keys(aws_subnet.private)) : aws_subnet.private[k].id]
 
-resource "aws_s3_bucket_versioning" "config" {
-  bucket = aws_s3_bucket.config.id
-  versioning_configuration {
-    status = "Enabled"
+  launch_template {
+    id      = aws_launch_template.main.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-asg"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Project"
+    value               = var.project_name
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
   }
 }
 
-resource "aws_s3_bucket_encryption" "config" {
-  bucket = aws_s3_bucket.config.id
+########################
+# CloudWatch Monitoring
+########################
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.main.arn
-        sse_algorithm     = "aws:kms"
-      }
-    }
-  }
-}
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "${local.name_prefix}-dashboard"
 
-resource "aws_s3_bucket_public_access_block" "config" {
-  bucket = aws_s3_bucket.config.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# =============================================================================
-# IAM ROLES AND POLICIES
-# =============================================================================
-
-# CloudTrail Service Role
-resource "aws_iam_role" "cloudtrail" {
-  name = "${var.project_name}-cloudtrail-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
+  dashboard_body = jsonencode({
+    widgets = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-      }
-    ]
-  })
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
 
-  tags = {
-    Name = "${var.project_name}-cloudtrail-role"
-  }
-}
-
-# Config Service Role
-resource "aws_iam_role" "config" {
-  name = "${var.project_name}-config-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "${var.project_name}-config-role"
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
-}
-
-resource "aws_iam_role_policy" "config_s3" {
-  name = "${var.project_name}-config-s3-policy"
-  role = aws_iam_role.config.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketAcl",
-          "s3:ListBucket"
-        ]
-        Resource = aws_s3_bucket.config.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject"
-        ]
-        Resource = "${aws_s3_bucket.config.arn}/*"
-      }
-    ]
-  })
-}
-
-# IAM Groups
-resource "aws_iam_group" "developers" {
-  name = "${var.project_name}-developers"
-}
-
-resource "aws_iam_group" "administrators" {
-  name = "${var.project_name}-administrators"
-}
-
-resource "aws_iam_group" "auditors" {
-  name = "${var.project_name}-auditors"
-}
-
-# IAM Policies
-resource "aws_iam_policy" "developer_policy" {
-  name        = "${var.project_name}-developer-policy"
-  description = "Policy for developers with limited permissions"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DescribeInstances",
-          "ec2:DescribeImages",
-          "ec2:DescribeSnapshots",
-          "ec2:DescribeVolumes",
-          "s3:ListBucket",
-          "s3:GetObject",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams",
-          "logs:GetLogEvents"
-        ]
-        Resource = [
-          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
-          "arn:aws:s3:::${var.project_name}-*",
-          "arn:aws:s3:::${var.project_name}-*/*",
-          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
-        ]
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy" "admin_policy" {
-  name        = "${var.project_name}-admin-policy"
-  description = "Policy for administrators with elevated permissions"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:*",
-          "s3:*",
-          "rds:*",
-          "logs:*",
-          "cloudwatch:*",
-          "iam:ListUsers",
-          "iam:ListRoles",
-          "iam:ListPolicies",
-          "iam:GetUser",
-          "iam:GetRole",
-          "iam:GetPolicy"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:RequestedRegion" = var.aws_region
-          }
+        properties = {
+          metrics = [
+            ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.main.name],
+            [".", "NetworkIn", ".", "."],
+            [".", "NetworkOut", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "EC2 Metrics"
         }
       },
       {
-        Effect = "Deny"
-        Action = [
-          "iam:CreateUser",
-          "iam:DeleteUser",
-          "iam:CreateRole",
-          "iam:DeleteRole",
-          "iam:AttachUserPolicy",
-          "iam:DetachUserPolicy",
-          "iam:PutUserPolicy",
-          "iam:DeleteUserPolicy"
-        ]
-        Resource = "*"
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          metrics = [
+            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main.id],
+            [".", "DatabaseConnections", ".", "."],
+            [".", "FreeableMemory", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "RDS Metrics"
+        }
       }
     ]
   })
 }
 
-resource "aws_iam_policy" "auditor_policy" {
-  name        = "${var.project_name}-auditor-policy"
-  description = "Policy for auditors with read-only permissions"
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${local.name_prefix}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudtrail:DescribeTrails",
-          "cloudtrail:GetTrailStatus",
-          "cloudtrail:LookupEvents",
-          "config:DescribeConfigRules",
-          "config:DescribeComplianceByConfigRule",
-          "config:GetComplianceDetailsByConfigRule",
-          "s3:ListBucket",
-          "s3:GetObject",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams",
-          "logs:GetLogEvents",
-          "iam:GenerateServiceLastAccessedDetails",
-          "iam:GetServiceLastAccessedDetails",
-          "iam:ListUsers",
-          "iam:ListRoles",
-          "iam:ListPolicies",
-          "iam:GetUser",
-          "iam:GetRole",
-          "iam:GetPolicy"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Group Policy Attachments
-resource "aws_iam_group_policy_attachment" "developers" {
-  group      = aws_iam_group.developers.name
-  policy_arn = aws_iam_policy.developer_policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "administrators" {
-  group      = aws_iam_group.administrators.name
-  policy_arn = aws_iam_policy.admin_policy.arn
-}
-
-resource "aws_iam_group_policy_attachment" "auditors" {
-  group      = aws_iam_group.auditors.name
-  policy_arn = aws_iam_policy.auditor_policy.arn
-}
-
-# IAM Users
-resource "aws_iam_user" "users" {
-  for_each = var.iam_users
-
-  name          = each.value.name
-  force_destroy = true
-
-  tags = {
-    Name = each.value.name
-    Role = each.value.role
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
   }
 }
 
-# User Group Memberships
-resource "aws_iam_user_group_membership" "users" {
-  for_each = var.iam_users
+resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
+  alarm_name          = "${local.name_prefix}-rds-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors RDS CPU utilization"
 
-  user   = aws_iam_user.users[each.key].name
-  groups = [for group in each.value.groups : "${var.project_name}-${group}"]
-
-  depends_on = [
-    aws_iam_group.developers,
-    aws_iam_group.administrators,
-    aws_iam_group.auditors
-  ]
-}
-
-# Access Keys for Users
-resource "aws_iam_access_key" "users" {
-  for_each = var.iam_users
-
-  user = aws_iam_user.users[each.key].name
-}
-
-# Login Profiles for Console Access
-resource "aws_iam_user_login_profile" "users" {
-  for_each = var.iam_users
-
-  user                    = aws_iam_user.users[each.key].name
-  password_reset_required = true
-}
-
-# =============================================================================
-# SECRETS MANAGER
-# =============================================================================
-
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "${var.project_name}-db-credentials"
-  description             = "Database credentials for ${var.project_name}"
-  kms_key_id              = aws_kms_key.main.arn
-  recovery_window_in_days = 7
-
-  tags = {
-    Name = "${var.project_name}-db-credentials"
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.id
   }
 }
 
-resource "aws_secretsmanager_secret_version" "db_credentials" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({
-    username = "admin"
-    password = random_password.db_password.result
-  })
-}
-
-# =============================================================================
-# CLOUDTRAIL
-# =============================================================================
-
-resource "aws_cloudtrail" "main" {
-  name                          = "${var.project_name}-cloudtrail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  kms_key_id                    = aws_kms_key.main.arn
-
-  event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:*"]
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-cloudtrail"
-  }
-
-  depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
-}
-
-# =============================================================================
-# AWS CONFIG
-# =============================================================================
-
-resource "aws_config_configuration_recorder" "main" {
-  name     = "${var.project_name}-config-recorder"
-  role_arn = aws_iam_role.config.arn
-
-  recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
-  }
-
-  depends_on = [aws_config_delivery_channel.main]
-}
-
-resource "aws_config_delivery_channel" "main" {
-  name           = "${var.project_name}-config-delivery-channel"
-  s3_bucket_name = aws_s3_bucket.config.bucket
-}
-
-# Config Rules
-resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
-  name = "${var.project_name}-s3-bucket-public-read-prohibited"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "s3_bucket_public_write_prohibited" {
-  name = "${var.project_name}-s3-bucket-public-write-prohibited"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "cloudtrail_enabled" {
-  name = "${var.project_name}-cloudtrail-enabled"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "CLOUD_TRAIL_ENABLED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "kms_key_rotation_enabled" {
-  name = "${var.project_name}-cmk-backing-key-rotation-enabled"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "CMK_BACKING_KEY_ROTATION_ENABLED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-resource "aws_config_config_rule" "ec2_required_tags" {
-  name = "${var.project_name}-ec2-required-tags"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "REQUIRED_TAGS"
-  }
-
-  input_parameters = jsonencode({
-    requiredTagKeys = "Project,Environment"
-  })
-
-  depends_on = [aws_config_configuration_recorder.main]
-}
-
-# =============================================================================
-# OUTPUTS
-# =============================================================================
+########################
+# Outputs
+########################
 
 output "vpc_id" {
-  description = "ID of the VPC"
+  description = "VPC ID"
   value       = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {
-  description = "IDs of the public subnets"
-  value       = aws_subnet.public[*].id
+  description = "Public subnet IDs"
+  value       = [for k in sort(keys(aws_subnet.public)) : aws_subnet.public[k].id]
 }
 
 output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
+  description = "Private subnet IDs"
+  value       = [for k in sort(keys(aws_subnet.private)) : aws_subnet.private[k].id]
 }
 
-output "database_subnet_ids" {
-  description = "IDs of the database subnets"
-  value       = aws_subnet.database[*].id
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
 }
 
-output "kms_key_id" {
-  description = "ID of the KMS key"
-  value       = aws_kms_key.main.key_id
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = aws_lb.main.zone_id
 }
 
-output "kms_key_arn" {
-  description = "ARN of the KMS key"
-  value       = aws_kms_key.main.arn
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
 }
 
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       =
+output "rds_port" {
+  description = "RDS instance port"
+  value       = aws_db_instance.main.port
+}
+
+output "asg_name" {
+  description = "Auto Scaling Group name"
+  value       = aws_autoscaling_group.main.name
+}
+
+output "cloudwatch_dashboard_url" {
+  description = "URL of the CloudWatch dashboard"
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
+}
+
+output "nat_gateway_id" {
+  description = "NAT Gateway ID (empty in test environment)"
+  value       = try(aws_nat_gateway.ngw[0].id, "")
+}
+
+output "environment_info" {
+  description = "Environment configuration information"
+  value = {
+    environment   = var.environment
+    region        = var.aws_region
+    project       = var.project_name
+    is_production = local.is_production
+    features = {
+      nat_gateway         = local.enable_nat_gateway
+      detailed_monitoring = local.enable_detailed_monitoring
+      bucket_versioning   = local.enable_bucket_versioning
+    }
+  }
 }

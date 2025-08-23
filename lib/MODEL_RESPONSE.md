@@ -1049,3 +1049,4 @@ output "kms_key_arn" {
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
   value       =
+}
