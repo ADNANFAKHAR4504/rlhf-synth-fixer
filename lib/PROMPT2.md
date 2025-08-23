@@ -1,2 +1,3 @@
-I'm working on setting up AWS infrastructure using CDK for Terraform and running into some issues with the imports and configuration.
-I need to build a complete infrastructure stack but I'm having trouble with the provider imports. From what I've read in the documentation, I should be using dataAwsCallerIdentity instead of DataAwsCallerIdentity, but I keep making mistakes with the import syntax.
+We are working on setting up AWS infrastructure using CDK for Terraform and running into some issues with the imports and configuration.
+we need to build a complete infrastructure stack but I'm having trouble with the provider imports.
+we need to use dataAwsCallerIdentity instead of DataAwsCallerIdentity.

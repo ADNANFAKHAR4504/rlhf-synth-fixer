@@ -1,3 +1,2 @@
-I'm having a frustrating time with TypeScript compilation errors in my CDKTF project. Every time I try to import AWS resources, I get these naming mismatches.
-The main problem I'm facing is that the class names seem to have changed in newer versions of the provider. I keep trying to use S3BucketServerSideEncryptionConfiguration but apparently it should be S3BucketServerSideEncryptionConfigurationA now? Same issue with S3BucketVersioning vs S3BucketVersioningA.
-I'm also confused about the CloudTrail imports - sometimes it works with cloudtrail and sometimes it doesn't.
+The main problem we are facing is that the class names seem to have changed in newer versions of the provider. we are keep trying to use S3BucketServerSideEncryptionConfiguration but apparently it should be S3BucketServerSideEncryptionConfigurationA now? Same issue with S3BucketVersioning vs S3BucketVersioningA.
+We are also confused about the CloudTrail imports - sometimes it works with cloudtrail and sometimes it doesn't.
