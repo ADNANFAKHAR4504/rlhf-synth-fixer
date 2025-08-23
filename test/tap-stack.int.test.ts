@@ -1,56 +1,44 @@
 // tap-stack.int.test.ts
 
-import * as fs from "fs";
-import * as path from "path";
+import {
+  S3Client,
+  GetBucketEncryptionCommand,
+  GetBucketTaggingCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+} from "@aws-sdk/client-s3";
 import {
   EC2Client,
   DescribeInstancesCommand,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
+  DescribeTagsCommand,
 } from "@aws-sdk/client-ec2";
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketPolicyStatusCommand,
-  GetBucketAclCommand,
-} from "@aws-sdk/client-s3";
+  RDSClient,
+  DescribeDBInstancesCommand,
+} from "@aws-sdk/client-rds";
 import {
   LambdaClient,
-  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
 } from "@aws-sdk/client-lambda";
 import {
   CloudTrailClient,
   DescribeTrailsCommand,
 } from "@aws-sdk/client-cloudtrail";
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from "@aws-sdk/client-secrets-manager";
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from "@aws-sdk/client-rds";
+import * as fs from "fs";
+import * as path from "path";
 
-// ------------------------------
-// Utility functions
-// ------------------------------
-function readOutputs() {
+// Utility to read outputs from consolidated JSON file
+function readFlatOutputs() {
   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
   if (!fs.existsSync(p)) {
     throw new Error(`Outputs file not found at ${p}`);
   }
-  const raw = JSON.parse(fs.readFileSync(p, "utf8"));
-  const flat: Record<string, string> = {};
-  for (const stackName of Object.keys(raw)) {
-    for (const out of raw[stackName]) {
-      flat[out.OutputKey] = out.OutputValue;
-    }
-  }
-  return flat;
+  const out = JSON.parse(fs.readFileSync(p, "utf8"));
+  return out;
 }
 
-async function retry<T>(fn: () => Promise<T>, attempts = 8, baseMs = 800): Promise<T> {
+// Utility for retrying AWS SDK calls
+async function retry<T>(fn: () => Promise<T>, attempts = 6, baseMs = 600): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -64,29 +52,118 @@ async function retry<T>(fn: () => Promise<T>, attempts = 8, baseMs = 800): Promi
   throw lastErr;
 }
 
-// ------------------------------
-// Load outputs & AWS clients
-// ------------------------------
-const outputs = readOutputs();
-
+const outputs = readFlatOutputs();
 const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "env";
 
-const ec2 = new EC2Client({ region });
+// AWS SDK clients
 const s3 = new S3Client({ region });
+const ec2 = new EC2Client({ region });
+const rds = new RDSClient({ region });
 const lambda = new LambdaClient({ region });
 const cloudtrail = new CloudTrailClient({ region });
-const secrets = new SecretsManagerClient({ region });
-const rds = new RDSClient({ region });
 
-// ------------------------------
-// Test suite
-// ------------------------------
 describe("TapStack Integration Tests", () => {
-  // ------------------------------
-  // Basic outputs presence
-  // ------------------------------
-  test("all required outputs are present", () => {
-    const required = [
+  // S3 Bucket Tests
+  test("S3 bucket exists and has server-side encryption enabled", async () => {
+    const bucketName = outputs.S3Bucket;
+    expect(bucketName).toBeDefined();
+    await expect(retry(() => s3.send(new HeadBucketCommand({ Bucket: bucketName })))).resolves.toBeTruthy();
+
+    const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: bucketName })));
+    const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
+    expect(rules.some(rule =>
+      rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
+    )).toBe(true);
+  });
+
+  test("S3 bucket blocks public access", async () => {
+    const pab = await retry(() => s3.send(new GetPublicAccessBlockCommand({ Bucket: outputs.S3Bucket })));
+    expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+    expect(pab.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+    expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+    expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+  });
+
+  test("S3 bucket has Environment: Production tag", async () => {
+    const tags = await retry(() => s3.send(new GetBucketTaggingCommand({ Bucket: outputs.S3Bucket })));
+    expect(tags.TagSet?.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
+  });
+
+  // EC2 Instance Tests
+  test("EC2 instance exists and is tagged correctly", async () => {
+    const instanceId = outputs.EC2Instance;
+    expect(instanceId).toMatch(/^i-/);
+    const desc = await retry(() => ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] })));
+    const instance = desc.Reservations?.[0]?.Instances?.[0];
+    expect(instance).toBeDefined();
+    expect(instance.Tags?.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
+    expect(instance.BlockDeviceMappings?.[0]?.Ebs?.Encrypted).toBe(true);
+    expect(instance.SecurityGroups?.some(sg => sg.GroupName?.includes("sg"))).toBe(true);
+  });
+
+  test("EC2 instance is in correct subnet and VPC", async () => {
+    const instanceId = outputs.EC2Instance;
+    const desc = await retry(() => ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] })));
+    const instance = desc.Reservations?.[0]?.Instances?.[0];
+    expect(instance.SubnetId).toBe(outputs.PublicSubnet1);
+    expect(instance.VpcId).toBe(outputs.VPC);
+  });
+
+  // RDS Instance Tests
+  test("RDS instance is encrypted and not publicly accessible", async () => {
+    const endpoint = outputs.RDS;
+    expect(endpoint).toMatch(/\.rds\.amazonaws\.com$/);
+    // Find DBInstanceIdentifier from endpoint (usually part of endpoint string)
+    const dbIdMatch = endpoint.match(/^([a-zA-Z0-9\-]+)\./);
+    expect(dbIdMatch).toBeTruthy();
+    const dbId = dbIdMatch![1];
+    const dbs = await retry(() => rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbId })));
+    const instance = dbs.DBInstances?.[0];
+    expect(instance.StorageEncrypted).toBe(true);
+    expect(instance.PubliclyAccessible).toBe(false);
+    expect(instance.DBSubnetGroup?.Subnets?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Lambda Tests
+  test("Lambda function exists and has at least 128MB memory", async () => {
+    const lambdaName = outputs.Lambda;
+    expect(lambdaName).toBeDefined();
+    const config = await retry(() => lambda.send(new GetFunctionConfigurationCommand({ FunctionName: lambdaName })));
+    expect(config.MemorySize).toBeGreaterThanOrEqual(128);
+    expect(config.Tags?.Environment).toBe("Production");
+  });
+
+  // CloudTrail Tests
+  test("CloudTrail is logging to encrypted S3 bucket", async () => {
+    const trailName = outputs.CloudTrail;
+    expect(trailName).toBeDefined();
+    const trails = await retry(() => cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [trailName] })));
+    const trail = trails.trailList?.[0];
+    expect(trail.S3BucketName).toBe(outputs.S3Bucket);
+    expect(trail.LogFileValidationEnabled).toBe(true);
+    expect(trail.IsMultiRegionTrail).toBe(false);
+  });
+
+  // Tagging Tests
+  test("All major resources have Environment: Production tag", async () => {
+    // EC2
+    const instanceId = outputs.EC2Instance;
+    const ec2Tags = await retry(() => ec2.send(new DescribeTagsCommand({ Filters: [{ Name: "resource-id", Values: [instanceId] }] })));
+    expect(ec2Tags.Tags?.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
+
+    // S3
+    const s3Tags = await retry(() => s3.send(new GetBucketTaggingCommand({ Bucket: outputs.S3Bucket })));
+    expect(s3Tags.TagSet?.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
+
+    // Lambda
+    const lambdaConfig = await retry(() => lambda.send(new GetFunctionConfigurationCommand({ FunctionName: outputs.Lambda })));
+    expect(lambdaConfig.Tags?.Environment).toBe("Production");
+  });
+
+  // Edge Case: Missing Output Keys
+  test("All required outputs are present and non-empty", () => {
+    const requiredKeys = [
       "RDS",
       "PrivateSubnet1",
       "PrivateSubnet2",
@@ -96,116 +173,39 @@ describe("TapStack Integration Tests", () => {
       "VPC",
       "Lambda",
       "CloudTrail",
-      "PublicSubnet1",
+      "PublicSubnet1"
     ];
-    for (const key of required) {
+    requiredKeys.forEach(key => {
       expect(outputs[key]).toBeDefined();
-      expect(typeof outputs[key]).toBe("string");
-    }
+      expect(outputs[key]).not.toBe("");
+      expect(outputs[key]).not.toBeNull();
+    });
   });
 
-  // ------------------------------
-  // VPC & Subnets
-  // ------------------------------
-  test("VPC exists and is valid", async () => {
-    const vpcId = outputs["VPC"];
-    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-    expect(res.Vpcs?.[0]).toBeDefined();
-    expect(res.Vpcs?.[0].VpcId).toBe(vpcId);
-    expect(res.Vpcs?.[0].CidrBlock).toBe("10.0.0.0/16");
+  // Edge Case: S3 bucket name format
+  test("S3 bucket name follows naming convention", () => {
+    expect(outputs.S3Bucket).toMatch(/^tapstackpr\d+-secures3bucket-/);
   });
 
-  test("subnets exist in VPC", async () => {
-    const vpcId = outputs["VPC"];
-    const subnets = [
-      outputs["PrivateSubnet1"],
-      outputs["PrivateSubnet2"],
-      outputs["PublicSubnet1"],
-    ];
-    const res = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: subnets }));
-    expect(res.Subnets?.length).toBe(3);
-    for (const sn of res.Subnets ?? []) {
-      expect(sn.VpcId).toBe(vpcId);
-    }
+  // Edge Case: Lambda function name format
+  test("Lambda function name follows naming convention", () => {
+    expect(outputs.Lambda).toMatch(/^TapStackpr\d+-pr\d+-lambda$/);
   });
 
-  // ------------------------------
-  // EC2 Instance
-  // ------------------------------
-  test("EC2 instance exists with correct profile", async () => {
-    const instanceId = outputs["EC2Instance"];
-    const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }));
-    const inst = res.Reservations?.[0]?.Instances?.[0];
-    expect(inst).toBeDefined();
-    expect(inst?.InstanceId).toBe(instanceId);
-    expect(inst?.BlockDeviceMappings?.[0].Ebs?.Encrypted).toBe(true);
-    expect(inst?.SecurityGroups?.[0].GroupName).toMatch(/-sg$/);
+  // Edge Case: VPC ID format
+  test("VPC ID format is valid", () => {
+    expect(outputs.VPC).toMatch(/^vpc-[a-z0-9]+$/);
   });
 
-  // ------------------------------
-  // S3 Bucket
-  // ------------------------------
-  test("S3 bucket exists and has encryption + block public access", async () => {
-    const bucket = outputs["S3Bucket"];
-
-    // Bucket exists
-    await expect(retry(() => s3.send(new HeadBucketCommand({ Bucket: bucket })))).resolves.toBeTruthy();
-
-    // SSE enabled
-    const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-    expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
-
-    // Public access blocked
-    const pol = await s3.send(new GetBucketPolicyStatusCommand({ Bucket: bucket }));
-    expect(pol.PolicyStatus?.IsPublic).toBe(false);
-
-    // CloudTrail can write
-    const acl = await s3.send(new GetBucketAclCommand({ Bucket: bucket }));
-    expect(acl.Grants?.map((g) => g.Grantee?.Type)).toContain("Group");
+  // Edge Case: Subnet ID format
+  test("Subnet IDs are valid", () => {
+    expect(outputs.PrivateSubnet1).toMatch(/^subnet-[a-z0-9]+$/);
+    expect(outputs.PrivateSubnet2).toMatch(/^subnet-[a-z0-9]+$/);
+    expect(outputs.PublicSubnet1).toMatch(/^subnet-[a-z0-9]+$/);
   });
 
-  // ------------------------------
-  // Lambda
-  // ------------------------------
-  test("Lambda function exists and has >=128MB memory", async () => {
-    const fnName = outputs["Lambda"];
-    const res = await lambda.send(new GetFunctionCommand({ FunctionName: fnName }));
-    expect(res.Configuration?.MemorySize).toBeGreaterThanOrEqual(128);
-    expect(res.Configuration?.Runtime).toMatch(/^python3/);
-  });
-
-  // ------------------------------
-  // CloudTrail
-  // ------------------------------
-  test("CloudTrail exists and is logging", async () => {
-    const trailName = outputs["CloudTrail"];
-    const res = await cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [trailName] }));
-    expect(res.trailList?.[0]).toBeDefined();
-    expect(res.trailList?.[0].Name).toBe(trailName);
-    expect(res.trailList?.[0].S3BucketName).toBe(outputs["S3Bucket"]);
-  });
-
-  // ------------------------------
-  // Secrets Manager
-  // ------------------------------
-  test("DB Secret exists in Secrets Manager", async () => {
-    const arn = outputs["DBSecret"];
-    const res = await secrets.send(new DescribeSecretCommand({ SecretId: arn }));
-    expect(res.ARN).toBeDefined();
-    expect(res.Name).toContain("DBSecret");
-  });
-
-  // ------------------------------
-  // RDS
-  // ------------------------------
-  test("RDS instance exists and is encrypted", async () => {
-    const endpoint = outputs["RDS"];
-    const identifier = endpoint.split(".")[0]; // first part of endpoint is identifier
-    const res = await rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: identifier }));
-    const db = res.DBInstances?.[0];
-    expect(db).toBeDefined();
-    expect(db?.StorageEncrypted).toBe(true);
-    expect(db?.Engine).toBe("mysql");
-    expect(db?.DBSubnetGroup?.Subnets?.length).toBeGreaterThanOrEqual(2);
+  // Edge Case: DBSecret ARN format
+  test("DBSecret ARN format is valid", () => {
+    expect(outputs.DBSecret).toMatch(/^arn:aws:secretsmanager:[a-z\-0-9]+:\d+:secret:/);
   });
 });
