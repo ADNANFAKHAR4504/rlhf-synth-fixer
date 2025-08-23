@@ -26,7 +26,7 @@ Metadata:
 Parameters:
   KeyName:
     Type: String
-    Default: 'iac-rlhf-aws-trainer-instance'
+    Default: 'my-key'
     Description: 'Name of an existing EC2 KeyPair to enable SSH access to the instances'
     MinLength: 1
 
