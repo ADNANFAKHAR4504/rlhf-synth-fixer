@@ -786,13 +786,6 @@ Resources:
                   - iam:*
                   - cloudformation:*
                 Resource: '*'
-              - Effect: Deny
-                Action:
-                  - iam:DeleteRole
-                  - iam:DeletePolicy
-                Resource:
-                  - !GetAtt TapAdminRole.Arn
-                  - !GetAtt TapDeveloperRole.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
