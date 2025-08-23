@@ -16,7 +16,7 @@ import com.pulumi.Context;
  * Unit tests for the Main class.
  * 
  * This is a minimal example showing how to test a Pulumi Java program.
- * Add more specific tests based on your infrastructure requirements.
+ * Add more specific tests based on your infrastructure requirements. 
  * 
  * Run with: ./gradlew test
  */
