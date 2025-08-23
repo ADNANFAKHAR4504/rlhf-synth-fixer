@@ -53,18 +53,18 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/variable\s+"aws_region"\s*{/);
       expect(stackContent).toMatch(/description\s*=\s*"AWS region to deploy resources"/);
       expect(stackContent).toMatch(/type\s*=\s*string/);
-      expect(stackContent).toMatch(/default\s*=\s*"us-east-1"/);
+      expect(stackContent).toMatch(/default\s*=\s*"us-west-2"/);
       expect(stackContent).toMatch(/validation\s*{/);
     });
 
     test('project_name variable is declared', () => {
       expect(stackContent).toMatch(/variable\s+"project_name"\s*{/);
-      expect(stackContent).toMatch(/default\s*=\s*"iac-aws-nova"/);
+      expect(stackContent).toMatch(/default\s*=\s*"prod-sec"/);
     });
 
     test('environment variable is declared with validation', () => {
       expect(stackContent).toMatch(/variable\s+"environment"\s*{/);
-      expect(stackContent).toMatch(/contains\(\["test", "production"\], var\.environment\)/);
+      expect(stackContent).toMatch(/contains\(\["production", "staging"\], var\.environment\)/);
     });
 
     test('VPC CIDR variable is declared with validation', () => {
@@ -83,7 +83,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/variable\s+"rds_instance_class"\s*{/);
       expect(stackContent).toMatch(/variable\s+"rds_allocated_storage"\s*{/);
       expect(stackContent).toMatch(/variable\s+"rds_engine_version"\s*{/);
-      expect(stackContent).toMatch(/variable\s+"rds_username"\s*{/);
     });
   });
 
@@ -109,13 +108,13 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('NAT Gateway is declared', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"ngw"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"\s*{/);
       expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat"\s*{/);
     });
 
     test('Security Groups are declared', () => {
       expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{/);
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"app"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ec2"\s*{/);
       expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"rds"\s*{/);
     });
 
@@ -140,6 +139,14 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_high"\s*{/);
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_cpu_high"\s*{/);
     });
+
+    test('Security components are declared', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"main"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_credentials"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
+      expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"vpc"\s*{/);
+    });
   });
 
   describe('Security and Best Practices', () => {
@@ -147,10 +154,15 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/storage_encrypted\s*=\s*true/);
     });
 
+    test('KMS encryption is properly configured', () => {
+      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.arn/);
+      expect(stackContent).toMatch(/enable_key_rotation\s*=\s*true/);
+    });
+
     test('Security groups have proper ingress rules', () => {
       expect(stackContent).toMatch(/ingress\s*{/);
-      expect(stackContent).toMatch(/from_port\s*=\s*80/);
-      expect(stackContent).toMatch(/to_port\s*=\s*80/);
+      expect(stackContent).toMatch(/from_port\s*=\s*443/);
+      expect(stackContent).toMatch(/to_port\s*=\s*443/);
       expect(stackContent).toMatch(/protocol\s*=\s*"tcp"/);
     });
 
@@ -160,6 +172,25 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('RDS has proper subnet group', () => {
       expect(stackContent).toMatch(/db_subnet_group_name\s*=\s*aws_db_subnet_group\.main\.name/);
+    });
+
+    test('CloudTrail is properly configured', () => {
+      expect(stackContent).toMatch(/include_global_service_events\s*=\s*true/);
+      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
+      expect(stackContent).toMatch(/enable_logging\s*=\s*true/);
+    });
+
+    test('AWS Config is properly configured', () => {
+      expect(stackContent).toMatch(/all_supported\s*=\s*true/);
+      expect(stackContent).toMatch(/include_global_resources\s*=\s*true/);
+    });
+
+    test('VPC Flow Logs are enabled', () => {
+      expect(stackContent).toMatch(/traffic_type\s*=\s*"ALL"/);
+    });
+
+    test('Deletion protection is enabled', () => {
+      expect(stackContent).toMatch(/deletion_protection\s*=\s*true/);
     });
   });
 
@@ -184,7 +215,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/\{/);
       expect(stackContent).toMatch(/\}/);
       expect(stackContent).toMatch(/=/);
-      
+
       // Check for balanced braces (basic check)
       const openBraces = (stackContent.match(/\{/g) || []).length;
       const closeBraces = (stackContent.match(/\}/g) || []).length;
