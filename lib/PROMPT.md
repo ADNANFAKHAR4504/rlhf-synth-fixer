@@ -2,7 +2,7 @@ Please write IAC code in cdktf Go using the data given below:
 
 Environment:
 
-You are tasked with developing a `tap_stack.go` file to ensure multi-environment consistency across different AWS regions. This requires expertise in structuring CDKTF code that can manage resources in a synchronized manner, specifically focusing on load balancers and auto-scaling groups. Requirements include:
+You are tasked with developing a `tap_stack.go` file to ensure multi-environment consistency across different AWS regions. This requires expertise in structuring CDKTF stack that can manage resources in a synchronized manner, specifically focusing on load balancers and auto-scaling groups. Requirements include:
 
 1. Deploy an application consisting of an Elastic Load Balancer (ELB) and linked Auto Scaling Groups (ASG) across three regions: us-east-1, us-west-2, and eu-central-1.
 2. Ensure that the ELB scales automatically based on predefined metrics and that ASGs are set to maintain a minimum of two instances per region.
@@ -13,7 +13,6 @@ Expected output: A single `tap_stack.go` file written in CDKTF Go that, when exe
 
 - Single Go source file: `lib/tap_stack.go`.
 - Use only `cdktf`, `constructs`, and packages under `.gen/aws/*` (e.g. `github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup`).
-- Initialize the AWS provider for `us-east-1` in the stack.
 
 Contraints:
 
