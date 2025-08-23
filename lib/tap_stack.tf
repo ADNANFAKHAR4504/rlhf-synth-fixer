@@ -281,13 +281,7 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description = "SSH for debugging"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+
 
   egress {
     description = "All outbound traffic"
@@ -441,7 +435,6 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
-  key_name      = "iac-rlhf-aws-trainer-instance"
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
