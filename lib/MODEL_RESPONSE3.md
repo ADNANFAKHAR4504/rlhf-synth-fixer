@@ -1,3 +1,8 @@
+The issue is that Go modules don't support paths with leading dots (.gen). The problem is in the import paths - they're trying to import from .gen which Go interprets as a malformed module path.
+
+Looking at your error and the example you provided, I need to fix the import paths. Here's the corrected lib/tap_stack.go file:
+
+```go
 package lib
 
 import (
@@ -489,3 +494,14 @@ echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance
 
 	return stack
 }
+```
+
+Key Changes Made:
+Fixed Import Paths: Changed all imports from .gen/aws/... to gen/aws/... (removed the leading dot)
+Removed Unused Imports: Removed the unused standard library imports that were copied from your example
+Kept Required Imports: Maintained the necessary CDKTF and AWS constructs imports
+The main issue was the leading dot in the import paths. Go modules don't support paths that start with a dot, so:
+
+Before: github.com/TuringGpt/iac-test-automations/.gen/aws/applicationloadbalancer
+After: github.com/TuringGpt/iac-test-automations/gen/aws/applicationloadbalancer
+This should resolve the "malformed module path" error and allow the code to compile and synth properly.
