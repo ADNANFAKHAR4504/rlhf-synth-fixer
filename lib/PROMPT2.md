@@ -76,6 +76,9 @@ We can use something like this for imports:
 ## Example code snippet
 
 ```go
+	jsii "github.com/aws/jsii-runtime-go"
+	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
+
 	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
 	_ "github.com/aws/constructs-go/constructs/v10/jsii"
 	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
