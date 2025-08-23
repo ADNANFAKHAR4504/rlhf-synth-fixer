@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import java.util.Map;
 import java.util.HashMap;
+import java.io.File;
+import java.io.IOException;
 
 // AWS SDK imports for live resource testing
 import software.amazon.awssdk.services.s3.S3Client;
@@ -750,13 +752,26 @@ public class MainIntegrationTest {
     }
 
     private String getStackOutputs() throws Exception {
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", TEST_STACK_NAME);
-        Process process = pb.start();
-        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+        // Read from cfn-outputs/all-outputs.json (deployment outputs)
+        final String allOutputsPath = "cfn-outputs/all-outputs.json";
+        final String flatOutputsPath = "cfn-outputs/flat-outputs.json";
         
-        if (finished && process.exitValue() == 0) {
-            return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        // Check if deployment outputs exist
+        if (Files.exists(Paths.get(allOutputsPath))) {
+            System.out.println("📊 Reading stack outputs from deployment file: " + allOutputsPath);
+            String allOutputs = new String(Files.readAllBytes(Paths.get(allOutputsPath)), StandardCharsets.UTF_8);
+            
+            // Also check for flat outputs
+            if (Files.exists(Paths.get(flatOutputsPath))) {
+                String flatOutputs = new String(Files.readAllBytes(Paths.get(flatOutputsPath)), StandardCharsets.UTF_8);
+                System.out.println("📊 Flat outputs available: " + flatOutputsPath);
+            }
+            
+            return allOutputs;
         }
+        
+        // No deployment outputs found
+        System.out.println("📊 No deployment outputs found in: " + allOutputsPath);
         return null;
     }
 
