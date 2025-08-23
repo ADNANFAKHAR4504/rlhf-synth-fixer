@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0.0"
-
+  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -10,11 +10,23 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.4"
     }
+    acme = {
+      source  = "vancluever/acme"
+      version = "~> 2.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 
-  # Use local backend for development and testing
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    bucket         = "terraform-state-291686"
+    key            = "environments/${var.environment}/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-locks"
+    encrypt        = true
+    kms_key_id     = "alias/terraform-state-key"
   }
 }
 
@@ -22,7 +34,7 @@ terraform {
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
-
+  
   default_tags {
     tags = var.common_tags
   }
@@ -32,7 +44,7 @@ provider "aws" {
 provider "aws" {
   alias  = "eu_central_1"
   region = "eu-central-1"
-
+  
   default_tags {
     tags = var.common_tags
   }
@@ -41,7 +53,7 @@ provider "aws" {
 # Default provider (us-east-1 for global resources)
 provider "aws" {
   region = "us-east-1"
-
+  
   default_tags {
     tags = var.common_tags
   }

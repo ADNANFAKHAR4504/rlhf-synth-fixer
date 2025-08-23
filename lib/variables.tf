@@ -1,11 +1,34 @@
 ###################
+# Tags
+###################
+
+variable "common_tags" {
+  description = "Common tags to be applied to all resources"
+  type        = map(string)
+  default = {
+    Environment = "dev"
+    Project     = "iac-test-automations"
+    Owner       = "DevOps Team"
+    ManagedBy   = "terraform"
+    CostCenter  = "Engineering"
+    Purpose     = "testing"
+  }
+}
+
+###################
 # General Variables
 ###################
 
-variable "aws_region" {
-  description = "AWS region"
+variable "aws_region_primary" {
+  description = "Primary AWS region"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
+}
+
+variable "aws_region_secondary" {
+  description = "Secondary AWS region"
+  type        = string
+  default     = "eu-central-1"
 }
 
 variable "environment" {
@@ -232,4 +255,134 @@ variable "scale_down_cooldown" {
   description = "Cooldown period after scaling down (seconds)"
   type        = number
   default     = 300
+}
+
+###################
+# CloudFront Variables
+###################
+
+variable "cloudfront_price_class" {
+  description = "CloudFront price class"
+  type        = string
+  default     = "PriceClass_100"
+  validation {
+    condition     = contains(["PriceClass_100", "PriceClass_200", "PriceClass_All"], var.cloudfront_price_class)
+    error_message = "Price class must be PriceClass_100, PriceClass_200, or PriceClass_All."
+  }
+}
+
+variable "cloudfront_allowed_methods" {
+  description = "Allowed HTTP methods for CloudFront"
+  type        = list(string)
+  default     = ["GET", "HEAD", "OPTIONS"]
+}
+
+variable "cloudfront_cached_methods" {
+  description = "HTTP methods to cache in CloudFront"
+  type        = list(string)
+  default     = ["GET", "HEAD"]
+}
+
+###################
+# Blue-Green Deployment Variables
+###################
+
+variable "enable_blue_green" {
+  description = "Enable blue-green deployment"
+  type        = bool
+  default     = true
+}
+
+variable "blue_green_deployment_config" {
+  description = "Configuration for blue-green deployment"
+  type = object({
+    blue_weight  = number
+    green_weight = number
+  })
+  default = {
+    blue_weight  = 100
+    green_weight = 0
+  }
+  validation {
+    condition     = var.blue_green_deployment_config.blue_weight + var.blue_green_deployment_config.green_weight == 100
+    error_message = "Blue and green weights must sum to 100."
+  }
+}
+
+variable "deployment_target" {
+  description = "Current deployment target (blue or green)"
+  type        = string
+  default     = "blue"
+  validation {
+    condition     = contains(["blue", "green"], var.deployment_target)
+    error_message = "Deployment target must be either 'blue' or 'green'."
+  }
+}
+
+variable "waf_rate_limit" {
+  description = "Number of requests allowed per 5-minute period per IP address"
+  type        = number
+  default     = 2000
+}
+
+variable "blue_green_deployment" {
+  description = "Configuration for blue-green deployment"
+  type = object({
+    enabled = bool
+    weights = object({
+      blue  = number
+      green = number
+    })
+  })
+  default = {
+    enabled = true
+    weights = {
+      blue  = 100
+      green = 0
+    }
+  }
+
+  validation {
+    condition     = var.blue_green_deployment.weights.blue + var.blue_green_deployment.weights.green == 100
+    error_message = "Blue and green weights must sum to 100."
+  }
+}
+
+###################
+# DNS Variables
+###################
+
+variable "domain_name" {
+  description = "Domain name for the application"
+  type        = string
+}
+
+variable "create_dns_zone" {
+  description = "Create Route53 zone for domain"
+  type        = bool
+  default     = false
+}
+
+variable "create_zone" {
+  description = "Whether to create Route53 zone (if false, it is assumed to exist)"
+  type        = bool
+  default     = false
+}
+
+variable "key_pair_name" {
+  description = "Name of the EC2 key pair to use for instances"
+  type        = string
+}
+
+# Load balancer names
+variable "aws_lb" {
+  description = "Map of load balancer names"
+  type = object({
+    app_us_east_1 = string
+    app_eu_central_1 = string
+  })
+  default = {
+    app_us_east_1 = "app-us-east-1"
+    app_eu_central_1 = "app-eu-central-1"
+  }
 }
