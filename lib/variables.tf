@@ -25,13 +25,44 @@ variable "regions" {
   default     = ["us-east-1", "eu-central-1"]
 }
 
+variable "region_config" {
+  description = "Region specific configuration"
+  type = map(object({
+    name      = string
+    code      = string
+    shortname = string
+  }))
+  default = {
+    us_east_1 = {
+      name      = "us-east-1"
+      code      = "use1"
+      shortname = "use1"
+    }
+    eu_central_1 = {
+      name      = "eu-central-1"
+      code      = "euc1"
+      shortname = "euc1"
+    }
+  }
+}
+
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (dev, stage, prod)"
   type        = string
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be dev, staging, or prod."
+    condition     = contains(["dev", "stage", "prod"], var.environment)
+    error_message = "Environment must be dev, stage, or prod."
   }
+}
+
+variable "active_color" {
+  description = "Active color for blue-green deployment (blue or green)"
+  type        = string
+  validation {
+    condition     = contains(["blue", "green"], var.active_color)
+    error_message = "Active color must be either blue or green."
+  }
+  default     = "blue"
 }
 
 variable "owner" {
@@ -57,11 +88,11 @@ variable "vpc_config" {
     azs  = list(string)
   }))
   default = {
-    us-east-1 = {
+    "us-east-1" = {
       cidr = "10.0.0.0/16"
       azs  = ["us-east-1a", "us-east-1b", "us-east-1c"]
     }
-    eu-central-1 = {
+    "eu-central-1" = {
       cidr = "10.1.0.0/16"
       azs  = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
     }
@@ -125,6 +156,18 @@ variable "kms_deletion_window" {
   validation {
     condition     = var.kms_deletion_window >= 7 && var.kms_deletion_window <= 30
     error_message = "KMS deletion window must be between 7 and 30 days."
+  }
+}
+
+variable "kms_config" {
+  description = "Configuration for KMS keys"
+  type = object({
+    deletion_window_in_days = number
+    enable_key_rotation    = bool
+  })
+  default = {
+    deletion_window_in_days = 7
+    enable_key_rotation    = true
   }
 }
 
@@ -251,6 +294,7 @@ variable "waf_rate_limit" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
+  default     = "example.com"  # Change this to your actual domain in tfvars
 }
 
 variable "create_zone" {
@@ -272,4 +316,16 @@ variable "allowed_ingress_cidrs" {
   description = "List of CIDR blocks allowed for ingress"
   type        = list(string)
   default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+}
+
+variable "security_group_rules" {
+  description = "Security group rule descriptions"
+  type = object({
+    https_ingress = string
+    http_ingress  = string
+  })
+  default = {
+    https_ingress = "HTTPS from allowed CIDRs"
+    http_ingress  = "HTTP from allowed CIDRs"
+  }
 }

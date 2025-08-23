@@ -8,18 +8,6 @@
 
 locals {
   name_prefix = "${var.environment}-tap-stack"
-  
-  # AZ configuration per region
-  az_config = {
-    "us-east-1" = {
-      azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
-      cidr = "10.0.0.0/16"
-    }
-    "eu-central-1" = {
-      azs = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-      cidr = "10.1.0.0/16"
-    }
-  }
 }
 
 #==============================================================================
@@ -72,9 +60,9 @@ resource "random_id" "suffix" {
 
 resource "aws_kms_key" "main_us_east_1" {
   provider                = aws.us_east_1
-  description             = "KMS key for ${var.environment} in us-east-1"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  description             = "KMS key for ${var.environment} in us-east-1"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -138,7 +126,21 @@ resource "aws_kms_alias" "main_eu_central_1" {
 # NETWORKING - US-EAST-1
 #==============================================================================
 
-# VPC
+# Local Values
+locals {
+  az_config = {
+    "us-east-1" = {
+      cidr = "10.0.0.0/16"
+      azs  = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+    "eu-central-1" = {
+      cidr = "10.1.0.0/16"
+      azs  = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+    }
+  }
+}
+
+# VPC Configuration
 resource "aws_vpc" "main_us_east_1" {
   provider             = aws.us_east_1
   cidr_block           = local.az_config["us-east-1"].cidr
@@ -651,7 +653,7 @@ resource "aws_secretsmanager_secret_version" "app_secrets_eu_central_1" {
 
 resource "aws_iam_role" "app_role_us_east_1" {
   provider    = aws.us_east_1
-  name_prefix = "${local.name_prefix}-app-role-us-east-1-"
+  name_prefix = "${local.name_prefix}-app-role-us-east-1-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

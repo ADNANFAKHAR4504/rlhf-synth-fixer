@@ -236,12 +236,12 @@ describe("Terraform Multi-Region Infrastructure", () => {
 
   test("Required variables should be properly defined", () => {
     // Check environment variable
-    expect(terraformContent).toMatch(/variable\s+"environment"\s*{[^}]*type\s*=\s*string/);
-    expect(terraformContent).toMatch(/validation\s*{[^}]*contains\(\["dev",\s*"stage",\s*"prod"\]/);
+    expect(variablesContent).toMatch(/variable\s+"environment"\s*{[^}]*type\s*=\s*string/);
+    expect(variablesContent).toMatch(/validation\s*{[^}]*contains\(\["dev",\s*"stage",\s*"prod"\]/);
 
     // Check regions variable
-    expect(terraformContent).toMatch(/variable\s+"regions"\s*{[^}]*type\s*=\s*list\(string\)/);
-    expect(terraformContent).toMatch(/default\s*=\s*\["us-east-1",\s*"eu-central-1"\]/);
+    expect(variablesContent).toMatch(/variable\s+"regions"\s*{[^}]*type\s*=\s*list\(string\)/);
+    expect(variablesContent).toMatch(/default\s*=\s*\["us-east-1",\s*"eu-central-1"\]/);
 
     // Check allowed_ingress_cidrs
     expect(terraformContent).toMatch(/variable\s+"allowed_ingress_cidrs"\s*{[^}]*type\s*=\s*list\(string\)/);
@@ -267,8 +267,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       expect(azConfigContent).toMatch(/"us-east-1"\s*=\s*{[^}]*cidr\s*=\s*"10\.0\.0\.0\/16"/);
       
       // EU Central config
-      expect(azConfigContent).toMatch(/["']eu-central-1["']\s*=\s*{[^}]*azs\s*=\s*\[\s*["']eu-central-1a["'],\s*["']eu-central-1b["'],\s*["']eu-central-1c["']\s*\]/);
-      expect(azConfigContent).toMatch(/["']eu-central-1["']\s*=\s*{[^}]*cidr\s*=\s*["']10\.1\.0\.0\/16["']/);
+      expect(azConfigContent).toMatch(/"eu-central-1"\s*=\s*{[^}]*azs\s*=\s*\[\s*"eu-central-1a",\s*"eu-central-1b",\s*"eu-central-1c"\s*\]/);
+      expect(azConfigContent).toMatch(/"eu-central-1"\s*=\s*{[^}]*cidr\s*=\s*"10\.1\.0\.0\/16"/);
     }
   });
 

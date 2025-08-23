@@ -2,8 +2,12 @@
 environment = "dev"
 
 # Domain Configuration
-domain_name = "example.com"
-create_zone = false  # Set to true if you want to create a new Route53 zone
+domain_name = "turing-tap.cloud"  # Replace with your actual domain
+create_zone = true  # Creates a new Route53 zone
+key_pair_name = "tap-key-pair"  # Replace with your EC2 key pair name
+
+# Regions
+regions = ["us-east-1", "eu-central-1"]
 
 # Blue-Green Deployment
 active_color = "blue"
@@ -34,3 +38,21 @@ allowed_ingress_cidrs = [
 
 # WAF Configuration
 waf_rate_limit = 2000
+
+# Infrastructure Configuration
+instance_type = "t3.micro"
+min_size = 2
+max_size = 4
+desired_capacity = 2
+
+# CloudFront Configuration
+cloudfront_price_class = "PriceClass_100"
+cloudfront_allowed_methods = ["GET", "HEAD", "OPTIONS"]
+cloudfront_cached_methods = ["GET", "HEAD"]
+
+# KMS Configuration
+kms_deletion_window = 7
+
+# Monitoring
+log_retention_days = 30
+enable_detailed_monitoring = true
