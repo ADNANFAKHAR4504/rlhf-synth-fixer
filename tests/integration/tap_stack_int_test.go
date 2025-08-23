@@ -445,6 +445,18 @@ func extractRoleNameFromArn(arn string) string {
 	return ""
 }
 
+func TestE2ESeparateBuckets(t *testing.T) {
+	t.Run("e2e: should use separate buckets for static assets and CloudTrail", func(t *testing.T) {
+		if outputs.S3BucketName == "" || outputs.CloudtrailBucketName == "" {
+			t.Skip("Both S3 buckets not available")
+		}
+
+		assert.NotEqual(t, outputs.S3BucketName, outputs.CloudtrailBucketName, "Should use separate buckets")
+		assert.Contains(t, outputs.S3BucketName, "static-assets")
+		assert.Contains(t, outputs.CloudtrailBucketName, "cloudtrail-logs")
+	})
+}
+
 func BenchmarkE2EResourceLookup(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if outputs.S3BucketName != "" {

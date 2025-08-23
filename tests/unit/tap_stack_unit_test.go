@@ -71,6 +71,21 @@ func TestFullDeployExportsOutputs(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSeparateBucketsCreation(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		infra := NewMultiRegionInfrastructure(ctx, baseConfig())
+		key, _ := infra.CreateKMSKey()
+		staticBucket, err := infra.CreateS3Bucket(key)
+		assert.NoError(t, err)
+		cloudtrailBucket, err := infra.CreateCloudTrailBucket(key)
+		assert.NoError(t, err)
+		assert.NotNil(t, staticBucket)
+		assert.NotNil(t, cloudtrailBucket)
+		return nil
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+}
+
 func TestIAMRolesExistAndHaveARNs(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		infra := NewMultiRegionInfrastructure(ctx, baseConfig())
@@ -218,16 +233,59 @@ func TestCreateCloudFrontDistribution(t *testing.T) {
 	assert.Equal(t, "mock-distribution-domain.example.com", domainName)
 }
 
+func TestCloudTrailBucketCreation(t *testing.T) {
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		infra := NewMultiRegionInfrastructure(ctx, baseConfig())
+		key, _ := infra.CreateKMSKey()
+		bucket, err := infra.CreateCloudTrailBucket(key)
+		assert.NoError(t, err)
+		assert.NotNil(t, bucket)
+		return nil
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+}
+
 func TestCloudTrailCreation(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		infra := NewMultiRegionInfrastructure(ctx, baseConfig())
 		key, _ := infra.CreateKMSKey()
-		bucket, _ := infra.CreateS3Bucket(key)
-		err := infra.CreateCloudTrail(bucket)
+		cloudtrailBucket, _ := infra.CreateCloudTrailBucket(key)
+		err := infra.CreateCloudTrail(cloudtrailBucket)
 		assert.NoError(t, err)
 		return nil
 	}, pulumi.WithMocks("proj", "stack", mocks{}))
 	assert.NoError(t, err)
+}
+
+func TestCloudTrailBucketEncryption(t *testing.T) {
+	var tags map[string]string
+	var wg sync.WaitGroup
+	wg.Add(1)
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		infra := NewMultiRegionInfrastructure(ctx, baseConfig())
+		key, _ := infra.CreateKMSKey()
+		bucket, err := infra.CreateCloudTrailBucket(key)
+		assert.NoError(t, err)
+		_ = bucket.Tags.ApplyT(func(ts interface{}) error {
+			if m, ok := ts.(map[string]string); ok {
+				tags = m
+			} else if m, ok := ts.(map[string]interface{}); ok {
+				tags = make(map[string]string)
+				for k, v := range m {
+					if str, ok := v.(string); ok {
+						tags[k] = str
+					}
+				}
+			}
+			wg.Done()
+			return nil
+		})
+		return nil
+	}, pulumi.WithMocks("proj", "stack", mocks{}))
+	assert.NoError(t, err)
+	wg.Wait()
+	assert.Equal(t, "unit-test", tags["Owner"])
+	assert.Equal(t, "test-suite", tags["Purpose"])
 }
 
 func TestDeployRegionalResourcesAllKeys(t *testing.T) {

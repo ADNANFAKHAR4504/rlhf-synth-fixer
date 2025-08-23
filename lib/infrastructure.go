@@ -87,12 +87,17 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 	}
 
 	// Create CloudTrail for auditing
-	if err := m.CreateCloudTrail(bucket); err != nil {
+	cloudtrailBucket, err := m.CreateCloudTrailBucket(kmsKey)
+	if err != nil {
+		return err
+	}
+
+	if err := m.CreateCloudTrail(cloudtrailBucket); err != nil {
 		return err
 	}
 
 	// Export outputs
-	m.exportOutputs(bucket, distribution, roles, regionalResources)
+	m.exportOutputs(bucket, cloudtrailBucket, distribution, roles, regionalResources)
 
 	return nil
 }
@@ -644,9 +649,45 @@ func (m *MultiRegionInfrastructure) CreateRDSInstance(region string, subnetGroup
 	return rdsInstance, nil
 }
 
-func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
+func (m *MultiRegionInfrastructure) CreateCloudTrailBucket(kmsKey *kms.Key) (*s3.Bucket, error) {
+	// Create dedicated S3 bucket for CloudTrail logs
+	bucket, err := s3.NewBucket(m.ctx, fmt.Sprintf("%s-cloudtrail-logs", m.config.Environment), &s3.BucketArgs{
+		Tags: m.tags,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure bucket encryption
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-encryption", m.config.Environment), &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: bucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					KmsMasterKeyId: kmsKey.Arn,
+					SseAlgorithm:   pulumi.String("aws:kms"),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Block public access
+	_, err = s3.NewBucketPublicAccessBlock(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-pab", m.config.Environment), &s3.BucketPublicAccessBlockArgs{
+		Bucket:                bucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// S3 bucket policy for CloudTrail
-	_, err := s3.NewBucketPolicy(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-policy", m.config.Environment), &s3.BucketPolicyArgs{
+	_, err = s3.NewBucketPolicy(m.ctx, fmt.Sprintf("%s-cloudtrail-bucket-policy", m.config.Environment), &s3.BucketPolicyArgs{
 		Bucket: bucket.ID(),
 		Policy: pulumi.Sprintf(`{
 			"Version": "2012-10-17",
@@ -657,7 +698,7 @@ func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
 						"Service": "cloudtrail.amazonaws.com"
 					},
 					"Action": "s3:PutObject",
-					"Resource": "%s/cloudtrail/*",
+					"Resource": "%s/*",
 					"Condition": {
 						"StringEquals": {
 							"s3:x-amz-acl": "bucket-owner-full-control"
@@ -676,13 +717,16 @@ func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
 		}`, bucket.Arn, bucket.Arn),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	return bucket, nil
+}
+
+func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
 	// CloudTrail for auditing
-	_, err = cloudtrail.NewTrail(m.ctx, fmt.Sprintf("%s-cloudtrail", m.config.Environment), &cloudtrail.TrailArgs{
+	_, err := cloudtrail.NewTrail(m.ctx, fmt.Sprintf("%s-cloudtrail", m.config.Environment), &cloudtrail.TrailArgs{
 		S3BucketName:               bucket.Bucket,
-		S3KeyPrefix:                pulumi.String("cloudtrail/"),
 		IncludeGlobalServiceEvents: pulumi.Bool(true),
 		IsMultiRegionTrail:         pulumi.Bool(true),
 		EnableLogFileValidation:    pulumi.Bool(true),
@@ -692,10 +736,12 @@ func (m *MultiRegionInfrastructure) CreateCloudTrail(bucket *s3.Bucket) error {
 	return err
 }
 
-func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, distribution *cloudfront.Distribution, roles map[string]*iam.Role, regionalResources map[string]map[string]pulumi.Output) {
+func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, cloudtrailBucket *s3.Bucket, distribution *cloudfront.Distribution, roles map[string]*iam.Role, regionalResources map[string]map[string]pulumi.Output) {
 	// Global resources
 	m.ctx.Export("s3BucketName", bucket.Bucket)
 	m.ctx.Export("s3BucketArn", bucket.Arn)
+	m.ctx.Export("cloudtrailBucketName", cloudtrailBucket.Bucket)
+	m.ctx.Export("cloudtrailBucketArn", cloudtrailBucket.Arn)
 	m.ctx.Export("cloudfrontDistributionId", distribution.ID())
 	m.ctx.Export("cloudfrontDomainName", distribution.DomainName)
 	m.ctx.Export("environment", pulumi.String(m.config.Environment))
