@@ -10,7 +10,6 @@ I need help implementing a multi-region, environment-consistent AWS infrastructu
 - Define **IAM roles and policies** following least privilege
 - Configure **CloudWatch** to monitor and log all supported services
 - Use **AWS Config** to ensure compliance
-- Implement **stack policies** to prevent accidental deletion of critical resources
 - **Export key outputs** to enable resource sharing across stacks
 - Include an **RDS instance** with advanced configuration such as:
   - Multi-AZ deployment
