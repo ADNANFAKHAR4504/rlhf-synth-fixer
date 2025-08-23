@@ -44,23 +44,24 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(kmsKey).add('Owner', commonTags.Owner);
 
     const vpc = new ec2.Vpc(this, 'TapVpc', {
+      ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16'), // Use a different CIDR to avoid conflicts
       maxAzs: 2,
       natGateways: 2,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       subnetConfiguration: [
         {
-          cidrMask: 24,
+          cidrMask: 26, // Smaller subnets (64 IPs each) to fit more subnets
           name: 'Public',
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
-          cidrMask: 24,
+          cidrMask: 26,
           name: 'Private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
-          cidrMask: 24,
+          cidrMask: 26,
           name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
