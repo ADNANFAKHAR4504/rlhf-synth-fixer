@@ -1,0 +1,773 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Multi-Account CI/CD Pipeline for Web App Deployment",
+    "Parameters": {
+        "GitHubOwner": {
+            "Type": "String",
+            "Description": "GitHub repository owner",
+            "Default": "your-github-org"
+        },
+        "GitHubRepo": {
+            "Type": "String",
+            "Description": "GitHub repository name",
+            "Default": "your-web-app"
+        },
+        "GitHubBranch": {
+            "Type": "String",
+            "Description": "GitHub branch to track",
+            "Default": "main"
+        },
+        "StagingAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for staging environment",
+            "AllowedPattern": "[0-9]{12}"
+        },
+        "ProductionAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for production environment",
+            "AllowedPattern": "[0-9]{12}"
+        },
+        "SlackChannelId": {
+            "Type": "String",
+            "Description": "Slack channel ID for notifications",
+            "Default": "C1234567890"
+        },
+        "SlackWorkspaceId": {
+            "Type": "String",
+            "Description": "Slack workspace ID",
+            "Default": "T1234567890"
+        },
+        "ApprovalEmailList": {
+            "Type": "CommaDelimitedList",
+            "Description": "Email addresses for manual approval notifications",
+            "Default": "devops@company.com,lead@company.com"
+        }
+    },
+    "Resources": {
+        "PipelineArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::StackName}-pipeline-artifacts-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArtifacts",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30
+                        }
+                    ]
+                }
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-CodePipeline-ServiceRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSCodePipelineServiceRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "PipelineExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject",
+                                        "s3:GetBucketVersioning"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${PipelineArtifactsBucket}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PipelineArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProject",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProject",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudformation:CreateStack",
+                                        "cloudformation:DeleteStack",
+                                        "cloudformation:DescribeStacks",
+                                        "cloudformation:UpdateStack",
+                                        "cloudformation:CreateChangeSet",
+                                        "cloudformation:DeleteChangeSet",
+                                        "cloudformation:DescribeChangeSet",
+                                        "cloudformation:ExecuteChangeSet",
+                                        "cloudformation:SetStackPolicy",
+                                        "cloudformation:ValidateTemplate"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sts:AssumeRole",
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${StagingAccountId}:role/CrossAccountDeploymentRole"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${ProductionAccountId}:role/CrossAccountDeploymentRole"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "ManualApprovalTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuild-ServiceRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${PipelineArtifactsBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Build"
+                },
+                "Description": "Build stage for web application",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_MEDIUM",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            }
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {
+                                "Ref": "AWS::AccountId"
+                            }
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Logging in to Amazon ECR...\n      - aws --version\n      - echo Build started on `date`\n  build:\n    commands:\n      - echo Build phase started on `date`\n      - # Add your build commands here\n      - npm install\n      - npm run build\n  post_build:\n    commands:\n      - echo Build completed on `date`\nartifacts:\n  files:\n    - '**/*'\n"
+                }
+            }
+        },
+        "TestProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Test"
+                },
+                "Description": "Test stage for web application",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_MEDIUM",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0"
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Test phase started on `date`\n  build:\n    commands:\n      - echo Running tests...\n      - npm test\n      - npm run test:integration\n  post_build:\n    commands:\n      - echo Tests completed on `date`\n"
+                }
+            }
+        },
+        "ManualApprovalTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-ManualApproval"
+                },
+                "DisplayName": "Pipeline Manual Approval Required"
+            }
+        },
+        "ManualApprovalSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "ManualApprovalTopic"
+                },
+                "Endpoint": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Ref": "ApprovalEmailList"
+                        }
+                    ]
+                }
+            }
+        },
+        "SlackNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-SlackNotifications"
+                },
+                "DisplayName": "Pipeline Notifications"
+            }
+        },
+        "ChatbotRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-Chatbot-Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "chatbot.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+                ]
+            }
+        },
+        "SlackChatbot": {
+            "Type": "AWS::Chatbot::SlackChannelConfiguration",
+            "Properties": {
+                "ConfigurationName": {
+                    "Fn::Sub": "${AWS::StackName}-slack-notifications"
+                },
+                "SlackChannelId": {
+                    "Ref": "SlackChannelId"
+                },
+                "SlackWorkspaceId": {
+                    "Ref": "SlackWorkspaceId"
+                },
+                "IamRoleArn": {
+                    "Fn::GetAtt": [
+                        "ChatbotRole",
+                        "Arn"
+                    ]
+                },
+                "SnsTopicArns": [
+                    {
+                        "Ref": "SlackNotificationTopic"
+                    }
+                ],
+                "LoggingLevel": "ERROR"
+            }
+        },
+        "PipelineEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-pipeline-events"
+                },
+                "Description": "Capture pipeline state changes",
+                "EventPattern": {
+                    "source": [
+                        "aws.codepipeline"
+                    ],
+                    "detail-type": [
+                        "CodePipeline Pipeline Execution State Change",
+                        "CodePipeline Stage Execution State Change"
+                    ],
+                    "detail": {
+                        "pipeline": [
+                            {
+                                "Ref": "CodePipeline"
+                            }
+                        ],
+                        "state": [
+                            "FAILED",
+                            "SUCCEEDED"
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "SlackNotificationTopic"
+                        },
+                        "Id": "SlackNotificationTarget"
+                    }
+                ]
+            }
+        },
+        "GitHubWebhookSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-github-webhook-secret"
+                },
+                "Description": "Secret for GitHub webhook authentication",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{}",
+                    "GenerateStringKey": "token",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
+        "CodePipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Pipeline"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "PipelineArtifactsBucket"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "ThirdParty",
+                                    "Provider": "GitHub",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "Owner": {
+                                        "Ref": "GitHubOwner"
+                                    },
+                                    "Repo": {
+                                        "Ref": "GitHubRepo"
+                                    },
+                                    "Branch": {
+                                        "Ref": "GitHubBranch"
+                                    },
+                                    "PollForSourceChanges": false
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Test",
+                        "Actions": [
+                            {
+                                "Name": "TestAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "TestProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "DeployStaging",
+                        "Actions": [
+                            {
+                                "Name": "CreateStagingChangeSet",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CloudFormation",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ActionMode": "CHANGE_SET_REPLACE",
+                                    "StackName": "Staging-WebApp-Stack",
+                                    "ChangeSetName": "Staging-WebApp-ChangeSet",
+                                    "TemplatePath": "TestOutput::infrastructure/app-template.yaml",
+                                    "Capabilities": "CAPABILITY_IAM,CAPABILITY_NAMED_IAM",
+                                    "RoleArn": {
+                                        "Fn::Sub": "arn:aws:iam::${StagingAccountId}:role/CrossAccountDeploymentRole"
+                                    },
+                                    "ParameterOverrides": "{\n  \"Environment\": \"staging\",\n  \"ResourcePrefix\": \"Staging-\"\n}\n"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ],
+                                "Region": "us-east-1",
+                                "RunOrder": 1
+                            },
+                            {
+                                "Name": "ExecuteStagingChangeSet",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CloudFormation",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ActionMode": "CHANGE_SET_EXECUTE",
+                                    "StackName": "Staging-WebApp-Stack",
+                                    "ChangeSetName": "Staging-WebApp-ChangeSet",
+                                    "RoleArn": {
+                                        "Fn::Sub": "arn:aws:iam::${StagingAccountId}:role/CrossAccountDeploymentRole"
+                                    }
+                                },
+                                "Region": "us-east-1",
+                                "RunOrder": 2
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "ManualApproval",
+                        "Actions": [
+                            {
+                                "Name": "ApprovalAction",
+                                "ActionTypeId": {
+                                    "Category": "Approval",
+                                    "Owner": "AWS",
+                                    "Provider": "Manual",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "NotificationArn": {
+                                        "Ref": "ManualApprovalTopic"
+                                    },
+                                    "CustomData": "Please review the staging deployment and approve for production release."
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "DeployProduction",
+                        "Actions": [
+                            {
+                                "Name": "CreateProductionChangeSet",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CloudFormation",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ActionMode": "CHANGE_SET_REPLACE",
+                                    "StackName": "Prod-WebApp-Stack",
+                                    "ChangeSetName": "Prod-WebApp-ChangeSet",
+                                    "TemplatePath": "TestOutput::infrastructure/app-template.yaml",
+                                    "Capabilities": "CAPABILITY_IAM,CAPABILITY_NAMED_IAM",
+                                    "RoleArn": {
+                                        "Fn::Sub": "arn:aws:iam::${ProductionAccountId}:role/CrossAccountDeploymentRole"
+                                    },
+                                    "ParameterOverrides": "{\n  \"Environment\": \"production\",\n  \"ResourcePrefix\": \"Prod-\"\n}\n"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ],
+                                "Region": "us-east-1",
+                                "RunOrder": 1
+                            },
+                            {
+                                "Name": "ExecuteProductionChangeSet",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CloudFormation",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ActionMode": "CHANGE_SET_EXECUTE",
+                                    "StackName": "Prod-WebApp-Stack",
+                                    "ChangeSetName": "Prod-WebApp-ChangeSet",
+                                    "RoleArn": {
+                                        "Fn::Sub": "arn:aws:iam::${ProductionAccountId}:role/CrossAccountDeploymentRole"
+                                    }
+                                },
+                                "Region": "us-east-1",
+                                "RunOrder": 2
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "GitHubWebhook": {
+            "Type": "AWS::CodePipeline::Webhook",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-github-webhook"
+                },
+                "Authentication": "GITHUB_HMAC",
+                "AuthenticationConfiguration": {
+                    "SecretToken": {
+                        "Ref": "GitHubWebhookSecret"
+                    }
+                },
+                "Filters": [
+                    {
+                        "JsonPath": "$.ref",
+                        "MatchEquals": {
+                            "Fn::Sub": "refs/heads/${GitHubBranch}"
+                        }
+                    }
+                ],
+                "TargetPipeline": {
+                    "Ref": "CodePipeline"
+                },
+                "TargetAction": "SourceAction",
+                "TargetPipelineVersion": {
+                    "Fn::GetAtt": [
+                        "CodePipeline",
+                        "Version"
+                    ]
+                },
+                "RegisterWithThirdParty": true
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineName": {
+            "Description": "Name of the created CodePipeline",
+            "Value": {
+                "Ref": "CodePipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "PipelineUrl": {
+            "Description": "URL of the CodePipeline in AWS Console",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view"
+            }
+        },
+        "ArtifactsBucket": {
+            "Description": "S3 bucket for pipeline artifacts",
+            "Value": {
+                "Ref": "PipelineArtifactsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactsBucket"
+                }
+            }
+        },
+        "CrossAccountRoleArn": {
+            "Description": "ARN pattern for cross-account roles that need to be created",
+            "Value": "arn:aws:iam::{ACCOUNT_ID}:role/CrossAccountDeploymentRole"
+        },
+        "GitHubWebhookUrl": {
+            "Description": "GitHub webhook URL for repository configuration",
+            "Value": {
+                "Fn::GetAtt": [
+                    "GitHubWebhook",
+                    "Url"
+                ]
+            }
+        },
+        "ManualApprovalTopicArn": {
+            "Description": "SNS Topic ARN for manual approval notifications",
+            "Value": {
+                "Ref": "ManualApprovalTopic"
+            }
+        },
+        "SlackNotificationTopicArn": {
+            "Description": "SNS Topic ARN for Slack notifications",
+            "Value": {
+                "Ref": "SlackNotificationTopic"
+            }
+        }
+    }
+}
