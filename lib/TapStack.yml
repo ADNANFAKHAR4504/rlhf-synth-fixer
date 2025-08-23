@@ -221,7 +221,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: s3-1930
+      BucketName: !Sub 's3-1930-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
