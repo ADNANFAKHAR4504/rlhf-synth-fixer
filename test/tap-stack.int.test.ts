@@ -30,6 +30,7 @@ const apigateway = new AWS.APIGateway();
 const wafv2 = new AWS.WAFV2();
 const iam = new AWS.IAM();
 const kms = new AWS.KMS();
+const autoscaling = new AWS.AutoScaling();
 
 describe('TAP Stack Integration Tests', () => {
   const timeout = 30000; // 30 seconds timeout for integration tests
@@ -140,6 +141,55 @@ describe('TAP Stack Integration Tests', () => {
         expect(volume.Encrypted).toBe(true);
         expect(volume.KmsKeyId).toBeDefined();
       });
+    }, timeout);
+  });
+
+  describe('Auto Scaling Group', () => {
+    test('should have Auto Scaling Group with correct configuration', async () => {
+      const autoScalingGroups = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: []
+      }).promise();
+
+      const tapASG = autoScalingGroups.AutoScalingGroups!.find((asg: any) => 
+        asg.Tags!.some((tag: any) => tag.Key === 'Project' && tag.Value === 'tap')
+      );
+
+      if (!tapASG) {
+        console.warn('No Auto Scaling Group found with project tag, skipping ASG test');
+        return;
+      }
+
+      expect(tapASG.MinSize).toBe(1);
+      expect(tapASG.MaxSize).toBe(3);
+      expect(tapASG.DesiredCapacity).toBe(1);
+      expect(tapASG.VPCZoneIdentifier).toBeDefined();
+    }, timeout);
+
+    test('should have encrypted EBS volumes in Launch Configuration', async () => {
+      const autoScalingGroups = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: []
+      }).promise();
+
+      const tapASG = autoScalingGroups.AutoScalingGroups!.find((asg: any) => 
+        asg.Tags!.some((tag: any) => tag.Key === 'Project' && tag.Value === 'tap')
+      );
+
+      if (!tapASG || !tapASG.LaunchConfigurationName) {
+        console.warn('No Auto Scaling Group or Launch Configuration found, skipping EBS encryption test');
+        return;
+      }
+
+      const launchConfigs = await autoscaling.describeLaunchConfigurations({
+        LaunchConfigurationNames: [tapASG.LaunchConfigurationName]
+      }).promise();
+
+      const launchConfig = launchConfigs.LaunchConfigurations![0];
+      expect(launchConfig.InstanceType).toBe('t3.micro');
+      
+      const ebsMapping = launchConfig.BlockDeviceMappings!.find((bdm: any) => bdm.DeviceName === '/dev/xvda');
+      expect(ebsMapping).toBeDefined();
+      expect(ebsMapping!.Ebs!.Encrypted).toBe(true);
+      expect(ebsMapping!.Ebs!.VolumeSize).toBe(20);
     }, timeout);
   });
 

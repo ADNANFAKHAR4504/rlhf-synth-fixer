@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -144,32 +145,39 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(ec2Role).add('Project', commonTags.Project);
     cdk.Tags.of(ec2Role).add('Owner', commonTags.Owner);
 
-    const ec2Instance = new ec2.Instance(this, 'TapInstance', {
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            encrypted: true,
-            kmsKey: kmsKey,
-          }),
+    // Auto Scaling Group for EC2 capacity management
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'TapAutoScalingGroup',
+      {
+        vpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-      ],
-    });
+        securityGroup: ec2SecurityGroup,
+        role: ec2Role,
+        minCapacity: 1,
+        maxCapacity: 3,
+        desiredCapacity: 1,
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: autoscaling.BlockDeviceVolume.ebs(20, {
+              encrypted: true,
+            }),
+          },
+        ],
+      }
+    );
 
-    cdk.Tags.of(ec2Instance).add('Environment', commonTags.Environment);
-    cdk.Tags.of(ec2Instance).add('Project', commonTags.Project);
-    cdk.Tags.of(ec2Instance).add('Owner', commonTags.Owner);
+    cdk.Tags.of(autoScalingGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(autoScalingGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
 
     const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
       vpc,
@@ -340,6 +348,42 @@ export class TapStack extends cdk.Stack {
     new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
       resourceArn: api.deploymentStage.stageArn,
       webAclArn: webAcl.attrArn,
+    });
+
+    // CloudWatch Logs and Metrics for monitoring
+    new logs.LogGroup(this, 'TapVpcFlowLogs', {
+      logGroupName: '/aws/vpc/flowlogs',
+      retention: logs.RetentionDays.TWO_WEEKS,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // S3 Bucket Lifecycle Policy for cost optimization
+    bucket.addLifecycleRule({
+      id: 'TransitionToIA',
+      enabled: true,
+      transitions: [
+        {
+          storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+          transitionAfter: cdk.Duration.days(30),
+        },
+        {
+          storageClass: s3.StorageClass.GLACIER,
+          transitionAfter: cdk.Duration.days(90),
+        },
+      ],
+    });
+
+    // Enhanced API Gateway with throttling
+    api.addUsagePlan('TapUsagePlan', {
+      name: 'TAP API Usage Plan',
+      throttle: {
+        rateLimit: 1000,
+        burstLimit: 2000,
+      },
+      quota: {
+        limit: 10000,
+        period: apigateway.Period.DAY,
+      },
     });
 
     // Output API endpoint for integration tests

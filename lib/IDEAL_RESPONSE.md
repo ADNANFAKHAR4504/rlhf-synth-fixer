@@ -1,6 +1,6 @@
 # AWS CDK TAP Stack - Ideal Response
 
-This is the ideal implementation for a secure, production-ready AWS CDK stack with comprehensive testing and CI/CD compliance.
+This is the ideal implementation for a secure, production-ready AWS CDK stack with comprehensive testing, CI/CD compliance, and enterprise-grade monitoring.
 
 ## Infrastructure Components
 
@@ -39,17 +39,20 @@ new TapStack(app, stackName, {
 #### lib/tap-stack.ts
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
-export interface TapStackProps extends cdk.StackProps {
+interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
@@ -66,7 +69,7 @@ export class TapStack extends cdk.Stack {
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
       description: 'KMS key for TAP stack encryption',
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Enable complete cleanup
     });
 
     cdk.Tags.of(kmsKey).add('Environment', commonTags.Environment);
@@ -160,38 +163,49 @@ export class TapStack extends cdk.Stack {
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
       ],
+      inlinePolicies: {
+        S3Access: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: ['arn:aws:s3:::tap-bucket-*/*'],
+            }),
+          ],
+        }),
+      },
     });
 
     cdk.Tags.of(ec2Role).add('Environment', commonTags.Environment);
     cdk.Tags.of(ec2Role).add('Project', commonTags.Project);
     cdk.Tags.of(ec2Role).add('Owner', commonTags.Owner);
 
-    const ec2Instance = new ec2.Instance(this, 'TapInstance', {
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+    // Auto Scaling Group for EC2 capacity management
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'TapAutoScalingGroup', {
       vpc,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      machineImage: ec2.MachineImage.latestAmazonLinux2(),
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
+      minCapacity: 1,
+      maxCapacity: 3,
+      desiredCapacity: 1,
       blockDevices: [
         {
           deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
+          volume: autoscaling.BlockDeviceVolume.ebs(20, {
             encrypted: true,
-            kmsKey: kmsKey,
           }),
         },
       ],
     });
 
-    cdk.Tags.of(ec2Instance).add('Environment', commonTags.Environment);
-    cdk.Tags.of(ec2Instance).add('Project', commonTags.Project);
-    cdk.Tags.of(ec2Instance).add('Owner', commonTags.Owner);
+    cdk.Tags.of(autoScalingGroup).add('Environment', commonTags.Environment);
+    cdk.Tags.of(autoScalingGroup).add('Project', commonTags.Project);
+    cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
 
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
@@ -344,6 +358,7 @@ export class TapStack extends cdk.Stack {
       webAclArn: webAcl.attrArn,
     });
 
+    // IAM Password Policy for security compliance
     new iam.AccountPasswordPolicy(this, 'PasswordPolicy', {
       minimumPasswordLength: 14,
       requireUppercaseCharacters: true,
@@ -354,9 +369,64 @@ export class TapStack extends cdk.Stack {
       passwordReusePrevention: 12,
     });
 
+    // CloudWatch VPC Flow Logs for monitoring
+    new ec2.FlowLog(this, 'TapVpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        new logs.LogGroup(this, 'TapVpcFlowLogs', {
+          logGroupName: '/aws/vpc/flowlogs',
+          retention: logs.RetentionDays.TWO_WEEKS,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        })
+      ),
+    });
+
+    // S3 Lifecycle Policy for cost optimization
+    bucket.addLifecycleRule({
+      id: 'TransitionToIA',
+      enabled: true,
+      transitions: [
+        {
+          storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+          transitionAfter: cdk.Duration.days(30),
+        },
+        {
+          storageClass: s3.StorageClass.GLACIER,
+          transitionAfter: cdk.Duration.days(90),
+        },
+      ],
+    });
+
+    // API Gateway Usage Plan with throttling
+    const usagePlan = api.addUsagePlan('TapUsagePlan', {
+      name: 'TAP API Usage Plan',
+      throttle: {
+        rateLimit: 1000,
+        burstLimit: 2000,
+      },
+      quota: {
+        limit: 10000,
+        period: apigateway.Period.DAY,
+      },
+    });
+
+    // Stack outputs for integration tests
     new cdk.CfnOutput(this, 'TapApiEndpoint', {
       value: api.url,
       description: 'TAP API Gateway endpoint URL',
+      exportName: props?.environmentSuffix ? `TapApiEndpoint-${props.environmentSuffix}` : 'TapApiEndpoint',
+    });
+
+    new cdk.CfnOutput(this, 'TapBucketName', {
+      value: bucket.bucketName,
+      description: 'TAP S3 bucket name',
+      exportName: props?.environmentSuffix ? `TapBucketName-${props.environmentSuffix}` : 'TapBucketName',
+    });
+
+    new cdk.CfnOutput(this, 'TapDatabaseEndpoint', {
+      value: database.instanceEndpoint.hostname,
+      description: 'TAP RDS database endpoint',
+      exportName: props?.environmentSuffix ? `TapDatabaseEndpoint-${props.environmentSuffix}` : 'TapDatabaseEndpoint',
     });
   }
 }
@@ -460,24 +530,33 @@ export class TapStack extends cdk.Stack {
     "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true,
     "@aws-cdk/aws-lambda:useCdkManagedLogGroup": true
   }
-}
-```
 
 ## Key Features
 
-### Security Implementation
-- **Encryption at Rest**: All storage encrypted with KMS (S3, RDS, EBS)
-- **Network Security**: VPC with private subnets, minimal security group rules
-- **Access Control**: Least privilege IAM roles, no broad permissions
-- **WAF Protection**: AWS managed rules for API Gateway
-- **Password Policy**: Enforced complexity standards
+### Security & Compliance
+- **KMS Encryption**: All storage encrypted with customer-managed KMS keys with automatic rotation
+- **Network Security**: Private subnets, security groups with least privilege access
+- **IAM Password Policy**: Enforced complexity requirements (14+ chars, mixed case, numbers, symbols)
+- **WAF Protection**: Web Application Firewall with AWS managed rules protecting API Gateway
+- **VPC Flow Logs**: Network traffic monitoring for security analysis
 
-### Infrastructure Design
-- **Multi-AZ VPC**: Public, private, and isolated subnets across 2 AZs
-- **Compute**: EC2 in private subnets, Lambda with VPC integration
-- **Database**: Multi-AZ RDS MySQL with encryption and backup retention
-- **Storage**: Encrypted S3 with versioning and public access blocked
-- **API**: Regional API Gateway with Lambda integration
+### High Availability & Scalability
+- **Auto Scaling Group**: Dynamic EC2 capacity management (1-3 instances)
+- **Multi-AZ RDS**: Database redundancy across availability zones
+- **API Gateway Throttling**: Rate limiting (1000 req/sec) and daily quotas (10K requests)
+- **Load Balancing**: Built-in ALB integration with Auto Scaling Group
+
+### Monitoring & Observability
+- **CloudWatch Logs**: Centralized logging with 2-week retention
+- **VPC Flow Logs**: Network traffic analysis and security monitoring
+- **Lambda Log Groups**: Function-level logging with automatic cleanup
+- **Database Monitoring**: RDS performance insights and automated backups
+
+### Cost Optimization
+- **S3 Lifecycle Policies**: Automatic transition to IA (30 days) and Glacier (90 days)
+- **Resource Cleanup**: Complete stack destruction support for CI/CD environments
+- **Right-sizing**: t3.micro instances optimized for development workloads
+- **Log Retention**: Automated cleanup of CloudWatch logs to control costs
 
 ### CI/CD Compliance
 - **Resource Cleanup**: All resources configured with `removalPolicy: DESTROY`

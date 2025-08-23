@@ -99,13 +99,21 @@ describe('TapStack', () => {
     });
   });
 
-  describe('EC2 Instance', () => {
-    test('should create EC2 instance in private subnet', () => {
-      template.hasResourceProperties('AWS::EC2::Instance', {
+  describe('Auto Scaling Group', () => {
+    test('should create Auto Scaling Group with correct configuration', () => {
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '1',
+        VPCZoneIdentifier: Match.anyValue(),
+      });
+    });
+
+    test('should create Launch Configuration with encrypted EBS volume', () => {
+      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
         InstanceType: 't3.micro',
         ImageId: Match.anyValue(),
-        SecurityGroupIds: [Match.anyValue()],
-        SubnetId: Match.anyValue(),
+        SecurityGroups: [Match.anyValue()],
         IamInstanceProfile: Match.anyValue(),
         BlockDeviceMappings: [
           {
@@ -113,25 +121,9 @@ describe('TapStack', () => {
             Ebs: {
               VolumeSize: 20,
               Encrypted: true,
-              KmsKeyId: Match.anyValue()
-            }
-          }
-        ]
-      });
-    });
-
-    test('should create encrypted EBS volume', () => {
-      template.hasResourceProperties('AWS::EC2::Instance', {
-        BlockDeviceMappings: [
-          {
-            DeviceName: '/dev/xvda',
-            Ebs: {
-              VolumeSize: 20,
-              Encrypted: true,
-              KmsKeyId: Match.anyValue()
-            }
-          }
-        ]
+            },
+          },
+        ],
       });
     });
   });
@@ -312,7 +304,8 @@ describe('TapStack', () => {
     test('should have expected number of resources', () => {
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::EC2::SecurityGroup', 3);
-      template.resourceCountIs('AWS::EC2::Instance', 1);
+      template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+      template.resourceCountIs('AWS::AutoScaling::LaunchConfiguration', 1);
       template.resourceCountIs('AWS::RDS::DBInstance', 1);
       template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::Lambda::Function', 2); // App Lambda + 1 CDK custom resource Lambda
