@@ -11,7 +11,7 @@
 ### Tagging (only where supported)
 
 - Tag: VPC, Subnet, SecurityGroup, EC2 Instance, S3 Bucket, KMS Key, DBInstance, DBSubnetGroup, CloudTrail Trail, Logs LogGroup, CloudWatch Alarm, IAM Role, SecretsManager Secret.
-- Don’t tag: Logs MetricFilter, Lambda Permission, some EC2 associations, IAM InstanceProfile.
+- Do not tag: Logs MetricFilter, Lambda Permission, some EC2 associations, IAM InstanceProfile.
 - Always include `Environment` and `Owner` on taggable resources.
 
 ### Other must-dos

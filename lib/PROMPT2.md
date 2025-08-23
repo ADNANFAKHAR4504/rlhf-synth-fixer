@@ -1,5 +1,3 @@
-## Hey — linter‑friendly spec for TapStack.yaml (us‑west‑2)
-
 We want a clean YAML template that won’t fight cfn‑lint or security reviews.
 
 Template name: `TapStack.yaml`

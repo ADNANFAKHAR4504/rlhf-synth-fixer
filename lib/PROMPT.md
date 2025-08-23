@@ -1,71 +1,61 @@
 # Hey there,
 
-I need your help building a CloudFormation template in YAML that we can use as a secure, scalable, and compliant starting point for new AWS projects. Think of it as our “gold standard” setup.
+I’m creating a sensible, secure starter CloudFormation template for new projects. Nothing flashy — just the essentials we always need: auditability, a solid VPC baseline, private data tier, a simple Lambda to demonstrate wiring, and a front door with WAF. Please build this as a single YAML file that we can drop into repositories and deploy without surprises.
 
-The template should be called `TapStack.yaml`, run in `us-east-1`, and follow a strict naming convention:
+Call the template output `TapStack.yaml`. We deploy in `us-east-1` and use a simple naming pattern to keep things tidy:
 
 <resource_type>-<project_name>-<environment>
 
-Use CloudFormation Parameters for `ProjectName` and `Environment` so resource names are dynamic and reusable.
+Expose `ProjectName` and `Environment` as Parameters and use them in names. Keep it readable and easy to extend.
 
 ## What to include
 
 ### Compliance and Auditing
 
-- AWS Config
-  - A `ConfigurationRecorder` that tracks all resource changes
-  - At least one managed Config rule (e.g., `s3-bucket-public-read-prohibited` or `rds-instance-public-access-check`)
-- CloudTrail
-  - A trail that captures all management events
-  - Logs go to a new S3 bucket that’s encrypted at rest
-  - Log file validation enabled
+- AWS Config: enable a `ConfigurationRecorder` for all resources and include one managed rule (e.g., `s3-bucket-public-read-prohibited` or `rds-instance-public-access-check`).
+- CloudTrail: capture all management events. Deliver to an encrypted S3 bucket and turn on log file validation.
 
 ### Networking Foundation
 
-- A VPC with public and private subnets across two Availability Zones
-- Internet access
-  - An Internet Gateway with a public route table for the public subnets
-  - A NAT Gateway (with EIP) in a public subnet
-  - A private route table so private subnets can reach the internet through the NAT Gateway
+- A VPC with both public and private subnets across two AZs.
+- Internet access:
+  - Internet Gateway plus a public route table for public subnets
+  - NAT Gateway (EIP) in a public subnet
+  - Private route table allowing private subnets to access the internet via NAT
 
 ### Secure Data Tier
 
 - S3
   - A bucket for application data
-  - Default server-side encryption enabled (KMS)
-  - Block Public Access turned on by default
+  - Default server-side encryption (KMS)
+  - Block Public Access on by default
 - RDS
-  - A DB instance deployed as Multi-AZ for high availability
-  - Must be private (`PubliclyAccessible: false`)
-  - Deployed into a DBSubnetGroup that spans the private subnets
+  - Multi-AZ DB instance for HA
+  - Keep it private (`PubliclyAccessible: false`)
+  - Use a DBSubnetGroup spanning the private subnets
 
 ### Application and Delivery
 
 - Lambda
-  - A simple “hello world” function (Python or Node.js)
-  - Runs inside the private subnets
+  - A tiny “hello world” (Python or Node.js) running in the private subnets
 - CloudFront + WAF
-  - A CloudFront distribution for content delivery
-  - A WAFv2 WebACL associated with it
-  - The WebACL should use the AWS managed ruleset `AWSManagedRulesCommonRuleSet` to block common web exploits
+  - CloudFront distribution in front
+  - WAFv2 WebACL using `AWSManagedRulesCommonRuleSet`
 
 ### IAM
 
-- Create a dedicated IAM role for the Lambda
-- The policy must be least-privilege
-  - Only what’s required to run the function and write to CloudWatch Logs (`logs:CreateLogStream`, `logs:PutLogEvents`)
-  - No wildcards in actions
+- Create a dedicated IAM role for the Lambda.
+- Keep it least-privilege: just what’s needed to execute and write logs (`logs:CreateLogStream`, `logs:PutLogEvents`). No wildcards.
 
 ### Expected Output
 
-- A single file: `TapStack.yaml`
-- It should be parameterized, well-structured, pass CloudFormation validation, and deploy cleanly into AWS
+- A single file: `TapStack.yaml`, parameterized, readable, and deployable. It should pass cfn validation and go up cleanly in `us-east-1`.
 
-## Validation guardrails (to avoid common deployment issues)
+## A few guardrails so this deploys cleanly
 
-- AMI resolution: do not hardcode — use SSM for latest Amazon Linux 2
-- IAM: no named IAM resources; no wildcards in `Action` or `Resource`
-- S3 ARNs: use full ARNs for object resources (e.g., `arn:aws:s3:::bucket/*`), not bucket names
-- CloudTrail: `CloudWatchLogsLogGroupArn` must be the log group ARN (no wildcard suffix)
-- AWS Config: use valid resource types only (Recorder, DeliveryChannel, ConfigRule). Avoid non-existent types
-- Region consistency: target `us-east-1` throughout
+- AMI: don’t hardcode — use the SSM parameter for latest Amazon Linux 2.
+- IAM: no named IAM resources; avoid wildcards in `Action` or `Resource`.
+- S3 in policies: reference full object ARNs (e.g., `arn:aws:s3:::bucket/*`).
+- CloudTrail: `CloudWatchLogsLogGroupArn` must be the actual log group ARN (no `:*`).
+- AWS Config: stick to `ConfigurationRecorder`, `DeliveryChannel`, `ConfigRule`.
+- Region: consistently target `us-east-1`.
