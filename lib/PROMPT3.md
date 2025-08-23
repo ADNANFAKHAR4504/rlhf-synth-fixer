@@ -78,7 +78,6 @@ A valid and tested CloudFormation YAML template that satisfies all requirements,
 I'm setting up audit logging for our security infrastructure but the CloudFormation deployment is failing with a validation error:
 
 ```
-CloudTrail | Properties validation failed for resource CloudTrail with message:
 #: required key [IsLogging] not found
 ```
 
