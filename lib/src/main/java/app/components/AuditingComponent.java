@@ -143,8 +143,8 @@ public class AuditingComponent extends ComponentResource {
                                 .name("Root Account Usage")
                                 .fieldSelectors(
                                         TrailAdvancedEventSelectorFieldSelectorArgs.builder()
-                                                .field("userIdentity.type")
-                                                .equals_("Root")
+                                                .field("userIdentity.arn")
+                                                .equals_(List.of("arn:aws:iam::" + accountId + ":root"))
                                                 .build()
                                 )
                                 .build()
