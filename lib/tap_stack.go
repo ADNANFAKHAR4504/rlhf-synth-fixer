@@ -414,18 +414,6 @@ EOF
 		"is_multi_region_trail":         true,
 		"enable_log_file_validation":    true,
 		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
-		"event_selector": []map[string]interface{}{
-			{
-				"read_write_type":           "All",
-				"include_management_events": true,
-				"data_resource": []map[string]interface{}{
-					{
-						"type":   "AWS::S3::Object",
-						"values": []string{"arn:aws:s3:::*/*"},
-					},
-				},
-			},
-		},
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
