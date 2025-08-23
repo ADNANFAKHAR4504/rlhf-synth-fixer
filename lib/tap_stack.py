@@ -433,7 +433,7 @@ class TapStack(pulumi.ComponentResource):
             f"microservices-db-{self.environment_suffix}",
             identifier=f"microservices-db-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.4",
+            engine_version="15",
             instance_class="db.t3.micro",
             allocated_storage=20,
             max_allocated_storage=100,
