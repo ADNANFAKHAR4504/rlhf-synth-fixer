@@ -35,12 +35,11 @@ type MultiRegionInfrastructure struct {
 
 func NewMultiRegionInfrastructure(ctx *pulumi.Context, config InfrastructureConfig) *MultiRegionInfrastructure {
 	tags := pulumi.StringMap{
-		"environment": pulumi.String(config.Environment),
-		"purpose":     pulumi.String("multi-region-infrastructure"),
-		"managed-by":  pulumi.String("pulumi"),
+		"purpose":    pulumi.String("multi-region-infrastructure"),
+		"managed-by": pulumi.String("pulumi"),
 	}
 
-	// Add custom tags from config
+	// Add custom tags from config (these take precedence)
 	for k, v := range config.tags {
 		tags[k] = pulumi.String(v)
 	}
@@ -98,18 +97,7 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 func (m *MultiRegionInfrastructure) createKMSKey() (*kms.Key, error) {
 	key, err := kms.NewKey(m.ctx, fmt.Sprintf("%s-encryption-key", m.config.Environment), &kms.KeyArgs{
 		Description: pulumi.String("Multi-region infrastructure encryption key"),
-		Policy: pulumi.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Sid": "Enable IAM User Permissions",
-					"Effect": "Allow",
-					"Principal": {"AWS": "arn:aws:iam::*:root"},
-					"Action": "kms:*",
-					"Resource": "*"
-				}
-			]
-		}`),
+
 		Tags: m.tags,
 	})
 	if err != nil {
@@ -169,6 +157,24 @@ func (m *MultiRegionInfrastructure) createS3Bucket(kmsKey *kms.Key) (*s3.Bucket,
 		BlockPublicPolicy:     pulumi.Bool(true),
 		IgnorePublicAcls:      pulumi.Bool(true),
 		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Create access logging bucket
+	logBucket, err := s3.NewBucket(m.ctx, fmt.Sprintf("%s-access-logs", m.config.Environment), &s3.BucketArgs{
+		Tags: m.tags,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Configure access logging
+	_, err = s3.NewBucketLoggingV2(m.ctx, fmt.Sprintf("%s-bucket-logging", m.config.Environment), &s3.BucketLoggingV2Args{
+		Bucket:       bucket.ID(),
+		TargetBucket: logBucket.ID(),
+		TargetPrefix: pulumi.String("access-logs/"),
 	})
 
 	return bucket, err
@@ -283,12 +289,18 @@ func (m *MultiRegionInfrastructure) createIAMResources() (map[string]*iam.Role, 
 				{
 					"Effect": "Allow",
 					"Action": [
-						"cloudwatch:PutMetricData",
+						"cloudwatch:PutMetricData"
+					],
+					"Resource": "*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
 						"logs:CreateLogGroup",
 						"logs:CreateLogStream",
 						"logs:PutLogEvents"
 					],
-					"Resource": "*"
+					"Resource": "arn:aws:logs:us-east-1:*:log-group:/aws/ec2/*"
 				}
 			]
 		}`),
@@ -349,11 +361,7 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKe
 		CidrBlock:          pulumi.String("10.0.0.0/16"),
 		EnableDnsHostnames: pulumi.Bool(true),
 		EnableDnsSupport:   pulumi.Bool(true),
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-vpc-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("networking"),
-		},
+		Tags:               m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return err
@@ -374,11 +382,7 @@ func (m *MultiRegionInfrastructure) deployRegionalResources(region string, kmsKe
 	// Create RDS subnet group
 	dbSubnetGroup, err := rds.NewSubnetGroup(m.ctx, fmt.Sprintf("%s-db-subnet-group-%s", m.config.Environment, region), &rds.SubnetGroupArgs{
 		SubnetIds: pulumi.StringArray{subnets["private1"].ID(), subnets["private2"].ID()},
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-db-subnet-group-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("database"),
-		},
+		Tags:      m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return err
@@ -446,12 +450,7 @@ func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, p
 			CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+1)),
 			AvailabilityZone:    pulumi.String(az),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-public-%d-%s", m.config.Environment, i+1, region)),
-				"environment": pulumi.String(m.config.Environment),
-				"purpose":     pulumi.String("public-networking"),
-				"Type":        pulumi.String("Public"),
-			},
+			Tags:                m.tags,
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return nil, err
@@ -465,12 +464,7 @@ func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, p
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+10)),
 			AvailabilityZone: pulumi.String(az),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-private-%d-%s", m.config.Environment, i+1, region)),
-				"environment": pulumi.String(m.config.Environment),
-				"purpose":     pulumi.String("private-networking"),
-				"Type":        pulumi.String("Private"),
-			},
+			Tags:             m.tags,
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return nil, err
@@ -481,11 +475,7 @@ func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, p
 	// Internet Gateway
 	igw, err := ec2.NewInternetGateway(m.ctx, fmt.Sprintf("%s-igw-%s", m.config.Environment, region), &ec2.InternetGatewayArgs{
 		VpcId: vpc.ID(),
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-igw-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("internet-access"),
-		},
+		Tags:  m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
@@ -500,11 +490,7 @@ func (m *MultiRegionInfrastructure) createSubnets(region string, vpc *ec2.Vpc, p
 				GatewayId: igw.ID(),
 			},
 		},
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-public-rt-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("public-routing"),
-		},
+		Tags: m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
@@ -536,22 +522,18 @@ func (m *MultiRegionInfrastructure) createSecurityGroups(region string, vpc *ec2
 				Protocol:   pulumi.String("tcp"),
 				FromPort:   pulumi.Int(3306),
 				ToPort:     pulumi.Int(3306),
-				CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+				CidrBlocks: pulumi.StringArray{pulumi.String("10.0.11.0/24"), pulumi.String("10.0.12.0/24")},
 			},
 		},
 		Egress: ec2.SecurityGroupEgressArray{
 			&ec2.SecurityGroupEgressArgs{
-				Protocol:   pulumi.String("-1"),
-				FromPort:   pulumi.Int(0),
-				ToPort:     pulumi.Int(0),
-				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+				Protocol:   pulumi.String("tcp"),
+				FromPort:   pulumi.Int(443),
+				ToPort:     pulumi.Int(443),
+				CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
 			},
 		},
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-db-sg-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("database-security"),
-		},
+		Tags: m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
@@ -570,8 +552,8 @@ func (m *MultiRegionInfrastructure) createRDSInstance(region string, subnetGroup
 		EngineVersion:                      pulumi.String("8.0"),
 		InstanceClass:                      pulumi.String(m.config.DBInstanceClass),
 		DbName:                             pulumi.String(fmt.Sprintf("%sdb", m.config.Environment)),
-		Username:                           pulumi.String("admin"),
-		Password:                           pulumi.String("changeme123!"), // Use AWS Secrets Manager in production
+		Username:                           pulumi.String(fmt.Sprintf("dbadmin_%s", m.config.Environment)),
+		ManageMasterUserPassword:           pulumi.Bool(true),
 		VpcSecurityGroupIds:                pulumi.StringArray{securityGroup.ID()},
 		DbSubnetGroupName:                  subnetGroup.Name,
 		BackupRetentionPeriod:              pulumi.Int(m.config.BackupRetention),
@@ -586,14 +568,10 @@ func (m *MultiRegionInfrastructure) createRDSInstance(region string, subnetGroup
 		PerformanceInsightsKmsKeyId:        kmsKey.Arn,
 		PerformanceInsightsRetentionPeriod: pulumi.Int(7),
 		AutoMinorVersionUpgrade:            pulumi.Bool(true),
-		DeletionProtection:                 pulumi.Bool(true),
+		DeletionProtection:                 pulumi.Bool(false),
 		SkipFinalSnapshot:                  pulumi.Bool(false),
 		FinalSnapshotIdentifier:            pulumi.String(fmt.Sprintf("%s-final-snapshot-%s", m.config.Environment, region)),
-		Tags: pulumi.StringMap{
-			"Name":        pulumi.String(fmt.Sprintf("%s-database-%s", m.config.Environment, region)),
-			"environment": pulumi.String(m.config.Environment),
-			"purpose":     pulumi.String("primary-database"),
-		},
+		Tags:                               m.tags,
 	}, pulumi.Provider(provider))
 }
 
