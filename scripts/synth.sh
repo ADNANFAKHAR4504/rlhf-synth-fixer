@@ -38,6 +38,15 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   npm run cdktf:get
 
+  if [ -d ".gen/providers" ] && [ ! -d ".gen/aws" ]; then
+    # Find the actual AWS provider directory
+    AWS_DIR=$(find .gen/providers -name "*aws*" -type d | head -1)
+    if [ -n "$AWS_DIR" ]; then
+      ln -sf "$AWS_DIR" .gen/aws
+      echo "✅ Created symlink .gen/aws -> $AWS_DIR"
+    fi
+  fi
+
   ensure_gen() {
     if [ ! -d ".gen" ]; then
       echo "❌ .gen not found; generating..."
