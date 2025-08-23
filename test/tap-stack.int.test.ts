@@ -59,11 +59,11 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have valid Load Balancer URL format', async () => {
-      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
     });
 
     test('should have valid Load Balancer DNS format', async () => {
-      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
     });
   });
 
@@ -96,7 +96,7 @@ describe('TapStack Integration Tests', () => {
         const albName = albDns.split('.')[0]; // Extract "WebApp-ALB-88025187" from DNS
         
         // Note: We can't directly validate ALB without its ARN, but we can validate the DNS is accessible
-        expect(albDns).toMatch(/^[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+        expect(albDns).toMatch(/^[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
         expect(albName).toContain('WebApp-ALB');
         
         console.log(`Application Load Balancer DNS ${albDns} is properly formatted`);
@@ -127,11 +127,11 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have valid Load Balancer URL format', async () => {
-      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
     });
 
     test('should have valid Load Balancer DNS format', async () => {
-      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
     });
   });
 
@@ -156,10 +156,10 @@ describe('TapStack Integration Tests', () => {
     test('should have proper load balancer configuration', async () => {
       // Validate Application Load Balancer
       expect(stackOutputs.LoadBalancerURL).toBeDefined();
-      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
       
       expect(stackOutputs.LoadBalancerDNS).toBeDefined();
-      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.elb\.amazonaws\.com$/);
+      expect(stackOutputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9\-]+\.[a-z0-9\-]+\.elb\.amazonaws\.com$/);
       
       console.log('Load balancer configuration validated');
     });
