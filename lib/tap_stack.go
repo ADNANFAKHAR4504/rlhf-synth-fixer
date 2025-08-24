@@ -46,7 +46,7 @@ func main() {
 		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-1-%s", envSuffix), &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.1.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2a"),
+			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags:             commonTags,
 		})
 		if err != nil {
@@ -56,7 +56,7 @@ func main() {
 		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-2-%s", envSuffix), &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.2.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2b"),
+			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags:             commonTags,
 		})
 		if err != nil {
