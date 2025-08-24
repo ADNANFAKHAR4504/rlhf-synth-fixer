@@ -3,6 +3,8 @@ package app.components;
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.iam.Role;
 import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
 import com.pulumi.aws.iam.RolePolicyAttachment;
 import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
 import com.pulumi.core.Either;
@@ -16,7 +18,8 @@ public class IAMRoles extends ComponentResource {
     private final Output<String> executionRoleName;
 
     public IAMRoles(String name, Provider provider) {
-        super("custom:aws:IAMRoles", name, ComponentResourceOptions.builder().provider(provider)
+        super("custom:aws:IAMRoles", name, ComponentResourceOptions.builder()
+                .provider(provider)
                 .build());
 
         // StackSet Administration Role
@@ -36,17 +39,37 @@ public class IAMRoles extends ComponentResource {
                             ]
                         }
                         """)
+                .build(), CustomResourceOptions.builder().parent(this).provider(provider)
+                .build());
+
+        // Create custom policy for StackSet administration
+        var administrationPolicy = new Policy("stackset-administration-policy", PolicyArgs.builder()
+                .name("StackSetAdministrationPolicy")
+                .description("Policy for CloudFormation StackSet administration")
+                .policy("""
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sts:AssumeRole"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+                                    ]
+                                }
+                            ]
+                        }
+                        """)
                 .build(), CustomResourceOptions.builder().parent(this).provider(provider).build());
 
-        // Attach policy to administration role
+        // Attach custom policy to administration role
         new RolePolicyAttachment("stackset-admin-policy-attachment",
                 RolePolicyAttachmentArgs.builder()
                         .role(administrationRole.name())
-                        .policyArn("arn:aws:iam::aws:policy/service-role/AWSCloudFormationStackSetAdministrationRole")
-                        .build(), CustomResourceOptions.builder()
-                .parent(this)
-                .provider(provider)
-                .build());
+                        .policyArn(administrationPolicy.arn())
+                        .build(), CustomResourceOptions.builder().parent(this).provider(provider).build());
 
         // StackSet Execution Role (to be created in target accounts)
         var executionRole = new Role("stackset-execution-role", RoleArgs.builder()
@@ -68,14 +91,54 @@ public class IAMRoles extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).provider(provider)
                 .build());
 
-        // Attach comprehensive policy to execution role
+        // Create custom policy for StackSet execution
+        var executionPolicy = new Policy("stackset-execution-policy", PolicyArgs.builder()
+                .name("StackSetExecutionPolicy")
+                .description("Policy for CloudFormation StackSet execution")
+                .policy("""
+                        {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudformation:*",
+                                        "ec2:*",
+                                        "elasticloadbalancing:*",
+                                        "autoscaling:*",
+                                        "dynamodb:*",
+                                        "iam:CreateRole",
+                                        "iam:DeleteRole",
+                                        "iam:GetRole",
+                                        "iam:PassRole",
+                                        "iam:CreateInstanceProfile",
+                                        "iam:DeleteInstanceProfile",
+                                        "iam:AddRoleToInstanceProfile",
+                                        "iam:RemoveRoleFromInstanceProfile",
+                                        "iam:AttachRolePolicy",
+                                        "iam:DetachRolePolicy",
+                                        "iam:PutRolePolicy",
+                                        "iam:DeleteRolePolicy",
+                                        "iam:GetRolePolicy",
+                                        "iam:ListRolePolicies",
+                                        "iam:ListAttachedRolePolicies",
+                                        "kms:*",
+                                        "logs:*",
+                                        "cloudwatch:*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                        """)
+                .build(), CustomResourceOptions.builder().parent(this).provider(provider).build());
+
+        // Attach custom policy to execution role
         new RolePolicyAttachment("stackset-exec-policy-attachment",
                 RolePolicyAttachmentArgs.builder()
                         .role(executionRole.name())
-                        .policyArn("arn:aws:iam::aws:policy/PowerUserAccess")
-                        .build(), CustomResourceOptions.builder()
-                .parent(this)
-                .provider(provider)
+                        .policyArn(executionPolicy.arn())
+                        .build(), CustomResourceOptions.builder().parent(this).provider(provider)
                 .build());
 
         this.administrationRoleArn = administrationRole.arn();
