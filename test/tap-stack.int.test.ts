@@ -400,8 +400,13 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(responseBody).toBe(testContent);
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
-      // S3 returns the full KMS key ARN, so we compare with our output directly
-      expect(getResponse.SSEKMSKeyId).toBe(outputs.KMSKeyId);
+      // S3 returns the full KMS key ARN, but our output might be just the key ID
+      // Extract the key ID from the S3 response and compare with our output
+      const s3KeyId = getResponse.SSEKMSKeyId?.split('/').pop();
+      const expectedKeyId = outputs.KMSKeyId.includes('arn:aws:kms:') 
+        ? outputs.KMSKeyId.split('/').pop() 
+        : outputs.KMSKeyId;
+      expect(s3KeyId).toBe(expectedKeyId);
 
       // Clean up
       const deleteCommand = new DeleteObjectCommand({
