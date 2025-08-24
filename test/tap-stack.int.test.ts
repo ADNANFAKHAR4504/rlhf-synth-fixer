@@ -1,16 +1,86 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
+import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
+import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } from '@aws-sdk/client-ec2';
+
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+describe('TapStack CloudFormation Integration Tests', () => {
+  const region = process.env.AWS_REGION || 'us-east-1';
+
+  const rdsClient = new RDSClient({ region });
+  const s3Client = new S3Client({ region });
+  const cwClient = new CloudWatchClient({ region });
+  const ec2Client = new EC2Client({ region });
+
+  describe('RDS Instance', () => {
+    test('RDS instance should be available and accessible', async () => {
+      const dbInstanceIdentifier = outputs.RDSInstanceIdentifier;
+      expect(dbInstanceIdentifier).toBeDefined();
+
+      const result = await rdsClient.send(
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceIdentifier })
+      );
+
+      const db = result.DBInstances?.[0];
+      expect(db).toBeDefined();
+      expect(db?.DBInstanceStatus).toBe('available');
+      expect(db?.Endpoint?.Address).toBe(outputs.RDSInstanceEndpoint);
+    });
+  });
+
+  describe('S3 Logging Bucket', () => {
+    test('S3 log bucket should exist and be accessible', async () => {
+      const bucketName = outputs.LoggingBucket;
+      expect(bucketName).toBeDefined();
+
+      const result = await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+      expect(result.$metadata.httpStatusCode).toBe(200);
+    });
+  });
+
+  describe('CloudWatch Alarm', () => {
+    test('CloudWatch CPU alarm should be present', async () => {
+      const result = await cwClient.send(
+        new DescribeAlarmsCommand({ AlarmNames: ['High CPU on EC2'] })
+      );
+
+      const alarm = result.MetricAlarms?.[0];
+      expect(alarm).toBeDefined();
+      expect(alarm?.AlarmName).toBe('High CPU on EC2');
+      expect(alarm?.MetricName).toBe('CPUUtilization');
+      expect(alarm?.Threshold).toBe(80);
+    });
+  });
+
+  describe('VPC & Subnets', () => {
+    test('VPC should exist', async () => {
+      const vpcId = outputs.VPCId;
+      expect(vpcId).toBeDefined();
+
+      const vpcResult = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
+      expect(vpcResult.Vpcs?.[0]).toBeDefined();
+    });
+
+    test('Private subnets should exist', async () => {
+      const privateSubnetIds = outputs.PrivateSubnets.split(',');
+      expect(privateSubnetIds.length).toBeGreaterThanOrEqual(2);
+
+      const subnetResult = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+      );
+
+      expect(subnetResult.Subnets?.length).toBe(privateSubnetIds.length);
+      subnetResult.Subnets?.forEach((subnet) => {
+        expect(subnet.VpcId).toBe(outputs.VPCId);
+      });
     });
   });
 });
