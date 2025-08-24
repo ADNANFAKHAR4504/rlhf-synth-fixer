@@ -149,6 +149,11 @@ runs:
         UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
         LANGUAGE: ${{ inputs.language }}
+        # Go environment variables for consistent caching
+        GOCACHE: ${{ github.workspace }}/.cache/go-build
+        GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+        GOPROXY: https://proxy.golang.org,direct
+        GOSUMDB: sum.golang.org
 
     - name: Upload build artifacts
       if: inputs.upload-artifacts == 'true'
