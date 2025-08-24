@@ -405,7 +405,7 @@ EOF
 				}
 			]
 		}`,
-		"depends_on": ["aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"],
+		"depends_on": []string{"aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"},
 	})
 
 	// Add current AWS account data source
@@ -425,10 +425,10 @@ EOF
 		"is_multi_region_trail":         true,
 		"enable_log_file_validation":    true,
 		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
-		"depends_on": [
+		"depends_on": []string{
 			"aws_s3_bucket_policy.cloudtrail_bucket_policy",
 			"aws_kms_key.tap_kms_key",
-		],
+		},
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
