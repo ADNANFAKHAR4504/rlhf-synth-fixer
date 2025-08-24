@@ -31,6 +31,9 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
+  # Go caching optimization
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
 jobs:
   detect-metadata:
@@ -314,7 +317,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
-          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -731,8 +733,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
-          platform: ''
-          language: ''
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
