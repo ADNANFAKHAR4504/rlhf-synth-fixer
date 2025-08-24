@@ -287,13 +287,14 @@ describe('TapStack', () => {
   test('Uses default values when optional props are not provided', () => {
     const appDefault = new cdk.App();
     const stackDefault = new TapStack(appDefault, 'TestDefaultStack', {
-      certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert-id',
+      certificateArn:
+        'arn:aws:acm:us-east-1:123456789012:certificate/test-cert-id',
       containerImage: 'nginx:test',
       desiredCount: 1,
     });
-    
+
     const templateDefault = Template.fromStack(stackDefault);
-    
+
     // Should use default environmentSuffix 'dev'
     templateDefault.hasResourceProperties('AWS::ECS::Service', {
       DesiredCount: 1,
@@ -301,36 +302,45 @@ describe('TapStack', () => {
   });
 
   test('Auto-scaling configuration with custom capacity', () => {
-    template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
-      MinCapacity: 1,
-      MaxCapacity: 5,
-      ResourceId: Match.anyValue(),
-      ScalableDimension: 'ecs:service:DesiredCount',
-      ServiceNamespace: 'ecs',
-    });
+    template.hasResourceProperties(
+      'AWS::ApplicationAutoScaling::ScalableTarget',
+      {
+        MinCapacity: 1,
+        MaxCapacity: 5,
+        ResourceId: Match.anyValue(),
+        ScalableDimension: 'ecs:service:DesiredCount',
+        ServiceNamespace: 'ecs',
+      }
+    );
 
-    template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
-      PolicyType: 'TargetTrackingScaling',
-      TargetTrackingScalingPolicyConfiguration: {
-        TargetValue: 70,
-        PredefinedMetricSpecification: {
-          PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+    template.hasResourceProperties(
+      'AWS::ApplicationAutoScaling::ScalingPolicy',
+      {
+        PolicyType: 'TargetTrackingScaling',
+        TargetTrackingScalingPolicyConfiguration: {
+          TargetValue: 70,
+          PredefinedMetricSpecification: {
+            PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+          },
+          ScaleInCooldown: 300,
+          ScaleOutCooldown: 120,
         },
-        ScaleInCooldown: 300,
-        ScaleOutCooldown: 120,
-      },
-    });
+      }
+    );
   });
 
   test('ALB deletion protection is enabled', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-      LoadBalancerAttributes: Match.arrayWith([
-        {
-          Key: 'deletion_protection.enabled',
-          Value: 'true',
-        },
-      ]),
-    });
+    template.hasResourceProperties(
+      'AWS::ElasticLoadBalancingV2::LoadBalancer',
+      {
+        LoadBalancerAttributes: Match.arrayWith([
+          {
+            Key: 'deletion_protection.enabled',
+            Value: 'true',
+          },
+        ]),
+      }
+    );
   });
 
   test('VPC has proper flow logs configuration', () => {
@@ -349,7 +359,10 @@ describe('TapStack', () => {
           Image: 'nginx:test',
           Essential: true,
           HealthCheck: {
-            Command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
+            Command: [
+              'CMD-SHELL',
+              'curl -f http://localhost:8080/health || exit 1',
+            ],
             Interval: 30,
             Timeout: 5,
             Retries: 3,

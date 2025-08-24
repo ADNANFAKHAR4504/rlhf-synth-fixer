@@ -250,6 +250,30 @@ export class TapStack extends cdk.Stack {
     // Grant execution role access to KMS for log encryption
     kmsKey.grantDecrypt(executionRole);
 
+    // Grant CloudWatch Logs service access to the KMS key for VPC Flow Logs
+    kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchLogsAccess',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnEquals: {
+            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/vpc/SecureApp-flowlogs-${environmentSuffix}`,
+          },
+        },
+      })
+    );
+
     const taskDefinition = new ecs.FargateTaskDefinition(
       this,
       `SecureAppTaskDefinition${environmentSuffix}`,
