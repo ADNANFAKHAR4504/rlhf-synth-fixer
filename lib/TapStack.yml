@@ -281,6 +281,7 @@ Resources:
               - Key: Environment
                 Value: Production
 
+  #Trigger
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
