@@ -513,8 +513,30 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		},
 	})
 
-	// Security Hub
+	// Security Hub in primary region (us-west-2)
 	securityhubaccount.NewSecurityhubAccount(stack, jsii.String("security-hub"), &securityhubaccount.SecurityhubAccountConfig{
+		EnableDefaultStandards: jsii.Bool(true),
+	})
+
+	// AWS Provider for us-east-1 (Security Hub secondary)
+	awsEast := provider.NewAwsProvider(stack, jsii.String("aws-east"), &provider.AwsProviderConfig{
+		Region: jsii.String("us-east-1"),
+		Alias:  jsii.String("east"),
+		DefaultTags: &[]*provider.AwsProviderDefaultTags{
+			{
+				Tags: &map[string]*string{
+					"Environment": config.Environment,
+					"Project":     config.Project,
+					"Region":      jsii.String("secondary"),
+					"ManagedBy":   jsii.String("cdktf"),
+				},
+			},
+		},
+	})
+
+	// Security Hub in us-east-1
+	securityhubaccount.NewSecurityhubAccount(stack, jsii.String("security-hub-east"), &securityhubaccount.SecurityhubAccountConfig{
+		Provider:               awsEast,
 		EnableDefaultStandards: jsii.Bool(true),
 	})
 
