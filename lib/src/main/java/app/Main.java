@@ -1,18 +1,17 @@
 package app;
 
+import app.components.IAMRoles;
+import app.components.ObservabilityDashboard;
 import com.pulumi.Context;
 import com.pulumi.Pulumi;
-import app.components.IamComponent;
-import app.components.AuditingComponent;
-import app.components.NetworkingComponent;
-import app.components.ComputeComponent;
-import app.components.StorageComponent;
-
-import java.util.List;
-import java.util.Arrays;
+import com.pulumi.aws.Provider;
+import app.config.DeploymentConfig;
+import app.components.WebApplicationStackSet;
+import com.pulumi.aws.ProviderArgs;
 
 /**
  * Main class for Java Pulumi infrastructure as code.
+ * <p>
  * This class demonstrates how to create AWS infrastructure using Pulumi's Java SDK.
  *
  * @version 1.0
@@ -50,43 +49,44 @@ public final class Main {
      */
     static void defineInfrastructure(Context ctx) {
 
-        List<String> allowedRegions = Arrays.asList("us-west-2", "us-east-1");
-        String currentRegion = ctx.config().get("aws:region").orElse("us-west-2");
+        var config = new DeploymentConfig(ctx);
 
-        // Validate region
-        if (!allowedRegions.contains(currentRegion)) {
-            throw new IllegalArgumentException(
-                    String.format("Deployment only allowed in regions: %s. Current region: %s",
-                            allowedRegions, currentRegion)
-            );
-        }
+        // Create AWS Provider for management account
+        var managementProvider = new Provider("management-provider", ProviderArgs.builder()
+                .region(config.getManagementRegion())
+                .build());
 
-        // Create IAM components first (needed for other resources)
-        var iamComponent = new IamComponent("iam", currentRegion);
+        // Create IAM roles for StackSet operations
+        var iamRoles = new IAMRoles("stackset-iam-roles", managementProvider);
 
-        // Create networking infrastructure
-        var networkingComponent = new NetworkingComponent("networking", currentRegion);
+        // Create the web application StackSet
+        var webAppStackSet = new WebApplicationStackSet("web-app-stackset",
+                WebApplicationStackSet.WebApplicationStackSetArgs.builder()
+                        .config(config)
+                        .administrationRoleArn(iamRoles.getAdministrationRoleArn())
+                        .executionRoleName(iamRoles.getExecutionRoleName())
+                        .build(),
+                managementProvider);
 
-        // Create storage with encryption
-        var storageComponent = new StorageComponent("storage", currentRegion);
+        // Create observability dashboard
+        var dashboard = new ObservabilityDashboard("web-app-dashboard",
+                ObservabilityDashboard.ObservabilityDashboardArgs.builder()
+                        .stackSetId(webAppStackSet.getStackSetId())
+                        .regions(config.getTargetRegions())
+                        .build(),
+                managementProvider);
 
-        // Create compute resources
-        var computeComponent = new ComputeComponent("compute",
-                networkingComponent,
-                iamComponent,
-                currentRegion);
+        // Export outputs
+        ctx.export("stackSetId", webAppStackSet.getStackSetId());
+        ctx.export("stackSetArn", webAppStackSet.getStackSetArn());
+        ctx.export("administrationRoleArn", iamRoles.getAdministrationRoleArn());
+        ctx.export("executionRoleName", iamRoles.getExecutionRoleName());
+        ctx.export("dashboardUrl", dashboard.getDashboardUrl());
 
-        // Enable auditing and compliance
-        var auditingComponent = new AuditingComponent("auditing",
-                storageComponent,
-                currentRegion);
-
-        // Export important outputs
-        ctx.export("vpcId", networkingComponent.getVpcId());
-        ctx.export("publicSubnetIds", networkingComponent.getPublicSubnetIds());
-        ctx.export("privateSubnetIds", networkingComponent.getPrivateSubnetIds());
-        ctx.export("ec2InstanceIds", computeComponent.getInstanceIds());
-        ctx.export("s3BucketNames", storageComponent.getBucketNames());
-        ctx.export("cloudTrailArn", auditingComponent.getCloudTrailArn());
+        // Export application endpoints for each region
+        config.getTargetRegions().forEach(region -> {
+            ctx.export("applicationEndpoint-" + region,
+                    webAppStackSet.getApplicationEndpoint(region));
+        });
     }
 }
