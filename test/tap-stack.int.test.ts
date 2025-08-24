@@ -1,18 +1,27 @@
 import fs from 'fs';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } from '@aws-sdk/client-ec2';
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+} from '@aws-sdk/client-rds';
+import {
+  S3Client,
+  HeadBucketCommand,
+} from '@aws-sdk/client-s3';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+} from '@aws-sdk/client-ec2';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
+const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 describe('TapStack CloudFormation Integration Tests', () => {
-  const region = process.env.AWS_REGION || 'us-east-1';
-
   const rdsClient = new RDSClient({ region });
   const s3Client = new S3Client({ region });
   const cwClient = new CloudWatchClient({ region });
@@ -39,20 +48,28 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const bucketName = outputs.LoggingBucket;
       expect(bucketName).toBeDefined();
 
-      const result = await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+      const result = await s3Client.send(
+        new HeadBucketCommand({ Bucket: bucketName })
+      );
+
       expect(result.$metadata.httpStatusCode).toBe(200);
     });
   });
 
   describe('CloudWatch Alarm', () => {
     test('CloudWatch CPU alarm should be present', async () => {
+      const stackName = outputs.StackName;
+      expect(stackName).toBeDefined();
+
+      const expectedAlarmName = `High-CPU-EC2-${stackName}`;
+
       const result = await cwClient.send(
-        new DescribeAlarmsCommand({ AlarmNames: ['High CPU on EC2'] })
+        new DescribeAlarmsCommand({ AlarmNames: [expectedAlarmName] })
       );
 
       const alarm = result.MetricAlarms?.[0];
       expect(alarm).toBeDefined();
-      expect(alarm?.AlarmName).toBe('High CPU on EC2');
+      expect(alarm?.AlarmName).toBe(expectedAlarmName);
       expect(alarm?.MetricName).toBe('CPUUtilization');
       expect(alarm?.Threshold).toBe(80);
     });
@@ -63,22 +80,24 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const vpcId = outputs.VPCId;
       expect(vpcId).toBeDefined();
 
-      const vpcResult = await ec2Client.send(
+      const result = await ec2Client.send(
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
-      expect(vpcResult.Vpcs?.[0]).toBeDefined();
+
+      expect(result.Vpcs?.[0]).toBeDefined();
     });
 
     test('Private subnets should exist', async () => {
-      const privateSubnetIds = outputs.PrivateSubnets.split(',');
-      expect(privateSubnetIds.length).toBeGreaterThanOrEqual(2);
+      const subnetIds = outputs.PrivateSubnets.split(',');
+      expect(subnetIds.length).toBeGreaterThanOrEqual(2);
 
-      const subnetResult = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+      const result = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
       );
 
-      expect(subnetResult.Subnets?.length).toBe(privateSubnetIds.length);
-      subnetResult.Subnets?.forEach((subnet) => {
+      expect(result.Subnets?.length).toBe(subnetIds.length);
+
+      result.Subnets?.forEach(subnet => {
         expect(subnet.VpcId).toBe(outputs.VPCId);
       });
     });

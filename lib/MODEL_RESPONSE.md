@@ -23,15 +23,6 @@ Parameters:
     Type: String
     Default: 10.0.4.0/24
 
-  DBUsername:
-    Type: String
-    Default: admin
-    NoEcho: true
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-
 Resources:
 
   ### VPC & Subnets ###
@@ -150,14 +141,28 @@ Resources:
       DBSubnetGroupDescription: "RDS Subnet Group"
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
 
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: rds-db-secret
+      Description: "Auto-generated DB credentials"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 20
+        ExcludeCharacters: "@/\"'\\"
+      Tags:
+        - Key: Name
+          Value: rds-db-secret
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: mysql
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:rds-db-secret:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:rds-db-secret:SecretString:password}}'
       DBSubnetGroupName: !Ref RDSSubnetGroup
       MultiAZ: true
       BackupRetentionPeriod: 7
@@ -228,7 +233,12 @@ Outputs:
     Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
   RDSInstanceEndpoint:
     Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSInstanceIdentifier:
+    Value: !Ref RDSInstance
   LoggingBucket:
     Value: !Ref LogBucket
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
 
 ```

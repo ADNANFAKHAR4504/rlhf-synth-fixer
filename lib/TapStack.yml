@@ -232,5 +232,10 @@ Outputs:
     Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
   RDSInstanceEndpoint:
     Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSInstanceIdentifier:
+    Value: !Ref RDSInstance
   LoggingBucket:
     Value: !Ref LogBucket
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
