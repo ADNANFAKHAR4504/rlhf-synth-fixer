@@ -44,6 +44,22 @@ func TestCreateInfrastructureDefaultEnv(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCreateInfrastructureWithConfigVars tests with config environment variables
+func TestCreateInfrastructureWithConfigVars(t *testing.T) {
+	os.Setenv("CONFIG_RECORDER_NAME", "test-recorder")
+	os.Setenv("DELIVERY_CHANNEL_NAME", "test-channel")
+	defer func() {
+		os.Unsetenv("CONFIG_RECORDER_NAME")
+		os.Unsetenv("DELIVERY_CHANNEL_NAME")
+	}()
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return CreateInfrastructure(ctx)
+	}, pulumi.WithMocks("project", "stack", mocks{}))
+
+	assert.NoError(t, err)
+}
+
 // Mock implementation for Pulumi testing
 type mocks struct{}
 

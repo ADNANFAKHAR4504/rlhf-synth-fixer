@@ -18,16 +18,16 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		environmentSuffix = "synthtrainr308"
 	}
 
-		// Get Config resources from environment or use defaults
-		configRecorder := os.Getenv("CONFIG_RECORDER_NAME")
-		if configRecorder == "" {
-			configRecorder = "tap-webapp-pr1598-config-recorder"
-		}
+	// Get Config resources from environment or use defaults
+	configRecorder := os.Getenv("CONFIG_RECORDER_NAME")
+	if configRecorder == "" {
+		configRecorder = "tap-webapp-pr1598-config-recorder"
+	}
 
-		deliveryChannel := os.Getenv("DELIVERY_CHANNEL_NAME")
-		if deliveryChannel == "" {
-			deliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
-		}
+	deliveryChannel := os.Getenv("DELIVERY_CHANNEL_NAME")
+	if deliveryChannel == "" {
+		deliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
+	}
 
 		// Create the S3 bucket for storing sensitive financial documents
 		financialDocumentsBucket, err := s3.NewBucket(ctx, "FinApp-DocumentsBucket", &s3.BucketArgs{
@@ -43,48 +43,51 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 			return err
 		}
 
-	// Enable versioning on the bucket for audit trail
-	_, err = s3.NewBucketVersioningV2(ctx, "FinApp-BucketVersioning", &s3.BucketVersioningV2Args{
-		Bucket: financialDocumentsBucket.ID(),
-		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
-			Status: pulumi.String("Enabled"),
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Configure server-side encryption with S3-managed keys (SSE-S3)
-	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "FinApp-BucketEncryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
-		Bucket: financialDocumentsBucket.ID(),
-		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-					SseAlgorithm: pulumi.String("AES256"),
-				},
-				BucketKeyEnabled: pulumi.Bool(true),
+		// Enable versioning on the bucket for audit trail
+		_, err = s3.NewBucketVersioningV2(ctx, "FinApp-BucketVersioning", &s3.BucketVersioningV2Args{
+			Bucket: financialDocumentsBucket.ID(),
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
 			},
-		},
-	})
-	if err != nil {
-		return err
-	}
+		})
+		if err != nil {
+			return err
+		}
 
-	// Block all public access to the bucket
-	_, err = s3.NewBucketPublicAccessBlock(ctx, "FinApp-BucketPublicAccessBlock", &s3.BucketPublicAccessBlockArgs{
-		Bucket:                financialDocumentsBucket.ID(),
-		BlockPublicAcls:       pulumi.Bool(true),
-		BlockPublicPolicy:     pulumi.Bool(true),
-		IgnorePublicAcls:      pulumi.Bool(true),
-		RestrictPublicBuckets: pulumi.Bool(true),
-	})
-	if err != nil {
-		return err
-	}
+		// Note: Object Lock must be enabled at bucket creation time
+		// We'll configure a default retention policy instead
 
-	// Create bucket policy to enforce SSL/TLS for all requests
-	bucketPolicyDocument := financialDocumentsBucket.Arn.ApplyT(func(arn string) (string, error) {
-		return fmt.Sprintf(`{
+		// Configure server-side encryption with S3-managed keys (SSE-S3)
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "FinApp-BucketEncryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: financialDocumentsBucket.ID(),
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+					BucketKeyEnabled: pulumi.Bool(true),
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Block all public access to the bucket
+		_, err = s3.NewBucketPublicAccessBlock(ctx, "FinApp-BucketPublicAccessBlock", &s3.BucketPublicAccessBlockArgs{
+			Bucket:                financialDocumentsBucket.ID(),
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create bucket policy to enforce SSL/TLS for all requests
+		bucketPolicyDocument := financialDocumentsBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -104,31 +107,31 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 					}
 				]
 			}`, arn, arn), nil
-	}).(pulumi.StringOutput)
+		}).(pulumi.StringOutput)
 
-	_, err = s3.NewBucketPolicy(ctx, "FinApp-BucketPolicy", &s3.BucketPolicyArgs{
-		Bucket: financialDocumentsBucket.ID(),
-		Policy: bucketPolicyDocument,
-	})
-	if err != nil {
-		return err
-	}
+		_, err = s3.NewBucketPolicy(ctx, "FinApp-BucketPolicy", &s3.BucketPolicyArgs{
+			Bucket: financialDocumentsBucket.ID(),
+			Policy: bucketPolicyDocument,
+		})
+		if err != nil {
+			return err
+		}
 
-	// Create S3 bucket for CloudTrail logs
-	cloudTrailBucket, err := s3.NewBucket(ctx, "FinApp-CloudTrailBucket", &s3.BucketArgs{
-		Bucket: pulumi.Sprintf("finapp-cloudtrail-logs-%s", environmentSuffix),
-		Tags: pulumi.StringMap{
-			"Project": pulumi.String("FinApp"),
-			"Purpose": pulumi.String("CloudTrail Audit Logs"),
-		},
-	})
-	if err != nil {
-		return err
-	}
+		// Create S3 bucket for CloudTrail logs
+		cloudTrailBucket, err := s3.NewBucket(ctx, "FinApp-CloudTrailBucket", &s3.BucketArgs{
+			Bucket: pulumi.Sprintf("finapp-cloudtrail-logs-%s", environmentSuffix),
+			Tags: pulumi.StringMap{
+				"Project": pulumi.String("FinApp"),
+				"Purpose": pulumi.String("CloudTrail Audit Logs"),
+			},
+		})
+		if err != nil {
+			return err
+		}
 
-	// CloudTrail bucket policy
-	cloudTrailBucketPolicy := cloudTrailBucket.Arn.ApplyT(func(arn string) (string, error) {
-		return fmt.Sprintf(`{
+		// CloudTrail bucket policy
+		cloudTrailBucketPolicy := cloudTrailBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -156,15 +159,15 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 					}
 				]
 			}`, arn, arn), nil
-	}).(pulumi.StringOutput)
+		}).(pulumi.StringOutput)
 
-	_, err = s3.NewBucketPolicy(ctx, "FinApp-CloudTrailBucketPolicy", &s3.BucketPolicyArgs{
-		Bucket: cloudTrailBucket.ID(),
-		Policy: cloudTrailBucketPolicy,
-	})
-	if err != nil {
-		return err
-	}
+		_, err = s3.NewBucketPolicy(ctx, "FinApp-CloudTrailBucketPolicy", &s3.BucketPolicyArgs{
+			Bucket: cloudTrailBucket.ID(),
+			Policy: cloudTrailBucketPolicy,
+		})
+		if err != nil {
+			return err
+		}
 
 		// Create CloudTrail for audit logging
 		cloudTrailResource, err := cloudtrail.NewTrail(ctx, "FinApp-CloudTrail", &cloudtrail.TrailArgs{
@@ -182,9 +185,9 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 			return err
 		}
 
-	// Create AWS Config Service Role
-	configServiceRole, err := iam.NewRole(ctx, "FinApp-ConfigServiceRole", &iam.RoleArgs{
-		AssumeRolePolicy: pulumi.String(`{
+		// Create AWS Config Service Role
+		configServiceRole, err := iam.NewRole(ctx, "FinApp-ConfigServiceRole", &iam.RoleArgs{
+			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -196,10 +199,10 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 					}
 				]
 			}`),
-	})
-	if err != nil {
-		return err
-	}
+		})
+		if err != nil {
+			return err
+		}
 
 		// Attach AWS Config service role policy (use correct policy ARN)
 		_, err = iam.NewRolePolicyAttachment(ctx, "FinApp-ConfigServiceRolePolicy", &iam.RolePolicyAttachmentArgs{
@@ -210,17 +213,17 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 			return err
 		}
 
-	// Create S3 bucket for AWS Config
-	configBucket, err := s3.NewBucket(ctx, "FinApp-ConfigBucket", &s3.BucketArgs{
-		Bucket: pulumi.Sprintf("finapp-config-compliance-%s", environmentSuffix),
-	})
-	if err != nil {
-		return err
-	}
+		// Create S3 bucket for AWS Config
+		configBucket, err := s3.NewBucket(ctx, "FinApp-ConfigBucket", &s3.BucketArgs{
+			Bucket: pulumi.Sprintf("finapp-config-compliance-%s", environmentSuffix),
+		})
+		if err != nil {
+			return err
+		}
 
-	// Add bucket policy for AWS Config
-	configBucketPolicy := configBucket.Arn.ApplyT(func(arn string) (string, error) {
-		return fmt.Sprintf(`{
+		// Add bucket policy for AWS Config
+		configBucketPolicy := configBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -257,15 +260,15 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 					}
 				]
 			}`, arn, arn, arn), nil
-	}).(pulumi.StringOutput)
+		}).(pulumi.StringOutput)
 
-	_, err = s3.NewBucketPolicy(ctx, "FinApp-ConfigBucketPolicy", &s3.BucketPolicyArgs{
-		Bucket: configBucket.ID(),
-		Policy: configBucketPolicy,
-	})
-	if err != nil {
-		return err
-	}
+		_, err = s3.NewBucketPolicy(ctx, "FinApp-ConfigBucketPolicy", &s3.BucketPolicyArgs{
+			Bucket: configBucket.ID(),
+			Policy: configBucketPolicy,
+		})
+		if err != nil {
+			return err
+		}
 
 		// Use existing or create new Config Recorder
 		var configRecorderName pulumi.StringOutput
@@ -313,9 +316,9 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 			return err
 		}
 
-	// Create IAM policy for least-privilege S3 access
-	s3AccessPolicyDocument := financialDocumentsBucket.Arn.ApplyT(func(arn string) (string, error) {
-		return fmt.Sprintf(`{
+		// Create IAM policy for least-privilege S3 access
+		s3AccessPolicyDocument := financialDocumentsBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -350,19 +353,19 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 					}
 				]
 			}`, arn, arn, arn), nil
-	}).(pulumi.StringOutput)
+		}).(pulumi.StringOutput)
 
-	s3AccessPolicy, err := iam.NewPolicy(ctx, "FinApp-S3AccessPolicy", &iam.PolicyArgs{
-		Name:        pulumi.Sprintf("FinApp-S3-LeastPrivilegeAccess-%s", environmentSuffix),
-		Description: pulumi.String("Least-privilege policy for accessing financial documents S3 bucket"),
-		Policy:      s3AccessPolicyDocument,
-	})
-	if err != nil {
-		return err
-	}
+		s3AccessPolicy, err := iam.NewPolicy(ctx, "FinApp-S3AccessPolicy", &iam.PolicyArgs{
+			Name:        pulumi.Sprintf("FinApp-S3-LeastPrivilegeAccess-%s", environmentSuffix),
+			Description: pulumi.String("Least-privilege policy for accessing financial documents S3 bucket"),
+			Policy:      s3AccessPolicyDocument,
+		})
+		if err != nil {
+			return err
+		}
 
-	// Create IAM role for applications to access the S3 bucket
-	assumeRolePolicyDocument := pulumi.String(`{
+		// Create IAM role for applications to access the S3 bucket
+		assumeRolePolicyDocument := pulumi.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
 				{
@@ -424,49 +427,6 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		ctx.Export("objectLockEnabled", pulumi.Bool(false)) // Object Lock requires enabling at bucket creation
 		ctx.Export("auditLoggingEnabled", pulumi.Bool(true))
 		ctx.Export("complianceMonitoringEnabled", pulumi.Bool(true))
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	// Attach the S3 access policy to the role
-	_, err = iam.NewRolePolicyAttachment(ctx, "FinApp-RolePolicyAttachment", &iam.RolePolicyAttachmentArgs{
-		Role:      financialAppRole.Name,
-		PolicyArn: s3AccessPolicy.Arn,
-	})
-	if err != nil {
-		return err
-	}
-
-	// Create an instance profile for EC2 instances
-	instanceProfile, err := iam.NewInstanceProfile(ctx, "FinApp-InstanceProfile", &iam.InstanceProfileArgs{
-		Name: pulumi.Sprintf("FinApp-EC2-InstanceProfile-%s", environmentSuffix),
-		Role: financialAppRole.Name,
-	})
-	if err != nil {
-		return err
-	}
-
-	// Export the outputs
-	ctx.Export("bucketName", financialDocumentsBucket.ID())
-	ctx.Export("bucketArn", financialDocumentsBucket.Arn)
-	ctx.Export("roleArn", financialAppRole.Arn)
-	ctx.Export("roleName", financialAppRole.Name)
-	ctx.Export("instanceProfileArn", instanceProfile.Arn)
-	ctx.Export("policyArn", s3AccessPolicy.Arn)
-	ctx.Export("cloudTrailArn", cloudTrailResource.Arn)
-	ctx.Export("configRecorderName", configRecorder.Name)
-
-	// Export compliance information
-	ctx.Export("encryptionEnabled", pulumi.Bool(true))
-	ctx.Export("sslEnforced", pulumi.Bool(true))
-	ctx.Export("publicAccessBlocked", pulumi.Bool(true))
-	ctx.Export("versioningEnabled", pulumi.Bool(true))
-	ctx.Export("objectLockEnabled", pulumi.Bool(false)) // Object Lock requires enabling at bucket creation
-	ctx.Export("auditLoggingEnabled", pulumi.Bool(true))
-	ctx.Export("complianceMonitoringEnabled", pulumi.Bool(true))
 
 	return nil
 }
