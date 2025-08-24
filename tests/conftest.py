@@ -20,8 +20,10 @@ def aws_credentials():
         return True
     except (NoCredentialsError, EndpointConnectionError) as e:
         pytest.skip(f"AWS credentials not available: {e}")
+        return None  # This line will never be reached due to pytest.skip
     except Exception as e:
         pytest.skip(f"Failed to verify AWS credentials: {e}")
+        return None  # This line will never be reached due to pytest.skip
 
 
 @pytest.fixture(scope="session")
@@ -45,8 +47,10 @@ def aws_clients(aws_region, aws_credentials):
     # Cleanup: close HTTP sessions
     for client in clients.values():
         try:
+            # Access protected member for cleanup - this is intentional
+            # pylint: disable=protected-access
             client._endpoint.http_session.close()
-        except:
+        except Exception:  # pylint: disable=broad-except
             pass
 
 

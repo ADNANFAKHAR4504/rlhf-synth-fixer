@@ -27,8 +27,8 @@ class TapStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    # Get environment suffix for resource naming
-    self.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+    # Get environment suffix for resource naming from CDK context or environment variable
+    self.environment_suffix = self.node.try_get_context('environmentSuffix') or os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
 
     # Project naming convention with environment suffix
     self.project_name = f"tap-webapp-{self.environment_suffix}"
