@@ -149,6 +149,29 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Grant ELB service principal additional permissions for ALB access logs
+    albLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowELBServicePrincipalAccess',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('elasticloadbalancing.amazonaws.com')],
+        actions: [
+          's3:PutObject',
+          's3:GetBucketAcl',
+          's3:GetBucketLocation',
+        ],
+        resources: [
+          albLogsBucket.bucketArn,
+          `${albLogsBucket.bucketArn}/*`,
+        ],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
+      })
+    );
+
     // 🛡️ Security Groups with least privilege
     const albSecurityGroup = new ec2.SecurityGroup(
       this,
