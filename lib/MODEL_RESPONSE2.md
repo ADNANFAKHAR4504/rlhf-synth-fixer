@@ -1,3 +1,8 @@
+You're right! The template is failing because it requires a KeyPair parameter that doesn't exist. I'll fix this by creating the KeyPair as part of the CloudFormation template and also complete the WAF configuration that was cut off. Here's the updated template:
+
+# TapStack.yml - Production-Ready Web Application Infrastructure (Fixed)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with multi-AZ deployment, enhanced security, and monitoring'
 
