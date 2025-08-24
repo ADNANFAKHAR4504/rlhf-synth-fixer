@@ -3048,4 +3048,563 @@ public class MainTest {
         assertFalse(Main.isValidS3BucketName("InvalidBucketName_"));
         assertFalse(Main.isValidS3BucketName(""));
     }
+
+    /**
+     * Test createInfrastructure method accessibility and basic structure.
+     */
+    @Test
+    void testCreateInfrastructureMethodStructure() {
+        assertDoesNotThrow(() -> {
+            Method method = Main.class.getDeclaredMethod("createInfrastructure", com.pulumi.Context.class);
+            assertTrue(Modifier.isStatic(method.getModifiers()));
+            assertTrue(Modifier.isPublic(method.getModifiers()));
+            assertEquals(void.class, method.getReturnType());
+        });
+    }
+
+    /**
+     * Test all private infrastructure methods exist.
+     */
+    @Test
+    void testPrivateInfrastructureMethodsExist() {
+        String[] methodNames = {
+            "createAwsProvider", "createProviderOptions", "createKmsKey",
+            "createCloudTrailS3Bucket", "createApplicationS3Bucket", "createVpcInfrastructure",
+            "createSecurityGroup", "createIamResources", "createSnsTopic",
+            "createEc2Instances", "createCloudTrail", "exportOutputs",
+            "createNatGatewayInfrastructure", "createRouteTables"
+        };
+        
+        for (String methodName : methodNames) {
+            assertDoesNotThrow(() -> {
+                Method[] methods = Main.class.getDeclaredMethods();
+                boolean found = false;
+                for (Method method : methods) {
+                    if (method.getName().equals(methodName)) {
+                        found = true;
+                        break;
+                    }
+                }
+                assertTrue(found, "Method " + methodName + " should exist");
+            });
+        }
+    }
+
+    /**
+     * Test VpcResources inner class structure.
+     */
+    @Test
+    void testVpcResourcesInnerClass() {
+        assertDoesNotThrow(() -> {
+            Class<?> vpcResourcesClass = Class.forName("app.Main$VpcResources");
+            assertNotNull(vpcResourcesClass);
+            assertTrue(Modifier.isStatic(vpcResourcesClass.getModifiers()));
+            assertTrue(Modifier.isPublic(vpcResourcesClass.getModifiers()));
+            
+            // Test constructor exists
+            var constructor = vpcResourcesClass.getDeclaredConstructor(
+                com.pulumi.aws.ec2.Vpc.class,
+                com.pulumi.aws.ec2.Subnet.class,
+                com.pulumi.aws.ec2.Subnet.class
+            );
+            assertTrue(Modifier.isPublic(constructor.getModifiers()));
+            
+            // Test getter methods exist
+            String[] getterMethods = {"getVpc", "getPublicSubnet", "getPrivateSubnet"};
+            for (String methodName : getterMethods) {
+                Method method = vpcResourcesClass.getDeclaredMethod(methodName);
+                assertTrue(Modifier.isPublic(method.getModifiers()));
+                assertNotNull(method.getReturnType());
+            }
+        });
+    }
+
+    /**
+     * Test IamResources inner class structure.
+     */
+    @Test
+    void testIamResourcesInnerClass() {
+        assertDoesNotThrow(() -> {
+            Class<?> iamResourcesClass = Class.forName("app.Main$IamResources");
+            assertNotNull(iamResourcesClass);
+            assertTrue(Modifier.isStatic(iamResourcesClass.getModifiers()));
+            assertTrue(Modifier.isPublic(iamResourcesClass.getModifiers()));
+            
+            // Test constructor exists
+            var constructor = iamResourcesClass.getDeclaredConstructor(
+                com.pulumi.aws.iam.Role.class,
+                com.pulumi.aws.iam.Policy.class,
+                com.pulumi.aws.iam.InstanceProfile.class
+            );
+            assertTrue(Modifier.isPublic(constructor.getModifiers()));
+            
+            // Test getter methods exist
+            String[] getterMethods = {"getEc2Role", "getS3Policy", "getInstanceProfile"};
+            for (String methodName : getterMethods) {
+                Method method = iamResourcesClass.getDeclaredMethod(methodName);
+                assertTrue(Modifier.isPublic(method.getModifiers()));
+                assertNotNull(method.getReturnType());
+            }
+        });
+    }
+
+    /**
+     * Test buildCloudTrailBucketPolicy method comprehensively.
+     */
+    @Test
+    void testBuildCloudTrailBucketPolicyComprehensive() {
+        // Test valid bucket names
+        String bucketName = "financial-cloudtrail-logs-1234";
+        String policy = Main.buildCloudTrailBucketPolicy(bucketName);
+        
+        assertNotNull(policy);
+        assertFalse(policy.isEmpty());
+        assertTrue(policy.contains(bucketName));
+        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
+        assertTrue(policy.contains("AWSCloudTrailAclCheck"));
+        assertTrue(policy.contains("AWSCloudTrailWrite"));
+        assertTrue(policy.contains("s3:GetBucketAcl"));
+        assertTrue(policy.contains("s3:PutObject"));
+        
+        // Test with different bucket names
+        String[] testBuckets = {
+            "test-bucket-123",
+            "compliance-logs-9999",
+            "audit-trail-456"
+        };
+        
+        for (String testBucket : testBuckets) {
+            String testPolicy = Main.buildCloudTrailBucketPolicy(testBucket);
+            assertNotNull(testPolicy);
+            assertTrue(testPolicy.contains(testBucket));
+            assertTrue(testPolicy.length() > 500); // Policy should be substantial
+        }
+        
+        // Test null bucket name
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildCloudTrailBucketPolicy(null);
+        });
+        
+        // Test empty bucket name
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildCloudTrailBucketPolicy("");
+        });
+    }
+
+    /**
+     * Test buildS3ReadOnlyPolicy method comprehensively.
+     */
+    @Test
+    void testBuildS3ReadOnlyPolicyComprehensive() {
+        // Test valid regions
+        String[] validRegions = {"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"};
+        
+        for (String region : validRegions) {
+            String policy = Main.buildS3ReadOnlyPolicy(region);
+            assertNotNull(policy);
+            assertFalse(policy.isEmpty());
+            assertTrue(policy.contains(region));
+            assertTrue(policy.contains("s3:GetObject"));
+            assertTrue(policy.contains("s3:ListBucket"));
+            assertTrue(policy.contains("kms:Decrypt"));
+            assertTrue(policy.contains("financial-app-data-*"));
+            assertTrue(policy.length() > 300);
+        }
+        
+        // Test invalid region
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy("invalid-region");
+        });
+        
+        // Test null region
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy(null);
+        });
+        
+        // Test empty region
+        assertThrows(IllegalArgumentException.class, () -> {
+            Main.buildS3ReadOnlyPolicy("");
+        });
+    }
+
+    /**
+     * Test buildEc2AssumeRolePolicy method.
+     */
+    @Test
+    void testBuildEc2AssumeRolePolicyBasic() {
+        String policy = Main.buildEc2AssumeRolePolicy();
+        
+        assertNotNull(policy);
+        assertFalse(policy.isEmpty());
+        assertTrue(policy.contains("sts:AssumeRole"));
+        assertTrue(policy.contains("ec2.amazonaws.com"));
+        assertTrue(policy.contains("2012-10-17"));
+        assertTrue(policy.contains("Allow"));
+        
+        // Multiple calls should return consistent result
+        String policy2 = Main.buildEc2AssumeRolePolicy();
+        assertEquals(policy, policy2);
+    }
+
+    /**
+     * Test buildCloudWatchAgentConfig method.
+     */
+    @Test
+    void testBuildCloudWatchAgentConfigStructure() {
+        String config = Main.buildCloudWatchAgentConfig();
+        
+        assertNotNull(config);
+        assertFalse(config.isEmpty());
+        assertTrue(config.contains("FinancialApp/EC2"));
+        assertTrue(config.contains("cpu_usage_idle"));
+        assertTrue(config.contains("mem_used_percent"));
+        assertTrue(config.contains("used_percent"));
+        assertTrue(config.contains("metrics_collection_interval"));
+        
+        // Should be valid JSON structure
+        assertTrue(config.trim().startsWith("{"));
+        assertTrue(config.trim().endsWith("}"));
+    }
+
+    /**
+     * Test buildEc2UserData method.
+     */
+    @Test
+    void testBuildEc2UserDataContent() {
+        String userData = Main.buildEc2UserData();
+        
+        assertNotNull(userData);
+        assertFalse(userData.isEmpty());
+        assertTrue(userData.contains("#!/bin/bash"));
+        assertTrue(userData.contains("yum update -y"));
+        assertTrue(userData.contains("amazon-cloudwatch-agent"));
+        assertTrue(userData.contains("amazon-cloudwatch-agent-ctl"));
+        assertTrue(userData.length() > 200);
+        
+        // Should contain the CloudWatch config
+        assertTrue(userData.contains("FinancialApp/EC2"));
+    }
+
+    /**
+     * Test buildKmsKeyPolicy method.
+     */
+    @Test
+    void testBuildKmsKeyPolicyStructure() {
+        String policy = Main.buildKmsKeyPolicy();
+        
+        assertNotNull(policy);
+        assertFalse(policy.isEmpty());
+        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
+        assertTrue(policy.contains("s3.amazonaws.com"));
+        assertTrue(policy.contains("kms:GenerateDataKey"));
+        assertTrue(policy.contains("kms:Decrypt"));
+        assertTrue(policy.contains("kms:Encrypt"));
+        assertTrue(policy.contains("2012-10-17"));
+        
+        // Should contain three statements
+        int statementCount = policy.split("\"Sid\":").length - 1;
+        assertEquals(3, statementCount);
+        
+        // Multiple calls should be consistent
+        String policy2 = Main.buildKmsKeyPolicy();
+        assertEquals(policy, policy2);
+    }
+
+    /**
+     * Test extensive CIDR validation with all prefix lengths.
+     */
+    @Test
+    void testExtensiveCidrValidation() {
+        // Test all valid prefix lengths
+        for (int prefix = 0; prefix <= 32; prefix++) {
+            String cidr = "10.0.0.0/" + prefix;
+            assertTrue(Main.isValidCidrBlock(cidr), "CIDR " + cidr + " should be valid");
+            
+            // Test subnet size calculation
+            int expectedSize = (int) Math.pow(2, 32 - prefix);
+            assertEquals(expectedSize, Main.calculateSubnetSize(cidr));
+        }
+        
+        // Test various IP ranges
+        String[] validCidrs = {
+            "0.0.0.0/0", "10.0.0.0/8", "192.168.1.0/24",
+            "172.16.0.0/12", "127.0.0.1/32", "255.255.255.0/24"
+        };
+        
+        for (String cidr : validCidrs) {
+            assertTrue(Main.isValidCidrBlock(cidr));
+            assertTrue(Main.calculateSubnetSize(cidr) > 0);
+        }
+    }
+
+    /**
+     * Test comprehensive S3 bucket name validation.
+     */
+    @Test
+    void testComprehensiveS3BucketNameValidation() {
+        // Valid bucket names
+        String[] validNames = {
+            "my-bucket", "test-bucket-123", "a-b-c", "bucket.with.dots",
+            "bucket-with-dashes", "123-bucket", "bucket-456"
+        };
+        
+        for (String name : validNames) {
+            assertTrue(Main.isValidS3BucketName(name), "Bucket name '" + name + "' should be valid");
+        }
+        
+        // Invalid bucket names
+        String[] invalidNames = {
+            "", "ab", "a".repeat(64), "Uppercase", "bucket_underscore",
+            "bucket with spaces", "bucket@symbol", "192.168.1.1",
+            "-starts-with-dash", "ends-with-dash-"
+        };
+        
+        for (String name : invalidNames) {
+            assertFalse(Main.isValidS3BucketName(name), "Bucket name '" + name + "' should be invalid");
+        }
+    }
+
+    /**
+     * Test AWS instance type validation comprehensively.
+     */
+    @Test
+    void testComprehensiveInstanceTypeValidation() {
+        // Valid instance types
+        String[] validTypes = {
+            "t3.micro", "t3.small", "t3.medium", "t3.large",
+            "m5.large", "m5.xlarge", "m5.2xlarge", "m5.4xlarge",
+            "c5.large", "c5n.xlarge", "r5.large", "r5a.xlarge",
+            "x1.large", "z1d.large", "i3.large", "d2.xlarge",
+            "p3.2xlarge", "g4.xlarge", "f1.2xlarge",
+            "m5dn.large", "c5n.large", "r5dn.xlarge"
+        };
+        
+        for (String type : validTypes) {
+            assertTrue(Main.isValidInstanceType(type), "Instance type '" + type + "' should be valid");
+        }
+        
+        // Invalid instance types
+        String[] invalidTypes = {
+            "", "invalid", "t3", "micro", "t3-micro",
+            "T3.micro", "t3.MICRO", "123.micro", "t.micro"
+        };
+        
+        for (String type : invalidTypes) {
+            assertFalse(Main.isValidInstanceType(type), "Instance type '" + type + "' should be invalid");
+        }
+    }
+
+    /**
+     * Test protocol validation with case sensitivity.
+     */
+    @Test
+    void testProtocolValidationCaseSensitivity() {
+        // Valid protocols (case insensitive)
+        String[][] validProtocols = {
+            {"tcp", "TCP", "Tcp", "tCp"},
+            {"udp", "UDP", "Udp", "uDp"},
+            {"icmp", "ICMP", "Icmp", "iCmP"},
+            {"all", "ALL", "All", "aLl"},
+            {"-1", "-1", "-1", "-1"}
+        };
+        
+        for (String[] protocolGroup : validProtocols) {
+            for (String protocol : protocolGroup) {
+                assertTrue(Main.isValidProtocol(protocol), "Protocol '" + protocol + "' should be valid");
+            }
+        }
+        
+        // Invalid protocols
+        String[] invalidProtocols = {"http", "https", "ftp", "ssh", "", "invalid", "123"};
+        for (String protocol : invalidProtocols) {
+            assertFalse(Main.isValidProtocol(protocol), "Protocol '" + protocol + "' should be invalid");
+        }
+    }
+
+    /**
+     * Test availability zone generation for all possible zones.
+     */
+    @Test
+    void testAvailabilityZoneGenerationComprehensive() {
+        String[] regions = {"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"};
+        String[] zones = {"a", "b", "c", "d", "e", "f"};
+        
+        for (String region : regions) {
+            for (String zone : zones) {
+                String az = Main.generateAvailabilityZone(region, zone);
+                assertEquals(region + zone, az);
+                assertTrue(az.endsWith(zone));
+                assertTrue(az.startsWith(region));
+            }
+        }
+        
+        // Test edge cases
+        for (char c = 'a'; c <= 'z'; c++) {
+            String zone = String.valueOf(c);
+            String az = Main.generateAvailabilityZone("us-east-1", zone);
+            assertEquals("us-east-1" + zone, az);
+        }
+    }
+
+    /**
+     * Test EBS volume size validation for all volume types.
+     */
+    @Test
+    void testEbsVolumeSizeValidationAllTypes() {
+        // Test gp2 and gp3 volumes (1-16384 GB)
+        String[] generalPurposeTypes = {"gp2", "gp3"};
+        for (String type : generalPurposeTypes) {
+            assertTrue(Main.isValidEbsVolumeSize(1, type));
+            assertTrue(Main.isValidEbsVolumeSize(100, type));
+            assertTrue(Main.isValidEbsVolumeSize(16384, type));
+            assertFalse(Main.isValidEbsVolumeSize(0, type));
+            assertFalse(Main.isValidEbsVolumeSize(16385, type));
+        }
+        
+        // Test io1 and io2 volumes (4-16384 GB)
+        String[] provisionedIOPSTypes = {"io1", "io2"};
+        for (String type : provisionedIOPSTypes) {
+            assertTrue(Main.isValidEbsVolumeSize(4, type));
+            assertTrue(Main.isValidEbsVolumeSize(100, type));
+            assertTrue(Main.isValidEbsVolumeSize(16384, type));
+            assertFalse(Main.isValidEbsVolumeSize(3, type));
+            assertFalse(Main.isValidEbsVolumeSize(16385, type));
+        }
+        
+        // Test st1 and sc1 volumes (125-16384 GB)
+        String[] throughputOptimizedTypes = {"st1", "sc1"};
+        for (String type : throughputOptimizedTypes) {
+            assertTrue(Main.isValidEbsVolumeSize(125, type));
+            assertTrue(Main.isValidEbsVolumeSize(1000, type));
+            assertTrue(Main.isValidEbsVolumeSize(16384, type));
+            assertFalse(Main.isValidEbsVolumeSize(124, type));
+            assertFalse(Main.isValidEbsVolumeSize(16385, type));
+        }
+        
+        // Test standard volumes (1-1024 GB)
+        assertTrue(Main.isValidEbsVolumeSize(1, "standard"));
+        assertTrue(Main.isValidEbsVolumeSize(500, "standard"));
+        assertTrue(Main.isValidEbsVolumeSize(1024, "standard"));
+        assertFalse(Main.isValidEbsVolumeSize(0, "standard"));
+        assertFalse(Main.isValidEbsVolumeSize(1025, "standard"));
+    }
+
+    /**
+     * Test policy generation with multiple regions and bucket names.
+     */
+    @Test
+    void testPolicyGenerationVariations() {
+        // Test S3 policy with different regions
+        String[] regions = {"us-east-1", "us-west-2", "eu-west-1", "ap-northeast-1", "ca-central-1"};
+        for (String region : regions) {
+            String policy = Main.buildS3ReadOnlyPolicy(region);
+            assertTrue(policy.contains(region));
+            assertTrue(policy.contains("s3." + region + ".amazonaws.com"));
+            assertTrue(policy.contains("arn:aws:kms:" + region + ":*:key/*"));
+        }
+        
+        // Test CloudTrail bucket policy with different bucket names
+        String[] bucketNames = {
+            "financial-cloudtrail-logs-123",
+            "audit-trail-bucket-456",
+            "compliance-logs-789",
+            "security-trail-999"
+        };
+        
+        for (String bucketName : bucketNames) {
+            String policy = Main.buildCloudTrailBucketPolicy(bucketName);
+            assertTrue(policy.contains("arn:aws:s3:::" + bucketName));
+            assertTrue(policy.contains("arn:aws:s3:::" + bucketName + "/*"));
+            
+            // Ensure bucket name appears exactly twice (for bucket and objects)
+            int occurrences = policy.split(bucketName, -1).length - 1;
+            assertEquals(2, occurrences);
+        }
+    }
+
+    /**
+     * Test resource tag building with extensive scenarios.
+     */
+    @Test
+    void testResourceTagBuildingExtensive() {
+        // Test basic two-parameter version
+        String[][] basicTests = {
+            {"production", "financial-app"},
+            {"development", "test-app"},
+            {"staging", "demo-app"},
+            {"qa", "integration-app"}
+        };
+        
+        for (String[] test : basicTests) {
+            Map<String, String> tags = Main.buildResourceTags(test[0], test[1]);
+            assertEquals(test[0], tags.get("Environment"));
+            assertEquals(test[1], tags.get("Application"));
+            assertEquals(2, tags.size());
+        }
+        
+        // Test four-parameter version with various tag combinations
+        String[][] extendedTests = {
+            {"production", "financial-app", "Compliance", "SOX"},
+            {"production", "financial-app", "DataClassification", "Confidential"},
+            {"development", "test-app", "Owner", "DevTeam"},
+            {"staging", "demo-app", "CostCenter", "IT-001"},
+            {"qa", "integration-app", "BackupPolicy", "Daily"}
+        };
+        
+        for (String[] test : extendedTests) {
+            Map<String, String> tags = Main.buildResourceTags(test[0], test[1], test[2], test[3]);
+            assertEquals(test[0], tags.get("Environment"));
+            assertEquals(test[1], tags.get("Application"));
+            assertEquals(test[3], tags.get(test[2]));
+            assertEquals(3, tags.size());
+        }
+        
+        // Test null and empty values in extended version
+        Map<String, String> tagsWithNull = Main.buildResourceTags("prod", "app", null, "value");
+        assertEquals(2, tagsWithNull.size()); // Should only have basic tags
+        
+        Map<String, String> tagsWithEmpty = Main.buildResourceTags("prod", "app", "", "value");
+        assertEquals(2, tagsWithEmpty.size()); // Should only have basic tags
+    }
+
+    /**
+     * Test exception handling scenarios for all methods.
+     */
+    @Test
+    void testExceptionHandlingScenarios() {
+        // Test buildResourceName exceptions
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceName(null, "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceName("", "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceName("prefix", null));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceName("prefix", ""));
+        
+        // Test generateAvailabilityZone exceptions
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone(null, "a"));
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone("", "a"));
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone("us-east-1", null));
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone("us-east-1", ""));
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone("us-east-1", "ab"));
+        assertThrows(IllegalArgumentException.class, () -> Main.generateAvailabilityZone("us-east-1", "A"));
+        
+        // Test formatResourceName exceptions
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName(null, "name", "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName("", "name", "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName("type", null, "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName("type", "", "suffix"));
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName("type", "name", null));
+        assertThrows(IllegalArgumentException.class, () -> Main.formatResourceName("type", "name", ""));
+        
+        // Test calculateSubnetSize exception
+        assertThrows(IllegalArgumentException.class, () -> Main.calculateSubnetSize("invalid-cidr"));
+        assertThrows(IllegalArgumentException.class, () -> Main.calculateSubnetSize("10.0.0.0"));
+        assertThrows(IllegalArgumentException.class, () -> Main.calculateSubnetSize("10.0.0.0/33"));
+        
+        // Test buildResourceTags exceptions
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags(null, "app"));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags("", "app"));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags("env", null));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags("env", ""));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags(null, "app", "key", "value"));
+        assertThrows(IllegalArgumentException.class, () -> Main.buildResourceTags("env", null, "key", "value"));
+    }
 }
