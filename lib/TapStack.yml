@@ -57,6 +57,15 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
+          - Sid: Allow EC2 to use key for EBS encryption
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+            Resource: '*'
 
 
   KMSKeyAlias:
