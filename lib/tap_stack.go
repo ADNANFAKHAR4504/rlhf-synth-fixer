@@ -26,6 +26,9 @@ func main() {
 		}
 
 		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
+		if existingDeliveryChannel == "" {
+			existingDeliveryChannel = "default"
+		}
 
 		// Create the S3 bucket for storing sensitive financial documents
 		financialDocumentsBucket, err := s3.NewBucket(ctx, "FinApp-DocumentsBucket", &s3.BucketArgs{
