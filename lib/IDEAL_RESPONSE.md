@@ -1,3 +1,111 @@
+**provider.tf**
+```tf
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.4"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+      Owner       = var.owner
+      EnvSuffix   = var.environment_suffix
+    }
+  }
+}
+
+# Provider for us-east-1 (required for CloudFront ACM certificates)
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+      Owner       = var.owner
+      EnvSuffix   = var.environment_suffix
+    }
+  }
+}
+```
+
+**user_data.sh**
+```sh
+#!/bin/bash
+yum update -y
+yum install -y httpd awslogs
+
+# Configure CloudWatch Logs
+cat > /etc/awslogs/awslogs.conf << EOF
+[general]
+state_file = /var/lib/awslogs/agent-state
+
+[/var/log/httpd/access_log]
+file = /var/log/httpd/access_log
+log_group_name = ${log_group_name}
+log_stream_name = {instance_id}/httpd/access_log
+datetime_format = %d/%b/%Y:%H:%M:%S %z
+
+[/var/log/httpd/error_log]
+file = /var/log/httpd/error_log
+log_group_name = ${log_group_name}
+log_stream_name = {instance_id}/httpd/error_log
+datetime_format = %a %b %d %H:%M:%S %Y
+EOF
+
+# Start services
+systemctl start httpd
+systemctl enable httpd
+systemctl start awslogsd
+systemctl enable awslogsd
+
+# Create a simple health check endpoint
+echo "OK" > /var/www/html/health
+
+# Basic web page
+cat > /var/www/html/index.html << EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Application</title>
+</head>
+<body>
+    <h1>Welcome to the Migrated Web Application</h1>
+    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+</body>
+</html>
+EOF
+```
+
+**terraform.tfvars**
+```tf
+domain_name        = "example.com"
+db_password        = "TuringSecure2024!"
+environment        = "dev"
+project_name       = "tap"
+environment_suffix = "pr1670"
+availability_zones = ["us-west-2a", "us-west-2b"]
+single_nat_gateway = true
+```
+
+**tap_stack.tf**
 ```tf
 # Variables
 variable "aws_region" {
