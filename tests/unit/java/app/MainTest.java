@@ -1,4 +1,4 @@
-package com.nova.infrastructure;
+package app;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
