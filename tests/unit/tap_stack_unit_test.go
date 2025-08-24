@@ -59,15 +59,15 @@ func TestS3BucketConfiguration(t *testing.T) {
 		// Test bucket naming convention
 		envSuffix := "test"
 		expectedBucketName := "finapp-financial-docs-" + envSuffix
-		
+
 		// Validate bucket name format
 		assert.Contains(t, expectedBucketName, "finapp")
 		assert.Contains(t, expectedBucketName, envSuffix)
 		assert.Contains(t, expectedBucketName, "financial-docs")
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -75,22 +75,22 @@ func TestS3BucketConfiguration(t *testing.T) {
 func TestIAMRoleConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		envSuffix := "test"
-		
+
 		// Test IAM role naming
 		expectedRoleName := "FinApp-ApplicationRole-" + envSuffix
 		assert.Contains(t, expectedRoleName, "FinApp")
 		assert.Contains(t, expectedRoleName, "ApplicationRole")
 		assert.Contains(t, expectedRoleName, envSuffix)
-		
+
 		// Test IAM policy naming
 		expectedPolicyName := "FinApp-S3-LeastPrivilegeAccess-" + envSuffix
 		assert.Contains(t, expectedPolicyName, "FinApp")
 		assert.Contains(t, expectedPolicyName, "LeastPrivilegeAccess")
 		assert.Contains(t, expectedPolicyName, envSuffix)
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -98,22 +98,22 @@ func TestIAMRoleConfiguration(t *testing.T) {
 func TestCloudTrailConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		envSuffix := "test"
-		
+
 		// Test CloudTrail naming
 		expectedTrailName := "FinApp-AuditTrail-" + envSuffix
 		assert.Contains(t, expectedTrailName, "FinApp")
 		assert.Contains(t, expectedTrailName, "AuditTrail")
 		assert.Contains(t, expectedTrailName, envSuffix)
-		
+
 		// Test CloudTrail bucket naming
 		expectedBucketName := "finapp-cloudtrail-logs-" + envSuffix
 		assert.Contains(t, expectedBucketName, "finapp")
 		assert.Contains(t, expectedBucketName, "cloudtrail")
 		assert.Contains(t, expectedBucketName, envSuffix)
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -121,28 +121,28 @@ func TestCloudTrailConfiguration(t *testing.T) {
 func TestAWSConfigConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		envSuffix := "test"
-		
+
 		// Test Config recorder naming
 		expectedRecorderName := "FinApp-ComplianceRecorder-" + envSuffix
 		assert.Contains(t, expectedRecorderName, "FinApp")
 		assert.Contains(t, expectedRecorderName, "ComplianceRecorder")
 		assert.Contains(t, expectedRecorderName, envSuffix)
-		
+
 		// Test Config bucket naming
 		expectedBucketName := "finapp-config-compliance-" + envSuffix
 		assert.Contains(t, expectedBucketName, "finapp")
 		assert.Contains(t, expectedBucketName, "config")
 		assert.Contains(t, expectedBucketName, envSuffix)
-		
+
 		// Test Config delivery channel naming
 		expectedChannelName := "FinApp-ComplianceDelivery-" + envSuffix
 		assert.Contains(t, expectedChannelName, "FinApp")
 		assert.Contains(t, expectedChannelName, "ComplianceDelivery")
 		assert.Contains(t, expectedChannelName, envSuffix)
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -167,15 +167,15 @@ func TestSecurityComplianceOutputs(t *testing.T) {
 			"auditLoggingEnabled",
 			"complianceMonitoringEnabled",
 		}
-		
+
 		// Verify all expected outputs are defined
 		for _, output := range expectedOutputs {
 			assert.NotEmpty(t, output, "Output %s should be defined", output)
 		}
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -183,17 +183,17 @@ func TestSecurityComplianceOutputs(t *testing.T) {
 func TestInstanceProfileConfiguration(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		envSuffix := "test"
-		
+
 		// Test instance profile naming
 		expectedProfileName := "FinApp-EC2-InstanceProfile-" + envSuffix
 		assert.Contains(t, expectedProfileName, "FinApp")
 		assert.Contains(t, expectedProfileName, "EC2")
 		assert.Contains(t, expectedProfileName, "InstanceProfile")
 		assert.Contains(t, expectedProfileName, envSuffix)
-		
+
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
-	
+
 	require.NoError(t, err)
 }
 
@@ -204,7 +204,7 @@ func TestResourceTagging(t *testing.T) {
 		"Project":     "FinApp",
 		"Environment": "Production",
 	}
-	
+
 	for key, value := range expectedTags {
 		assert.NotEmpty(t, key)
 		assert.NotEmpty(t, value)
@@ -218,15 +218,15 @@ func TestS3BucketPolicies(t *testing.T) {
 	// Test that SSL/TLS enforcement is configured
 	sslEnforced := true
 	assert.True(t, sslEnforced, "SSL/TLS should be enforced")
-	
+
 	// Test that public access is blocked
 	publicAccessBlocked := true
 	assert.True(t, publicAccessBlocked, "Public access should be blocked")
-	
+
 	// Test that versioning is enabled
 	versioningEnabled := true
 	assert.True(t, versioningEnabled, "Versioning should be enabled")
-	
+
 	// Test that encryption is enabled
 	encryptionEnabled := true
 	assert.True(t, encryptionEnabled, "Encryption should be enabled")
@@ -246,12 +246,12 @@ func TestIAMPolicyLeastPrivilege(t *testing.T) {
 		"s3:GetEncryptionConfiguration",
 		"s3:GetObjectLockConfiguration",
 	}
-	
+
 	for _, action := range allowedActions {
 		assert.NotEmpty(t, action, "Action %s should be defined", action)
 		assert.Contains(t, action, "s3:", "All actions should be S3-specific")
 	}
-	
+
 	// Verify no wildcard permissions
 	for _, action := range allowedActions {
 		assert.NotEqual(t, "s3:*", action, "Wildcard permissions should not be used")
@@ -263,15 +263,15 @@ func TestFinancialComplianceRequirements(t *testing.T) {
 	// Test audit logging is enabled
 	auditLoggingEnabled := true
 	assert.True(t, auditLoggingEnabled, "Audit logging must be enabled for financial compliance")
-	
+
 	// Test compliance monitoring is enabled
 	complianceMonitoringEnabled := true
 	assert.True(t, complianceMonitoringEnabled, "Compliance monitoring must be enabled")
-	
+
 	// Test data encryption is enabled
 	encryptionEnabled := true
 	assert.True(t, encryptionEnabled, "Data encryption must be enabled for financial data")
-	
+
 	// Test versioning is enabled for audit trails
 	versioningEnabled := true
 	assert.True(t, versioningEnabled, "Versioning must be enabled for audit trails")
@@ -285,7 +285,7 @@ type mocks struct {
 func (m mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
 	// Return a mock ID and outputs for resources
 	outputs := resource.PropertyMap{}
-	
+
 	switch args.TypeToken {
 	case "aws:s3/bucket:Bucket":
 		outputs["arn"] = resource.NewStringProperty("arn:aws:s3:::test-bucket")
@@ -302,7 +302,7 @@ func (m mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.Prope
 	case "aws:cfg/recorder:Recorder":
 		outputs["name"] = resource.NewStringProperty("test-recorder")
 	}
-	
+
 	return args.Name + "_id", outputs, nil
 }
 
