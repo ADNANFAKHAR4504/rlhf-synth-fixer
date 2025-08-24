@@ -19,10 +19,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
           lockFile: path.join(libDir, '.terraform.lock.hcl'),
           stateFile: path.join(libDir, 'terraform.tfstate'),
           stateBackupFile: path.join(libDir, 'terraform.tfstate.backup'),
-          testBackend: path.join(libDir, 'test_backend.tf'),
+          testBackend: path.join(libDir, 'backend_override.tf'),
           providerBackup: path.join(libDir, 'provider.tf.backup'),
           versionFile: path.join(libDir, '.terraform-version')
         };
+        
+        // Create workspace test directory if it doesn't exist
+        if (!fs.existsSync(libDir)) {
+          fs.mkdirSync(libDir, { recursive: true });
+        }
 
         // Clean up any existing terraform files
         if (fs.existsSync(terraformPaths.dir)) {
@@ -82,103 +87,119 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
         fs.writeFileSync(testTfvars, varsContent);
 
-        // Create test backend configuration
-        const testBackendConfig = `terraform {
-          backend "local" {}
-        }`;
-        fs.writeFileSync(terraformPaths.testBackend, testBackendConfig);
+        // Create temporary backend override
+        const backendOverride = path.join(libDir, 'override.tf');
+        fs.writeFileSync(backendOverride, `terraform {
+          backend "local" {
+            path = "${path.join(libDir, 'terraform.tfstate')}"
+          }
+        }`);
 
-        // Backup and modify provider configuration
-        const originalProvider = path.join(libDir, 'provider.tf');
-        if (fs.existsSync(originalProvider)) {
-          fs.copyFileSync(originalProvider, terraformPaths.providerBackup);
-          
-          let providerContent = fs.readFileSync(originalProvider, 'utf8');
-          providerContent = providerContent.replace(
-            /backend\s+"s3"\s*{\s*}/,
-            'backend "local" {}'
-          );
-          fs.writeFileSync(originalProvider, providerContent);
+        // Backup original configuration files
+        const backupFiles = ['provider.tf', 'backend.tf'].map(file => path.join(libDir, file));
+        const backupDir = path.join(libDir, '.backup');
+        
+        if (!fs.existsSync(backupDir)) {
+          fs.mkdirSync(backupDir, { recursive: true });
         }
 
-        // Initialize Terraform with local backend
-        execSync('terraform init -backend=true -backend-config=backend="local"', { 
-          cwd: libDir, 
-          stdio: 'inherit' 
+        backupFiles.forEach(file => {
+          if (fs.existsSync(file)) {
+            const backupPath = path.join(backupDir, path.basename(file));
+            fs.copyFileSync(file, backupPath);
+            
+            // If it's backend.tf, remove it temporarily
+            if (path.basename(file) === 'backend.tf') {
+              fs.unlinkSync(file);
+            }
+          }
         });
+
+        // Initialize Terraform with local backend
+        try {
+          execSync('terraform init -reconfigure', { 
+            cwd: libDir, 
+            stdio: 'pipe',  // Capture output instead of inheriting
+            encoding: 'utf8',
+            env: {
+              ...process.env,
+              TF_WORKSPACE: 'test',  // Use a test workspace
+              TF_IN_AUTOMATION: 'true'  // Reduce Terraform output
+            }
+          });
+        } catch (initError: any) {
+          console.error('Terraform init error:', initError.stdout?.toString(), initError.stderr?.toString());
+          throw initError;
+        }
 
         // For integration testing, we'll use static file analysis instead of terraform plan
         // to avoid requiring AWS credentials. This is more suitable for testing file structure
         // and configuration syntax rather than actual AWS resource validation.
         planOutput = "Integration tests using static file analysis";
       } catch (error: any) {
-        console.error('Failed to initialize Terraform:', error);
-        // Additional debug info
+        console.error('Failed to initialize Terraform:');
         if (error.stdout) console.error('STDOUT:', error.stdout.toString());
         if (error.stderr) console.error('STDERR:', error.stderr.toString());
+        console.error('Error details:', error);
+        
+        // Try to get more context about the failure
+        try {
+          const files = fs.readdirSync(libDir);
+          console.error('Files in lib directory:', files);
+        } catch (e) {
+          console.error('Could not read lib directory:', e);
+        }
+        
         throw error;
       }
     });
 
     afterAll(() => {
       try {
-        // Define terraform-related paths
-        const terraformPaths = {
-          dir: path.join(libDir, '.terraform'),
+        const backupDir = path.join(libDir, '.backup');
+        const backendOverride = path.join(libDir, 'override.tf');
+        
+        // Cleanup paths
+        const cleanupPaths = {
+          terraformDir: path.join(libDir, '.terraform'),
           lockFile: path.join(libDir, '.terraform.lock.hcl'),
           stateFile: path.join(libDir, 'terraform.tfstate'),
           stateBackupFile: path.join(libDir, 'terraform.tfstate.backup'),
-          testBackend: path.join(libDir, 'test_backend.tf'),
-          providerBackup: path.join(libDir, 'provider.tf.backup'),
-          versionFile: path.join(libDir, '.terraform-version'),
+          overrideFile: backendOverride,
+          backupDir: backupDir,
           testVars: testTfvars
         };
 
-        // Clean up test files
-        Object.values(terraformPaths).forEach(file => {
-          if (fs.existsSync(file)) {
+        // Clean up all test artifacts
+        Object.values(cleanupPaths).forEach(path => {
+          if (fs.existsSync(path)) {
             try {
-              if (file === terraformPaths.dir) {
-                fs.rmSync(file, { recursive: true, force: true });
+              if (fs.statSync(path).isDirectory()) {
+                fs.rmSync(path, { recursive: true, force: true });
               } else {
-                fs.unlinkSync(file);
+                fs.unlinkSync(path);
               }
             } catch (err) {
-              console.warn(`Failed to remove ${file}:`, err);
+              console.warn(`Failed to remove ${path}:`, err);
             }
           }
         });
         
-        // Restore original provider.tf if backup exists
-        const originalProvider = path.join(libDir, 'provider.tf');
-        const backupProvider = terraformPaths.providerBackup;
-        
-        if (fs.existsSync(backupProvider)) {
-          try {
-            fs.copyFileSync(backupProvider, originalProvider);
-          } catch (err) {
-            console.error('Failed to restore original provider.tf:', err);
-          }
+        // Restore original files from backup
+        if (fs.existsSync(backupDir)) {
+          const backupFiles = fs.readdirSync(backupDir);
+          backupFiles.forEach(file => {
+            const backupPath = path.join(backupDir, file);
+            const originalPath = path.join(libDir, file);
+            try {
+              fs.copyFileSync(backupPath, originalPath);
+            } catch (err) {
+              console.error(`Failed to restore ${file}:`, err);
+            }
+          });
         }
         
-        // Clean up terraform files
-        const terraformDir = path.join(libDir, '.terraform');
-        const terraformLockFile = path.join(libDir, '.terraform.lock.hcl');
-        const terraformStateFile = path.join(libDir, 'terraform.tfstate');
-        const terraformBackupFile = path.join(libDir, 'terraform.tfstate.backup');
-        
-        if (fs.existsSync(terraformDir)) {
-          fs.rmSync(terraformDir, { recursive: true, force: true });
-        }
-        if (fs.existsSync(terraformLockFile)) {
-          fs.unlinkSync(terraformLockFile);
-        }
-        if (fs.existsSync(terraformStateFile)) {
-          fs.unlinkSync(terraformStateFile);
-        }
-        if (fs.existsSync(terraformBackupFile)) {
-          fs.unlinkSync(terraformBackupFile);
-        }
+
       } catch (error) {
         console.warn('Failed to clean up test files:', error);
       }
@@ -254,14 +275,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('should validate terraform plan execution', () => {
-      // For integration testing, validate terraform configuration syntax
-      const validateOutput = execSync('terraform validate', { 
-        cwd: libDir,
-        encoding: 'utf8'
-      });
-      
-      // Check for valid configuration
+      test('should validate terraform plan execution', () => {
+        // For integration testing, validate terraform configuration syntax
+        const validateOutput = execSync('terraform validate -no-color', { 
+          cwd: libDir,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe']  // Capture all output
+        });      // Check for valid configuration
       expect(validateOutput).toContain('Success!');
       expect(validateOutput).not.toContain('Error:');
     });
