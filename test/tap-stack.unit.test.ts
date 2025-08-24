@@ -1,6 +1,6 @@
 import fs from 'fs';
-import yaml from 'js-yaml';
 import path from 'path';
+import { parse } from 'yaml-cfn';
 
 describe('TapStack CloudFormation YAML Template', () => {
   let template: any;
@@ -8,7 +8,7 @@ describe('TapStack CloudFormation YAML Template', () => {
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = yaml.load(templateContent);
+    template = parse(templateContent);
   });
 
   describe('Template Structure', () => {
