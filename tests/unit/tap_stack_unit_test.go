@@ -32,7 +32,14 @@ func synthStack(t *testing.T, stackId string) string {
 	_ = os.Setenv("ENVIRONMENT_SUFFIX", "test")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	NewTapStack(app, stackId)
+	NewTapStack(app, stackId, &TapStackProps{
+		EnvironmentSuffix: "test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-west-2",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	})
 	app.Synth()
 
 	tfPath := filepath.Join(outdir, "stacks", stackId, "cdk.tf.json")
@@ -102,8 +109,8 @@ func TestVPCConfiguration(t *testing.T) {
 		t.Fatal("VPC tags not found")
 	}
 
-	if name := tags["Name"]; name != "secure-network" {
-		t.Errorf("expected VPC Name tag 'secure-network', got %v", name)
+	if name := tags["Name"]; name != "test-cdktf-secure-network" {
+		t.Errorf("expected VPC Name tag 'test-cdktf-secure-network', got %v", name)
 	}
 
 	if env := tags["Environment"]; env != "Production" {
@@ -168,8 +175,8 @@ func TestSecurityGroupConfiguration(t *testing.T) {
 		t.Fatal("web-security-group not found")
 	}
 
-	if name := webSg["name"]; name != "web-application-sg" {
-		t.Errorf("expected security group name 'web-application-sg', got %v", name)
+	if name := webSg["name"]; name != "test-cdktf-web-application-sg" {
+		t.Errorf("expected security group name 'test-cdktf-web-application-sg', got %v", name)
 	}
 
 	// Check security group rules
@@ -220,8 +227,8 @@ func TestS3BucketConfiguration(t *testing.T) {
 		t.Fatal("app-logs-bucket not found")
 	}
 
-	if prefix := logsBucket["bucket_prefix"]; prefix != "secure-web-app-logs-" {
-		t.Errorf("expected bucket prefix 'secure-web-app-logs-', got %v", prefix)
+	if prefix := logsBucket["bucket_prefix"]; prefix != "test-cdktf-secure-web-app-logs-" {
+		t.Errorf("expected bucket prefix 'test-cdktf-secure-web-app-logs-', got %v", prefix)
 	}
 
 	// Check encryption configuration
@@ -277,8 +284,8 @@ func TestIAMConfiguration(t *testing.T) {
 		t.Fatal("web-app-role not found")
 	}
 
-	if name := webRole["name"]; name != "WebAppEC2Role" {
-		t.Errorf("expected IAM role name 'WebAppEC2Role', got %v", name)
+	if name := webRole["name"]; name != "test-cdktf-WebAppEC2Role" {
+		t.Errorf("expected IAM role name 'test-cdktf-WebAppEC2Role', got %v", name)
 	}
 
 	// Check IAM policy exists
@@ -292,8 +299,8 @@ func TestIAMConfiguration(t *testing.T) {
 		t.Fatal("s3-log-policy not found")
 	}
 
-	if name := logPolicy["name"]; name != "S3LogWritePolicy" {
-		t.Errorf("expected IAM policy name 'S3LogWritePolicy', got %v", name)
+	if name := logPolicy["name"]; name != "test-cdktf-S3LogWritePolicy" {
+		t.Errorf("expected IAM policy name 'test-cdktf-S3LogWritePolicy', got %v", name)
 	}
 
 	// Check IAM instance profile
@@ -467,8 +474,8 @@ func TestProviderConfiguration(t *testing.T) {
 	}
 
 	tags := defaultTags[0].(map[string]interface{})["tags"].(map[string]interface{})
-	if env := tags["Environment"]; env != "Production" {
-		t.Errorf("expected default Environment tag 'Production', got %v", env)
+	if env := tags["Environment"]; env != "test" {
+		t.Errorf("expected default Environment tag 'test', got %v", env)
 	}
 }
 
