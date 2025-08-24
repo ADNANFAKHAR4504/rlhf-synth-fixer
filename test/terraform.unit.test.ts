@@ -411,7 +411,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (roleMatch) {
         const roleConfig = roleMatch[1];
-        expect(roleConfig).toMatch(/name_prefix\s*=\s*"\${local\.name_prefix}-app-role/);
+        expect(roleConfig).toMatch(/name_prefix\s*=\s*"\${var\.environment}-app-\${random_id\.suffix\.hex}-"/);
         expect(roleConfig).toMatch(/assume_role_policy\s*=\s*jsonencode\({[^}]*Service\s*=\s*"ec2\.amazonaws\.com"/);
       }
 
