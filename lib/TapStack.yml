@@ -8,17 +8,21 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: 'Existing VPC ID where resources will be deployed'
+    Default: vpc-12345678
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
+    Default: subnet-11111111,subnet-22222222
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: 'Public subnet ID for Network ACL demonstration'
+    Default: subnet-33333333
   SecurityTeamEmail:
     Type: String
     Description: 'Email address for security team notifications'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: 'Must be a valid email address'
+    Default: security@example.com
   EnvironmentName:
     Type: String
     Default: 'production'
@@ -109,7 +113,7 @@ Resources:
                 Action:
                   - iam:ChangePassword
                   - iam:GetUser
-                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
               # Deny all other actions unless MFA is present
               - Effect: Deny
                 NotAction:
@@ -166,12 +170,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: 'secure-logging-bucket-access/'
-      # Notification configuration for security monitoring
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -267,7 +265,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       # Enable log file validation for integrity
       EnableLogFileValidation: true
-      # Capture all management events
+      IsLogging: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
@@ -540,17 +538,18 @@ Resources:
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot  # Always take snapshot before deletion
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-secure-db'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true  # Enable encryption at rest
       # Database credentials - use Secrets Manager in production
       MasterUsername: admin
-      ManageUserPassword: true  # Let RDS manage the password in Secrets Manager
+      ManageMasterUserPassword: true  # Let RDS manage the password in Secrets Manager
       # Network configuration - private only
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       VPCSecurityGroups:
@@ -596,7 +595,7 @@ Resources:
   SecureEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       InstanceType: t3.micro
       # Use the secure IAM instance profile
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -605,12 +604,12 @@ Resources:
       SecurityGroupIds:
         - !Ref ApplicationSecurityGroup
       # Disable public IP assignment
-      AssociatePublicIpAddress: false
+      # AssociatePublicIpAddress: false
       # Enable detailed monitoring
       Monitoring: true
       # User data for basic security hardening
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           # Install CloudWatch agent
