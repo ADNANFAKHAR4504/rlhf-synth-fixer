@@ -63,46 +63,7 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.23.12'
-        cache: false # We'll handle caching manually for better control
-
-    - name: Cache Go modules
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ${{ github.workspace }}/.cache/go-build
-          ${{ github.workspace }}/.cache/go-mod
-        key: ${{ runner.os }}-go-${{ inputs.platform }}-${{ hashFiles('go.sum', 'lib/go.sum', '**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ inputs.platform }}-
-          ${{ runner.os }}-go-
-
-    - name: Warm up Go module cache
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
-      shell: bash
-      run: |
-        echo "Warming up Go module cache..."
-        # Create cache directories if they don't exist
-        mkdir -p ~/.cache/go-build
-        mkdir -p ${{ github.workspace }}/.cache/go-build
-        mkdir -p ${{ github.workspace }}/.cache/go-mod
-        
-        # Set Go environment variables for better caching
-        export GOCACHE=${{ github.workspace }}/.cache/go-build
-        export GOMODCACHE=${{ github.workspace }}/.cache/go-mod
-        export GOPROXY=https://proxy.golang.org,direct
-        export GOSUMDB=sum.golang.org
-        
-        # Pre-download dependencies if go.mod exists
-        if [ -f "go.mod" ]; then
-          echo "Found go.mod, downloading dependencies..."
-          go mod download
-        elif [ -f "lib/go.mod" ]; then
-          echo "Found lib/go.mod, downloading dependencies..."
-          cd lib && go mod download && cd ..
-        fi
+        cache: false # Caching is handled in build stage
 
     - name: Setup Java 17
       if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
@@ -180,3 +141,5 @@ runs:
           go.mod
           go.sum
           tap.go
+          ~/.cache/go-build/
+          ~/go/pkg/mod/

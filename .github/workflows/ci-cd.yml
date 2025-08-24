@@ -63,6 +63,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Go Caching (Build Stage)
+        if: ${{ needs.detect-metadata.outputs.language == 'go' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
@@ -317,6 +328,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -733,6 +745,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
+          platform: ''
+          language: ''
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
