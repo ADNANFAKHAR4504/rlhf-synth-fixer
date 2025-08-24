@@ -55,13 +55,13 @@ elif [ "$LANGUAGE" = "go" ]; then
 
     # Go modules prepared during build; skipping go get/tidy here
 
-  elif [ "$PLATFORM" = "pulumi" ]; then
-    echo "🔧 Pulumi Go project detected, ensuring dependencies..."
-    cd lib
-    go mod tidy
-    cd ..
+  # elif [ "$PLATFORM" = "pulumi" ]; then
+  #   echo "🔧 Pulumi Go project detected, ensuring dependencies..."
+  #   cd lib
+  #   go mod tidy
+  #   cd ..
 
-  fi
+  # fi
 
   if [ -d "lib" ]; then
     if [ -d "tests/integration" ]; then
