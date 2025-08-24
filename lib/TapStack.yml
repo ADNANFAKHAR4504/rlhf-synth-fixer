@@ -146,8 +146,8 @@ Parameters:
 
   UseExistingKMSAlias:
     Type: String
-    Default: ''
-    Description: 'Existing KMS alias name to use. Leave empty to create new alias.'
+    Default: 'arn:aws:kms:us-east-1:718240086340:alias/Production-secure-app-key'
+    Description: 'Existing KMS alias ARN to use (e.g., arn:aws:kms:us-east-1:718240086340:alias/Production-secure-app-key)'
 
   UseExistingGlobalCluster:
     Type: String
@@ -207,7 +207,7 @@ Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   CreateS3Bucket: !Equals [!Ref UseExistingS3Bucket, '']
   CreateKMSKey: !Equals [!Ref UseExistingKMSKey, '']
-  CreateKMSAlias: !Equals [!Ref UseExistingKMSAlias, '']
+  # CreateKMSAlias: !Equals [!Ref UseExistingKMSAlias, '']
   CreateS3BucketAndPrimary:
     !And [
       !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion],
@@ -237,12 +237,7 @@ Resources:
     Properties:
       TopicName: !Sub '${Environment}-cloudformation-notifications'
       DisplayName: 'CloudFormation Stack Notifications'
-      KmsMasterKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsMasterKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -300,14 +295,14 @@ Resources:
         - Key: Compliance
           Value: 'HIPAA-PCI-DSS'
 
-  KMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Condition: CreateKMSAlias
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      AliasName: !Sub 'alias/${Environment}-secure-app-key'
-      TargetKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
+  # KMSKeyAlias:
+  #   Type: AWS::KMS::Alias
+  #   Condition: CreateKMSAlias
+  #   DeletionPolicy: Retain
+  #   UpdateReplacePolicy: Retain
+  #   Properties:
+  #     AliasName: !Sub 'alias/${Environment}-secure-app-key'
+  #     TargetKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
 
   # VPC and Network Infrastructure
   VPC:
@@ -356,12 +351,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
 
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
@@ -738,15 +728,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID:
-                !If [
-                  CreateKMSKey,
-                  !If [
-                    CreateKMSAlias,
-                    !Ref KMSKeyAlias,
-                    !Ref UseExistingKMSAlias,
-                  ],
-                  !Ref UseExistingKMSKey,
-                ]
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -778,15 +760,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID:
-                !If [
-                  CreateKMSKey,
-                  !If [
-                    CreateKMSAlias,
-                    !Ref KMSKeyAlias,
-                    !Ref UseExistingKMSAlias,
-                  ],
-                  !Ref UseExistingKMSKey,
-                ]
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
             BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
@@ -893,12 +867,7 @@ Resources:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       StorageEncrypted: true
-      KmsKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
       BackupRetentionPeriod: !If [IsProduction, 30, 7]
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
@@ -957,36 +926,21 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/webserver/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId:
-        !If [
-          CreateKMSKey,
-          !If [CreateKMSAlias, !Ref KMSKeyAlias, !Ref UseExistingKMSAlias],
-          !Ref UseExistingKMSKey,
-        ]
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
 
   # IAM Roles
   EC2Role:
@@ -1027,15 +981,7 @@ Resources:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
                   Resource:
-                    !If [
-                      CreateKMSKey,
-                      !If [
-                        CreateKMSAlias,
-                        !Ref KMSKeyAlias,
-                        !Ref UseExistingKMSAlias,
-                      ],
-                      !Ref UseExistingKMSKey,
-                    ]
+                    !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
           - PolicyName: KMSOnlyAccess
             PolicyDocument:
               Version: '2012-10-17'
@@ -1045,15 +991,7 @@ Resources:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
                   Resource:
-                    !If [
-                      CreateKMSKey,
-                      !If [
-                        CreateKMSAlias,
-                        !Ref KMSKeyAlias,
-                        !Ref UseExistingKMSAlias,
-                      ],
-                      !Ref UseExistingKMSKey,
-                    ]
+                    !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
         - PolicyName: ParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1110,15 +1048,7 @@ Resources:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                 Resource:
-                  !If [
-                    CreateKMSKey,
-                    !If [
-                      CreateKMSAlias,
-                      !Ref KMSKeyAlias,
-                      !Ref UseExistingKMSAlias,
-                    ],
-                    !Ref UseExistingKMSKey,
-                  ]
+                  !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
 
   CodeDeployRole:
     Type: AWS::IAM::Role
@@ -1256,15 +1186,7 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               KmsKeyId:
-                !If [
-                  CreateKMSKey,
-                  !If [
-                    CreateKMSAlias,
-                    !Ref KMSKeyAlias,
-                    !Ref UseExistingKMSAlias,
-                  ],
-                  !Ref UseExistingKMSKey,
-                ]
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSAlias]
         UserData:
           Fn::Base64: |
             #!/bin/bash
