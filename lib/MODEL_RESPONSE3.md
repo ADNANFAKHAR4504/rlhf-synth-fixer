@@ -1,3 +1,8 @@
+I see the issue! There's a typo in the BastionHost resource - it's referencing `!Ref EC2` instead of `!Ref EC2KeyPair`. Let me provide the corrected template with all fixes:
+
+# TapStack.yml - Production-Ready Web Application Infrastructure (Fixed)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with multi-AZ deployment, enhanced security, and monitoring'
 
