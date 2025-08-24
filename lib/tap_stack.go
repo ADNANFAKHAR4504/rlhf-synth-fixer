@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
@@ -33,24 +32,48 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpcendpoint"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
+	"os"
 )
 
-func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
+type TapStackProps struct {
+	EnvironmentSuffix string
+	StateBucket       string
+	StateBucketRegion string
+	AwsRegion         string
+	RepositoryName    string
+	CommitAuthor      string
+}
+
+func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
 
 	// Get environment prefix
-	envPrefix := os.Getenv("ENVIRONMENT_PREFIX")
+	envPrefix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if envPrefix == "" {
-		envPrefix = "default"
+		envPrefix = props.EnvironmentSuffix
 	}
+	envPrefix = fmt.Sprintf("%s-cdktf", envPrefix)
+
+	// Configure S3 Backend
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket:  jsii.String(props.StateBucket),
+		Key:     jsii.String(fmt.Sprintf("%s/%s.tfstate", props.EnvironmentSuffix, id)),
+		Region:  jsii.String(props.StateBucketRegion),
+		Encrypt: jsii.Bool(true),
+	})
+
+	// Add S3 state locking using escape hatch
+	stack.AddOverride(jsii.String("terraform.backend.s3.use_lockfile"), jsii.Bool(true))
 
 	// Configure AWS Provider
-	provider.NewAwsProvider(stack, jsii.String("AWS"), &provider.AwsProviderConfig{
-		Region: jsii.String("us-west-2"),
+	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
+		Region: jsii.String(props.AwsRegion),
 		DefaultTags: []provider.AwsProviderDefaultTags{
 			{
 				Tags: &map[string]*string{
-					"Environment": jsii.String("Production"),
+					"Environment": jsii.String(props.EnvironmentSuffix),
+					"Repository":  jsii.String(props.RepositoryName),
+					"Author":      jsii.String(props.CommitAuthor),
 				},
 			},
 		},
@@ -641,10 +664,4 @@ EOF`
 	})
 
 	return stack
-}
-
-func main() {
-	app := cdktf.NewApp(nil)
-	NewTapStack(app, "TapStack")
-	app.Synth()
 }
