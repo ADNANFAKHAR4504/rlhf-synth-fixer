@@ -949,7 +949,7 @@ Resources:
                     - 's3:GetObject'
                     - 's3:PutObject'
                   Resource: !Sub
-                    - '${BucketName}/*'
+                    - 'arn:aws:s3:::${BucketName}/*'
                     - BucketName:
                         !If [
                           CreateS3Bucket,
