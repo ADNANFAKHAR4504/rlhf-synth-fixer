@@ -211,47 +211,45 @@ func main() {
 			return err
 		}
 
-		// Create IAM role for CloudTrail
-		cloudtrailRole, err := iam.NewRole(ctx, fmt.Sprintf("cloudtrail-role-%s", envSuffix), &iam.RoleArgs{
-			AssumeRolePolicy: pulumi.String(`{
+
+
+
+
+		// Add bucket policy for CloudTrail
+		auditBucketPolicy := auditBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
-						"Action": "sts:AssumeRole",
+						"Sid": "AWSCloudTrailAclCheck",
+						"Effect": "Allow",
 						"Principal": {
 							"Service": "cloudtrail.amazonaws.com"
 						},
-						"Effect": "Allow"
+						"Action": "s3:GetBucketAcl",
+						"Resource": "%s"
+					},
+					{
+						"Sid": "AWSCloudTrailWrite",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "cloudtrail.amazonaws.com"
+						},
+						"Action": "s3:PutObject",
+						"Resource": "%s/*",
+						"Condition": {
+							"StringEquals": {
+								"s3:x-amz-acl": "bucket-owner-full-control"
+							}
+						}
 					}
 				]
-			}`),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+			}`, arn, arn), nil
+		}).(pulumi.StringOutput)
 
-		// Create CloudTrail policy for audit bucket access
-		cloudtrailPolicy, err := iam.NewRolePolicy(ctx, fmt.Sprintf("cloudtrail-policy-%s", envSuffix), &iam.RolePolicyArgs{
-			Role: cloudtrailRole.ID(),
-			Policy: auditBucket.ID().ApplyT(func(bucketName string) (string, error) {
-				return fmt.Sprintf(`{
-					"Version": "2012-10-17",
-					"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [
-								"s3:PutObject",
-								"s3:GetBucketAcl"
-							],
-							"Resource": [
-								"arn:aws:s3:::%s",
-								"arn:aws:s3:::%s/*"
-							]
-						}
-					]
-				}`, bucketName, bucketName), nil
-			}).(pulumi.StringOutput),
+		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("audit-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
+			Bucket: auditBucket.ID(),
+			Policy: auditBucketPolicy,
 		})
 		if err != nil {
 			return err
@@ -280,7 +278,7 @@ func main() {
 				},
 			},
 			Tags: commonTags,
-		}, pulumi.DependsOn([]pulumi.Resource{cloudtrailPolicy}))
+		})
 		if err != nil {
 			return err
 		}
