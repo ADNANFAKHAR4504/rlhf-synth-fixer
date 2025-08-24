@@ -407,9 +407,9 @@ func TestSecurityGroups(t *testing.T) {
 
 	// Check for expected security groups (with environment suffix)
 	expectedGroups := map[string]bool{
-		"web-security-group-cdktf-":  false,
-		"app-security-group-cdktf-":  false,
-		"db-security-group-cdktf-":   false,
+		"web-security-group-cdktf-": false,
+		"app-security-group-cdktf-": false,
+		"db-security-group-cdktf-":  false,
 	}
 
 	for _, sg := range result.SecurityGroups {
