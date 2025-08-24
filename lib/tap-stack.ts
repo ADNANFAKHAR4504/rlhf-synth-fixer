@@ -1,6 +1,7 @@
 import { Fn, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
@@ -31,11 +32,14 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // --- Provider & Basic Configuration ---
+    // --- Provider Registrations ---
     new AwsProvider(this, 'aws', {
       region: 'us-east-1',
     });
 
+    new RandomProvider(this, 'random');
+
+    // --- Basic Configuration ---
     const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
     const resourceNamePrefix = `webapp-${uniqueSuffix}`;
 
