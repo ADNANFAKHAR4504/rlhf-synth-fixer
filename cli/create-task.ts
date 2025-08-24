@@ -87,6 +87,7 @@ function getLanguageChoices(platform: string) {
       { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
       { name: 'Java', value: 'java' },
+      { name: 'Go', value: 'go' },
     ];
   }
   if (platform === 'tf') {
