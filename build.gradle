@@ -113,6 +113,7 @@ jar {
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = 'app.jar'
+    zip64 = true  // Enable zip64 for large archives
 }
 
 // Configure integration test dependencies
