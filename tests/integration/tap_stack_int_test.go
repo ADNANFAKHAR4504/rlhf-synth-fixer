@@ -764,7 +764,6 @@ func TestIntegration_RequiredOutputsPresent(t *testing.T) {
 	}
 }
 
-
 // TestIntegration_VPCValidation validates VPC resources in each region
 func TestIntegration_VPCValidation(t *testing.T) {
 	regions := []string{"us-east-1", "us-west-2", "eu-central-1"}
@@ -797,4 +796,3 @@ func TestIntegration_AutoScalingGroupsValidation(t *testing.T) {
 		})
 	}
 }
-
