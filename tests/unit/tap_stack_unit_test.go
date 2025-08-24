@@ -32,7 +32,14 @@ func synthStack(t *testing.T, stackId string) string {
 	_ = os.Setenv("ENVIRONMENT_SUFFIX", "test")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	NewTapStack(app, stackId)
+	NewTapStack(app, stackId, &TapStackProps{
+		EnvironmentSuffix:   "test",
+		StateBucket:         "test-bucket",
+		StateBucketRegion:   "us-east-1",
+		AwsRegion:          "us-west-2",
+		RepositoryName:     "test-repo",
+		CommitAuthor:       "test-author",
+	})
 	app.Synth()
 
 	tfPath := filepath.Join(outdir, "stacks", stackId, "cdk.tf.json")
