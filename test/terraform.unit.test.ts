@@ -421,8 +421,8 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (policyMatch) {
         const policyConfig = policyMatch[1];
-        expect(policyConfig).toMatch(/name_prefix\s*=\s*"\${var\.environment}-policy-\${random_id\.suffix\.hex}-"/);
-        expect(policyConfig).toMatch(/policy\s*=\s*jsonencode\({[^}]*Action\s*=\s*\[\s*"secretsmanager:GetSecretValue"\s*\]/);
+        expect(policyConfig).toMatch(/name_prefix\s*=\s*"\${local\.name_prefix}-app-secrets-[^"]*-"/);
+        expect(policyConfig).toMatch(/policy\s*=\s*jsonencode\(\{[^}]*Action\s*=\s*\[\s*"secretsmanager:GetSecretValue"[^\]]*\]/);
         expect(policyConfig).toMatch(new RegExp(`Resource\\s*=\\s*aws_secretsmanager_secret\\.app_secrets_${region}\\.arn`));
       }
 
