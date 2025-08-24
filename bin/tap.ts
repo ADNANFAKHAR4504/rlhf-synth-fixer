@@ -45,5 +45,5 @@ const secondaryStack = new TapStack(
   }
 );
 
-// Add cross-stack dependency
-secondaryStack.addDependency(primaryStack);
+// Add cross-stack dependency - Primary depends on Secondary to ensure replica bucket exists
+primaryStack.addDependency(secondaryStack);
