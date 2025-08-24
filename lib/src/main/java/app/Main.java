@@ -178,7 +178,10 @@ public class Main {
             Route53StackProps.builder()
                 .primaryLoadBalancer(primaryStack.getLoadBalancer())
                 .failoverLoadBalancer(failoverStack.getLoadBalancer())
-                .stackProps(StackProps.builder().build())
+                .stackProps(StackProps.builder()
+                    .crossRegionReferences(true) // Enable cross-region references for the application
+                    .env(Environment.builder().region("us-east-1").build()) // Anchor the global stack
+                    .build())
                 .build());
 
         app.synth();
