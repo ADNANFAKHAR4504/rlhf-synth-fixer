@@ -123,7 +123,12 @@ export class TapStack extends cdk.Stack {
         sid: 'AllowELBServiceAccountBucketAccess',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation', 's3:ListBucket'],
+        actions: [
+          's3:GetBucketAcl',
+          's3:GetBucketLocation',
+          's3:ListBucket',
+          's3:PutBucketAcl',
+        ],
         resources: [albLogsBucket.bucketArn],
       })
     );

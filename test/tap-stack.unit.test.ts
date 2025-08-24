@@ -45,15 +45,19 @@ describe('TapStack', () => {
     const kmsKeyId = Object.keys(kmsKey)[0];
     const keyPolicy = kmsKey[kmsKeyId].Properties.KeyPolicy;
 
-    // Stringify the policy to search for the ARNs  
+    // Stringify the policy to search for the ARNs
     const policyString = JSON.stringify(keyPolicy);
-    
+
     // Check for VPC Flow Logs ARN reference
-    expect(policyString).toContain(`/aws/vpc/SecureApp-flowlogs-${environmentSuffix}`);
-    
+    expect(policyString).toContain(
+      `/aws/vpc/SecureApp-flowlogs-${environmentSuffix}`
+    );
+
     // Check for ECS Application Logs ARN reference
-    expect(policyString).toContain(`/aws/ecs/SecureApp-application-${environmentSuffix}`);
-    
+    expect(policyString).toContain(
+      `/aws/ecs/SecureApp-application-${environmentSuffix}`
+    );
+
     // Check for CloudWatch Logs service principal (it's constructed with Fn::Join)
     expect(policyString).toContain('logs.');
   });
@@ -402,7 +406,12 @@ describe('TapStack', () => {
             Principal: {
               AWS: Match.anyValue(), // The account ID is wrapped in Fn::Join
             },
-            Action: ['s3:GetBucketAcl', 's3:GetBucketLocation', 's3:ListBucket'],
+            Action: [
+              's3:GetBucketAcl',
+              's3:GetBucketLocation',
+              's3:ListBucket',
+              's3:PutBucketAcl',
+            ],
             Effect: 'Allow',
             Resource: Match.anyValue(),
             Sid: 'AllowELBServiceAccountBucketAccess',
