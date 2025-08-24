@@ -58,7 +58,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	// Configure S3 backend for remote state
 	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
 		Bucket: jsii.String(stateBucket),
-		Key:    jsii.String(fmt.Sprintf("tap-stack-%s.tfstate", environmentSuffix)),
+		Key:    jsii.String(fmt.Sprintf("%s/TapStack%s.tfstate", environmentSuffix, environmentSuffix)),
 		Region: jsii.String(stateBucketRegion),
 	})
 
