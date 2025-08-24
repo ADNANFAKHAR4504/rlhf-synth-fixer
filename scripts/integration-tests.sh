@@ -59,6 +59,12 @@ elif [ "$LANGUAGE" = "go" ]; then
     go clean -modcache || true
     go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
     go mod tidy
+
+  elif [ "$PLATFORM" = "pulumi" ]; then
+    echo "🔧 Pulumi Go project detected, ensuring dependencies..."
+    cd lib
+    go mod tidy
+    cd ..
   fi
 
   if [ -d "lib" ]; then
