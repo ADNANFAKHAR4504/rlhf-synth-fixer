@@ -1,7 +1,6 @@
 This template will establish a production-ready, secure web application environment.
 
 ```yaml
-# secure-web-app-template.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable web application environment with comprehensive monitoring and compliance'
 
@@ -910,11 +909,10 @@ Outputs:
     Value: !Ref VPCDefaultSecurityGroupClosedRule
     Export:
       Name: !Sub '${EnvironmentName}-VPCDefaultSecurityGroupClosedRule-Name'
-
-# Template Capabilities
-# Note: This template requires CAPABILITY_IAM and CAPABILITY_NAMED_IAM for IAM resources
 ```
 
+
+```
 ## Key Features Implemented
 
 ### Security Architecture
@@ -943,3 +941,4 @@ Outputs:
 - **Dynamic AZ selection**: Uses !GetAZs for region independence
 
 This template provides enterprise-grade security, scalability, and monitoring while meeting all specified requirements for a production-ready secure web application environment.
+```
