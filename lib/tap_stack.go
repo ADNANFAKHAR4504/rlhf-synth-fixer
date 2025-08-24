@@ -406,12 +406,12 @@ func main() {
 		// Get existing Config resources from environment
 		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
 		if existingConfigRecorder == "" {
-			existingConfigRecorder = "default"
+			existingConfigRecorder = "tap-webapp-pr1598-config-recorder"
 		}
 
 		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
 		if existingDeliveryChannel == "" {
-			existingDeliveryChannel = "default"
+			existingDeliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
 		}
 
 		// Create AWS Config Service Role
@@ -510,9 +510,11 @@ func main() {
 
 		// Use existing or create new Config Recorder
 		var configRecorderName pulumi.StringOutput
-		if existingConfigRecorder != "default" {
+		if existingConfigRecorder != "" {
+			// Use existing recorder
 			configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
 		} else {
+			// Create new recorder
 			configRecorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
 				Name:    pulumi.Sprintf("healthapp-recorder-%s", envSuffix),
 				RoleArn: configRole.Arn,
@@ -527,9 +529,15 @@ func main() {
 			configRecorderName = configRecorder.Name
 		}
 
-		// Create delivery channel if needed
+		// Use existing or create new Delivery Channel
+		var deliveryChannelName pulumi.StringOutput
 		var deliveryChannelResource pulumi.Resource
-		if existingDeliveryChannel == "default" {
+		if existingDeliveryChannel != "" {
+			// Use existing delivery channel
+			deliveryChannelName = pulumi.String(existingDeliveryChannel).ToStringOutput()
+			deliveryChannelResource = nil
+		} else {
+			// Create new delivery channel
 			deliveryChannel, err := cfg.NewDeliveryChannel(ctx, fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), &cfg.DeliveryChannelArgs{
 				Name:         pulumi.Sprintf("healthapp-delivery-%s", envSuffix),
 				S3BucketName: configBucket.ID(),
@@ -538,6 +546,7 @@ func main() {
 			if err != nil {
 				return err
 			}
+			deliveryChannelName = deliveryChannel.Name
 			deliveryChannelResource = deliveryChannel
 		}
 
@@ -570,6 +579,7 @@ func main() {
 		ctx.Export("privateSubnet1Id", privateSubnet1.ID())
 		ctx.Export("privateSubnet2Id", privateSubnet2.ID())
 		ctx.Export("configRecorderName", configRecorderName)
+		ctx.Export("configDeliveryChannelName", deliveryChannelName)
 		ctx.Export("configBucketName", configBucket.ID())
 
 		return nil
