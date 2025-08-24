@@ -508,7 +508,8 @@ Resources:
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
-              Encrypted: false
+              Encrypted: true
+              KmsKeyId: !Ref KMSKey
 
 
 

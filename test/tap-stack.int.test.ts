@@ -19,6 +19,7 @@ import {
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeInstancesCommand,
+  DescribeVolumesCommand,
   EC2Client
 } from '@aws-sdk/client-ec2';
 import {
@@ -34,7 +35,7 @@ import {
   DescribeConfigRulesCommand,
   ConfigServiceClient
 } from '@aws-sdk/client-config-service';
-import fs from 'fs';
+import * as fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after CloudFormation deploy
 const outputs = JSON.parse(
@@ -414,6 +415,28 @@ describe('TapStack Infrastructure Integration Tests', () => {
         Key: testKey
       });
       await s3Client.send(deleteCommand);
+    });
+
+    test('Auto Scaling Group instances should exist and be running', async () => {
+      const vpcId = outputs.VPCId;
+
+      // Get instances from the Auto Scaling Group
+      const command = new DescribeInstancesCommand({
+        Filters: [
+          { Name: 'vpc-id', Values: [vpcId] },
+          { Name: 'instance-state-name', Values: ['running', 'pending'] }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      expect(response.Reservations).toBeDefined();
+      expect(response.Reservations!.length).toBeGreaterThan(0);
+
+      // Check that we have instances in the VPC
+      const instanceCount = response.Reservations!.reduce((count, reservation) => {
+        return count + (reservation.Instances?.length || 0);
+      }, 0);
+      expect(instanceCount).toBeGreaterThan(0);
     });
 
     test('All services should be in the same VPC', async () => {
