@@ -403,7 +403,18 @@ func main() {
 			return err
 		}
 
-		// Enable AWS Config for compliance monitoring
+		// Get existing Config resources from environment
+		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
+		if existingConfigRecorder == "" {
+			existingConfigRecorder = "default"
+		}
+
+		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
+		if existingDeliveryChannel == "" {
+			existingDeliveryChannel = "default"
+		}
+
+		// Create AWS Config Service Role
 		configRole, err := iam.NewRole(ctx, fmt.Sprintf("config-role-%s", envSuffix), &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
@@ -417,24 +428,31 @@ func main() {
 					}
 				]
 			}`),
-			ManagedPolicyArns: pulumi.StringArray{
-				pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
-			},
 			Tags: commonTags,
 		})
 		if err != nil {
 			return err
 		}
 
-		// Create Config delivery channel
+		// Attach AWS Config service role policy
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("config-policy-attachment-%s", envSuffix), &iam.RolePolicyAttachmentArgs{
+			Role:      configRole.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create S3 bucket for AWS Config
 		configBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-config-bucket-%s", envSuffix), &s3.BucketV2Args{
-			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
+			ForceDestroy: pulumi.Bool(true),
 			Tags:         commonTags,
 		})
 		if err != nil {
 			return err
 		}
 
+		// Configure Config bucket encryption
 		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("config-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: configBucket.ID(),
 			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
@@ -450,46 +468,91 @@ func main() {
 			return err
 		}
 
-		// Create Config recorder
-		recorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
-			RoleArn: configRole.Arn,
-			RecordingGroup: &cfg.RecorderRecordingGroupArgs{
-				AllSupported:               pulumi.Bool(true),
-				IncludeGlobalResourceTypes: pulumi.Bool(true),
-			},
+		// Add bucket policy for AWS Config
+		configBucketPolicy := configBucket.Arn.ApplyT(func(arn string) (string, error) {
+			return fmt.Sprintf(`{
+				"Version": "2012-10-17",
+				"Statement": [
+					{
+						"Sid": "AWSConfigBucketPermissionsCheck",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "config.amazonaws.com"
+						},
+						"Action": "s3:GetBucketAcl",
+						"Resource": "%s"
+					},
+					{
+						"Sid": "AWSConfigBucketWrite",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "config.amazonaws.com"
+						},
+						"Action": "s3:PutObject",
+						"Resource": "%s/*",
+						"Condition": {
+							"StringEquals": {
+								"s3:x-amz-acl": "bucket-owner-full-control"
+							}
+						}
+					}
+				]
+			}`, arn, arn), nil
+		}).(pulumi.StringOutput)
+
+		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("config-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
+			Bucket: configBucket.ID(),
+			Policy: configBucketPolicy,
 		})
 		if err != nil {
 			return err
 		}
 
-		// Create Config delivery channel
-		deliveryChannel, err := cfg.NewDeliveryChannel(ctx, fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), &cfg.DeliveryChannelArgs{
-			S3BucketName: configBucket.ID(),
-			S3KeyPrefix:  pulumi.String("config/"),
-		}, pulumi.DependsOn([]pulumi.Resource{recorder}))
-		if err != nil {
-			return err
+		// Use existing or create new Config Recorder
+		var configRecorderName pulumi.StringOutput
+		if existingConfigRecorder != "default" {
+			configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
+		} else {
+			configRecorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
+				Name:    pulumi.Sprintf("healthapp-recorder-%s", envSuffix),
+				RoleArn: configRole.Arn,
+				RecordingGroup: &cfg.RecorderRecordingGroupArgs{
+					AllSupported:               pulumi.Bool(true),
+					IncludeGlobalResourceTypes: pulumi.Bool(true),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			configRecorderName = configRecorder.Name
 		}
 
-		// Create Config rules for HIPAA compliance
-		_, err = cfg.NewRule(ctx, fmt.Sprintf("s3-bucket-server-side-encryption-%s", envSuffix), &cfg.RuleArgs{
-			Name: pulumi.String("s3-bucket-server-side-encryption-enabled"),
-			Source: &cfg.RuleSourceArgs{
-				Owner:            pulumi.String("AWS"),
-				SourceIdentifier: pulumi.String("S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"),
-			},
-		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannel}))
-		if err != nil {
-			return err
+		// Create delivery channel if needed
+		var deliveryChannelResource pulumi.Resource
+		if existingDeliveryChannel == "default" {
+			deliveryChannel, err := cfg.NewDeliveryChannel(ctx, fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), &cfg.DeliveryChannelArgs{
+				Name:         pulumi.Sprintf("healthapp-delivery-%s", envSuffix),
+				S3BucketName: configBucket.ID(),
+				S3KeyPrefix:  pulumi.String("config/"),
+			})
+			if err != nil {
+				return err
+			}
+			deliveryChannelResource = deliveryChannel
 		}
 
-		_, err = cfg.NewRule(ctx, fmt.Sprintf("s3-bucket-public-access-prohibited-%s", envSuffix), &cfg.RuleArgs{
-			Name: pulumi.String("s3-bucket-public-access-prohibited"),
-			Source: &cfg.RuleSourceArgs{
-				Owner:            pulumi.String("AWS"),
-				SourceIdentifier: pulumi.String("S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"),
-			},
-		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannel}))
+		// Enable Config Recorder
+		if deliveryChannelResource != nil {
+			_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
+				Name:      configRecorderName,
+				IsEnabled: pulumi.Bool(true),
+			}, pulumi.DependsOn([]pulumi.Resource{deliveryChannelResource}))
+		} else {
+			_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
+				Name:      configRecorderName,
+				IsEnabled: pulumi.Bool(true),
+			})
+		}
 		if err != nil {
 			return err
 		}
@@ -506,6 +569,8 @@ func main() {
 		ctx.Export("appRoleArn", appRole.Arn)
 		ctx.Export("privateSubnet1Id", privateSubnet1.ID())
 		ctx.Export("privateSubnet2Id", privateSubnet2.ID())
+		ctx.Export("configRecorderName", configRecorderName)
+		ctx.Export("configBucketName", configBucket.ID())
 
 		return nil
 	})
