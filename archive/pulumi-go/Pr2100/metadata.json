@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291932",
+  "team": "2",
+  "startedAt": "2025-08-23T09:35:27.029Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "CloudTrail",
+    "IAM",
+    "KMS",
+    "VPC"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
+}

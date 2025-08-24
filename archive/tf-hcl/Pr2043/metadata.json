@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291690",
+  "team": "6",
+  "startedAt": "2025-08-23T00:50:52.127Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Infrastructure QA",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "Config",
+    "Secrets Manager",
+    "Security Groups",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "amitk6-ctu",
+  "dockerS3Location": ""
+}
