@@ -35,6 +35,8 @@ elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
   if [ "$PLATFORM" = "cdktf" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    # Ensure CDKTF Go deps and .gen are prepared (idempotent, uses cache)
+    bash ./scripts/cdktf-go-prepare.sh
 
     # --- FIX: remove legacy terraform.tfstate for clean CI runs ---
     if [ -f "terraform.tfstate" ]; then
