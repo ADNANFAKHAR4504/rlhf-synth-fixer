@@ -5,5 +5,9 @@
   "turn_type": "multi",
   "po_id": "291988",
   "team": "5",
-  "startedAt": "2025-08-23T05:01:54.568Z"
+  "startedAt": "2025-08-23T05:01:54.568Z",
+  "subtask": "financial-application-infrastructure",
+  "subject_labels": ["aws", "security", "networking", "encryption", "monitoring", "compliance"],
+  "training_quality": 8,
+  "aws_services": ["VPC", "EC2", "S3", "KMS", "CloudTrail", "IAM", "CloudWatch", "SNS"]
 }
