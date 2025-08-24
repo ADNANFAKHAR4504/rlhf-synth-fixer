@@ -33,7 +33,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
 Conditions:
-  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # KMS Key for encryption
