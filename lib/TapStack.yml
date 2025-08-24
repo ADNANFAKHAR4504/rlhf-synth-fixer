@@ -12,11 +12,11 @@ Parameters:
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
-    Default: subnet-11111111,subnet-22222222
+    Default: subnet-0f5eb8e64a7c7dc0b
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: 'Public subnet ID for Network ACL demonstration'
-    Default: subnet-33333333
+    Default: subnet-00ec7eee49db50d76
   SecurityTeamEmail:
     Type: String
     Description: 'Email address for security team notifications'
