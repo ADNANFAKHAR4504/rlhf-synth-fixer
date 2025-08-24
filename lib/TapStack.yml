@@ -283,6 +283,8 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Condition: CreateKMSKey
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AliasName: !Sub 'alias/${Environment}-secure-app-key'
       TargetKeyId: !Ref KMSKey
@@ -290,6 +292,8 @@ Resources:
   # VPC and Network Infrastructure
   VPC:
     Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       CidrBlock: !Ref VpcCidr
       EnableDnsHostnames: true
@@ -352,7 +356,8 @@ Resources:
   # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Tags:
         - Key: Name
@@ -362,7 +367,8 @@ Resources:
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
@@ -370,7 +376,8 @@ Resources:
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -384,7 +391,8 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -399,7 +407,8 @@ Resources:
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -412,7 +421,8 @@ Resources:
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -426,7 +436,8 @@ Resources:
   # Database Subnets
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
@@ -439,7 +450,8 @@ Resources:
 
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
-
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
@@ -471,6 +483,8 @@ Resources:
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -480,6 +494,8 @@ Resources:
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -561,6 +577,8 @@ Resources:
   # Security Groups
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-alb-sg'
       GroupDescription: 'Security group for Application Load Balancer'
@@ -587,6 +605,8 @@ Resources:
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-web-sg'
       GroupDescription: 'Security group for web servers'
@@ -615,6 +635,8 @@ Resources:
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-db-sg'
       GroupDescription: 'Security group for database'
@@ -638,6 +660,8 @@ Resources:
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-bastion-sg'
       GroupDescription: 'Security group for bastion host'
@@ -656,6 +680,8 @@ Resources:
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-lambda-sg'
       GroupDescription: 'Security group for Lambda functions'
@@ -707,7 +733,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub
-        - '${EnvironmentLower}-${EnvironmentSuffix}-assets-${AWS::AccountId}'
+        - '${EnvironmentLower}-${EnvironmentSuffix}-${AWS::AccountId}'
         - EnvironmentLower:
             !FindInMap [EnvironmentLowerMap, !Ref Environment, Name]
       BucketEncryption:
