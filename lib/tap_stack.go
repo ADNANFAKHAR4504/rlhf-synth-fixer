@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cfg"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
@@ -62,44 +63,26 @@ func main() {
 			return err
 		}
 
+		// Get current AWS account ID and region for KMS policy
+		current, err := aws.GetCallerIdentity(ctx, nil, nil)
+		if err != nil {
+			return err
+		}
+
 		// Create KMS key for encryption with FIPS 140-3 Level 3 compliance
 		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("healthapp-kms-key-%s", envSuffix), &kms.KeyArgs{
 			Description: pulumi.String("KMS key for HealthApp data encryption - FIPS 140-3 Level 3 compliant"),
 			KeyUsage:    pulumi.String("ENCRYPT_DECRYPT"),
-			Policy: pulumi.String(`{
+			Policy: pulumi.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
 						"Sid": "Enable IAM User Permissions",
 						"Effect": "Allow",
 						"Principal": {
-							"AWS": "arn:aws:iam::*:root"
+							"AWS": "arn:aws:iam::%s:root"
 						},
 						"Action": "kms:*",
-						"Resource": "*"
-					},
-					{
-						"Sid": "Allow access for Key Administrators",
-						"Effect": "Allow",
-						"Principal": {
-							"AWS": "arn:aws:iam::*:role/HealthAppAdminRole"
-						},
-						"Action": [
-							"kms:Create*",
-							"kms:Describe*",
-							"kms:Enable*",
-							"kms:List*",
-							"kms:Put*",
-							"kms:Update*",
-							"kms:Revoke*",
-							"kms:Disable*",
-							"kms:Get*",
-							"kms:Delete*",
-							"kms:TagResource",
-							"kms:UntagResource",
-							"kms:ScheduleKeyDeletion",
-							"kms:CancelKeyDeletion"
-						],
 						"Resource": "*"
 					},
 					{
@@ -122,7 +105,7 @@ func main() {
 						"Resource": "*"
 					}
 				]
-			}`),
+			}`, current.AccountId),
 			Tags: commonTags,
 		})
 		if err != nil {
@@ -435,7 +418,7 @@ func main() {
 				]
 			}`),
 			ManagedPolicyArns: pulumi.StringArray{
-				pulumi.String("arn:aws:iam::aws:policy/service-role/ConfigRole"),
+				pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
 			},
 			Tags: commonTags,
 		})
