@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { parse } from 'yaml-cfn';
+import { parse } from 'yaml';
 
 describe('TapStack CloudFormation YAML Template', () => {
   let template: any;
