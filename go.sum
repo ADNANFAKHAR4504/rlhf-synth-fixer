@@ -45,6 +45,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 h1:hT8rVHwugYE2lEfdFE0QWVo81lF7
 github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0/go.mod h1:8tu/lYfQfFe6IGnaOdrpVgEL2IrrDOf6/m9RQum4NkY=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.5 h1:81KE7vaZzrl7yHBYHVEzYB8sypz11NMOZ40YlWvPxsU=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.5/go.mod h1:LIt2rg7Mcgn09Ygbdh/RdIm0rQ+3BNkbP1gyVMFtRK0=
+github.com/aws/aws-sdk-go-v2/service/cloudformation v1.64.2 h1:QOsVXn4JOYT/hijI83NKENLuPBgNnoCsZRYevszDFMs=
+github.com/aws/aws-sdk-go-v2/service/cloudformation v1.64.2/go.mod h1:J14kHsEQ16zYUK6AQyDQZjC1n+NUn2L7Dpx0zMd/vZs=
 github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0 h1:fdPi8+XO2X3h+Z5fTArTVeThFOqf+8LBu+dxjXDx9dc=
 github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0/go.mod h1:zs9f9z7VhQZJ2TMUqYYst0uZTc7VTDzmoDcHf0VrmPs=
 github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0 h1:WMgigsEPtSgsVe+jBMqCuAF2u0j/CnSjCm3I6Ar7nFo=
