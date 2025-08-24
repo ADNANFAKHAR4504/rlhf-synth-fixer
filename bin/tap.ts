@@ -19,6 +19,13 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  certificateArn:
+    process.env.CERTIFICATE_ARN ||
+    'arn:aws:acm:us-east-1:123456789012:certificate/sample-cert-id',
+  containerImage: process.env.CONTAINER_IMAGE || 'nginx:latest',
+  desiredCount: parseInt(process.env.DESIRED_COUNT || '2', 10),
+  minCapacity: parseInt(process.env.MIN_CAPACITY || '2', 10),
+  maxCapacity: parseInt(process.env.MAX_CAPACITY || '10', 10),
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,

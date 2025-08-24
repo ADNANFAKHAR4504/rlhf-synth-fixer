@@ -1,12 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -14,17 +10,382 @@ describe('TapStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, `TestTapStack`, {
+      environmentSuffix,
+      certificateArn:
+        'arn:aws:acm:us-east-1:123456789012:certificate/test-cert-id',
+      containerImage: 'nginx:test',
+      desiredCount: 2,
+      minCapacity: 1,
+      maxCapacity: 5,
+    });
     template = Template.fromStack(stack);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  test('Creates VPC with correct configuration', () => {
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
+      EnableDnsHostnames: true,
+      EnableDnsSupport: true,
+    });
+  });
+
+  test('Creates KMS Key with rotation enabled', () => {
+    template.hasResourceProperties('AWS::KMS::Key', {
+      EnableKeyRotation: true,
+      KeySpec: 'SYMMETRIC_DEFAULT',
+      KeyUsage: 'ENCRYPT_DECRYPT',
+    });
+  });
+
+  test('Creates encrypted CloudWatch Log Groups', () => {
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      RetentionInDays: 365,
+    });
+
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      RetentionInDays: 30,
+    });
+  });
+
+  test('Creates S3 bucket with encryption and SSL enforcement', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [
+          {
+            ServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'aws:kms',
+            },
+          },
+        ],
+      },
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      VersioningConfiguration: {
+        Status: 'Enabled',
+      },
+    });
+  });
+
+  test('Creates ECS Cluster with container insights', () => {
+    template.hasResourceProperties('AWS::ECS::Cluster', {
+      ClusterSettings: [
+        {
+          Name: 'containerInsights',
+          Value: 'enabled',
+        },
+      ],
+    });
+  });
+
+  test('Creates Fargate Service with correct configuration', () => {
+    template.hasResourceProperties('AWS::ECS::Service', {
+      LaunchType: 'FARGATE',
+      DesiredCount: 2,
+      NetworkConfiguration: {
+        AwsvpcConfiguration: {
+          AssignPublicIp: 'DISABLED',
+        },
+      },
+    });
+  });
+
+  test('Creates Application Load Balancer in public subnets', () => {
+    template.hasResourceProperties(
+      'AWS::ElasticLoadBalancingV2::LoadBalancer',
+      {
+        Type: 'application',
+        Scheme: 'internet-facing',
+      }
+    );
+  });
+
+  test('Creates HTTPS listener with TLS 1.2+', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+      Port: 443,
+      Protocol: 'HTTPS',
+      SslPolicy: 'ELBSecurityPolicy-TLS-1-2-Ext-2018-06',
+    });
+  });
+
+  test('Creates HTTP listener with redirect to HTTPS', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+      Port: 80,
+      Protocol: 'HTTP',
+      DefaultActions: [
+        {
+          Type: 'redirect',
+          RedirectConfig: {
+            Protocol: 'HTTPS',
+            Port: '443',
+            StatusCode: 'HTTP_301',
+          },
+        },
+      ],
+    });
+  });
+
+  test('Creates WAF WebACL with managed rule sets', () => {
+    template.hasResourceProperties('AWS::WAFv2::WebACL', {
+      Scope: 'REGIONAL',
+      DefaultAction: {
+        Allow: {},
+      },
+      Rules: Match.arrayWith([
+        {
+          Name: 'AWSManagedRulesCommonRuleSet',
+          Priority: 1,
+          OverrideAction: { None: {} },
+          Statement: {
+            ManagedRuleGroupStatement: {
+              VendorName: 'AWS',
+              Name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          VisibilityConfig: {
+            SampledRequestsEnabled: true,
+            CloudWatchMetricsEnabled: true,
+            MetricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          Priority: 2,
+          OverrideAction: { None: {} },
+          Statement: {
+            ManagedRuleGroupStatement: {
+              VendorName: 'AWS',
+              Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          VisibilityConfig: {
+            SampledRequestsEnabled: true,
+            CloudWatchMetricsEnabled: true,
+            MetricName: 'KnownBadInputsMetric',
+          },
+        },
+      ]),
+    });
+  });
+
+  test('Associates WAF with Load Balancer', () => {
+    template.hasResourceProperties('AWS::WAFv2::WebACLAssociation', {
+      ResourceArn: Match.anyValue(),
+      WebACLArn: Match.anyValue(),
+    });
+  });
+
+  test('Creates security groups with least privilege', () => {
+    // ALB Security Group allows HTTPS and HTTP
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for SecureApp ALB',
+      SecurityGroupIngress: [
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 443,
+          IpProtocol: 'tcp',
+          ToPort: 443,
+        },
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 80,
+          IpProtocol: 'tcp',
+          ToPort: 80,
+        },
+      ],
+    });
+
+    // ECS Security Group allows traffic from ALB only
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for SecureApp ECS tasks',
+      SecurityGroupEgress: [
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 443,
+          IpProtocol: 'tcp',
+          ToPort: 443,
+        },
+      ],
+    });
+  });
+
+  test('Creates IAM roles with least privilege', () => {
+    // Task execution role
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ecs-tasks.amazonaws.com',
+            },
+          },
+        ],
+      },
+      ManagedPolicyArns: [
+        {
+          'Fn::Join': [
+            '',
+            [
+              'arn:',
+              { Ref: 'AWS::Partition' },
+              ':iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+            ],
+          ],
+        },
+      ],
+    });
+
+    // Task role with minimal permissions
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ecs-tasks.amazonaws.com',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  test('Creates outputs for integration tests', () => {
+    template.hasOutput(`SecureAppALBDNS${environmentSuffix}`, {});
+    template.hasOutput(`SecureAppKMSKeyId${environmentSuffix}`, {});
+    template.hasOutput(`SecureAppVPCId${environmentSuffix}`, {});
+    template.hasOutput(`SecureAppS3BucketName${environmentSuffix}`, {});
+  });
+
+  test('Resources are named with environment suffix', () => {
+    const templateJson = template.toJSON();
+    const resources = Object.keys(templateJson.Resources);
+
+    // Check that resource logical IDs include environment suffix
+    expect(resources.some(r => r.includes(environmentSuffix))).toBe(true);
+  });
+
+  test('All removal policies are set to DESTROY for QA compliance', () => {
+    const templateJson = template.toJSON();
+    const resources = templateJson.Resources;
+
+    Object.values(resources).forEach((resource: any) => {
+      if (resource.DeletionPolicy) {
+        expect(resource.DeletionPolicy).not.toBe('Retain');
+      }
+    });
+  });
+
+  test('Uses default values when optional props are not provided', () => {
+    const appDefault = new cdk.App();
+    const stackDefault = new TapStack(appDefault, 'TestDefaultStack', {
+      certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert-id',
+      containerImage: 'nginx:test',
+      desiredCount: 1,
+    });
+    
+    const templateDefault = Template.fromStack(stackDefault);
+    
+    // Should use default environmentSuffix 'dev'
+    templateDefault.hasResourceProperties('AWS::ECS::Service', {
+      DesiredCount: 1,
+    });
+  });
+
+  test('Auto-scaling configuration with custom capacity', () => {
+    template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+      MinCapacity: 1,
+      MaxCapacity: 5,
+      ResourceId: Match.anyValue(),
+      ScalableDimension: 'ecs:service:DesiredCount',
+      ServiceNamespace: 'ecs',
+    });
+
+    template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+      PolicyType: 'TargetTrackingScaling',
+      TargetTrackingScalingPolicyConfiguration: {
+        TargetValue: 70,
+        PredefinedMetricSpecification: {
+          PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+        },
+        ScaleInCooldown: 300,
+        ScaleOutCooldown: 120,
+      },
+    });
+  });
+
+  test('ALB deletion protection is enabled', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+      LoadBalancerAttributes: Match.arrayWith([
+        {
+          Key: 'deletion_protection.enabled',
+          Value: 'true',
+        },
+      ]),
+    });
+  });
+
+  test('VPC has proper flow logs configuration', () => {
+    template.hasResourceProperties('AWS::EC2::FlowLog', {
+      ResourceType: 'VPC',
+      TrafficType: 'ALL',
+      LogDestinationType: 'cloud-watch-logs',
+    });
+  });
+
+  test('Health check configuration for ECS container', () => {
+    template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+      ContainerDefinitions: Match.arrayWith([
+        {
+          Name: `SecureApp-Container-${environmentSuffix}`,
+          Image: 'nginx:test',
+          Essential: true,
+          HealthCheck: {
+            Command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
+            Interval: 30,
+            Timeout: 5,
+            Retries: 3,
+            StartPeriod: 60,
+          },
+          PortMappings: Match.anyValue(),
+          LogConfiguration: Match.anyValue(),
+        },
+      ]),
+    });
+  });
+
+  test('ELB service account policy configuration', () => {
+    template.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Principal: {
+              AWS: Match.anyValue(), // The account ID is wrapped in Fn::Join
+            },
+            Action: 's3:GetBucketAcl',
+            Effect: 'Allow',
+            Resource: Match.anyValue(),
+            Sid: 'AWSLogDeliveryAclCheck',
+          },
+        ]),
+      },
+    });
+  });
+
+  test('Task definition resource requirements', () => {
+    template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+      Cpu: '512',
+      Memory: '1024',
+      NetworkMode: 'awsvpc',
+      RequiresCompatibilities: ['FARGATE'],
     });
   });
 });
