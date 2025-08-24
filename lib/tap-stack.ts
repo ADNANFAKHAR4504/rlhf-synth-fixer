@@ -176,7 +176,7 @@ export class TapStack extends TerraformStack {
     const dbInstance = new DbInstance(this, 'dbInstance', {
       allocatedStorage: 20,
       engine: 'postgres',
-      engineVersion: '13.7',
+      engineVersion: '15',
       instanceClass: 'db.t3.micro',
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [dbSg.id],
