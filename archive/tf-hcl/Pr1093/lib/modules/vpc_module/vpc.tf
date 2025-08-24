@@ -49,7 +49,7 @@ resource "aws_subnet" "private" {
 
 # NAT Gateways
 resource "aws_eip" "nat" {
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(var.common_tags, {
@@ -69,16 +69,16 @@ resource "aws_nat_gateway" "main" {
     aws_internet_gateway.main,
     aws_subnet.public,
     aws_eip.nat
-    ]
+  ]
 }
 
 
 # Route Tables
 # Create internet gateway route in default route-table for pubic subnets
 resource "aws_route" "attach_gateway" {
-    gateway_id = aws_internet_gateway.main.id
-    route_table_id = aws_vpc.main.default_route_table_id
-    destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.main.id
+  route_table_id         = aws_vpc.main.default_route_table_id
+  destination_cidr_block = "0.0.0.0/0"
 }
 
 

@@ -54,7 +54,7 @@ Your task is to **generate a fully valid AWS CloudFormation YAML template** that
 
 ---
 
-## ✅ Expected Output
+## Expected Output
 Provide a **CloudFormation YAML template** that:
 - Provisions all resources above.  
 - Has correct **YAML syntax and indentation**.  

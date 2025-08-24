@@ -28,9 +28,9 @@ variable "allowed_ip_ranges" {
     "192.168.0.0/16", # Private network range
     "203.0.113.0/24"  # Example public IP range (RFC 5737 documentation range)
   ]
-  
+
   validation {
-    condition = length(var.allowed_ip_ranges) > 0
+    condition     = length(var.allowed_ip_ranges) > 0
     error_message = "At least one IP range must be specified for security group access."
   }
 }
@@ -50,14 +50,14 @@ data "aws_vpc" "default" {
 # Local values for resource naming and configuration
 locals {
   vpc_id = var.vpc_id != null ? var.vpc_id : data.aws_vpc.default[0].id
-  
+
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
     ManagedBy   = "terraform"
     Purpose     = "web-application-security"
   }
-  
+
   security_group_name = "${var.project_name}-${var.environment}-web-sg"
 }
 
@@ -140,9 +140,9 @@ output "allowed_ip_ranges" {
 output "inbound_rules_summary" {
   description = "Summary of configured inbound rules"
   value = {
-    http_port  = 80
-    https_port = 443
+    http_port       = 80
+    https_port      = 443
     allowed_sources = var.allowed_ip_ranges
-    total_rules = length(var.allowed_ip_ranges) * 2 # 2 ports × number of IP ranges
+    total_rules     = length(var.allowed_ip_ranges) * 2 # 2 ports × number of IP ranges
   }
 }
