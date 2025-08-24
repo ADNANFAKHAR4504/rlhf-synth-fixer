@@ -1213,8 +1213,6 @@ Resources:
         - !Ref PrivateSubnet2
       TargetGroupARNs:
         - !If [CreateALB, !Ref ALBTargetGroupBlue, !Ref 'AWS::NoValue']
-      LoadBalancerNames:
-        - !If [CreateALB, !Ref ALB, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-instance'
