@@ -19,8 +19,6 @@ terraform {
       version = "~> 4.0"
     }
   }
-
-  backend "s3" {}
 }
 
 # Primary provider for us-east-1
