@@ -989,6 +989,15 @@ public final class Main {
                 "Version": "2012-10-17",
                 "Statement": [
                     {
+                        "Sid": "Allow Admin to manage key",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "*"
+                        },
+                        "Action": "kms:*",
+                        "Resource": "*"
+                    },
+                    {
                         "Sid": "Allow CloudTrail to encrypt logs",
                         "Effect": "Allow",
                         "Principal": {
