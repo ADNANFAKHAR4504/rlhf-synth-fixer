@@ -405,7 +405,7 @@ describe('TapStack', () => {
             Action: 's3:GetBucketAcl',
             Effect: 'Allow',
             Resource: Match.anyValue(),
-            Sid: 'AWSLogDeliveryAclCheck',
+            Sid: 'AllowELBServiceAccountAclCheck',
           },
         ]),
       },

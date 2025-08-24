@@ -114,28 +114,13 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Grant ALB service access to write logs
-    albLogsBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AWSLogDeliveryWrite',
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('delivery.logs.amazonaws.com')],
-        actions: ['s3:PutObject'],
-        resources: [`${albLogsBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-server-side-encryption': 'aws:kms',
-            's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.keyArn,
-          },
-        },
-      })
-    );
-
     // ELB service principal for ALB access logs (region-specific)
     const elbServiceAccount = this.getELBServiceAccount();
+
+    // Grant ELB service account access to check bucket ACL
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AWSLogDeliveryAclCheck',
+        sid: 'AllowELBServiceAccountAclCheck',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
         actions: ['s3:GetBucketAcl'],
@@ -143,9 +128,10 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Grant ELB service account access to put access logs
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AWSLogDeliveryWrite',
+        sid: 'AllowELBServiceAccountLogDelivery',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
         actions: ['s3:PutObject'],
