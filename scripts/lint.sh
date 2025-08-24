@@ -27,11 +27,11 @@ elif [ "$LANGUAGE" = "go" ]; then
             rm -f terraform.tfstate
         fi
 
-        if [ ! -d ".gen/providers" ]; then
-            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/providers)"
+        if [ ! -d ".gen" ]; then
+            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen)"
             npx --yes cdktf get
         else
-            echo ".gen/providers exists, skipping cdktf get"
+            echo ".gen exists, skipping cdktf get"
         fi
     fi
 
