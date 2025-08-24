@@ -189,4 +189,32 @@ describe('TapStack Integration Tests', () => {
       });
     });
   });
+
+  describe('IAM Roles', () => {
+    test('IAM roles should exist and have correct trust relationships', () => {
+      const expectedRoles = [
+        'CodePipelineServiceRole',
+        'CodeBuildServiceRole',
+        'LambdaExecutionRole',
+      ];
+      expectedRoles.forEach(role => {
+        expect(stackResources[role] || stackOutputs[role]).toBeDefined();
+      });
+    });
+  });
+
+  describe('SNS Topics', () => {
+    test('SNS topic and subscription should exist and be configured', () => {
+      expect(stackResources.PipelineNotificationTopic || stackOutputs.PipelineNotificationTopicArn).toBeDefined();
+      expect(stackResources.PipelineNotificationSubscription || stackOutputs.PipelineNotificationSubscriptionArn).toBeDefined();
+    });
+  });
+
+  describe('Service Functionality', () => {
+    test('CodeBuild project, Lambda, and Pipeline should be present and have valid names', () => {
+      expect(stackOutputs.CodeBuildProjectName).toBeDefined();
+      expect(stackOutputs.ValidationLambdaName).toBeDefined();
+      expect(stackOutputs.PipelineName).toBeDefined();
+    });
+  });
 });

@@ -115,4 +115,34 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceKeys.length).toBe(uniqueKeys.size);
     });
   });
+
+  describe('IAM Roles and Policies', () => {
+    test('IAM roles should exist and have correct trust relationships', () => {
+      const expectedRoles = [
+        'CodePipelineServiceRole',
+        'CodeBuildServiceRole',
+        'LambdaExecutionRole',
+      ];
+      expectedRoles.forEach(role => {
+        expect(template.Resources[role]).toBeDefined();
+        const principal = template.Resources[role].Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service;
+        if (role === 'CodePipelineServiceRole') expect(principal).toBe('codepipeline.amazonaws.com');
+        if (role === 'CodeBuildServiceRole') expect(principal).toBe('codebuild.amazonaws.com');
+        if (role === 'LambdaExecutionRole') expect(principal).toBe('lambda.amazonaws.com');
+      });
+    });
+  });
+
+  describe('SNS Topics and Subscriptions', () => {
+    test('SNS topic and subscription should exist and be configured', () => {
+      expect(template.Resources.PipelineNotificationTopic).toBeDefined();
+      expect(template.Resources.PipelineNotificationSubscription).toBeDefined();
+      const topicProps = template.Resources.PipelineNotificationTopic.Properties;
+      expect(topicProps.TopicName).toBeDefined();
+      expect(topicProps.DisplayName).toBeDefined();
+      const subProps = template.Resources.PipelineNotificationSubscription.Properties;
+      expect(subProps.Protocol).toBe('email');
+      expect(subProps.Endpoint).toBeDefined();
+    });
+  });
 });
