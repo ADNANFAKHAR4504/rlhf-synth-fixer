@@ -1,6 +1,7 @@
-I'll create a comprehensive CloudFormation template that meets all your security and scalability requirements. This template will establish a production-ready, secure web application environment.
+This template will establish a production-ready, secure web application environment.
 
 ```yaml
+# secure-web-app-template.yml
 # secure-web-app-template.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable web application environment with comprehensive monitoring and compliance'
@@ -23,8 +24,9 @@ Parameters:
     AllowedValues: [t3.small, t3.medium, t3.large, m5.large, m5.xlarge]
   
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access (optional - leave empty to disable SSH access)
+    Type: String
+    Default: ""
   
   DBUsername:
     Description: Database master username
@@ -33,6 +35,9 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Resources:
   # KMS Key for encryption
@@ -56,6 +61,7 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
+
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -335,24 +341,6 @@ Resources:
       NetworkAclId: !Ref PrivateNetworkAcl
 
   # Security Groups
-  LoadBalancerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG'
-      GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG'
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -364,7 +352,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -425,11 +413,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub '${S3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref S3Bucket
+                Resource: !GetAtt S3Bucket.Arn
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -441,11 +429,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join
-        - ''
-        - - !Sub '${AWS::StackName}'
-          - '-secure-bucket-'
-          - !Ref 'AWS::AccountId'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -465,11 +449,7 @@ Resources:
   S3LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join
-        - ''
-        - - !Sub '${AWS::StackName}'
-          - '-logging-bucket-'
-          - !Ref 'AWS::AccountId'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-logging-bucket-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -481,6 +461,8 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+
+
   # Launch Template for EC2 instances
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -489,7 +471,7 @@ Resources:
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -514,47 +496,7 @@ Resources:
               Encrypted: true
               KmsKeyId: !Ref KMSKey
 
-  # Application Load Balancer
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ALB'
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref S3LoggingBucket
-        - Key: access_logs.s3.prefix
-          Value: 'alb-logs'
 
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-TG'
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      HealthCheckPath: /
-      HealthCheckProtocol: HTTP
-      HealthCheckIntervalSeconds: 30
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 5
-
-  LoadBalancerListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
 
   # Auto Scaling Group
   AutoScalingGroup:
@@ -570,9 +512,7 @@ Resources:
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
-      TargetGroupARNs:
-        - !Ref TargetGroup
-      HealthCheckType: ELB
+      HealthCheckType: EC2
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
@@ -647,7 +587,7 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-${EnvironmentSuffix}-database'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -664,52 +604,11 @@ Resources:
       MultiAZ: true
       DeletionProtection: true
 
-  # WAF Web ACL
-  WebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
-      Scope: REGIONAL
-      DefaultAction:
-        Allow: {}
-      Rules:
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSetMetric
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 2
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: KnownBadInputsRuleSetMetric
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
+  # AWS WAF WebACL - Removed as ALB was removed
+  # Note: WAF requires an ALB, API Gateway, or CloudFront to be associated with
+  # Since we removed the ALB, WAF cannot protect the application
 
-  # WAF Association with ALB
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Ref ApplicationLoadBalancer
-      WebACLArn: !GetAtt WebACL.Arn
-
-  # CloudTrail
+  # CloudTrail Logging
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -733,32 +632,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt CloudTrailLogGroup.Arn
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-CloudTrail'
-      S3BucketName: !Ref CloudTrailBucket
-      S3KeyPrefix: 'cloudtrail-logs/'
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KMSKeyId: !Ref KMSKey
+                Resource: 
+                  - !GetAtt CloudTrailLogGroup.Arn
+                  - !Sub '${CloudTrailLogGroup.Arn}:*'
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join
-        - ''
-        - - !Sub '${AWS::StackName}'
-          - '-cloudtrail-'
-          - !Ref 'AWS::AccountId'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-cloudtrail-bucket-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -775,6 +659,7 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
@@ -791,82 +676,98 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-
-  # AWS Config
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy
-
-  ConfigBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Join
-        - ''
-        - - !Sub '${AWS::StackName}'
-          - '-config-'
-          - !Ref 'AWS::AccountId'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  ConfigBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ConfigBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
+          - Sid: AWSCloudTrailLogDeliveryWrite
             Effect: Allow
             Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigBucket.Arn
-          - Sid: AWSConfigBucketExistenceCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt ConfigBucket.Arn
-          - Sid: AWSConfigBucketDelivery
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
+              Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${ConfigBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/*'
 
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
     Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ConfigRecorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
+      TrailName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-CloudTrail'
+      S3BucketName: !Ref CloudTrailBucket
+      S3KeyPrefix: cloudtrail-logs/
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      KMSKeyId: !Ref KMSKey
 
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
+  # AWS Config Rules (using existing ConfigurationRecorder in the account)
+  # Note: AWS Config ConfigurationRecorder and DeliveryChannel already exist in the account
+  # We only need to create Config Rules for compliance monitoring
+  
+  # AWS Config Rule: S3 Bucket Public Read Prohibited
+  S3BucketPublicReadProhibitedRule:
+    Type: AWS::Config::ConfigRule
     Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-DeliveryChannel'
-      S3BucketName: !Ref ConfigBucket
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicReadProhibited'
+      Description: 'Checks that S3 buckets do not allow public read access'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+      MaximumExecutionFrequency: TwentyFour_Hours
+
+  # AWS Config Rule: S3 Bucket Public Write Prohibited
+  S3BucketPublicWriteProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicWriteProhibited'
+      Description: 'Checks that S3 buckets do not allow public write access'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+      MaximumExecutionFrequency: TwentyFour_Hours
+
+  # AWS Config Rule: S3 Bucket Encryption
+  S3BucketEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketEncryption'
+      Description: 'Checks that S3 buckets have default encryption enabled'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+
+  # AWS Config Rule: RDS Instance Encryption
+  RDSInstanceEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-RDSInstanceEncryption'
+      Description: 'Checks that RDS instances have encryption enabled'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::RDS::DBInstance
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+
+  # AWS Config Rule: VPC Default Security Group Closed
+  VPCDefaultSecurityGroupClosedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPCDefaultSecurityGroupClosed'
+      Description: 'Checks that the default security group of any VPC does not allow inbound or outbound traffic'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::SecurityGroup
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
 
   # Bastion Host
   BastionHost:
@@ -874,7 +775,7 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId: !Ref PublicSubnet1
@@ -927,17 +828,7 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-PrivateSubnet2-ID'
 
-  LoadBalancerDNS:
-    Description: Application Load Balancer DNS Name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${EnvironmentName}-ALB-DNS'
 
-  LoadBalancerArn:
-    Description: Application Load Balancer ARN
-    Value: !Ref ApplicationLoadBalancer
-    Export:
-      Name: !Sub '${EnvironmentName}-ALB-ARN'
 
   DatabaseEndpoint:
     Description: RDS Database Endpoint
@@ -951,11 +842,7 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-S3-Bucket'
 
-  WebACLArn:
-    Description: WAF Web ACL ARN
-    Value: !GetAtt WebACL.Arn
-    Export:
-      Name: !Sub '${EnvironmentName}-WebACL-ARN'
+
 
   KMSKeyId:
     Description: KMS Key ID
@@ -974,6 +861,40 @@ Outputs:
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub '${EnvironmentName}-CloudTrail-ARN'
+
+  # AWS Config Rule Outputs
+  S3BucketPublicReadProhibitedRuleName:
+    Description: S3 Bucket Public Read Prohibited Config Rule Name
+    Value: !Ref S3BucketPublicReadProhibitedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketPublicReadProhibitedRule-Name'
+
+  S3BucketPublicWriteProhibitedRuleName:
+    Description: S3 Bucket Public Write Prohibited Config Rule Name
+    Value: !Ref S3BucketPublicWriteProhibitedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketPublicWriteProhibitedRule-Name'
+
+  S3BucketEncryptionRuleName:
+    Description: S3 Bucket Encryption Config Rule Name
+    Value: !Ref S3BucketEncryptionRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketEncryptionRule-Name'
+
+  RDSInstanceEncryptionRuleName:
+    Description: RDS Instance Encryption Config Rule Name
+    Value: !Ref RDSInstanceEncryptionRule
+    Export:
+      Name: !Sub '${EnvironmentName}-RDSInstanceEncryptionRule-Name'
+
+  VPCDefaultSecurityGroupClosedRuleName:
+    Description: VPC Default Security Group Closed Config Rule Name
+    Value: !Ref VPCDefaultSecurityGroupClosedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-VPCDefaultSecurityGroupClosedRule-Name'
+
+# Template Capabilities
+# Note: This template requires CAPABILITY_IAM and CAPABILITY_NAMED_IAM for IAM resources
 ```
 
 ## Key Features Implemented

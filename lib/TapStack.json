@@ -794,17 +794,7 @@
                 }
             }
         },
-        "S3LoggingBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "S3LoggingBucket"
-                },
-                "PolicyDocument": {
-                    "Statement": []
-                }
-            }
-        },
+
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
