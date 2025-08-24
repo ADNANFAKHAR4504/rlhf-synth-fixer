@@ -20,13 +20,12 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func main() {
-	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Get environment suffix for unique resource naming
-		environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-		if environmentSuffix == "" {
-			environmentSuffix = "synthtrainr308"
-		}
+func CreateInfrastructure(ctx *pulumi.Context) error {
+	// Get environment suffix for unique resource naming
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "synthtrainr308"
+	}
 
 		// Create the S3 bucket for storing sensitive financial documents
 		financialDocumentsBucket, err := s3.NewBucket(ctx, "FinApp-DocumentsBucket", &s3.BucketArgs{
@@ -409,8 +408,11 @@ func main() {
 		ctx.Export("auditLoggingEnabled", pulumi.Bool(true))
 		ctx.Export("complianceMonitoringEnabled", pulumi.Bool(true))
 
-		return nil
-	})
+	return nil
+}
+
+func main() {
+	pulumi.Run(CreateInfrastructure)
 }
 ```
 
