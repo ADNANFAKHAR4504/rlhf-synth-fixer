@@ -1,5 +1,5 @@
 {
-  "app": "gradle run",
+  "app": "./gradlew run",
   "watch": {
     "include": [
       "**"

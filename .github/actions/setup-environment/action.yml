@@ -12,7 +12,7 @@ inputs:
   language:
     description: "Project language (ts, py, java, go, yaml, json, hcl)"
     required: false
-    default: ""
+    default: ''
   terraform-version:
     description: "Terraform version to use"
     required: false
@@ -62,7 +62,7 @@ runs:
       if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
       uses: actions/setup-go@v5
       with:
-        go-version: "1.23.12"
+        go-version: '1.23.12'
 
     - name: Cache Go modules
       if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
@@ -85,14 +85,14 @@ runs:
           ${{ runner.os }}-cdktf-gen-
 
     - name: Setup Java 17
-      if: (inputs.language == 'java' && (inputs.platform == 'pulumi' || inputs.platform == 'cdk')) || inputs.platform == ''
+      if: ${{ (inputs.platform == 'pulumi' && inputs.language == 'java') || (inputs.platform == 'cdk' && inputs.language == 'java') || inputs.platform == '' }}
       uses: actions/setup-java@v4
       with:
-        distribution: "temurin"
-        java-version: "17"
+        distribution: 'temurin'
+        java-version: '17'
 
     - name: Setup Gradle
-      if: (inputs.language == 'java' && (inputs.platform == 'pulumi' || inputs.platform == 'cdk')) || inputs.platform == ''
+      if: ${{ (inputs.platform == 'pulumi' && inputs.language == 'java') || (inputs.platform == 'cdk' && inputs.language == 'java') || inputs.platform == '' }}
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-home-cache-cleanup: true
@@ -157,4 +157,3 @@ runs:
           config/
           .gradle/
           build/
-
