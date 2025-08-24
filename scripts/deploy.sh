@@ -74,15 +74,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       echo "❌ .gen/aws missing after cdktf get; aborting"
       exit 1
     fi
-
-    # Ensure CDKTF core deps are present to satisfy .gen imports
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    go clean -modcache || true
-    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-    go mod tidy
+    # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
 
   npm run cdktf:deploy
