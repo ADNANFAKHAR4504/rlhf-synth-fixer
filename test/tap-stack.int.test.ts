@@ -400,6 +400,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(responseBody).toBe(testContent);
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
+      // S3 returns the full KMS key ARN, so we compare with our output directly
       expect(getResponse.SSEKMSKeyId).toBe(outputs.KMSKeyId);
 
       // Clean up
