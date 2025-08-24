@@ -1,14 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { parse } from 'yaml';
 
-describe('TapStack CloudFormation YAML Template', () => {
+describe('TapStack CloudFormation JSON Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = parse(templateContent);
+    template = JSON.parse(templateContent);
   });
 
   it('should have valid CloudFormation format version', () => {
@@ -29,12 +28,7 @@ describe('TapStack CloudFormation YAML Template', () => {
   });
 
   it('should define two public and two private subnets', () => {
-    [
-      'PublicSubnet1',
-      'PublicSubnet2',
-      'PrivateSubnet1',
-      'PrivateSubnet2',
-    ].forEach(subnet => {
+    ['PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2'].forEach(subnet => {
       expect(template.Resources[subnet]).toBeDefined();
       expect(template.Resources[subnet].Type).toBe('AWS::EC2::Subnet');
     });
@@ -49,35 +43,23 @@ describe('TapStack CloudFormation YAML Template', () => {
 
   it('should define ALB, Target Group, and Listener', () => {
     expect(template.Resources.ALB).toBeDefined();
-    expect(template.Resources.ALB.Type).toBe(
-      'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    );
+    expect(template.Resources.ALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     expect(template.Resources.TargetGroup).toBeDefined();
-    expect(template.Resources.TargetGroup.Type).toBe(
-      'AWS::ElasticLoadBalancingV2::TargetGroup'
-    );
+    expect(template.Resources.TargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
     expect(template.Resources.Listener).toBeDefined();
-    expect(template.Resources.Listener.Type).toBe(
-      'AWS::ElasticLoadBalancingV2::Listener'
-    );
+    expect(template.Resources.Listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
   });
 
   it('should define LaunchTemplate and AutoScalingGroup', () => {
     expect(template.Resources.LaunchTemplate).toBeDefined();
-    expect(template.Resources.LaunchTemplate.Type).toBe(
-      'AWS::EC2::LaunchTemplate'
-    );
+    expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
     expect(template.Resources.AutoScalingGroup).toBeDefined();
-    expect(template.Resources.AutoScalingGroup.Type).toBe(
-      'AWS::AutoScaling::AutoScalingGroup'
-    );
+    expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
   });
 
   it('should define DBSubnetGroup and MyDB', () => {
     expect(template.Resources.DBSubnetGroup).toBeDefined();
-    expect(template.Resources.DBSubnetGroup.Type).toBe(
-      'AWS::RDS::DBSubnetGroup'
-    );
+    expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
     expect(template.Resources.MyDB).toBeDefined();
     expect(template.Resources.MyDB.Type).toBe('AWS::RDS::DBInstance');
   });
