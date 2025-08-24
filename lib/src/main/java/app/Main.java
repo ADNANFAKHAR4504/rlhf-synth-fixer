@@ -55,10 +55,10 @@ final class NovaStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private NovaStackProps(final boolean isPrimary, final String environmentSuffix, final StackProps stackProps) {
-        this.isPrimary = isPrimary;
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private NovaStackProps(final boolean pIsPrimary, final String pEnvironmentSuffix, final StackProps pStackProps) {
+        this.isPrimary = pIsPrimary;
+        this.environmentSuffix = pEnvironmentSuffix;
+        this.stackProps = pStackProps != null ? pStackProps : StackProps.builder().build();
     }
 
     public boolean isPrimary() {
@@ -111,9 +111,9 @@ final class Route53StackProps {
     private final ApplicationLoadBalancer failoverLoadBalancer;
     private final StackProps stackProps;
 
-    private Route53StackProps(final ApplicationLoadBalancer primaryLb, final ApplicationLoadBalancer failoverLb, final StackProps pStackProps) {
-        this.primaryLoadBalancer = primaryLb;
-        this.failoverLoadBalancer = failoverLb;
+    private Route53StackProps(final ApplicationLoadBalancer pPrimaryLoadBalancer, final ApplicationLoadBalancer pFailoverLoadBalancer, final StackProps pStackProps) {
+        this.primaryLoadBalancer = pPrimaryLoadBalancer;
+        this.failoverLoadBalancer = pFailoverLoadBalancer;
         this.stackProps = pStackProps != null ? pStackProps : StackProps.builder().build();
     }
 

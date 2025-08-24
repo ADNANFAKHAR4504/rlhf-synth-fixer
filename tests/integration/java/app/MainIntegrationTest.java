@@ -96,16 +96,19 @@ public class MainIntegrationTest {
     public void testIamRoleHasSsmAndSecretsManagerPermissions() {
         final Template primaryTemplate = synthesizeFullApp(new App(), "integ-iam");
         primaryTemplate.hasResourceProperties("AWS::IAM::Role", objectLike(Map.of(
-            "InlinePolicies", objectLike(Map.of(
-                "NovaApplicationPolicy", objectLike(Map.of(
-                    "Statement", Match.arrayWith(List.of(
-                        objectLike(Map.of(
-                            "Action", Match.arrayWith(List.of("secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret")),
-                            "Effect", "Allow"
-                        )),
-                        objectLike(Map.of(
-                            "Action", Match.arrayWith(List.of("logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents")),
-                            "Effect", "Allow"
+            "Policies", Match.arrayWith(List.of(
+                objectLike(Map.of(
+                    "PolicyName", "NovaApplicationPolicy",
+                    "PolicyDocument", objectLike(Map.of(
+                        "Statement", Match.arrayWith(List.of(
+                            objectLike(Map.of(
+                                "Action", Match.arrayWith(List.of("secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret")),
+                                "Effect", "Allow"
+                            )),
+                            objectLike(Map.of(
+                                "Action", Match.arrayWith(List.of("logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents")),
+                                "Effect", "Allow"
+                            ))
                         ))
                     ))
                 ))
