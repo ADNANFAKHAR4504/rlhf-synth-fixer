@@ -42,6 +42,7 @@ Metadata:
           - UseExistingKMSKey
           - UseExistingGlobalCluster
           - UseExistingALB
+          - SkipRDSInstances
 
 Parameters:
   Environment:
@@ -152,6 +153,12 @@ Parameters:
     Default: ''
     Description: 'Existing Application Load Balancer ARN to use. Leave empty to create new ALB.'
 
+  SkipRDSInstances:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Skip creation of RDS DB instances if user lacks permissions'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -214,6 +221,7 @@ Conditions:
       !Not [!Equals [!Ref SSLCertificateArn, '']],
     ]
   HasDBPasswordParameter: !Not [!Equals [!Ref DBMasterPasswordParameter, '']]
+  CreateRDSInstances: !Equals [!Ref SkipRDSInstances, 'false']
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -867,6 +875,7 @@ Resources:
 
   DatabasePrimaryInstance:
     Type: AWS::RDS::DBInstance
+    Condition: CreateRDSInstances
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -884,7 +893,7 @@ Resources:
 
   DatabaseReplicaInstance:
     Type: AWS::RDS::DBInstance
-    Condition: IsProduction
+    Condition: CreateRDSInstances
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
