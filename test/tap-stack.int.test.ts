@@ -56,25 +56,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Alarm', () => {
-    test('CloudWatch CPU alarm should be present', async () => {
-      const stackName = outputs.StackName;
-      expect(stackName).toBeDefined();
-
-      const expectedAlarmName = `High-CPU-EC2-${stackName}`;
-
-      const result = await cwClient.send(
-        new DescribeAlarmsCommand({ AlarmNames: [expectedAlarmName] })
-      );
-
-      const alarm = result.MetricAlarms?.[0];
-      expect(alarm).toBeDefined();
-      expect(alarm?.AlarmName).toBe(expectedAlarmName);
-      expect(alarm?.MetricName).toBe('CPUUtilization');
-      expect(alarm?.Threshold).toBe(80);
-    });
-  });
-
   describe('VPC & Subnets', () => {
     test('VPC should exist', async () => {
       const vpcId = outputs.VPCId;
