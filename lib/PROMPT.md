@@ -1,18 +1,28 @@
-# Prompt
+# Infrastructure Requirements
 
-We need to set up a secure AWS environment for a web application using the **Go CDK for Terraform**.  
-Everything should run in the **us-east-1** region and follow best practices around security, monitoring, and auditing.
+Hey team! We're building out the AWS infrastructure for our new web application. I've been tasked with setting this up using Go CDK for Terraform, and here's what we need to implement:
 
-Here’s what we’re aiming for:
+## Security & Compliance
+I want to make sure we're following security best practices from day one. Here's what I'm thinking:
+- Let's encrypt everything at rest using KMS keys
+- No more shared credentials - we'll use proper IAM roles for everything
+- The application should run in a private VPC, not directly internet-facing
+- We need CloudTrail enabled for audit compliance (management is asking for this)
 
-- All data should be encrypted at rest using **KMS**.  
-- Access control should rely on **IAM roles**, never root credentials.  
-- The app should live inside a **VPC** with private subnets, not exposed directly to the internet.  
-- Our EC2 instances should all be **t3.micro** type and come with **detailed monitoring** enabled.  
-- These instances need a role that lets them read from **one specific S3 bucket** (read-only).  
-- We need to enforce **SSL/TLS** everywhere so traffic is secure.  
-- Monitoring should be in place: set up a **CloudWatch alarm** to watch CPU usage and send an **SNS notification** if it goes over 70%.  
-- For auditing, turn on **CloudTrail** so every API call is logged.
+## Infrastructure Setup
+For the compute layer:
+- Going with t3.micro instances to keep costs down initially
+- Need detailed monitoring enabled on all EC2 instances
+- Each instance should have read-only access to our application data bucket
+- SSL/TLS everywhere - no exceptions
 
-The idea is to capture all of this in a single Go CDK Terraform stack file (`tap_stack.go`).  
-By the end, we want a deployment that’s isolated, secure, fully monitored, and compliant — something we can feel confident running in production.
+## Monitoring & Alerting
+We've had issues with resource utilization in the past, so:
+- Set up CloudWatch alarms for CPU usage
+- If CPU goes above 70%, send SNS notifications to the ops team
+- Want to catch performance issues before customers notice them
+
+## Implementation
+Everything should be defined in a single `tap_stack.go` file for now. We're targeting us-east-1 region.
+
+The goal is to have a production-ready environment that's secure, monitored, and compliant with our internal standards. This will be the foundation for our application deployment.

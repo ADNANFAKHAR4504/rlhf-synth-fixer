@@ -11,6 +11,13 @@ func main() {
 
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
 
+	// Configure S3 backend for state management
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket: jsii.String("iac-rlhf-cfn-states-us-east-1"),
+		Key:    jsii.String("cdktf/TapStack-dev/terraform.tfstate"),
+		Region: jsii.String("us-east-1"),
+	})
+
 	// We'll configure the AWS provider using HCL configuration
 	// This avoids the "module too large" issue with Go CDKTF AWS provider
 
@@ -372,12 +379,7 @@ EOF
 						"Service": "cloudtrail.amazonaws.com"
 					},
 					"Action": "s3:GetBucketAcl",
-					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}",
-					"Condition": {
-						"StringEquals": {
-							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
-						}
-					}
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}"
 				},
 				{
 					"Sid": "AWSCloudTrailWrite",
@@ -389,13 +391,22 @@ EOF
 					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}/*",
 					"Condition": {
 						"StringEquals": {
-							"s3:x-amz-acl": "bucket-owner-full-control",
-							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+							"s3:x-amz-acl": "bucket-owner-full-control"
 						}
 					}
+				},
+				{
+					"Sid": "AWSCloudTrailBucketExistenceCheck",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": "s3:ListBucket",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}"
 				}
 			]
 		}`,
+		"depends_on": []string{"aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"},
 	})
 
 	// Add current AWS account data source
@@ -415,11 +426,67 @@ EOF
 		"is_multi_region_trail":         true,
 		"enable_log_file_validation":    true,
 		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
+		"depends_on": []string{
+			"aws_s3_bucket_policy.cloudtrail_bucket_policy",
+			"aws_kms_key.tap_kms_key",
+		},
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
 	})
 
+	// Add outputs for integration testing
+	stack.AddOverride(jsii.String("output.vpc_id"), map[string]interface{}{
+		"value":       "${aws_vpc.tap_vpc.id}",
+		"description": "VPC ID",
+	})
+
+	stack.AddOverride(jsii.String("output.private_subnet_id"), map[string]interface{}{
+		"value":       "${aws_subnet.private_subnet.id}",
+		"description": "Private subnet ID",
+	})
+
+	stack.AddOverride(jsii.String("output.kms_key_id"), map[string]interface{}{
+		"value":       "${aws_kms_key.tap_kms_key.id}",
+		"description": "KMS key ID",
+	})
+
+	stack.AddOverride(jsii.String("output.s3_bucket_name"), map[string]interface{}{
+		"value":       "${aws_s3_bucket.tap_bucket.id}",
+		"description": "Application S3 bucket name",
+	})
+
+	stack.AddOverride(jsii.String("output.cloudtrail_bucket_name"), map[string]interface{}{
+		"value":       "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"description": "CloudTrail S3 bucket name",
+	})
+
+	stack.AddOverride(jsii.String("output.ec2_instance_id"), map[string]interface{}{
+		"value":       "${aws_instance.app_instance.id}",
+		"description": "EC2 instance ID",
+	})
+
+	stack.AddOverride(jsii.String("output.iam_role_name"), map[string]interface{}{
+		"value":       "${aws_iam_role.ec2_role.name}",
+		"description": "IAM role name",
+	})
+
+	stack.AddOverride(jsii.String("output.security_group_id"), map[string]interface{}{
+		"value":       "${aws_security_group.ec2_sg.id}",
+		"description": "Security group ID",
+	})
+
+	stack.AddOverride(jsii.String("output.sns_topic_arn"), map[string]interface{}{
+		"value":       "${aws_sns_topic.cpu_alarm_topic.arn}",
+		"description": "SNS topic ARN",
+	})
+
+	stack.AddOverride(jsii.String("output.cloudtrail_arn"), map[string]interface{}{
+		"value":       "${aws_cloudtrail.audit_trail.arn}",
+		"description": "CloudTrail ARN",
+	})
+
 	app.Synth()
 }
 ```
+
