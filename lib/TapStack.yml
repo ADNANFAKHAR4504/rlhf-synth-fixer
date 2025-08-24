@@ -989,7 +989,7 @@ Resources:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
                   - 'ssm:GetParametersByPath'
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}/*'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
