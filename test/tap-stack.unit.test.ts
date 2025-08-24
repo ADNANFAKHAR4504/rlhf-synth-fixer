@@ -39,6 +39,25 @@ describe('TapStack', () => {
     });
   });
 
+  test('KMS Key has CloudWatch Logs access policies for VPC Flow Logs and ECS Application Logs', () => {
+    // Check that the KMS key policy contains references to both log groups
+    const kmsKey = template.findResources('AWS::KMS::Key');
+    const kmsKeyId = Object.keys(kmsKey)[0];
+    const keyPolicy = kmsKey[kmsKeyId].Properties.KeyPolicy;
+
+    // Stringify the policy to search for the ARNs  
+    const policyString = JSON.stringify(keyPolicy);
+    
+    // Check for VPC Flow Logs ARN reference
+    expect(policyString).toContain(`/aws/vpc/SecureApp-flowlogs-${environmentSuffix}`);
+    
+    // Check for ECS Application Logs ARN reference
+    expect(policyString).toContain(`/aws/ecs/SecureApp-application-${environmentSuffix}`);
+    
+    // Check for CloudWatch Logs service principal (it's constructed with Fn::Join)
+    expect(policyString).toContain('logs.');
+  });
+
   test('Creates encrypted CloudWatch Log Groups', () => {
     template.hasResourceProperties('AWS::Logs::LogGroup', {
       RetentionInDays: 365,
