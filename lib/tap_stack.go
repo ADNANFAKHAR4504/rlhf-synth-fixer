@@ -15,65 +15,64 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func main() {
-	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Get environment suffix from config or use default
-		envSuffix := "dev"
-		if suffix := os.Getenv("ENVIRONMENT_SUFFIX"); suffix != "" {
-			envSuffix = suffix
-		}
+func CreateInfrastructure(ctx *pulumi.Context) error {
+	// Get environment suffix from config or use default
+	envSuffix := "dev"
+	if suffix := os.Getenv("ENVIRONMENT_SUFFIX"); suffix != "" {
+		envSuffix = suffix
+	}
 
-		// Common tags for all resources
-		commonTags := pulumi.StringMap{
-			"Project":     pulumi.String("HealthApp"),
-			"Environment": pulumi.String("Production"),
-			"Compliance":  pulumi.String("HIPAA"),
-			"EnvSuffix":   pulumi.String(envSuffix),
-		}
+	// Common tags for all resources
+	commonTags := pulumi.StringMap{
+		"Project":     pulumi.String("HealthApp"),
+		"Environment": pulumi.String("Production"),
+		"Compliance":  pulumi.String("HIPAA"),
+		"EnvSuffix":   pulumi.String(envSuffix),
+	}
 
-		// Create VPC for network isolation
-		vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("healthapp-vpc-%s", envSuffix), &ec2.VpcArgs{
-			CidrBlock:          pulumi.String("10.0.0.0/16"),
-			EnableDnsHostnames: pulumi.Bool(true),
-			EnableDnsSupport:   pulumi.Bool(true),
-			Tags:               commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create VPC for network isolation
+	vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("healthapp-vpc-%s", envSuffix), &ec2.VpcArgs{
+		CidrBlock:          pulumi.String("10.0.0.0/16"),
+		EnableDnsHostnames: pulumi.Bool(true),
+		EnableDnsSupport:   pulumi.Bool(true),
+		Tags:               commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create private subnets in different AZs for high availability
-		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-1-%s", envSuffix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.1.0/24"),
-			AvailabilityZone: pulumi.String("us-east-1a"),
-			Tags:             commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create private subnets in different AZs for high availability
+	privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-1-%s", envSuffix), &ec2.SubnetArgs{
+		VpcId:            vpc.ID(),
+		CidrBlock:        pulumi.String("10.0.1.0/24"),
+		AvailabilityZone: pulumi.String("us-east-1a"),
+		Tags:             commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-2-%s", envSuffix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.2.0/24"),
-			AvailabilityZone: pulumi.String("us-east-1b"),
-			Tags:             commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-2-%s", envSuffix), &ec2.SubnetArgs{
+		VpcId:            vpc.ID(),
+		CidrBlock:        pulumi.String("10.0.2.0/24"),
+		AvailabilityZone: pulumi.String("us-east-1b"),
+		Tags:             commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Get current AWS account ID and region for KMS policy
-		current, err := aws.GetCallerIdentity(ctx, nil, nil)
-		if err != nil {
-			return err
-		}
+	// Get current AWS account ID and region for KMS policy
+	current, err := aws.GetCallerIdentity(ctx, nil, nil)
+	if err != nil {
+		return err
+	}
 
-		// Create KMS key for encryption with FIPS 140-3 Level 3 compliance
-		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("healthapp-kms-key-%s", envSuffix), &kms.KeyArgs{
-			Description: pulumi.String("KMS key for HealthApp data encryption - FIPS 140-3 Level 3 compliant"),
-			KeyUsage:    pulumi.String("ENCRYPT_DECRYPT"),
-			Policy: pulumi.Sprintf(`{
+	// Create KMS key for encryption with FIPS 140-3 Level 3 compliance
+	kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("healthapp-kms-key-%s", envSuffix), &kms.KeyArgs{
+		Description: pulumi.String("KMS key for HealthApp data encryption - FIPS 140-3 Level 3 compliant"),
+		KeyUsage:    pulumi.String("ENCRYPT_DECRYPT"),
+		Policy: pulumi.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -106,114 +105,114 @@ func main() {
 					}
 				]
 			}`, current.AccountId),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create KMS alias for easier reference
-		_, err = kms.NewAlias(ctx, fmt.Sprintf("healthapp-kms-alias-%s", envSuffix), &kms.AliasArgs{
-			Name:        pulumi.Sprintf("alias/healthapp-encryption-%s", envSuffix),
-			TargetKeyId: kmsKey.KeyId,
-			NamePrefix:  nil,
-		})
-		if err != nil {
-			return err
-		}
+	// Create KMS alias for easier reference
+	_, err = kms.NewAlias(ctx, fmt.Sprintf("healthapp-kms-alias-%s", envSuffix), &kms.AliasArgs{
+		Name:        pulumi.Sprintf("alias/healthapp-encryption-%s", envSuffix),
+		TargetKeyId: kmsKey.KeyId,
+		NamePrefix:  nil,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create S3 bucket for PHI data storage with encryption
-		phiBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-phi-bucket-%s", envSuffix), &s3.BucketV2Args{
-			Bucket:       nil,               // Auto-generated name
-			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
-			Tags:         commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create S3 bucket for PHI data storage with encryption
+	phiBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-phi-bucket-%s", envSuffix), &s3.BucketV2Args{
+		Bucket:       nil,               // Auto-generated name
+		ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
+		Tags:         commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Configure S3 bucket encryption with KMS
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("phi-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
-			Bucket: phiBucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm:   pulumi.String("aws:kms"),
-						KmsMasterKeyId: kmsKey.Arn,
-					},
-					BucketKeyEnabled: pulumi.Bool(true),
+	// Configure S3 bucket encryption with KMS
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("phi-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: phiBucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm:   pulumi.String("aws:kms"),
+					KmsMasterKeyId: kmsKey.Arn,
 				},
+				BucketKeyEnabled: pulumi.Bool(true),
 			},
-		})
-		if err != nil {
-			return err
-		}
+		},
+	})
+	if err != nil {
+		return err
+	}
 
-		// Block public access to PHI bucket
-		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("phi-bucket-pab-%s", envSuffix), &s3.BucketPublicAccessBlockArgs{
-			Bucket:                phiBucket.ID(),
-			BlockPublicAcls:       pulumi.Bool(true),
-			BlockPublicPolicy:     pulumi.Bool(true),
-			IgnorePublicAcls:      pulumi.Bool(true),
-			RestrictPublicBuckets: pulumi.Bool(true),
-		})
-		if err != nil {
-			return err
-		}
+	// Block public access to PHI bucket
+	_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("phi-bucket-pab-%s", envSuffix), &s3.BucketPublicAccessBlockArgs{
+		Bucket:                phiBucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return err
+	}
 
-		// Enable versioning for data protection
-		_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("phi-bucket-versioning-%s", envSuffix), &s3.BucketVersioningV2Args{
-			Bucket: phiBucket.ID(),
-			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
-				Status: pulumi.String("Enabled"),
-			},
-		})
-		if err != nil {
-			return err
-		}
+	// Enable versioning for data protection
+	_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("phi-bucket-versioning-%s", envSuffix), &s3.BucketVersioningV2Args{
+		Bucket: phiBucket.ID(),
+		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+			Status: pulumi.String("Enabled"),
+		},
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create S3 bucket for audit logs
-		auditBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-audit-bucket-%s", envSuffix), &s3.BucketV2Args{
-			Bucket:       nil,               // Auto-generated name
-			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
-			Tags:         commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create S3 bucket for audit logs
+	auditBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-audit-bucket-%s", envSuffix), &s3.BucketV2Args{
+		Bucket:       nil,               // Auto-generated name
+		ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
+		Tags:         commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Configure audit bucket encryption
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("audit-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
-			Bucket: auditBucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm:   pulumi.String("aws:kms"),
-						KmsMasterKeyId: kmsKey.Arn,
-					},
-					BucketKeyEnabled: pulumi.Bool(true),
+	// Configure audit bucket encryption
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("audit-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: auditBucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm:   pulumi.String("aws:kms"),
+					KmsMasterKeyId: kmsKey.Arn,
 				},
+				BucketKeyEnabled: pulumi.Bool(true),
 			},
-		})
-		if err != nil {
-			return err
-		}
+		},
+	})
+	if err != nil {
+		return err
+	}
 
-		// Block public access to audit bucket
-		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("audit-bucket-pab-%s", envSuffix), &s3.BucketPublicAccessBlockArgs{
-			Bucket:                auditBucket.ID(),
-			BlockPublicAcls:       pulumi.Bool(true),
-			BlockPublicPolicy:     pulumi.Bool(true),
-			IgnorePublicAcls:      pulumi.Bool(true),
-			RestrictPublicBuckets: pulumi.Bool(true),
-		})
-		if err != nil {
-			return err
-		}
+	// Block public access to audit bucket
+	_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("audit-bucket-pab-%s", envSuffix), &s3.BucketPublicAccessBlockArgs{
+		Bucket:                auditBucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return err
+	}
 
-		// Add bucket policy for CloudTrail
-		auditBucketPolicy := auditBucket.Arn.ApplyT(func(arn string) (string, error) {
-			return fmt.Sprintf(`{
+	// Add bucket policy for CloudTrail
+	auditBucketPolicy := auditBucket.Arn.ApplyT(func(arn string) (string, error) {
+		return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -241,58 +240,58 @@ func main() {
 					}
 				]
 			}`, arn, arn), nil
-		}).(pulumi.StringOutput)
+	}).(pulumi.StringOutput)
 
-		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("audit-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
-			Bucket: auditBucket.ID(),
-			Policy: auditBucketPolicy,
-		})
-		if err != nil {
-			return err
-		}
+	_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("audit-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
+		Bucket: auditBucket.ID(),
+		Policy: auditBucketPolicy,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create CloudTrail for audit logging
-		trail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix), &cloudtrail.TrailArgs{
-			S3BucketName: auditBucket.ID(),
-			S3KeyPrefix:  pulumi.String("healthapp-logs/"),
-			KmsKeyId:     kmsKey.Arn,
-			EventSelectors: cloudtrail.TrailEventSelectorArray{
-				&cloudtrail.TrailEventSelectorArgs{
-					ReadWriteType:                 pulumi.String("All"),
-					IncludeManagementEvents:       pulumi.Bool(true),
-					ExcludeManagementEventSources: pulumi.StringArray{},
-					DataResources: cloudtrail.TrailEventSelectorDataResourceArray{
-						&cloudtrail.TrailEventSelectorDataResourceArgs{
-							Type: pulumi.String("AWS::S3::Object"),
-							Values: pulumi.StringArray{
-								phiBucket.Arn.ApplyT(func(arn string) string {
-									return arn + "/*"
-								}).(pulumi.StringOutput),
-							},
+	// Create CloudTrail for audit logging
+	trail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix), &cloudtrail.TrailArgs{
+		S3BucketName: auditBucket.ID(),
+		S3KeyPrefix:  pulumi.String("healthapp-logs/"),
+		KmsKeyId:     kmsKey.Arn,
+		EventSelectors: cloudtrail.TrailEventSelectorArray{
+			&cloudtrail.TrailEventSelectorArgs{
+				ReadWriteType:                 pulumi.String("All"),
+				IncludeManagementEvents:       pulumi.Bool(true),
+				ExcludeManagementEventSources: pulumi.StringArray{},
+				DataResources: cloudtrail.TrailEventSelectorDataResourceArray{
+					&cloudtrail.TrailEventSelectorDataResourceArgs{
+						Type: pulumi.String("AWS::S3::Object"),
+						Values: pulumi.StringArray{
+							phiBucket.Arn.ApplyT(func(arn string) string {
+								return arn + "/*"
+							}).(pulumi.StringOutput),
 						},
 					},
 				},
 			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+		},
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create database credential secret with automatic rotation
-		dbSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("healthapp-db-secret-%s", envSuffix), &secretsmanager.SecretArgs{
-			Description: pulumi.String("Database credentials for HealthApp with automatic rotation"),
-			KmsKeyId:    kmsKey.ID(),
-			Tags:        commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create database credential secret with automatic rotation
+	dbSecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("healthapp-db-secret-%s", envSuffix), &secretsmanager.SecretArgs{
+		Description: pulumi.String("Database credentials for HealthApp with automatic rotation"),
+		KmsKeyId:    kmsKey.ID(),
+		Tags:        commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Store initial database credentials
-		_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("healthapp-db-secret-version-%s", envSuffix), &secretsmanager.SecretVersionArgs{
-			SecretId: dbSecret.ID(),
-			SecretString: pulumi.String(`{
+	// Store initial database credentials
+	_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("healthapp-db-secret-version-%s", envSuffix), &secretsmanager.SecretVersionArgs{
+		SecretId: dbSecret.ID(),
+		SecretString: pulumi.String(`{
 				"username": "healthapp_admin",
 				"password": "TempPassword123!",
 				"engine": "mysql",
@@ -300,37 +299,37 @@ func main() {
 				"port": 3306,
 				"database": "healthapp"
 			}`),
-		})
-		if err != nil {
-			return err
-		}
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create API key secret for external integrations
-		apiKeySecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("healthapp-api-keys-%s", envSuffix), &secretsmanager.SecretArgs{
-			Description: pulumi.String("API keys for external healthcare integrations"),
-			KmsKeyId:    kmsKey.ID(),
-			Tags:        commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create API key secret for external integrations
+	apiKeySecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("healthapp-api-keys-%s", envSuffix), &secretsmanager.SecretArgs{
+		Description: pulumi.String("API keys for external healthcare integrations"),
+		KmsKeyId:    kmsKey.ID(),
+		Tags:        commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Store API keys
-		_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("healthapp-api-keys-version-%s", envSuffix), &secretsmanager.SecretVersionArgs{
-			SecretId: apiKeySecret.ID(),
-			SecretString: pulumi.String(`{
+	// Store API keys
+	_, err = secretsmanager.NewSecretVersion(ctx, fmt.Sprintf("healthapp-api-keys-version-%s", envSuffix), &secretsmanager.SecretVersionArgs{
+		SecretId: apiKeySecret.ID(),
+		SecretString: pulumi.String(`{
 				"fhir_api_key": "temp-fhir-key-123",
 				"lab_integration_key": "temp-lab-key-456",
 				"insurance_api_key": "temp-insurance-key-789"
 			}`),
-		})
-		if err != nil {
-			return err
-		}
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create IAM role for application with least privilege access
-		appRole, err := iam.NewRole(ctx, fmt.Sprintf("healthapp-role-%s", envSuffix), &iam.RoleArgs{
-			AssumeRolePolicy: pulumi.String(`{
+	// Create IAM role for application with least privilege access
+	appRole, err := iam.NewRole(ctx, fmt.Sprintf("healthapp-role-%s", envSuffix), &iam.RoleArgs{
+		AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -342,21 +341,21 @@ func main() {
 					}
 				]
 			}`),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create policy for application access to S3 and Secrets Manager
-		_, err = iam.NewRolePolicy(ctx, fmt.Sprintf("healthapp-policy-%s", envSuffix), &iam.RolePolicyArgs{
-			Role: appRole.ID(),
-			Policy: pulumi.All(phiBucket.Arn, dbSecret.Arn, apiKeySecret.Arn, kmsKey.Arn).ApplyT(func(args []interface{}) (string, error) {
-				bucketArn := args[0].(string)
-				dbSecretArn := args[1].(string)
-				apiSecretArn := args[2].(string)
-				kmsArn := args[3].(string)
-				return fmt.Sprintf(`{
+	// Create policy for application access to S3 and Secrets Manager
+	_, err = iam.NewRolePolicy(ctx, fmt.Sprintf("healthapp-policy-%s", envSuffix), &iam.RolePolicyArgs{
+		Role: appRole.ID(),
+		Policy: pulumi.All(phiBucket.Arn, dbSecret.Arn, apiKeySecret.Arn, kmsKey.Arn).ApplyT(func(args []interface{}) (string, error) {
+			bucketArn := args[0].(string)
+			dbSecretArn := args[1].(string)
+			apiSecretArn := args[2].(string)
+			kmsArn := args[3].(string)
+			return fmt.Sprintf(`{
 					"Version": "2012-10-17",
 					"Statement": [
 						{
@@ -391,26 +390,26 @@ func main() {
 						}
 					]
 				}`, bucketArn, dbSecretArn, apiSecretArn, kmsArn), nil
-			}).(pulumi.StringOutput),
-		})
-		if err != nil {
-			return err
-		}
+		}).(pulumi.StringOutput),
+	})
+	if err != nil {
+		return err
+	}
 
-		// Get existing Config resources from environment
-		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
-		if existingConfigRecorder == "" {
-			existingConfigRecorder = "tap-webapp-pr1598-config-recorder"
-		}
+	// Get existing Config resources from environment
+	existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
+	if existingConfigRecorder == "" {
+		existingConfigRecorder = "tap-webapp-pr1598-config-recorder"
+	}
 
-		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
-		if existingDeliveryChannel == "" {
-			existingDeliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
-		}
+	existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
+	if existingDeliveryChannel == "" {
+		existingDeliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
+	}
 
-		// Create AWS Config Service Role
-		configRole, err := iam.NewRole(ctx, fmt.Sprintf("config-role-%s", envSuffix), &iam.RoleArgs{
-			AssumeRolePolicy: pulumi.String(`{
+	// Create AWS Config Service Role
+	configRole, err := iam.NewRole(ctx, fmt.Sprintf("config-role-%s", envSuffix), &iam.RoleArgs{
+		AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -422,49 +421,49 @@ func main() {
 					}
 				]
 			}`),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Attach AWS Config service role policy
-		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("config-policy-attachment-%s", envSuffix), &iam.RolePolicyAttachmentArgs{
-			Role:      configRole.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
-		})
-		if err != nil {
-			return err
-		}
+	// Attach AWS Config service role policy
+	_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("config-policy-attachment-%s", envSuffix), &iam.RolePolicyAttachmentArgs{
+		Role:      configRole.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
+	})
+	if err != nil {
+		return err
+	}
 
-		// Create S3 bucket for AWS Config
-		configBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-config-bucket-%s", envSuffix), &s3.BucketV2Args{
-			ForceDestroy: pulumi.Bool(true),
-			Tags:         commonTags,
-		})
-		if err != nil {
-			return err
-		}
+	// Create S3 bucket for AWS Config
+	configBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-config-bucket-%s", envSuffix), &s3.BucketV2Args{
+		ForceDestroy: pulumi.Bool(true),
+		Tags:         commonTags,
+	})
+	if err != nil {
+		return err
+	}
 
-		// Configure Config bucket encryption
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("config-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
-			Bucket: configBucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm:   pulumi.String("aws:kms"),
-						KmsMasterKeyId: kmsKey.Arn,
-					},
+	// Configure Config bucket encryption
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("config-bucket-encryption-%s", envSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: configBucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm:   pulumi.String("aws:kms"),
+					KmsMasterKeyId: kmsKey.Arn,
 				},
 			},
-		})
-		if err != nil {
-			return err
-		}
+		},
+	})
+	if err != nil {
+		return err
+	}
 
-		// Add bucket policy for AWS Config
-		configBucketPolicy := configBucket.Arn.ApplyT(func(arn string) (string, error) {
-			return fmt.Sprintf(`{
+	// Add bucket policy for AWS Config
+	configBucketPolicy := configBucket.Arn.ApplyT(func(arn string) (string, error) {
+		return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
 					{
@@ -492,90 +491,93 @@ func main() {
 					}
 				]
 			}`, arn, arn), nil
-		}).(pulumi.StringOutput)
+	}).(pulumi.StringOutput)
 
-		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("config-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
-			Bucket: configBucket.ID(),
-			Policy: configBucketPolicy,
+	_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("config-bucket-policy-%s", envSuffix), &s3.BucketPolicyArgs{
+		Bucket: configBucket.ID(),
+		Policy: configBucketPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Use existing or create new Config Recorder
+	var configRecorderName pulumi.StringOutput
+	if existingConfigRecorder != "" {
+		// Use existing recorder
+		configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
+	} else {
+		// Create new recorder
+		configRecorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
+			Name:    pulumi.Sprintf("healthapp-recorder-%s", envSuffix),
+			RoleArn: configRole.Arn,
+			RecordingGroup: &cfg.RecorderRecordingGroupArgs{
+				AllSupported:               pulumi.Bool(true),
+				IncludeGlobalResourceTypes: pulumi.Bool(true),
+			},
 		})
 		if err != nil {
 			return err
 		}
+		configRecorderName = configRecorder.Name
+	}
 
-		// Use existing or create new Config Recorder
-		var configRecorderName pulumi.StringOutput
-		if existingConfigRecorder != "" {
-			// Use existing recorder
-			configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
-		} else {
-			// Create new recorder
-			configRecorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
-				Name:    pulumi.Sprintf("healthapp-recorder-%s", envSuffix),
-				RoleArn: configRole.Arn,
-				RecordingGroup: &cfg.RecorderRecordingGroupArgs{
-					AllSupported:               pulumi.Bool(true),
-					IncludeGlobalResourceTypes: pulumi.Bool(true),
-				},
-			})
-			if err != nil {
-				return err
-			}
-			configRecorderName = configRecorder.Name
-		}
-
-		// Use existing or create new Delivery Channel
-		var deliveryChannelName pulumi.StringOutput
-		var deliveryChannelResource pulumi.Resource
-		if existingDeliveryChannel != "" {
-			// Use existing delivery channel
-			deliveryChannelName = pulumi.String(existingDeliveryChannel).ToStringOutput()
-			deliveryChannelResource = nil
-		} else {
-			// Create new delivery channel
-			deliveryChannel, err := cfg.NewDeliveryChannel(ctx, fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), &cfg.DeliveryChannelArgs{
-				Name:         pulumi.Sprintf("healthapp-delivery-%s", envSuffix),
-				S3BucketName: configBucket.ID(),
-				S3KeyPrefix:  pulumi.String("config/"),
-			})
-			if err != nil {
-				return err
-			}
-			deliveryChannelName = deliveryChannel.Name
-			deliveryChannelResource = deliveryChannel
-		}
-
-		// Enable Config Recorder
-		if deliveryChannelResource != nil {
-			_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
-				Name:      configRecorderName,
-				IsEnabled: pulumi.Bool(true),
-			}, pulumi.DependsOn([]pulumi.Resource{deliveryChannelResource}))
-		} else {
-			_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
-				Name:      configRecorderName,
-				IsEnabled: pulumi.Bool(true),
-			})
-		}
+	// Use existing or create new Delivery Channel
+	var deliveryChannelName pulumi.StringOutput
+	var deliveryChannelResource pulumi.Resource
+	if existingDeliveryChannel != "" {
+		// Use existing delivery channel
+		deliveryChannelName = pulumi.String(existingDeliveryChannel).ToStringOutput()
+		deliveryChannelResource = nil
+	} else {
+		// Create new delivery channel
+		deliveryChannel, err := cfg.NewDeliveryChannel(ctx, fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), &cfg.DeliveryChannelArgs{
+			Name:         pulumi.Sprintf("healthapp-delivery-%s", envSuffix),
+			S3BucketName: configBucket.ID(),
+			S3KeyPrefix:  pulumi.String("config/"),
+		})
 		if err != nil {
 			return err
 		}
+		deliveryChannelName = deliveryChannel.Name
+		deliveryChannelResource = deliveryChannel
+	}
 
-		// Export important resource information
-		ctx.Export("vpcId", vpc.ID())
-		ctx.Export("kmsKeyId", kmsKey.ID())
-		ctx.Export("kmsKeyArn", kmsKey.Arn)
-		ctx.Export("phiBucketName", phiBucket.ID())
-		ctx.Export("auditBucketName", auditBucket.ID())
-		ctx.Export("cloudTrailArn", trail.Arn)
-		ctx.Export("dbSecretArn", dbSecret.Arn)
-		ctx.Export("apiKeySecretArn", apiKeySecret.Arn)
-		ctx.Export("appRoleArn", appRole.Arn)
-		ctx.Export("privateSubnet1Id", privateSubnet1.ID())
-		ctx.Export("privateSubnet2Id", privateSubnet2.ID())
-		ctx.Export("configRecorderName", configRecorderName)
-		ctx.Export("configDeliveryChannelName", deliveryChannelName)
-		ctx.Export("configBucketName", configBucket.ID())
+	// Enable Config Recorder
+	if deliveryChannelResource != nil {
+		_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
+			Name:      configRecorderName,
+			IsEnabled: pulumi.Bool(true),
+		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannelResource}))
+	} else {
+		_, err = cfg.NewRecorderStatus(ctx, fmt.Sprintf("config-recorder-status-%s", envSuffix), &cfg.RecorderStatusArgs{
+			Name:      configRecorderName,
+			IsEnabled: pulumi.Bool(true),
+		})
+	}
+	if err != nil {
+		return err
+	}
 
-		return nil
-	})
+	// Export important resource information
+	ctx.Export("vpcId", vpc.ID())
+	ctx.Export("kmsKeyId", kmsKey.ID())
+	ctx.Export("kmsKeyArn", kmsKey.Arn)
+	ctx.Export("phiBucketName", phiBucket.ID())
+	ctx.Export("auditBucketName", auditBucket.ID())
+	ctx.Export("cloudTrailArn", trail.Arn)
+	ctx.Export("dbSecretArn", dbSecret.Arn)
+	ctx.Export("apiKeySecretArn", apiKeySecret.Arn)
+	ctx.Export("appRoleArn", appRole.Arn)
+	ctx.Export("privateSubnet1Id", privateSubnet1.ID())
+	ctx.Export("privateSubnet2Id", privateSubnet2.ID())
+	ctx.Export("configRecorderName", configRecorderName)
+	ctx.Export("configDeliveryChannelName", deliveryChannelName)
+	ctx.Export("configBucketName", configBucket.ID())
+
+	return nil
+}
+
+func main() {
+	pulumi.Run(CreateInfrastructure)
 }
