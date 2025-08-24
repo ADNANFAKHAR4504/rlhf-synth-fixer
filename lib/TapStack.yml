@@ -423,6 +423,16 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource: !GetAtt S3Bucket.Arn
+        - PolicyName: KMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt KMSKey.Arn
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
