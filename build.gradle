@@ -220,6 +220,8 @@ jacocoTestCoverageVerification {
                 value = 'COVEREDRATIO'
                 minimum = 0.09
             }
+            // Exclude Main class from coverage requirements (contains main() method)
+            excludes = ['app.Main']
         }
     }
 }
