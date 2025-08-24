@@ -53,6 +53,8 @@ elif [ "$LANGUAGE" = "go" ]; then
       exit 1
     fi
 
+  fi
+
   if [ -d "lib" ]; then
     if [ -d "tests/integration" ]; then
       echo "📦 Copying integration *_test.go files into lib/ for package alignment"
