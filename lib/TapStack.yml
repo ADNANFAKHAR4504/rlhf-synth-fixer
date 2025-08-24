@@ -8,7 +8,7 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: 'Existing VPC ID where resources will be deployed'
-    Default: vpc-12345678
+    Default: vpc-000a81111ab279330
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
