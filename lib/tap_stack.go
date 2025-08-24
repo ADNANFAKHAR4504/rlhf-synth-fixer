@@ -22,13 +22,10 @@ func main() {
 		// Get existing Config resources from environment
 		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
 		if existingConfigRecorder == "" {
-			existingConfigRecorder = "prod-sec-production-config-rec"
+			existingConfigRecorder = "tap-webapp-pr1598-config-recorder"
 		}
 
 		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
-		if existingDeliveryChannel == "" {
-			existingDeliveryChannel = "default"
-		}
 
 		// Create the S3 bucket for storing sensitive financial documents
 		financialDocumentsBucket, err := s3.NewBucket(ctx, "FinApp-DocumentsBucket", &s3.BucketArgs{
