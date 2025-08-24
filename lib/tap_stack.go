@@ -19,6 +19,17 @@ func main() {
 			environmentSuffix = "synthtrainr308"
 		}
 
+		// Get existing Config resources from environment
+		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
+		if existingConfigRecorder == "" {
+			existingConfigRecorder = "prod-sec-production-config-rec"
+		}
+
+		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
+		if existingDeliveryChannel == "" {
+			existingDeliveryChannel = "default"
+		}
+
 		// Create the S3 bucket for storing sensitive financial documents
 		financialDocumentsBucket, err := s3.NewBucket(ctx, "FinApp-DocumentsBucket", &s3.BucketArgs{
 			Bucket: pulumi.Sprintf("finapp-financial-docs-%s", environmentSuffix),
@@ -194,10 +205,10 @@ func main() {
 			return err
 		}
 
-		// Attach AWS Config service role policy
+		// Attach AWS Config service role policy (use correct policy ARN)
 		_, err = iam.NewRolePolicyAttachment(ctx, "FinApp-ConfigServiceRolePolicy", &iam.RolePolicyAttachmentArgs{
 			Role:      configServiceRole.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/ConfigRole"),
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),
 		})
 		if err != nil {
 			return err
@@ -260,33 +271,51 @@ func main() {
 			return err
 		}
 
-		// Create AWS Config Configuration Recorder
-		configRecorder, err := cfg.NewRecorder(ctx, "FinApp-ConfigRecorder", &cfg.RecorderArgs{
-			Name:    pulumi.Sprintf("FinApp-ComplianceRecorder-%s", environmentSuffix),
-			RoleArn: configServiceRole.Arn,
-			RecordingGroup: &cfg.RecorderRecordingGroupArgs{
-				AllSupported:               pulumi.Bool(true),
-				IncludeGlobalResourceTypes: pulumi.Bool(true),
-			},
-		})
-		if err != nil {
-			return err
+		// Use existing or create new Config Recorder
+		var configRecorderName pulumi.StringOutput
+		if existingConfigRecorder != "" {
+			configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
+			ctx.Export("configRecorderUsed", pulumi.String(existingConfigRecorder))
+		} else {
+			configRecorder, err := cfg.NewRecorder(ctx, "FinApp-ConfigRecorder", &cfg.RecorderArgs{
+				Name:    pulumi.Sprintf("FinApp-ComplianceRecorder-%s", environmentSuffix),
+				RoleArn: configServiceRole.Arn,
+				RecordingGroup: &cfg.RecorderRecordingGroupArgs{
+					AllSupported:               pulumi.Bool(true),
+					IncludeGlobalResourceTypes: pulumi.Bool(true),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			configRecorderName = configRecorder.Name
 		}
 
-		// Create AWS Config Delivery Channel
-		deliveryChannel, err := cfg.NewDeliveryChannel(ctx, "FinApp-ConfigDeliveryChannel", &cfg.DeliveryChannelArgs{
-			Name:         pulumi.Sprintf("FinApp-ComplianceDelivery-%s", environmentSuffix),
-			S3BucketName: configBucket.ID(),
-		})
-		if err != nil {
-			return err
+		// Create delivery channel if needed
+		var deliveryChannelResource pulumi.Resource
+		if existingDeliveryChannel == "default" {
+			deliveryChannel, err := cfg.NewDeliveryChannel(ctx, "FinApp-ConfigDeliveryChannel", &cfg.DeliveryChannelArgs{
+				Name:         pulumi.Sprintf("FinApp-ComplianceDelivery-%s", environmentSuffix),
+				S3BucketName: configBucket.ID(),
+			})
+			if err != nil {
+				return err
+			}
+			deliveryChannelResource = deliveryChannel
 		}
 
-		// Start the Config Recorder
-		_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
-			Name:      configRecorder.Name,
-			IsEnabled: pulumi.Bool(true),
-		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannel}))
+		// Enable Config Recorder
+		if deliveryChannelResource != nil {
+			_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
+				Name:      configRecorderName,
+				IsEnabled: pulumi.Bool(true),
+			}, pulumi.DependsOn([]pulumi.Resource{deliveryChannelResource}))
+		} else {
+			_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
+				Name:      configRecorderName,
+				IsEnabled: pulumi.Bool(true),
+			})
+		}
 		if err != nil {
 			return err
 		}
@@ -392,7 +421,7 @@ func main() {
 		ctx.Export("instanceProfileArn", instanceProfile.Arn)
 		ctx.Export("policyArn", s3AccessPolicy.Arn)
 		ctx.Export("cloudTrailArn", cloudTrailResource.Arn)
-		ctx.Export("configRecorderName", configRecorder.Name)
+		ctx.Export("configRecorderName", configRecorderName)
 
 		// Export compliance information
 		ctx.Export("encryptionEnabled", pulumi.Bool(true))
