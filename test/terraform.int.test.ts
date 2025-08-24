@@ -13,69 +13,95 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     beforeAll(async () => {
       try {
-        // Create test.tfvars if it doesn't exist
-        if (!fs.existsSync(testTfvars)) {
-          const testVarsContent = `
-environment     = "test"
-active_color    = "blue"
-domain_name     = "test.example.com"
-regions         = ["us-east-1", "eu-central-1"]
-allowed_ingress_cidrs = [
-  "10.0.0.0/8",
-  "172.16.0.0/12",
-  "192.168.0.0/16"
-]
-common_tags = {
-  Owner       = "platform-team"
-  Purpose     = "testing"
-  Environment = "test"
-  CostCenter  = "engineering"
-  Project     = "tap-stack"
-}`;
-          fs.writeFileSync(testTfvars, testVarsContent);
-        }
+        // Define terraform-related paths
+        const terraformPaths = {
+          dir: path.join(libDir, '.terraform'),
+          lockFile: path.join(libDir, '.terraform.lock.hcl'),
+          stateFile: path.join(libDir, 'terraform.tfstate'),
+          stateBackupFile: path.join(libDir, 'terraform.tfstate.backup'),
+          testBackend: path.join(libDir, 'test_backend.tf'),
+          providerBackup: path.join(libDir, 'provider.tf.backup'),
+          versionFile: path.join(libDir, '.terraform-version')
+        };
 
-        // Initialize Terraform with local backend (not S3) for integration testing
-        // Clean up any existing terraform configuration
-        const terraformDir = path.join(libDir, '.terraform');
-        const terraformLockFile = path.join(libDir, '.terraform.lock.hcl');
+        // Clean up any existing terraform files
+        if (fs.existsSync(terraformPaths.dir)) {
+          fs.rmSync(terraformPaths.dir, { recursive: true, force: true });
+        }
         
-        if (fs.existsSync(terraformDir)) {
-          fs.rmSync(terraformDir, { recursive: true, force: true });
-        }
-        if (fs.existsSync(terraformLockFile)) {
-          fs.unlinkSync(terraformLockFile);
-        }
+        Object.values(terraformPaths).forEach(file => {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+        });
 
-        // Create temporary provider.tf for testing without S3 backend
+        // Create test.tfvars with comprehensive configuration
+        const testVarsContent = {
+          environment: "test",
+          active_color: "blue",
+          domain_name: "test.example.com",
+          regions: ["us-east-1", "eu-central-1"],
+          allowed_ingress_cidrs: [
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16"
+          ],
+          common_tags: {
+            Owner: "platform-team",
+            Purpose: "testing",
+            Environment: "test",
+            CostCenter: "engineering",
+            Project: "tap-stack"
+          },
+          asg_min_size: 1,
+          asg_max_size: 3,
+          asg_desired_capacity: 2,
+          key_name: "test-keypair",
+          waf_rate_limit: 2000,
+          cloudfront_price_class: "PriceClass_100",
+          kms_config: {
+            deletion_window_in_days: 7,
+            enable_key_rotation: true
+          }
+        };
+
+        // Convert the test vars object to HCL format
+        const formatHcl = (obj: any, indent: number = 0): string => {
+          const spaces = ' '.repeat(indent);
+          if (typeof obj !== 'object') return JSON.stringify(obj);
+          if (Array.isArray(obj)) return `[${obj.map(v => formatHcl(v)).join(', ')}]`;
+          
+          return `{\n${Object.entries(obj)
+            .map(([k, v]) => `${spaces}  ${k} = ${formatHcl(v, indent + 2)}`)
+            .join('\n')}\n${spaces}}`;
+        };
+
+        const varsContent = Object.entries(testVarsContent)
+          .map(([k, v]) => `${k} = ${formatHcl(v)}`)
+          .join('\n\n');
+
+        fs.writeFileSync(testTfvars, varsContent);
+
+        // Create test backend configuration
+        const testBackendConfig = `terraform {
+          backend "local" {}
+        }`;
+        fs.writeFileSync(terraformPaths.testBackend, testBackendConfig);
+
+        // Backup and modify provider configuration
         const originalProvider = path.join(libDir, 'provider.tf');
-        const backupProvider = path.join(libDir, 'provider.tf.backup');
-        
-        // Backup original provider.tf
         if (fs.existsSync(originalProvider)) {
-          fs.copyFileSync(originalProvider, backupProvider);
+          fs.copyFileSync(originalProvider, terraformPaths.providerBackup);
           
-          // Read and modify provider configuration for testing
           let providerContent = fs.readFileSync(originalProvider, 'utf8');
-          
-          // Replace S3 backend with local backend for testing
           providerContent = providerContent.replace(
             /backend\s+"s3"\s*{\s*}/,
             'backend "local" {}'
           );
-          
           fs.writeFileSync(originalProvider, providerContent);
         }
 
-        // Create a local test backend configuration
-        const testBackendConfig = `
-terraform {
-  backend "local" {}
-}
-`;
-        fs.writeFileSync(path.join(libDir, 'test_backend.tf'), testBackendConfig);
-
-        // Initialize Terraform with local backend for testing
+        // Initialize Terraform with local backend
         execSync('terraform init -backend=true -backend-config=backend="local"', { 
           cwd: libDir, 
           stdio: 'inherit' 
@@ -95,27 +121,44 @@ terraform {
     });
 
     afterAll(() => {
-      // Clean up temporary test files
       try {
+        // Define terraform-related paths
+        const terraformPaths = {
+          dir: path.join(libDir, '.terraform'),
+          lockFile: path.join(libDir, '.terraform.lock.hcl'),
+          stateFile: path.join(libDir, 'terraform.tfstate'),
+          stateBackupFile: path.join(libDir, 'terraform.tfstate.backup'),
+          testBackend: path.join(libDir, 'test_backend.tf'),
+          providerBackup: path.join(libDir, 'provider.tf.backup'),
+          versionFile: path.join(libDir, '.terraform-version'),
+          testVars: testTfvars
+        };
+
         // Clean up test files
-        const testFiles = [
-          testTfvars,
-          path.join(libDir, 'test_backend.tf'),
-          path.join(libDir, 'provider.tf.backup')
-        ];
-        
-        testFiles.forEach(file => {
+        Object.values(terraformPaths).forEach(file => {
           if (fs.existsSync(file)) {
-            fs.unlinkSync(file);
+            try {
+              if (file === terraformPaths.dir) {
+                fs.rmSync(file, { recursive: true, force: true });
+              } else {
+                fs.unlinkSync(file);
+              }
+            } catch (err) {
+              console.warn(`Failed to remove ${file}:`, err);
+            }
           }
         });
         
         // Restore original provider.tf if backup exists
         const originalProvider = path.join(libDir, 'provider.tf');
-        const backupProvider = path.join(libDir, 'provider.tf.backup');
+        const backupProvider = terraformPaths.providerBackup;
         
         if (fs.existsSync(backupProvider)) {
-          fs.copyFileSync(backupProvider, originalProvider);
+          try {
+            fs.copyFileSync(backupProvider, originalProvider);
+          } catch (err) {
+            console.error('Failed to restore original provider.tf:', err);
+          }
         }
         
         // Clean up terraform files
