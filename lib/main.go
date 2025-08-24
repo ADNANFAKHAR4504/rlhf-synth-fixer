@@ -16,21 +16,15 @@ func main() {
 	if environmentSuffix == "" {
 		environmentSuffix = "synthtrainr961"
 	}
+	environmentSuffix = fmt.Sprintf("cdktf-%s", environmentSuffix)
 
-	// Primary stack in us-west-2
+	// Single stack with multi-region resources
 	NewTapStack(app, jsii.String(fmt.Sprintf("TapStack%s", environmentSuffix)), &TapStackConfig{
 		Region:      jsii.String("us-west-2"),
 		Environment: jsii.String("production"),
 		Project:     jsii.String("security-infra"),
 		Owner:       jsii.String("security-team"),
 		CostCenter:  jsii.String("infrastructure"),
-	})
-
-	// Security Hub stack for us-east-1
-	NewSecurityHubSecondaryStack(app, jsii.String(fmt.Sprintf("TapStack%sSecurityHubSecondary", environmentSuffix)), &SecurityHubSecondaryStackConfig{
-		Region:      jsii.String("us-east-1"),
-		Environment: jsii.String("production"),
-		Project:     jsii.String("security-infra"),
 	})
 
 	app.Synth()

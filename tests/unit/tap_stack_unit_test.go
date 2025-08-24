@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/aws/jsii-runtime-go"
@@ -31,21 +30,13 @@ func synthStack(t *testing.T, stackName string, region string) string {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 
-	if strings.Contains(stackName, "SecurityHub") {
-		NewSecurityHubSecondaryStack(app, jsii.String(stackName), &SecurityHubSecondaryStackConfig{
-			Region:      jsii.String(region),
-			Environment: jsii.String("test"),
-			Project:     jsii.String("security-test"),
-		})
-	} else {
-		NewTapStack(app, jsii.String(stackName), &TapStackConfig{
-			Region:      jsii.String(region),
-			Environment: jsii.String("test"),
-			Project:     jsii.String("security-test"),
-			Owner:       jsii.String("test-team"),
-			CostCenter:  jsii.String("test-center"),
-		})
-	}
+	NewTapStack(app, jsii.String(stackName), &TapStackConfig{
+		Region:      jsii.String(region),
+		Environment: jsii.String("test"),
+		Project:     jsii.String("security-test"),
+		Owner:       jsii.String("test-team"),
+		CostCenter:  jsii.String("test-center"),
+	})
 
 	app.Synth()
 
@@ -81,18 +72,23 @@ func TestTapStackCreation(t *testing.T) {
 	assert.Contains(t, tfConfig, "data")
 }
 
-func TestSecurityHubSecondaryStackCreation(t *testing.T) {
+func TestSecurityHubConfiguration(t *testing.T) {
 	// Synthesize the stack
-	tfPath := synthStack(t, "SecurityHubTest", "us-east-1")
+	tfPath := synthStack(t, "TapStackSecurityHubTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
 
 	// Verify basic structure
 	assert.Contains(t, tfConfig, "provider")
 	assert.Contains(t, tfConfig, "resource")
 
-	// Verify Security Hub resource
+	// Verify Security Hub resources (both primary and secondary)
 	resources := tfConfig["resource"].(map[string]interface{})
 	assert.Contains(t, resources, "aws_securityhub_account")
+
+	// Should have both primary and secondary Security Hub accounts
+	securityHubAccounts := resources["aws_securityhub_account"].(map[string]interface{})
+	assert.Contains(t, securityHubAccounts, "security-hub")
+	assert.Contains(t, securityHubAccounts, "security-hub-east")
 }
 
 func TestVPCConfiguration(t *testing.T) {
@@ -169,9 +165,9 @@ func TestSecurityGroups(t *testing.T) {
 	assert.Equal(t, float64(443), httpsRule["from_port"])
 
 	// Database ingress rule
-	assert.Contains(t, sgRules, "db-ingress-mysql")
-	dbRule := sgRules["db-ingress-mysql"].(map[string]interface{})
-	assert.Equal(t, float64(3306), dbRule["from_port"])
+	assert.Contains(t, sgRules, "db-ingress-postgres")
+	dbRule := sgRules["db-ingress-postgres"].(map[string]interface{})
+	assert.Equal(t, float64(5432), dbRule["from_port"])
 }
 
 func TestKMSConfiguration(t *testing.T) {
@@ -193,7 +189,9 @@ func TestKMSConfiguration(t *testing.T) {
 	// Verify KMS alias
 	assert.Contains(t, kmsAliases, "security-kms-alias")
 	kmsAlias := kmsAliases["security-kms-alias"].(map[string]interface{})
-	assert.Equal(t, "alias/security-infrastructure", kmsAlias["name"])
+	// KMS alias name should contain environment suffix
+	aliasName := kmsAlias["name"].(string)
+	assert.Contains(t, aliasName, "alias/security-infrastructure-cdktf-")
 }
 
 func TestS3BucketConfiguration(t *testing.T) {
@@ -267,12 +265,16 @@ func TestIAMRolesAndPolicies(t *testing.T) {
 	// Verify IAM role exists
 	assert.Contains(t, iamRoles, "ec2-role")
 	ec2Role := iamRoles["ec2-role"].(map[string]interface{})
-	assert.Equal(t, "EC2SecurityRole", ec2Role["name"])
+	// IAM role name should contain environment suffix
+	roleName := ec2Role["name"].(string)
+	assert.Contains(t, roleName, "EC2SecurityRole-cdktf-")
 
 	// Verify IAM policy exists
 	assert.Contains(t, iamPolicies, "ec2-policy")
 	ec2Policy := iamPolicies["ec2-policy"].(map[string]interface{})
-	assert.Equal(t, "EC2SecurityPolicy", ec2Policy["name"])
+	// IAM policy name should contain environment suffix
+	policyName := ec2Policy["name"].(string)
+	assert.Contains(t, policyName, "EC2SecurityPolicy-cdktf-")
 
 	// Verify policy attachment
 	attachments := resources["aws_iam_role_policy_attachment"].(map[string]interface{})
@@ -295,8 +297,8 @@ func TestRDSConfiguration(t *testing.T) {
 	assert.Equal(t, true, rdsInstance["storage_encrypted"])
 	assert.Equal(t, true, rdsInstance["skip_final_snapshot"])
 	assert.Equal(t, false, rdsInstance["deletion_protection"])
-	assert.Equal(t, "mysql", rdsInstance["engine"])
-	assert.Equal(t, "8.0", rdsInstance["engine_version"])
+	assert.Equal(t, "postgres", rdsInstance["engine"])
+	assert.Equal(t, "15.7", rdsInstance["engine_version"])
 
 	// Verify DB subnet group
 	assert.Contains(t, dbSubnetGroups, "db-subnet-group")
@@ -419,18 +421,30 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 	assert.NotEmpty(t, resources)
 }
 
-func TestSecurityHubProviderConfiguration(t *testing.T) {
-	// Synthesize the Security Hub stack
-	tfPath := synthStack(t, "SecurityHubProviderTest", "us-east-1")
+func TestMultiRegionProviderConfiguration(t *testing.T) {
+	// Synthesize the unified stack
+	tfPath := synthStack(t, "TapStackMultiRegionTest", "us-west-2")
 	tfConfig := loadSynthesizedStack(t, tfPath)
 
 	// Get provider configuration
 	provider := tfConfig["provider"].(map[string]interface{})
-	awsProvider := provider["aws"].([]interface{})[0].(map[string]interface{})
+	awsProviders := provider["aws"].([]interface{})
 
-	// Verify region is correct
-	assert.Equal(t, "us-east-1", awsProvider["region"])
+	// Should have multiple AWS providers (primary and secondary)
+	assert.GreaterOrEqual(t, len(awsProviders), 2)
 
-	// Verify alias is set
-	assert.Equal(t, "east", awsProvider["alias"])
+	// Find the east region provider
+	var eastProvider map[string]interface{}
+	for _, p := range awsProviders {
+		providerConfig := p.(map[string]interface{})
+		if alias, ok := providerConfig["alias"]; ok && alias == "east" {
+			eastProvider = providerConfig
+			break
+		}
+	}
+
+	// Verify east provider configuration
+	assert.NotNil(t, eastProvider)
+	assert.Equal(t, "us-east-1", eastProvider["region"])
+	assert.Equal(t, "east", eastProvider["alias"])
 }
