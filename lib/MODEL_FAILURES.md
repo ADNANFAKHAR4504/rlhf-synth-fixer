@@ -105,3 +105,5 @@ Ensuring security groups follow least privilege principles while maintaining fun
 - **Web tier:** HTTP/HTTPS inbound from internet, outbound to app tier
 - **App tier:** Custom port inbound from web tier only, outbound to database tier
 - **Database tier:** MySQL/Aurora port inbound from app tier only, no internet access
+
+---
