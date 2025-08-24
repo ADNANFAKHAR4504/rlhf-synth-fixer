@@ -25,5 +25,11 @@
     "Secrets Manager",
     "Security Groups",
     "CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "amitk6-ctu",
+  "dockerS3Location": ""
 }
