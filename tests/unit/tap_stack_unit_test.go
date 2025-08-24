@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cfg"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
@@ -149,8 +149,8 @@ func TestS3BucketEncryption(t *testing.T) {
 		assert.NotNil(t, phiBucket)
 
 		// Test bucket encryption configuration
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, 
-			fmt.Sprintf("phi-bucket-encryption-%s", envSuffix), 
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx,
+			fmt.Sprintf("phi-bucket-encryption-%s", envSuffix),
 			&s3.BucketServerSideEncryptionConfigurationV2Args{
 				Bucket: phiBucket.ID(),
 				Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
@@ -166,8 +166,8 @@ func TestS3BucketEncryption(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Test public access block
-		_, err = s3.NewBucketPublicAccessBlock(ctx, 
-			fmt.Sprintf("phi-bucket-pab-%s", envSuffix), 
+		_, err = s3.NewBucketPublicAccessBlock(ctx,
+			fmt.Sprintf("phi-bucket-pab-%s", envSuffix),
 			&s3.BucketPublicAccessBlockArgs{
 				Bucket:                phiBucket.ID(),
 				BlockPublicAcls:       pulumi.Bool(true),
@@ -178,8 +178,8 @@ func TestS3BucketEncryption(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Test versioning
-		_, err = s3.NewBucketVersioningV2(ctx, 
-			fmt.Sprintf("phi-bucket-versioning-%s", envSuffix), 
+		_, err = s3.NewBucketVersioningV2(ctx,
+			fmt.Sprintf("phi-bucket-versioning-%s", envSuffix),
 			&s3.BucketVersioningV2Args{
 				Bucket: phiBucket.ID(),
 				VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
@@ -205,8 +205,8 @@ func TestSecretsManager(t *testing.T) {
 		mockKmsId := pulumi.String("mock-kms-key-id").ToStringOutput()
 
 		// Test database secret creation
-		dbSecret, err := secretsmanager.NewSecret(ctx, 
-			fmt.Sprintf("healthapp-db-secret-%s", envSuffix), 
+		dbSecret, err := secretsmanager.NewSecret(ctx,
+			fmt.Sprintf("healthapp-db-secret-%s", envSuffix),
 			&secretsmanager.SecretArgs{
 				Description: pulumi.String("Database credentials for HealthApp with automatic rotation"),
 				KmsKeyId:    mockKmsId,
@@ -218,8 +218,8 @@ func TestSecretsManager(t *testing.T) {
 		assert.NotNil(t, dbSecret)
 
 		// Test secret version
-		_, err = secretsmanager.NewSecretVersion(ctx, 
-			fmt.Sprintf("healthapp-db-secret-version-%s", envSuffix), 
+		_, err = secretsmanager.NewSecretVersion(ctx,
+			fmt.Sprintf("healthapp-db-secret-version-%s", envSuffix),
 			&secretsmanager.SecretVersionArgs{
 				SecretId: dbSecret.ID(),
 				SecretString: pulumi.String(`{
@@ -232,8 +232,8 @@ func TestSecretsManager(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Test API key secret
-		apiSecret, err := secretsmanager.NewSecret(ctx, 
-			fmt.Sprintf("healthapp-api-keys-%s", envSuffix), 
+		apiSecret, err := secretsmanager.NewSecret(ctx,
+			fmt.Sprintf("healthapp-api-keys-%s", envSuffix),
 			&secretsmanager.SecretArgs{
 				Description: pulumi.String("API keys for external healthcare integrations"),
 				KmsKeyId:    mockKmsId,
@@ -256,8 +256,8 @@ func TestIAMRoles(t *testing.T) {
 		envSuffix := "test"
 
 		// Test application role
-		appRole, err := iam.NewRole(ctx, 
-			fmt.Sprintf("healthapp-role-%s", envSuffix), 
+		appRole, err := iam.NewRole(ctx,
+			fmt.Sprintf("healthapp-role-%s", envSuffix),
 			&iam.RoleArgs{
 				AssumeRolePolicy: pulumi.String(`{
 					"Version": "2012-10-17",
@@ -275,8 +275,8 @@ func TestIAMRoles(t *testing.T) {
 		assert.NotNil(t, appRole)
 
 		// Test CloudTrail role
-		cloudtrailRole, err := iam.NewRole(ctx, 
-			fmt.Sprintf("cloudtrail-role-%s", envSuffix), 
+		cloudtrailRole, err := iam.NewRole(ctx,
+			fmt.Sprintf("cloudtrail-role-%s", envSuffix),
 			&iam.RoleArgs{
 				AssumeRolePolicy: pulumi.String(`{
 					"Version": "2012-10-17",
@@ -291,8 +291,8 @@ func TestIAMRoles(t *testing.T) {
 		assert.NotNil(t, cloudtrailRole)
 
 		// Test Config role
-		configRole, err := iam.NewRole(ctx, 
-			fmt.Sprintf("config-role-%s", envSuffix), 
+		configRole, err := iam.NewRole(ctx,
+			fmt.Sprintf("config-role-%s", envSuffix),
 			&iam.RoleArgs{
 				AssumeRolePolicy: pulumi.String(`{
 					"Version": "2012-10-17",
@@ -330,8 +330,8 @@ func TestCloudTrail(t *testing.T) {
 		mockPhiBucketArn := pulumi.String("arn:aws:s3:::mock-phi-bucket").ToStringOutput()
 
 		// Test CloudTrail creation
-		trail, err := cloudtrail.NewTrail(ctx, 
-			fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix), 
+		trail, err := cloudtrail.NewTrail(ctx,
+			fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix),
 			&cloudtrail.TrailArgs{
 				S3BucketName: mockBucketId,
 				S3KeyPrefix:  pulumi.String("healthapp-logs/"),
@@ -377,21 +377,21 @@ func TestAWSConfig(t *testing.T) {
 		mockBucketId := pulumi.String("mock-config-bucket").ToStringOutput()
 
 		// Test Config recorder
-		recorder, err := cfg.NewRecorder(ctx, 
-			fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), 
+		recorder, err := cfg.NewRecorder(ctx,
+			fmt.Sprintf("healthapp-config-recorder-%s", envSuffix),
 			&cfg.RecorderArgs{
 				RoleArn: mockRoleArn,
 				RecordingGroup: &cfg.RecorderRecordingGroupArgs{
-					AllSupported:                 pulumi.Bool(true),
-					IncludeGlobalResourceTypes:   pulumi.Bool(true),
+					AllSupported:               pulumi.Bool(true),
+					IncludeGlobalResourceTypes: pulumi.Bool(true),
 				},
 			})
 		assert.NoError(t, err)
 		assert.NotNil(t, recorder)
 
 		// Test Config delivery channel
-		deliveryChannel, err := cfg.NewDeliveryChannel(ctx, 
-			fmt.Sprintf("healthapp-config-delivery-%s", envSuffix), 
+		deliveryChannel, err := cfg.NewDeliveryChannel(ctx,
+			fmt.Sprintf("healthapp-config-delivery-%s", envSuffix),
 			&cfg.DeliveryChannelArgs{
 				S3BucketName: mockBucketId,
 				S3KeyPrefix:  pulumi.String("config/"),
@@ -400,8 +400,8 @@ func TestAWSConfig(t *testing.T) {
 		assert.NotNil(t, deliveryChannel)
 
 		// Test Config rules
-		rule1, err := cfg.NewRule(ctx, 
-			fmt.Sprintf("s3-bucket-server-side-encryption-%s", envSuffix), 
+		rule1, err := cfg.NewRule(ctx,
+			fmt.Sprintf("s3-bucket-server-side-encryption-%s", envSuffix),
 			&cfg.RuleArgs{
 				Name: pulumi.String("s3-bucket-server-side-encryption-enabled"),
 				Source: &cfg.RuleSourceArgs{
@@ -412,8 +412,8 @@ func TestAWSConfig(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, rule1)
 
-		rule2, err := cfg.NewRule(ctx, 
-			fmt.Sprintf("s3-bucket-public-access-prohibited-%s", envSuffix), 
+		rule2, err := cfg.NewRule(ctx,
+			fmt.Sprintf("s3-bucket-public-access-prohibited-%s", envSuffix),
 			&cfg.RuleArgs{
 				Name: pulumi.String("s3-bucket-public-access-prohibited"),
 				Source: &cfg.RuleSourceArgs{
@@ -480,10 +480,10 @@ func TestForceDestroy(t *testing.T) {
 		envSuffix := "test"
 
 		buckets := []string{"phi", "audit", "config"}
-		
+
 		for _, bucketType := range buckets {
-			bucket, err := s3.NewBucketV2(ctx, 
-				fmt.Sprintf("healthapp-%s-bucket-%s", bucketType, envSuffix), 
+			bucket, err := s3.NewBucketV2(ctx,
+				fmt.Sprintf("healthapp-%s-bucket-%s", bucketType, envSuffix),
 				&s3.BucketV2Args{
 					ForceDestroy: pulumi.Bool(true), // Must be true for testing
 					Tags: pulumi.StringMap{
@@ -549,7 +549,7 @@ func TestMain(m *testing.M) {
 	// Set environment variables for testing
 	os.Setenv("ENVIRONMENT_SUFFIX", "test")
 	os.Setenv("AWS_REGION", "us-west-2")
-	
+
 	code := m.Run()
 	os.Exit(code)
 }

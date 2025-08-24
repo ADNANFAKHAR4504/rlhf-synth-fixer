@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cfg"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
@@ -131,9 +131,9 @@ func main() {
 
 		// Create KMS alias for easier reference
 		_, err = kms.NewAlias(ctx, fmt.Sprintf("healthapp-kms-alias-%s", envSuffix), &kms.AliasArgs{
-			Name:         pulumi.Sprintf("alias/healthapp-encryption-%s", envSuffix),
-			TargetKeyId:  kmsKey.KeyId,
-			NamePrefix:   nil,
+			Name:        pulumi.Sprintf("alias/healthapp-encryption-%s", envSuffix),
+			TargetKeyId: kmsKey.KeyId,
+			NamePrefix:  nil,
 		})
 		if err != nil {
 			return err
@@ -141,7 +141,7 @@ func main() {
 
 		// Create S3 bucket for PHI data storage with encryption
 		phiBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-phi-bucket-%s", envSuffix), &s3.BucketV2Args{
-			Bucket:       nil, // Auto-generated name
+			Bucket:       nil,               // Auto-generated name
 			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
 			Tags:         commonTags,
 		})
@@ -191,7 +191,7 @@ func main() {
 
 		// Create S3 bucket for audit logs
 		auditBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-audit-bucket-%s", envSuffix), &s3.BucketV2Args{
-			Bucket:       nil, // Auto-generated name
+			Bucket:       nil,               // Auto-generated name
 			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
 			Tags:         commonTags,
 		})
@@ -446,7 +446,7 @@ func main() {
 		// Create Config delivery channel
 		configBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("healthapp-config-bucket-%s", envSuffix), &s3.BucketV2Args{
 			ForceDestroy: pulumi.Bool(true), // Allow destruction for testing
-			Tags: commonTags,
+			Tags:         commonTags,
 		})
 		if err != nil {
 			return err
@@ -471,8 +471,8 @@ func main() {
 		recorder, err := cfg.NewRecorder(ctx, fmt.Sprintf("healthapp-config-recorder-%s", envSuffix), &cfg.RecorderArgs{
 			RoleArn: configRole.Arn,
 			RecordingGroup: &cfg.RecorderRecordingGroupArgs{
-				AllSupported:                 pulumi.Bool(true),
-				IncludeGlobalResourceTypes:   pulumi.Bool(true),
+				AllSupported:               pulumi.Bool(true),
+				IncludeGlobalResourceTypes: pulumi.Bool(true),
 			},
 		})
 		if err != nil {
@@ -492,8 +492,8 @@ func main() {
 		_, err = cfg.NewRule(ctx, fmt.Sprintf("s3-bucket-server-side-encryption-%s", envSuffix), &cfg.RuleArgs{
 			Name: pulumi.String("s3-bucket-server-side-encryption-enabled"),
 			Source: &cfg.RuleSourceArgs{
-				Owner:             pulumi.String("AWS"),
-				SourceIdentifier:  pulumi.String("S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"),
+				Owner:            pulumi.String("AWS"),
+				SourceIdentifier: pulumi.String("S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannel}))
 		if err != nil {
@@ -503,8 +503,8 @@ func main() {
 		_, err = cfg.NewRule(ctx, fmt.Sprintf("s3-bucket-public-access-prohibited-%s", envSuffix), &cfg.RuleArgs{
 			Name: pulumi.String("s3-bucket-public-access-prohibited"),
 			Source: &cfg.RuleSourceArgs{
-				Owner:             pulumi.String("AWS"),
-				SourceIdentifier:  pulumi.String("S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"),
+				Owner:            pulumi.String("AWS"),
+				SourceIdentifier: pulumi.String("S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{deliveryChannel}))
 		if err != nil {

@@ -359,9 +359,9 @@ func TestAWSConfigCompliance(t *testing.T) {
 	cfgClient := configservice.NewFromConfig(awsConfig)
 
 	t.Run("Config Recorder", func(t *testing.T) {
-		recordersOutput, err := cfgClient.DescribeConfigurationRecorders(ctx, 
+		recordersOutput, err := cfgClient.DescribeConfigurationRecorders(ctx,
 			&configservice.DescribeConfigurationRecordersInput{})
-		
+
 		if err != nil {
 			t.Logf("AWS Config might not be fully configured: %v", err)
 			return
@@ -382,9 +382,9 @@ func TestAWSConfigCompliance(t *testing.T) {
 	})
 
 	t.Run("Config Rules", func(t *testing.T) {
-		rulesOutput, err := cfgClient.DescribeConfigRules(ctx, 
+		rulesOutput, err := cfgClient.DescribeConfigRules(ctx,
 			&configservice.DescribeConfigRulesInput{})
-		
+
 		if err != nil {
 			t.Logf("Config rules might not be configured: %v", err)
 			return
@@ -497,13 +497,13 @@ func TestPerformanceBaseline(t *testing.T) {
 		// Test S3 bucket accessibility
 		if outputs.PhiBucketName != "" {
 			s3Client := s3.NewFromConfig(awsConfig)
-			
+
 			start := time.Now()
 			_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 				Bucket: aws.String(outputs.PhiBucketName),
 			})
 			duration := time.Since(start)
-			
+
 			if err == nil {
 				assert.Less(t, duration, 5*time.Second, "S3 bucket should respond quickly")
 			}
@@ -512,13 +512,13 @@ func TestPerformanceBaseline(t *testing.T) {
 		// Test Secrets Manager accessibility
 		if outputs.DbSecretArn != "" {
 			smClient := secretsmanager.NewFromConfig(awsConfig)
-			
+
 			start := time.Now()
 			_, err := smClient.DescribeSecret(ctx, &secretsmanager.DescribeSecretInput{
 				SecretId: aws.String(outputs.DbSecretArn),
 			})
 			duration := time.Since(start)
-			
+
 			if err == nil {
 				assert.Less(t, duration, 2*time.Second, "Secrets Manager should respond quickly")
 			}
@@ -537,7 +537,7 @@ func TestResourceTagging(t *testing.T) {
 	t.Run("Tag Compliance", func(t *testing.T) {
 		// This ensures all resources are properly tagged for
 		// cost allocation, compliance, and governance
-		
+
 		for tagKey, expectedValue := range requiredTags {
 			t.Run(fmt.Sprintf("Tag_%s", tagKey), func(t *testing.T) {
 				// Tags should be present on all major resources
