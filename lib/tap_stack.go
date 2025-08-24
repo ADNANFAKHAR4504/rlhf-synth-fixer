@@ -22,7 +22,7 @@ func main() {
 		// Get Config resources from environment or use defaults
 		configRecorder := os.Getenv("CONFIG_RECORDER_NAME")
 		if configRecorder == "" {
-			configRecorder = "tap-webapp-pr1598-config-delivery-channel"
+			configRecorder = "tap-webapp-pr1598-config-recorder"
 		}
 
 		deliveryChannel := os.Getenv("DELIVERY_CHANNEL_NAME")
@@ -175,7 +175,7 @@ func main() {
 			Name:                       pulumi.Sprintf("FinApp-AuditTrail-%s", environmentSuffix),
 			S3BucketName:               cloudTrailBucket.ID(),
 			IncludeGlobalServiceEvents: pulumi.Bool(true),
-			IsMultiRegionTrail:         pulumi.Bool(true),
+			IsMultiRegionTrail:         pulumi.Bool(false),
 			EnableLogFileValidation:    pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Project": pulumi.String("FinApp"),
