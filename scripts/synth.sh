@@ -31,12 +31,12 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
   export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
   
-  # if [ -f "go.mod" ]; then
-  #   go mod download || true
-  #   go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
-  # fi
+  if [ -f "go.mod" ]; then
+    go mod download || true
+    go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
+  fi
 
-  # npm run cdktf:get
+  npm run cdktf:get
 
   ensure_gen() {
     if [ ! -d ".gen" ]; then
@@ -52,9 +52,9 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   ensure_gen
 
   echo "Ensuring Go module deps are available (go mod tidy)"
-  # go clean -modcache || true
-  # go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-  # go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
+  go clean -modcache || true
+  go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+  go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
   go mod tidy
 
   npm run cdktf:synth
