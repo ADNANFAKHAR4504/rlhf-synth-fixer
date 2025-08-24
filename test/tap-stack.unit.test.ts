@@ -402,7 +402,7 @@ describe('TapStack', () => {
             Principal: {
               AWS: Match.anyValue(), // The account ID is wrapped in Fn::Join
             },
-            Action: 's3:GetBucketAcl',
+            Action: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
             Effect: 'Allow',
             Resource: Match.anyValue(),
             Sid: 'AllowELBServiceAccountAclCheck',

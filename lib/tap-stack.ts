@@ -117,13 +117,13 @@ export class TapStack extends cdk.Stack {
     // ELB service principal for ALB access logs (region-specific)
     const elbServiceAccount = this.getELBServiceAccount();
 
-    // Grant ELB service account access to check bucket ACL
+    // Grant ELB service account access to check bucket ACL and location
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AllowELBServiceAccountAclCheck',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: ['s3:GetBucketAcl'],
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
         resources: [albLogsBucket.bucketArn],
       })
     );
