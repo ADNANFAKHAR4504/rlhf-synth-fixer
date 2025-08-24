@@ -45,6 +45,23 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		environmentSuffix = "pr2114" // Default for this PR
 	}
 
+	// Get state bucket configuration from environment variables
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states" // Default state bucket
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1" // Default region for state bucket
+	}
+
+	// Configure S3 backend for remote state
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket: jsii.String(stateBucket),
+		Key:    jsii.String(fmt.Sprintf("tap-stack-%s.tfstate", environmentSuffix)),
+		Region: jsii.String(stateBucketRegion),
+	})
+
 	// Define region configurations with specific settings for each region
 	regionConfigs := []RegionConfig{
 		{
