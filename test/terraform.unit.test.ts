@@ -432,7 +432,7 @@ describe("Terraform Multi-Region Infrastructure", () => {
       
       if (profileMatch) {
         const profileConfig = profileMatch[1];
-        expect(profileConfig).toMatch(/name_prefix\s*=\s*"\${var\.environment}-profile-\${random_id\.suffix\.hex}-"/);
+        expect(profileConfig).toMatch(/name_prefix\s*=\s*"\${local\.name_prefix}-app-profile-[^"]*-"/);
         expect(profileConfig).toMatch(new RegExp(`role\\s*=\\s*aws_iam_role\\.app_role_${region}\\.name`));
       }
     });
