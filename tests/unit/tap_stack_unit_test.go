@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -251,8 +252,14 @@ func Test_Synth_S3ResourcesPresentAndConfigured(t *testing.T) {
 		t.Fatalf("bucket name is not a string: %v", loggingBucket["bucket"])
 	}
 	// Check that bucket name follows the new pattern: logs-{accountID}-{suffix}-{randomSuffix}
-	if !strings.HasPrefix(bucketName, "logs-123456789012-dev-") {
-		t.Fatalf("bucket name = %v, want prefix logs-123456789012-dev-", bucketName)
+	// Get the actual config to determine the expected prefix
+	cfg, err := GetConfig("dev")
+	if err != nil {
+		t.Fatalf("failed to get config: %v", err)
+	}
+	expectedPrefix := fmt.Sprintf("logs-%s-%s-", cfg.AccountID, cfg.Suffix)
+	if !strings.HasPrefix(bucketName, expectedPrefix) {
+		t.Fatalf("bucket name = %v, want prefix %s", bucketName, expectedPrefix)
 	}
 
 	// Replication Bucket
@@ -265,8 +272,9 @@ func Test_Synth_S3ResourcesPresentAndConfigured(t *testing.T) {
 		t.Fatalf("replication bucket name is not a string: %v", replicationBucket["bucket"])
 	}
 	// Check that replication bucket name follows the new pattern: logs-replica-{accountID}-{suffix}-{randomSuffix}
-	if !strings.HasPrefix(replicationBucketName, "logs-replica-123456789012-dev-") {
-		t.Fatalf("replication bucket name = %v, want prefix logs-replica-123456789012-dev-", replicationBucketName)
+	expectedReplicationPrefix := fmt.Sprintf("logs-replica-%s-%s-", cfg.AccountID, cfg.Suffix)
+	if !strings.HasPrefix(replicationBucketName, expectedReplicationPrefix) {
+		t.Fatalf("replication bucket name = %v, want prefix %s", replicationBucketName, expectedReplicationPrefix)
 	}
 
 	// Versioning
@@ -367,21 +375,25 @@ func Test_Provider_Region_SetProperly(t *testing.T) {
 
 func Test_Environment_Specific_Configuration(t *testing.T) {
 	tests := []struct {
-		env               string
-		expectedRegion    string
-		expectedVPCCidr   string
-		expectedAccountID string
-		bucketPrefix      string
+		env             string
+		expectedRegion  string
+		expectedVPCCidr string
 	}{
-		{"dev", "us-east-1", "10.0.0.0/16", "123456789012", "logs-123456789012-dev-"},
-		{"staging", "us-east-2", "10.1.0.0/16", "123456789013", "logs-123456789013-staging-"},
-		{"prod", "us-west-1", "10.2.0.0/16", "123456789014", "logs-123456789014-prod-"},
+		{"dev", "us-east-1", "10.0.0.0/16"},
+		{"staging", "us-east-2", "10.1.0.0/16"},
+		{"prod", "us-west-1", "10.2.0.0/16"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.env, func(t *testing.T) {
 			tfPath := synthStack(t, tt.env)
 			root := readTF(t, tfPath)
+
+			// Get the actual config to determine expected values
+			cfg, err := GetConfig(tt.env)
+			if err != nil {
+				t.Fatalf("failed to get config: %v", err)
+			}
 
 			// Check provider region
 			prov := asMap(root["provider"])
@@ -407,14 +419,15 @@ func Test_Environment_Specific_Configuration(t *testing.T) {
 				t.Fatalf("vpc cidr_block = %v, want %s", vpc["cidr_block"], tt.expectedVPCCidr)
 			}
 
-			// Check bucket name follows new pattern
+			// Check bucket name follows new pattern with dynamic suffix
 			bucket := asMap(asMap(resources["aws_s3_bucket"])["LoggingBucket"])
 			bucketName, ok := bucket["bucket"].(string)
 			if !ok {
 				t.Fatalf("bucket name is not a string: %v", bucket["bucket"])
 			}
-			if !strings.HasPrefix(bucketName, tt.bucketPrefix) {
-				t.Fatalf("bucket name = %v, want prefix %s", bucketName, tt.bucketPrefix)
+			expectedBucketPrefix := fmt.Sprintf("logs-%s-%s-", cfg.AccountID, cfg.Suffix)
+			if !strings.HasPrefix(bucketName, expectedBucketPrefix) {
+				t.Fatalf("bucket name = %v, want prefix %s", bucketName, expectedBucketPrefix)
 			}
 		})
 	}

@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,16 +130,13 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 
 func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 	environments := []struct {
-		env               string
-		expectedRegion    string
-		expectedVPCCidr   string
-		expectedAccountID string
-		bucketPrefix      string
-		rolePrefix        string
+		env             string
+		expectedRegion  string
+		expectedVPCCidr string
 	}{
-		{"dev", "us-east-1", "10.0.0.0/16", "123456789012", "logs-123456789012-dev-", "dev-"},
-		{"staging", "us-east-2", "10.1.0.0/16", "123456789013", "logs-123456789013-staging-", "staging-"},
-		{"prod", "us-west-1", "10.2.0.0/16", "123456789014", "logs-123456789014-prod-", "prod-"},
+		{"dev", "us-east-1", "10.0.0.0/16"},
+		{"staging", "us-east-2", "10.1.0.0/16"},
+		{"prod", "us-west-1", "10.2.0.0/16"},
 	}
 
 	for _, env := range environments {
@@ -195,14 +193,21 @@ func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 				t.Fatalf("vpc cidr = %v, want %s", vpc["cidr_block"], env.expectedVPCCidr)
 			}
 
-			// Validate bucket names follow new pattern
+			// Get the actual config to determine expected values
+			cfg, configErr := GetConfig(env.env)
+			if configErr != nil {
+				t.Fatalf("failed to get config: %v", configErr)
+			}
+
+			// Validate bucket names follow new pattern with dynamic suffix
 			loggingBucket := resources["aws_s3_bucket"].(map[string]any)["LoggingBucket"].(map[string]any)
 			bucketName, ok := loggingBucket["bucket"].(string)
 			if !ok {
 				t.Fatalf("bucket name is not a string: %v", loggingBucket["bucket"])
 			}
-			if !strings.HasPrefix(bucketName, env.bucketPrefix) {
-				t.Fatalf("logging bucket = %v, want prefix %s", bucketName, env.bucketPrefix)
+			expectedBucketPrefix := fmt.Sprintf("logs-%s-%s-", cfg.AccountID, cfg.Suffix)
+			if !strings.HasPrefix(bucketName, expectedBucketPrefix) {
+				t.Fatalf("logging bucket = %v, want prefix %s", bucketName, expectedBucketPrefix)
 			}
 
 			// Validate role names contain environment prefix and random suffix
@@ -211,8 +216,9 @@ func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 			if !ok {
 				t.Fatalf("ec2 role name is not a string: %v", ec2Role["name"])
 			}
-			if !strings.HasPrefix(ec2RoleName, env.rolePrefix) || !strings.HasSuffix(ec2RoleName, "-ec2-role") {
-				t.Fatalf("ec2 role name = %v, want prefix %s and suffix -ec2-role", ec2RoleName, env.rolePrefix)
+			expectedRolePrefix := fmt.Sprintf("%s-", cfg.Suffix)
+			if !strings.HasPrefix(ec2RoleName, expectedRolePrefix) || !strings.HasSuffix(ec2RoleName, "-ec2-role") {
+				t.Fatalf("ec2 role name = %v, want prefix %s and suffix -ec2-role", ec2RoleName, expectedRolePrefix)
 			}
 
 			lambdaRole := resources["aws_iam_role"].(map[string]any)["LambdaRole"].(map[string]any)
@@ -220,8 +226,8 @@ func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 			if !ok {
 				t.Fatalf("lambda role name is not a string: %v", lambdaRole["name"])
 			}
-			if !strings.HasPrefix(lambdaRoleName, env.rolePrefix) || !strings.HasSuffix(lambdaRoleName, "-lambda-role") {
-				t.Fatalf("lambda role name = %v, want prefix %s and suffix -lambda-role", lambdaRoleName, env.rolePrefix)
+			if !strings.HasPrefix(lambdaRoleName, expectedRolePrefix) || !strings.HasSuffix(lambdaRoleName, "-lambda-role") {
+				t.Fatalf("lambda role name = %v, want prefix %s and suffix -lambda-role", lambdaRoleName, expectedRolePrefix)
 			}
 		})
 	}
