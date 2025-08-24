@@ -1,75 +1,46 @@
-# Ideal CloudFormation Template Response
-
-## Template Overview
-
-This is the ideal CloudFormation template that demonstrates best practices for the infrastructure challenge. It creates a complete, secure, development-ready web hosting environment.
-
-## Template Features
-
-- ✅ Multi-AZ VPC with public subnets
-- ✅ Secure EC2 instance with parameterized SSH access
-- ✅ Encrypted S3 bucket with versioning
-- ✅ Least-privilege IAM roles and policies
-- ✅ CloudWatch monitoring and alerting
-- ✅ Consistent resource naming and tagging
-- ✅ Comprehensive outputs for integration
-
----
-
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
+  TAP Stack - Task Assignment Platform Infrastructure
   Development-ready web hosting environment with multi-AZ networking, 
-  secure EC2 instance, encrypted S3 storage, IAM integration, and CloudWatch monitoring.
+  secure EC2 instances, and comprehensive monitoring.
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Security Configuration'
+          default: "Security Configuration"
         Parameters:
+          - KeyName
           - SSHLocation
-          - KeyPairName
       - Label:
-          default: 'Resource Naming'
+          default: "Environment Configuration"
         Parameters:
-          - UniqueId
           - Environment
     ParameterLabels:
+      KeyName:
+        default: "EC2 Key Pair"
       SSHLocation:
-        default: 'SSH Access CIDR'
-      KeyPairName:
-        default: 'EC2 Key Pair'
-      UniqueId:
-        default: 'Unique Identifier'
+        default: "SSH Access CIDR"
       Environment:
-        default: 'Environment Tag'
+        default: "Environment Tag"
 
 Parameters:
+  KeyName:
+    Type: String
+    Default: 'my-key'
+    Description: 'Name of an existing EC2 KeyPair to enable SSH access to the instances'
+    MinLength: 1
+
   SSHLocation:
     Type: String
-    Description: The IP range that can SSH to the EC2 instance (e.g., 203.0.113.0/24)
-    Default: 10.0.0.0/8
+    Description: 'The IP address range that can be used to SSH to the EC2 instances'
+    Default: '0.0.0.0/0'
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-    ConstraintDescription: Must be a valid IP CIDR range (x.x.x.x/x)
-
-  KeyPairName:
-    Type: String
-    Description: Name of existing EC2 key pair for SSH access
-    Default: iac-rlhf-aws-trainer-instance
-    MinLength: 1
-
-  UniqueId:
-    Type: String
-    Description: Unique identifier for resource names (e.g., 001, dev, test)
-    Default: dev001
-    MinLength: 1
-    MaxLength: 10
-    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x'
 
   Environment:
     Type: String
-    Description: Environment designation for resource tagging
-    Default: Development
+    Default: 'Development'
+    Description: 'Environment designation for resource tagging'
     AllowedValues: [Development, Staging, Production]
 
 Resources:
@@ -78,61 +49,61 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: '10.0.0.0/16'
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'VPC-${Environment}-${UniqueId}'
+          Value: !Sub 'VPC-${Environment}-TAP'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
-          Value: Web hosting infrastructure
+          Value: 'TAP Platform Infrastructure'
 
   # Public Subnet in First AZ
-  PublicSubnetA:
+  PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-${Environment}-${UniqueId}-Public-A'
+          Value: !Sub 'Subnet-${Environment}-TAP-Public-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
-          Value: Public
+          Value: 'Public'
 
   # Public Subnet in Second AZ
-  PublicSubnetB:
+  PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: 10.0.2.0/24
+      CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-${Environment}-${UniqueId}-Public-B'
+          Value: !Sub 'Subnet-${Environment}-TAP-Public-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Type
-          Value: Public
+          Value: 'Public'
 
-  # Internet Gateway for public access
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'IGW-${Environment}-${UniqueId}'
+          Value: !Sub 'IGW-${Environment}-TAP'
         - Key: Environment
           Value: !Ref Environment
 
   # Attach Internet Gateway to VPC
-  VPCGatewayAttachment:
+  InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
@@ -145,69 +116,69 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'RT-${Environment}-${UniqueId}-Public'
+          Value: !Sub 'RT-${Environment}-TAP-Public'
         - Key: Environment
           Value: !Ref Environment
 
-  # Route to Internet Gateway
-  PublicRoute:
+  # Default route to Internet Gateway
+  DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
+    DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
+      DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
-  # Associate Public Subnet A with Route Table
-  PublicSubnetARouteTableAssociation:
+  # Associate Public Subnet 1 with Route Table
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnetA
       RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
 
-  # Associate Public Subnet B with Route Table
-  PublicSubnetBRouteTableAssociation:
+  # Associate Public Subnet 2 with Route Table
+  PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
 
   # ===== SECURITY CONFIGURATION =====
 
-  # Security Group for web server
+  # Security Group for web servers
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for web server - allows HTTP and restricted SSH
+      GroupName: !Sub 'SG-${Environment}-TAP-WebServer'
+      GroupDescription: 'Enable SSH and HTTP access'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - IpProtocol: 'tcp'
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: Allow HTTP from anywhere
-        - IpProtocol: tcp
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow HTTP from anywhere'
+        - IpProtocol: 'tcp'
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref SSHLocation
-          Description: Allow SSH from trusted networks only
+          Description: 'Allow SSH from specified CIDR'
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: Allow all outbound traffic
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+          Description: 'Allow all outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub 'SG-${Environment}-${UniqueId}-WebServer'
+          Value: !Sub 'SG-${Environment}-TAP-WebServer'
         - Key: Environment
           Value: !Ref Environment
 
   # ===== IAM ROLES AND POLICIES =====
 
-  # IAM Role for EC2 instance
-  EC2InstanceRole:
+  # IAM Role for EC2 instances
+  EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'Role-${Environment}-${UniqueId}-EC2-S3Access'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -215,6 +186,8 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
         - PolicyName: S3BucketAccess
           PolicyDocument:
@@ -227,68 +200,34 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${S3Bucket}/*'
-                  - !Ref S3Bucket
+                  - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::${S3Bucket}'
       Tags:
         - Key: Name
-          Value: !Sub 'Role-${Environment}-${UniqueId}-EC2'
+          Value: !Sub 'Role-${Environment}-TAP-EC2'
         - Key: Environment
           Value: !Ref Environment
 
-  # Instance Profile for EC2
+  # Instance Profile for EC2 instances
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'Profile-${Environment}-${UniqueId}-EC2'
       Roles:
-        - !Ref EC2InstanceRole
+        - !Ref EC2Role
 
-  # ===== COMPUTE RESOURCES =====
-
-  # EC2 Instance for web hosting
-  WebServerInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
-      InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
-      VpcSecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      SubnetId: !Ref PublicSubnetA
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      Monitoring: true # Enable detailed monitoring
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<h1>Hello from ${Environment} Environment</h1>" > /var/www/html/index.html
-          echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-          echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
-      Tags:
-        - Key: Name
-          Value: !Sub 'EC2-${Environment}-${UniqueId}-WebServer'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Purpose
-          Value: Web hosting
-
-  # ===== STORAGE RESOURCES =====
+  # ===== STORAGE & DATA MANAGEMENT =====
 
   # S3 Bucket for application data
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 's3-${Environment}-${UniqueId}-${AWS::AccountId}-webdata'
+      BucketName: !Sub 's3-1930-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -296,202 +235,189 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub 'S3-${Environment}-${UniqueId}-WebData'
+          Value: !Sub 'S3-${Environment}-TAP-Data'
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
-          Value: Application data storage
+          Value: 'TAP Application Data Storage'
 
-  # ===== MONITORING AND ALERTING =====
+  # ===== MONITORING & ALERTING =====
 
-  # CloudWatch Alarm for high CPU utilization
-  HighCPUAlarm:
+  # CloudWatch Log Group
+  WebServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${Environment}/tap/webserver'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub 'LogGroup-${Environment}-TAP-WebServer'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Alarm for CPU Utilization - Instance 1
+  CPUAlarmInstance1:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'Alarm-${Environment}-${UniqueId}-HighCPU'
-      AlarmDescription: Alert when CPU utilization exceeds 70% for 5 minutes
+      AlarmName: !Sub 'CPUAlarm-${Environment}-TAP-Instance1'
+      AlarmDescription: 'CPU utilization alarm for EC2 Instance 1'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: 300 # 5 minutes
+      Period: 300
       EvaluationPeriods: 1
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: InstanceId
-          Value: !Ref WebServerInstance
+          Value: !Ref WebServerInstance1
       TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for CPU Utilization - Instance 2  
+  CPUAlarmInstance2:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'CPUAlarm-${Environment}-TAP-Instance2'
+      AlarmDescription: 'CPU utilization alarm for EC2 Instance 2'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref WebServerInstance2
+      TreatMissingData: notBreaching
+
+  # ===== COMPUTE RESOURCES =====
+
+  # EC2 Instance 1 in Subnet 1
+  WebServerInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      InstanceType: 't3.micro'
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      Monitoring: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd awscli
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>TAP Platform - Instance 1</h1>" > /var/www/html/index.html
+          echo "<p>Environment: ${Environment}</p>" >> /var/www/html/index.html
+          echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+          echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+          echo "<p>S3 Bucket: ${S3Bucket}</p>" >> /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Sub 'EC2-${Environment}-TAP-WebServer-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'TAP Web Server'
+
+  # EC2 Instance 2 in Subnet 2
+  WebServerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      InstanceType: 't3.micro'
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref PublicSubnet2
+      Monitoring: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd awscli
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>TAP Platform - Instance 2</h1>" > /var/www/html/index.html
+          echo "<p>Environment: ${Environment}</p>" >> /var/www/html/index.html
+          echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+          echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+          echo "<p>S3 Bucket: ${S3Bucket}</p>" >> /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Sub 'EC2-${Environment}-TAP-WebServer-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: 'TAP Web Server'
 
 # ===== OUTPUTS =====
 
 Outputs:
   VPCId:
-    Description: ID of the created VPC
+    Description: 'ID of the VPC'
     Value: !Ref VPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
-  PublicSubnetAId:
-    Description: ID of Public Subnet A
-    Value: !Ref PublicSubnetA
+  PublicSubnet1Id:
+    Description: 'ID of the first public subnet'
+    Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnetA-ID'
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
 
-  PublicSubnetBId:
-    Description: ID of Public Subnet B
-    Value: !Ref PublicSubnetB
+  PublicSubnet2Id:
+    Description: 'ID of the second public subnet'
+    Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnetB-ID'
-
-  EC2InstanceId:
-    Description: ID of the EC2 web server instance
-    Value: !Ref WebServerInstance
-
-  EC2PublicIP:
-    Description: Public IP address of the EC2 instance
-    Value: !GetAtt WebServerInstance.PublicIp
-
-  EC2PublicDNS:
-    Description: Public DNS name of the EC2 instance
-    Value: !GetAtt WebServerInstance.PublicDnsName
-
-  S3BucketName:
-    Description: Name of the created S3 bucket
-    Value: !Ref S3Bucket
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
 
   SecurityGroupId:
-    Description: ID of the web server security group
+    Description: 'ID of the web server security group'
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-SecurityGroup-ID'
 
-  WebsiteURL:
-    Description: URL of the web server
-    Value: !Sub 'http://${WebServerInstance.PublicDnsName}'
-```
-## Key Features Explained
-### 🔒 Security Best Practices
-- **Parameterized SSH Access**: SSH restricted to specified CIDR range, not open to the world
-- **Least Privilege IAM**: EC2 role has minimal permissions needed for S3 access
-- **Encrypted Storage**: S3 bucket uses server-side encryption with managed keys
-- **Public Access Blocked**: S3 bucket blocks all public access configurations
-### 🌐 Network Architecture
-- **Multi-AZ Design**: Resources distributed across multiple availability zones
-- **Dynamic AZ Selection**: Uses `!GetAZs` for region-agnostic deployment
-- **Proper Routing**: Internet gateway with route tables for public subnet access
-- **DNS Enabled**: VPC configured with DNS resolution and hostnames
+  S3BucketName:
+    Description: 'Name of the S3 bucket for application data'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket'
 
-### 📊 Monitoring & Operations
+  Instance1Id:
+    Description: 'ID of the first EC2 instance'
+    Value: !Ref WebServerInstance1
 
-- **Detailed Monitoring**: EC2 instance has CloudWatch detailed monitoring enabled
-- **CPU Alerting**: CloudWatch alarm monitors CPU usage with 70% threshold
-- **Resource Tagging**: Consistent tagging strategy for all resources
-- **Comprehensive Outputs**: All necessary resource references for integration
+  Instance2Id:
+    Description: 'ID of the second EC2 instance'  
+    Value: !Ref WebServerInstance2
 
-### 🔧 Operational Excellence
+  Instance1PublicIp:
+    Description: 'Public IP address of the first EC2 instance'
+    Value: !GetAtt WebServerInstance1.PublicIp
 
-- **Parameter Validation**: Input parameters have appropriate constraints and patterns
-- **Resource Dependencies**: Proper use of `DependsOn` and implicit dependencies
-- **User Data Script**: Automated web server setup with environment information
-- **Export Values**: Critical resource IDs exported for cross-stack references
+  Instance2PublicIp:
+    Description: 'Public IP address of the second EC2 instance'
+    Value: !GetAtt WebServerInstance2.PublicIp
 
-This template demonstrates production-ready infrastructure code with proper security, monitoring, and operational practices.
-SecurityGroupIngress: - IpProtocol: tcp
-FromPort: 22
-ToPort: 22
-CidrIp: !Ref SSHLocation - IpProtocol: tcp
-FromPort: 80
-ToPort: 80
-CidrIp: 0.0.0.0/0
-Tags: - Key: Environment
-Value: Development - Key: Name
-Value: SG-Development-!Ref UniqueId
+  Instance1PublicDNS:
+    Description: 'Public DNS name of the first EC2 instance'
+    Value: !GetAtt WebServerInstance1.PublicDnsName
 
-EC2Instance:
-Type: AWS::EC2::Instance
-Properties:
-InstanceType: t3.micro
-SubnetId: !Ref SubnetA
-ImageId: ami-0c02fb55956c7d316 # Latest Amazon Linux 2 in us-west-2, update if using another region
-KeyName: !Ref KeyPair
-SecurityGroupIds: - !Ref SecurityGroup
-Tags: - Key: Environment
-Value: Development - Key: Name
-Value: EC2-Development-!Ref UniqueId
+  Instance2PublicDNS:
+    Description: 'Public DNS name of the second EC2 instance'
+    Value: !GetAtt WebServerInstance2.PublicDnsName
 
-S3Bucket:
-Type: AWS::S3::Bucket
-Properties:
-BucketName: !Sub s3-development-${UniqueId}
-VersioningConfiguration:
-Status: Enabled
-BucketEncryption:
-ServerSideEncryptionConfiguration: - ServerSideEncryptionByDefault:
-SSEAlgorithm: AES256
-Tags: - Key: Environment
-Value: Development - Key: Name
-Value: S3-Development-!Ref UniqueId
+  WebSite1URL:
+    Description: 'URL of the first web server'
+    Value: !Sub 'http://${WebServerInstance1.PublicDnsName}'
 
-S3AccessRole:
-Type: AWS::IAM::Role
-Properties:
-RoleName: !Sub S3AccessRole-Development-${UniqueId}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
-      Policies:
-        - PolicyName: S3FullAccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:*
-                Resource: !Sub arn:aws:s3:::s3-development-${UniqueId}/\*
-
-      Tags:
-        - Key: Environment
-          Value: Development
-        - Key: Name
-          Value: IAMRole-Development-!Ref UniqueId
-
-InstanceProfile:
-Type: AWS::IAM::InstanceProfile
-Properties:
-Roles: - !Ref S3AccessRole
-InstanceProfileName: !Sub InstanceProfile-Development-${UniqueId}
-
-CWAlarm:
-Type: AWS::CloudWatch::Alarm
-Properties:
-AlarmDescription: Alarm if CPU > 70% for 5 minutes
-Namespace: AWS/EC2
-MetricName: CPUUtilization
-Dimensions: - Name: InstanceId
-Value: !Ref EC2Instance
-Statistic: Average
-Period: 300
-EvaluationPeriods: 1
-Threshold: 70
-ComparisonOperator: GreaterThanThreshold
-AlarmActions: []
-Tags: - Key: Environment
-Value: Development - Key: Name
-Value: CWAlarm-Development-!Ref UniqueId
-
-Outputs:
-VpcId:
-Value: !Ref VPC
-Description: The ID of the created VPC
-SubnetIds:
-Value: !Join [',', [!Ref SubnetA, !Ref SubnetB]]
-Description: The IDs of the created subnets
-EC2PublicIP:
-Value: !GetAtt EC2Instance.PublicIp
-Description: The public IP of the EC2 instance
+  WebSite2URL:
+    Description: 'URL of the second web server'
+    Value: !Sub 'http://${WebServerInstance2.PublicDnsName}'
