@@ -20,12 +20,22 @@ import (
 func loadDeploymentOutputs(t *testing.T) map[string]string {
 	t.Helper()
 
-	outputsPath := "/var/www/turing/iac-test-automations/worktree/synth-trainr964/cfn-outputs/flat-outputs.json"
+	outputsPath := "../cfn-outputs/flat-outputs.json"
 	data, err := os.ReadFile(outputsPath)
 	if err != nil {
 		t.Fatalf("failed to read deployment outputs: %v", err)
 	}
 
+	// First try to parse as nested structure (CDKTF format)
+	var nestedOutputs map[string]map[string]string
+	if err := json.Unmarshal(data, &nestedOutputs); err == nil {
+		// Find the first stack and return its outputs
+		for _, stackOutputs := range nestedOutputs {
+			return stackOutputs
+		}
+	}
+
+	// Fallback to flat structure
 	var outputs map[string]string
 	if err := json.Unmarshal(data, &outputs); err != nil {
 		t.Fatalf("failed to parse deployment outputs: %v", err)
