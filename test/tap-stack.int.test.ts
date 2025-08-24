@@ -140,7 +140,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(response.Reservations).toBeDefined();
       expect(response.Reservations!.length).toBeGreaterThan(0);
-      expect(response.Reservations![0].Instances![0].State.Name).toBe('running');
+      expect(response.Reservations![0].Instances).toBeDefined();
+      expect(response.Reservations![0].Instances!.length).toBeGreaterThan(0);
+      expect(response.Reservations![0].Instances![0].State).toBeDefined();
+      expect(response.Reservations![0].Instances![0].State!.Name).toBe('running');
     });
   });
 
@@ -157,12 +160,12 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const encryptionResponse = await s3Client.send(encryptionCommand);
 
       expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0]
-        .ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules!.length).toBeGreaterThan(0);
+      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0].ApplyServerSideEncryptionByDefault).toBeDefined();
+      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
       // S3 uses the key ID, not the ARN
       const expectedKeyId = outputs.KMSKeyId.split('/').pop();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0]
-        .ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(expectedKeyId);
+      expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0].ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(expectedKeyId);
     });
 
     test('S3 bucket should block public access', async () => {
