@@ -1,95 +1,232 @@
-package app;
+package com.nova.infrastructure;
 
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
+import software.amazon.awscdk.assertions.Match;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static software.amazon.awscdk.assertions.Match.objectLike;
 
 /**
  * Integration tests for the Main CDK application.
- * 
- * These tests verify the integration between different components of the TapStack
- * and may involve more complex scenarios than unit tests.
- * 
- * Note: These tests still use synthetic AWS resources and do not require
- * actual AWS credentials or resources to be created.
+ *
+ * These tests synthesize the stacks with production-like configurations
+ * to ensure they are valid before deployment.
  */
 public class MainIntegrationTest {
 
     /**
-     * Integration test for full stack deployment simulation.
-     * 
-     * This test verifies that the complete stack can be synthesized
-     * with all its components working together.
+     * Synthesizes a complete set of stacks for a given environment suffix.
+     * @param app The CDK App construct.
+     * @param environmentSuffix The suffix for the environment (e.g., "prod", "dev").
+     * @return The synthesized Template for the primary stack.
      */
-    @Test
-    public void testFullStackDeployment() {
-        App app = new App();
-        
-        // Create stack with production-like configuration
-        TapStack stack = new TapStack(app, "TapStackProd", TapStackProps.builder()
-                .environmentSuffix("prod")
+    private Template synthesizeFullApp(App app, String environmentSuffix) {
+        Main.NovaStack primaryStack = new Main.NovaStack(app, "NovaStack-Primary-" + environmentSuffix,
+            NovaStackProps.builder()
+                .isPrimary(true)
+                .environmentSuffix(environmentSuffix)
+                .stackProps(StackProps.builder().env(Environment.builder().region("us-west-2").build()).build())
                 .build());
 
-        // Create template and verify it can be synthesized
-        Template template = Template.fromStack(stack);
-        
-        // Verify stack configuration
-        assertThat(stack).isNotNull();
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
-        assertThat(template).isNotNull();
-    }
-
-    /**
-     * Integration test for multiple environment configurations.
-     * 
-     * This test verifies that the stack can be configured for different
-     * environments (dev, staging, prod) with appropriate settings.
-     */
-    @Test
-    public void testMultiEnvironmentConfiguration() {
-        App app = new App();
-
-        // Test different environment configurations
-        String[] environments = {"dev", "staging", "prod"};
-        
-        for (String env : environments) {
-            TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
-                    .environmentSuffix(env)
-                    .build());
-
-            // Verify each environment configuration
-            assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
-            
-            // Verify template can be created for each environment
-            Template template = Template.fromStack(stack);
-            assertThat(template).isNotNull();
-        }
-    }
-
-    /**
-     * Integration test for stack with nested components.
-     * 
-     * This test would verify the integration between the main stack
-     * and any nested stacks or components that might be added in the future.
-     */
-    @Test
-    public void testStackWithNestedComponents() {
-        App app = new App();
-        
-        TapStack stack = new TapStack(app, "TapStackIntegration", TapStackProps.builder()
-                .environmentSuffix("integration")
+        Main.NovaStack failoverStack = new Main.NovaStack(app, "NovaStack-Failover-" + environmentSuffix,
+            NovaStackProps.builder()
+                .isPrimary(false)
+                .environmentSuffix(environmentSuffix)
+                .stackProps(StackProps.builder().env(Environment.builder().region("eu-central-1").build()).build())
                 .build());
 
-        Template template = Template.fromStack(stack);
-        
-        // Verify basic stack structure
-        assertThat(stack).isNotNull();
-        assertThat(template).isNotNull();
-        
-        // When nested stacks are added, additional assertions would go here
-        // For example:
-        // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
+        new Main.Route53Stack(app, "NovaRoute53Stack-" + environmentSuffix,
+            Route53StackProps.builder()
+                .primaryLoadBalancer(primaryStack.getLoadBalancer())
+                .failoverLoadBalancer(failoverStack.getLoadBalancer())
+                .stackProps(StackProps.builder().crossRegionReferences(true).env(Environment.builder().region("us-east-1").build()).build())
+                .build());
+
+        // Synthesize the entire app to resolve cross-stack references
+        app.synth();
+
+        return Template.fromStack(primaryStack);
+    }
+
+    @Test
+    public void testFullStackDeploymentForProd() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "prod");
+        primaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1);
+        primaryTemplate.hasResourceProperties("AWS::SecretsManager::Secret", Map.of("Name", "nova/database/credentials-prod"));
+    }
+
+    @Test
+    public void testFullStackDeploymentForDev() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "dev");
+        primaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1);
+        primaryTemplate.hasResourceProperties("AWS::SecretsManager::Secret", Map.of("Name", "nova/database/credentials-dev"));
+    }
+
+    @Test
+    public void testFullStackDeploymentForStaging() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "staging");
+        primaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1);
+        primaryTemplate.hasResourceProperties("AWS::SecretsManager::Secret", Map.of("Name", "nova/database/credentials-staging"));
+    }
+
+    @Test
+    public void testVpcHasCorrectSubnetAndNatGatewayConfiguration() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-vpc");
+        primaryTemplate.resourceCountIs("AWS::EC2::Subnet", 6); // 3 AZs * (Public + Private)
+        primaryTemplate.resourceCountIs("AWS::EC2::NatGateway", 2);
+    }
+
+    @Test
+    public void testAlbListenerAndTargetGroupConfiguration() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-alb");
+        primaryTemplate.hasResourceProperties("AWS::ElasticLoadBalancingV2::TargetGroup", objectLike(Map.of(
+            "Port", 8080,
+            "Protocol", "HTTP",
+            "HealthCheck", objectLike(Map.of("Path", "/health"))
+        )));
+    }
+
+    @Test
+    public void testIamRoleHasSsmAndSecretsManagerPermissions() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-iam");
+        primaryTemplate.hasResourceProperties("AWS::IAM::Policy", objectLike(Map.of(
+            "PolicyDocument", objectLike(Map.of(
+                "Statement", Match.arrayWith(List.of(
+                    objectLike(Map.of(
+                        "Action", Match.arrayWith(List.of("secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret")),
+                        "Effect", "Allow"
+                    )),
+                    objectLike(Map.of(
+                        "Action", Match.arrayWith(List.of("logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents")),
+                        "Effect", "Allow"
+                    ))
+                ))
+            ))
+        )));
+    }
+
+    @Test
+    public void testDatabaseHasPerformanceInsightsEnabled() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-db");
+        primaryTemplate.hasResourceProperties("AWS::RDS::DBInstance", objectLike(Map.of(
+            "EnablePerformanceInsights", true
+        )));
+    }
+
+    @Test
+    public void testRoute53HealthCheckPointsToCorrectLoadBalancer() {
+        App app = new App();
+        Main.NovaStack primaryStack = new Main.NovaStack(app, "NovaStack-Primary-r53",
+            NovaStackProps.builder().isPrimary(true).environmentSuffix("r53")
+                .stackProps(StackProps.builder().env(Environment.builder().region("us-west-2").build()).build())
+                .build());
+        Main.Route53Stack route53Stack = new Main.Route53Stack(app, "NovaRoute53Stack-r53",
+            Route53StackProps.builder()
+                .primaryLoadBalancer(primaryStack.getLoadBalancer())
+                .failoverLoadBalancer(primaryStack.getLoadBalancer()) // Using same for simplicity
+                .stackProps(StackProps.builder().crossRegionReferences(true).env(Environment.builder().region("us-east-1").build()).build())
+                .build());
+
+        Template.fromStack(route53Stack).hasResourceProperties("AWS::Route53::HealthCheck", objectLike(Map.of(
+            "HealthCheckConfig", objectLike(Map.of(
+                "FullyQualifiedDomainName", objectLike(Map.of("Fn::GetAtt", Match.anyValue()))
+            ))
+        )));
+    }
+
+    // Adding more tests to reach the desired count, focusing on different aspects.
+
+    @Test
+    public void testPrimaryDbIsDeletionProtected() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-del-protect");
+        primaryTemplate.hasResourceProperties("AWS::RDS::DBInstance", objectLike(Map.of(
+            "DeletionProtection", true
+        )));
+    }
+
+    @Test
+    public void testFailoverDbIsNotDeletionProtected() {
+        // In this setup, the replica is not explicitly deletion protected.
+        App app = new App();
+        Main.NovaStack failoverStack = new Main.NovaStack(app, "NovaStack-Failover-del-protect",
+            NovaStackProps.builder().isPrimary(false).environmentSuffix("del-protect")
+                .stackProps(StackProps.builder().env(Environment.builder().region("eu-central-1").build()).build())
+                .build());
+        Template.fromStack(failoverStack).hasResourceProperties("AWS::RDS::DBInstance", objectLike(Map.of(
+            "DeletionProtection", Match.absent()
+        )));
+    }
+
+    @Test
+    public void testApplicationSecurityGroupAllowsAlbAccess() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-sg");
+        primaryTemplate.hasResourceProperties("AWS::EC2::SecurityGroupIngress", objectLike(Map.of(
+            "IpProtocol", "tcp",
+            "FromPort", 8080,
+            "ToPort", 8080,
+            "Description", "Application port from ALB"
+        )));
+    }
+
+    @Test
+    public void testDatabaseSecurityGroupAllowsAppAccess() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-db-sg");
+        primaryTemplate.hasResourceProperties("AWS::EC2::SecurityGroupIngress", objectLike(Map.of(
+            "IpProtocol", "tcp",
+            "FromPort", 5432,
+            "ToPort", 5432,
+            "Description", "PostgreSQL from application"
+        )));
+    }
+
+    @Test
+    public void testSecretHasCorrectGenerationRule() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-secret");
+        primaryTemplate.hasResourceProperties("AWS::SecretsManager::Secret", objectLike(Map.of(
+            "GenerateSecretString", objectLike(Map.of(
+                "SecretStringTemplate", "{\"username\": \"novaadmin\"}",
+                "GenerateStringKey", "password"
+            ))
+        )));
+    }
+
+    @Test
+    public void testRoute53ARecordHasCorrectAliasTarget() {
+        App app = new App();
+        Main.NovaStack primaryStack = new Main.NovaStack(app, "NovaStack-Primary-alias",
+            NovaStackProps.builder().isPrimary(true).environmentSuffix("alias")
+                .stackProps(StackProps.builder().env(Environment.builder().region("us-west-2").build()).build())
+                .build());
+        Main.Route53Stack route53Stack = new Main.Route53Stack(app, "NovaRoute53Stack-alias",
+            Route53StackProps.builder()
+                .primaryLoadBalancer(primaryStack.getLoadBalancer())
+                .failoverLoadBalancer(primaryStack.getLoadBalancer())
+                .stackProps(StackProps.builder().crossRegionReferences(true).env(Environment.builder().region("us-east-1").build()).build())
+                .build());
+
+        Template.fromStack(route53Stack).hasResourceProperties("AWS::Route53::RecordSet", objectLike(Map.of(
+            "AliasTarget", objectLike(Map.of(
+                "DNSName", objectLike(Map.of("Fn::GetAtt", Match.anyValue()))
+            ))
+        )));
+    }
+
+    @Test
+    public void testIamRoleHasManagedSsmPolicy() {
+        Template primaryTemplate = synthesizeFullApp(new App(), "integ-ssm-policy");
+        primaryTemplate.hasResourceProperties("AWS::IAM::Role", objectLike(Map.of(
+            "ManagedPolicyArns", Match.arrayWith(List.of(
+                objectLike(Map.of("Fn::Join", Match.arrayWith(List.of(
+                    Match.arrayWith(List.of("arn:", Match.anyValue(), ":iam::aws:policy/AmazonSSMManagedInstanceCore"))
+                ))))
+            ))
+        )));
     }
 }

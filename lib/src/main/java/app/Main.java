@@ -14,21 +14,127 @@ import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.secretsmanager.*;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
+import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * Nova Project Multi-Region High Availability CDK Stack
- *
- * This stack implements a multi-region architecture with:
- * - Primary region: us-west-2
- * - Failover region: eu-central-1
- * - Multi-region RDS PostgreSQL with automated failover
- * - Route 53 latency-based routing with health checks
- * - Secure IAM roles and security groups
- * - Comprehensive resource tagging
+ * NovaStackProps holds configuration for the NovaStack.
+ */
+class NovaStackProps {
+    private final boolean isPrimary;
+    private final String environmentSuffix;
+    private final StackProps stackProps;
+
+    private NovaStackProps(boolean isPrimary, String environmentSuffix, StackProps stackProps) {
+        this.isPrimary = isPrimary;
+        this.environmentSuffix = environmentSuffix;
+        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    }
+
+    public boolean isPrimary() {
+        return isPrimary;
+    }
+
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
+
+    public StackProps getStackProps() {
+        return stackProps;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private boolean isPrimary;
+        private String environmentSuffix;
+        private StackProps stackProps;
+
+        public Builder isPrimary(boolean isPrimary) {
+            this.isPrimary = isPrimary;
+            return this;
+        }
+
+        public Builder environmentSuffix(String environmentSuffix) {
+            this.environmentSuffix = environmentSuffix;
+            return this;
+        }
+
+        public Builder stackProps(StackProps stackProps) {
+            this.stackProps = stackProps;
+            return this;
+        }
+
+        public NovaStackProps build() {
+            return new NovaStackProps(isPrimary, environmentSuffix, stackProps);
+        }
+    }
+}
+
+/**
+ * Route53StackProps holds configuration for the Route53Stack.
+ */
+class Route53StackProps {
+    private final ApplicationLoadBalancer primaryLoadBalancer;
+    private final ApplicationLoadBalancer failoverLoadBalancer;
+    private final StackProps stackProps;
+
+    private Route53StackProps(ApplicationLoadBalancer primaryLb, ApplicationLoadBalancer failoverLb, StackProps stackProps) {
+        this.primaryLoadBalancer = primaryLb;
+        this.failoverLoadBalancer = failoverLb;
+        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    }
+
+    public ApplicationLoadBalancer getPrimaryLoadBalancer() {
+        return primaryLoadBalancer;
+    }
+
+    public ApplicationLoadBalancer getFailoverLoadBalancer() {
+        return failoverLoadBalancer;
+    }
+
+    public StackProps getStackProps() {
+        return stackProps;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private ApplicationLoadBalancer primaryLoadBalancer;
+        private ApplicationLoadBalancer failoverLoadBalancer;
+        private StackProps stackProps;
+
+        public Builder primaryLoadBalancer(ApplicationLoadBalancer primaryLoadBalancer) {
+            this.primaryLoadBalancer = primaryLoadBalancer;
+            return this;
+        }
+
+        public Builder failoverLoadBalancer(ApplicationLoadBalancer failoverLoadBalancer) {
+            this.failoverLoadBalancer = failoverLoadBalancer;
+            return this;
+        }
+
+        public Builder stackProps(StackProps stackProps) {
+            this.stackProps = stackProps;
+            return this;
+        }
+
+        public Route53StackProps build() {
+            return new Route53StackProps(primaryLoadBalancer, failoverLoadBalancer, stackProps);
+        }
+    }
+}
+
+
+/**
+ * Main entry point for the Nova CDK Java application.
  */
 public class Main {
 
@@ -39,28 +145,41 @@ public class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        // Create stacks for both regions
-        NovaStack primaryStack = new NovaStack(app, "NovaStack-Primary",
-            StackProps.builder()
-                .env(Environment.builder()
-                    .region(PRIMARY_REGION)
-                    .build())
-                .build(),
-            true); // isPrimary = true
+        // Get environment suffix from context or default to 'dev'
+        String environmentSuffix = Optional.ofNullable(app.getNode().tryGetContext("environmentSuffix"))
+                                           .map(Object::toString)
+                                           .orElse("dev");
 
-        NovaStack failoverStack = new NovaStack(app, "NovaStack-Failover",
-            StackProps.builder()
-                .env(Environment.builder()
-                    .region(FAILOVER_REGION)
+        // Create stacks for both regions using the new Props pattern
+        NovaStack primaryStack = new NovaStack(app, "NovaStack-Primary-" + environmentSuffix,
+            NovaStackProps.builder()
+                .isPrimary(true)
+                .environmentSuffix(environmentSuffix)
+                .stackProps(StackProps.builder()
+                    .env(Environment.builder()
+                        .region(PRIMARY_REGION)
+                        .build())
                     .build())
-                .build(),
-            false); // isPrimary = false
+                .build());
 
-        // Create global Route 53 stack
-        Route53Stack route53Stack = new Route53Stack(app, "NovaRoute53Stack",
-            StackProps.builder().build(),
-            primaryStack.getLoadBalancer(),
-            failoverStack.getLoadBalancer());
+        NovaStack failoverStack = new NovaStack(app, "NovaStack-Failover-" + environmentSuffix,
+            NovaStackProps.builder()
+                .isPrimary(false)
+                .environmentSuffix(environmentSuffix)
+                .stackProps(StackProps.builder()
+                    .env(Environment.builder()
+                        .region(FAILOVER_REGION)
+                        .build())
+                    .build())
+                .build());
+
+        // Create global Route 53 stack using the new Props pattern
+        new Route53Stack(app, "NovaRoute53Stack-" + environmentSuffix,
+            Route53StackProps.builder()
+                .primaryLoadBalancer(primaryStack.getLoadBalancer())
+                .failoverLoadBalancer(failoverStack.getLoadBalancer())
+                .stackProps(StackProps.builder().build())
+                .build());
 
         app.synth();
     }
@@ -72,10 +191,12 @@ public class Main {
         private final ApplicationLoadBalancer loadBalancer;
         private final DatabaseInstance database;
         private final boolean isPrimary;
+        private final String environmentSuffix;
 
-        public NovaStack(final App scope, final String id, final StackProps props, final boolean isPrimary) {
-            super(scope, id, props);
-            this.isPrimary = isPrimary;
+        public NovaStack(final Construct scope, final String id, final NovaStackProps props) {
+            super(scope, id, props.getStackProps());
+            this.isPrimary = props.isPrimary();
+            this.environmentSuffix = props.getEnvironmentSuffix();
 
             // Apply mandatory tagging to all resources in this stack
             Tags.of(this).add("Environment", "Production");
@@ -94,7 +215,7 @@ public class Main {
             dbSecurityGroup.addIngressRule(appSecurityGroup, Port.tcp(5432), "PostgreSQL from application");
 
             // Create IAM roles
-            Role appRole = createApplicationRole();
+            createApplicationRole();
 
             // Create database secret
             Secret dbSecret = createDatabaseSecret();
@@ -140,13 +261,11 @@ public class Main {
          * Creates security group for RDS database with minimal required access
          */
         private SecurityGroup createDatabaseSecurityGroup(Vpc vpc) {
-            SecurityGroup sg = SecurityGroup.Builder.create(this, "DatabaseSecurityGroup")
+            return SecurityGroup.Builder.create(this, "DatabaseSecurityGroup")
                 .vpc(vpc)
                 .description("Security group for Nova PostgreSQL database")
                 .allowAllOutbound(false)
                 .build();
-
-            return sg;
         }
 
         /**
@@ -227,7 +346,7 @@ public class Main {
          */
         private Secret createDatabaseSecret() {
             return Secret.Builder.create(this, "DatabaseSecret")
-                .secretName("nova/database/credentials")
+                .secretName("nova/database/credentials-" + this.environmentSuffix)
                 .description("Database credentials for Nova application")
                 .generateSecretString(SecretStringGenerator.builder()
                     .secretStringTemplate("{\"username\": \"novaadmin\"}")
@@ -246,7 +365,7 @@ public class Main {
             SubnetGroup subnetGroup = SubnetGroup.Builder.create(this, "DatabaseSubnetGroup")
                 .description("Subnet group for Nova database")
                 .vpc(vpc)
-                .subnetGroupName("nova-db-subnet-group-" + (isPrimary ? "primary" : "failover"))
+                .subnetGroupName("nova-db-subnet-group-" + (isPrimary ? "primary" : "failover") + "-" + this.environmentSuffix)
                 .vpcSubnets(SubnetSelection.builder()
                     .subnetType(SubnetType.PRIVATE_ISOLATED)
                     .build())
@@ -344,9 +463,11 @@ public class Main {
      */
     static class Route53Stack extends Stack {
 
-        public Route53Stack(final App scope, final String id, final StackProps props,
-                           final ApplicationLoadBalancer primaryLb, final ApplicationLoadBalancer failoverLb) {
-            super(scope, id, props);
+        public Route53Stack(final Construct scope, final String id, final Route53StackProps props) {
+            super(scope, id, props.getStackProps());
+
+            ApplicationLoadBalancer primaryLb = props.getPrimaryLoadBalancer();
+            ApplicationLoadBalancer failoverLb = props.getFailoverLoadBalancer();
 
             // Apply mandatory tagging
             Tags.of(this).add("Environment", "Production");
@@ -363,7 +484,6 @@ public class Main {
             CfnHealthCheck failoverHealthCheck = createHealthCheck("Failover", failoverLb.getLoadBalancerDnsName());
 
             // Create Route 53 records with latency-based routing for automated failover
-            // Health checks monitor each region and automatically route traffic away from unhealthy regions
             createLatencyRoutingRecord(hostedZone, "Primary", PRIMARY_REGION, primaryLb, primaryHealthCheck);
             createLatencyRoutingRecord(hostedZone, "Failover", FAILOVER_REGION, failoverLb, failoverHealthCheck);
         }
@@ -390,7 +510,7 @@ public class Main {
          * Creates latency-based routing record
          */
         private void createLatencyRoutingRecord(HostedZone hostedZone, String regionName, String region,
-                                              ApplicationLoadBalancer loadBalancer, CfnHealthCheck healthCheck) {
+                                                ApplicationLoadBalancer loadBalancer, CfnHealthCheck healthCheck) {
             ARecord.Builder.create(this, "ARecord" + regionName)
                 .zone(hostedZone)
                 .recordName(DOMAIN_NAME)
