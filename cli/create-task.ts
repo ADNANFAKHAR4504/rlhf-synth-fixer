@@ -77,6 +77,7 @@ function getLanguageChoices(platform: string) {
     return [
       { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' },
+      { name: 'Go', value: 'go' },
     ];
   }
 

@@ -66,6 +66,7 @@ jobs:
           download-artifacts: 'false'
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Build
         run: ./scripts/build.sh
@@ -93,6 +94,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -129,6 +131,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -194,6 +197,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       # Python setup is handled by the setup-environment action
 
@@ -217,6 +221,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
         run: ./scripts/unit-tests.sh
@@ -436,6 +441,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
