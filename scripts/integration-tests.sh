@@ -65,6 +65,12 @@ elif [ "$LANGUAGE" = "go" ]; then
     # Ensure CDK core deps are present
     export GOPROXY=${GOPROXY:-direct}
     go mod tidy
+
+  elif [ "$PLATFORM" = "pulumi" ]; then
+    echo "🔧 Pulumi Go project detected, ensuring dependencies..."
+    cd lib
+    go mod tidy
+    cd ..
   fi
 
   if [ -d "lib" ]; then
