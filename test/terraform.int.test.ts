@@ -67,8 +67,19 @@ common_tags = {
           fs.writeFileSync(originalProvider, providerContent);
         }
 
-        // Use local backend for integration testing to avoid S3 dependency
-        execSync('terraform init -reconfigure', { cwd: libDir, stdio: 'inherit' });
+        // Create a local test backend configuration
+        const testBackendConfig = `
+terraform {
+  backend "local" {}
+}
+`;
+        fs.writeFileSync(path.join(libDir, 'test_backend.tf'), testBackendConfig);
+
+        // Initialize Terraform with local backend for testing
+        execSync('terraform init -backend=true -backend-config=backend="local"', { 
+          cwd: libDir, 
+          stdio: 'inherit' 
+        });
 
         // For integration testing, we'll use static file analysis instead of terraform plan
         // to avoid requiring AWS credentials. This is more suitable for testing file structure
@@ -86,9 +97,18 @@ common_tags = {
     afterAll(() => {
       // Clean up temporary test files
       try {
-        if (fs.existsSync(testTfvars)) {
-          fs.unlinkSync(testTfvars);
-        }
+        // Clean up test files
+        const testFiles = [
+          testTfvars,
+          path.join(libDir, 'test_backend.tf'),
+          path.join(libDir, 'provider.tf.backup')
+        ];
+        
+        testFiles.forEach(file => {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+        });
         
         // Restore original provider.tf if backup exists
         const originalProvider = path.join(libDir, 'provider.tf');
@@ -96,7 +116,6 @@ common_tags = {
         
         if (fs.existsSync(backupProvider)) {
           fs.copyFileSync(backupProvider, originalProvider);
-          fs.unlinkSync(backupProvider);
         }
         
         // Clean up terraform files
