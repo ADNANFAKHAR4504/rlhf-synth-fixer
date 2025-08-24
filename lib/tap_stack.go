@@ -8,37 +8,37 @@ import (
 	jsii "github.com/aws/jsii-runtime-go"
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
-	provider "github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
-	vpc "github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
-	subnet "github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	alb "github.com/cdktf/cdktf-provider-aws-go/aws/v19/alb"
+	lbListener "github.com/cdktf/cdktf-provider-aws-go/aws/v19/alblistener"
+	tg "github.com/cdktf/cdktf-provider-aws-go/aws/v19/albtargetgroup"
+	asg "github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
+	amidata "github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 	igw "github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
+	lt "github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
+	provider "github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
 	rt "github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
 	rta "github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
 	sg "github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
-	alb "github.com/cdktf/cdktf-provider-aws-go/aws/v19/alb"
-	tg "github.com/cdktf/cdktf-provider-aws-go/aws/v19/albtargetgroup"
-	lbListener "github.com/cdktf/cdktf-provider-aws-go/aws/v19/alblistener"
-	asg "github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
-	lt "github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
-	amidata "github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
+	subnet "github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	vpc "github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 )
 
 // RegionConfig holds configuration specific to each AWS region
 type RegionConfig struct {
-	Region           string
+	Region            string
 	AvailabilityZones []string
-	CidrBlock        string
-	SubnetCidrs      []string
-	InstanceType     string
-	MinSize          int
-	MaxSize          int
-	DesiredCapacity  int
+	CidrBlock         string
+	SubnetCidrs       []string
+	InstanceType      string
+	MinSize           int
+	MaxSize           int
+	DesiredCapacity   int
 }
 
 // NewTapStack creates a new instance of our multi-region stack
 func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
-	
+
 	// Get environment suffix from environment variable
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
@@ -48,34 +48,34 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	// Define region configurations with specific settings for each region
 	regionConfigs := []RegionConfig{
 		{
-			Region:           "us-east-1",
+			Region:            "us-east-1",
 			AvailabilityZones: []string{"us-east-1a", "us-east-1b"},
-			CidrBlock:        "10.0.0.0/16",
-			SubnetCidrs:      []string{"10.0.1.0/24", "10.0.2.0/24"},
-			InstanceType:     "t3.micro",
-			MinSize:          2,
-			MaxSize:          10,
-			DesiredCapacity:  2,
+			CidrBlock:         "10.0.0.0/16",
+			SubnetCidrs:       []string{"10.0.1.0/24", "10.0.2.0/24"},
+			InstanceType:      "t3.micro",
+			MinSize:           2,
+			MaxSize:           10,
+			DesiredCapacity:   2,
 		},
 		{
-			Region:           "us-west-2",
+			Region:            "us-west-2",
 			AvailabilityZones: []string{"us-west-2a", "us-west-2b"},
-			CidrBlock:        "10.1.0.0/16",
-			SubnetCidrs:      []string{"10.1.1.0/24", "10.1.2.0/24"},
-			InstanceType:     "t3.micro",
-			MinSize:          2,
-			MaxSize:          10,
-			DesiredCapacity:  2,
+			CidrBlock:         "10.1.0.0/16",
+			SubnetCidrs:       []string{"10.1.1.0/24", "10.1.2.0/24"},
+			InstanceType:      "t3.micro",
+			MinSize:           2,
+			MaxSize:           10,
+			DesiredCapacity:   2,
 		},
 		{
-			Region:           "eu-central-1",
+			Region:            "eu-central-1",
 			AvailabilityZones: []string{"eu-central-1a", "eu-central-1b"},
-			CidrBlock:        "10.2.0.0/16",
-			SubnetCidrs:      []string{"10.2.1.0/24", "10.2.2.0/24"},
-			InstanceType:     "t3.micro",
-			MinSize:          2,
-			MaxSize:          10,
-			DesiredCapacity:  2,
+			CidrBlock:         "10.2.0.0/16",
+			SubnetCidrs:       []string{"10.2.1.0/24", "10.2.2.0/24"},
+			InstanceType:      "t3.micro",
+			MinSize:           2,
+			MaxSize:           10,
+			DesiredCapacity:   2,
 		},
 	}
 
@@ -90,7 +90,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Store ALB DNS names and zone IDs for outputs
 	albDnsNames := make(map[string]*string)
-	
+
 	// Deploy infrastructure in each region
 	for _, config := range regionConfigs {
 		regionProvider := providers[config.Region]
@@ -239,11 +239,11 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 `, config.Region)
 
 		launchTemplate := lt.NewLaunchTemplate(stack, jsii.String(fmt.Sprintf("lt-%s", config.Region)), &lt.LaunchTemplateConfig{
-			Name:         jsii.String(fmt.Sprintf("tap-%s-lt-%s", environmentSuffix, config.Region)),
-			ImageId:      ami.Id(),
-			InstanceType: jsii.String(config.InstanceType),
+			Name:                jsii.String(fmt.Sprintf("tap-%s-lt-%s", environmentSuffix, config.Region)),
+			ImageId:             ami.Id(),
+			InstanceType:        jsii.String(config.InstanceType),
 			VpcSecurityGroupIds: &[]*string{ec2Sg.Id()},
-			UserData: cdktf.Fn_Base64encode(cdktf.Fn_RawString(jsii.String(userData))),
+			UserData:            cdktf.Fn_Base64encode(cdktf.Fn_RawString(jsii.String(userData))),
 			Tags: &map[string]*string{
 				"Name":   jsii.String(fmt.Sprintf("tap-%s-lt-%s", environmentSuffix, config.Region)),
 				"Region": jsii.String(config.Region),
@@ -274,10 +274,10 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 
 		// Create Application Load Balancer
 		albResource := alb.NewAlb(stack, jsii.String(fmt.Sprintf("alb-%s", config.Region)), &alb.AlbConfig{
-			Name:           jsii.String(fmt.Sprintf("tap-%s-alb-%s", environmentSuffix, config.Region)),
+			Name:             jsii.String(fmt.Sprintf("tap-%s-alb-%s", environmentSuffix, config.Region)),
 			LoadBalancerType: jsii.String("application"),
-			Subnets:        &subnetIds,
-			SecurityGroups: &[]*string{albSg.Id()},
+			Subnets:          &subnetIds,
+			SecurityGroups:   &[]*string{albSg.Id()},
 			Tags: &map[string]*string{
 				"Name":   jsii.String(fmt.Sprintf("tap-%s-alb-%s", environmentSuffix, config.Region)),
 				"Region": jsii.String(config.Region),
@@ -304,14 +304,14 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 
 		// Create Auto Scaling Group
 		asg.NewAutoscalingGroup(stack, jsii.String(fmt.Sprintf("asg-%s", config.Region)), &asg.AutoscalingGroupConfig{
-			Name:               jsii.String(fmt.Sprintf("tap-%s-asg-%s", environmentSuffix, config.Region)),
-			VpcZoneIdentifier:  &subnetIds,
-			MinSize:            jsii.Number(float64(config.MinSize)),
-			MaxSize:            jsii.Number(float64(config.MaxSize)),
-			DesiredCapacity:    jsii.Number(float64(config.DesiredCapacity)),
-			HealthCheckType:    jsii.String("ELB"),
+			Name:                   jsii.String(fmt.Sprintf("tap-%s-asg-%s", environmentSuffix, config.Region)),
+			VpcZoneIdentifier:      &subnetIds,
+			MinSize:                jsii.Number(float64(config.MinSize)),
+			MaxSize:                jsii.Number(float64(config.MaxSize)),
+			DesiredCapacity:        jsii.Number(float64(config.DesiredCapacity)),
+			HealthCheckType:        jsii.String("ELB"),
 			HealthCheckGracePeriod: jsii.Number(300),
-			TargetGroupArns:    &[]*string{targetGroup.Arn()},
+			TargetGroupArns:        &[]*string{targetGroup.Arn()},
 			LaunchTemplate: &asg.AutoscalingGroupLaunchTemplate{
 				Id:      launchTemplate.Id(),
 				Version: jsii.String("$Latest"),
