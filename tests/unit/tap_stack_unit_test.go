@@ -33,12 +33,12 @@ func synthStack(t *testing.T, stackId string) string {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	NewTapStack(app, stackId, &TapStackProps{
-		EnvironmentSuffix:   "test",
-		StateBucket:         "test-bucket",
-		StateBucketRegion:   "us-east-1",
-		AwsRegion:          "us-west-2",
-		RepositoryName:     "test-repo",
-		CommitAuthor:       "test-author",
+		EnvironmentSuffix: "test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-west-2",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
 	})
 	app.Synth()
 
