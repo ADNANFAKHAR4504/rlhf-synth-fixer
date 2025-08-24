@@ -1,40 +1,49 @@
-# Multi-Environment AWS Infrastructure Requirements
+# AWS Infrastructure for Multi-Tenant SaaS Platform
 
-## Project Context
-We need to build a scalable AWS infrastructure that can be deployed across multiple environments (development, staging, production) with proper isolation and security controls. The infrastructure should support our web application workloads and provide centralized logging capabilities.
+## Background
+We're launching a new SaaS platform and need to set up our AWS infrastructure properly from day one. Our team has been burned by messy infrastructure in the past, so we want to do this right - with proper environments, security, and the ability to scale.
 
-## Infrastructure Requirements
+## What We're Building
+Our platform will serve multiple customers with isolated data, and we need infrastructure that can handle:
+- Web application hosting across multiple environments
+- Secure data storage and processing
+- Centralized logging and monitoring
+- Disaster recovery capabilities
 
-### Networking
-- VPC with public and private subnets across multiple availability zones
-- Internet gateway for public subnet connectivity
-- NAT gateways for private subnet outbound access
-- Proper routing tables and security group configurations
+## Current Situation
+- We have three AWS accounts (dev, staging, prod) in different regions
+- Our development team prefers Go and wants type-safe infrastructure code
+- We chose CDKTF because we want the benefits of Terraform with better developer experience
+- We need to deploy frequently and can't afford naming conflicts or deployment failures
 
-### Compute & Access Management
-- IAM roles for EC2 instances with Systems Manager access for remote management
-- IAM roles for Lambda functions with appropriate execution permissions
-- Cross-account access policies for centralized logging and monitoring
+## What We Need Help With
+I'm looking for a complete CDKTF Go implementation that includes:
 
-### Storage & Logging
-- S3 buckets for application logs with versioning enabled
-- Cross-region replication for disaster recovery
-- Server-side encryption for data at rest
-- Public access blocking for security compliance
+1. **Networking Setup**
+   - VPCs with proper subnet design (public/private across AZs)
+   - NAT gateways for secure outbound access
+   - All the routing and security groups we'll need
 
-### Environment Specifications
-- **Development**: us-east-1, 10.0.0.0/16 CIDR
-- **Staging**: us-east-2, 10.1.0.0/16 CIDR  
-- **Production**: us-west-1, 10.2.0.0/16 CIDR
+2. **Access Management**
+   - IAM roles for our EC2 instances and Lambda functions
+   - Cross-account policies for centralized logging
+   - Proper least-privilege access controls
 
-## Technical Constraints
-- Must use Infrastructure as Code (CDKTF with Go)
-- Support for CI/CD pipeline deployment with unique resource naming
-- Environment-specific configuration management
-- Comprehensive testing strategy (unit and integration tests)
+3. **Storage & Logging**
+   - S3 buckets for application logs with encryption
+   - Cross-region replication for compliance
+   - Versioning and lifecycle policies
+
+4. **Environment Management**
+   - Clean way to deploy the same code to dev/staging/prod
+   - Environment-specific configurations without code duplication
+   - Support for CI/CD pipelines with unique resource naming
 
 ## Success Criteria
-- Zero-downtime deployments across environments
-- No resource naming conflicts during parallel deployments
-- Proper error handling and validation
-- Complete infrastructure outputs for application integration
+- I should be able to run `cdktf deploy` and have everything work
+- No resource naming conflicts when multiple developers deploy
+- Proper security controls and encryption everywhere
+- Clear separation between environments
+- Code that my team can understand and maintain
+
+This is going into production, so I need something robust with proper error handling and best practices built in.

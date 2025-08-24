@@ -356,8 +356,8 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 			VpcId:     mainVPC.Id(),
 			CidrBlock: str(cidr),
 			// Use Fn_Element to safely access AZ list - this creates a Terraform function call
-			// instead of trying to resolve the value at synthesis time
-			AvailabilityZone:    jsii.String(cdktf.Fn_Element(availabilityZones.Names(), jsii.Number(i)).(string)),
+			// instead of trying to resolve the value at synthesis time  
+			AvailabilityZone:    jsii.String(fmt.Sprintf("${element(%s, %d)}", *availabilityZones.Fqn(), i)),
 			MapPublicIpOnLaunch: jsii.Bool(true),
 			Tags: &map[string]*string{
 				"Name":        str(fmt.Sprintf("%s-public-subnet-%d", cfg.Environment, i)),
@@ -426,7 +426,7 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 		privateSubnet := subnet.NewSubnet(stack, str(fmt.Sprintf("PrivateSubnet%d", i)), &subnet.SubnetConfig{
 			VpcId:            mainVPC.Id(),
 			CidrBlock:        str(cidr),
-			AvailabilityZone: jsii.String(cdktf.Fn_Element(availabilityZones.Names(), jsii.Number(i)).(string)),
+			AvailabilityZone: jsii.String(fmt.Sprintf("${element(%s, %d)}", *availabilityZones.Fqn(), i)),
 			Tags: &map[string]*string{
 				"Name":        str(fmt.Sprintf("%s-private-subnet-%d", cfg.Environment, i)),
 				"Type":        str("private"),
