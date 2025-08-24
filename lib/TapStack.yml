@@ -8,11 +8,11 @@ Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: 'Existing VPC ID where resources will be deployed'
-    Default: vpc-000a81111ab279330
+    Default: vpc-002dd1e7eb944d35a
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
-    Default: subnet-0f5eb8e64a7c7dc0b,subnet-0b753215d479ff8cc
+    Default: subnet-0214d97a7b880ee01,subnet-02a3baa16b423a792
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: 'Public subnet ID for Network ACL demonstration'
