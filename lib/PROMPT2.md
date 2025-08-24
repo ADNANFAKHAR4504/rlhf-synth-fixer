@@ -1,43 +1,68 @@
-Again code failed in build stage:
+Build Failed With Following Error
 ```
-
+/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:50: error: incompatible types: ComponentResourceOptions cannot be converted to CustomResourceOptions
+> Task :compileJava
+                .build(), providerOptions);
+                          ^
+/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:53: error: cannot find symbol
+            var azs = GetAvailabilityZones.invoke(GetAvailabilityZonesArgs.builder()
+                      ^
+  symbol:   variable GetAvailabilityZones
+  location: class Main
+/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:53: error: cannot find symbol
+            var azs = GetAvailabilityZones.invoke(GetAvailabilityZonesArgs.builder()
+                                                  ^
+  symbol:   variable GetAvailabilityZonesArgs
+  location: class Main
+/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:209: error: cannot find symbol
+            var amiId = GetAmi.invoke(GetAmiArgs.builder()
+                        ^
+  symbol:   variable GetAmi
+  location: class Main
+/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:209: error: cannot find symbol
+            var amiId = GetAmi.invoke(GetAmiArgs.builder()
+                                      ^
+  symbol:   variable GetAmiArgs
+  location: class Main
+Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output
+5 errors
+> Task :compileJava FAILED
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1755936530270.json
+[Incubating] Problems report is available at: file:///home/runner/work/iac-test-automations/iac-test-automations/build/reports/problems/problems-report.html
+FAILURE: Build failed with an exception.
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
 * What went wrong:
 Execution failed for task ':compileJava'.
 > Compilation failed; see the compiler output below.
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:223: error: no suitable method found for vpcSecurityGroupIds(List<Output<String>>)
-                  .vpcSecurityGroupIds(List.of(webSecurityGroup.id()))
-                  ^
-      method Builder.vpcSecurityGroupIds(Output<List<String>>) is not applicable
-        (argument mismatch; no instance(s) of type variable(s) E exist so that List<E> conforms to Output<List<String>>)
-      method Builder.vpcSecurityGroupIds(List<String>) is not applicable
-        (argument mismatch; inference variable E has incompatible bounds
-            equality constraints: String
-            lower bounds: Output<String>)
-      method Builder.vpcSecurityGroupIds(String...) is not applicable
-        (varargs mismatch; no instance(s) of type variable(s) E exist so that List<E> conforms to String)
-    where E is a type-variable:
-      E extends Object declared in method <E>of(E)
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:237: error: no suitable method found for vpcSecurityGroupIds(List<Output<String>>)
-                  .vpcSecurityGroupIds(List.of(webSecurityGroup.id()))
-                  ^
-      method Builder.vpcSecurityGroupIds(Output<List<String>>) is not applicable
-        (argument mismatch; no instance(s) of type variable(s) E exist so that List<E> conforms to Output<List<String>>)
-      method Builder.vpcSecurityGroupIds(List<String>) is not applicable
-        (argument mismatch; inference variable E has incompatible bounds
-            equality constraints: String
-            lower bounds: Output<String>)
-      method Builder.vpcSecurityGroupIds(String...) is not applicable
-        (varargs mismatch; no instance(s) of type variable(s) E exist so that List<E> conforms to String)
-    where E is a type-variable:
-      E extends Object declared in method <E>of(E)/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:9: error: cannot find symbol
-  import com.pulumi.aws.ec2.inputs.GetAvailabilityZonesArgs;
-                                  ^
-    symbol:   class GetAvailabilityZonesArgs
-    location: package com.pulumi.aws.ec2.inputs
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:47: error: cannot find symbol
-              var azs = com.pulumi.aws.ec2.Ec2Functions.getAvailabilityZones(GetAvailabilityZonesArgs.builder()
-                                                                             ^
+  Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:53: error: cannot find symbol
+              var azs = GetAvailabilityZones.invoke(GetAvailabilityZonesArgs.builder()
+                        ^
+    symbol:   variable GetAvailabilityZones
+    location: class Main
+  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:53: error: cannot find symbol
+              var azs = GetAvailabilityZones.invoke(GetAvailabilityZonesArgs.builder()
+                                                    ^
     symbol:   variable GetAvailabilityZonesArgs
     location: class Main
-  4 errors
+  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:209: error: cannot find symbol
+              var amiId = GetAmi.invoke(GetAmiArgs.builder()
+                          ^
+    symbol:   variable GetAmi
+    location: class Main
+  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:209: error: cannot find symbol
+              var amiId = GetAmi.invoke(GetAmiArgs.builder()
+                                        ^
+    symbol:   variable GetAmiArgs
+    location: class Main/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:50: error: incompatible types: ComponentResourceOptions cannot be converted to CustomResourceOptions
+                  .build(), providerOptions);
+                            ^
+  5 errors
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+BUILD FAILED in 33s
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+For more on this, please refer to https://docs.gradle.org/8.12/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+1 actionable task: 1 executed
+Error: Process completed with exit code 1.
 ```
