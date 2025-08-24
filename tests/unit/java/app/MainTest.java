@@ -2900,4 +2900,152 @@ public class MainTest {
             }
         }
     }
+
+    /**
+     * Test infrastructure configuration scenarios for comprehensive coverage.
+     * Validates various edge cases and configuration patterns.
+     */
+    @Test
+    void testInfrastructureConfigurationScenarios() {
+        // Test edge case configurations
+        assertDoesNotThrow(() -> {
+            // Test with minimum valid inputs
+            Map<String, String> minTags = Main.buildResourceTags("dev", "test");
+            assertNotNull(minTags);
+            assertEquals(2, minTags.size());
+            
+            // Test with special characters in environment names
+            Map<String, String> specialTags = Main.buildResourceTags("dev-test-123", "financial-app-2024");
+            assertNotNull(specialTags);
+            assertEquals("dev-test-123", specialTags.get("Environment"));
+            assertEquals("financial-app-2024", specialTags.get("Application"));
+        });
+        
+        // Test region and resource naming functionality
+        String region = Main.getRegion();
+        assertNotNull(region);
+        assertFalse(region.isEmpty());
+        assertTrue(Main.isValidAwsRegion(region));
+        
+        // Test CIDR validation functionality  
+        assertTrue(Main.isValidCidrBlock("10.0.0.0/16"));
+        assertTrue(Main.isValidCidrBlock("10.0.1.0/24"));
+        assertTrue(Main.isValidCidrBlock("10.0.2.0/24"));
+        assertFalse(Main.isValidCidrBlock("invalid-cidr"));
+    }
+
+    /**
+     * Test advanced validation scenarios for enhanced test coverage.
+     * Covers complex business logic and edge cases.
+     */
+    @Test
+    void testAdvancedValidationScenarios() {
+        // Test various input combinations and boundaries
+        String[] environments = {"dev", "staging", "prod", "test", "qa"};
+        String[] applications = {"financial-app", "trading-system", "risk-management"};
+        
+        for (String env : environments) {
+            for (String app : applications) {
+                Map<String, String> tags = Main.buildResourceTags(env, app);
+                assertNotNull(tags);
+                
+                // Validate required fields are present
+                assertTrue(tags.containsKey("Environment"));
+                assertTrue(tags.containsKey("Application"));
+                
+                // Validate no empty values
+                assertFalse(tags.get("Environment").isEmpty());
+                assertFalse(tags.get("Application").isEmpty());
+                
+                // Test with additional metadata
+                Map<String, String> enrichedTags = Main.buildResourceTags(env, app, "Owner", "DevOps-Team");
+                assertTrue(enrichedTags.size() > tags.size());
+                assertEquals("DevOps-Team", enrichedTags.get("Owner"));
+            }
+        }
+        
+        // Test CIDR and resource validation logic
+        assertTrue(Main.calculateSubnetSize("10.0.1.0/24") == 256);
+        assertTrue(Main.calculateSubnetSize("10.0.0.0/16") == 65536);
+        assertTrue(Main.isValidInstanceType("t3.micro"));
+        assertTrue(Main.isValidInstanceType("t3.small"));
+        assertFalse(Main.isValidInstanceType("invalid-instance-type"));
+    }
+
+    /**
+     * Test resource naming and tagging strategies.
+     * Ensures consistent naming conventions across resources.
+     */
+    @Test
+    void testResourceNamingAndTaggingStrategies() {
+        // Test resource name building and validation
+        String resourceName = Main.buildResourceName("test-prefix", "suffix123");
+        assertNotNull(resourceName);
+        assertTrue(resourceName.contains("test-prefix"));
+        assertTrue(resourceName.contains("suffix123"));
+        
+        // Test formatted resource names
+        String formattedName = Main.formatResourceName("EC2", "instance", "dev");
+        assertNotNull(formattedName);
+        assertFalse(formattedName.isEmpty());
+        
+        // Test tagging strategies with various scenarios
+        String[][] testCases = {
+            {"development", "financial-platform", "Team", "Backend"},
+            {"production", "trading-app", "CostCenter", "Trading"},
+            {"staging", "risk-engine", "Project", "RiskManagement"},
+            {"qa", "compliance-tool", "Owner", "ComplianceTeam"}
+        };
+        
+        for (String[] testCase : testCases) {
+            Map<String, String> tags = Main.buildResourceTags(testCase[0], testCase[1], testCase[2], testCase[3]);
+            
+            // Validate all expected tags are present
+            assertEquals(testCase[0], tags.get("Environment"));
+            assertEquals(testCase[1], tags.get("Application"));
+            assertEquals(testCase[3], tags.get(testCase[2]));
+            
+            // Validate tag count and structure
+            assertTrue(tags.size() >= 3);
+            assertFalse(tags.containsValue(""));
+            assertFalse(tags.containsValue(null));
+        }
+    }
+
+    /**
+     * Test security and compliance validation scenarios.
+     * Ensures infrastructure meets security requirements.
+     */
+    @Test
+    void testSecurityAndComplianceValidation() {
+        // Test security validations and policies
+        assertTrue(Main.isValidPort(443), "HTTPS port should be valid");
+        assertTrue(Main.isValidPort(80), "HTTP port should be valid"); 
+        assertFalse(Main.isValidPort(70000), "Invalid high port should fail");
+        assertFalse(Main.isValidPort(-1), "Negative port should fail");
+        
+        // Test protocol validation
+        assertTrue(Main.isValidProtocol("tcp"), "TCP protocol should be valid");
+        assertTrue(Main.isValidProtocol("udp"), "UDP protocol should be valid");
+        assertFalse(Main.isValidProtocol("invalid"), "Invalid protocol should fail");
+        
+        // Test tagging for compliance tracking
+        Map<String, String> complianceTags = Main.buildResourceTags("prod", "financial-app", "Compliance", "SOX");
+        assertEquals("SOX", complianceTags.get("Compliance"));
+        
+        // Test security-focused tagging
+        Map<String, String> securityTags = Main.buildResourceTags("prod", "financial-app", "DataClassification", "Confidential");
+        assertEquals("Confidential", securityTags.get("DataClassification"));
+        
+        // Test ARN validation for security resources
+        String validArn = "arn:aws:iam::123456789012:role/MyRole";
+        String invalidArn = "invalid-arn";
+        assertTrue(Main.isValidArn(validArn), "Valid ARN should pass validation");
+        assertFalse(Main.isValidArn(invalidArn), "Invalid ARN should fail validation");
+        
+        // Test S3 bucket name validation for security compliance
+        assertTrue(Main.isValidS3BucketName("financial-cloudtrail-logs-123"));
+        assertFalse(Main.isValidS3BucketName("InvalidBucketName_"));
+        assertFalse(Main.isValidS3BucketName(""));
+    }
 }
