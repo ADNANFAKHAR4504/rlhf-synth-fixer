@@ -1,4 +1,4 @@
-package app;
+package com.nova.infrastructure;
 
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.App;
@@ -232,10 +232,7 @@ public class MainIntegrationTest {
         final Template primaryTemplate = synthesizeFullApp(new App(), "integ-ssm-policy");
         primaryTemplate.hasResourceProperties("AWS::IAM::Role", objectLike(Map.of(
             "ManagedPolicyArns", Match.arrayWith(List.of(
-                Map.of("Fn::Join", Match.arrayWith(List.of(
-                    "",
-                    Match.arrayWith(List.of("arn:", Match.anyValue(), ":iam::aws:policy/AmazonSSMManagedInstanceCore"))
-                )))
+                Match.stringLikeRegexp(".*:iam::aws:policy/AmazonSSMManagedInstanceCore")
             ))
         )));
     }
