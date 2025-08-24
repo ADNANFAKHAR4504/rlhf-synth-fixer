@@ -33,18 +33,29 @@ type DeploymentOutputs struct {
 	PrivateSubnet1Id string `json:"PrivateSubnet1Id"`
 }
 
-func loadDeploymentOutputs(t *testing.T) DeploymentOutputs {
+// loadDeploymentOutputs loads the deployment outputs from flat-outputs.json
+func loadDeploymentOutputs(t *testing.T) map[string]string {
 	t.Helper()
 
-	outputsFile := "/var/www/turing/iac-test-automations/worktree/synth-trainr961/cfn-outputs/flat-outputs.json"
-	data, err := os.ReadFile(outputsFile)
+	outputsPath := "../cfn-outputs/flat-outputs.json"
+	data, err := os.ReadFile(outputsPath)
 	if err != nil {
-		t.Skipf("Integration test skipped: deployment outputs not found: %v", err)
+		t.Fatalf("failed to read deployment outputs: %v", err)
 	}
 
-	var outputs DeploymentOutputs
+	// First try to parse as nested structure (CDKTF format)
+	var nestedOutputs map[string]map[string]string
+	if err := json.Unmarshal(data, &nestedOutputs); err == nil {
+		// Find the first stack and return its outputs
+		for _, stackOutputs := range nestedOutputs {
+			return stackOutputs
+		}
+	}
+
+	// Fallback to flat structure
+	var outputs map[string]string
 	if err := json.Unmarshal(data, &outputs); err != nil {
-		t.Fatalf("Failed to parse deployment outputs: %v", err)
+		t.Fatalf("failed to parse deployment outputs: %v", err)
 	}
 
 	return outputs
@@ -81,7 +92,7 @@ func TestVPCExists(t *testing.T) {
 
 	ctx := context.Background()
 	input := &ec2.DescribeVpcsInput{
-		VpcIds: []string{outputs.VpcId},
+		VpcIds: []string{outputs["VpcId"]},
 	}
 
 	result, err := ec2Client.DescribeVpcs(ctx, input)
@@ -110,7 +121,7 @@ func TestSubnetsExist(t *testing.T) {
 
 	// Test public subnet
 	publicInput := &ec2.DescribeSubnetsInput{
-		SubnetIds: []string{outputs.PublicSubnet1Id},
+		SubnetIds: []string{outputs["PublicSubnet1Id"]},
 	}
 
 	publicResult, err := ec2Client.DescribeSubnets(ctx, publicInput)
@@ -129,7 +140,7 @@ func TestSubnetsExist(t *testing.T) {
 
 	// Test private subnet
 	privateInput := &ec2.DescribeSubnetsInput{
-		SubnetIds: []string{outputs.PrivateSubnet1Id},
+		SubnetIds: []string{outputs["PrivateSubnet1Id"]},
 	}
 
 	privateResult, err := ec2Client.DescribeSubnets(ctx, privateInput)
@@ -155,7 +166,7 @@ func TestS3BucketsExist(t *testing.T) {
 
 	// Test secure data bucket
 	secureInput := &s3.HeadBucketInput{
-		Bucket: aws.String(outputs.SecureDataBucket),
+		Bucket: aws.String(outputs["SecureDataBucket"]),
 	}
 
 	_, err := s3Client.HeadBucket(ctx, secureInput)
@@ -165,7 +176,7 @@ func TestS3BucketsExist(t *testing.T) {
 
 	// Test CloudTrail bucket
 	cloudtrailInput := &s3.HeadBucketInput{
-		Bucket: aws.String(outputs.CloudTrailBucket),
+		Bucket: aws.String(outputs["CloudTrailBucket"]),
 	}
 
 	_, err = s3Client.HeadBucket(ctx, cloudtrailInput)
@@ -182,7 +193,7 @@ func TestS3BucketEncryption(t *testing.T) {
 
 	// Check encryption on secure data bucket
 	encryptionInput := &s3.GetBucketEncryptionInput{
-		Bucket: aws.String(outputs.SecureDataBucket),
+		Bucket: aws.String(outputs["SecureDataBucket"]),
 	}
 
 	result, err := s3Client.GetBucketEncryption(ctx, encryptionInput)
@@ -210,7 +221,7 @@ func TestKMSKeyExists(t *testing.T) {
 
 	ctx := context.Background()
 	input := &kms.DescribeKeyInput{
-		KeyId: aws.String(outputs.KmsKeyId),
+		KeyId: aws.String(outputs["KmsKeyId"]),
 	}
 
 	result, err := kmsClient.DescribeKey(ctx, input)
@@ -237,7 +248,7 @@ func TestKMSKeyRotation(t *testing.T) {
 
 	ctx := context.Background()
 	input := &kms.GetKeyRotationStatusInput{
-		KeyId: aws.String(outputs.KmsKeyId),
+		KeyId: aws.String(outputs["KmsKeyId"]),
 	}
 
 	result, err := kmsClient.GetKeyRotationStatus(ctx, input)
@@ -256,7 +267,7 @@ func TestRDSInstanceExists(t *testing.T) {
 
 	ctx := context.Background()
 	input := &rds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: aws.String(outputs.RdsInstanceId),
+		DBInstanceIdentifier: aws.String(outputs["RdsInstanceId"]),
 	}
 
 	result, err := rdsClient.DescribeDBInstances(ctx, input)
@@ -348,7 +359,7 @@ func TestNetworkConnectivity(t *testing.T) {
 		Filter: []types.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []string{outputs.VpcId},
+				Values: []string{outputs["VpcId"]},
 			},
 			{
 				Name:   aws.String("state"),
@@ -371,7 +382,7 @@ func TestNetworkConnectivity(t *testing.T) {
 		Filters: []types.Filter{
 			{
 				Name:   aws.String("attachment.vpc-id"),
-				Values: []string{outputs.VpcId},
+				Values: []string{outputs["VpcId"]},
 			},
 		},
 	}
@@ -395,7 +406,7 @@ func TestSecurityGroups(t *testing.T) {
 		Filters: []types.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []string{outputs.VpcId},
+				Values: []string{outputs["VpcId"]},
 			},
 		},
 	}
@@ -435,7 +446,7 @@ func TestResourceTags(t *testing.T) {
 
 	ctx := context.Background()
 	input := &ec2.DescribeVpcsInput{
-		VpcIds: []string{outputs.VpcId},
+		VpcIds: []string{outputs["VpcId"]},
 	}
 
 	result, err := ec2Client.DescribeVpcs(ctx, input)
@@ -474,7 +485,7 @@ func TestS3BucketPolicy(t *testing.T) {
 
 	// Get bucket policy
 	policyInput := &s3.GetBucketPolicyInput{
-		Bucket: aws.String(outputs.SecureDataBucket),
+		Bucket: aws.String(outputs["SecureDataBucket"]),
 	}
 
 	result, err := s3Client.GetBucketPolicy(ctx, policyInput)
@@ -520,35 +531,35 @@ func TestDeploymentIntegrity(t *testing.T) {
 	outputs := loadDeploymentOutputs(t)
 
 	// Verify all expected outputs are present
-	if outputs.VpcId == "" {
+	if outputs["VpcId"] == "" {
 		t.Error("VPC ID is missing")
 	}
 
-	if outputs.SecureDataBucket == "" {
+	if outputs["SecureDataBucket"] == "" {
 		t.Error("Secure data bucket name is missing")
 	}
 
-	if outputs.CloudTrailBucket == "" {
+	if outputs["CloudTrailBucket"] == "" {
 		t.Error("CloudTrail bucket name is missing")
 	}
 
-	if outputs.KmsKeyId == "" {
+	if outputs["KmsKeyId"] == "" {
 		t.Error("KMS key ID is missing")
 	}
 
-	if outputs.RdsInstanceId == "" {
+	if outputs["RdsInstanceId"] == "" {
 		t.Error("RDS instance ID is missing")
 	}
 
-	if outputs.PublicSubnet1Id == "" {
+	if outputs["PublicSubnet1Id"] == "" {
 		t.Error("Public subnet ID is missing")
 	}
 
-	if outputs.PrivateSubnet1Id == "" {
+	if outputs["PrivateSubnet1Id"] == "" {
 		t.Error("Private subnet ID is missing")
 	}
 
-	t.Logf("All deployment outputs verified: VPC=%s, RDS=%s", outputs.VpcId, outputs.RdsInstanceId)
+	t.Logf("All deployment outputs verified: VPC=%s, RDS=%s", outputs["VpcId"], outputs["RdsInstanceId"])
 }
 
 func TestResourceConnections(t *testing.T) {
@@ -559,7 +570,7 @@ func TestResourceConnections(t *testing.T) {
 
 	// Verify RDS is in the correct subnets
 	rdsInput := &rds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: aws.String(outputs.RdsInstanceId),
+		DBInstanceIdentifier: aws.String(outputs["RdsInstanceId"]),
 	}
 
 	rdsResult, err := rdsClient.DescribeDBInstances(ctx, rdsInput)
@@ -573,7 +584,7 @@ func TestResourceConnections(t *testing.T) {
 		// Check if DB is in VPC
 		if dbInstance.DBSubnetGroup == nil {
 			t.Error("RDS instance not in a subnet group")
-		} else if dbInstance.DBSubnetGroup.VpcId == nil || *dbInstance.DBSubnetGroup.VpcId != outputs.VpcId {
+		} else if dbInstance.DBSubnetGroup.VpcId == nil || *dbInstance.DBSubnetGroup.VpcId != outputs["VpcId"] {
 			t.Error("RDS instance not in the correct VPC")
 		}
 	}
@@ -583,7 +594,7 @@ func TestResourceConnections(t *testing.T) {
 		Filters: []types.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []string{outputs.VpcId},
+				Values: []string{outputs["VpcId"]},
 			},
 		},
 	}
@@ -627,28 +638,28 @@ func TestInfrastructureHealth(t *testing.T) {
 
 		// Quick health checks for each service
 		_, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.VpcId},
+			VpcIds: []string{outputs["VpcId"]},
 		})
 		if err != nil {
 			t.Logf("VPC health check failed: %v", err)
 		}
 
 		_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
-			Bucket: aws.String(outputs.SecureDataBucket),
+			Bucket: aws.String(outputs["SecureDataBucket"]),
 		})
 		if err != nil {
 			t.Logf("S3 health check failed: %v", err)
 		}
 
 		_, err = kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{
-			KeyId: aws.String(outputs.KmsKeyId),
+			KeyId: aws.String(outputs["KmsKeyId"]),
 		})
 		if err != nil {
 			t.Logf("KMS health check failed: %v", err)
 		}
 
 		_, err = rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
-			DBInstanceIdentifier: aws.String(outputs.RdsInstanceId),
+			DBInstanceIdentifier: aws.String(outputs["RdsInstanceId"]),
 		})
 		if err != nil {
 			t.Logf("RDS health check failed: %v", err)
