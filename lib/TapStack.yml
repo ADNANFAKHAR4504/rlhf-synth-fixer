@@ -12,7 +12,7 @@ Parameters:
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'List of private subnet IDs for RDS and secure resources'
-    Default: subnet-0f5eb8e64a7c7dc0b
+    Default: subnet-0f5eb8e64a7c7dc0b,subnet-0b753215d479ff8cc
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: 'Public subnet ID for Network ACL demonstration'
