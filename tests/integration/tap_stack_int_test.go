@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	jsii "github.com/aws/jsii-runtime-go"
@@ -128,15 +129,16 @@ func Test_Synth_EndToEndInfrastructureAndOutputs(t *testing.T) {
 
 func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 	environments := []struct {
-		env                string
-		expectedRegion     string
-		expectedVPCCidr    string
-		expectedBucket     string
-		expectedRolePrefix string
+		env               string
+		expectedRegion    string
+		expectedVPCCidr   string
+		expectedAccountID string
+		bucketPrefix      string
+		rolePrefix        string
 	}{
-		{"dev", "us-east-1", "10.0.0.0/16", "my-company-logs-dev", "dev"},
-		{"staging", "us-east-2", "10.1.0.0/16", "my-company-logs-staging", "staging"},
-		{"prod", "us-west-1", "10.2.0.0/16", "my-company-logs-prod", "prod"},
+		{"dev", "us-east-1", "10.0.0.0/16", "123456789012", "logs-123456789012-dev-", "dev-"},
+		{"staging", "us-east-2", "10.1.0.0/16", "123456789013", "logs-123456789013-staging-", "staging-"},
+		{"prod", "us-west-1", "10.2.0.0/16", "123456789014", "logs-123456789014-prod-", "prod-"},
 	}
 
 	for _, env := range environments {
@@ -193,23 +195,33 @@ func Test_Synth_MultiEnvironment_ConfigurationDifferences(t *testing.T) {
 				t.Fatalf("vpc cidr = %v, want %s", vpc["cidr_block"], env.expectedVPCCidr)
 			}
 
-			// Validate bucket names
+			// Validate bucket names follow new pattern
 			loggingBucket := resources["aws_s3_bucket"].(map[string]any)["LoggingBucket"].(map[string]any)
-			if loggingBucket["bucket"] != env.expectedBucket {
-				t.Fatalf("logging bucket = %v, want %s", loggingBucket["bucket"], env.expectedBucket)
+			bucketName, ok := loggingBucket["bucket"].(string)
+			if !ok {
+				t.Fatalf("bucket name is not a string: %v", loggingBucket["bucket"])
+			}
+			if !strings.HasPrefix(bucketName, env.bucketPrefix) {
+				t.Fatalf("logging bucket = %v, want prefix %s", bucketName, env.bucketPrefix)
 			}
 
-			// Validate role names contain environment prefix
+			// Validate role names contain environment prefix and random suffix
 			ec2Role := resources["aws_iam_role"].(map[string]any)["EC2Role"].(map[string]any)
-			expectedEC2RoleName := env.expectedRolePrefix + "-ec2-role"
-			if ec2Role["name"] != expectedEC2RoleName {
-				t.Fatalf("ec2 role name = %v, want %s", ec2Role["name"], expectedEC2RoleName)
+			ec2RoleName, ok := ec2Role["name"].(string)
+			if !ok {
+				t.Fatalf("ec2 role name is not a string: %v", ec2Role["name"])
+			}
+			if !strings.HasPrefix(ec2RoleName, env.rolePrefix) || !strings.HasSuffix(ec2RoleName, "-ec2-role") {
+				t.Fatalf("ec2 role name = %v, want prefix %s and suffix -ec2-role", ec2RoleName, env.rolePrefix)
 			}
 
 			lambdaRole := resources["aws_iam_role"].(map[string]any)["LambdaRole"].(map[string]any)
-			expectedLambdaRoleName := env.expectedRolePrefix + "-lambda-role"
-			if lambdaRole["name"] != expectedLambdaRoleName {
-				t.Fatalf("lambda role name = %v, want %s", lambdaRole["name"], expectedLambdaRoleName)
+			lambdaRoleName, ok := lambdaRole["name"].(string)
+			if !ok {
+				t.Fatalf("lambda role name is not a string: %v", lambdaRole["name"])
+			}
+			if !strings.HasPrefix(lambdaRoleName, env.rolePrefix) || !strings.HasSuffix(lambdaRoleName, "-lambda-role") {
+				t.Fatalf("lambda role name = %v, want prefix %s and suffix -lambda-role", lambdaRoleName, env.rolePrefix)
 			}
 		})
 	}

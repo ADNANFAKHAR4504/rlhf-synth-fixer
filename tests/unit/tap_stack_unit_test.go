@@ -246,8 +246,13 @@ func Test_Synth_S3ResourcesPresentAndConfigured(t *testing.T) {
 	if loggingBucket == nil {
 		t.Fatalf("aws_s3_bucket.LoggingBucket missing")
 	}
-	if loggingBucket["bucket"] != "my-company-logs-dev" {
-		t.Fatalf("bucket name = %v, want my-company-logs-dev", loggingBucket["bucket"])
+	bucketName, ok := loggingBucket["bucket"].(string)
+	if !ok {
+		t.Fatalf("bucket name is not a string: %v", loggingBucket["bucket"])
+	}
+	// Check that bucket name follows the new pattern: logs-{accountID}-{suffix}-{randomSuffix}
+	if !strings.HasPrefix(bucketName, "logs-123456789012-dev-") {
+		t.Fatalf("bucket name = %v, want prefix logs-123456789012-dev-", bucketName)
 	}
 
 	// Replication Bucket
@@ -255,8 +260,13 @@ func Test_Synth_S3ResourcesPresentAndConfigured(t *testing.T) {
 	if replicationBucket == nil {
 		t.Fatalf("aws_s3_bucket.ReplicationBucket missing")
 	}
-	if replicationBucket["bucket"] != "my-company-logs-dev-replica" {
-		t.Fatalf("bucket name = %v, want my-company-logs-dev-replica", replicationBucket["bucket"])
+	replicationBucketName, ok := replicationBucket["bucket"].(string)
+	if !ok {
+		t.Fatalf("replication bucket name is not a string: %v", replicationBucket["bucket"])
+	}
+	// Check that replication bucket name follows the new pattern: logs-replica-{accountID}-{suffix}-{randomSuffix}
+	if !strings.HasPrefix(replicationBucketName, "logs-replica-123456789012-dev-") {
+		t.Fatalf("replication bucket name = %v, want prefix logs-replica-123456789012-dev-", replicationBucketName)
 	}
 
 	// Versioning
@@ -357,14 +367,15 @@ func Test_Provider_Region_SetProperly(t *testing.T) {
 
 func Test_Environment_Specific_Configuration(t *testing.T) {
 	tests := []struct {
-		env             string
-		expectedRegion  string
-		expectedVPCCidr string
-		expectedBucket  string
+		env               string
+		expectedRegion    string
+		expectedVPCCidr   string
+		expectedAccountID string
+		bucketPrefix      string
 	}{
-		{"dev", "us-east-1", "10.0.0.0/16", "my-company-logs-dev"},
-		{"staging", "us-east-2", "10.1.0.0/16", "my-company-logs-staging"},
-		{"prod", "us-west-1", "10.2.0.0/16", "my-company-logs-prod"},
+		{"dev", "us-east-1", "10.0.0.0/16", "123456789012", "logs-123456789012-dev-"},
+		{"staging", "us-east-2", "10.1.0.0/16", "123456789013", "logs-123456789013-staging-"},
+		{"prod", "us-west-1", "10.2.0.0/16", "123456789014", "logs-123456789014-prod-"},
 	}
 
 	for _, tt := range tests {
@@ -396,10 +407,14 @@ func Test_Environment_Specific_Configuration(t *testing.T) {
 				t.Fatalf("vpc cidr_block = %v, want %s", vpc["cidr_block"], tt.expectedVPCCidr)
 			}
 
-			// Check bucket name
+			// Check bucket name follows new pattern
 			bucket := asMap(asMap(resources["aws_s3_bucket"])["LoggingBucket"])
-			if bucket["bucket"] != tt.expectedBucket {
-				t.Fatalf("bucket name = %v, want %s", bucket["bucket"], tt.expectedBucket)
+			bucketName, ok := bucket["bucket"].(string)
+			if !ok {
+				t.Fatalf("bucket name is not a string: %v", bucket["bucket"])
+			}
+			if !strings.HasPrefix(bucketName, tt.bucketPrefix) {
+				t.Fatalf("bucket name = %v, want prefix %s", bucketName, tt.bucketPrefix)
 			}
 		})
 	}
@@ -422,6 +437,13 @@ func Test_S3Policy_CrossAccountAccess(t *testing.T) {
 	if len(stmts) == 0 {
 		t.Fatalf("policy has no statements")
 	}
+
+	// Get the actual bucket names from the resources to validate policy references
+	loggingBucket := asMap(asMap(resources["aws_s3_bucket"])["LoggingBucket"])
+	replicationBucket := asMap(asMap(resources["aws_s3_bucket"])["ReplicationBucket"])
+	loggingBucketName, _ := loggingBucket["bucket"].(string)
+	replicationBucketName, _ := replicationBucket["bucket"].(string)
+
 	var hasGetPut, hasListBucket bool
 	for _, s := range stmts {
 		sm := asMap(s)
@@ -453,19 +475,19 @@ func Test_S3Policy_CrossAccountAccess(t *testing.T) {
 		for _, a := range acts {
 			if a == "s3:GetObject" || a == "s3:PutObject" || a == "s3:DeleteObject" {
 				hasGetPut = true
-				// ensure access is scoped to specific buckets
+				// ensure access is scoped to specific buckets (check for either bucket name)
 				for _, r := range res {
-					if !strings.Contains(r, "my-company-logs-dev") {
-						t.Fatalf("S3 object actions should be scoped to specific buckets: %v", res)
+					if !strings.Contains(r, loggingBucketName) && !strings.Contains(r, replicationBucketName) {
+						t.Fatalf("S3 object actions should be scoped to specific buckets, got: %v, expected to contain %s or %s", res, loggingBucketName, replicationBucketName)
 					}
 				}
 			}
 			if a == "s3:ListBucket" {
 				hasListBucket = true
-				// ensure list is scoped to specific buckets
+				// ensure list is scoped to specific buckets (check for either bucket name)
 				for _, r := range res {
-					if !strings.Contains(r, "my-company-logs-dev") {
-						t.Fatalf("S3 list actions should be scoped to specific buckets: %v", res)
+					if !strings.Contains(r, loggingBucketName) && !strings.Contains(r, replicationBucketName) {
+						t.Fatalf("S3 list actions should be scoped to specific buckets, got: %v, expected to contain %s or %s", res, loggingBucketName, replicationBucketName)
 					}
 				}
 			}

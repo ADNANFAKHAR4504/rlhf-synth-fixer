@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,9 +37,11 @@ import (
 
 // EnvironmentConfig holds all environment-specific configuration
 type EnvironmentConfig struct {
-	Environment string
-	Region      string
-	AccountID   string
+	Environment  string
+	Region       string
+	AccountID    string
+	Suffix       string // Environment suffix for resource naming
+	RandomSuffix string // Random suffix to avoid naming conflicts
 	// Networking
 	VPCCidr            string
 	PublicSubnetCidrs  []string
@@ -113,6 +117,44 @@ func main() {
 
 func str(v string) *string { return &v }
 
+// generateRandomSuffix creates a random 6-character suffix for resource naming
+func generateRandomSuffix() string {
+	bytes := make([]byte, 3)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to a simple timestamp-based suffix if random generation fails
+		return fmt.Sprintf("%d", os.Getpid()%1000000)
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// getEnvironmentSuffix returns the environment suffix from environment variables
+func getEnvironmentSuffix(environment string) string {
+	suffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if suffix == "" {
+		suffix = environment
+	}
+	return suffix
+}
+
+// getAccountID returns the account ID from environment variable or uses placeholder
+func getAccountID(environment string) string {
+	accountID := os.Getenv("AWS_ACCOUNT_ID")
+	if accountID == "" {
+		// Use environment-specific placeholder if no account ID is provided
+		switch environment {
+		case "dev":
+			return "123456789012" // Replace with your dev account ID
+		case "staging":
+			return "123456789013" // Replace with your staging account ID
+		case "prod":
+			return "123456789014" // Replace with your prod account ID
+		default:
+			return "123456789012" // Default fallback
+		}
+	}
+	return accountID
+}
+
 // GetConfig returns the configuration for the specified environment
 func GetConfig(env string) (*EnvironmentConfig, error) {
 	configs := map[string]*EnvironmentConfig{
@@ -130,65 +172,90 @@ func GetConfig(env string) (*EnvironmentConfig, error) {
 }
 
 func getDevConfig() *EnvironmentConfig {
+	environment := "dev"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
+
 	return &EnvironmentConfig{
-		Environment:        "dev",
+		Environment:        environment,
 		Region:             "us-east-1",
-		AccountID:          "123456789012", // Replace with your dev account ID
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
 		VPCCidr:            "10.0.0.0/16",
 		PublicSubnetCidrs:  []string{"10.0.1.0/24", "10.0.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.0.10.0/24", "10.0.20.0/24"},
-		LoggingBucket:      "my-company-logs-dev",
-		ReplicationBucket:  "my-company-logs-dev-replica",
-		RolePrefix:         "dev",
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
 		CommonTags: map[string]string{
-			"Environment": "dev",
+			"Environment": environment,
 			"Project":     "infrastructure",
 			"ManagedBy":   "cdktf",
+			"Suffix":      suffix,
 		},
 	}
 }
 
 func getStagingConfig() *EnvironmentConfig {
+	environment := "staging"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
+
 	return &EnvironmentConfig{
-		Environment:        "staging",
+		Environment:        environment,
 		Region:             "us-east-2",
-		AccountID:          "123456789013", // Replace with your staging account ID
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
 		VPCCidr:            "10.1.0.0/16",
 		PublicSubnetCidrs:  []string{"10.1.1.0/24", "10.1.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.1.10.0/24", "10.1.20.0/24"},
-		LoggingBucket:      "my-company-logs-staging",
-		ReplicationBucket:  "my-company-logs-staging-replica",
-		RolePrefix:         "staging",
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
 		CommonTags: map[string]string{
-			"Environment": "staging",
+			"Environment": environment,
 			"Project":     "infrastructure",
 			"ManagedBy":   "cdktf",
+			"Suffix":      suffix,
 		},
 	}
 }
 
 func getProdConfig() *EnvironmentConfig {
+	environment := "prod"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
+
 	return &EnvironmentConfig{
-		Environment:        "prod",
+		Environment:        environment,
 		Region:             "us-west-1",
-		AccountID:          "123456789014", // Replace with your prod account ID
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
 		VPCCidr:            "10.2.0.0/16",
 		PublicSubnetCidrs:  []string{"10.2.1.0/24", "10.2.2.0/24"},
 		PrivateSubnetCidrs: []string{"10.2.10.0/24", "10.2.20.0/24"},
-		LoggingBucket:      "my-company-logs-prod",
-		ReplicationBucket:  "my-company-logs-prod-replica",
-		RolePrefix:         "prod",
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
 		CommonTags: map[string]string{
-			"Environment": "prod",
+			"Environment": environment,
 			"Project":     "infrastructure",
 			"ManagedBy":   "cdktf",
+			"Suffix":      suffix,
 		},
 	}
 }
 
 // BuildInfrastructureStack provisions the complete multi-environment infrastructure
 func BuildInfrastructureStack(stack cdktf.TerraformStack, cfg *EnvironmentConfig) {
-	// Provider
+	// Configure AWS provider with region-specific settings
+	// This creates the Terraform provider block in the generated JSON
 	awscdktf.NewAwsProvider(stack, str("aws"), &awscdktf.AwsProviderConfig{Region: &cfg.Region})
 
 	// Build VPC component
@@ -286,8 +353,10 @@ func buildVPCComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *VPCC
 
 	for i, cidr := range cfg.PublicSubnetCidrs {
 		publicSubnet := subnet.NewSubnet(stack, str(fmt.Sprintf("PublicSubnet%d", i)), &subnet.SubnetConfig{
-			VpcId:               mainVPC.Id(),
-			CidrBlock:           str(cidr),
+			VpcId:     mainVPC.Id(),
+			CidrBlock: str(cidr),
+			// Use Fn_Element to safely access AZ list - this creates a Terraform function call
+			// instead of trying to resolve the value at synthesis time
 			AvailabilityZone:    jsii.String(cdktf.Fn_Element(availabilityZones.Names(), jsii.Number(i)).(string)),
 			MapPublicIpOnLaunch: jsii.Bool(true),
 			Tags: &map[string]*string{
@@ -427,7 +496,11 @@ func buildIAMComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *IAMC
 		},
 	}
 
-	ec2PolicyJSON, _ := json.Marshal(ec2AssumeRolePolicy)
+	ec2PolicyJSON, err := json.Marshal(ec2AssumeRolePolicy)
+	if err != nil {
+		fmt.Printf("Error marshalling EC2 assume role policy: %v\n", err)
+		return nil
+	}
 
 	// Create EC2 role
 	ec2Role := iamrole.NewIamRole(stack, str("EC2Role"), &iamrole.IamRoleConfig{
@@ -461,7 +534,11 @@ func buildIAMComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *IAMC
 		},
 	}
 
-	lambdaPolicyJSON, _ := json.Marshal(lambdaAssumeRolePolicy)
+	lambdaPolicyJSON, err := json.Marshal(lambdaAssumeRolePolicy)
+	if err != nil {
+		fmt.Printf("Error marshalling Lambda assume role policy: %v\n", err)
+		return nil
+	}
 
 	// Create Lambda role
 	lambdaRole := iamrole.NewIamRole(stack, str("LambdaRole"), &iamrole.IamRoleConfig{
@@ -510,7 +587,11 @@ func buildIAMComponent(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *IAMC
 		},
 	}
 
-	s3PolicyJSON, _ := json.Marshal(s3CrossAccountPolicy)
+	s3PolicyJSON, err := json.Marshal(s3CrossAccountPolicy)
+	if err != nil {
+		fmt.Printf("Error marshalling S3 cross-account policy: %v\n", err)
+		return nil
+	}
 
 	s3Policy := iampolicy.NewIamPolicy(stack, str("S3CrossAccountPolicy"), &iampolicy.IamPolicyConfig{
 		Name:        str(fmt.Sprintf("%s-s3-cross-account-policy", cfg.RolePrefix)),
@@ -641,7 +722,11 @@ func buildS3Component(stack cdktf.TerraformStack, cfg *EnvironmentConfig) *S3Com
 		},
 	}
 
-	policyJSON, _ := json.Marshal(bucketPolicy)
+	policyJSON, err := json.Marshal(bucketPolicy)
+	if err != nil {
+		fmt.Printf("Error marshalling S3 bucket policy: %v\n", err)
+		return nil
+	}
 
 	s3bucketpolicy.NewS3BucketPolicy(stack, str("LoggingBucketPolicy"), &s3bucketpolicy.S3BucketPolicyConfig{
 		Bucket: loggingBucket.Id(),
