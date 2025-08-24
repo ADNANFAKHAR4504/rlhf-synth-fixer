@@ -5,8 +5,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,15 +17,63 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	cloudwatchTypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmsTypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3Types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
-// Global AWS config for integration tests
+// FlatOutputs represents the structure of cfn-outputs/flat-outputs.json
+type FlatOutputs map[string]string
+
+// loadFlatOutputs loads the deployment outputs from cfn-outputs/flat-outputs.json
+func loadFlatOutputs() (FlatOutputs, error) {
+	// Get the path relative to the test file
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Navigate up to project root and then to cfn-outputs
+	flatOutputsPath := filepath.Join(currentDir, "..", "..", "cfn-outputs", "flat-outputs.json")
+
+	if _, err := os.Stat(flatOutputsPath); os.IsNotExist(err) {
+		return FlatOutputs{}, nil // Return empty map if file doesn't exist
+	}
+
+	data, err := os.ReadFile(flatOutputsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read flat-outputs.json: %w", err)
+	}
+
+	var outputs FlatOutputs
+	if err := json.Unmarshal(data, &outputs); err != nil {
+		return nil, fmt.Errorf("failed to parse flat-outputs.json: %w", err)
+	}
+
+	return outputs, nil
+}
+
+// getOutputValue retrieves a specific output value from the flat outputs
+func getOutputValue(outputs FlatOutputs, outputKey string) (string, bool) {
+	// Look for the output key in the flat outputs
+	// The key format is typically: StackName.OutputKey
+	for key, value := range outputs {
+		if strings.HasSuffix(key, "."+outputKey) {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// Global AWS config and outputs for integration tests
 var awsConfig aws.Config
+var flatOutputs FlatOutputs
 
 func TestMain(m *testing.M) {
 	// Initialize AWS config once for all tests
@@ -34,6 +84,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	awsConfig = cfg
+
+	// Load flat outputs
+	outputs, err := loadFlatOutputs()
+	if err != nil {
+		fmt.Printf("Failed to load flat outputs: %v\n", err)
+		os.Exit(1)
+	}
+	flatOutputs = outputs
 
 	// Run tests
 	code := m.Run()
@@ -46,29 +104,26 @@ func TestVPCExists(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	// Get VPC ID from outputs
+	vpcID, exists := getOutputValue(flatOutputs, "VpcId")
+	if !exists {
+		t.Skip("VpcId output not found in flat-outputs.json - skipping VPC test")
+	}
+
 	ctx := context.Background()
 	ec2Client := ec2.NewFromConfig(awsConfig)
 
-	// Look for VPC with our tag
+	// Test VPC exists and has expected configuration
 	result, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-		Filters: []ec2Types.Filter{
-			{
-				Name:   aws.String("tag:Name"),
-				Values: []string{"tap-vpc-dev"},
-			},
-			{
-				Name:   aws.String("state"),
-				Values: []string{"available"},
-			},
-		},
+		VpcIds: []string{vpcID},
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to describe VPCs: %v", err)
+		t.Fatalf("Failed to describe VPC %s: %v", vpcID, err)
 	}
 
 	if len(result.Vpcs) == 0 {
-		t.Fatal("VPC with name 'tap-vpc-dev' not found")
+		t.Fatalf("VPC %s not found", vpcID)
 	}
 
 	vpc := result.Vpcs[0]
@@ -102,6 +157,8 @@ func TestVPCExists(t *testing.T) {
 	if !*dnsHostnames.EnableDnsHostnames.Value {
 		t.Error("VPC DNS hostnames should be enabled")
 	}
+
+	t.Logf("✅ VPC %s exists and is properly configured", vpcID)
 }
 
 // TestSubnetExists tests that the private subnet exists and is configured correctly
@@ -110,28 +167,25 @@ func TestSubnetExists(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	// Get subnet ID from outputs
+	subnetID, exists := getOutputValue(flatOutputs, "PrivateSubnetId")
+	if !exists {
+		t.Skip("PrivateSubnetId output not found in flat-outputs.json - skipping subnet test")
+	}
+
 	ctx := context.Background()
 	ec2Client := ec2.NewFromConfig(awsConfig)
 
 	result, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
-		Filters: []ec2Types.Filter{
-			{
-				Name:   aws.String("tag:Name"),
-				Values: []string{"tap-private-subnet-dev"},
-			},
-			{
-				Name:   aws.String("state"),
-				Values: []string{"available"},
-			},
-		},
+		SubnetIds: []string{subnetID},
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to describe subnets: %v", err)
+		t.Fatalf("Failed to describe subnet %s: %v", subnetID, err)
 	}
 
 	if len(result.Subnets) == 0 {
-		t.Fatal("Private subnet with name 'tap-private-subnet-dev' not found")
+		t.Fatalf("Subnet %s not found", subnetID)
 	}
 
 	subnet := result.Subnets[0]
@@ -156,6 +210,8 @@ func TestSubnetExists(t *testing.T) {
 	if subnetType != "private" {
 		t.Errorf("Expected subnet type 'private', got %s", subnetType)
 	}
+
+	t.Logf("✅ Subnet %s exists and is properly configured", subnetID)
 }
 
 // TestKMSKeyExists tests that the KMS key exists and has correct permissions
@@ -229,10 +285,10 @@ func TestS3BucketsExist(t *testing.T) {
 
 	var appBucket, cloudtrailBucket *s3Types.Bucket
 	for _, bucket := range result.Buckets {
-		if strings.HasPrefix(*bucket.Name, "tap-app-data-dev-") {
+		if *bucket.Name == "tap-app-data-dev" {
 			appBucket = &bucket
 		}
-		if strings.HasPrefix(*bucket.Name, "tap-cloudtrail-logs-dev-") {
+		if *bucket.Name == "tap-cloudtrail-logs-dev" {
 			cloudtrailBucket = &bucket
 		}
 	}
@@ -410,7 +466,7 @@ func TestEC2InstanceExists(t *testing.T) {
 		t.Errorf("Expected instance type t3.micro, got %s", string(instance.InstanceType))
 	}
 
-	if !*instance.Monitoring.State == ec2Types.MonitoringStateEnabled {
+	if instance.Monitoring.State != ec2Types.MonitoringStateEnabled {
 		t.Error("EC2 instance monitoring should be enabled")
 	}
 

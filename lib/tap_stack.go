@@ -434,5 +434,56 @@ EOF
 		},
 	})
 
+	// Add outputs for integration testing
+	stack.AddOverride(jsii.String("output.vpc_id"), map[string]interface{}{
+		"value":       "${aws_vpc.tap_vpc.id}",
+		"description": "VPC ID",
+	})
+
+	stack.AddOverride(jsii.String("output.private_subnet_id"), map[string]interface{}{
+		"value":       "${aws_subnet.private_subnet.id}",
+		"description": "Private subnet ID",
+	})
+
+	stack.AddOverride(jsii.String("output.kms_key_id"), map[string]interface{}{
+		"value":       "${aws_kms_key.tap_kms_key.id}",
+		"description": "KMS key ID",
+	})
+
+	stack.AddOverride(jsii.String("output.s3_bucket_name"), map[string]interface{}{
+		"value":       "${aws_s3_bucket.tap_bucket.id}",
+		"description": "Application S3 bucket name",
+	})
+
+	stack.AddOverride(jsii.String("output.cloudtrail_bucket_name"), map[string]interface{}{
+		"value":       "${aws_s3_bucket.cloudtrail_bucket.id}",
+		"description": "CloudTrail S3 bucket name",
+	})
+
+	stack.AddOverride(jsii.String("output.ec2_instance_id"), map[string]interface{}{
+		"value":       "${aws_instance.app_instance.id}",
+		"description": "EC2 instance ID",
+	})
+
+	stack.AddOverride(jsii.String("output.iam_role_name"), map[string]interface{}{
+		"value":       "${aws_iam_role.ec2_role.name}",
+		"description": "IAM role name",
+	})
+
+	stack.AddOverride(jsii.String("output.security_group_id"), map[string]interface{}{
+		"value":       "${aws_security_group.ec2_sg.id}",
+		"description": "Security group ID",
+	})
+
+	stack.AddOverride(jsii.String("output.sns_topic_arn"), map[string]interface{}{
+		"value":       "${aws_sns_topic.cpu_alarm_topic.arn}",
+		"description": "SNS topic ARN",
+	})
+
+	stack.AddOverride(jsii.String("output.cloudtrail_arn"), map[string]interface{}{
+		"value":       "${aws_cloudtrail.audit_trail.arn}",
+		"description": "CloudTrail ARN",
+	})
+
 	app.Synth()
 }
