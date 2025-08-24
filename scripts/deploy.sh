@@ -129,10 +129,23 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-  export PYTHONPATH=.:bin
-  pipenv run pulumi-create-stack
-  echo "Deploying infrastructure ..."
-  pipenv run pulumi-deploy
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Go Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    cd lib
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    cd ..
+  else
+    echo "🔧 Python Pulumi project detected"
+    export PYTHONPATH=.:bin
+    pipenv run pulumi-create-stack
+    echo "Deploying infrastructure ..."
+    pipenv run pulumi-deploy
+  fi
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"

@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291587",
+  "team": "3",
+  "startedAt": "2025-08-21T14:20:33.587Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Network Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::Instance",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::SecretsManager::Secret",
+    "AWS::Lambda::Function",
+    "AWS::CloudTrail::Trail",
+    "AWS::Logs::LogGroup"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}
