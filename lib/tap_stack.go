@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
@@ -36,6 +38,12 @@ import (
 func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
 
+	// Get environment prefix
+	envPrefix := os.Getenv("ENVIRONMENT_PREFIX")
+	if envPrefix == "" {
+		envPrefix = "default"
+	}
+
 	// Configure AWS Provider
 	provider.NewAwsProvider(stack, jsii.String("AWS"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-west-2"),
@@ -63,7 +71,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-network"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-network", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -72,7 +80,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	igw := internetgateway.NewInternetGateway(stack, jsii.String("igw"), &internetgateway.InternetGatewayConfig{
 		VpcId: vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-network-igw"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-network-igw", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -84,7 +92,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		AvailabilityZone:    az1,
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("public-subnet-1"),
+			"Name":        jsii.String(fmt.Sprintf("%s-public-subnet-1", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -95,7 +103,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		AvailabilityZone:    az2,
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("public-subnet-2"),
+			"Name":        jsii.String(fmt.Sprintf("%s-public-subnet-2", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -106,7 +114,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		CidrBlock:        jsii.String("10.0.10.0/24"),
 		AvailabilityZone: az1,
 		Tags: &map[string]*string{
-			"Name":        jsii.String("private-subnet-1"),
+			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-1", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -116,7 +124,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		CidrBlock:        jsii.String("10.0.20.0/24"),
 		AvailabilityZone: az2,
 		Tags: &map[string]*string{
-			"Name":        jsii.String("private-subnet-2"),
+			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-2", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -125,7 +133,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	natEip := eip.NewEip(stack, jsii.String("nat-eip"), &eip.EipConfig{
 		Domain: jsii.String("vpc"),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("nat-gateway-eip"),
+			"Name":        jsii.String(fmt.Sprintf("%s-nat-gateway-eip", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 		DependsOn: &[]cdktf.ITerraformDependable{igw},
@@ -135,7 +143,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		AllocationId: natEip.Id(),
 		SubnetId:     publicSubnet1.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-network-nat"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-network-nat", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -144,7 +152,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	publicRt := routetable.NewRouteTable(stack, jsii.String("public-rt"), &routetable.RouteTableConfig{
 		VpcId: vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("public-route-table"),
+			"Name":        jsii.String(fmt.Sprintf("%s-public-route-table", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -152,7 +160,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	privateRt := routetable.NewRouteTable(stack, jsii.String("private-rt"), &routetable.RouteTableConfig{
 		VpcId: vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("private-route-table"),
+			"Name":        jsii.String(fmt.Sprintf("%s-private-route-table", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -195,7 +203,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	networkAcl := networkacl.NewNetworkAcl(stack, jsii.String("secure-network-acl"), &networkacl.NetworkAclConfig{
 		VpcId: vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-network-acl"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-network-acl", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -254,11 +262,11 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Security Group for Web Application
 	webSg := securitygroup.NewSecurityGroup(stack, jsii.String("web-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String("web-application-sg"),
+		Name:        jsii.String(fmt.Sprintf("%s-web-application-sg", envPrefix)),
 		Description: jsii.String("Security group for web application"),
 		VpcId:       vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("web-application-sg"),
+			"Name":        jsii.String(fmt.Sprintf("%s-web-application-sg", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -297,9 +305,9 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// S3 Bucket for Application Logs
 	logsBucket := s3bucket.NewS3Bucket(stack, jsii.String("app-logs-bucket"), &s3bucket.S3BucketConfig{
-		BucketPrefix: jsii.String("secure-web-app-logs-"),
+		BucketPrefix: jsii.String(fmt.Sprintf("%s-secure-web-app-logs-", envPrefix)),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("application-logs"),
+			"Name":        jsii.String(fmt.Sprintf("%s-application-logs", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -341,14 +349,14 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		VpcEndpointType: jsii.String("Gateway"),
 		RouteTableIds:   &[]*string{privateRt.Id()},
 		Tags: &map[string]*string{
-			"Name":        jsii.String("s3-vpc-endpoint"),
+			"Name":        jsii.String(fmt.Sprintf("%s-s3-vpc-endpoint", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
 
 	// IAM Role for EC2 instance
 	ec2Role := iamrole.NewIamRole(stack, jsii.String("web-app-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String("WebAppEC2Role"),
+		Name: jsii.String(fmt.Sprintf("%s-WebAppEC2Role", envPrefix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -362,14 +370,14 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("WebAppEC2Role"),
+			"Name":        jsii.String(fmt.Sprintf("%s-WebAppEC2Role", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
 
 	// IAM Policy with modern security constraints
 	logPolicy := iampolicy.NewIamPolicy(stack, jsii.String("s3-log-policy"), &iampolicy.IamPolicyConfig{
-		Name: jsii.String("S3LogWritePolicy"),
+		Name: jsii.String(fmt.Sprintf("%s-S3LogWritePolicy", envPrefix)),
 		Policy: cdktf.Fn_Jsonencode(map[string]interface{}{
 			"Version": "2012-10-17",
 			"Statement": []map[string]interface{}{
@@ -399,7 +407,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 			},
 		}),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("S3LogWritePolicy"),
+			"Name":        jsii.String(fmt.Sprintf("%s-S3LogWritePolicy", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -412,10 +420,10 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Instance Profile
 	instanceProfile := iaminstanceprofile.NewIamInstanceProfile(stack, jsii.String("web-app-profile"), &iaminstanceprofile.IamInstanceProfileConfig{
-		Name: jsii.String("WebAppInstanceProfile"),
+		Name: jsii.String(fmt.Sprintf("%s-WebAppInstanceProfile", envPrefix)),
 		Role: ec2Role.Name(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("WebAppInstanceProfile"),
+			"Name":        jsii.String(fmt.Sprintf("%s-WebAppInstanceProfile", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -537,7 +545,7 @@ EOF`
 		DisableApiTermination: jsii.Bool(false),
 		Monitoring:            jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-web-server"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-web-server", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 		RootBlockDevice: &instance.InstanceRootBlockDevice{
@@ -554,11 +562,11 @@ EOF`
 
 	// Security Group for EC2 Instance Connect Endpoint
 	eiceSecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("eice-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String("eice-sg"),
+		Name:        jsii.String(fmt.Sprintf("%s-eice-sg", envPrefix)),
 		Description: jsii.String("Security group for EC2 Instance Connect Endpoint"),
 		VpcId:       vpcResource.Id(),
 		Tags: &map[string]*string{
-			"Name":        jsii.String("eice-security-group"),
+			"Name":        jsii.String(fmt.Sprintf("%s-eice-security-group", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
@@ -601,7 +609,7 @@ EOF`
 		SubnetId:         privateSubnet1.Id(),
 		SecurityGroupIds: &[]*string{eiceSecurityGroup.Id()},
 		Tags: &map[string]*string{
-			"Name":        jsii.String("secure-web-eice"),
+			"Name":        jsii.String(fmt.Sprintf("%s-secure-web-eice", envPrefix)),
 			"Environment": jsii.String("Production"),
 		},
 	})
