@@ -1,1 +1,1 @@
-pulumi+go
+cdk+typescript
