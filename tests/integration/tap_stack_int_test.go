@@ -327,12 +327,14 @@ func TestSecurityGroups(t *testing.T) {
 	// Find web application security group (with environment prefix)
 	var webSG *ec2.SecurityGroup
 	for _, sg := range sgResult.SecurityGroups {
-		if sg.GroupName != nil && (*sg.GroupName != "default") {
-			// Look for security group that contains "web-application-sg" in the name
-			if len(*sg.GroupName) > 0 && *sg.GroupName != "default" {
-				webSG = sg
-				t.Logf("Found security group: %s", *sg.GroupName)
-				break
+		if sg.GroupName != nil && *sg.GroupName != "default" {
+			// Look for security group that ends with "web-application-sg"
+			if len(*sg.GroupName) >= len("web-application-sg") {
+				if (*sg.GroupName)[len(*sg.GroupName)-len("web-application-sg"):] == "web-application-sg" {
+					webSG = sg
+					t.Logf("Found web application security group: %s", *sg.GroupName)
+					break
+				}
 			}
 		}
 	}
