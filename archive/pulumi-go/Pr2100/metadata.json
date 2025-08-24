@@ -28,5 +28,11 @@
     "IAM",
     "KMS",
     "VPC"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
 }
