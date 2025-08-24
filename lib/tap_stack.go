@@ -11,10 +11,10 @@ func main() {
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
 
 	// Configure S3 backend for state management
-	stack.AddOverride(jsii.String("terraform.backend.s3"), map[string]interface{}{
-		"bucket": "iac-rlhf-cfn-states-us-east-1",
-		"key":    "cdktf/TapStack-dev/terraform.tfstate",
-		"region": "us-east-1",
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket: jsii.String("iac-rlhf-cfn-states-us-east-1"),
+		Key:    jsii.String("cdktf/TapStack-dev/terraform.tfstate"),
+		Region: jsii.String("us-east-1"),
 	})
 
 	// We'll configure the AWS provider using HCL configuration
