@@ -1,3 +1,11 @@
+# IDEAL_RESPONSE.md
+
+This file contains the ideal CloudFormation template for the TAP Stack (Task Assignment Platform) infrastructure.  
+It demonstrates best practices for multi-AZ networking, secure EC2 instances, IAM, monitoring, and outputs.
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
   TAP Stack - Task Assignment Platform Infrastructure
@@ -421,3 +429,4 @@ Outputs:
   WebSite2URL:
     Description: 'URL of the second web server'
     Value: !Sub 'http://${WebServerInstance2.PublicDnsName}'
+```
