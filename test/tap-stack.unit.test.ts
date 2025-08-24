@@ -22,7 +22,8 @@ describe('TapStack', () => {
       isPrimary: false,
       primaryRegion: 'us-east-1',
       primaryBucketArn: 'arn:aws:s3:::mock-primary-bucket',
-      env: { region: 'us-east-2' },
+      primaryDatabaseIdentifier: 'mock-primary-db-identifier',
+      env: { region: 'us-west-1' },
     });
     return { app, stack, template: Template.fromStack(stack) };
   };
@@ -99,13 +100,13 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates API Gateway with proper configuration', () => {
+    test('creates CloudFront distribution in primary region only', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'TAP API',
-        Description: 'API for TAP application',
-        EndpointConfiguration: {
-          Types: ['REGIONAL'],
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          Comment: Match.stringLikeRegexp('.*TAP CloudFront Distribution.*'),
+          PriceClass: 'PriceClass_100',
+          Enabled: true,
         },
       });
     });
@@ -145,15 +146,23 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates EC2 instance with encrypted EBS volume', () => {
+    test('creates Auto Scaling Group with encrypted EBS volumes', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::EC2::Instance', {
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '1',
+      });
+      
+      // Auto Scaling Group uses Launch Configuration, not Launch Template
+      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
         InstanceType: 't3.micro',
         BlockDeviceMappings: Match.arrayWith([
           Match.objectLike({
             DeviceName: '/dev/xvda',
             Ebs: Match.objectLike({
               Encrypted: true,
+              VolumeType: 'gp3',
             }),
           }),
         ]),
@@ -197,21 +206,26 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates WAF Web ACL for API protection', () => {
+    test('creates SNS topic for replication alerts', () => {
       const { template } = createPrimaryStack();
-      template.hasResourceProperties('AWS::WAFv2::WebACL', {
-        Scope: 'REGIONAL',
-        DefaultAction: { Allow: {} },
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: Match.stringLikeRegexp('tap-replication-alerts-.*'),
+        DisplayName: Match.stringLikeRegexp('TAP Replication Alerts.*'),
       });
     });
 
-    test('creates Lambda function with correct configuration', () => {
+    test('creates Lambda function for replication monitoring', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x',
+        Runtime: 'python3.11',
         Handler: 'index.handler',
         Code: {
-          ZipFile: Match.stringLikeRegexp('.*Hello from Lambda.*'),
+          ZipFile: Match.stringLikeRegexp('.*replication.*'),
+        },
+        Environment: {
+          Variables: {
+            SNS_TOPIC_ARN: Match.anyValue(),
+          },
         },
       });
     });
@@ -226,18 +240,18 @@ describe('TapStack', () => {
       });
     });
 
-    test('outputs all required values', () => {
+    test('outputs CloudFront distribution domain name', () => {
       const { template } = createPrimaryStack();
       const outputs = template.findOutputs('*');
-      expect(outputs).toHaveProperty('TapApiEndpoint');
-      // API Gateway endpoint is the main output
+      expect(outputs).toHaveProperty('CloudFrontDistributionDomainName');
     });
   });
 
   describe('Secondary Stack Resources', () => {
-    test('creates S3 bucket with versioning enabled', () => {
+    test('creates replica S3 bucket in secondary region', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('tap-replica-bucket-.*-uswest1'),
         VersioningConfiguration: {
           Status: 'Enabled',
         },
@@ -252,13 +266,12 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudFront::Distribution', 0);
     });
 
-    test('creates RDS instance with encryption', () => {
+    test('creates RDS read replica in secondary region', () => {
       const { template } = createSecondaryStack();
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBInstanceClass: 'db.t3.micro',
         StorageEncrypted: true,
-        Engine: 'mysql',
-        MultiAZ: true,
+        SourceDBInstanceIdentifier: Match.anyValue(),
       });
     });
 
@@ -269,27 +282,26 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates EC2 instance in secondary region', () => {
+    test('creates Auto Scaling Group in secondary region', () => {
       const { template } = createSecondaryStack();
-      template.hasResourceProperties('AWS::EC2::Instance', {
-        InstanceType: 't3.micro',
-        BlockDeviceMappings: Match.anyValue(),
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '1',
+        MaxSize: '3',
+        DesiredCapacity: '1',
       });
     });
 
-    test('creates API Gateway in secondary region', () => {
+    test('creates SNS topic in secondary region', () => {
       const { template } = createSecondaryStack();
-      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'TAP API',
-        Description: 'API for TAP application',
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: Match.stringLikeRegexp('tap-replication-alerts-.*'),
+        DisplayName: Match.stringLikeRegexp('TAP Replication Alerts.*'),
       });
     });
 
-    test('does not output CloudFront domain name', () => {
+    test('does not create CloudFront distribution in secondary region', () => {
       const { template } = createSecondaryStack();
-      expect(() => {
-        template.hasOutput('CloudFrontDomainName', Match.anyValue());
-      }).toThrow();
+      template.resourceCountIs('AWS::CloudFront::Distribution', 0);
     });
   });
 
@@ -342,7 +354,9 @@ describe('TapStack', () => {
       expect(resourceTypes).toContain('AWS::RDS::DBInstance');
       expect(resourceTypes).toContain('AWS::EC2::VPC');
       expect(resourceTypes).toContain('AWS::Lambda::Function');
-      expect(resourceTypes).toContain('AWS::ApiGateway::RestApi');
+      expect(resourceTypes).toContain('AWS::CloudFront::Distribution');
+      expect(resourceTypes).toContain('AWS::AutoScaling::AutoScalingGroup');
+      expect(resourceTypes).toContain('AWS::SNS::Topic');
     });
   });
 
@@ -380,17 +394,14 @@ describe('TapStack', () => {
       const app = new cdk.App();
       const defaultStack = new TapStack(app, 'TestStackDefault', {
         environmentSuffix: 'test',
-        // isPrimary is undefined, should default to true
+        // isPrimary is undefined, should default to false (not primary)
       });
       const template = Template.fromStack(defaultStack);
 
-      // Should create primary stack resources (like API Gateway)
-      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'TAP API',
-        Description: 'API for TAP application',
-      });
+      // Should NOT create CloudFront (only in primary)
+      template.resourceCountIs('AWS::CloudFront::Distribution', 0);
 
-      // Should create S3 bucket (primary resource)
+      // Should create S3 bucket (exists in both regions)
       template.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
           Status: 'Enabled',
@@ -400,13 +411,13 @@ describe('TapStack', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('Lambda function has correct runtime and handler', () => {
+    test('Lambda function has correct runtime and handler for replication monitoring', () => {
       const { template } = createPrimaryStack();
       template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x',
+        Runtime: 'python3.11',
         Handler: 'index.handler',
         Code: {
-          ZipFile: Match.stringLikeRegexp('.*Hello from Lambda.*'),
+          ZipFile: Match.stringLikeRegexp('.*replication.*'),
         },
       });
     });

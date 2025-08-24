@@ -5,5 +5,29 @@
   "turn_type": "single",
   "po_id": "291817",
   "team": "5",
-  "startedAt": "2025-08-21T08:24:46.953Z"
+  "startedAt": "2025-08-21T08:24:46.953Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Database Management", 
+    "Network Configuration",
+    "Resource Scaling",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "Lambda",
+    "CloudFront",
+    "SNS",
+    "Auto Scaling",
+    "IAM"
+  ]
 }

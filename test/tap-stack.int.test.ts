@@ -44,8 +44,8 @@ describe('TAP Multi-Region Infrastructure Integration Tests', () => {
   });
 
   describe('S3 Cross-Region Replication', () => {
-    const primaryBucketName = `tap-bucket-useast1-${environmentSuffix}`;
-    const secondaryBucketName = `tap-bucket-useast2-${environmentSuffix}`;
+    const primaryBucketName = `tap-bucket-${environmentSuffix}-useast1`;
+    const secondaryBucketName = `tap-replica-bucket-${environmentSuffix}-uswest1`;
     const testObjectKey = `integration-test-${Date.now()}.txt`;
     const testContent = 'Integration test content for cross-region replication';
 
