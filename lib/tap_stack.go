@@ -19,15 +19,15 @@ func main() {
 			environmentSuffix = "synthtrainr308"
 		}
 
-		// Get existing Config resources from environment
-		existingConfigRecorder := os.Getenv("EXISTING_CONFIG_RECORDER")
-		if existingConfigRecorder == "" {
-			existingConfigRecorder = "tap-webapp-pr1598-config-recorder"
+		// Get Config resources from environment or use defaults
+		configRecorder := os.Getenv("CONFIG_RECORDER_NAME")
+		if configRecorder == "" {
+			configRecorder = "prod-sec-production-config-rec"
 		}
 
-		existingDeliveryChannel := os.Getenv("EXISTING_DELIVERY_CHANNEL")
-		if existingDeliveryChannel == "" {
-			existingDeliveryChannel = "default"
+		deliveryChannel := os.Getenv("DELIVERY_CHANNEL_NAME")
+		if deliveryChannel == "" {
+			deliveryChannel = "tap-webapp-pr1598-config-delivery-channel"
 		}
 
 		// Create the S3 bucket for storing sensitive financial documents
@@ -273,11 +273,13 @@ func main() {
 
 		// Use existing or create new Config Recorder
 		var configRecorderName pulumi.StringOutput
-		if existingConfigRecorder != "" {
-			configRecorderName = pulumi.String(existingConfigRecorder).ToStringOutput()
-			ctx.Export("configRecorderUsed", pulumi.String(existingConfigRecorder))
+		if configRecorder != "" {
+			// Use existing recorder
+			configRecorderName = pulumi.String(configRecorder).ToStringOutput()
+			ctx.Export("configRecorderUsed", pulumi.String(configRecorder))
 		} else {
-			configRecorder, err := cfg.NewRecorder(ctx, "FinApp-ConfigRecorder", &cfg.RecorderArgs{
+			// Create new recorder
+			newConfigRecorder, err := cfg.NewRecorder(ctx, "FinApp-ConfigRecorder", &cfg.RecorderArgs{
 				Name:    pulumi.Sprintf("FinApp-ComplianceRecorder-%s", environmentSuffix),
 				RoleArn: configServiceRole.Arn,
 				RecordingGroup: &cfg.RecorderRecordingGroupArgs{
@@ -288,34 +290,29 @@ func main() {
 			if err != nil {
 				return err
 			}
-			configRecorderName = configRecorder.Name
+			configRecorderName = newConfigRecorder.Name
 		}
 
-		// Create delivery channel if needed
-		var deliveryChannelResource pulumi.Resource
-		if existingDeliveryChannel == "default" {
-			deliveryChannel, err := cfg.NewDeliveryChannel(ctx, "FinApp-ConfigDeliveryChannel", &cfg.DeliveryChannelArgs{
+		// Use existing or create new Delivery Channel
+		if deliveryChannel != "" {
+			// Use existing delivery channel
+			ctx.Export("deliveryChannelUsed", pulumi.String(deliveryChannel))
+		} else {
+			// Create new delivery channel
+			_, err = cfg.NewDeliveryChannel(ctx, "FinApp-ConfigDeliveryChannel", &cfg.DeliveryChannelArgs{
 				Name:         pulumi.Sprintf("FinApp-ComplianceDelivery-%s", environmentSuffix),
 				S3BucketName: configBucket.ID(),
 			})
 			if err != nil {
 				return err
 			}
-			deliveryChannelResource = deliveryChannel
 		}
 
 		// Enable Config Recorder
-		if deliveryChannelResource != nil {
-			_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
-				Name:      configRecorderName,
-				IsEnabled: pulumi.Bool(true),
-			}, pulumi.DependsOn([]pulumi.Resource{deliveryChannelResource}))
-		} else {
-			_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
-				Name:      configRecorderName,
-				IsEnabled: pulumi.Bool(true),
-			})
-		}
+		_, err = cfg.NewRecorderStatus(ctx, "FinApp-ConfigRecorderStatus", &cfg.RecorderStatusArgs{
+			Name:      configRecorderName,
+			IsEnabled: pulumi.Bool(true),
+		})
 		if err != nil {
 			return err
 		}
