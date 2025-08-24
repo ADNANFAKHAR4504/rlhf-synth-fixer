@@ -31,9 +31,6 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
-  # Go caching optimization
-  GOCACHE: ${{ github.workspace }}/.cache/go-build
-  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
 jobs:
   detect-metadata:
@@ -62,17 +59,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Go Caching (Build Stage)
-        if: ${{ needs.detect-metadata.outputs.language == 'go' }}
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment

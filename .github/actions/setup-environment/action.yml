@@ -63,7 +63,7 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.23.12'
-        cache: false # Caching is handled in build stage
+        cache: true
 
     - name: Setup Java 17
       if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
@@ -141,5 +141,3 @@ runs:
           go.mod
           go.sum
           tap.go
-          ~/.cache/go-build/
-          ~/go/pkg/mod/
