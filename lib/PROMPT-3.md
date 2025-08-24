@@ -1,11 +1,5 @@
-The build failed with below error and please fix this along with other corrections:
-error TS2353: Object literal may only specify known properties, and 'days' does not exist in type 'IResolvable | S3BucketLifecycleConfigurationRuleExpiration[]'.
+To improve our operational visibility, we need to enhance the monitoring and alerting for our secure web application.
 
-88 days: 90,
+Please create a new CloudWatch Dashboard that visualizes key metrics for our EC2 instance and RDS database, including CPU Utilization, Disk I/O, and Network In/Out.
 
-```
-node_modules/@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration/index.d.ts:543:14
-543 readonly expiration?: S3BucketLifecycleConfigurationRuleExpiration[] | cdktf.IResolvable;
-```
-
-The expected type comes from property 'expiration' which is declared here on type 'S3BucketLifecycleConfigurationRule'
+Additionally, set up an SNS topic for critical alerts. The high-CPU CloudWatch alarms we created earlier for both EC2 and RDS should be configured to publish a notification to this SNS topic whenever they go into an ALARM state.

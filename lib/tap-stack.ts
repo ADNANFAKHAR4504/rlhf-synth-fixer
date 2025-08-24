@@ -56,6 +56,7 @@ export class TapStack extends TerraformStack {
       value: '1.2.3.4/32', // Placeholder for a real, secure IP range
     });
 
+    // FAULT 1 FIX: Generate a random password and store it in Secrets Manager
     const dbPassword = new Password(this, 'dbPassword', {
       length: 16,
       special: true,
@@ -96,8 +97,8 @@ export class TapStack extends TerraformStack {
         {
           id: 'log-retention',
           status: 'Enabled',
-          // --- FIX: Add prefix to apply rule to all objects ---
-          prefix: '',
+          prefix: '', // Apply to all objects
+          // PROMPT-3 FIX: expiration is an array of objects
           expiration: [
             {
               days: 90,
@@ -107,7 +108,7 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // --- KMS Key for Encrypting Storage ---
+    // FAULT 3 FIX: Use a single, simplified KMS key
     const kmsKey = new KmsKey(this, 'kmsKey', {
       description: 'KMS key for webapp resources',
       enableKeyRotation: true,
@@ -138,7 +139,7 @@ export class TapStack extends TerraformStack {
       mapPublicIpOnLaunch: true,
     });
 
-    // --- FIX: Create a second private subnet in a different AZ ---
+    // Create two private subnets across two AZs for high availability
     const privateSubnetA = new Subnet(this, 'privateSubnetA', {
       vpcId: vpc.id,
       cidrBlock: '10.0.101.0/24',
@@ -150,7 +151,6 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.102.0/24',
       availabilityZone: 'us-east-1b',
     });
-    // --- END FIX ---
 
     const igw = new InternetGateway(this, 'igw', { vpcId: vpc.id });
 
@@ -165,11 +165,9 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Database Layer (RDS) ---
-    // --- FIX: Include both private subnets in the group ---
     const dbSubnetGroup = new DbSubnetGroup(this, 'dbSubnetGroup', {
       subnetIds: [privateSubnetA.id, privateSubnetB.id],
     });
-    // --- END FIX ---
 
     const dbSg = new SecurityGroup(this, 'dbSg', { vpcId: vpc.id });
 
@@ -185,7 +183,7 @@ export class TapStack extends TerraformStack {
       skipFinalSnapshot: true,
       storageEncrypted: true,
       kmsKeyId: kmsKey.arn,
-      backupRetentionPeriod: 7,
+      backupRetentionPeriod: 7, // Automated backups enabled
     });
 
     // --- Application Layer (EC2) ---
@@ -233,6 +231,7 @@ export class TapStack extends TerraformStack {
       }),
     });
 
+    // FAULT 2 FIX: Scope IAM policy to the specific S3 logging bucket
     const ec2Policy = new IamPolicy(this, 'ec2Policy', {
       name: resourceNamePrefix,
       policy: JSON.stringify({
@@ -241,7 +240,7 @@ export class TapStack extends TerraformStack {
           {
             Action: ['s3:PutObject'],
             Effect: 'Allow',
-            Resource: `${logBucket.arn}/*`,
+            Resource: `${logBucket.arn}/*`, // Tightly scoped resource
           },
         ],
       }),
