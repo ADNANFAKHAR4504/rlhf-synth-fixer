@@ -1,5 +1,6 @@
 package app;
 
+import app.components.CrossAccountRoleSetup;
 import app.components.IAMRoles;
 import app.components.ObservabilityDashboard;
 import com.pulumi.Context;
@@ -8,6 +9,7 @@ import com.pulumi.aws.Provider;
 import app.config.DeploymentConfig;
 import app.components.WebApplicationStackSet;
 import com.pulumi.aws.ProviderArgs;
+import com.pulumi.resources.ComponentResourceOptions;
 
 /**
  * Main class for Java Pulumi infrastructure as code.
@@ -56,15 +58,23 @@ public final class Main {
                 .region(config.getManagementRegion())
                 .build());
 
-        // Create IAM roles for StackSet operations
+        // Create IAM roles for StackSet operations in management account
         var iamRoles = new IAMRoles("stackset-iam-roles", managementProvider);
 
-        // Create the web application StackSet
+        // Set up cross-account execution roles
+        var crossAccountSetup = new CrossAccountRoleSetup("cross-account-setup",
+                CrossAccountRoleSetup.CrossAccountRoleSetupArgs.builder()
+                        .config(config)
+                        .administrationRoleArn(iamRoles.getAdministrationRoleArn())
+                        .build(), ComponentResourceOptions.Empty);
+
+        // Create the web application StackSet (after cross-account setup)
         var webAppStackSet = new WebApplicationStackSet("web-app-stackset",
                 WebApplicationStackSet.WebApplicationStackSetArgs.builder()
                         .config(config)
                         .administrationRoleArn(iamRoles.getAdministrationRoleArn())
                         .executionRoleName(iamRoles.getExecutionRoleName())
+                        .crossAccountSetup(crossAccountSetup)
                         .build(),
                 managementProvider);
 
