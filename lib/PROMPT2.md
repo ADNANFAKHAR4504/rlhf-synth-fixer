@@ -1,9 +1,19 @@
-Error: creating S3 Bucket (my-company-logs-dev) encryption: operation error S3: PutBucketEncryption, https response error StatusCode: 501, RequestID: ABC123, HostID: xyz, api error NotImplemented: A header you provided implies functionality that is not implemented
+# S3 Bucket Encryption Configuration Update
 
-│   with aws_s3_bucket_encryption.storage-logging-encryption,
-│   on cdk.tf.json line 234, in resource.aws_s3_bucket_encryption.storage-logging-encryption:
-│  234:       }
-│ 
-│ Error: The aws_s3_bucket_encryption resource is deprecated and has been replaced by aws_s3_bucket_server_side_encryption_configuration
+## Background
+Our current infrastructure deployment is failing due to deprecated AWS S3 encryption resources. We need to update our CDKTF Go implementation to use the current AWS provider patterns for S3 bucket encryption.
 
-getting the error , please fix it and give me a single source file
+## Current Issue
+The deployment fails because we're using the deprecated `aws_s3_bucket_encryption` resource instead of the newer `aws_s3_bucket_server_side_encryption_configuration` resource.
+
+## Requirements
+- Update S3 bucket encryption to use the current AWS provider resource
+- Ensure all S3 buckets have server-side encryption enabled with AES256
+- Maintain compatibility with our multi-environment setup (dev, staging, prod)
+- Keep the existing bucket versioning and public access block configurations
+
+## Expected Outcome
+- Clean deployment without deprecation warnings
+- Proper S3 server-side encryption configuration
+- Maintained security posture across all environments
+- Updated code that follows current AWS provider best practices

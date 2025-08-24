@@ -1,15 +1,40 @@
-panic: Error: Found an encoded list token string in a scalar string context.
+# Multi-Environment AWS Infrastructure Requirements
 
-        In CDKTF, we represent lists, with values unknown until after runtime, as arrays with a single element— a string token (["Token.1"]).
+## Project Context
+We need to build a scalable AWS infrastructure that can be deployed across multiple environments (development, staging, production) with proper isolation and security controls. The infrastructure should support our web application workloads and provide centralized logging capabilities.
 
-        We do this because CDKTF does not know the length of the list at compile time, meaning CDKTF has yet to invoke Terraform to communicate with the cloud provider.
+## Infrastructure Requirements
 
-        Because we don't know the length of the list, we can not differentiate if the list was accessed at the first or last index, or as part of a loop. To avoid this ambiguity:
+### Networking
+- VPC with public and private subnets across multiple availability zones
+- Internet gateway for public subnet connectivity
+- NAT gateways for private subnet outbound access
+- Proper routing tables and security group configurations
 
-        - If you want to access a singular item, use 'Fn.element(list, 0)'. Do not use 'list[0]'.
+### Compute & Access Management
+- IAM roles for EC2 instances with Systems Manager access for remote management
+- IAM roles for Lambda functions with appropriate execution permissions
+- Cross-account access policies for centralized logging and monitoring
 
-goroutine 1 [running]:
-github.com/aws/jsii-runtime-go/runtime.InvokeVoid
-        /go/pkg/mod/github.com/aws/jsii-runtime-go@v1.113.0/runtime/runtime.go:253 +0x158
+### Storage & Logging
+- S3 buckets for application logs with versioning enabled
+- Cross-region replication for disaster recovery
+- Server-side encryption for data at rest
+- Public access blocking for security compliance
 
-could you please fix the above errors while deploying
+### Environment Specifications
+- **Development**: us-east-1, 10.0.0.0/16 CIDR
+- **Staging**: us-east-2, 10.1.0.0/16 CIDR  
+- **Production**: us-west-1, 10.2.0.0/16 CIDR
+
+## Technical Constraints
+- Must use Infrastructure as Code (CDKTF with Go)
+- Support for CI/CD pipeline deployment with unique resource naming
+- Environment-specific configuration management
+- Comprehensive testing strategy (unit and integration tests)
+
+## Success Criteria
+- Zero-downtime deployments across environments
+- No resource naming conflicts during parallel deployments
+- Proper error handling and validation
+- Complete infrastructure outputs for application integration
