@@ -111,7 +111,9 @@ final class Route53StackProps {
     private final ApplicationLoadBalancer failoverLoadBalancer;
     private final StackProps stackProps;
 
-    private Route53StackProps(final ApplicationLoadBalancer pPrimaryLoadBalancer, final ApplicationLoadBalancer pFailoverLoadBalancer, final StackProps pStackProps) {
+    private Route53StackProps(final ApplicationLoadBalancer pPrimaryLoadBalancer,
+                               final ApplicationLoadBalancer pFailoverLoadBalancer,
+                               final StackProps pStackProps) {
         this.primaryLoadBalancer = pPrimaryLoadBalancer;
         this.failoverLoadBalancer = pFailoverLoadBalancer;
         this.stackProps = pStackProps != null ? pStackProps : StackProps.builder().build();

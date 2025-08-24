@@ -6,13 +6,11 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
-import software.amazon.awscdk.assertions.Capture;
 import software.amazon.awscdk.assertions.Match;
 
 import java.util.List;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static software.amazon.awscdk.assertions.Match.objectLike;
 
 /**
