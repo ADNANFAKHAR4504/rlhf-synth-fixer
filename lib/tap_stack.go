@@ -22,7 +22,7 @@ func main() {
 		// Get Config resources from environment or use defaults
 		configRecorder := os.Getenv("CONFIG_RECORDER_NAME")
 		if configRecorder == "" {
-			configRecorder = "prod-sec-production-config-rec"
+			configRecorder = "tap-webapp-pr1598-config-delivery-channel"
 		}
 
 		deliveryChannel := os.Getenv("DELIVERY_CHANNEL_NAME")
