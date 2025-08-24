@@ -109,7 +109,7 @@ public final class Main {
             .description("KMS key for financial application encryption")
             .keyUsage("ENCRYPT_DECRYPT")
             .deletionWindowInDays(7)
-            // Removed custom policy to allow AWS default policy with proper root account permissions
+            .policy(buildKmsKeyPolicy())
             .tags(Map.of(
                 "Environment", "production",
                 "Application", "financial-services",
@@ -982,5 +982,50 @@ public final class Main {
         return tags;
     }
 
+    // Helper method to build KMS key policy JSON for CloudTrail access
+    public static String buildKmsKeyPolicy() {
+        return """
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "Allow CloudTrail to encrypt logs",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "cloudtrail.amazonaws.com"
+                        },
+                        "Action": [
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:Encrypt",
+                            "kms:ReEncrypt*",
+                            "kms:Decrypt"
+                        ],
+                        "Condition": {
+                            "StringEquals": {
+                                "kms:EncryptionContext:aws:cloudtrail:arn": "arn:aws:cloudtrail:*:*:trail/*"
+                            }
+                        }
+                    },
+                    {
+                        "Sid": "Allow S3 service to use the key",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "s3.amazonaws.com"
+                        },
+                        "Action": [
+                            "kms:Decrypt",
+                            "kms:GenerateDataKey"
+                        ],
+                        "Condition": {
+                            "StringEquals": {
+                                "kms:ViaService": "s3.us-east-1.amazonaws.com"
+                            }
+                        }
+                    }
+                ]
+            }
+            """;
+    }
 
 }

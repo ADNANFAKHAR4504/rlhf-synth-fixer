@@ -721,6 +721,30 @@ public class MainTest {
     }
     
     /**
+     * Test KMS key policy generation for CloudTrail access.
+     */
+    @Test
+    void testBuildKmsKeyPolicy() {
+        String policy = Main.buildKmsKeyPolicy();
+        assertNotNull(policy);
+        assertTrue(policy.contains("2012-10-17"));
+        assertTrue(policy.contains("Allow CloudTrail to encrypt logs"));
+        assertTrue(policy.contains("cloudtrail.amazonaws.com"));
+        assertTrue(policy.contains("kms:GenerateDataKey"));
+        assertTrue(policy.contains("kms:DescribeKey"));
+        assertTrue(policy.contains("kms:Encrypt"));
+        assertTrue(policy.contains("kms:ReEncrypt"));
+        assertTrue(policy.contains("kms:Decrypt"));
+        assertTrue(policy.contains("Allow S3 service to use the key"));
+        assertTrue(policy.contains("s3.amazonaws.com"));
+        assertTrue(policy.contains("kms:ViaService"));
+        assertTrue(policy.contains("s3.us-east-1.amazonaws.com"));
+        assertTrue(policy.contains("aws:cloudtrail:arn"));
+        assertTrue(policy.contains("arn:aws:cloudtrail:*:*:trail/*"));
+        assertTrue(policy.contains("StringEquals"));
+    }
+    
+    /**
      * Test CloudWatch agent configuration generation.
      */
     @Test
