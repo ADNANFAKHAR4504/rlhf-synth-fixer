@@ -9,9 +9,7 @@ import (
 )
 
 func main() {
-	app := cdktf.NewApp(&cdktf.AppConfig{
-		Outdir: jsii.String("../cdktf.out"),
-	})
+	app := cdktf.NewApp(nil)
 
 	// Get environment suffix
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
