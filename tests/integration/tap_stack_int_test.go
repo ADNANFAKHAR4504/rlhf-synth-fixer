@@ -583,21 +583,27 @@ func TestInfrastructureConnectivity(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	// Get VPC ID and subnet ID from outputs instead of searching by tags
+	vpcID, vpcExists := getOutputValue(flatOutputs, "VpcId")
+	if !vpcExists {
+		t.Skip("VpcId output not found in flat-outputs.json - skipping connectivity test")
+	}
+
+	subnetID, subnetExists := getOutputValue(flatOutputs, "PrivateSubnetId")
+	if !subnetExists {
+		t.Skip("PrivateSubnetId output not found in flat-outputs.json - skipping connectivity test")
+	}
+
 	ctx := context.Background()
 	ec2Client := ec2.NewFromConfig(awsConfig)
 
-	// Get VPC and subnet to verify they're connected
+	// Get VPC details
 	vpcResult, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-		Filters: []ec2Types.Filter{
-			{
-				Name:   aws.String("tag:Name"),
-				Values: []string{"tap-vpc-dev"},
-			},
-		},
+		VpcIds: []string{vpcID},
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to describe VPCs: %v", err)
+		t.Fatalf("Failed to describe VPC %s: %v", vpcID, err)
 	}
 
 	if len(vpcResult.Vpcs) == 0 {
@@ -606,17 +612,13 @@ func TestInfrastructureConnectivity(t *testing.T) {
 
 	vpc := vpcResult.Vpcs[0]
 
+	// Get subnet details
 	subnetResult, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
-		Filters: []ec2Types.Filter{
-			{
-				Name:   aws.String("tag:Name"),
-				Values: []string{"tap-private-subnet-dev"},
-			},
-		},
+		SubnetIds: []string{subnetID},
 	})
 
 	if err != nil {
-		t.Fatalf("Failed to describe subnets: %v", err)
+		t.Fatalf("Failed to describe subnet %s: %v", subnetID, err)
 	}
 
 	if len(subnetResult.Subnets) == 0 {
@@ -629,6 +631,8 @@ func TestInfrastructureConnectivity(t *testing.T) {
 	if *subnet.VpcId != *vpc.VpcId {
 		t.Errorf("Subnet should be in VPC %s, but is in %s", *vpc.VpcId, *subnet.VpcId)
 	}
+
+	t.Logf("✅ Infrastructure connectivity verified: Subnet %s is in VPC %s", subnetID, vpcID)
 }
 
 // TestResourceCleanup tests cleanup functionality (useful for CI/CD)
