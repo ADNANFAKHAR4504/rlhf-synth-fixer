@@ -66,7 +66,7 @@ Diagnostics:
 
 Here’s the code snippet from your fix that triggered the error:
 
-```java
+```
 // Deploy StackSet instances across accounts and regions
 for (String account : config.getTargetAccounts()) {
     for (String region : config.getTargetRegions()) {

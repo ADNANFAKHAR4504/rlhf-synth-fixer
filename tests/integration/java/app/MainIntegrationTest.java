@@ -1,9 +1,5 @@
 package app;
 
-import app.components.CrossAccountRoleSetup;
-import app.components.IAMRoles;
-import app.components.ObservabilityDashboard;
-import app.components.WebApplicationStackSet;
 import app.config.DeploymentConfig;
 import com.pulumi.Context;
 import org.junit.jupiter.api.BeforeEach;
@@ -214,7 +210,7 @@ public class MainIntegrationTest {
                 // Test basic EC2 read permissions
                 DescribeRegionsResponse regionsResponse = ec2Client.describeRegions();
                 assertNotNull(regionsResponse.regions());
-                assertTrue(regionsResponse.regions().size() > 0);
+                assertFalse(regionsResponse.regions().isEmpty());
                 
                 // Test VPC permissions
                 DescribeVpcsResponse vpcsResponse = ec2Client.describeVpcs();
@@ -310,7 +306,7 @@ public class MainIntegrationTest {
             
             // Deploy infrastructure with timeout
             String deployOutput = executeCommandWithTimeout(
-                300, "pulumi", "up", "--yes", "--stack", stackName, "--cwd", "lib");
+                    "pulumi", "up", "--yes", "--stack", stackName, "--cwd", "lib");
             
             assertNotNull(deployOutput);
             assertTrue(deployOutput.contains("Resources") || deployOutput.contains("Update summary"));
@@ -336,7 +332,7 @@ public class MainIntegrationTest {
             // Clean up - destroy the stack
             try {
                 String destroyOutput = executeCommandWithTimeout(
-                    300, "pulumi", "destroy", "--yes", "--stack", stackName, "--cwd", "lib");
+                        "pulumi", "destroy", "--yes", "--stack", stackName, "--cwd", "lib");
                 
                 // Remove the stack
                 executeCommand("pulumi", "stack", "rm", stackName, "--yes", "--cwd", "lib");
@@ -365,9 +361,9 @@ public class MainIntegrationTest {
                     .anyMatch(summary -> summary.stackSetName().contains("integration-test-app"));
                 
                 if (found) {
-                    System.out.println("✅ StackSet found in CloudFormation");
+                    System.out.println("StackSet found in CloudFormation");
                 } else {
-                    System.out.println("⚠️ StackSet not found - this is expected if infrastructure is not deployed");
+                    System.out.println("StackSet not found - this is expected if infrastructure is not deployed");
                 }
             }
             
@@ -382,9 +378,9 @@ public class MainIntegrationTest {
                     .anyMatch(role -> role.roleName().contains("CloudFormationStackSetExecution"));
                 
                 if (adminRoleFound && execRoleFound) {
-                    System.out.println("✅ IAM roles found");
+                    System.out.println("IAM roles found");
                 } else {
-                    System.out.println("⚠️ IAM roles not found - this is expected if infrastructure is not deployed");
+                    System.out.println("IAM roles not found - this is expected if infrastructure is not deployed");
                 }
             }
             
@@ -396,9 +392,9 @@ public class MainIntegrationTest {
                     .anyMatch(dashboard -> dashboard.dashboardName().contains("WebApplication"));
                 
                 if (dashboardFound) {
-                    System.out.println("✅ CloudWatch dashboard found");
+                    System.out.println("CloudWatch dashboard found");
                 } else {
-                    System.out.println("⚠️ CloudWatch dashboard not found - this is expected if infrastructure is not deployed");
+                    System.out.println("CloudWatch dashboard not found - this is expected if infrastructure is not deployed");
                 }
             }
         });
@@ -412,8 +408,7 @@ public class MainIntegrationTest {
         assertDoesNotThrow(() -> {
             var config = new DeploymentConfig(mockContext);
             assertNotNull(config);
-            
-            System.out.println("✅ DeploymentConfig created successfully");
+
             System.out.println("   - Application: " + config.getApplicationName());
             System.out.println("   - Environment: " + config.getEnvironment());
             System.out.println("   - Management Region: " + config.getManagementRegion());
@@ -436,7 +431,7 @@ public class MainIntegrationTest {
             assertEquals(3, defaultConfig.getTargetRegions().size());
             assertEquals(2, defaultConfig.getTargetAccounts().size());
             
-            System.out.println("✅ Default configuration works correctly");
+            System.out.println("Default configuration works correctly");
         });
     }
     
@@ -453,7 +448,7 @@ public class MainIntegrationTest {
             assertEquals("Pulumi", tags.get("ManagedBy"));
             assertEquals("MultiRegionWebApp", tags.get("Project"));
             
-            System.out.println("✅ Resource naming conventions are correct");
+            System.out.println("Resource naming conventions are correct");
         });
     }
 
@@ -503,18 +498,18 @@ public class MainIntegrationTest {
         return readProcessOutput(process);
     }
     
-    private String executeCommandWithTimeout(int timeoutSeconds, String... command) 
+    private String executeCommandWithTimeout(String... command)
             throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(Paths.get(".").toFile())
                 .redirectErrorStream(true);
                 
         Process process = pb.start();
-        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        boolean finished = process.waitFor(300, TimeUnit.SECONDS);
         
         if (!finished) {
             process.destroyForcibly();
-            throw new RuntimeException("Command timed out after " + timeoutSeconds + " seconds: " + String.join(" ", command));
+            throw new RuntimeException("Command timed out after " + 300 + " seconds: " + String.join(" ", command));
         }
         
         String output = readProcessOutput(process);
