@@ -66,7 +66,7 @@ public class CrossAccountRoleSetup extends ComponentResource {
 
             // Create execution role in target account
             var executionRole = new Role("execution-role-" + accountId, RoleArgs.builder()
-                    .name("AWSCloudFormationStackSetExecutionRole")
+                    .name("AWSCloudFormationStackSetExecutionRole-" + accountId)
                     .assumeRolePolicy(args.administrationRoleArn.applyValue(adminArn -> Either.ofLeft(String.format("""
                             {
                                 "Version": "2012-10-17",
@@ -86,7 +86,7 @@ public class CrossAccountRoleSetup extends ComponentResource {
 
             // Create execution policy
             var executionPolicy = new Policy("execution-policy-" + accountId, PolicyArgs.builder()
-                    .name("StackSetExecutionPolicy")
+                    .name("StackSetExecutionPolicy-" + accountId)
                     .policy("""
                             {
                                 "Version": "2012-10-17",
