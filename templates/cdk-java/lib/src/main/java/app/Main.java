@@ -10,7 +10,7 @@ import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
- * 
+ *
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
@@ -57,15 +57,15 @@ class TapStackProps {
 
 /**
  * Represents the main CDK stack for the Tap project.
- * 
+ *
  * This stack is responsible for orchestrating the instantiation of other resource-specific stacks.
- * It determines the environment suffix from the provided properties, 
+ * It determines the environment suffix from the provided properties,
  * CDK context, or defaults to 'dev'.
- * 
+ *
  * Note:
  * - Do NOT create AWS resources directly in this stack.
  * - Instead, instantiate separate stacks for each resource type within this stack.
- * 
+ *
  * @version 1.0
  * @since 1.0
  */
@@ -74,7 +74,7 @@ class TapStack extends Stack {
 
     /**
      * Constructs a new TapStack.
-     * 
+     *
      * @param scope The parent construct
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack, including environment suffix
@@ -110,7 +110,7 @@ class TapStack extends Stack {
 
     /**
      * Gets the environment suffix used by this stack.
-     * 
+     *
      * @return The environment suffix (e.g., 'dev', 'prod')
      */
     public String getEnvironmentSuffix() {
@@ -120,13 +120,13 @@ class TapStack extends Stack {
 
 /**
  * Main entry point for the TAP CDK Java application.
- * 
+ *
  * This class serves as the entry point for the CDK application and is responsible
  * for initializing the CDK app and instantiating the main TapStack.
- * 
+ *
  * The application supports environment-specific deployments through the
  * environmentSuffix context parameter.
- * 
+ *
  * @version 1.0
  * @since 1.0
  */
@@ -141,10 +141,10 @@ public final class Main {
 
     /**
      * Main entry point for the CDK application.
-     * 
+     *
      * This method creates a CDK App instance and instantiates the TapStack
      * with appropriate configuration based on environment variables and context.
-     * 
+     *
      * @param args Command line arguments (not used in this application)
      */
     public static void main(final String[] args) {
