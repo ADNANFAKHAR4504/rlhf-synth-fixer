@@ -149,7 +149,7 @@ Resources:
         SecretStringTemplate: '{"username":"admin"}'
         GenerateStringKey: "password"
         PasswordLength: 20
-        ExcludeCharacters: '@/"\'\\'
+        ExcludeCharacters: "@/\"'\\"
       Tags:
         - Key: Name
           Value: rds-db-secret
