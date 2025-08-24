@@ -189,7 +189,9 @@ func TestKMSConfiguration(t *testing.T) {
 	// Verify KMS alias
 	assert.Contains(t, kmsAliases, "security-kms-alias")
 	kmsAlias := kmsAliases["security-kms-alias"].(map[string]interface{})
-	assert.Equal(t, "alias/security-infrastructure", kmsAlias["name"])
+	// KMS alias name should contain environment suffix
+	aliasName := kmsAlias["name"].(string)
+	assert.Contains(t, aliasName, "alias/security-infrastructure-cdktf-")
 }
 
 func TestS3BucketConfiguration(t *testing.T) {
@@ -263,12 +265,16 @@ func TestIAMRolesAndPolicies(t *testing.T) {
 	// Verify IAM role exists
 	assert.Contains(t, iamRoles, "ec2-role")
 	ec2Role := iamRoles["ec2-role"].(map[string]interface{})
-	assert.Equal(t, "EC2SecurityRole", ec2Role["name"])
+	// IAM role name should contain environment suffix
+	roleName := ec2Role["name"].(string)
+	assert.Contains(t, roleName, "EC2SecurityRole-cdktf-")
 
 	// Verify IAM policy exists
 	assert.Contains(t, iamPolicies, "ec2-policy")
 	ec2Policy := iamPolicies["ec2-policy"].(map[string]interface{})
-	assert.Equal(t, "EC2SecurityPolicy", ec2Policy["name"])
+	// IAM policy name should contain environment suffix
+	policyName := ec2Policy["name"].(string)
+	assert.Contains(t, policyName, "EC2SecurityPolicy-cdktf-")
 
 	// Verify policy attachment
 	attachments := resources["aws_iam_role_policy_attachment"].(map[string]interface{})
