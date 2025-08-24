@@ -1,4 +1,4 @@
-package lib
+package main
 
 import (
 	"fmt"
@@ -341,4 +341,10 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 	}
 
 	return stack
+}
+
+func main() {
+	app := cdktf.NewApp(nil)
+	NewTapStack(app, "TapStack")
+	app.Synth()
 }
