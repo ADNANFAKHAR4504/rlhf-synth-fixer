@@ -378,12 +378,7 @@ EOF
 						"Service": "cloudtrail.amazonaws.com"
 					},
 					"Action": "s3:GetBucketAcl",
-					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}",
-					"Condition": {
-						"StringEquals": {
-							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
-						}
-					}
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}"
 				},
 				{
 					"Sid": "AWSCloudTrailWrite",
@@ -395,13 +390,22 @@ EOF
 					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}/*",
 					"Condition": {
 						"StringEquals": {
-							"s3:x-amz-acl": "bucket-owner-full-control",
-							"AWS:SourceArn": "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/tap-cloudtrail-dev"
+							"s3:x-amz-acl": "bucket-owner-full-control"
 						}
 					}
+				},
+				{
+					"Sid": "AWSCloudTrailBucketExistenceCheck",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": "s3:ListBucket",
+					"Resource": "${aws_s3_bucket.cloudtrail_bucket.arn}"
 				}
 			]
 		}`,
+		"depends_on": ["aws_s3_bucket_public_access_block.cloudtrail_bucket_pab"],
 	})
 
 	// Add current AWS account data source
@@ -421,6 +425,10 @@ EOF
 		"is_multi_region_trail":         true,
 		"enable_log_file_validation":    true,
 		"kms_key_id":                    "${aws_kms_key.tap_kms_key.arn}",
+		"depends_on": [
+			"aws_s3_bucket_policy.cloudtrail_bucket_policy",
+			"aws_kms_key.tap_kms_key",
+		],
 		"tags": map[string]string{
 			"Name": "tap-cloudtrail-dev",
 		},
