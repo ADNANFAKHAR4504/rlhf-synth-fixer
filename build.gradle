@@ -104,6 +104,7 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:ec2'
     integrationTestImplementation 'software.amazon.awssdk:iam'
     integrationTestImplementation 'software.amazon.awssdk:kms'
+    integrationTestImplementation 'software.amazon.awssdk:cloudformation'
     integrationTestImplementation 'software.amazon.awssdk:cloudtrail'
     integrationTestImplementation 'software.amazon.awssdk:cloudwatch'
     integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
