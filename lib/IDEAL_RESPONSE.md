@@ -926,7 +926,7 @@ public class ObservabilityDashboard extends ComponentResource {
 ```
 
 ```java
-// components/ObservabilityDashboard.java
+// components/CrossAccountRoleSetup.java
 package app.components;
 
 import com.pulumi.aws.Provider;
