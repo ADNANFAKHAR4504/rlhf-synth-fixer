@@ -110,7 +110,7 @@ func validateVPCExists(t *testing.T, region string) {
 	t.Helper()
 
 	ec2Client := createEC2Client(t, region)
-	
+
 	// Get environment suffix for resource naming
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
@@ -147,7 +147,7 @@ func validateSecurityGroupsExist(t *testing.T, region string) {
 	t.Helper()
 
 	ec2Client := createEC2Client(t, region)
-	
+
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
 		environmentSuffix = "pr2114"
@@ -203,7 +203,7 @@ func validateLoadBalancerExists(t *testing.T, dnsName, region string) {
 	t.Helper()
 
 	elbv2Client := createELBv2Client(t, region)
-	
+
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
 		environmentSuffix = "pr2114"
@@ -270,7 +270,7 @@ func validateAutoScalingGroupExists(t *testing.T, region string) {
 	t.Helper()
 
 	asgClient := createAutoScalingClient(t, region)
-	
+
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
 		environmentSuffix = "pr2114"
@@ -714,7 +714,7 @@ func TestIntegration_InfrastructureHealthCheck(t *testing.T) {
 			outputKey := fmt.Sprintf("alb-dns-%s", region)
 			albDNS, exists := outputs[outputKey]
 			require.True(t, exists, "ALB DNS output should exist for region %s", region)
-			
+
 			dnsStr, ok := albDNS.(string)
 			require.True(t, ok, "ALB DNS should be a string")
 			require.NotEmpty(t, dnsStr, "ALB DNS should not be empty")
@@ -752,7 +752,7 @@ func TestIntegration_CrossRegionDeploymentConsistency(t *testing.T) {
 			outputKey := fmt.Sprintf("alb-dns-%s", region)
 			albDNS, exists := outputs[outputKey]
 			require.True(t, exists, "ALB DNS output should exist for region %s", region)
-			
+
 			dnsStr, ok := albDNS.(string)
 			require.True(t, ok, "ALB DNS should be a string")
 
