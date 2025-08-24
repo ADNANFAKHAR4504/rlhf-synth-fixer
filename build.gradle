@@ -119,12 +119,6 @@ jar {
     zip64 = true  // Enable zip64 for large archives
 }
 
-// Configure integration test dependencies
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
 // JUnit configuration
 test {
     useJUnitPlatform()
