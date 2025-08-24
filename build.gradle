@@ -203,7 +203,7 @@ tasks.register('showCoverage') {
 
         if (xmlReportFile.exists()) {
             // Parse XML to get coverage percentage
-            def xml = new XmlParser().parse(xmlReportFile)
+            def xml = new groovy.xml.XmlParser().parse(xmlReportFile)
             def counter = xml.counter.find { it.@type == 'LINE' }
             if (counter) {
                 def covered = counter.@covered.toInteger()
