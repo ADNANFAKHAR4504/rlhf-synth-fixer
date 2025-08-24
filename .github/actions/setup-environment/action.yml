@@ -75,6 +75,15 @@ runs:
         restore-keys: |
           ${{ runner.os }}-go-
 
+    - name: Cache CDKTF .gen (Go)
+      if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
+      uses: actions/cache@v4
+      with:
+        path: .gen
+        key: ${{ runner.os }}-cdktf-gen-${{ hashFiles('cdktf.json', 'package-lock.json', 'package.json') }}
+        restore-keys: |
+          ${{ runner.os }}-cdktf-gen-
+
     - name: Setup Java 17
       if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
       uses: actions/setup-java@v4
@@ -87,7 +96,6 @@ runs:
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-home-cache-cleanup: true
-
 
     - name: Setup Terraform
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
@@ -128,6 +136,7 @@ runs:
         name: build-artifacts
         include-hidden-files: true
         path: |
+          .gen/
           bin/
           lib/
           tests/
