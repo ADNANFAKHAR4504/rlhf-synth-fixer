@@ -9,38 +9,48 @@ import software.constructs.Construct;
 import java.util.Optional;
 
 /**
- * TapStackProps defines the properties for the TapStack CDK stack.
+ * TapStackProps holds configuration for the TapStack CDK stack.
  * 
- * This class extends the base CDK StackProps and adds support for
- * environment-specific configurations through the environmentSuffix property.
+ * This class provides a simple container for stack-specific configuration
+ * including environment suffix for resource naming.
  */
-class TapStackProps extends StackProps {
+class TapStackProps {
     private final String environmentSuffix;
+    private final StackProps stackProps;
 
-    private TapStackProps(Builder builder) {
-        super(builder);
-        this.environmentSuffix = builder.environmentSuffix;
+    private TapStackProps(String environmentSuffix, StackProps stackProps) {
+        this.environmentSuffix = environmentSuffix;
+        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
         return environmentSuffix;
     }
 
+    public StackProps getStackProps() {
+        return stackProps;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
 
-    public static class Builder extends StackProps.Builder {
+    public static class Builder {
         private String environmentSuffix;
+        private StackProps stackProps;
 
         public Builder environmentSuffix(String environmentSuffix) {
             this.environmentSuffix = environmentSuffix;
             return this;
         }
 
-        @Override
+        public Builder stackProps(StackProps stackProps) {
+            this.stackProps = stackProps;
+            return this;
+        }
+
         public TapStackProps build() {
-            return new TapStackProps(this);
+            return new TapStackProps(environmentSuffix, stackProps);
         }
     }
 }
@@ -70,7 +80,7 @@ class TapStack extends Stack {
      * @param props Optional properties for configuring the stack, including environment suffix
      */
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
-        super(scope, id, props);
+        super(scope, id, props != null ? props.getStackProps() : null);
 
         // Get environment suffix from props, context, or use 'dev' as default
         this.environmentSuffix = Optional.ofNullable(props)
@@ -149,9 +159,11 @@ public final class Main {
         // Create the main TAP stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
-                .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                        .region(System.getenv("CDK_DEFAULT_REGION"))
+                .stackProps(StackProps.builder()
+                        .env(Environment.builder()
+                                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                                .region(System.getenv("CDK_DEFAULT_REGION"))
+                                .build())
                         .build())
                 .build());
 

@@ -49,12 +49,12 @@ public class MainIntegrationTest {
      */
     @Test
     public void testMultiEnvironmentConfiguration() {
-        App app = new App();
-
         // Test different environment configurations
         String[] environments = {"dev", "staging", "prod"};
         
         for (String env : environments) {
+            // Create a new app for each environment to avoid synthesis conflicts
+            App app = new App();
             TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
                     .environmentSuffix(env)
                     .build());
