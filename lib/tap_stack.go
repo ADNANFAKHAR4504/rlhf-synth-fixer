@@ -211,10 +211,6 @@ func main() {
 			return err
 		}
 
-
-
-
-
 		// Add bucket policy for CloudTrail
 		auditBucketPolicy := auditBucket.Arn.ApplyT(func(arn string) (string, error) {
 			return fmt.Sprintf(`{
