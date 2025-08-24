@@ -348,14 +348,14 @@ describe('TapStack', () => {
     );
   });
 
-  test('ALB deletion protection is enabled', () => {
+  test('ALB deletion protection is disabled for QA', () => {
     template.hasResourceProperties(
       'AWS::ElasticLoadBalancingV2::LoadBalancer',
       {
         LoadBalancerAttributes: Match.arrayWith([
           {
             Key: 'deletion_protection.enabled',
-            Value: 'true',
+            Value: 'false',
           },
         ]),
       }
@@ -402,10 +402,24 @@ describe('TapStack', () => {
             Principal: {
               AWS: Match.anyValue(), // The account ID is wrapped in Fn::Join
             },
-            Action: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
+            Action: ['s3:GetBucketAcl', 's3:GetBucketLocation', 's3:ListBucket'],
             Effect: 'Allow',
             Resource: Match.anyValue(),
-            Sid: 'AllowELBServiceAccountAclCheck',
+            Sid: 'AllowELBServiceAccountBucketAccess',
+          },
+          {
+            Principal: {
+              AWS: Match.anyValue(), // The account ID is wrapped in Fn::Join
+            },
+            Action: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
+            Effect: 'Allow',
+            Resource: Match.anyValue(),
+            Sid: 'AllowELBServiceAccountLogDelivery',
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
           },
         ]),
       },

@@ -117,25 +117,30 @@ export class TapStack extends cdk.Stack {
     // ELB service principal for ALB access logs (region-specific)
     const elbServiceAccount = this.getELBServiceAccount();
 
-    // Grant ELB service account access to check bucket ACL and location
+    // Grant ELB service account comprehensive bucket access for ALB logs
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AllowELBServiceAccountAclCheck',
+        sid: 'AllowELBServiceAccountBucketAccess',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation', 's3:ListBucket'],
         resources: [albLogsBucket.bucketArn],
       })
     );
 
-    // Grant ELB service account access to put access logs
+    // Grant ELB service account comprehensive object access for ALB logs
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AllowELBServiceAccountLogDelivery',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: ['s3:PutObject'],
+        actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
         resources: [`${albLogsBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
       })
     );
 
@@ -371,7 +376,7 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PUBLIC,
         },
         securityGroup: albSecurityGroup,
-        deletionProtection: true, // Prevent accidental deletion
+        deletionProtection: false, // Allow deletion for QA environment cleanup
       }
     );
 
@@ -379,6 +384,9 @@ export class TapStack extends cdk.Stack {
     alb.setAttribute('access_logs.s3.enabled', 'true');
     alb.setAttribute('access_logs.s3.bucket', albLogsBucket.bucketName);
     alb.setAttribute('access_logs.s3.prefix', 'alb-access-logs');
+
+    // Disable deletion protection for QA compliance
+    alb.setAttribute('deletion_protection.enabled', 'false');
 
     // HTTPS Listener with TLS 1.2+
     const httpsListener = alb.addListener(
