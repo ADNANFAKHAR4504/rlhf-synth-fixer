@@ -2,7 +2,6 @@ This template will establish a production-ready, secure web application environm
 
 ```yaml
 # secure-web-app-template.yml
-# secure-web-app-template.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, scalable web application environment with comprehensive monitoring and compliance'
 
@@ -37,7 +36,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
 Conditions:
-  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # KMS Key for encryption
@@ -59,6 +58,15 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action:
               - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow EC2 to use key for EBS encryption
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
               - kms:DescribeKey
             Resource: '*'
 
@@ -418,6 +426,16 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource: !GetAtt S3Bucket.Arn
+        - PolicyName: KMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt KMSKey.Arn
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -895,6 +913,9 @@ Outputs:
 
 # Template Capabilities
 # Note: This template requires CAPABILITY_IAM and CAPABILITY_NAMED_IAM for IAM resources
+```
+
+## Key Features Implemented
 ```
 
 ## Key Features Implemented
