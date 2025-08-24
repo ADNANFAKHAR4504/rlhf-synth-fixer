@@ -47,8 +47,9 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	// Get environment suffix
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
-		environmentSuffix = fmt.Sprintf("synthtrainr961")
+		environmentSuffix = "synthtrainr961"
 	}
+	environmentSuffix = fmt.Sprintf("cdktf-%s", environmentSuffix)
 
 	// AWS Provider
 	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
@@ -64,6 +65,23 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 				},
 			},
 		},
+	})
+
+	// S3 Backend for remote state
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states"
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1"
+	}
+
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket:  jsii.String(stateBucket),
+		Key:     jsii.String(fmt.Sprintf("%s/TapStack%s.tfstate", environmentSuffix, environmentSuffix)),
+		Region:  jsii.String(stateBucketRegion),
+		Encrypt: jsii.Bool(true),
 	})
 
 	// Get availability zones
@@ -93,12 +111,12 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-infrastructure-kms-key"),
+			"Name": jsii.String(fmt.Sprintf("security-infrastructure-kms-key-%s", environmentSuffix)),
 		},
 	})
 
 	kmsalias.NewKmsAlias(stack, jsii.String("security-kms-alias"), &kmsalias.KmsAliasConfig{
-		Name:        jsii.String("alias/security-infrastructure"),
+		Name:        jsii.String(fmt.Sprintf("alias/security-infrastructure-%s", environmentSuffix)),
 		TargetKeyId: kmsKey.KeyId(),
 	})
 
@@ -108,7 +126,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-vpc"),
+			"Name": jsii.String(fmt.Sprintf("security-vpc-%s", environmentSuffix)),
 		},
 	})
 
@@ -116,7 +134,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	igw := internetgateway.NewInternetGateway(stack, jsii.String("security-igw"), &internetgateway.InternetGatewayConfig{
 		VpcId: mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-igw"),
+			"Name": jsii.String(fmt.Sprintf("security-igw-%s", environmentSuffix)),
 		},
 	})
 
@@ -127,7 +145,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		AvailabilityZone:    jsii.String(*cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(0)), nil)),
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name": jsii.String("public-subnet-1"),
+			"Name": jsii.String(fmt.Sprintf("public-subnet-1-%s", environmentSuffix)),
 			"Type": jsii.String("public"),
 		},
 	})
@@ -138,7 +156,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		AvailabilityZone:    jsii.String(*cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(1)), nil)),
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Tags: &map[string]*string{
-			"Name": jsii.String("public-subnet-2"),
+			"Name": jsii.String(fmt.Sprintf("public-subnet-2-%s", environmentSuffix)),
 			"Type": jsii.String("public"),
 		},
 	})
@@ -149,7 +167,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		CidrBlock:        jsii.String("10.0.11.0/24"),
 		AvailabilityZone: jsii.String(*cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(0)), nil)),
 		Tags: &map[string]*string{
-			"Name": jsii.String("private-subnet-1"),
+			"Name": jsii.String(fmt.Sprintf("private-subnet-1-%s", environmentSuffix)),
 			"Type": jsii.String("private"),
 		},
 	})
@@ -159,7 +177,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		CidrBlock:        jsii.String("10.0.12.0/24"),
 		AvailabilityZone: jsii.String(*cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(1)), nil)),
 		Tags: &map[string]*string{
-			"Name": jsii.String("private-subnet-2"),
+			"Name": jsii.String(fmt.Sprintf("private-subnet-2-%s", environmentSuffix)),
 			"Type": jsii.String("private"),
 		},
 	})
@@ -168,7 +186,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	natEip1 := eip.NewEip(stack, jsii.String("nat-eip-1"), &eip.EipConfig{
 		Domain: jsii.String("vpc"),
 		Tags: &map[string]*string{
-			"Name": jsii.String("nat-eip-1"),
+			"Name": jsii.String(fmt.Sprintf("nat-eip-1-%s", environmentSuffix)),
 		},
 		DependsOn: &[]cdktf.ITerraformDependable{igw},
 	})
@@ -176,7 +194,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	natEip2 := eip.NewEip(stack, jsii.String("nat-eip-2"), &eip.EipConfig{
 		Domain: jsii.String("vpc"),
 		Tags: &map[string]*string{
-			"Name": jsii.String("nat-eip-2"),
+			"Name": jsii.String(fmt.Sprintf("nat-eip-2-%s", environmentSuffix)),
 		},
 		DependsOn: &[]cdktf.ITerraformDependable{igw},
 	})
@@ -186,7 +204,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		AllocationId: natEip1.Id(),
 		SubnetId:     publicSubnet1.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("nat-gateway-1"),
+			"Name": jsii.String(fmt.Sprintf("nat-gateway-1-%s", environmentSuffix)),
 		},
 	})
 
@@ -194,7 +212,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		AllocationId: natEip2.Id(),
 		SubnetId:     publicSubnet2.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("nat-gateway-2"),
+			"Name": jsii.String(fmt.Sprintf("nat-gateway-2-%s", environmentSuffix)),
 		},
 	})
 
@@ -202,21 +220,21 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	publicRt := routetable.NewRouteTable(stack, jsii.String("public-route-table"), &routetable.RouteTableConfig{
 		VpcId: mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("public-route-table"),
+			"Name": jsii.String(fmt.Sprintf("public-route-table-%s", environmentSuffix)),
 		},
 	})
 
 	privateRt1 := routetable.NewRouteTable(stack, jsii.String("private-route-table-1"), &routetable.RouteTableConfig{
 		VpcId: mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("private-route-table-1"),
+			"Name": jsii.String(fmt.Sprintf("private-route-table-1-%s", environmentSuffix)),
 		},
 	})
 
 	privateRt2 := routetable.NewRouteTable(stack, jsii.String("private-route-table-2"), &routetable.RouteTableConfig{
 		VpcId: mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("private-route-table-2"),
+			"Name": jsii.String(fmt.Sprintf("private-route-table-2-%s", environmentSuffix)),
 		},
 	})
 
@@ -262,11 +280,11 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 
 	// Security Groups
 	webSecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("web-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String("web-security-group"),
+		Name:        jsii.String(fmt.Sprintf("web-security-group-%s", environmentSuffix)),
 		Description: jsii.String("Security group for web tier"),
 		VpcId:       mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("web-security-group"),
+			"Name": jsii.String(fmt.Sprintf("web-security-group-%s", environmentSuffix)),
 		},
 	})
 
@@ -302,20 +320,20 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	})
 
 	appSecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("app-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String("app-security-group"),
+		Name:        jsii.String(fmt.Sprintf("app-security-group-%s", environmentSuffix)),
 		Description: jsii.String("Security group for application tier"),
 		VpcId:       mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("app-security-group"),
+			"Name": jsii.String(fmt.Sprintf("app-security-group-%s", environmentSuffix)),
 		},
 	})
 
 	dbSecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("db-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String("db-security-group"),
+		Name:        jsii.String(fmt.Sprintf("db-security-group-%s", environmentSuffix)),
 		Description: jsii.String("Security group for database tier"),
 		VpcId:       mainVpc.Id(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("db-security-group"),
+			"Name": jsii.String(fmt.Sprintf("db-security-group-%s", environmentSuffix)),
 		},
 	})
 
@@ -332,7 +350,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 
 	// IAM Roles
 	ec2Role := iamrole.NewIamRole(stack, jsii.String("ec2-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String("EC2SecurityRole"),
+		Name: jsii.String(fmt.Sprintf("EC2SecurityRole-%s", environmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -346,13 +364,13 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name": jsii.String("EC2SecurityRole"),
+			"Name": jsii.String(fmt.Sprintf("EC2SecurityRole-%s", environmentSuffix)),
 		},
 	})
 
 	// IAM Policy for EC2 (least privilege)
 	ec2Policy := iampolicy.NewIamPolicy(stack, jsii.String("ec2-policy"), &iampolicy.IamPolicyConfig{
-		Name:        jsii.String("EC2SecurityPolicy"),
+		Name:        jsii.String(fmt.Sprintf("EC2SecurityPolicy-%s", environmentSuffix)),
 		Description: jsii.String("Least privilege policy for EC2 instances"),
 		Policy: jsii.String(`{
 			"Version": "2012-10-17",
@@ -509,7 +527,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 			},
 		},
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-audit-trail"),
+			"Name": jsii.String(fmt.Sprintf("security-audit-trail-%s", environmentSuffix)),
 		},
 	})
 
@@ -545,7 +563,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		Name:      jsii.String(fmt.Sprintf("security-db-subnet-group-%s", environmentSuffix)),
 		SubnetIds: &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-db-subnet-group"),
+			"Name": jsii.String(fmt.Sprintf("security-db-subnet-group-%s", environmentSuffix)),
 		},
 	})
 
@@ -571,7 +589,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		SkipFinalSnapshot:     jsii.Bool(true),
 		DeletionProtection:    jsii.Bool(false),
 		Tags: &map[string]*string{
-			"Name": jsii.String("security-database"),
+			"Name": jsii.String(fmt.Sprintf("security-database-%s", environmentSuffix)),
 		},
 	})
 

@@ -16,6 +16,7 @@ func main() {
 	if environmentSuffix == "" {
 		environmentSuffix = "synthtrainr961"
 	}
+	environmentSuffix = fmt.Sprintf("cdktf-%s", environmentSuffix)
 
 	// Single stack with multi-region resources
 	NewTapStack(app, jsii.String(fmt.Sprintf("TapStack%s", environmentSuffix)), &TapStackConfig{
