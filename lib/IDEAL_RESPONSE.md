@@ -1,4 +1,4 @@
-I'll create a comprehensive CloudFormation template for a web application environment that meets all your requirements. Here's the complete YAML template:
+A comprehensive CloudFormation template for a web application environment that meets all your requirements. Here's the complete YAML template:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
