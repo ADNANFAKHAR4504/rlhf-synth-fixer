@@ -92,12 +92,26 @@ elif [ "$PLATFORM" = "tf" ]; then
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi destroy..."
-  echo "Selecting dev stack..."
-  pipenv run pulumi-create-stack || echo "Stack selection failed"
-  echo "Destroying Pulumi infrastructure..."
-  pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
-  echo "Removing Pulumi stack..."
-  pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Go Pulumi project detected"
+    cd lib
+    echo "Selecting dev stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create || echo "Stack selection failed"
+    echo "Destroying Pulumi infrastructure..."
+    pulumi destroy --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || echo "No resources to destroy or destruction failed"
+    echo "Removing Pulumi stack..."
+    pulumi stack rm "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes --force || echo "Stack removal failed or stack doesn't exist"
+    cd ..
+  else
+    echo "🔧 Python Pulumi project detected"
+    echo "Selecting dev stack..."
+    pipenv run pulumi-create-stack || echo "Stack selection failed"
+    echo "Destroying Pulumi infrastructure..."
+    pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
+    echo "Removing Pulumi stack..."
+    pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
+  fi
 
 else
   echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
