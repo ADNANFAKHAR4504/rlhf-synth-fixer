@@ -109,7 +109,7 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Route Table for public subnets
+  # Route Table for public subnetss
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
