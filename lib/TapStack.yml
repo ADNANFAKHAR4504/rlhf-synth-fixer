@@ -155,8 +155,8 @@ Resources:
       Engine: mysql
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: '{{resolve:secretsmanager:/rds/db/creds:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:/rds/db/creds:SecretString:password}}'
       DBSubnetGroupName: !Ref RDSSubnetGroup
       MultiAZ: true
       BackupRetentionPeriod: 7
