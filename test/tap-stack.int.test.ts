@@ -57,8 +57,14 @@ describe('Secure WebApp Stack Integration Checks', () => {
   test('should place the RDS instance in a private subnet', () => {
     const synthesizedJson = JSON.parse(synthesized);
     const dbSubnetGroup = synthesizedJson.resource.aws_db_subnet_group.dbSubnetGroup;
-    const privateSubnetToken = '${aws_subnet.privateSubnet.id}';
-    expect(dbSubnetGroup.subnet_ids).toContain(privateSubnetToken);
+
+    // Create tokens for both new private subnets
+    const privateSubnetAToken = '${aws_subnet.privateSubnetA.id}';
+    const privateSubnetBToken = '${aws_subnet.privateSubnetB.id}';
+
+    // Check that the subnet group contains both new subnets
+    expect(dbSubnetGroup.subnet_ids).toContain(privateSubnetAToken);
+    expect(dbSubnetGroup.subnet_ids).toContain(privateSubnetBToken);
   });
 
   test('should create an SSM Parameter for the SSH IP address', () => {

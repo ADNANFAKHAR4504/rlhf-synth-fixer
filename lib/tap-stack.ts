@@ -96,6 +96,8 @@ export class TapStack extends TerraformStack {
         {
           id: 'log-retention',
           status: 'Enabled',
+          // --- FIX: Add prefix to apply rule to all objects ---
+          prefix: '',
           expiration: [
             {
               days: 90,
@@ -136,11 +138,19 @@ export class TapStack extends TerraformStack {
       mapPublicIpOnLaunch: true,
     });
 
-    const privateSubnet = new Subnet(this, 'privateSubnet', {
+    // --- FIX: Create a second private subnet in a different AZ ---
+    const privateSubnetA = new Subnet(this, 'privateSubnetA', {
       vpcId: vpc.id,
       cidrBlock: '10.0.101.0/24',
       availabilityZone: 'us-east-1a',
     });
+
+    const privateSubnetB = new Subnet(this, 'privateSubnetB', {
+      vpcId: vpc.id,
+      cidrBlock: '10.0.102.0/24',
+      availabilityZone: 'us-east-1b',
+    });
+    // --- END FIX ---
 
     const igw = new InternetGateway(this, 'igw', { vpcId: vpc.id });
 
@@ -155,9 +165,11 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Database Layer (RDS) ---
+    // --- FIX: Include both private subnets in the group ---
     const dbSubnetGroup = new DbSubnetGroup(this, 'dbSubnetGroup', {
-      subnetIds: [privateSubnet.id],
+      subnetIds: [privateSubnetA.id, privateSubnetB.id],
     });
+    // --- END FIX ---
 
     const dbSg = new SecurityGroup(this, 'dbSg', { vpcId: vpc.id });
 
