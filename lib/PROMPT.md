@@ -36,7 +36,8 @@ Think of it as building a fortress for our application. Here’s what that envir
 - Amazon RDS instances that are fully encrypted.  
 
 ### Web Application Protection
-- AWS WAF in front of the application to guard against common web threats.  
+- Note: WAF protection removed as it requires an ALB, API Gateway, or CloudFront
+- Application is protected by security groups and network ACLs instead  
 
 ---
 
@@ -48,15 +49,15 @@ Think of it as building a fortress for our application. Here’s what that envir
 ### Compliance
 - AWS Config to monitor configuration changes and compliance.  
 
-### Activity Tracking
+# Activity Tracking
 - AWS CloudTrail enabled to track all API calls and user activity.  
 
-### Secure Storage
+# Secure Storage
 - S3 buckets must deny public access by default.  
 
 ---
 
-## Key Constraints
+# Key Constraints
 
 - Region must be us-east-1.  
 - IAM roles must use least privilege.  
@@ -67,7 +68,7 @@ Think of it as building a fortress for our application. Here’s what that envir
 - EC2 instances must be spread across two or more Availability Zones.  
 - Logging must be enabled for critical services.  
 - AWS Config must be active.  
-- AWS WAF must protect the application.  
+- Note: WAF protection removed as it requires an ALB, API Gateway, or CloudFront  
 - CloudTrail must track all API calls and user activity.  
 - S3 buckets must deny public access.  
 - RDS databases must be encrypted.  

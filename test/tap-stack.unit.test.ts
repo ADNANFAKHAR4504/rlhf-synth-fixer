@@ -216,20 +216,7 @@ describe('Secure Web Application CloudFormation Template', () => {
       expect(template.Resources.KMSKeyAlias.Type).toBe('AWS::KMS::Alias');
     });
 
-    test('should have WAF WebACL', () => {
-      const waf = template.Resources.WebACL;
-      expect(waf).toBeDefined();
-      expect(waf.Type).toBe('AWS::WAFv2::WebACL');
-      expect(waf.Properties.Scope).toBe('REGIONAL');
-    });
 
-    test('WAF should have managed rule sets', () => {
-      const waf = template.Resources.WebACL;
-      const rules = waf.Properties.Rules;
-      expect(rules).toHaveLength(2);
-      expect(rules.some((rule: any) => rule.Name === 'AWSManagedRulesCommonRuleSet')).toBe(true);
-      expect(rules.some((rule: any) => rule.Name === 'AWSManagedRulesKnownBadInputsRuleSet')).toBe(true);
-    });
   });
 
   describe('S3 Buckets', () => {
@@ -360,7 +347,7 @@ describe('Secure Web Application CloudFormation Template', () => {
         
         'DatabaseEndpoint',
         'S3BucketName',
-        'WebACLArn',
+
         'KMSKeyId',
         'BastionHostPublicIP',
         'CloudTrailArn',

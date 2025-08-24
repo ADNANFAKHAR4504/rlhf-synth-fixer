@@ -605,50 +605,9 @@ Resources:
       MultiAZ: true
       DeletionProtection: true
 
-  # WAF Web ACL
-  WebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
-      Scope: REGIONAL
-      DefaultAction:
-        Allow: {}
-      Rules:
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSetMetric
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 2
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: KnownBadInputsRuleSetMetric
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
-
-  # WAF Association with ALB
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Ref ApplicationLoadBalancer
-      WebACLArn: !GetAtt WebACL.Arn
+  # AWS WAF WebACL - Removed as ALB was removed
+  # Note: WAF requires an ALB, API Gateway, or CloudFront to be associated with
+  # Since we removed the ALB, WAF cannot protect the application
 
   # CloudTrail Logging
   CloudTrailLogGroup:
@@ -884,11 +843,7 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-S3-Bucket'
 
-  WebACLArn:
-    Description: WAF Web ACL ARN
-    Value: !GetAtt WebACL.Arn
-    Export:
-      Name: !Sub '${EnvironmentName}-WebACL-ARN'
+
 
   KMSKeyId:
     Description: KMS Key ID

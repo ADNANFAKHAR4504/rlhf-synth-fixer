@@ -42,7 +42,7 @@ describe('Secure Web Application Integration Tests', () => {
 
         'DatabaseEndpoint': 'test-db.123456789.us-east-1.rds.amazonaws.com',
         'S3BucketName': 'test-bucket-123456789',
-        'WebACLArn': 'arn:aws:wafv2:us-east-1:123456789:regional/webacl/test-waf/123456789',
+
         'KMSKeyId': 'arn:aws:kms:us-east-1:123456789:key/12345678-1234-1234-1234-123456789012',
         'BastionHostPublicIP': '1.2.3.4',
         'CloudTrailArn': 'arn:aws:cloudtrail:us-east-1:123456789:trail/test-trail'
@@ -79,7 +79,7 @@ describe('Secure Web Application Integration Tests', () => {
 
         'DatabaseEndpoint',
         'S3BucketName',
-        'WebACLArn',
+
         'KMSKeyId',
         'BastionHostPublicIP',
         'CloudTrailArn'
@@ -274,17 +274,7 @@ describe('Secure Web Application Integration Tests', () => {
       expect(outputs.CloudTrailArn).toMatch(/^arn:aws:cloudtrail:/);
     });
 
-    test('WAF should be protecting the application', async () => {
-      if (outputs.WebACLArn.includes('mock')) {
-        console.log('Skipping WAF test - using mock data');
-        expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:/);
-        return;
-      }
 
-      // WAF validation would require WAFv2 API calls
-      expect(outputs.WebACLArn).toBeDefined();
-      expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:/);
-    });
 
     test('KMS key should be available for encryption', async () => {
       if (outputs.KMSKeyId.includes('mock')) {

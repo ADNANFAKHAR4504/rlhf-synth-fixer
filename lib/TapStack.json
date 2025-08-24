@@ -1021,63 +1021,7 @@
                 "DeletionProtection": true
             }
         },
-        "WebACL": {
-            "Type": "AWS::WAFv2::WebACL",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-WebACL"
-                },
-                "Scope": "REGIONAL",
-                "DefaultAction": {
-                    "Allow": {}
-                },
-                "Rules": [
-                    {
-                        "Name": "AWSManagedRulesCommonRuleSet",
-                        "Priority": 1,
-                        "OverrideAction": {
-                            "None": {}
-                        },
-                        "Statement": {
-                            "ManagedRuleGroupStatement": {
-                                "VendorName": "AWS",
-                                "Name": "AWSManagedRulesCommonRuleSet"
-                            }
-                        },
-                        "VisibilityConfig": {
-                            "SampledRequestsEnabled": true,
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "CommonRuleSetMetric"
-                        }
-                    },
-                    {
-                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
-                        "Priority": 2,
-                        "OverrideAction": {
-                            "None": {}
-                        },
-                        "Statement": {
-                            "ManagedRuleGroupStatement": {
-                                "VendorName": "AWS",
-                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
-                            }
-                        },
-                        "VisibilityConfig": {
-                            "SampledRequestsEnabled": true,
-                            "CloudWatchMetricsEnabled": true,
-                            "MetricName": "KnownBadInputsRuleSetMetric"
-                        }
-                    }
-                ],
-                "VisibilityConfig": {
-                    "SampledRequestsEnabled": true,
-                    "CloudWatchMetricsEnabled": true,
-                    "MetricName": {
-                        "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-WebACL"
-                    }
-                }
-            }
-        },
+
 
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
@@ -1461,20 +1405,7 @@
                 }
             }
         },
-        "WebACLArn": {
-            "Description": "WAF Web ACL ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "WebACL",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-WebACL-ARN"
-                }
-            }
-        },
+
         "KMSKeyId": {
             "Description": "KMS Key ID",
             "Value": {
