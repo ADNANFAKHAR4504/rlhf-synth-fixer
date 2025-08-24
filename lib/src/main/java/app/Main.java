@@ -628,8 +628,8 @@ public final class Main {
             return false;
         }
         
-        // Common AWS instance type formats: t3.micro, m5.large, c5n.xlarge, r5a.2xlarge, etc.
-        return instanceType.matches("^[a-z][0-9][a-z]?\\.[0-9]*[a-z]+$");
+        // Common AWS instance type formats: t3.micro, m5.large, c5n.xlarge, r5a.2xlarge, m5dn.large, etc.
+        return instanceType.matches("^[a-z][0-9][a-z]*\\.[0-9]*[a-z]+$");
     }
     
     // Helper method to generate availability zone name
