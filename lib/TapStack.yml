@@ -841,6 +841,8 @@ Resources:
 
   DatabasePrimaryInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Engine: aurora-mysql
       DBInstanceClass: !Ref DBInstanceClass
