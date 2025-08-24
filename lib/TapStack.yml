@@ -332,7 +332,7 @@ Resources:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       PubliclyAccessible: false
-      MultiAZ: false
+      MultiAZ: true
       # StorageEncrypted: true   # <-- Removed KMS encryption requirement
       Tags:
         - Key: Name

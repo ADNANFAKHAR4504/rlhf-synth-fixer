@@ -2,13 +2,19 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "intermediate",
-  "subtask": "networking, compute, database, autoscaling",
-  "subject_labels": ["cloudformation", "aws", "vpc", "ec2", "alb", "rds", "autoscaling"],
-  "training_quality": "high",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "cloudformation",
+    "aws",
+    "vpc",
+    "ec2",
+    "rds",
+    "autoscaling"
+  ],
+  "training_quality": 7,
   "aws_services": [
     "EC2",
     "VPC",
-    "ElasticLoadBalancingV2",
     "AutoScaling",
     "RDS"
   ]

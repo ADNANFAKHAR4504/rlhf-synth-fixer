@@ -1,5 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for a production-ready, highly available web application stack with VPC, public/private subnets, NAT gateways, ALB, EC2 Auto Scaling, and Multi-AZ RDS.",
   "Parameters": {
     "DBUsername": {
       "Type": "String",
@@ -19,7 +20,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "vpc-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "vpc-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -34,7 +37,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "igw-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "igw-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -46,14 +51,25 @@
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.0.0/24",
-        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "public-subnet-1-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "public-subnet-1-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -65,14 +81,25 @@
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "public-subnet-2-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "public-subnet-2-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -84,14 +111,25 @@
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.10.0/24",
-        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-1-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -103,14 +141,25 @@
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-2-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -122,11 +171,15 @@
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "public-rt-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "public-rt-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -138,11 +191,15 @@
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-rt-1-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-rt-1-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -154,11 +211,15 @@
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-rt-2-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-rt-2-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -174,7 +235,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "eip-nat-1-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "eip-nat-1-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -190,7 +253,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "eip-nat-2-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "eip-nat-2-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -203,12 +268,21 @@
       "Type": "AWS::EC2::NatGateway",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "AllocationId": { "Fn::GetAtt": ["NatEIP1", "AllocationId"] },
-        "SubnetId": { "Ref": "PublicSubnet1" },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatEIP1",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "nat-1-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "nat-1-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -221,12 +295,21 @@
       "Type": "AWS::EC2::NatGateway",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "AllocationId": { "Fn::GetAtt": ["NatEIP2", "AllocationId"] },
-        "SubnetId": { "Ref": "PublicSubnet2" },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatEIP2",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "nat-2-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "nat-2-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -239,7 +322,9 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Allow HTTP from anywhere",
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -254,11 +339,15 @@
             "CidrIp": "0.0.0.0/0"
           }
         ],
-        "GroupName": { "Fn::Sub": "alb-sg-${TimestampSuffix}" },
+        "GroupName": {
+          "Fn::Sub": "alb-sg-${TimestampSuffix}"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "alb-sg-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "alb-sg-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -271,13 +360,17 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Allow HTTP from ALB only, egress to anywhere",
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "SourceSecurityGroupId": { "Ref": "ALBSecurityGroup" }
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -286,11 +379,15 @@
             "CidrIp": "0.0.0.0/0"
           }
         ],
-        "GroupName": { "Fn::Sub": "ec2-sg-${TimestampSuffix}" },
+        "GroupName": {
+          "Fn::Sub": "ec2-sg-${TimestampSuffix}"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "ec2-sg-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "ec2-sg-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -303,13 +400,17 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Allow DB port from EC2 only",
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "SourceSecurityGroupId": { "Ref": "EC2SecurityGroup" }
+            "SourceSecurityGroupId": {
+              "Ref": "EC2SecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -318,11 +419,15 @@
             "CidrIp": "0.0.0.0/0"
           }
         ],
-        "GroupName": { "Fn::Sub": "rds-sg-${TimestampSuffix}" },
+        "GroupName": {
+          "Fn::Sub": "rds-sg-${TimestampSuffix}"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "rds-sg-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "rds-sg-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -334,20 +439,30 @@
     "ALB": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": { "Fn::Sub": "alb-${TimestampSuffix}" },
+        "Name": {
+          "Fn::Sub": "alb-${TimestampSuffix}"
+        },
         "Subnets": [
-          { "Ref": "PublicSubnet1" },
-          { "Ref": "PublicSubnet2" }
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
         ],
         "SecurityGroups": [
-          { "Ref": "ALBSecurityGroup" }
+          {
+            "Ref": "ALBSecurityGroup"
+          }
         ],
         "Scheme": "internet-facing",
         "Type": "application",
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "alb-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "alb-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -359,8 +474,12 @@
     "TargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": { "Fn::Sub": "tg-${TimestampSuffix}" },
-        "VpcId": { "Ref": "VPC" },
+        "Name": {
+          "Fn::Sub": "tg-${TimestampSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "TargetType": "instance",
@@ -373,7 +492,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "tg-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "tg-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -385,13 +506,17 @@
     "Listener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": { "Ref": "ALB" },
+        "LoadBalancerArn": {
+          "Ref": "ALB"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "DefaultActions": [
           {
             "Type": "forward",
-            "TargetGroupArn": { "Ref": "TargetGroup" }
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
           }
         ]
       }
@@ -399,12 +524,16 @@
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": { "Fn::Sub": "launch-template-${TimestampSuffix}" },
+        "LaunchTemplateName": {
+          "Fn::Sub": "launch-template-${TimestampSuffix}"
+        },
         "LaunchTemplateData": {
           "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
           "InstanceType": "t3.micro",
           "SecurityGroupIds": [
-            { "Ref": "EC2SecurityGroup" }
+            {
+              "Ref": "EC2SecurityGroup"
+            }
           ],
           "UserData": {
             "Fn::Base64": "#!/bin/bash\nyum install -y python3\nnohup python3 -m http.server 80 &\n"
@@ -415,7 +544,9 @@
               "Tags": [
                 {
                   "Key": "Name",
-                  "Value": { "Fn::Sub": "ec2-instance-${TimestampSuffix}" }
+                  "Value": {
+                    "Fn::Sub": "ec2-instance-${TimestampSuffix}"
+                  }
                 },
                 {
                   "Key": "Environment",
@@ -430,25 +561,42 @@
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": { "Fn::Sub": "asg-${TimestampSuffix}" },
+        "AutoScalingGroupName": {
+          "Fn::Sub": "asg-${TimestampSuffix}"
+        },
         "VPCZoneIdentifier": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" }
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "LaunchTemplate": {
-          "LaunchTemplateId": { "Ref": "LaunchTemplate" },
-          "Version": { "Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"] }
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
         },
         "MinSize": 2,
         "MaxSize": 4,
         "DesiredCapacity": 2,
         "TargetGroupARNs": [
-          { "Ref": "TargetGroup" }
+          {
+            "Ref": "TargetGroup"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "asg-instance-${TimestampSuffix}" },
+            "Value": {
+              "Fn::Sub": "asg-instance-${TimestampSuffix}"
+            },
             "PropagateAtLaunch": true
           },
           {
@@ -462,16 +610,24 @@
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": { "Fn::Sub": "db-subnet-group-${TimestampSuffix}" },
+        "DBSubnetGroupName": {
+          "Fn::Sub": "db-subnet-group-${TimestampSuffix}"
+        },
         "DBSubnetGroupDescription": "DB subnet group",
         "SubnetIds": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" }
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "db-subnet-group-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "db-subnet-group-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -483,22 +639,32 @@
     "MyDB": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": { "Fn::Sub": "db-${TimestampSuffix}" },
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "db-${TimestampSuffix}"
+        },
         "AllocatedStorage": 20,
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
-        "MasterUsername": { "Ref": "DBUsername" },
+        "MasterUsername": {
+          "Ref": "DBUsername"
+        },
         "MasterUserPassword": "{{resolve:secretsmanager:secret-291545-safe:SecretString:password}}",
         "VPCSecurityGroups": [
-          { "Ref": "RDSSecurityGroup" }
+          {
+            "Ref": "RDSSecurityGroup"
+          }
         ],
-        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
         "PubliclyAccessible": false,
         "MultiAZ": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "db-${TimestampSuffix}" }
+            "Value": {
+              "Fn::Sub": "db-${TimestampSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -510,52 +676,90 @@
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "InternetGatewayId": { "Ref": "InternetGateway" }
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     }
   },
   "Outputs": {
     "ALBDNSName": {
-      "Value": { "Fn::GetAtt": ["ALB", "DNSName"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "ALB",
+          "DNSName"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "alb-dns-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "alb-dns-${TimestampSuffix}"
+        }
       }
     },
     "VPCId": {
-      "Value": { "Ref": "VPC" },
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "vpc-id-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "vpc-id-${TimestampSuffix}"
+        }
       }
     },
     "PublicSubnet1Id": {
-      "Value": { "Ref": "PublicSubnet1" },
+      "Value": {
+        "Ref": "PublicSubnet1"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "public-subnet-1-id-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "public-subnet-1-id-${TimestampSuffix}"
+        }
       }
     },
     "PublicSubnet2Id": {
-      "Value": { "Ref": "PublicSubnet2" },
+      "Value": {
+        "Ref": "PublicSubnet2"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "public-subnet-2-id-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "public-subnet-2-id-${TimestampSuffix}"
+        }
       }
     },
     "PrivateSubnet1Id": {
-      "Value": { "Ref": "PrivateSubnet1" },
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "private-subnet-1-id-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "private-subnet-1-id-${TimestampSuffix}"
+        }
       }
     },
     "PrivateSubnet2Id": {
-      "Value": { "Ref": "PrivateSubnet2" },
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "private-subnet-2-id-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "private-subnet-2-id-${TimestampSuffix}"
+        }
       }
     },
     "RDSEndpoint": {
-      "Value": { "Fn::GetAtt": ["MyDB", "Endpoint.Address"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "MyDB",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "rds-endpoint-${TimestampSuffix}" }
+        "Name": {
+          "Fn::Sub": "rds-endpoint-${TimestampSuffix}"
+        }
       }
     }
   }
