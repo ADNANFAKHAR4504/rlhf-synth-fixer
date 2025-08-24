@@ -1,4 +1,15 @@
-**provider.tf**
+# IDEAL_RESPONSE.md
+
+This file contains the complete infrastructure configuration for the Terraform infrastructure project.
+
+## File Structure
+
+The `lib/` folder contains the following configuration files:
+
+---
+
+## provider.tf
+
 ```tf
 terraform {
   required_version = ">= 1.0"
@@ -45,7 +56,24 @@ provider "aws" {
 }
 ```
 
-**user_data.sh**
+---
+
+## terraform.tfvars
+
+```tf
+domain_name        = "example.com"
+db_password        = "TuringSecure2024!"
+environment        = "dev"
+project_name       = "tap"
+environment_suffix = "pr1670"
+availability_zones = ["us-west-2a", "us-west-2b"]
+single_nat_gateway = true
+```
+
+---
+
+## user_data.sh
+
 ```sh
 #!/bin/bash
 yum update -y
@@ -94,18 +122,10 @@ cat > /var/www/html/index.html << EOF
 EOF
 ```
 
-**terraform.tfvars**
-```tf
-domain_name        = "example.com"
-db_password        = "TuringSecure2024!"
-environment        = "dev"
-project_name       = "tap"
-environment_suffix = "pr1670"
-availability_zones = ["us-west-2a", "us-west-2b"]
-single_nat_gateway = true
-```
+---
 
-**tap_stack.tf**
+## tap_stack.tf
+
 ```tf
 # Variables
 variable "aws_region" {
@@ -193,7 +213,6 @@ variable "domain_name" {
   default     = "example.com"
 }
 
-
 variable "log_retention_days" {
   description = "CloudWatch log retention period in days"
   type        = number
@@ -207,12 +226,16 @@ variable "enable_nat_gateway" {
 }
 
 variable "single_nat_gateway" {
-  description = "Use a single NAT Gateway for all private subnets (cost optimization)"
+  description = "Use single NAT Gateway for cost optimization"
   type        = bool
   default     = false
 }
 
-# Data Sources
+# Data sources
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -221,28 +244,24 @@ data "aws_ami" "amazon_linux" {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
-# Route53 zone is optional - will be created if it doesn't exist
-data "aws_route53_zone" "main" {
-  count        = 0 # Disabled for now - will create zone if needed
-  name         = var.domain_name
-  private_zone = false
-}
-
-# VPC and Networking
-# Locals for resource naming
-# Random ID to ensure unique resource names
+# Random suffix for resource naming to avoid conflicts
 resource "random_id" "suffix" {
-  byte_length = 3
+  byte_length = 4
 }
 
+# Locals for consistent naming
 locals {
-  env_suffix    = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
-  random_suffix = random_id.suffix.hex
-  name_prefix   = "${var.project_name}${local.env_suffix}-${local.random_suffix}"
+  name_prefix = "${var.project_name}-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
 }
 
+# VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -253,6 +272,7 @@ resource "aws_vpc" "main" {
   }
 }
 
+# Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -271,8 +291,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
-    Type = "Public"
+    Name = "${local.name_prefix}-public-${var.availability_zones[count.index]}"
   }
 }
 
@@ -280,12 +299,11 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   count             = length(var.availability_zones)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + length(var.availability_zones))
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
-    Type = "Private"
+    Name = "${local.name_prefix}-private-${var.availability_zones[count.index]}"
   }
 }
 
@@ -293,40 +311,39 @@ resource "aws_subnet" "private" {
 resource "aws_subnet" "database" {
   count             = length(var.availability_zones)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 2 * length(var.availability_zones))
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "${local.name_prefix}-db-subnet-${count.index + 1}"
-    Type = "Database"
+    Name = "${local.name_prefix}-database-${var.availability_zones[count.index]}"
   }
 }
 
-# NAT Gateways
+# Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  count  = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
   domain = "vpc"
 
-  depends_on = [aws_internet_gateway.main]
-
   tags = {
-    Name = "${local.name_prefix}-nat-eip-${var.single_nat_gateway ? "single" : count.index + 1}"
+    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
   }
 }
 
+# NAT Gateway
 resource "aws_nat_gateway" "main" {
-  count         = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  
   allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = var.single_nat_gateway ? aws_subnet.public[0].id : aws_subnet.public[count.index].id
-
-  depends_on = [aws_internet_gateway.main]
+  subnet_id     = aws_subnet.public[var.single_nat_gateway ? 0 : count.index].id
 
   tags = {
-    Name = "${local.name_prefix}-nat-gateway-${var.single_nat_gateway ? "single" : count.index + 1}"
+    Name = "${local.name_prefix}-nat-${count.index + 1}"
   }
+
+  depends_on = [aws_internet_gateway.main]
 }
 
-# Route Tables
+# Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -340,51 +357,39 @@ resource "aws_route_table" "public" {
   }
 }
 
+# Route Table for Private Subnets
 resource "aws_route_table" "private" {
-  count  = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
+  count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.main[0].id : aws_nat_gateway.main[count.index].id
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
   tags = {
-    Name = "${local.name_prefix}-private-rt-${var.single_nat_gateway ? "single" : count.index + 1}"
+    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
   }
 }
 
-resource "aws_route_table" "database" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${local.name_prefix}-database-rt"
-  }
-}
-
-# Route Table Associations
+# Route Table Association for Public Subnets
 resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
+  count          = length(var.availability_zones)
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
+# Route Table Association for Private Subnets
 resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
+  count = var.enable_nat_gateway ? length(var.availability_zones) : 0
+  
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = var.single_nat_gateway ? aws_route_table.private[0].id : aws_route_table.private[count.index].id
 }
 
-resource "aws_route_table_association" "database" {
-  count          = length(aws_subnet.database)
-  subnet_id      = aws_subnet.database[count.index].id
-  route_table_id = aws_route_table.database.id
-}
-
 # Security Groups
 resource "aws_security_group" "alb" {
-  name        = "${local.name_prefix}-alb-sg"
-  description = "Security group for Application Load Balancer"
+  name_prefix = "${local.name_prefix}-alb-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -414,20 +419,12 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "web_servers" {
-  name        = "${local.name_prefix}-web-servers-sg"
-  description = "Security group for web servers"
+  name_prefix = "${local.name_prefix}-web-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port       = 80
     to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    from_port       = 443
-    to_port         = 443
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -440,13 +437,12 @@ resource "aws_security_group" "web_servers" {
   }
 
   tags = {
-    Name = "${local.name_prefix}-web-servers-sg"
+    Name = "${local.name_prefix}-web-sg"
   }
 }
 
 resource "aws_security_group" "database" {
-  name        = "${local.name_prefix}-database-sg"
-  description = "Security group for RDS database"
+  name_prefix = "${local.name_prefix}-db-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -456,12 +452,93 @@ resource "aws_security_group" "database" {
     security_groups = [aws_security_group.web_servers.id]
   }
 
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = {
-    Name = "${local.name_prefix}-database-sg"
+    Name = "${local.name_prefix}-db-sg"
   }
 }
 
-# IAM Roles and Policies
+# RDS Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.database[*].id
+
+  tags = {
+    Name = "${local.name_prefix}-db-subnet-group"
+  }
+}
+
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier = "${local.name_prefix}-db"
+
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  max_allocated_storage = 100
+
+  db_name  = "webapp"
+  username = var.db_username
+  password = var.db_password
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+
+  skip_final_snapshot = true
+
+  tags = {
+    Name = "${local.name_prefix}-db"
+  }
+}
+
+# RDS Replica
+resource "aws_db_instance" "replica" {
+  identifier = "${local.name_prefix}-db-replica"
+
+  replicate_source_db = aws_db_instance.main.identifier
+
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  max_allocated_storage = 100
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+
+  skip_final_snapshot = true
+
+  tags = {
+    Name = "${local.name_prefix}-db-replica"
+  }
+}
+
+# CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "app_logs" {
+  name              = "/aws/ec2/${local.name_prefix}/web-app"
+  retention_in_days = var.log_retention_days
+
+  tags = {
+    Name = "${local.name_prefix}-app-logs"
+  }
+}
+
+# IAM Role for EC2
 resource "aws_iam_role" "ec2_role" {
   name = "${local.name_prefix}-ec2-role"
 
@@ -477,11 +554,15 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
+
+  tags = {
+    Name = "${local.name_prefix}-ec2-role"
+  }
 }
 
+# IAM Policy for EC2
 resource "aws_iam_policy" "ec2_policy" {
-  name        = "${local.name_prefix}-ec2-policy"
-  description = "Minimal policy for EC2 instances"
+  name = "${local.name_prefix}-ec2-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -492,14 +573,8 @@ resource "aws_iam_policy" "ec2_policy" {
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
-        ]
-        Resource = "arn:aws:logs:${var.aws_region}:*:*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData"
         ]
         Resource = "*"
       }
@@ -507,11 +582,13 @@ resource "aws_iam_policy" "ec2_policy" {
   })
 }
 
+# IAM Role Policy Attachment
 resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.ec2_policy.arn
 }
 
+# IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
@@ -556,6 +633,7 @@ resource "aws_lb" "main" {
   }
 }
 
+# Target Group
 resource "aws_lb_target_group" "web_servers" {
   name     = substr("${local.name_prefix}-web-tg", 0, 32)
   port     = 80
@@ -577,6 +655,7 @@ resource "aws_lb_target_group" "web_servers" {
   }
 }
 
+# Listener
 resource "aws_lb_listener" "web_servers" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
@@ -607,128 +686,20 @@ resource "aws_autoscaling_group" "web_servers" {
 
   tag {
     key                 = "Name"
-    value               = "${local.name_prefix}-asg"
-    propagate_at_launch = false
-  }
-}
-
-# Auto Scaling Policies
-resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${local.name_prefix}-scale-up"
-  scaling_adjustment     = 2
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.web_servers.name
-}
-
-resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${local.name_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.web_servers.name
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${local.name_prefix}-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.web_servers.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "low_cpu" {
-  alarm_name          = "${local.name_prefix}-low-cpu"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "10"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.web_servers.name
-  }
-}
-
-# RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
-
-  tags = {
-    Name = "${local.name_prefix}-db-subnet-group"
-  }
-}
-
-# RDS Instance
-resource "aws_db_instance" "main" {
-  identifier            = "${local.name_prefix}-database"
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  storage_type          = "gp2"
-  engine                = "mysql"
-  engine_version        = "8.0"
-  instance_class        = "db.t3.micro"
-  db_name               = "webapp"
-  username              = var.db_username
-  password              = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.database.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-  deletion_protection = false
-
-  tags = {
-    Name = "${local.name_prefix}-database"
-  }
-}
-
-# RDS Read Replica
-resource "aws_db_instance" "replica" {
-  identifier          = "${local.name_prefix}-db-replica"
-  replicate_source_db = aws_db_instance.main.identifier
-  instance_class      = "db.t3.micro"
-  publicly_accessible = false
-
-  tags = {
-    Name = "${local.name_prefix}-db-replica"
-  }
-}
-
-# CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "app_logs" {
-  name              = "/aws/ec2/${local.name_prefix}"
-  retention_in_days = var.log_retention_days
-
-  tags = {
-    Name = "${local.name_prefix}-app-logs"
+    value               = "${local.name_prefix}-web-server"
+    propagate_at_launch = true
   }
 }
 
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
+  enabled             = true
+  is_ipv6_enabled    = true
+  default_root_object = "index.html"
+
   origin {
     domain_name = aws_lb.main.dns_name
-    origin_id   = "${local.name_prefix}-alb-origin"
+    origin_id   = aws_lb.main.id
 
     custom_origin_config {
       http_port              = 80
@@ -738,17 +709,10 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "${local.name_prefix} CloudFront Distribution"
-  default_root_object = "index.html"
-
-  # aliases = [var.domain_name]  # Disabled - requires valid domain and certificate
-
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "${local.name_prefix}-alb-origin"
+    target_origin_id = aws_lb.main.id
 
     forwarded_values {
       query_string = false
@@ -763,6 +727,8 @@ resource "aws_cloudfront_distribution" "main" {
     max_ttl                = 86400
   }
 
+  price_class = "PriceClass_100"
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
@@ -771,8 +737,6 @@ resource "aws_cloudfront_distribution" "main" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-    # acm_certificate_arn = aws_acm_certificate.main.arn  # Disabled - requires valid domain
-    # ssl_support_method  = "sni-only"
   }
 
   tags = {
@@ -780,57 +744,59 @@ resource "aws_cloudfront_distribution" "main" {
   }
 }
 
-# ACM Certificate - Disabled as it requires valid domain
-# resource "aws_acm_certificate" "main" {
-#   provider          = aws.us_east_1  # CloudFront requires cert in us-east-1
-#   domain_name       = var.domain_name
-#   validation_method = "DNS"
-#   
-#   lifecycle {
-#     create_before_destroy = true
-#   }
-#   
-#   tags = {
-#     Name = "${local.name_prefix}-certificate"
-#   }
-# }
+# CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "alb_target_health" {
+  alarm_name          = "${local.name_prefix}-alb-target-health"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB target health"
+  alarm_actions       = []
 
-# resource "aws_acm_certificate_validation" "main" {
-#   provider                = aws.us_east_1
-#   certificate_arn         = aws_acm_certificate.main.arn
-#   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
-# }
+  dimensions = {
+    LoadBalancer = aws_lb.main.arn_suffix
+    TargetGroup  = aws_lb_target_group.web_servers.arn_suffix
+  }
+}
 
-# Route53 Records - Disabled as they require valid domain and zone
-# resource "aws_route53_record" "cert_validation" {
-#   for_each = {
-#     for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
-#       name   = dvo.resource_record_name
-#       record = dvo.resource_record_value
-#       type   = dvo.resource_record_type
-#     }
-#   }
-#   
-#   allow_overwrite = true
-#   name            = each.value.name
-#   records         = [each.value.record]
-#   ttl             = 60
-#   type            = each.value.type
-#   zone_id         = data.aws_route53_zone.main[0].zone_id
-# }
+resource "aws_cloudwatch_metric_alarm" "asg_instance_health" {
+  alarm_name          = "${local.name_prefix}-asg-instance-health"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "GroupInServiceInstances"
+  namespace           = "AWS/AutoScaling"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ASG instance health"
+  alarm_actions       = []
 
-# resource "aws_route53_record" "main" {
-#   count   = length(data.aws_route53_zone.main)
-#   zone_id = data.aws_route53_zone.main[0].zone_id
-#   name    = var.domain_name
-#   type    = "A"
-#   
-#   alias {
-#     name                   = aws_cloudfront_distribution.main.domain_name
-#     zone_id                = aws_cloudfront_distribution.main.hosted_zone_id
-#     evaluate_target_health = false
-#   }
-# }
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web_servers.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
+  alarm_name          = "${local.name_prefix}-alb-response-time"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "5"
+  alarm_description   = "This metric monitors ALB response time"
+  alarm_actions       = []
+
+  dimensions = {
+    LoadBalancer = aws_lb.main.arn_suffix
+    TargetGroup  = aws_lb_target_group.web_servers.arn_suffix
+  }
+}
 
 # Outputs
 output "vpc_id" {
@@ -905,3 +871,21 @@ output "target_group_arn" {
   value       = aws_lb_target_group.web_servers.arn
 }
 ```
+
+---
+
+## Summary
+
+This infrastructure configuration provides:
+
+- **VPC with public and private subnets** across multiple availability zones
+- **NAT Gateway** for private subnet internet access (configurable for single or multiple)
+- **Application Load Balancer** for distributing traffic
+- **Auto Scaling Group** with EC2 instances
+- **RDS MySQL database** with read replica
+- **CloudFront distribution** for CDN capabilities
+- **Security groups** with appropriate access controls
+- **CloudWatch monitoring** and alarms
+- **IAM roles and policies** for EC2 instances
+
+The configuration uses variables for flexibility and includes proper tagging for resource management.
