@@ -209,7 +209,11 @@ Conditions:
       !Equals [!Ref UseExistingGlobalCluster, ''],
     ]
   CreateALB: !Equals [!Ref UseExistingALB, '']
-  CreateALBAndHasSSL: !And [!Condition CreateALB, !Condition HasSSLCertificate]
+  CreateALBAndHasSSL:
+    !And [
+      !Equals [!Ref UseExistingALB, ''],
+      !Not [!Equals [!Ref SSLCertificateArn, '']],
+    ]
   HasDBPasswordParameter: !Not [!Equals [!Ref DBMasterPasswordParameter, '']]
 
 Resources:
