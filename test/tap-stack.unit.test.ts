@@ -1,6 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import yaml from 'js-yaml';
+import path from 'path';
 
 describe('TapStack CloudFormation YAML Template', () => {
   let template: any;
@@ -57,53 +57,71 @@ describe('TapStack CloudFormation YAML Template', () => {
   describe('Security Groups', () => {
     test('should define ALBSecurityGroup', () => {
       expect(template.Resources.ALBSecurityGroup).toBeDefined();
-      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.ALBSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should define EC2SecurityGroup', () => {
       expect(template.Resources.EC2SecurityGroup).toBeDefined();
-      expect(template.Resources.EC2SecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.EC2SecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should define RDSSecurityGroup', () => {
       expect(template.Resources.RDSSecurityGroup).toBeDefined();
-      expect(template.Resources.RDSSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.RDSSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
   });
 
   describe('Load Balancer', () => {
     test('should define an Application Load Balancer', () => {
       expect(template.Resources.ALB).toBeDefined();
-      expect(template.Resources.ALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(template.Resources.ALB.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
     });
 
     test('should define a Target Group', () => {
       expect(template.Resources.TargetGroup).toBeDefined();
-      expect(template.Resources.TargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(template.Resources.TargetGroup.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::TargetGroup'
+      );
     });
 
     test('should define a Listener', () => {
       expect(template.Resources.Listener).toBeDefined();
-      expect(template.Resources.Listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(template.Resources.Listener.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::Listener'
+      );
     });
   });
 
   describe('Auto Scaling', () => {
     test('should define a LaunchTemplate', () => {
       expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+      expect(template.Resources.LaunchTemplate.Type).toBe(
+        'AWS::EC2::LaunchTemplate'
+      );
     });
 
     test('should define an AutoScalingGroup', () => {
       expect(template.Resources.AutoScalingGroup).toBeDefined();
-      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+      expect(template.Resources.AutoScalingGroup.Type).toBe(
+        'AWS::AutoScaling::AutoScalingGroup'
+      );
     });
   });
 
   describe('RDS', () => {
     test('should define a DBSubnetGroup', () => {
       expect(template.Resources.DBSubnetGroup).toBeDefined();
-      expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(template.Resources.DBSubnetGroup.Type).toBe(
+        'AWS::RDS::DBSubnetGroup'
+      );
     });
 
     test('should define a MyDB resource', () => {
