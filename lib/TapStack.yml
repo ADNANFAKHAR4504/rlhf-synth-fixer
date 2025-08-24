@@ -54,10 +54,7 @@ Parameters:
     Type: String
     Default: 0.0.0.0/0
     
-  SSHPublicKey:
-    Description: SSH Public Key for EC2 access (paste your public key here, or leave default for demo)
-    Type: String
-    Default: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vK8Z9X2Y1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z demo-key"
+
     
 Mappings:
   AWSInstanceType2Arch:
@@ -79,8 +76,7 @@ Resources:
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Sub '${EnvironmentName}-keypair'
-      PublicKeyMaterial: !Ref SSHPublicKey
+      KeyName: !Sub '${EnvironmentName}-keypair-${AWS::StackName}'
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-keypair'
@@ -150,7 +146,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PublicSubnet1CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -161,7 +157,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PublicSubnet2CIDR
       MapPublicIpOnLaunch: true
       Tags:
@@ -172,7 +168,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet1CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -183,7 +179,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -194,7 +190,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1c
+      AvailabilityZone: !Select [2, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet3CIDR
       MapPublicIpOnLaunch: false
       Tags:
@@ -335,16 +331,9 @@ Resources:
           CidrIp: !Ref TrustedCIDR
           Description: HTTPS access from trusted sources
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          DestinationSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: HTTP to web servers
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          DestinationSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: HTTPS to web servers
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-LoadBalancer-SG
@@ -359,18 +348,18 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: HTTP from load balancer
+          CidrIp: !Ref VpcCIDR
+          Description: HTTP from VPC
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-          Description: HTTPS from load balancer
+          CidrIp: !Ref VpcCIDR
+          Description: HTTPS from VPC
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: SSH from bastion host
+          CidrIp: !Ref VpcCIDR
+          Description: SSH from VPC
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
@@ -385,7 +374,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+          CidrIp: !Ref VpcCIDR
           Description: MySQL to database
         - IpProtocol: tcp
           FromPort: 53
@@ -417,7 +406,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          DestinationSecurityGroupId: !Ref WebServerSecurityGroup
+          CidrIp: !Ref VpcCIDR
           Description: SSH to web servers
         - IpProtocol: tcp
           FromPort: 443
@@ -443,8 +432,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: MySQL from web servers
+          CidrIp: !Ref VpcCIDR
+          Description: MySQL from VPC
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-Database-SG
@@ -485,7 +474,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${EnvironmentName}-EC2-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -504,11 +492,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref S3Bucket
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}'
         - PolicyName: SecretsManagerAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -530,14 +518,12 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub ${EnvironmentName}-EC2-Profile
       Roles:
         - !Ref EC2Role
         
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${EnvironmentName}-Lambda-Role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -564,7 +550,6 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-secure-bucket-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -585,7 +570,6 @@ Resources:
   S3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-access-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -613,6 +597,7 @@ Resources:
           import json
           import boto3
           import logging
+          import os
           
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
@@ -657,7 +642,7 @@ Resources:
       FunctionName: !Ref LogMonitoringLambda
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub '${S3Bucket}/*'
+      SourceArn: !Sub 'arn:aws:s3:::${S3Bucket}/*'
 
   # ============================================================================
   # RDS DATABASE WITH ENCRYPTION
@@ -697,11 +682,12 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-database
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -714,8 +700,6 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: true
       DeletionProtection: false
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref TapStackKMSKey
       MonitoringInterval: 0
       Tags:
         - Key: Name
@@ -817,6 +801,29 @@ Resources:
       WebACLArn: !GetAtt WebACL.Arn
 
   # ============================================================================
+  # BASTION HOST
+  # ============================================================================
+  
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
+      InstanceType: t3.micro
+      KeyName: !Ref EC2KeyPair
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y aws-cli
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-Bastion
+
+  # ============================================================================
   # AUTO SCALING GROUP
   # ============================================================================
   
@@ -833,7 +840,7 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd aws-cli amazon-cloudwatch-agent
@@ -850,3 +857,171 @@ Resources:
             <!DOCTYPE html>
             <html>
             <head><title>TapStack Application</title></head>
+            <body>
+              <h1>Welcome to TapStack</h1>
+              <p>Your application is running successfully!</p>
+            </body>
+            </html>
+            EOF
+            
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+            {
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "/aws/ec2/TapStack",
+                        "log_stream_name": "{instance_id}",
+                        "timezone": "UTC"
+                      },
+                      {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "/aws/ec2/TapStack",
+                        "log_stream_name": "{instance_id}",
+                        "timezone": "UTC"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+            
+            # Start CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+            systemctl start amazon-cloudwatch-agent
+            systemctl enable amazon-cloudwatch-agent
+
+  # ============================================================================
+  # AUTO SCALING GROUP
+  # ============================================================================
+  
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${EnvironmentName}-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Cooldown: 300
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-ASG
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+
+  # ============================================================================
+  # AUTO SCALING POLICIES
+  # ============================================================================
+  
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyName: !Sub ${EnvironmentName}-ScaleUp
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70.0
+
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      PolicyName: !Sub ${EnvironmentName}-ScaleDown
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 30.0
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS
+  # ============================================================================
+  
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${EnvironmentName}-HighCPU
+      AlarmDescription: CPU utilization is high
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+
+  LowCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${EnvironmentName}-LowCPU
+      AlarmDescription: CPU utilization is low
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+
+  # ============================================================================
+  # OUTPUTS
+  # ============================================================================
+  
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VPC-ID
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-ALB-DNS
+
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-DB-Endpoint
+
+  BastionHostPublicIP:
+    Description: Bastion Host Public IP
+    Value: !GetAtt BastionHost.PublicIp
+    Export:
+      Name: !Sub ${EnvironmentName}-Bastion-IP
+
+  EC2KeyPairName:
+    Description: EC2 Key Pair Name
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub ${EnvironmentName}-KeyPair-Name
