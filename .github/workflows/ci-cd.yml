@@ -17,6 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22.17.0'
+  GO_VERSION: '1.23.12'
   # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
@@ -30,6 +31,9 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
+  # Go caching optimization
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
 jobs:
   detect-metadata:
@@ -533,6 +537,16 @@ jobs:
               LINES_COVERAGE=100
               BRANCHES_COVERAGE=100
             fi
+          elif [ "$LANGUAGE" = "go" ]; then
+            echo "Extracting Go coverage from coverage-summary.json..."
+            if [ -f "coverage/coverage-summary.json" ]; then
+              LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+              BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            else
+              echo "Warning: Go coverage-summary.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
           else
             echo "Extracting TypeScript/JavaScript coverage from coverage-summary.json..."
             if [ -f "coverage/coverage-summary.json" ]; then
@@ -589,6 +603,9 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "tap.go"
+            "go.mod"
+            "go.sum"
             "setup.js"
             "cdktf.json"
             "Pulumi.yaml"

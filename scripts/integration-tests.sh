@@ -59,6 +59,12 @@ elif [ "$LANGUAGE" = "go" ]; then
     go clean -modcache || true
     go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
     go mod tidy
+  elif [ "$PLATFORM" = "cdk" ]; then
+    echo "🔧 Setting up CDK Go integration tests"
+    
+    # Ensure CDK core deps are present
+    export GOPROXY=${GOPROXY:-direct}
+    go mod tidy
   fi
 
   if [ -d "lib" ]; then
