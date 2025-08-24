@@ -50,7 +50,7 @@ var (
 // TestMain sets up the test environment
 func TestMain(m *testing.M) {
 	// Load deployment outputs
-	outputsFile := "../../cfn-outputs/flat-outputs.json"
+	outputsFile := "../cfn-outputs/flat-outputs.json"
 	data, err := ioutil.ReadFile(outputsFile)
 	if err != nil {
 		fmt.Printf("Failed to read outputs file %s: %v\n", outputsFile, err)
