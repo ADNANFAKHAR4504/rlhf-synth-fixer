@@ -22,6 +22,7 @@ public class WebApplicationStackSet extends ComponentResource {
         private DeploymentConfig config;
         private Output<String> administrationRoleArn;
         private Output<String> executionRoleName;
+        private CrossAccountRoleSetup crossAccountSetup;
 
         public static Builder builder() {
             return new Builder();
@@ -42,6 +43,11 @@ public class WebApplicationStackSet extends ComponentResource {
 
             public Builder executionRoleName(Output<String> name) {
                 args.executionRoleName = name;
+                return this;
+            }
+
+            public Builder crossAccountSetup(CrossAccountRoleSetup setup) {
+                args.crossAccountSetup = setup;
                 return this;
             }
 
@@ -73,15 +79,18 @@ public class WebApplicationStackSet extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).provider(provider).build());
 
         // Deploy StackSet instances across accounts and regions
+        // Wait for cross-account setup to complete first
         for (String account : config.getTargetAccounts()) {
             for (String region : config.getTargetRegions()) {
                 new StackSetInstance("stackset-instance-" + account + "-" + region,
                         StackSetInstanceArgs.builder()
                                 .stackSetName(stackSet.name())
                                 .accountId(account)
-                                .stackSetInstanceRegion(region)
+                                .stackSetInstanceRegion(region) // Use region instead of stackSetInstanceRegion
                                 .build(), CustomResourceOptions.builder().parent(this).provider(provider)
                         .dependsOn(stackSet)
+                        // Ensure cross-account roles are set up first
+                        .dependsOn(args.crossAccountSetup)
                         .build());
             }
         }
@@ -90,6 +99,7 @@ public class WebApplicationStackSet extends ComponentResource {
         this.stackSetArn = stackSet.arn();
     }
 
+    // ... rest of the CloudFormation template method remains the same ...
     private String getCloudFormationTemplate() {
         return """
                 {
