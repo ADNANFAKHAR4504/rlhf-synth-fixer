@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "intermediate",
+  "subtask": "networking, compute, database, autoscaling",
+  "subject_labels": ["cloudformation", "aws", "vpc", "ec2", "alb", "rds", "autoscaling"],
+  "training_quality": "high",
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ElasticLoadBalancingV2",
+    "AutoScaling",
+    "RDS"
+  ]
+}

@@ -1,85 +1,324 @@
-You are an expert AWS Cloud Architect. Generate a single, production-ready CloudFormation template in YAML that provisions a secure, highly available web application baseline per the requirements below. Output only the YAML template—no extra text, comments, or explanations.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation Template for a Secure, Highly Available Web Application
 
-Requirements
+Parameters:
+DBUsername:
+Type: String
+Default: admin
+NoEcho: true
+DBPassword:
+Type: String
+Default: password
+NoEcho: true
+KeyPairName:
+Type: String
+Description: EC2 Key Pair Name
+LatestAmiId:
+Type: String
+Description: Latest Amazon Linux 2 AMI ID
+Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
-Region: Deploy in us-east-1 (assume the stack is launched there; do not parameterize the region).
+Resources:
 
-Tagging: Tag every resource with Environment: Production.
+# Networking
 
-Networking:
+VPC:
+Type: AWS::EC2::VPC
+Properties:
+CidrBlock: 10.0.0.0/16
+EnableDnsSupport: 'true'
+EnableDnsHostnames: 'true'
+Tags: - Key: Environment
+Value: Production
 
-Create a VPC with CIDR 10.0.0.0/16.
+PublicSubnet1:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId: !Ref VPC
+CidrBlock: 10.0.0.0/24
+AvailabilityZone: us-east-1a
+MapPublicIpOnLaunch: 'true'
+Tags: - Key: Environment
+Value: Production
 
-Create two public subnets in distinct AZs and two private subnets in distinct AZs (e.g., us-east-1a and us-east-1b). Use sensible /24 CIDRs inside the /16, e.g.:
+PublicSubnet2:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId: !Ref VPC
+CidrBlock: 10.0.1.0/24
+AvailabilityZone: us-east-1b
+MapPublicIpOnLaunch: 'true'
+Tags: - Key: Environment
+Value: Production
 
-Public: 10.0.0.0/24, 10.0.1.0/24
+PrivateSubnet1:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId: !Ref VPC
+CidrBlock: 10.0.10.0/24
+AvailabilityZone: us-east-1a
+Tags: - Key: Environment
+Value: Production
 
-Private: 10.0.10.0/24, 10.0.11.0/24
+PrivateSubnet2:
+Type: AWS::EC2::Subnet
+Properties:
+VpcId: !Ref VPC
+CidrBlock: 10.0.11.0/24
+AvailabilityZone: us-east-1b
+Tags: - Key: Environment
+Value: Production
 
-Internet Gateway attached to the VPC.
+InternetGateway:
+Type: AWS::EC2::InternetGateway
+Properties:
+Tags: - Key: Environment
+Value: Production
 
-Two NAT Gateways (one per public subnet) with associated Elastic IPs.
+AttachGateway:
+Type: AWS::EC2::VPCGatewayAttachment
+Properties:
+VpcId: !Ref VPC
+InternetGatewayId: !Ref InternetGateway
 
-Route tables:
+NatGatewayEIP1:
+Type: AWS::EC2::EIP
+Properties:
+Domain: vpc
 
-Public subnets route 0.0.0.0/0 to the Internet Gateway.
+NatGatewayEIP2:
+Type: AWS::EC2::EIP
+Properties:
+Domain: vpc
 
-Private subnets route 0.0.0.0/0 to their AZ’s NAT Gateway (one-to-one mapping for HA).
+NatGateway1:
+Type: AWS::EC2::NatGateway
+Properties:
+AllocationId: !GetAtt NatGatewayEIP1.AllocationId
+SubnetId: !Ref PublicSubnet1
+Tags: - Key: Environment
+Value: Production
 
-Load Balancing & Compute:
+NatGateway2:
+Type: AWS::EC2::NatGateway
+Properties:
+AllocationId: !GetAtt NatGatewayEIP2.AllocationId
+SubnetId: !Ref PublicSubnet2
+Tags: - Key: Environment
+Value: Production
 
-Application Load Balancer spanning both public subnets.
+PublicRouteTable:
+Type: AWS::EC2::RouteTable
+Properties:
+VpcId: !Ref VPC
+Tags: - Key: Environment
+Value: Production
 
-Target Group (HTTP on port 80).
+PublicRoute:
+Type: AWS::EC2::Route
+Properties:
+RouteTableId: !Ref PublicRouteTable
+DestinationCidrBlock: 0.0.0.0/0
+GatewayId: !Ref InternetGateway
 
-Listener: HTTP :80 forwarding to the Target Group.
+PrivateRouteTable1:
+Type: AWS::EC2::RouteTable
+Properties:
+VpcId: !Ref VPC
+Tags: - Key: Environment
+Value: Production
 
-Launch Template for EC2 using the latest Amazon Linux 2 AMI via SSM Parameter /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2. UserData should install and start a simple HTTP service responding on port 80 (e.g., python3 -m http.server 80 or httpd).
+PrivateRoute1:
+Type: AWS::EC2::Route
+Properties:
+RouteTableId: !Ref PrivateRouteTable1
+DestinationCidrBlock: 0.0.0.0/0
+NatGatewayId: !Ref NatGateway1
 
-Auto Scaling Group in the private subnets with:
+PrivateRouteTable2:
+Type: AWS::EC2::RouteTable
+Properties:
+VpcId: !Ref VPC
+Tags: - Key: Environment
+Value: Production
 
-MinCapacity 2, DesiredCapacity 2, MaxCapacity 4
+PrivateRoute2:
+Type: AWS::EC2::Route
+Properties:
+RouteTableId: !Ref PrivateRouteTable2
+DestinationCidrBlock: 0.0.0.0/0
+NatGatewayId: !Ref NatGateway2
 
-Health checks integrated with the Target Group
+# Load Balancing & Compute
 
-Database:
+ALB:
+Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+Properties:
+Name: !Sub '${AWS::StackName}-alb'
+Subnets: - !Ref PublicSubnet1 - !Ref PublicSubnet2
+SecurityGroups: - !Ref ALBSecurityGroup
+Tags: - Key: Environment
+Value: Production
 
-An RDS instance (you may choose PostgreSQL or MySQL) deployed in the private tier:
+ALBSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Allow inbound HTTP from the internet
+VpcId: !Ref VPC
+SecurityGroupIngress: - IpProtocol: tcp
+FromPort: '80'
+ToPort: '80'
+CidrIp: 0.0.0.0/0
+Tags: - Key: Environment
+Value: Production
 
-Use a DBSubnetGroup covering the two private subnets.
+TargetGroup:
+Type: AWS::ElasticLoadBalancingV2::TargetGroup
+Properties:
+Name: !Sub '${AWS::StackName}-tg'
+Port: '80'
+Protocol: HTTP
+VpcId: !Ref VPC
+TargetType: instance
+HealthCheckProtocol: HTTP
+HealthCheckPort: '80'
+HealthCheckPath: /
+Matcher:
+HttpCode: '200'
+Tags: - Key: Environment
+Value: Production
 
-Single-AZ is acceptable, but subnets must be private.
+Listener:
+Type: AWS::ElasticLoadBalancingV2::Listener
+Properties:
+LoadBalancerArn: !Ref ALB
+Port: '80'
+Protocol: HTTP
+DefaultActions: - Type: forward
+TargetGroupArn: !Ref TargetGroup
 
-Store non-sensitive defaults via Parameters. Do not hardcode secrets; create dummy defaults for username/password Parameters.
+LaunchTemplate:
+Type: AWS::EC2::LaunchTemplate
+Properties:
+LaunchTemplateName: !Sub '${AWS::StackName}-lt'
+LaunchTemplateData:
+InstanceType: t3.micro
+ImageId: !Ref LatestAmiId
+KeyName: !Ref KeyPairName
+SecurityGroupIds: - !Ref EC2SecurityGroup
+UserData:
+Fn::Base64: !Sub |
+#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+TagSpecifications: - ResourceType: instance
+Tags: - Key: Environment
+Value: Production
 
-Security:
+EC2SecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Allow inbound HTTP from the ALB
+VpcId: !Ref VPC
+SecurityGroupIngress: - IpProtocol: tcp
+FromPort: '80'
+ToPort: '80'
+SourceSecurityGroupId: !Ref ALBSecurityGroup
+Tags: - Key: Environment
+Value: Production
 
-Security Groups:
+AutoScalingGroup:
+Type: AWS::AutoScaling::AutoScalingGroup
+Properties:
+VPCZoneIdentifier: - !Ref PrivateSubnet1 - !Ref PrivateSubnet2
+LaunchTemplate:
+LaunchTemplateId: !Ref LaunchTemplate
+Version: !GetAtt LaunchTemplate.LatestVersionNumber
+MinSize: '2'
+MaxSize: '4'
+DesiredCapacity: '2'
+HealthCheckType: ELB
+Tags: - Key: Environment
+Value: Production
+PropagateAtLaunch: 'true'
 
-ALB SG: allow inbound 80 from the internet; allow outbound to targets.
+# Database
 
-EC2 SG: allow inbound 80 only from the ALB SG; allow egress to the DB port.
+DBSubnetGroup:
+Type: AWS::RDS::DBSubnetGroup
+Properties:
+DBSubnetGroupDescription: !Sub '${AWS::StackName} DB Subnet Group'
+SubnetIds: - !Ref PrivateSubnet1 - !Ref PrivateSubnet2
+Tags: - Key: Environment
+Value: Production
 
-RDS SG: allow inbound on the DB port only from the EC2 SG.
+RDSInstance:
+Type: AWS::RDS::DBInstance
+Properties:
+DBInstanceClass: db.t3.micro
+Engine: mysql
+MasterUsername: !Ref DBUsername
+MasterUserPassword: !Ref DBPassword
+DBSubnetGroupName: !Ref DBSubnetGroup
+VPCSecurityGroups: - !Ref RDSSecurityGroup
+Tags: - Key: Environment
+Value: Production
 
-No public IPs on instances in private subnets.
+RDSSecurityGroup:
+Type: AWS::EC2::SecurityGroup
+Properties:
+GroupDescription: Allow inbound MySQL from the EC2 instances
+VpcId: !Ref VPC
+SecurityGroupIngress: - IpProtocol: tcp
+FromPort: '3306'
+ToPort: '3306'
+SourceSecurityGroupId: !Ref EC2SecurityGroup
+Tags: - Key: Environment
+Value: Production
+
+# Outputs
 
 Outputs:
+ALBDNSName:
+Description: DNS Name of the Application Load Balancer
+Value: !GetAtt ALB.DNSName
+Export:
+Name: !Sub '${AWS::StackName}-ALBDNSName'
 
-Export at least the ALB DNS Name, VPC ID, PublicSubnet IDs, PrivateSubnet IDs, and RDS Endpoint.
+VPCID:
+Description: VPC ID
+Value: !Ref VPC
+Export:
+Name: !Sub '${AWS::StackName}-VPCID'
 
-Conventions & Constraints
+PublicSubnet1ID:
+Description: Public Subnet 1 ID
+Value: !Ref PublicSubnet1
+Export:
+Name: !Sub '${AWS::StackName}-PublicSubnet1ID'
 
-Use intrinsic functions (Ref, Fn::Sub, Fn::GetAtt) appropriately; avoid hardcoded ARNs.
+PublicSubnet2ID:
+Description: Public Subnet 2 ID
+Value: !Ref PublicSubnet2
+Export:
+Name: !Sub '${AWS::StackName}-PublicSubnet2ID'
 
-Use SSM to resolve the Amazon Linux 2 AMI.
+PrivateSubnet1ID:
+Description: Private Subnet 1 ID
+Value: !Ref PrivateSubnet1
+Export:
+Name: !Sub '${AWS::StackName}-PrivateSubnet1ID'
 
-Ensure the ALB’s Target Group type matches the instances (instance targets).
+PrivateSubnet2ID:
+Description: Private Subnet 2 ID
+Value: !Ref PrivateSubnet2
+Export:
+Name: !Sub '${AWS::StackName}-PrivateSubnet2ID'
 
-Ensure route-table associations are correct and AZ-aware.
-
-Ensure all resources include the tag: Environment: Production.
-
-Deliverable
-
-Only the final valid CloudFormation YAML document, starting with AWSTemplateFormatVersion, no comments or prose.
+RDSInstanceEndpoint:
+Description: RDS Instance Endpoint
+Value: !GetAtt RDSInstance.Endpoint.Address
+Export:
+Name: !Sub '${AWS::StackName}-RDSInstanceEndpoint'
