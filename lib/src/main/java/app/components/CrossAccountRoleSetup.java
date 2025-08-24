@@ -58,10 +58,6 @@ public class CrossAccountRoleSetup extends ComponentResource {
             // Create provider for target account (assumes cross-account access is configured)
             var targetProvider = new Provider("provider-" + accountId, ProviderArgs.builder()
                     .region(args.config.getManagementRegion())
-                    // Note: In real scenarios, you'd configure assume_role here
-                    // .assumeRole(AssumeRoleArgs.builder()
-                    //     .roleArn("arn:aws:iam::" + accountId + ":role/OrganizationAccountAccessRole")
-                    //     .build())
                     .build(), CustomResourceOptions.builder().parent(this).build());
 
             // Create execution role in target account

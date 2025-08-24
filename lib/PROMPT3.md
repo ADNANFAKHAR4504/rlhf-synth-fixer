@@ -1,7 +1,6 @@
 our last fix worked, but deployment still failed with a new error:
 
-Error:
-```text
+```
 +  aws:cloudformation:StackSetInstance stackset-instance-123456789013-eu-west-1 creating (11s) error:   sdk-v2/provider2.go:572: sdk.helper_schema: creating CloudFormation StackSet (multi-region-web-app-stackset) Instance: waiting for completion: unexpected state 'FAILED', wanted target 'SUCCEEDED'. last error: Account (123456789013), Region (eu-west-1), FAILED: Account 123456789013 should have 'AWSCloudFormationStackSetExecutionRole' role with trust relationship to Role 'AWSCloudFormationStackSetAdministrationRole'.: provider=aws@7.5.0
  +  aws:cloudformation:StackSetInstance stackset-instance-123456789013-eu-west-1 creating (11s) error: 1 error occurred:
  +  aws:cloudformation:StackSetInstance stackset-instance-123456789013-eu-west-1 **creating failed** error: 1 error occurred:
@@ -63,23 +62,3 @@ Diagnostics:
     	* creating CloudFormation StackSet (multi-region-web-app-stackset) Instance: waiting for completion: unexpected state 'FAILED', wanted target 'SUCCEEDED'. last error: Account (123456789012), Region (us-west-2), FAILED: Account 123456789012 should have 'AWSCloudFormationStackSetExecutionRole' role with trust relationship to Role 'AWSCloudFormationStackSetAdministrationRole'.
   pulumi:pulumi:Stack (TapStack-TapStackpr2140):
 ```
-
-Here’s the code snippet from your fix that triggered the error:
-
-```
-// Deploy StackSet instances across accounts and regions
-for (String account : config.getTargetAccounts()) {
-    for (String region : config.getTargetRegions()) {
-        new StackSetInstance("stackset-instance-" + account + "-" + region,
-                StackSetInstanceArgs.builder()
-                        .stackSetName(stackSet.name())
-                        .accountId(account)
-                        .stackSetInstanceRegion(region)
-                        .build(), CustomResourceOptions.builder().parent(this).provider(provider)
-                .dependsOn(stackSet)
-                .build());
-    }
-}
-```
-
-Can you update this code so it deploys successfully?
