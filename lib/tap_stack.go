@@ -105,8 +105,12 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		})
 	}
 
-	// Store ALB DNS names and zone IDs for outputs
+	// Store outputs for each region
 	albDnsNames := make(map[string]*string)
+	albArns := make(map[string]*string)
+	vpcIds := make(map[string]*string)
+	asgNames := make(map[string]*string)
+	targetGroupArns := make(map[string]*string)
 
 	// Deploy infrastructure in each region
 	for _, config := range regionConfigs {
@@ -316,11 +320,14 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 			Provider: regionProvider,
 		})
 
-		// Store ALB DNS information for outputs
+		// Store information for outputs
 		albDnsNames[config.Region] = albResource.DnsName()
+		albArns[config.Region] = albResource.Arn()
+		vpcIds[config.Region] = vpcResource.Id()
+		targetGroupArns[config.Region] = targetGroup.Arn()
 
 		// Create Auto Scaling Group
-		asg.NewAutoscalingGroup(stack, jsii.String(fmt.Sprintf("asg-%s", config.Region)), &asg.AutoscalingGroupConfig{
+		asgResource := asg.NewAutoscalingGroup(stack, jsii.String(fmt.Sprintf("asg-%s", config.Region)), &asg.AutoscalingGroupConfig{
 			Name:                   jsii.String(fmt.Sprintf("tap-%s-asg-%s", environmentSuffix, config.Region)),
 			VpcZoneIdentifier:      &subnetIds,
 			MinSize:                jsii.Number(float64(config.MinSize)),
@@ -347,15 +354,59 @@ echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
 			},
 			Provider: regionProvider,
 		})
+
+		// Store ASG name for outputs
+		asgNames[config.Region] = asgResource.Name()
 	}
 
-	// Output ALB DNS names for each region
+	// Output comprehensive information for each region
 	for region, dnsName := range albDnsNames {
+		// ALB DNS names
 		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("alb-dns-%s", region)), &cdktf.TerraformOutputConfig{
 			Value:       dnsName,
 			Description: jsii.String(fmt.Sprintf("ALB DNS name for %s", region)),
 		})
+
+		// ALB ARNs
+		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("alb-arn-%s", region)), &cdktf.TerraformOutputConfig{
+			Value:       albArns[region],
+			Description: jsii.String(fmt.Sprintf("ALB ARN for %s", region)),
+		})
+
+		// VPC IDs
+		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("vpc-id-%s", region)), &cdktf.TerraformOutputConfig{
+			Value:       vpcIds[region],
+			Description: jsii.String(fmt.Sprintf("VPC ID for %s", region)),
+		})
+
+		// Target Group ARNs
+		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("target-group-arn-%s", region)), &cdktf.TerraformOutputConfig{
+			Value:       targetGroupArns[region],
+			Description: jsii.String(fmt.Sprintf("Target Group ARN for %s", region)),
+		})
+
+		// ASG Names
+		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("asg-name-%s", region)), &cdktf.TerraformOutputConfig{
+			Value:       asgNames[region],
+			Description: jsii.String(fmt.Sprintf("Auto Scaling Group name for %s", region)),
+		})
 	}
+
+	// Output environment information
+	cdktf.NewTerraformOutput(stack, jsii.String("environment-suffix"), &cdktf.TerraformOutputConfig{
+		Value:       jsii.String(environmentSuffix),
+		Description: jsii.String("Environment suffix used for resource naming"),
+	})
+
+	// Output deployment regions
+	regionsList := make([]*string, 0, len(regionConfigs))
+	for _, config := range regionConfigs {
+		regionsList = append(regionsList, jsii.String(config.Region))
+	}
+	cdktf.NewTerraformOutput(stack, jsii.String("deployment-regions"), &cdktf.TerraformOutputConfig{
+		Value:       cdktf.Fn_Jsonencode(regionsList),
+		Description: jsii.String("List of regions where infrastructure is deployed"),
+	})
 
 	return stack
 }
