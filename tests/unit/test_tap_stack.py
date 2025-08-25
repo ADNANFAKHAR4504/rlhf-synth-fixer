@@ -34,8 +34,8 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTestDefault")
         
         # ASSERT - Stack should create with default suffix
-        self.assertIsNotNone(stack.security_stack)
-        self.assertEqual(stack.security_stack.environment_suffix, 'dev')
+        self.assertIsNotNone(stack.security_nested_stack)
+        self.assertEqual(stack.security_nested_stack.security_stack.environment_suffix, 'dev')
 
     @mark.it("passes environment suffix to nested stack")
     def test_passes_env_suffix_to_nested_stack(self):
@@ -45,7 +45,7 @@ class TestTapStack(unittest.TestCase):
                          TapStackProps(environment_suffix=env_suffix))
         
         # ASSERT - Verify environment suffix is passed
-        self.assertEqual(stack.security_stack.environment_suffix, env_suffix)
+        self.assertEqual(stack.security_nested_stack.security_stack.environment_suffix, env_suffix)
 
     @mark.it("uses context for environment suffix when not in props")
     def test_uses_context_for_env_suffix(self):
@@ -54,7 +54,7 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTestContext")
         
         # ASSERT
-        self.assertEqual(stack.security_stack.environment_suffix, 'fromcontext')
+        self.assertEqual(stack.security_nested_stack.security_stack.environment_suffix, 'fromcontext')
 
 
 @mark.describe("SimpleSecurityStack")
@@ -172,9 +172,9 @@ class TestSimpleSecurityStack(unittest.TestCase):
         for role_id, role_props in roles.items():
             if "Properties" in role_props and "RoleName" in role_props["Properties"]:
                 role_name = role_props["Properties"]["RoleName"]
-                if f"tap-{self.env_suffix}-lambda-role" == role_name:
+                if f"tap-{self.env_suffix}-lambda-role-primary-1" == role_name:
                     lambda_role_found = True
-                elif f"tap-{self.env_suffix}-ec2-role" == role_name:
+                elif f"tap-{self.env_suffix}-ec2-role-primary-1" == role_name:
                     ec2_role_found = True
         
         self.assertTrue(lambda_role_found, "Lambda role not found")
@@ -201,7 +201,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
         # ASSERT
         self.template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
         self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
-            "Name": f"tap-{self.env_suffix}-alb",
+            "Name": f"tap-{self.env_suffix}-alb-primary-1",
             "Scheme": "internet-facing",
             "Type": "application"
         })
@@ -211,7 +211,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
         # ASSERT
         self.template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
         self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
-            "Name": f"tap-{self.env_suffix}-tg",
+            "Name": f"tap-{self.env_suffix}-tg-primary-1",
             "Port": 80,
             "Protocol": "HTTP",
             "TargetType": "instance",
@@ -284,8 +284,8 @@ class TestSimpleSecurityStack(unittest.TestCase):
             ("AWS::EC2::VPC", "Name", f"tap-{self.env_suffix}-vpc"),
             ("AWS::Lambda::Function", "FunctionName", f"tap-{self.env_suffix}-function"),
             ("AWS::ApiGateway::RestApi", "Name", f"tap-{self.env_suffix}-api"),
-            ("AWS::ElasticLoadBalancingV2::LoadBalancer", "Name", f"tap-{self.env_suffix}-alb"),
-            ("AWS::ElasticLoadBalancingV2::TargetGroup", "Name", f"tap-{self.env_suffix}-tg")
+            ("AWS::ElasticLoadBalancingV2::LoadBalancer", "Name", f"tap-{self.env_suffix}-alb-primary-1"),
+            ("AWS::ElasticLoadBalancingV2::TargetGroup", "Name", f"tap-{self.env_suffix}-tg-primary-1")
         ]
         
         for resource_type, prop_name, expected_value in resources:

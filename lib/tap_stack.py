@@ -64,9 +64,17 @@ class TapStack(cdk.Stack):
             props.environment_suffix if props else None
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-        # Create the simplified security stack directly  
-        self.security_stack = SimpleSecurityStack(
+        # Create the simplified security stack as a nested stack
+        class SecurityNestedStack(NestedStack):
+            def __init__(self, scope, construct_id, **kwargs):
+                super().__init__(scope, construct_id, **kwargs)
+                self.security_stack = SimpleSecurityStack(
+                    self,
+                    "SecurityStack",
+                    environment_suffix=environment_suffix
+                )
+        
+        self.security_nested_stack = SecurityNestedStack(
             self,
-            f"SecurityStack{environment_suffix}",
-            environment_suffix=environment_suffix
+            f"SecurityStack{environment_suffix}"
         )

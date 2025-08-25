@@ -1,7 +1,7 @@
 """Simplified security stack for deployment testing"""
 
 from aws_cdk import (
-  NestedStack,
+  Stack,
   RemovalPolicy,
   Duration,
   CfnOutput,
@@ -10,14 +10,13 @@ from aws_cdk import (
   aws_iam as iam,
   aws_ec2 as ec2,
   aws_lambda as _lambda,
-  aws_logs as logs,
   aws_apigateway as apigateway,
   aws_elasticloadbalancingv2 as elbv2,
 )
 from constructs import Construct
 
 
-class SimpleSecurityStack(NestedStack):
+class SimpleSecurityStack(Stack):
     """Simplified security stack with core components"""
     
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str = "dev", **kwargs) -> None:
@@ -96,7 +95,7 @@ class SimpleSecurityStack(NestedStack):
         # IAM Role for Lambda
         self.lambda_role = iam.Role(
             self, "LambdaRole",
-            role_name=f"tap-{environment_suffix}-lambda-role",
+            role_name=f"tap-{environment_suffix}-lambda-role-primary-1",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -146,7 +145,7 @@ def handler(event, context):
         # ALB
         self.alb = elbv2.ApplicationLoadBalancer(
             self, "ALB",
-            load_balancer_name=f"tap-{environment_suffix}-alb",
+            load_balancer_name=f"tap-{environment_suffix}-alb-primary-1",
             vpc=self.vpc,
             internet_facing=True,
             security_group=self.alb_sg,
@@ -156,7 +155,7 @@ def handler(event, context):
         # Target Group
         self.target_group = elbv2.ApplicationTargetGroup(
             self, "TargetGroup",
-            target_group_name=f"tap-{environment_suffix}-tg",
+            target_group_name=f"tap-{environment_suffix}-tg-primary-1",
             vpc=self.vpc,
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
@@ -178,7 +177,7 @@ def handler(event, context):
         # IAM Role for EC2
         self.ec2_role = iam.Role(
             self, "EC2Role",
-            role_name=f"tap-{environment_suffix}-ec2-role",
+            role_name=f"tap-{environment_suffix}-ec2-role-primary-1",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
