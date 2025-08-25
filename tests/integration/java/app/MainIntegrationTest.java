@@ -2,34 +2,21 @@ package app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pulumi.Context;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Assumptions;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
 import software.amazon.awssdk.services.cloudformation.model.DescribeStackSetResponse;
-import software.amazon.awssdk.services.cloudformation.model.ListStackSetsResponse;
-import software.amazon.awssdk.services.cloudformation.model.ListStacksResponse;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsResponse;
 import software.amazon.awssdk.services.cloudwatch.model.ListDashboardsResponse;
-import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.DescribeRegionsResponse;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
 import software.amazon.awssdk.services.iam.IamClient;
-import software.amazon.awssdk.services.iam.model.GetAccountSummaryResponse;
 import software.amazon.awssdk.services.iam.model.GetRoleResponse;
-import software.amazon.awssdk.services.iam.model.ListRolesResponse;
-import software.amazon.awssdk.services.sts.StsClient;
-import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -76,15 +63,8 @@ public class MainIntegrationTest {
             System.out.println("=== Loading Deployment Outputs ===");
             System.out.println("Stack Name: " + TEST_STACK_NAME);
             
-            // Check if passphrase is required
-            if (isPassphraseRequired()) {
-                System.out.println("⚠️  Pulumi stack requires passphrase for decryption");
-                System.out.println("💡 PULUMI_CONFIG_PASSPHRASE environment variable not found");
-                System.out.println("ℹ️  Integration tests will skip live resource validation");
-                return;
-            }
-            
-            String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--cwd", "lib", "--stack", stackName);
+            // Try to get outputs directly from root directory (not lib)
+            String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--stack", stackName);
             allOutputs = objectMapper.readTree(outputsJson);
             
             // Extract specific outputs
@@ -104,14 +84,25 @@ public class MainIntegrationTest {
             String errorMsg = e.getMessage();
             System.err.println("Failed to load deployment outputs: " + errorMsg);
             
+            // Check if we're running in CI
+            boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
+            String passphrase = System.getenv("PULUMI_CONFIG_PASSPHRASE");
+            
             if (errorMsg.contains("passphrase") || errorMsg.contains("decrypt")) {
-                System.out.println("💡 Pulumi Configuration Help:");
-                System.out.println("   • Set PULUMI_CONFIG_PASSPHRASE=<your-passphrase>");
-                System.out.println("   • Or set PULUMI_CONFIG_PASSPHRASE_FILE=<path-to-passphrase-file>");
-                System.out.println("   • Or use 'pulumi login --local' for local state");
+                if (isCI) {
+                    System.out.println("⚠️  Running in CI but passphrase decryption failed");
+                    System.out.println("💡 Check CI environment configuration:");
+                    System.out.println("   • PULUMI_CONFIG_PASSPHRASE: " + (passphrase != null ? "SET (length: " + passphrase.length() + ")" : "NOT SET"));
+                    System.out.println("   • Verify passphrase is correct in CI secrets");
+                } else {
+                    System.out.println("💡 Local Development - Pulumi Configuration Help:");
+                    System.out.println("   • This test requires deployed infrastructure with outputs");
+                    System.out.println("   • Set PULUMI_CONFIG_PASSPHRASE=<your-passphrase> to access encrypted state");
+                    System.out.println("   • Or run tests in CI where the passphrase is configured");
+                }
             } else if (errorMsg.contains("no stack")) {
                 System.out.println("💡 Stack Setup Help:");
-                System.out.println("   • Run 'cd lib && pulumi up' to deploy infrastructure");
+                System.out.println("   • Run 'cd lib && pulumi up' to deploy infrastructure first");
                 System.out.println("   • Or set PULUMI_STACK environment variable to correct stack name");
             } else if (errorMsg.contains("not logged in")) {
                 System.out.println("💡 Authentication Help:");
@@ -119,38 +110,59 @@ public class MainIntegrationTest {
                 System.out.println("   • Or run 'pulumi login --local' for local file state");
             }
             
-            System.out.println("ℹ️  Integration tests will run with limited validation");
+            if (isCI) {
+                System.out.println("ℹ️  CI: Integration tests will skip live resource validation");
+            } else {
+                System.out.println("ℹ️  Local: Integration tests will skip live resource validation (run in CI for full validation)");
+            }
             TEST_STACK_NAME = "dev"; // fallback
         }
     }
     
     private static boolean isPassphraseRequired() {
-        // If PULUMI_CONFIG_PASSPHRASE is set in CI, we don't need to prompt
+        // In CI, we should already be logged into Pulumi backend
+        boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
         String passphrase = System.getenv("PULUMI_CONFIG_PASSPHRASE");
-        if (passphrase != null && !passphrase.isEmpty()) {
-            return false;
-        }
+        System.out.println("Running in CI: " + isCI);
+        System.out.println("PULUMI_CONFIG_PASSPHRASE available: " + (passphrase != null && !passphrase.isEmpty()));
+        System.out.println("ENVIRONMENT_SUFFIX: " + System.getenv("ENVIRONMENT_SUFFIX"));
         
         try {
-            // Try a simple stack command to check if passphrase is needed
-            executeCommand("pulumi", "stack", "ls", "--cwd", "lib");
+            // Try a simple stack command to check if we can access Pulumi
+            String stackList = executeCommand("pulumi", "stack", "ls");
+            System.out.println("Available stacks: " + stackList.trim());
             return false;
         } catch (Exception e) {
+            System.out.println("Stack access test failed: " + e.getMessage());
             return e.getMessage().contains("passphrase") || e.getMessage().contains("decrypt");
         }
     }
     
     private static String getStackName() {
+        // Check for explicit PULUMI_STACK environment variable first
         String stackName = System.getenv("PULUMI_STACK");
-        if (stackName == null || stackName.isEmpty()) {
-            // Try to get current stack
-            try {
-                return executeCommand("pulumi", "stack", "--show-name", "--cwd", "lib").trim();
-            } catch (Exception e) {
-                return "dev"; // fallback to dev stack
-            }
+        if (stackName != null && !stackName.isEmpty()) {
+            return stackName;
         }
-        return stackName;
+        
+        // Build stack name using TapStack + ENVIRONMENT_SUFFIX pattern
+        String envSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        if (envSuffix != null && !envSuffix.isEmpty()) {
+            return "TapStack" + envSuffix;
+        }
+        
+        // Try to get current stack from Pulumi CLI
+        try {
+            String currentStack = executeCommand("pulumi", "stack", "--show-name").trim();
+            if (!currentStack.isEmpty()) {
+                return currentStack;
+            }
+        } catch (Exception e) {
+            System.out.println("Could not get current stack from Pulumi CLI: " + e.getMessage());
+        }
+        
+        // Fallback - look for any TapStack* pattern
+        return "TapStack";
     }
     
     private static String getOutputValue(String outputName) {
@@ -165,7 +177,12 @@ public class MainIntegrationTest {
     void setUp() {
         // Validate that outputs are available before each test
         if (allOutputs == null) {
-            System.out.println("Warning: Deployment outputs not available. Some tests may be skipped.");
+            boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
+            if (isCI) {
+                System.out.println("Warning: Running in CI but deployment outputs not available. Test will be skipped.");
+            } else {
+                System.out.println("Warning: Deployment outputs not available. Test will be skipped. (Run in CI for full validation)");
+            }
         }
     }
 
@@ -416,6 +433,18 @@ public class MainIntegrationTest {
         ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(Paths.get(".").toFile())
                 .redirectErrorStream(true);
+        
+        // Ensure PULUMI_CONFIG_PASSPHRASE is passed to the process if available
+        String passphrase = System.getenv("PULUMI_CONFIG_PASSPHRASE");
+        if (passphrase != null && !passphrase.isEmpty()) {
+            pb.environment().put("PULUMI_CONFIG_PASSPHRASE", passphrase);
+        }
+        
+        // Also pass through other Pulumi environment variables
+        String passphraseFile = System.getenv("PULUMI_CONFIG_PASSPHRASE_FILE");
+        if (passphraseFile != null && !passphraseFile.isEmpty()) {
+            pb.environment().put("PULUMI_CONFIG_PASSPHRASE_FILE", passphraseFile);
+        }
                 
         Process process = pb.start();
         boolean finished = process.waitFor(60, TimeUnit.SECONDS);
