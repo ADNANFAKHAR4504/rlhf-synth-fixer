@@ -24,12 +24,12 @@ fi
 if [ "$LANGUAGE" = "java" ]  && [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi Java project detected, running JUnit tests..."
   chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
+  ./gradlew clean test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
 
 elif [ "$LANGUAGE" = "java" ] && [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK Java project detected, running JUnit tests..."
   chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
+  ./gradlew clean test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
 
   echo "📊 Checking for generated coverage reports..."
   if [ -d "build/reports/jacoco" ]; then
