@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "Access Control",
     "Network Configuration",
     "Database Management",
@@ -21,7 +21,7 @@
   "aws_services": [
     "KMS",
     "S3",
-    "VPC", 
+    "VPC",
     "EC2",
     "Lambda",
     "API Gateway",
@@ -32,5 +32,11 @@
     "CloudWatch",
     "ACM",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
