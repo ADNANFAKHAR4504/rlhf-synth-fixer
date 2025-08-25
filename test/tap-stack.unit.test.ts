@@ -390,14 +390,12 @@ describe('TapStack Unit Tests', () => {
         throw new Error('Permission denied');
       });
 
-      // Mock console.error to avoid cluttering test output
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
       expect(() => {
         new TapStack('file-error-test', defaultArgs);
       }).not.toThrow();
 
-      // Wait for the async operation to complete
       await new Promise(resolve => setTimeout(resolve, 100));
       
       expect(mockFs.writeFileSync).toHaveBeenCalled();
@@ -407,9 +405,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should handle successful file writes', async () => {
-      mockFs.writeFileSync.mockImplementation(() => {
-        // Successfully write file
-      });
+      mockFs.writeFileSync.mockImplementation(() => {});
 
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const originalNodeEnv = process.env.NODE_ENV;
@@ -417,12 +413,57 @@ describe('TapStack Unit Tests', () => {
 
       new TapStack('file-success-test', defaultArgs);
 
-      // Wait for the async operation to complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
 
       process.env.NODE_ENV = originalNodeEnv;
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle test environment logging path', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {});
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      // Ensure we're in test environment
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalJestWorker = process.env.JEST_WORKER_ID;
+      process.env.NODE_ENV = 'test';
+      process.env.JEST_WORKER_ID = '1';
+
+      new TapStack('test-env-logging-test', defaultArgs);
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      // Should NOT call console.log in test environment
+      expect(consoleSpy).not.toHaveBeenCalled();
+
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.JEST_WORKER_ID = originalJestWorker;
+      consoleSpy.mockRestore();
+    });
+
+    test('should handle non-test environment logging path', async () => {
+      mockFs.writeFileSync.mockImplementation(() => {});
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalJestWorker = process.env.JEST_WORKER_ID;
+      process.env.NODE_ENV = 'production';
+      delete process.env.JEST_WORKER_ID;
+
+      new TapStack('non-test-env-logging-test', defaultArgs);
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith('Stack outputs written to stack-outputs.json');
+
+      process.env.NODE_ENV = originalNodeEnv;
+      process.env.JEST_WORKER_ID = originalJestWorker;
       consoleSpy.mockRestore();
     });
   });
