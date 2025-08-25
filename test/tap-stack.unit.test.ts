@@ -1,14 +1,12 @@
 import { Template } from 'aws-cdk-lib/assertions';
 import * as fs from 'fs';
 import * as path from 'path';
-import { yamlParse } from 'yaml-cfn';
 import { describe, it, expect } from '@jest/globals';
 
 describe('TapStack CloudFormation Template', () => {
-  // Load and parse the CloudFormation template
-  const templatePath = path.resolve(__dirname, '../lib/TapStack.yml');
-  const templateYaml = fs.readFileSync(templatePath, 'utf-8');
-  const templateJson = JSON.stringify(yamlParse(templateYaml));
+  // Load the pre-converted JSON template
+  const templatePath = path.resolve(__dirname, '../lib/TapStack.json');
+  const templateJson = fs.readFileSync(templatePath, 'utf-8');
   const template = Template.fromString(templateJson);
 
   // Test Suite for Stack Metadata
