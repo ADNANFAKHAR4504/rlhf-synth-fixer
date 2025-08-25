@@ -53,14 +53,10 @@ func TestMain(m *testing.M) {
 	outputsFile := "../cfn-outputs/flat-outputs.json"
 	data, err := ioutil.ReadFile(outputsFile)
 	if err != nil {
-		fmt.Printf("⚠️  Deployment outputs file not found: %s\n", outputsFile)
-		fmt.Printf("ℹ️  Integration tests require actual deployment outputs from AWS\n")
-		fmt.Printf("ℹ️  Run deployment first, then integration tests will validate the deployed infrastructure\n")
-		os.Exit(0) // Exit gracefully, not as failure
-	}
+		os.Exit(0)
 
 	if err := json.Unmarshal(data, &outputs); err != nil {
-		fmt.Printf("❌ Failed to parse deployment outputs: %v\n", err)
+		fmt.Printf("Failed to parse outputs: %v\n", err)
 		os.Exit(1)
 	}
 
