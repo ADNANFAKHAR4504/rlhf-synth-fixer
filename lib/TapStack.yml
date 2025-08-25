@@ -292,8 +292,8 @@ Resources:
           DataResources:
             - Type: "AWS::S3::Object"
               Values:
-                - !Sub "${CloudTrailLogsBucket}/*"
-                - !Sub "${VpcFlowLogsBucket}/*"
+                - !Sub "${CloudTrailLogsBucket.Arn}/*"
+                - !Sub "${VpcFlowLogsBucket.Arn}/*"
 
   # VPC
   SecureVPC:

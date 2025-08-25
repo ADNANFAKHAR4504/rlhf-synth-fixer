@@ -518,10 +518,10 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${CloudTrailLogsBucket}/*"
+                                        "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${VpcFlowLogsBucket}/*"
+                                        "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
                                     }
                                 ]
                             }
