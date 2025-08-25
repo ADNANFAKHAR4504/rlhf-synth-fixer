@@ -660,6 +660,10 @@ resource "aws_ecs_service" "app" {
     type = "CODE_DEPLOY"
   }
 
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [aws_lb_listener.http]
 
   tags = local.common_tags
