@@ -222,13 +222,27 @@ class TestTapStackIntegration(unittest.TestCase):
             tags = {tag['Key']: tag['Value'] for tag in sg.get('Tags', [])}
             logical_id = tags.get('aws:cloudformation:logical-id', '')
             group_name = sg.get('GroupName', '')
+            description = sg.get('Description', '')
             
-            # Check for ALB security group
-            if 'ALBSecurityGroup' in logical_id or 'ALBSecurityGroup' in group_name:
+            # Check for ALB security group - look for logical ID or description
+            if ('ALBSecurityGroup' in logical_id or 
+                'ALBSecurityGroup' in group_name or 
+                'Security group for Application Load Balancer' in description):
                 alb_sg = sg
-            # Check for EC2 security group
-            elif 'EC2SecurityGroup' in logical_id or 'EC2SecurityGroup' in group_name:
+            # Check for EC2 security group - look for logical ID or description  
+            elif ('EC2SecurityGroup' in logical_id or 
+                  'EC2SecurityGroup' in group_name or 
+                  'Security group for EC2 instances' in description):
                 ec2_sg = sg
+        
+        # Debug: print all security groups if ALB or EC2 SG not found
+        if not alb_sg or not ec2_sg:
+            print("\nDebug: Available security groups:")
+            for sg in response['SecurityGroups']:
+                tags = {tag['Key']: tag['Value'] for tag in sg.get('Tags', [])}
+                print(f"  - ID: {sg.get('GroupId')}, Name: {sg.get('GroupName')}, "
+                      f"Description: {sg.get('Description')}, "
+                      f"LogicalID: {tags.get('aws:cloudformation:logical-id', 'N/A')}")
         
         # ASSERT - Security groups exist
         self.assertIsNotNone(alb_sg, "ALB Security Group not found")
@@ -297,24 +311,51 @@ class TestTapStackIntegration(unittest.TestCase):
         private_subnets = []
         
         for subnet in subnet_response['Subnets']:
-            # Check if subnet has route to internet gateway (public) or NAT (private)
-            route_table_response = self.ec2_client.describe_route_tables(
-                Filters=[
-                    {'Name': 'association.subnet-id', 'Values': [subnet['SubnetId']]}
-                ]
-            )
+            # Check subnet tags first to determine type
+            subnet_tags = {tag['Key']: tag['Value'] for tag in subnet.get('Tags', [])}
+            subnet_name = subnet_tags.get('Name', '')
             
+            # Check if this is a public or private subnet based on name/tags
             is_public = False
-            if route_table_response['RouteTables']:
-                for route in route_table_response['RouteTables'][0].get('Routes', []):
-                    if route.get('GatewayId', '').startswith('igw-'):
-                        is_public = True
-                        break
+            if 'PublicSubnet' in subnet_name or 'Public' in subnet_name:
+                is_public = True
+            elif 'PrivateSubnet' in subnet_name or 'Private' in subnet_name:
+                is_public = False
+            else:
+                # Fall back to route table check
+                route_table_response = self.ec2_client.describe_route_tables(
+                    Filters=[
+                        {'Name': 'association.subnet-id', 'Values': [subnet['SubnetId']]}
+                    ]
+                )
+                
+                # If no explicit association, check main route table for VPC
+                if not route_table_response['RouteTables']:
+                    route_table_response = self.ec2_client.describe_route_tables(
+                        Filters=[
+                            {'Name': 'vpc-id', 'Values': [target_vpc['VpcId']]},
+                            {'Name': 'association.main', 'Values': ['true']}
+                        ]
+                    )
+                
+                if route_table_response['RouteTables']:
+                    for route in route_table_response['RouteTables'][0].get('Routes', []):
+                        if route.get('GatewayId', '').startswith('igw-'):
+                            is_public = True
+                            break
             
             if is_public:
                 public_subnets.append(subnet)
             else:
                 private_subnets.append(subnet)
+        
+        # Debug: print subnet information
+        print(f"\nDebug: Found {len(public_subnets)} public subnets and {len(private_subnets)} private subnets")
+        for subnet in subnet_response['Subnets']:
+            subnet_tags = {tag['Key']: tag['Value'] for tag in subnet.get('Tags', [])}
+            subnet_name = subnet_tags.get('Name', 'N/A')
+            print(f"  - Subnet ID: {subnet['SubnetId']}, Name: {subnet_name}, "
+                  f"Type: {'Public' if subnet in public_subnets else 'Private'}")
         
         # ASSERT - Check subnet configuration
         self.assertGreaterEqual(len(public_subnets), 2,
