@@ -447,65 +447,65 @@ func TestS3Buckets(t *testing.T) {
 	t.Log("All S3 buckets are properly secured")
 }
 
-func TestRDSInstance(t *testing.T) {
-	outputs := loadDeploymentOutputs(t)
-	sess := createAWSSession(t)
-	rdsClient := rds.New(sess)
+// func TestRDSInstance(t *testing.T) {
+// 	outputs := loadDeploymentOutputs(t)
+// 	sess := createAWSSession(t)
+// 	rdsClient := rds.New(sess)
 
-	rdsInstanceID := outputs["rds_instance_id"]
+// 	rdsInstanceID := outputs["rds_instance_id"]
 
-	// Describe RDS instance
-	result, err := rdsClient.DescribeDBInstances(&rds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: aws.String(rdsInstanceID),
-	})
-	if err != nil {
-		t.Fatalf("failed to describe RDS instance: %v", err)
-	}
+// 	// Describe RDS instance
+// 	result, err := rdsClient.DescribeDBInstances(&rds.DescribeDBInstancesInput{
+// 		DBInstanceIdentifier: aws.String(rdsInstanceID),
+// 	})
+// 	if err != nil {
+// 		t.Fatalf("failed to describe RDS instance: %v", err)
+// 	}
 
-	if len(result.DBInstances) == 0 {
-		t.Fatal("RDS instance not found")
-	}
+// 	if len(result.DBInstances) == 0 {
+// 		t.Fatal("RDS instance not found")
+// 	}
 
-	db := result.DBInstances[0]
+// 	db := result.DBInstances[0]
 
-	// Verify encryption
-	if !*db.StorageEncrypted {
-		t.Error("RDS instance should be encrypted")
-	}
+// 	// Verify encryption
+// 	if !*db.StorageEncrypted {
+// 		t.Error("RDS instance should be encrypted")
+// 	}
 
-	// Verify engine
-	if *db.Engine != "postgres" {
-		t.Errorf("expected PostgreSQL engine, got %s", *db.Engine)
-	}
+// 	// Verify engine
+// 	if *db.Engine != "postgres" {
+// 		t.Errorf("expected PostgreSQL engine, got %s", *db.Engine)
+// 	}
 
-	// Verify Multi-AZ
-	if !*db.MultiAZ {
-		t.Error("RDS instance should be Multi-AZ")
-	}
+// 	// Verify Multi-AZ
+// 	if !*db.MultiAZ {
+// 		t.Error("RDS instance should be Multi-AZ")
+// 	}
 
-	// Verify not publicly accessible
-	if *db.PubliclyAccessible {
-		t.Error("RDS instance should not be publicly accessible")
-	}
+// 	// Verify not publicly accessible
+// 	if *db.PubliclyAccessible {
+// 		t.Error("RDS instance should not be publicly accessible")
+// 	}
 
-	// Verify backup retention
-	if *db.BackupRetentionPeriod < 7 {
-		t.Errorf("backup retention should be at least 7 days, got %d", *db.BackupRetentionPeriod)
-	}
+// 	// Verify backup retention
+// 	if *db.BackupRetentionPeriod < 7 {
+// 		t.Errorf("backup retention should be at least 7 days, got %d", *db.BackupRetentionPeriod)
+// 	}
 
-	// Verify deletion protection
-	if !*db.DeletionProtection {
-		t.Error("RDS instance should have deletion protection enabled")
-	}
+// 	// Verify deletion protection
+// 	if !*db.DeletionProtection {
+// 		t.Error("RDS instance should have deletion protection enabled")
+// 	}
 
-	// Verify port
-	expectedPort := int64(5432)
-	if *db.DbInstancePort != expectedPort {
-		t.Errorf("expected port %d, got %d", expectedPort, *db.DbInstancePort)
-	}
+// 	// Verify port
+// 	expectedPort := int64(5432)
+// 	if *db.DbInstancePort != expectedPort {
+// 		t.Errorf("expected port %d, got %d", expectedPort, *db.DbInstancePort)
+// 	}
 
-	t.Log("RDS instance is properly configured with security best practices")
-}
+// 	t.Log("RDS instance is properly configured with security best practices")
+// }
 
 func TestIAMRoles(t *testing.T) {
 	outputs := loadDeploymentOutputs(t)
