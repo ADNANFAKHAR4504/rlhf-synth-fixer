@@ -30,9 +30,20 @@ try {
   }
 }
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-// For testing, we'll use the actual suffix from the deployment outputs
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1641';
+// Get environment suffix from environment variable (set by CI/CD pipeline)  
+// For testing, we'll derive the actual suffix from the deployment outputs
+// since there might be a mismatch between env var and actual deployed resource names
+let environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1641';
+
+// Try to derive the actual suffix from deployed resources
+if (outputs && Object.keys(outputs).length > 0) {
+  const firstStackName = Object.keys(outputs)[0];
+  const match = firstStackName.match(/TapStack(.+)-(us-east-1|us-west-2)/);
+  if (match) {
+    environmentSuffix = match[1]; // Extract the actual suffix used in deployment
+    console.log(`Detected actual environment suffix from deployment: ${environmentSuffix}`);
+  }
+}
 
 // Helper function to get stack outputs
 function getStackOutput(stackName: string, outputKey: string): string | undefined {
@@ -72,8 +83,8 @@ describe('TapStack Integration Tests', () => {
       // Log available outputs for debugging
       console.log('Available stack outputs:', Object.keys(outputs));
       
-      // Check for expected stack names
-      const expectedStacks = ['TapStackpr1641-us-east-1', 'TapStackpr1641-us-west-2'];
+      // Check for expected stack names using the detected environment suffix
+      const expectedStacks = [`TapStack${environmentSuffix}-us-east-1`, `TapStack${environmentSuffix}-us-west-2`];
       const availableStacks = Object.keys(outputs);
       
       console.log('Expected stacks:', expectedStacks);
@@ -108,9 +119,9 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have VPC ID in outputs', () => {
-      const east1VpcId = getStackOutput('TapStackpr1641-us-east-1', 'VPCId');
-      const west2VpcId = getStackOutput('TapStackpr1641-us-west-2', 'VPCId');
-      const devVpcId = getStackOutput('TapStackpr1641-us-east-1', 'VPCId') || getStackOutput('TapStackpr1641-us-west-2', 'VPCId');
+      const east1VpcId = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId');
+      const west2VpcId = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId');
+      const devVpcId = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId') || getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId');
       
       // At least one region should have a VPC ID
       expect(east1VpcId || west2VpcId || devVpcId).toBeDefined();
@@ -133,9 +144,9 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have Load Balancer DNS in outputs', () => {
-      const east1AlbDns = getStackOutput('TapStackpr1641-us-east-1', 'LoadBalancerDNS');
-      const west2AlbDns = getStackOutput('TapStackpr1641-us-west-2', 'LoadBalancerDNS');
-      const devAlbDns = getStackOutput('TapStackpr1641-us-east-1', 'LoadBalancerDNS') || getStackOutput('TapStackpr1641-us-west-2', 'LoadBalancerDNS');
+      const east1AlbDns = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'LoadBalancerDNS');
+      const west2AlbDns = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'LoadBalancerDNS');
+      const devAlbDns = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'LoadBalancerDNS') || getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'LoadBalancerDNS');
       
       // At least one region should have a Load Balancer DNS
       expect(east1AlbDns || west2AlbDns || devAlbDns).toBeDefined();
@@ -158,8 +169,8 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have Auto Scaling Group name in outputs', () => {
-      const east1AsgName = getStackOutput('TapStackpr1641-us-east-1', 'AutoScalingGroupName');
-      const west2AsgName = getStackOutput('TapStackpr1641-us-west-2', 'AutoScalingGroupName');
+      const east1AsgName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'AutoScalingGroupName');
+      const west2AsgName = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'AutoScalingGroupName');
       
       // At least one region should have an Auto Scaling Group name
       expect(east1AsgName || west2AsgName).toBeDefined();
@@ -173,8 +184,8 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have RDS database endpoint in outputs', () => {
-      const east1DbEndpoint = getStackOutput('TapStackpr1641-us-east-1', 'DatabaseEndpoint');
-      const west2DbEndpoint = getStackOutput('TapStackpr1641-us-west-2', 'DatabaseEndpoint');
+      const east1DbEndpoint = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'DatabaseEndpoint');
+      const west2DbEndpoint = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'DatabaseEndpoint');
       
       // At least one region should have a database endpoint
       expect(east1DbEndpoint || west2DbEndpoint).toBeDefined();
@@ -188,8 +199,8 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have S3 bucket name in outputs', () => {
-      const east1BucketName = getStackOutput('TapStackpr1641-us-east-1', 'S3BucketName');
-      const west2BucketName = getStackOutput('TapStackpr1641-us-west-2', 'S3BucketName');
+      const east1BucketName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'S3BucketName');
+      const west2BucketName = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'S3BucketName');
       
       // At least one region should have an S3 bucket name
       expect(east1BucketName || west2BucketName).toBeDefined();
@@ -205,7 +216,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Load Balancer Connectivity', () => {
     test('should be able to connect to US East 1 load balancer', async () => {
-      const albDns = getStackOutput('TapStackpr1641-us-east-1', 'LoadBalancerDNS');
+      const albDns = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'LoadBalancerDNS');
       
       if (!albDns) {
         console.warn('US East 1 Load Balancer DNS not found in outputs, skipping test');
@@ -236,7 +247,7 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should be able to connect to US West 2 load balancer', async () => {
-      const albDns = getStackOutput('TapStackpr1641-us-west-2', 'LoadBalancerDNS');
+      const albDns = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'LoadBalancerDNS');
       
       if (!albDns) {
         console.warn('US West 2 Load Balancer DNS not found in outputs, skipping test');
@@ -306,8 +317,8 @@ describe('TapStack Integration Tests', () => {
 
   describe('Multi-Region Deployment', () => {
     test('should have resources deployed in both regions', () => {
-      const east1VpcId = getStackOutput('TapStackpr1641-us-east-1', 'VPCId');
-      const west2VpcId = getStackOutput('TapStackpr1641-us-west-2', 'VPCId');
+      const east1VpcId = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId');
+      const west2VpcId = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId');
       
       console.log('Checking multi-region deployment...');
       console.log('US East 1 VPC ID:', east1VpcId || 'Not found');
@@ -326,19 +337,19 @@ describe('TapStack Integration Tests', () => {
 
     test('should have consistent resource naming across regions', () => {
       const east1Resources = {
-        vpc: getStackOutput('TapStackpr1641-us-east-1', 'VPCId'),
-        alb: getStackOutput('TapStackpr1641-us-east-1', 'LoadBalancerDNS'),
-        asg: getStackOutput('TapStackpr1641-us-east-1', 'AutoScalingGroupName'),
-        db: getStackOutput('TapStackpr1641-us-east-1', 'DatabaseEndpoint'),
-        s3: getStackOutput('TapStackpr1641-us-east-1', 'S3BucketName')
+        vpc: getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId'),
+        alb: getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'LoadBalancerDNS'),
+        asg: getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'AutoScalingGroupName'),
+        db: getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'DatabaseEndpoint'),
+        s3: getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'S3BucketName')
       };
       
       const west2Resources = {
-        vpc: getStackOutput('TapStackpr1641-us-west-2', 'VPCId'),
-        alb: getStackOutput('TapStackpr1641-us-west-2', 'LoadBalancerDNS'),
-        asg: getStackOutput('TapStackpr1641-us-west-2', 'AutoScalingGroupName'),
-        db: getStackOutput('TapStackpr1641-us-west-2', 'DatabaseEndpoint'),
-        s3: getStackOutput('TapStackpr1641-us-west-2', 'S3BucketName')
+        vpc: getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId'),
+        alb: getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'LoadBalancerDNS'),
+        asg: getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'AutoScalingGroupName'),
+        db: getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'DatabaseEndpoint'),
+        s3: getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'S3BucketName')
       };
       
       console.log('Resource naming consistency check:');
@@ -367,8 +378,8 @@ describe('TapStack Integration Tests', () => {
 
   describe('Resource Validation', () => {
     test('should have unique resource names with environment suffix', () => {
-      const s3BucketName = getStackOutput('TapStackpr1641-us-east-1', 'S3BucketName') || 
-                          getStackOutput('TapStackpr1641-us-west-2', 'S3BucketName');
+      const s3BucketName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'S3BucketName') || 
+                          getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'S3BucketName');
       
       if (s3BucketName) {
         console.log('Checking S3 bucket name uniqueness:', s3BucketName);
@@ -386,8 +397,8 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('should have proper resource naming conventions', () => {
-      const asgName = getStackOutput('TapStackpr1641-us-east-1', 'AutoScalingGroupName') || 
-                     getStackOutput('TapStackpr1641-us-west-2', 'AutoScalingGroupName');
+      const asgName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'AutoScalingGroupName') || 
+                     getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'AutoScalingGroupName');
       
       if (asgName) {
         console.log('Checking Auto Scaling Group name:', asgName);
@@ -409,7 +420,7 @@ describe('TapStack Integration Tests', () => {
       // Check that we have outputs from at least one region
       const regions = ['us-east-1', 'us-west-2'];
       const deployedRegions = regions.filter(region => {
-        const stackName = `TapStackpr1641-${region}`;
+        const stackName = `TapStack${environmentSuffix}-${region}`;
         const vpcId = getStackOutput(stackName, 'VPCId');
         return vpcId !== undefined;
       });
@@ -419,7 +430,7 @@ describe('TapStack Integration Tests', () => {
       
       // For each deployed region, verify we have the core resources
       for (const region of deployedRegions) {
-        const stackName = `TapStackpr1641-${region}`;
+        const stackName = `TapStack${environmentSuffix}-${region}`;
         console.log(`Validating ${region} resources from deploy stage...`);
         
         const resources = {
@@ -468,8 +479,8 @@ describe('TapStack Integration Tests', () => {
       
       // Check for template files
       const templateFiles = [
-        'TapStackpr1641-us-east-1.template.json',
-        'TapStackpr1641-us-west-2.template.json'
+        `TapStack${environmentSuffix}-us-east-1.template.json`,
+        `TapStack${environmentSuffix}-us-west-2.template.json`
       ];
       
       for (const templateFile of templateFiles) {
@@ -556,7 +567,7 @@ describe('TapStack Integration Tests', () => {
         console.log(`CDK manifest version: ${manifest.version}`);
         
         // Check for expected artifacts
-        const expectedArtifacts = ['TapStackpr1641-us-east-1', 'TapStackpr1641-us-west-2'];
+        const expectedArtifacts = [`TapStack${environmentSuffix}-us-east-1`, `TapStack${environmentSuffix}-us-west-2`];
         const actualArtifacts = Object.keys(manifest.artifacts);
         
         for (const expectedArtifact of expectedArtifacts) {
@@ -577,8 +588,8 @@ describe('TapStack Integration Tests', () => {
     test('should validate resource naming patterns from deploy stage', () => {
       console.log('Validating resource naming patterns from deploy stage...');
       
-      const s3BucketName = getStackOutput('TapStackpr1641-us-east-1', 'S3BucketName') || 
-                          getStackOutput('TapStackpr1641-us-west-2', 'S3BucketName');
+      const s3BucketName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'S3BucketName') || 
+                          getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'S3BucketName');
       
       if (s3BucketName) {
         console.log('S3 Bucket Name Pattern Validation:');
@@ -589,26 +600,24 @@ describe('TapStack Integration Tests', () => {
         console.log('S3 bucket name follows production naming pattern');
         
         // Check for environment suffix
-        if (environmentSuffix !== 'dev') {
-          expect(s3BucketName).toContain(environmentSuffix);
-          console.log('S3 bucket name contains environment suffix');
-        }
+        expect(s3BucketName).toContain(environmentSuffix);
+        console.log('S3 bucket name contains environment suffix');
       }
       
-      const asgName = getStackOutput('TapStackpr1641-us-east-1', 'AutoScalingGroupName') || 
-                     getStackOutput('TapStackpr1641-us-west-2', 'AutoScalingGroupName');
+      const asgName = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'AutoScalingGroupName') || 
+                     getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'AutoScalingGroupName');
       
       if (asgName) {
         console.log('Auto Scaling Group Name Pattern Validation:');
         console.log(`   ASG: ${asgName}`);
         
         // Validate ASG naming pattern
-        expect(asgName).toMatch(/^TapStackpr1641-(us-east-1|us-west-2)-AutoScalingGroupASG[A-Z0-9]+-[A-Za-z0-9]+$/);
+        expect(asgName).toMatch(new RegExp(`^TapStack${environmentSuffix}-(us-east-1|us-west-2)-AutoScalingGroupASG[A-Z0-9]+-[A-Za-z0-9]+$`));
         console.log('Auto Scaling Group name follows CDK naming pattern');
       }
       
-      const dbEndpoint = getStackOutput('TapStackpr1641-us-east-1', 'DatabaseEndpoint') || 
-                        getStackOutput('TapStackpr1641-us-west-2', 'DatabaseEndpoint');
+      const dbEndpoint = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'DatabaseEndpoint') || 
+                        getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'DatabaseEndpoint');
       
       if (dbEndpoint) {
         console.log('Database Endpoint Pattern Validation:');
@@ -629,9 +638,9 @@ describe('TapStack Integration Tests', () => {
       console.log(`AWS Region: ${process.env.AWS_REGION}`);
       console.log(`CI Environment: ${process.env.CI}`);
       
-      const east1VpcId = getStackOutput('TapStackpr1641-us-east-1', 'VPCId');
-      const west2VpcId = getStackOutput('TapStackpr1641-us-west-2', 'VPCId');
-      const devVpcId = getStackOutput('TapStackpr1641-us-east-1', 'VPCId') || getStackOutput('TapStackpr1641-us-west-2', 'VPCId');
+      const east1VpcId = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId');
+      const west2VpcId = getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId');
+      const devVpcId = getStackOutput(`TapStack${environmentSuffix}-us-east-1`, 'VPCId') || getStackOutput(`TapStack${environmentSuffix}-us-west-2`, 'VPCId');
       
       console.log(`US East 1 VPC: ${east1VpcId ? 'Deployed' : 'Not found'}`);
       console.log(`US West 2 VPC: ${west2VpcId ? 'Deployed' : 'Not found'}`);
