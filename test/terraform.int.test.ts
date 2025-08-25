@@ -23,7 +23,10 @@ describe("Terraform integration tests (read-only)", () => {
 
     // Check tags
     const tagResult = await s3.getBucketTagging({ Bucket: bucketName }).promise();
-    const tagSet = tagResult.TagSet.reduce((acc, t) => ({ ...acc, [t.Key]: t.Value }), {});
+    const tagSet: Record<string, string> = tagResult.TagSet.reduce(
+      (acc, t) => ({ ...acc, [t.Key]: t.Value }),
+      {} as Record<string, string>
+    );
     expect(tagSet.Environment).toBe(tags.Environment);
     expect(tagSet.ManagedBy).toBe("terraform");
   });
