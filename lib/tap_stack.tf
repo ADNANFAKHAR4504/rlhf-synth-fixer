@@ -1322,7 +1322,7 @@ resource "aws_db_instance" "secondary" {
   identifier                = "${var.project_name}-postgres-replica"
   replicate_source_db       = aws_db_instance.primary.arn
   instance_class            = "db.t3.micro"
-  
+  storage_encrypted = true 
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
   
