@@ -71,6 +71,9 @@ Resources:
               - kms:UntagResource
               - kms:ScheduleKeyDeletion
               - kms:CancelKeyDeletion
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+              - kms:CreateGrant
             Resource: '*'
           - Sid: Allow Secrets Manager to use key
             Effect: Allow
@@ -82,6 +85,7 @@ Resources:
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
+              - kms:CreateGrant
             Resource: '*'
       Tags:
         - Key: Environment
