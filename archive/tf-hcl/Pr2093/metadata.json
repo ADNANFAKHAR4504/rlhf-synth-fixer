@@ -17,10 +17,20 @@
   "training_quality": 9,
   "aws_services": [
     "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "ALB",
+    "Auto Scaling",
     "IAM",
     "Security Groups",
-    "EC2",
-    "S3"
+    "KMS",
+    "CloudWatch",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Elastic IP"
   ],
   "coverage": {
     "lines": 100,
