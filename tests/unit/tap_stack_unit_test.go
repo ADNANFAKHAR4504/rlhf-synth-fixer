@@ -36,7 +36,7 @@ func TestTapStackCreation(t *testing.T) {
 	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
 
 	app := cdktf.NewApp(nil)
-	
+
 	// Create stack
 	stack := NewTapStack(app, jsii.String("TestTapStack"), "test")
 
@@ -128,25 +128,25 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 // TestS3BackendConfiguration tests S3 backend configuration
 func TestS3BackendConfiguration(t *testing.T) {
 	tests := []struct {
-		name               string
-		stateBucket        string
-		stateBucketRegion  string
-		expectedBucket     string
-		expectedRegion     string
+		name              string
+		stateBucket       string
+		stateBucketRegion string
+		expectedBucket    string
+		expectedRegion    string
 	}{
 		{
-			name:               "Default S3 backend configuration",
-			stateBucket:        "",
-			stateBucketRegion:  "",
-			expectedBucket:     "iac-rlhf-tf-states",
-			expectedRegion:     "us-east-1",
+			name:              "Default S3 backend configuration",
+			stateBucket:       "",
+			stateBucketRegion: "",
+			expectedBucket:    "iac-rlhf-tf-states",
+			expectedRegion:    "us-east-1",
 		},
 		{
-			name:               "Custom S3 backend configuration",
-			stateBucket:        "custom-tf-states",
-			stateBucketRegion:  "us-west-1",
-			expectedBucket:     "custom-tf-states",
-			expectedRegion:     "us-west-1",
+			name:              "Custom S3 backend configuration",
+			stateBucket:       "custom-tf-states",
+			stateBucketRegion: "us-west-1",
+			expectedBucket:    "custom-tf-states",
+			expectedRegion:    "us-west-1",
 		},
 	}
 
