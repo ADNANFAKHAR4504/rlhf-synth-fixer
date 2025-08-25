@@ -7,17 +7,21 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.38.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.51.0
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.64.2
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.48.2
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.56.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.245.2
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
 	github.com/aws/aws-sdk-go-v2/service/kms v1.30.1
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.76.2
 	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
+	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
@@ -27,7 +31,7 @@ require (
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.4 // indirect
@@ -44,7 +48,6 @@ require (
 	github.com/aws/smithy-go v1.22.5 // indirect
 	github.com/cdklabs/awscdk-asset-awscli-go/awscliv1/v2 v2.2.242 // indirect
 	github.com/cdklabs/awscdk-asset-node-proxy-agent-go/nodeproxyagentv6/v2 v2.1.0 // indirect
-	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
