@@ -1,6 +1,7 @@
-Terraform plan is failing with this error
+## Terraform Plan Error
+I am getting the error missing User Data File when running terraform plan, can we fix this? Below is the full error message:
+
 ```
-╷
 │ Error: Invalid function argument
 │ 
 │   on tap_stack.tf line 474, in resource "aws_launch_template" "primary":
