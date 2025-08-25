@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ import (
 // setupUnitTests synthesizes the stack and parses the JSON output for testing.
 func setupUnitTests(t *testing.T) map[string]interface{} {
 	// GIVEN
-	stack := lib.NewTapStack(cdktf.NewApp(nil), "test-unit-stack")
+	stack := NewTapStack(cdktf.NewApp(nil), "test-unit-stack")
 
 	// WHEN
 	synthesized := cdktf.Testing_Synth(stack, jsii.Bool(true))
