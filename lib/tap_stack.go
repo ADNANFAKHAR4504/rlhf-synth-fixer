@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -30,6 +31,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	if envSuffix == "" {
 		envSuffix = "prod"
 	}
+	environmentSuffix := fmt.Sprintf("cdktf-%s", envSuffix)
 
 	// Configure AWS provider for us-east-1
 	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
@@ -45,9 +47,26 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		},
 	})
 
+	// S3 Backend for remote state
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states"
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1"
+	}
+
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket:  jsii.String(stateBucket),
+		Key:     jsii.String(fmt.Sprintf("%s/TapStack%s.tfstate", environmentSuffix, environmentSuffix)),
+		Region:  jsii.String(stateBucketRegion),
+		Encrypt: jsii.Bool(true),
+	})
+
 	// Create IAM role for SecureApp with Lambda service principal
 	secureAppRole := iamrole.NewIamRole(stack, jsii.String("SecureAppRole"), &iamrole.IamRoleConfig{
-		Name: jsii.String("SecureApp-Role-" + envSuffix),
+		Name: jsii.String(fmt.Sprintf("SecureApp-Role-%s", environmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -73,7 +92,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create unique bucket name using timestamp and environment suffix
 	bucketSuffix := strconv.FormatInt(time.Now().Unix(), 16)
-	bucketName := "secureapp-bucket-" + envSuffix + "-" + bucketSuffix
+	bucketName := fmt.Sprintf("secureapp-bucket-%s-%s", environmentSuffix, bucketSuffix)
 
 	// Create S3 bucket with security configurations
 	secureAppBucket := s3bucket.NewS3Bucket(stack, jsii.String("SecureAppBucket"), &s3bucket.S3BucketConfig{
@@ -116,7 +135,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create DynamoDB table with encryption
 	secureAppTable := dynamodbtable.NewDynamodbTable(stack, jsii.String("SecureAppTable"), &dynamodbtable.DynamodbTableConfig{
-		Name:        jsii.String("SecureApp-Table-" + envSuffix),
+		Name:        jsii.String(fmt.Sprintf("SecureApp-Table-%s", environmentSuffix)),
 		BillingMode: jsii.String("PAY_PER_REQUEST"),
 		HashKey:     jsii.String("id"),
 		Attribute: []*dynamodbtable.DynamodbTableAttribute{
@@ -139,7 +158,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create IAM policy for restricted S3 and DynamoDB access
 	secureAppPolicy := iampolicy.NewIamPolicy(stack, jsii.String("SecureAppPolicy"), &iampolicy.IamPolicyConfig{
-		Name: jsii.String("SecureApp-Policy-" + envSuffix),
+		Name: jsii.String(fmt.Sprintf("SecureApp-Policy-%s", environmentSuffix)),
 		Policy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -198,7 +217,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create IAM Access Analyzer for 2025 security monitoring
 	analyzer := accessanalyzeranalyzer.NewAccessanalyzerAnalyzer(stack, jsii.String("SecureAppAccessAnalyzer"), &accessanalyzeranalyzer.AccessanalyzerAnalyzerConfig{
-		AnalyzerName: jsii.String("SecureApp-AccessAnalyzer-" + envSuffix),
+		AnalyzerName: jsii.String(fmt.Sprintf("SecureApp-AccessAnalyzer-%s", environmentSuffix)),
 		Type:         jsii.String("ACCOUNT"),
 		Tags: &map[string]*string{
 			"Name":        jsii.String("SecureApp-AccessAnalyzer"),
