@@ -345,7 +345,7 @@ Resources:
       Name: !Sub ${EnvironmentName}-fintech-rds-credentials
       Description: RDS credentials for FinTech application
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
+        SecretStringTemplate: '{"username": "fintechadmin"}'
         GenerateStringKey: password
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
