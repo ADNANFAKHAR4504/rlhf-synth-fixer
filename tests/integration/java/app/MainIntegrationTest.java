@@ -119,25 +119,6 @@ public class MainIntegrationTest {
         }
     }
     
-    private static boolean isPassphraseRequired() {
-        // In CI, we should already be logged into Pulumi backend
-        boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-        String passphrase = System.getenv("PULUMI_CONFIG_PASSPHRASE");
-        System.out.println("Running in CI: " + isCI);
-        System.out.println("PULUMI_CONFIG_PASSPHRASE available: " + (passphrase != null && !passphrase.isEmpty()));
-        System.out.println("ENVIRONMENT_SUFFIX: " + System.getenv("ENVIRONMENT_SUFFIX"));
-        
-        try {
-            // Try a simple stack command to check if we can access Pulumi
-            String stackList = executeCommand("pulumi", "stack", "ls");
-            System.out.println("Available stacks: " + stackList.trim());
-            return false;
-        } catch (Exception e) {
-            System.out.println("Stack access test failed: " + e.getMessage());
-            return e.getMessage().contains("passphrase") || e.getMessage().contains("decrypt");
-        }
-    }
-    
     private static String getStackName() {
         // Check for explicit PULUMI_STACK environment variable first
         String stackName = System.getenv("PULUMI_STACK");
