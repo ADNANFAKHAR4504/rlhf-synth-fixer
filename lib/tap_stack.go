@@ -188,51 +188,53 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	cloudtrailKmsKey := kmskey.NewKmsKey(stack, jsii.String("cloudtrail-kms-key"), &kmskey.KmsKeyConfig{
 		Description: jsii.String("KMS key for CloudTrail log encryption"),
 		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
+		// Remove KeySpec field
 		Policy: jsii.String(fmt.Sprintf(`{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "Enable IAM User Permissions",
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": "arn:aws:iam::%s:root"
-            },
-            "Action": "kms:*",
-            "Resource": "*"
-        },
-        {
-            "Sid": "Allow CloudTrail to encrypt logs",
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-            },
-            "Action": [
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "Allow CloudWatch Logs",
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "logs.%s.amazonaws.com"
-            },
-            "Action": [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-            ],
-            "Resource": "*"
-        }
-    ]
-}`, *currentAccount.AccountId(), *config.Region)),
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "Enable IAM User Permissions",
+				"Effect": "Allow",
+				"Principal": {
+					"AWS": "arn:aws:iam::%s:root"
+				},
+				"Action": "kms:*",
+				"Resource": "*"
+			},
+			{
+				"Sid": "Allow CloudTrail to encrypt logs",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "cloudtrail.amazonaws.com"
+				},
+				"Action": [
+					"kms:GenerateDataKey*",
+					"kms:DescribeKey"
+				],
+				"Resource": "*"
+			}
+		]
+	}`, *currentAccount.AccountId())),
 		EnableKeyRotation: jsii.Bool(true),
 		Tags: &map[string]*string{
 			"Name":        jsii.String(fmt.Sprintf("tap-cloudtrail-kms-key-%s", environmentSuffix)),
 			"Purpose":     jsii.String("CloudTrail-Encryption"),
+			"Environment": config.Environment,
+		},
+	})
+
+	cloudtrailKmsAlias := kmsalias.NewKmsAlias(stack, jsii.String("cloudtrail-kms-alias"), &kmsalias.KmsAliasConfig{
+		Name:        jsii.String(fmt.Sprintf("alias/tap-cloudtrail-encryption-key-%s", environmentSuffix)),
+		TargetKeyId: cloudtrailKmsKey.KeyId(),
+	})
+
+	// VPC
+	mainVpc := vpc.NewVpc(stack, jsii.String("main-vpc"), &vpc.VpcConfig{
+		CidrBlock:          config.VpcCidr,
+		EnableDnsHostnames: jsii.Bool(true),
+		EnableDnsSupport:   jsii.Bool(true),
+		Tags: &map[string]*string{
+			"Name":        jsii.String(fmt.Sprintf("tap-main-vpc-%s", environmentSuffix)),
 			"Environment": config.Environment,
 		},
 	})
@@ -535,36 +537,17 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	cloudtrailRole := iamrole.NewIamRole(stack, jsii.String("cloudtrail-role"), &iamrole.IamRoleConfig{
 		Name: jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", environmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "cloudtrail.amazonaws.com"
-                }
-            }
-        ]
-    }`),
-		InlinePolicy: &[]*iamrole.IamRoleInlinePolicy{
-			{
-				Name: jsii.String("CloudTrailLogsPolicy"),
-				Policy: jsii.String(fmt.Sprintf(`{
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:PutLogEvents",
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream"
-                        ],
-                        "Resource": "arn:aws:logs:%s:%s:log-group:/aws/cloudtrail/tap-trail-%s:*"
-                    }
-                ]
-            }`, *config.Region, *currentAccount.AccountId(), environmentSuffix)),
-			},
-		},
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Action": "sts:AssumeRole",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					}
+				}
+			]
+		}`),
 		Tags: &map[string]*string{
 			"Name":        jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", environmentSuffix)),
 			"Service":     jsii.String("CloudTrail"),
@@ -728,6 +711,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	rdsInstance := dbinstance.NewDbInstance(stack, jsii.String("postgres-db"), &dbinstance.DbInstanceConfig{
 		Identifier:            jsii.String(fmt.Sprintf("tap-postgres-db-%s", environmentSuffix)),
 		Engine:                jsii.String("postgres"),
+		EngineVersion:         jsii.String("15.4"),
 		InstanceClass:         jsii.String("db.t3.micro"),
 		AllocatedStorage:      jsii.Number(20),
 		StorageType:           jsii.String("gp3"),
