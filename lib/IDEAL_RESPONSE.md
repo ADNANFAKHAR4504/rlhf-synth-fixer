@@ -1,6 +1,7 @@
 # Security Configuration as Code - IDEAL RESPONSE (CDKTF+Go)
 
 ## Overview
+
 This implementation provides a complete security configuration for the SecureApp project using Infrastructure as Code (IaC) with CDKTF (Cloud Development Kit for Terraform) and Go. The solution follows AWS best practices for security, implements least-privilege access, and ensures no resources are publicly accessible.
 
 ## Implementation Details
@@ -11,13 +12,15 @@ This implementation provides a complete security configuration for the SecureApp
 package main
 
 import (
+	"fmt"
+	"os"
 	"strconv"
 	"time"
-	
+
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	
+
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/accessanalyzeranalyzer"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dynamodbtable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
@@ -34,6 +37,13 @@ import (
 func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
 
+	// Get environment suffix from ENV variable
+	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if envSuffix == "" {
+		envSuffix = "prod"
+	}
+	environmentSuffix := fmt.Sprintf("cdktf-%s", envSuffix)
+
 	// Configure AWS provider for us-east-1
 	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-east-1"),
@@ -48,9 +58,26 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		},
 	})
 
+	// S3 Backend for remote state
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states"
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1"
+	}
+
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket:  jsii.String(stateBucket),
+		Key:     jsii.String(fmt.Sprintf("%s/TapStack%s.tfstate", environmentSuffix, environmentSuffix)),
+		Region:  jsii.String(stateBucketRegion),
+		Encrypt: jsii.Bool(true),
+	})
+
 	// Create IAM role for SecureApp with Lambda service principal
 	secureAppRole := iamrole.NewIamRole(stack, jsii.String("SecureAppRole"), &iamrole.IamRoleConfig{
-		Name: jsii.String("SecureApp-Role"),
+		Name: jsii.String(fmt.Sprintf("SecureApp-Role-%s", environmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -74,11 +101,11 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		},
 	})
 
-	// Create unique bucket name using timestamp
+	// Create unique bucket name using timestamp and environment suffix
 	bucketSuffix := strconv.FormatInt(time.Now().Unix(), 16)
-	bucketName := "secureapp-bucket-" + bucketSuffix
-	
-	// Create S3 bucket with security configurations  
+	bucketName := fmt.Sprintf("secureapp-bucket-%s-%s", environmentSuffix, bucketSuffix)
+
+	// Create S3 bucket with security configurations
 	secureAppBucket := s3bucket.NewS3Bucket(stack, jsii.String("SecureAppBucket"), &s3bucket.S3BucketConfig{
 		Bucket: jsii.String(bucketName),
 		Tags: &map[string]*string{
@@ -119,7 +146,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create DynamoDB table with encryption
 	secureAppTable := dynamodbtable.NewDynamodbTable(stack, jsii.String("SecureAppTable"), &dynamodbtable.DynamodbTableConfig{
-		Name:        jsii.String("SecureApp-Table"),
+		Name:        jsii.String(fmt.Sprintf("SecureApp-Table-%s", environmentSuffix)),
 		BillingMode: jsii.String("PAY_PER_REQUEST"),
 		HashKey:     jsii.String("id"),
 		Attribute: []*dynamodbtable.DynamodbTableAttribute{
@@ -142,7 +169,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create IAM policy for restricted S3 and DynamoDB access
 	secureAppPolicy := iampolicy.NewIamPolicy(stack, jsii.String("SecureAppPolicy"), &iampolicy.IamPolicyConfig{
-		Name: jsii.String("SecureApp-Policy"),
+		Name: jsii.String(fmt.Sprintf("SecureApp-Policy-%s", environmentSuffix)),
 		Policy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -200,8 +227,8 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	})
 
 	// Create IAM Access Analyzer for 2025 security monitoring
-	accessanalyzeranalyzer.NewAccessanalyzerAnalyzer(stack, jsii.String("SecureAppAccessAnalyzer"), &accessanalyzeranalyzer.AccessanalyzerAnalyzerConfig{
-		AnalyzerName: jsii.String("SecureApp-AccessAnalyzer"),
+	analyzer := accessanalyzeranalyzer.NewAccessanalyzerAnalyzer(stack, jsii.String("SecureAppAccessAnalyzer"), &accessanalyzeranalyzer.AccessanalyzerAnalyzerConfig{
+		AnalyzerName: jsii.String(fmt.Sprintf("SecureApp-AccessAnalyzer-%s", environmentSuffix)),
 		Type:         jsii.String("ACCOUNT"),
 		Tags: &map[string]*string{
 			"Name":        jsii.String("SecureApp-AccessAnalyzer"),
@@ -234,6 +261,42 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		}`),
 	})
 
+	// Outputs
+	cdktf.NewTerraformOutput(stack, jsii.String("bucket_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppBucket.Id(),
+		Description: jsii.String("Name of the S3 bucket"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("bucket_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppBucket.Arn(),
+		Description: jsii.String("ARN of the S3 bucket"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("dynamodb_table_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppTable.Name(),
+		Description: jsii.String("Name of the DynamoDB table"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("dynamodb_table_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppTable.Arn(),
+		Description: jsii.String("ARN of the DynamoDB table"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("iam_role_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppRole.Name(),
+		Description: jsii.String("Name of the IAM role"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("iam_role_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppRole.Arn(),
+		Description: jsii.String("ARN of the IAM role"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("access_analyzer_arn"), &cdktf.TerraformOutputConfig{
+		Value:       analyzer.Arn(),
+		Description: jsii.String("ARN of the Access Analyzer"),
+	})
+
 	return stack
 }
 
@@ -244,50 +307,24 @@ func main() {
 }
 ```
 
-### Outputs Configuration
-
-```hcl
-output "iam_role_arn" {
-  value       = aws_iam_role.secureapp_role.arn
-  description = "ARN of the SecureApp IAM Role"
-}
-
-output "s3_bucket_name" {
-  value       = aws_s3_bucket.secureapp_bucket.bucket
-  description = "Name of the SecureApp S3 Bucket"
-}
-
-output "dynamodb_table_name" {
-  value       = aws_dynamodb_table.secureapp_table.name
-  description = "Name of the SecureApp DynamoDB Table"
-}
-
-output "access_analyzer_name" {
-  value       = aws_accessanalyzer_analyzer.secureapp_analyzer.analyzer_name
-  description = "Name of the IAM Access Analyzer"
-}
-
-output "iam_policy_arn" {
-  value       = aws_iam_policy.secureapp_policy.arn
-  description = "ARN of the SecureApp IAM Policy"
-}
-```
-
 ## Security Features Implemented
 
 ### 1. IAM Role (SecureApp-Role)
+
 - **Trust Policy**: Restricted to Lambda service principal only
 - **Regional Constraint**: Limited to us-east-1 region
 - **Session Duration**: Limited to 1 hour (3600 seconds)
 - **Principle of Least Privilege**: Only necessary permissions granted
 
 ### 2. IAM Policy (SecureApp-Policy)
+
 - **S3 Access**: Limited to specific bucket with encryption requirements
 - **DynamoDB Access**: Limited to specific table and attributes
 - **CloudWatch Logs**: Basic Lambda execution permissions
 - **Conditional Access**: Enforces encryption and specific attributes
 
 ### 3. S3 Bucket (secureapp-bucket)
+
 - **Public Access Block**: All public access blocked at bucket level
 - **Encryption**: AES256 server-side encryption enabled
 - **Versioning**: Enabled for data protection
@@ -295,12 +332,14 @@ output "iam_policy_arn" {
 - **Bucket Key**: Enabled for cost optimization
 
 ### 4. DynamoDB Table (SecureApp-Table)
+
 - **Encryption**: Server-side encryption enabled
 - **Point-in-Time Recovery**: Enabled for data protection
 - **Billing Mode**: Pay-per-request for cost optimization
 - **Attribute Restrictions**: Policy limits access to specific attributes
 
 ### 5. IAM Access Analyzer
+
 - **Continuous Monitoring**: Analyzes resource policies
 - **Security Findings**: Identifies unintended access
 - **Account-Level**: Monitors all resources in the account
@@ -308,12 +347,14 @@ output "iam_policy_arn" {
 ## Deployment Instructions
 
 1. **Install Dependencies**:
+
    ```bash
    cd lib
    go mod tidy
    ```
 
 2. **Synthesis (Generate Terraform)**:
+
    ```bash
    go run .
    # or alternatively
@@ -321,18 +362,21 @@ output "iam_policy_arn" {
    ```
 
 3. **Plan Deployment**:
+
    ```bash
    cdktf plan
    ```
 
 4. **Deploy Configuration**:
+
    ```bash
    cdktf deploy
    ```
 
 5. **Verify Deployment**:
+
    - Check IAM Role and Policy creation
-   - Verify S3 bucket security settings  
+   - Verify S3 bucket security settings
    - Confirm DynamoDB encryption
    - Review Access Analyzer findings
 
@@ -344,11 +388,13 @@ output "iam_policy_arn" {
 ## Testing
 
 ### Unit Tests
+
 - Verify resource naming conventions
 - Check security configurations in code
 - Validate policy documents
 
 ### Integration Tests
+
 - Test IAM role assumption
 - Verify S3 public access is blocked
 - Confirm DynamoDB encryption status
