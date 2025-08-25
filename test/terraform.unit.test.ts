@@ -70,8 +70,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/Owner\s*=\s*"DevOps Team"/);
     });
 
-    test('project_name is set to iac-aws-nova-model-breaking', () => {
-      expect(stackContent).toMatch(/project_name\s*=\s*"iac-aws-nova-model-breaking"/);
+    test('project_name is set to iac-aws-nova', () => {
+      expect(stackContent).toMatch(/project_name\s*=\s*"iac-aws-nova"/);
     });
 
     test('environment is set to production', () => {
