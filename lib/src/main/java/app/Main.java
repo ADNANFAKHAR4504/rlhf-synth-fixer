@@ -2,14 +2,11 @@ package app;
 
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.Stack;
-
-import javax.management.relation.Role;
-import javax.sound.sampled.Port;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
@@ -25,15 +22,18 @@ import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.MachineImage;
 import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
 import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
+
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
