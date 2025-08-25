@@ -145,7 +145,7 @@ resource "aws_kms_key" "main_use1" {
 }
 
 resource "aws_kms_alias" "main_use1" {
-  name          = "alias/${var.project}-${local.env}-use1-9846"
+  name          = "alias/${var.project}-${local.env}-use1-09846"
   target_key_id = aws_kms_key.main_use1.key_id
   provider      = aws.use1
 }
@@ -169,7 +169,7 @@ resource "aws_kms_key" "main_apse2" {
 }
 
 resource "aws_kms_alias" "main_apse2" {
-  name          = "alias/${var.project}-${local.env}-apse2"
+  name          = "alias/${var.project}-${local.env}-apse2-09846"
   target_key_id = aws_kms_key.main_apse2.key_id
   provider      = aws.apse2
 }
@@ -2539,7 +2539,7 @@ resource "aws_lb_listener" "main_apse2" {
 # AWS WAF v2 WebACLs
 resource "aws_wafv2_web_acl" "main_use1" {
   count    = local.enable_waf ? 1 : 0
-  name     = "${var.project}-${local.env}-waf-use1"
+  name     = "${var.project}-${local.env}-waf-use1-9846"
   scope    = "REGIONAL"
   provider = aws.use1
   
@@ -2610,7 +2610,7 @@ resource "aws_wafv2_web_acl" "main_use1" {
 
 resource "aws_wafv2_web_acl" "main_apse2" {
   count    = local.enable_waf ? 1 : 0
-  name     = "${var.project}-${local.env}-waf-apse2"
+  name     = "${var.project}-${local.env}-waf-apse2-9846"
   scope    = "REGIONAL"
   provider = aws.apse2
   
