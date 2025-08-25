@@ -671,10 +671,13 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - LogBucketPolicy
     Properties:
       TrailName: !Sub ${EnvironmentName}-fintech-trail
       S3BucketName: !Ref LogBucket
       IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       IsLogging: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
