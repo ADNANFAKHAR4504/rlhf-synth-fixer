@@ -39,6 +39,11 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
+  DBPassword:
+    Type: String
+    Description: Database master password (stored in Secrets Manager)
+    NoEcho: true
+
   # Environment Tag
   Environment:
     Type: String
