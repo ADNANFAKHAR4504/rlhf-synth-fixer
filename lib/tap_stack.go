@@ -92,7 +92,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 	// This implements the principle of least privilege access
 	securityGroup.AddIngressRule(
 		awsec2.Peer_Ipv4(jsii.String("203.0.113.0/24")), // Source: Specific CIDR block only
-		awsec2.Port_Tcp(jsii.Number(80)),                 // Port: HTTP (80)
+		awsec2.Port_Tcp(jsii.Number(80)),                // Port: HTTP (80)
 		jsii.String("Allow HTTP traffic from trusted CIDR block 203.0.113.0/24 only"),
 		jsii.Bool(false), // remoteRule parameter - set to false for standard rule
 	)

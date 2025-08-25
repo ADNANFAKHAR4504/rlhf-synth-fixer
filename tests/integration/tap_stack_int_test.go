@@ -67,7 +67,7 @@ func TestTapStackIntegration(t *testing.T) {
 		vpc := vpcResp.Vpcs[0]
 		assert.Equal(t, "10.0.0.0/16", *vpc.CidrBlock, "VPC should have correct CIDR block")
 		assert.Equal(t, ec2types.VpcStateAvailable, vpc.State, "VPC should be available")
-		
+
 		// Check DNS attributes separately using DescribeVpcAttribute
 		dnsSupport, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
 			VpcId:     &outputs.VPCId,
@@ -75,7 +75,7 @@ func TestTapStackIntegration(t *testing.T) {
 		})
 		require.NoError(t, err, "Failed to get DNS support attribute")
 		assert.True(t, *dnsSupport.EnableDnsSupport.Value, "VPC should have DNS support enabled")
-		
+
 		dnsHostnames, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
 			VpcId:     &outputs.VPCId,
 			Attribute: ec2types.VpcAttributeNameEnableDnsHostnames,
