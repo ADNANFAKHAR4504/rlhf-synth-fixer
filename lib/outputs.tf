@@ -45,7 +45,7 @@ output "cloudtrail_name" {
 
 output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
-  value       = aws_guardduty_detector.main.id
+  value       = aws_guardduty_detector.main[0].id
 }
 
 output "config_recorder_name" {
