@@ -429,6 +429,19 @@ describe('TapStack CloudFormation Template', () => {
               if (prop && prop['Fn::Sub']) {
                 return prop['Fn::Sub'].includes('${EnvironmentSuffix}');
               }
+              if (prop && prop['Fn::Join']) {
+                // Check if the Fn::Join includes EnvironmentSuffix
+                const joinArray = prop['Fn::Join'][1];
+                if (Array.isArray(joinArray)) {
+                  return joinArray.some(
+                    item =>
+                      (typeof item === 'object' &&
+                        item.Ref === 'EnvironmentSuffix') ||
+                      (typeof item === 'string' &&
+                        item.includes('${EnvironmentSuffix}'))
+                  );
+                }
+              }
               return false;
             });
             expect(hasEnvSuffix).toBe(true);

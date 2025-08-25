@@ -644,7 +644,13 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - ["secure", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
+          - [
+              "secure",
+              "bucket",
+              "tapstack",
+              { "Ref": "AWS::AccountId" },
+              { "Ref": "EnvironmentSuffix" },
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -673,7 +679,13 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - ["logging", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
+          - [
+              "logging",
+              "bucket",
+              "tapstack",
+              { "Ref": "AWS::AccountId" },
+              { "Ref": "EnvironmentSuffix" },
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -780,7 +792,13 @@ Resources:
       BucketName:
         Fn::Join:
           - "-"
-          - ["cloudtrail", "bucket", "tapstack", { "Ref": "AWS::AccountId" }]
+          - [
+              "cloudtrail",
+              "bucket",
+              "tapstack",
+              { "Ref": "AWS::AccountId" },
+              { "Ref": "EnvironmentSuffix" },
+            ]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
