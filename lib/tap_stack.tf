@@ -404,6 +404,445 @@ variable "skip_final_snapshot" {
   default     = false
 }
 
+locals {
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
+}
+
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "aws_region" {
+  description = "AWS region"
+  value       = data.aws_caller_identity.current.account_id
+}
+
+output "availability_zones" {
+  description = "List of availability zones"
+  value       = data.aws_availability_zones.available.names
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_route_table_id" {
+  description = "Route table ID for public subnets"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_ids" {
+  description = "List of private route table IDs"
+  value       = aws_route_table.private[*].id
+}
+
+output "web_security_group_id" {
+  description = "Security group ID for web access"
+  value       = aws_security_group.web.id
+}
+
+output "app_security_group_id" {
+  description = "Security group ID for app access"
+  value       = aws_security_group.app.id
+}
+
+output "database_security_group_id" {
+  description = "Security group ID for database access"
+  value       = aws_security_group.database.id
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.main.arn
+}
+
+output "app_target_group_arn" {
+  description = "ARN of the target group for the app"
+  value       = aws_lb_target_group.app.arn
+}
+
+output "app_launch_template_id" {
+  description = "ID of the launch template for the app"
+  value       = aws_launch_template.app.id
+}
+
+output "app_autoscaling_group_id" {
+  description = "ID of the Auto Scaling group for the app"
+  value       = aws_autoscaling_group.app.id
+}
+
+output "db_subnet_group_name" {
+  description = "Name of the DB subnet group"
+  value       = aws_db_subnet_group.main.name
+}
+
+output "db_instance_endpoint" {
+  description = "Endpoint of the database instance"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_instance_id" {
+  description = "ID of the database instance"
+  value       = aws_db_instance.main.id
+}
+
+output "db_instance_arn" {
+  description = "ARN of the database instance"
+  value       = aws_db_instance.main.arn
+}
+
+output "db_instance_port" {
+  description = "Port of the database instance"
+  value       = aws_db_instance.main.port
+}
+
+output "db_instance_username" {
+  description = "Username for the database instance"
+  value       = aws_db_instance.main.username
+}
+
+output "db_instance_password" {
+  description = "Password for the database instance"
+  value       = aws_db_instance.main.password
+  sensitive   = true
+}
+
+output "db_instance_engine" {
+  description = "Database engine"
+  value       = aws_db_instance.main.engine
+}
+
+output "db_instance_engine_version" {
+  description = "Database engine version"
+  value       = aws_db_instance.main.engine_version
+}
+
+output "db_instance_class" {
+  description = "Database instance class"
+  value       = aws_db_instance.main.instance_class
+}
+
+output "db_allocated_storage" {
+  description = "Allocated storage for the database instance (GB)"
+  value       = aws_db_instance.main.allocated_storage
+}
+
+output "db_max_allocated_storage" {
+  description = "Max allocated storage for the database instance (GB)"
+  value       = aws_db_instance.main.max_allocated_storage
+}
+
+output "db_backup_retention_period" {
+  description = "Backup retention period for the database (days)"
+  value       = aws_db_instance.main.backup_retention_period
+}
+
+output "db_backup_window" {
+  description = "Backup window for the database"
+  value       = aws_db_instance.main.backup_window
+}
+
+output "db_maintenance_window" {
+  description = "Maintenance window for the database"
+  value       = aws_db_instance.main.maintenance_window
+}
+
+output "db_instance_status" {
+  description = "Status of the database instance"
+  value       = aws_db_instance.main.db_instance_status
+}
+
+output "db_instance_endpoint_address" {
+  description = "Endpoint address of the database instance"
+  value       = aws_db_instance.main.endpoint_address
+}
+
+output "db_instance_endpoint_port" {
+  description = "Endpoint port of the database instance"
+  value       = aws_db_instance.main.endpoint_port
+}
+
+output "db_instance_read_replica_ids" {
+  description = "List of read replica IDs for the database instance"
+  value       = aws_db_instance.main.read_replica_ids
+}
+
+output "db_instance_parameter_group" {
+  description = "Parameter group of the database instance"
+  value       = aws_db_instance.main.parameter_group
+}
+
+output "db_instance_option_group" {
+  description = "Option group of the database instance"
+  value       = aws_db_instance.main.option_group
+}
+
+output "db_instance_time_zone" {
+  description = "Time zone of the database instance"
+  value       = aws_db_instance.main.time_zone
+}
+
+output "db_instance_character_set" {
+  description = "Character set of the database instance"
+  value       = aws_db_instance.main.character_set
+}
+
+output "db_instance_collation" {
+  description = "Collation of the database instance"
+  value       = aws_db_instance.main.collation
+}
+
+output "db_instance_license_model" {
+  description = "License model of the database instance"
+  value       = aws_db_instance.main.license_model
+}
+
+output "db_instance_storage_encrypted" {
+  description = "Indicates if storage is encrypted for the database instance"
+  value       = aws_db_instance.main.storage_encrypted
+}
+
+output "db_instance_kms_key_id" {
+  description = "KMS key ID for encryption of the database instance"
+  value       = aws_db_instance.main.kms_key_id
+}
+
+output "db_instance_iops" {
+  description = "IOPS for the database instance (if provisioned IOPS storage is used)"
+  value       = aws_db_instance.main.iops
+}
+
+output "db_instance_throughput" {
+  description = "Throughput for the database instance (if using Aurora)"
+  value       = aws_db_instance.main.throughput
+}
+
+output "db_instance_read_replica_source_id" {
+  description = "Source ID of the read replica (if this is a read replica)"
+  value       = aws_db_instance.main.read_replica_source_id
+}
+
+output "db_instance_replica_mode" {
+  description = "Replica mode of the database instance (if this is a read replica)"
+  value       = aws_db_instance.main.replica_mode
+}
+
+output "db_instance_source_db_instance_id" {
+  description = "Source DB instance ID if this is a read replica"
+  value       = aws_db_instance.main.source_db_instance_id
+}
+
+output "db_instance_source_db_cluster_id" {
+  description = "Source DB cluster ID if this is a read replica"
+  value       = aws_db_instance.main.source_db_cluster_id
+}
+
+output "db_instance_read_replica_db_instance_ids" {
+  description = "List of read replica DB instance IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.read_replica_db_instance_ids
+}
+
+output "db_instance_read_replica_db_cluster_ids" {
+  description = "List of read replica DB cluster IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.read_replica_db_cluster_ids
+}
+
+output "db_instance_cluster_id" {
+  description = "Cluster ID if this is a member of a DB cluster"
+  value       = aws_db_instance.main.cluster_id
+}
+
+output "db_instance_db_cluster_identifier" {
+  description = "DB cluster identifier if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_identifier
+}
+
+output "db_instance_db_cluster_role" {
+  description = "DB cluster role if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_role
+}
+
+output "db_instance_db_cluster_endpoint" {
+  description = "DB cluster endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_endpoint
+}
+
+output "db_instance_db_cluster_port" {
+  description = "DB cluster port if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_port
+}
+
+output "db_instance_db_cluster_reader_endpoint" {
+  description = "DB cluster reader endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_reader_endpoint
+}
+
+output "db_instance_db_cluster_writer_endpoint" {
+  description = "DB cluster writer endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_writer_endpoint
+}
+
+output "db_instance_db_cluster_members" {
+  description = "List of DB cluster members if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_members
+}
+
+output "db_instance_db_cluster_storage_encrypted" {
+  description = "Indicates if storage is encrypted for the DB cluster"
+  value       = aws_db_instance.main.db_cluster_storage_encrypted
+}
+
+output "db_instance_db_cluster_kms_key_id" {
+  description = "KMS key ID for encryption of the DB cluster"
+  value       = aws_db_instance.main.db_cluster_kms_key_id
+}
+
+output "db_instance_db_cluster_iops" {
+  description = "IOPS for the DB cluster (if provisioned IOPS storage is used)"
+  value       = aws_db_instance.main.db_cluster_iops
+}
+
+output "db_instance_db_cluster_throughput" {
+  description = "Throughput for the DB cluster (if using Aurora)"
+  value       = aws_db_instance.main.db_cluster_throughput
+}
+
+output "db_instance_db_cluster_read_replica_source_id" {
+  description = "Source ID of the read replica (if this is a read replica of a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_read_replica_source_id
+}
+
+output "db_instance_db_cluster_replica_mode" {
+  description = "Replica mode of the DB cluster (if this is a read replica)"
+  value       = aws_db_instance.main.db_cluster_replica_mode
+}
+
+output "db_instance_db_cluster_source_db_instance_id" {
+  description = "Source DB instance ID if this is a read replica of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_source_db_instance_id
+}
+
+output "db_instance_db_cluster_source_db_cluster_id" {
+  description = "Source DB cluster ID if this is a read replica of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_source_db_cluster_id
+}
+
+output "db_instance_db_cluster_read_replica_db_instance_ids" {
+  description = "List of read replica DB instance IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_read_replica_db_instance_ids
+}
+
+output "db_instance_db_cluster_read_replica_db_cluster_ids" {
+  description = "List of read replica DB cluster IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_read_replica_db_cluster_ids
+}
+
+output "db_instance_db_cluster_cluster_id" {
+  description = "Cluster ID if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_cluster_id
+}
+
+output "db_instance_db_cluster_db_cluster_identifier" {
+  description = "DB cluster identifier if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_identifier
+}
+
+output "db_instance_db_cluster_db_cluster_role" {
+  description = "DB cluster role if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_role
+}
+
+output "db_instance_db_cluster_db_cluster_endpoint" {
+  description = "DB cluster endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_endpoint
+}
+
+output "db_instance_db_cluster_db_cluster_port" {
+  description = "DB cluster port if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_port
+}
+
+output "db_instance_db_cluster_db_cluster_reader_endpoint" {
+  description = "DB cluster reader endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_reader_endpoint
+}
+
+output "db_instance_db_cluster_db_cluster_writer_endpoint" {
+  description = "DB cluster writer endpoint if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_writer_endpoint
+}
+
+output "db_instance_db_cluster_db_cluster_members" {
+  description = "List of DB cluster members if this is a member of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_members
+}
+
+output "db_instance_db_cluster_db_cluster_storage_encrypted" {
+  description = "Indicates if storage is encrypted for the DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_storage_encrypted
+}
+
+output "db_instance_db_cluster_db_cluster_kms_key_id" {
+  description = "KMS key ID for encryption of the DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_kms_key_id
+}
+
+output "db_instance_db_cluster_db_cluster_iops" {
+  description = "IOPS for the DB cluster (if provisioned IOPS storage is used)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_iops
+}
+
+output "db_instance_db_cluster_db_cluster_throughput" {
+  description = "Throughput for the DB cluster (if using Aurora)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_throughput
+}
+
+output "db_instance_db_cluster_db_cluster_read_replica_source_id" {
+  description = "Source ID of the read replica (if this is a read replica of a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_read_replica_source_id
+}
+
+output "db_instance_db_cluster_db_cluster_replica_mode" {
+  description = "Replica mode of the DB cluster (if this is a read replica)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_replica_mode
+}
+
+output "db_instance_db_cluster_db_cluster_source_db_instance_id" {
+  description = "Source DB instance ID if this is a read replica of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_source_db_instance_id
+}
+
+output "db_instance_db_cluster_db_cluster_source_db_cluster_id" {
+  description = "Source DB cluster ID if this is a read replica of a DB cluster"
+  value       = aws_db_instance.main.db_cluster_db_cluster_source_db_cluster_id
+}
+
+output "db_instance_db_cluster_db_cluster_read_replica_db_instance_ids" {
+  description = "List of read replica DB instance IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_read_replica_db_instance_ids
+}
+
+output "db_instance_db_cluster_db_cluster_read_replica_db_cluster_ids" {
+  description = "List of read replica DB cluster IDs (if this is a DB cluster)"
+  value       = aws_db_instance.main.db_cluster_db_cluster_read_replica_db_cluster_ids
+}
+
 # backend.tf
 terraform {
   backend "s3" {
