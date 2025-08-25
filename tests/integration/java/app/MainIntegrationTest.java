@@ -1,6 +1,5 @@
 package app;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,7 +12,6 @@ import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
 import software.amazon.awssdk.services.cloudformation.model.DescribeStackSetResponse;
 import software.amazon.awssdk.services.cloudformation.model.ListStackSetsResponse;
 import software.amazon.awssdk.services.cloudformation.model.ListStacksResponse;
-import software.amazon.awssdk.services.cloudformation.model.StackSetSummary;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsResponse;
 import software.amazon.awssdk.services.cloudwatch.model.ListDashboardsResponse;
@@ -32,7 +30,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
