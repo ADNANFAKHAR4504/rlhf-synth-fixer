@@ -1667,3 +1667,106 @@ func TestComplianceIntegration(t *testing.T) {
 		}
 	})
 }
+
+// TestLambdaVPCIntegration validates Lambda VPC configuration in NewTapStack
+func TestLambdaVPCIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+
+	props := &TapStackProps{
+		EnvironmentSuffix: "lambda-vpc-test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+
+	NewTapStack(app, "LambdaVPCTestStack", props)
+	app.Synth()
+
+	tfPath := filepath.Join(outdir, "stacks", "LambdaVPCTestStack", "cdk.tf.json")
+	data, err := os.ReadFile(tfPath)
+	if err != nil {
+		t.Fatalf("failed to read terraform config: %v", err)
+	}
+
+	var tfConfig map[string]interface{}
+	if err := json.Unmarshal(data, &tfConfig); err != nil {
+		t.Fatalf("failed to parse terraform JSON: %v", err)
+	}
+
+	resources, ok := tfConfig["resource"].(map[string]interface{})
+	if !ok {
+		t.Fatal("no resources found")
+	}
+
+	// Test Lambda VPC configuration
+	t.Run("LambdaVPCConfiguration", func(t *testing.T) {
+		if lambdaFunctions, ok := resources["aws_lambda_function"]; ok {
+			lambdaMap := lambdaFunctions.(map[string]interface{})
+			for lambdaName, lambdaConfig := range lambdaMap {
+				configMap := lambdaConfig.(map[string]interface{})
+
+				// Verify VPC configuration exists
+				if vpcConfig, ok := configMap["vpc_config"]; ok && vpcConfig != nil {
+					vpcSlice := vpcConfig.([]interface{})
+					if len(vpcSlice) > 0 {
+						vpcMap := vpcSlice[0].(map[string]interface{})
+
+						// Verify subnet IDs are configured
+						if subnetIds, ok := vpcMap["subnet_ids"]; ok && subnetIds != nil {
+							subnetSlice := subnetIds.([]interface{})
+							if len(subnetSlice) < 2 {
+								t.Errorf("Lambda %s should be deployed in at least 2 subnets for HA", lambdaName)
+							}
+						} else {
+							t.Errorf("Lambda %s missing subnet IDs in VPC config", lambdaName)
+						}
+
+						// Verify security group IDs are configured (can be empty)
+						if _, ok := vpcMap["security_group_ids"]; !ok {
+							t.Errorf("Lambda %s missing security group IDs in VPC config", lambdaName)
+						}
+					}
+				} else {
+					t.Errorf("Lambda %s missing VPC configuration", lambdaName)
+				}
+
+				// Verify enhanced Lambda configuration
+				if timeout, ok := configMap["timeout"]; !ok || timeout != float64(30) {
+					t.Errorf("Lambda %s should have 30 second timeout, got: %v", lambdaName, timeout)
+				}
+
+				if memorySize, ok := configMap["memory_size"]; !ok || memorySize != float64(256) {
+					t.Errorf("Lambda %s should have 256 MB memory, got: %v", lambdaName, memorySize)
+				}
+
+				// Verify environment variables
+				if environment, ok := configMap["environment"]; ok && environment != nil {
+					envSlice := environment.([]interface{})
+					if len(envSlice) > 0 {
+						envMap := envSlice[0].(map[string]interface{})
+						if variables, ok := envMap["variables"]; ok && variables != nil {
+							varsMap := variables.(map[string]interface{})
+							requiredVars := []string{"BUCKET_NAME", "KMS_KEY_ID", "ENVIRONMENT"}
+							for _, varName := range requiredVars {
+								if _, exists := varsMap[varName]; !exists {
+									t.Errorf("Lambda %s missing environment variable: %s", lambdaName, varName)
+								}
+							}
+						}
+					}
+				}
+			}
+		} else {
+			t.Error("no Lambda functions found")
+		}
+	})
+}

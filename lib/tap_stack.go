@@ -173,7 +173,16 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		Runtime:      jsii.String("python3.9"),
 		Filename:     jsii.String("./lib/lambda.zip"),
 		KmsKeyArn:    kmsKey.Arn(),
-		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
+		Timeout:      jsii.Number(30),
+		MemorySize:   jsii.Number(256),
+		Environment: &lambdafunction.LambdaFunctionEnvironment{
+			Variables: &map[string]*string{
+				"BUCKET_NAME": s3Bucket.Bucket(),
+				"KMS_KEY_ID":  kmsKey.KeyId(),
+				"ENVIRONMENT": jsii.String("prod"),
+			},
+		},
+		DependsOn: &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
 			"Name": jsii.String("prod-security-function"),
 		},
@@ -487,7 +496,20 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		Runtime:      jsii.String("python3.9"),
 		Filename:     jsii.String("./lib/lambda.zip"),
 		KmsKeyArn:    kmsKey.Arn(),
-		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
+		Timeout:      jsii.Number(30),
+		MemorySize:   jsii.Number(256),
+		Environment: &lambdafunction.LambdaFunctionEnvironment{
+			Variables: &map[string]*string{
+				"BUCKET_NAME": s3Bucket.Bucket(),
+				"KMS_KEY_ID":  kmsKey.KeyId(),
+				"ENVIRONMENT": jsii.String(environmentSuffix),
+			},
+		},
+		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
+			SubnetIds:        &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
+			SecurityGroupIds: &[]*string{},
+		},
+		DependsOn: &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
 		},

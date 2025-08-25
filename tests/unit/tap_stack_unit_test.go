@@ -1111,3 +1111,52 @@ func TestFullStackOutputs(t *testing.T) {
 		}
 	}
 }
+
+// TestLambdaEnhancedConfiguration tests Lambda function enhanced configuration
+func TestLambdaEnhancedConfiguration(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	lambdaFunction := getResource(tfConfig, "aws_lambda_function", "prod-security-function")
+	if lambdaFunction == nil {
+		t.Fatal("Lambda function not found")
+	}
+
+	// Test timeout configuration
+	if timeout, ok := lambdaFunction["timeout"]; !ok || timeout != float64(30) {
+		t.Errorf("expected timeout 30, got: %v", timeout)
+	}
+
+	// Test memory size configuration
+	if memorySize, ok := lambdaFunction["memory_size"]; !ok || memorySize != float64(256) {
+		t.Errorf("expected memory size 256, got: %v", memorySize)
+	}
+
+	// Test environment variables
+	if environment, ok := lambdaFunction["environment"]; ok && environment != nil {
+		envMap := environment.(map[string]interface{})
+		if variables, ok := envMap["variables"]; ok && variables != nil {
+			varsMap := variables.(map[string]interface{})
+
+			// Check required environment variables
+			requiredVars := []string{"BUCKET_NAME", "KMS_KEY_ID", "ENVIRONMENT"}
+			for _, varName := range requiredVars {
+				if _, exists := varsMap[varName]; !exists {
+					t.Errorf("Lambda function missing environment variable: %s", varName)
+				}
+			}
+		}
+	}
+
+	// Test VPC configuration (BuildSecurityStack doesn't create VPC, so this will be empty)
+	if vpcConfig, ok := lambdaFunction["vpc_config"]; ok && vpcConfig != nil {
+		vpcSlice := vpcConfig.([]interface{})
+		if len(vpcSlice) > 0 {
+			vpcMap := vpcSlice[0].(map[string]interface{})
+			if subnetIds, ok := vpcMap["subnet_ids"]; ok && subnetIds != nil {
+				// BuildSecurityStack uses empty subnet IDs since it doesn't create VPC
+				t.Logf("VPC config found with subnet IDs: %v", subnetIds)
+			}
+		}
+	}
+}
