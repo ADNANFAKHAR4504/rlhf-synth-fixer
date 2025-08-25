@@ -3,7 +3,7 @@
   "language": "py",
   "complexity": "hard",
   "po_id": "trainr191cdkpy",
-  "subtask": "Security Configuration as Code",
+  "subtask": "Security and Compliance Implementation",
   "team": "synth",
   "startedAt": "2025-08-25T13:44:39+05:30",
   "subject_labels": [
@@ -28,5 +28,11 @@
     "IAM",
     "Systems Manager",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
