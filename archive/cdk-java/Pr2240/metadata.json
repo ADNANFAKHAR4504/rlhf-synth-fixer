@@ -9,7 +9,7 @@
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Network Configuration",
     "Access Control"
@@ -17,9 +17,15 @@
   "training_quality": 8,
   "aws_services": [
     "Amazon VPC",
-    "Amazon EC2", 
+    "Amazon EC2",
     "AWS IAM",
     "Amazon CloudFormation",
     "AWS Systems Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
