@@ -31,28 +31,16 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       echo "❌ .gen not found; generating..."
       npx --yes cdktf get
     fi
-    
-    # Check for AWS provider and create symlink if needed
-    if [ ! -d ".gen/aws" ]; then
-      if [ -d ".gen/providers" ]; then
-        # Find the actual AWS provider directory
-        AWS_DIR=$(find .gen/providers -name "*aws*" -type d | head -1)
-        if [ -n "$AWS_DIR" ]; then
-          # Create relative symlink (remove .gen/ prefix)
-          REL_PATH=$(echo "$AWS_DIR" | sed 's|^\.gen/||')
-          ln -sf "$REL_PATH" .gen/aws
-          echo "✅ Created symlink .gen/aws -> $REL_PATH"
-        fi
-      fi
-    fi
-    
-    # Final check
-    if [ ! -d ".gen/aws" ]; then
-      echo "❌ .gen/aws missing after cdktf get"
+
+    # --- FIX: Check for the new path OR the old path for backward compatibility ---
+    if [ ! -d ".gen/aws" ] && [ ! -d ".gen/providers/aws" ]; then
+      echo "❌ Neither .gen/aws nor .gen/providers/aws directory found after cdktf get."
       echo "Contents of .gen:"; ls -la .gen || true
-      echo "Contents of .gen/providers:"; ls -la .gen/providers 2>/dev/null || echo "No providers directory"
       exit 1
+    else
+      echo "✅ Found generated provider directory."
     fi
+    # --- END FIX ---
   }
   ensure_gen
   # Go modules are prepared during build; avoid extra operations here
