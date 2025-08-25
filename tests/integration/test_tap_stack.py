@@ -275,6 +275,14 @@ class TestTapStackIntegration(unittest.TestCase):
                     if user_id_group.get('GroupId') == alb_sg['GroupId']:
                         alb_to_ec2_rule_found = True
         
+        # Debug: print EC2 security group rules if not found
+        if not alb_to_ec2_rule_found:
+            print(f"\nDebug: EC2 Security Group {ec2_sg['GroupId']} rules:")
+            for rule in ec2_sg.get('IpPermissions', []):
+                print(f"  - Port {rule.get('FromPort')}-{rule.get('ToPort')}: "
+                      f"UserIdGroupPairs: {rule.get('UserIdGroupPairs', [])}")
+            print(f"Looking for ALB SG: {alb_sg['GroupId']}")
+        
         self.assertTrue(alb_to_ec2_rule_found, 
                        "EC2 Security Group should allow HTTP traffic from ALB")
 
@@ -288,7 +296,9 @@ class TestTapStackIntegration(unittest.TestCase):
         target_vpc = None
         for vpc in response['Vpcs']:
             for tag in vpc.get('Tags', []):
-                if tag.get('Key') == 'Name' and 'WebAppVPC' in tag.get('Value', ''):
+                if (tag.get('Key') == 'Name' and 
+                    ('WebAppVPC' in tag.get('Value', '') or 
+                     'TapStack' in tag.get('Value', ''))):
                     target_vpc = vpc
                     break
         
@@ -315,9 +325,16 @@ class TestTapStackIntegration(unittest.TestCase):
             subnet_tags = {tag['Key']: tag['Value'] for tag in subnet.get('Tags', [])}
             subnet_name = subnet_tags.get('Name', '')
             
-            # Check if this is a public or private subnet based on name/tags
+            # Check AWS subnet type tag first (more reliable)
+            aws_subnet_type = subnet_tags.get('aws-cdk:subnet-type', '')
+            
+            # Check if this is a public or private subnet based on AWS tags first
             is_public = False
-            if 'PublicSubnet' in subnet_name or 'Public' in subnet_name:
+            if aws_subnet_type == 'Public':
+                is_public = True
+            elif aws_subnet_type == 'Private':
+                is_public = False
+            elif 'PublicSubnet' in subnet_name or 'Public' in subnet_name:
                 is_public = True
             elif 'PrivateSubnet' in subnet_name or 'Private' in subnet_name:
                 is_public = False
@@ -354,8 +371,10 @@ class TestTapStackIntegration(unittest.TestCase):
         for subnet in subnet_response['Subnets']:
             subnet_tags = {tag['Key']: tag['Value'] for tag in subnet.get('Tags', [])}
             subnet_name = subnet_tags.get('Name', 'N/A')
+            aws_subnet_type = subnet_tags.get('aws-cdk:subnet-type', 'N/A')
             print(f"  - Subnet ID: {subnet['SubnetId']}, Name: {subnet_name}, "
-                  f"Type: {'Public' if subnet in public_subnets else 'Private'}")
+                  f"CDK Type: {aws_subnet_type}, "
+                  f"Detected Type: {'Public' if subnet in public_subnets else 'Private'}")
         
         # ASSERT - Check subnet configuration
         self.assertGreaterEqual(len(public_subnets), 2,
