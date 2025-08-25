@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -366,16 +367,31 @@ func TestAllEc2LogsShippedToCloudWatch(t *testing.T) {
 	if len(lt) < 2 {
 		t.Fatalf("expected launch templates in both regions")
 	}
-	want := []string{"/var/log/messages", "/var/log/secure", "/var/log/httpd/access_log"}
-	for name := range lt {
-		obj := getObj(lt, name)
+
+	// What we expect the script to configure
+	want := []string{
+		"/var/log/messages",
+		"/var/log/secure",
+		"/var/log/httpd/access_log",
+	}
+
+	for name, body := range lt {
+		obj, _ := body.(map[string]any)
 		ud := getString(obj, "user_data")
 		if ud == "" {
-			t.Fatalf("%s: expected user_data to configure CloudWatch logs", name)
+			t.Fatalf("%s: expected non-empty user_data", name)
 		}
+
+		// user_data is base64 for aws_launch_template
+		decoded, err := base64.StdEncoding.DecodeString(ud)
+		content := ud
+		if err == nil {
+			content = string(decoded)
+		}
+
 		for _, p := range want {
-			if !strings.Contains(ud, p) {
-				t.Fatalf("%s: expected user_data to ship %q to CloudWatch; user_data:\n%s", name, p, ud)
+			if !strings.Contains(content, p) {
+				t.Fatalf("%s: expected user_data to ship %q to CloudWatch; user_data (decoded if possible):\n%s", name, p, content)
 			}
 		}
 	}

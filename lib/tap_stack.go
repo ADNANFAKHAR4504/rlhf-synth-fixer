@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 
@@ -527,7 +528,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 				Name: instanceProfile.Name(),
 			},
 			VpcSecurityGroupIds: &[]*string{webSecurityGroup.Id()},
-			UserData: jsii.String(`#!/bin/bash
+			UserData: jsii.String(base64.StdEncoding.EncodeToString([]byte(`#!/bin/bash
         yum update -y
         yum install -y httpd awslogs
         systemctl start httpd
@@ -565,7 +566,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
         EOF
         
         systemctl start awslogsd
-        systemctl enable awslogsd`),
+        systemctl enable awslogsd`))),
 		})
 
 		// Create target group
