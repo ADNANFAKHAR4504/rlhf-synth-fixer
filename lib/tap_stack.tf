@@ -1229,7 +1229,7 @@ output "availability_zones" {
 
 output "region" {
   description = "AWS region used for deployment"
-  value       = var.region
+  value       = var.aws_region
 }
 
 output "environment" {
