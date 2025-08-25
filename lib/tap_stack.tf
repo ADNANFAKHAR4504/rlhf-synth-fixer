@@ -769,7 +769,7 @@ resource "aws_route_table_association" "private_apse2_b" {
 
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs_use1" {
-  name              = "/aws/vpc/flowlogs/${var.project}-${local.env}-use1"
+  name              = "/aws/vpc/flowlogs/${var.project}-${local.env}-use1-09846"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_use1.arn
   provider          = aws.use1
@@ -784,7 +784,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_use1" {
 
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs_apse2" {
-  name              = "/aws/vpc/flowlogs/${var.project}-${local.env}-apse2"
+  name              = "/aws/vpc/flowlogs/${var.project}-${local.env}-apse2-09846"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_apse2.arn
   provider          = aws.apse2
@@ -871,7 +871,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_use1" {
 
 
 resource "aws_iam_role_policy" "vpc_flow_logs_apse2" {
-  name     = "${var.project}-${local.env}-vpc-flow-logs-policy-apse2"
+  name     = "${var.project}-${local.env}-vpc-flow-logs-policy-apse2-09846"
   role     = aws_iam_role.vpc_flow_logs_apse2.id
   provider = aws.apse2
   
