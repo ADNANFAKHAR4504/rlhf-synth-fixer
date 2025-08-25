@@ -268,7 +268,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !GetAtt CloudTrailLogGroup.Arn
-        - PolicyName: CloudTrailS3Access
+        - PolicyName: CloudTrailToS3
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -280,7 +280,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${CloudTrailBucket}"
                   - !Sub "arn:aws:s3:::${CloudTrailBucket}/*"
-        - PolicyName: CloudTrailKMSAccess
+        - PolicyName: CloudTrailToKMS
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
