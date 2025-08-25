@@ -1,0 +1,52 @@
+{
+  "task_id": "trainr360",
+  "problem_id": "cloud-environment-setup_Terraform_HCL_Pt9vgTLDk9Ab",
+  "platform": "pulumi",
+  "language": "go",
+  "difficulty": "medium",
+  "category": "Cloud Environment Setup",
+  "description": "Set up a basic AWS cloud environment with VPC, subnets, and routing components",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Access Control",
+    "Resource Scaling"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "Route Tables",
+    "Subnets"
+  ],
+  "requirements": {
+    "vpc_cidr": "10.0.0.0/16",
+    "region": "us-east-1",
+    "public_subnets": 2,
+    "private_subnets": 2,
+    "availability_zones": 2,
+    "resource_prefix": "iac-task"
+  },
+  "constraints": [
+    "All resources must be created in the AWS us-east-1 region",
+    "Use Pulumi with Go language",
+    "Define the AWS provider with version constraints",
+    "Ensure that the VPC uses a CIDR block of 10.0.0.0/16",
+    "Create two public subnets and two private subnets across two availability zones",
+    "All resources names should have a consistent prefix 'iac-task'",
+    "Setup an Internet Gateway and route tables for public subnets",
+    "No hardcoded values are allowed; use Pulumi configuration"
+  ],
+  "deployment_region": "us-east-1",
+  "project_structure": "pulumi-go",
+  "test_requirements": [
+    "VPC created with correct CIDR block",
+    "Two public subnets in different AZs",
+    "Two private subnets in different AZs",
+    "Internet Gateway attached to VPC",
+    "Route tables configured for public subnets",
+    "All resources properly tagged with prefix"
+  ]
+}
