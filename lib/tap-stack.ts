@@ -42,7 +42,6 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -58,11 +57,11 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    
+
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Instantiate your modules here
-    const project = 'tap-project'; 
+    const project = 'tap-project';
 
     // Create KMS key for encryption
     const kmsModule = new KmsModule(this, 'kms', {
