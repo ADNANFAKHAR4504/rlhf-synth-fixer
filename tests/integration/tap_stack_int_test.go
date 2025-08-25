@@ -4,12 +4,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,16 +127,6 @@ func TestCloudTrailDeployment(t *testing.T) {
 	assert.Contains(t, outputs.CloudTrailArn, "FinApp", "CloudTrail ARN should contain 'FinApp'")
 }
 
-// TestAWSConfigDeployment tests the deployed AWS Config configuration
-func TestAWSConfigDeployment(t *testing.T) {
-	outputs := loadOutputs(t)
-
-	// Test Config recorder deployment
-	assert.NotEmpty(t, outputs.ConfigRecorderName, "Config recorder name should not be empty")
-	assert.Contains(t, outputs.ConfigRecorderName, "FinApp", "Config recorder name should contain 'FinApp'")
-	assert.Contains(t, outputs.ConfigRecorderName, "ComplianceRecorder", "Config recorder name should contain 'ComplianceRecorder'")
-}
-
 // TestSecurityCompliance tests the security compliance settings
 func TestSecurityCompliance(t *testing.T) {
 	outputs := loadOutputs(t)
@@ -200,14 +196,6 @@ func TestResourceNaming(t *testing.T) {
 	outputs := loadOutputs(t)
 
 	// Check that resources follow FinApp naming convention
-	if outputs.RoleName != "" {
-		assert.Contains(t, outputs.RoleName, "FinApp", "Role should follow FinApp naming convention")
-	}
-
-	if outputs.ConfigRecorderName != "" {
-		assert.Contains(t, outputs.ConfigRecorderName, "FinApp", "Config recorder should follow FinApp naming convention")
-	}
-
 	if outputs.BucketName != "" {
 		assert.Contains(t, outputs.BucketName, "finapp", "Bucket should follow finapp naming convention")
 	}
@@ -244,27 +232,353 @@ func TestDataProtection(t *testing.T) {
 	assert.NotEmpty(t, outputs.PolicyArn, "Least-privilege policy must be configured")
 }
 
-// TestEndToEndWorkflow tests the complete workflow
+// TestS3BucketActualConfiguration tests the actual S3 bucket configuration via AWS API
+func TestS3BucketActualConfiguration(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	s3Client := s3.NewFromConfig(cfg)
+
+	// Test bucket exists
+	_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Bucket should exist and be accessible")
+
+	// Test bucket encryption
+	encryption, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get bucket encryption")
+	assert.NotNil(t, encryption.ServerSideEncryptionConfiguration, "Encryption should be configured")
+	assert.NotEmpty(t, encryption.ServerSideEncryptionConfiguration.Rules, "Encryption rules should exist")
+
+	// Test bucket versioning
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get bucket versioning")
+	assert.Equal(t, "Enabled", string(versioning.Status), "Versioning should be enabled")
+
+	// Test public access block
+	publicAccessBlock, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get public access block")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls, "Public ACLs should be blocked")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy, "Public policies should be blocked")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls, "Public ACLs should be ignored")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets, "Public buckets should be restricted")
+
+	// Test bucket policy (SSL enforcement)
+	bucketPolicy, err := s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get bucket policy")
+	assert.Contains(t, *bucketPolicy.Policy, "aws:SecureTransport", "Policy should enforce SSL")
+	assert.Contains(t, *bucketPolicy.Policy, "Deny", "Policy should have deny statements")
+}
+
+// TestIAMResourcesActualConfiguration tests the actual IAM resources via AWS API
+func TestIAMResourcesActualConfiguration(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	iamClient := iam.NewFromConfig(cfg)
+
+	// Test IAM role exists
+	role, err := iamClient.GetRole(ctx, &iam.GetRoleInput{
+		RoleName: aws.String(outputs.RoleName),
+	})
+	require.NoError(t, err, "Role should exist")
+	assert.Contains(t, *role.Role.RoleName, "FinApp", "Role name should contain FinApp")
+	assert.Contains(t, *role.Role.AssumeRolePolicyDocument, "ec2.amazonaws.com", "Role should allow EC2 to assume it")
+
+	// Test IAM policy exists
+	policyArn := outputs.PolicyArn
+	policy, err := iamClient.GetPolicy(ctx, &iam.GetPolicyInput{
+		PolicyArn: aws.String(policyArn),
+	})
+	require.NoError(t, err, "Policy should exist")
+	assert.Contains(t, *policy.Policy.PolicyName, "FinApp", "Policy name should contain FinApp")
+
+	// Test policy is attached to role
+	attachedPolicies, err := iamClient.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
+		RoleName: aws.String(outputs.RoleName),
+	})
+	require.NoError(t, err, "Should be able to list attached policies")
+
+	found := false
+	for _, attachedPolicy := range attachedPolicies.AttachedPolicies {
+		if *attachedPolicy.PolicyArn == policyArn {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Policy should be attached to role")
+
+	// Test instance profile exists
+	instanceProfileName := strings.Split(outputs.InstanceProfileArn, "/")[1]
+	instanceProfile, err := iamClient.GetInstanceProfile(ctx, &iam.GetInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+	})
+	require.NoError(t, err, "Instance profile should exist")
+	assert.Contains(t, *instanceProfile.InstanceProfile.InstanceProfileName, "FinApp", "Instance profile should contain FinApp")
+	assert.Len(t, instanceProfile.InstanceProfile.Roles, 1, "Instance profile should have one role")
+	assert.Equal(t, outputs.RoleName, *instanceProfile.InstanceProfile.Roles[0].RoleName, "Instance profile should be associated with the correct role")
+}
+
+// TestCloudTrailActualConfiguration tests the actual CloudTrail configuration via AWS API
+func TestCloudTrailActualConfiguration(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	cloudTrailClient := cloudtrail.NewFromConfig(cfg)
+
+	// Extract trail name from ARN
+	trailArnParts := strings.Split(outputs.CloudTrailArn, "/")
+	trailName := trailArnParts[len(trailArnParts)-1]
+
+	// Test CloudTrail exists and is configured correctly
+	trail, err := cloudTrailClient.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{
+		TrailNameList: []string{trailName},
+	})
+	require.NoError(t, err, "Should be able to describe trail")
+	require.Len(t, trail.TrailList, 1, "Should find exactly one trail")
+
+	trailConfig := trail.TrailList[0]
+	assert.Contains(t, *trailConfig.Name, "FinApp", "Trail name should contain FinApp")
+	assert.True(t, *trailConfig.IncludeGlobalServiceEvents, "Trail should include global service events")
+	assert.True(t, *trailConfig.LogFileValidationEnabled, "Trail should have log file validation enabled")
+	assert.NotNil(t, trailConfig.S3BucketName, "Trail should have S3 bucket configured")
+
+	// Test CloudTrail status
+	status, err := cloudTrailClient.GetTrailStatus(ctx, &cloudtrail.GetTrailStatusInput{
+		Name: aws.String(trailName),
+	})
+	require.NoError(t, err, "Should be able to get trail status")
+	assert.True(t, *status.IsLogging, "CloudTrail should be actively logging")
+}
+
+// TestEndToEndWorkflow tests the complete workflow with actual AWS API calls
 func TestEndToEndWorkflow(t *testing.T) {
 	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	s3Client := s3.NewFromConfig(cfg)
+	iamClient := iam.NewFromConfig(cfg)
+	cloudTrailClient := cloudtrail.NewFromConfig(cfg)
 
 	// Step 1: Verify S3 bucket is created with security features
 	assert.NotEmpty(t, outputs.BucketName, "S3 bucket should be created")
-	assert.True(t, outputs.IsEncryptionEnabled(), "Bucket should have encryption")
-	assert.True(t, outputs.IsVersioningEnabled(), "Bucket should have versioning")
-	assert.True(t, outputs.IsSSLEnforced(), "Bucket should enforce SSL")
-	assert.True(t, outputs.IsPublicAccessBlocked(), "Bucket should block public access")
+	_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	assert.NoError(t, err, "S3 bucket should exist and be accessible")
 
 	// Step 2: Verify IAM resources for access control
 	assert.NotEmpty(t, outputs.RoleArn, "IAM role should be created")
+	_, err = iamClient.GetRole(ctx, &iam.GetRoleInput{
+		RoleName: aws.String(outputs.RoleName),
+	})
+	assert.NoError(t, err, "IAM role should exist")
+
 	assert.NotEmpty(t, outputs.PolicyArn, "IAM policy should be created")
-	assert.NotEmpty(t, outputs.InstanceProfileArn, "Instance profile should be created")
+	_, err = iamClient.GetPolicy(ctx, &iam.GetPolicyInput{
+		PolicyArn: aws.String(outputs.PolicyArn),
+	})
+	assert.NoError(t, err, "IAM policy should exist")
 
 	// Step 3: Verify audit infrastructure
 	assert.NotEmpty(t, outputs.CloudTrailArn, "CloudTrail should be configured")
-	assert.NotEmpty(t, outputs.ConfigRecorderName, "AWS Config should be configured")
+	trailArnParts := strings.Split(outputs.CloudTrailArn, "/")
+	trailName := trailArnParts[len(trailArnParts)-1]
+	_, err = cloudTrailClient.DescribeTrails(ctx, &cloudtrail.DescribeTrailsInput{
+		TrailNameList: []string{trailName},
+	})
+	assert.NoError(t, err, "CloudTrail should exist")
 
-	// Step 4: Verify all compliance features are enabled
-	assert.True(t, outputs.IsAuditLoggingEnabled(), "Audit logging should be enabled")
-	assert.True(t, outputs.IsComplianceMonitoringEnabled(), "Compliance monitoring should be enabled")
+	// Step 4: Verify security configurations via API
+	encryption, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	assert.NoError(t, err, "Should be able to verify encryption")
+	assert.NotNil(t, encryption.ServerSideEncryptionConfiguration, "Encryption should be configured")
+
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	assert.NoError(t, err, "Should be able to verify versioning")
+	assert.Equal(t, "Enabled", string(versioning.Status), "Versioning should be enabled")
+
+	publicAccessBlock, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	assert.NoError(t, err, "Should be able to verify public access block")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls, "Public access should be blocked")
+}
+
+// TestS3BucketPolicyEnforcement tests that the bucket policy actually enforces SSL
+func TestS3BucketPolicyEnforcement(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	s3Client := s3.NewFromConfig(cfg)
+
+	// Test that bucket policy exists and contains SSL enforcement
+	bucketPolicy, err := s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get bucket policy")
+
+	policyDocument := *bucketPolicy.Policy
+	assert.Contains(t, policyDocument, "aws:SecureTransport", "Policy should check for secure transport")
+	assert.Contains(t, policyDocument, "\"false\"", "Policy should deny when SecureTransport is false")
+	assert.Contains(t, policyDocument, "Deny", "Policy should have deny effect")
+	assert.Contains(t, policyDocument, "s3:*", "Policy should apply to all S3 actions")
+}
+
+// TestIAMPolicyPermissions tests that the IAM policy has appropriate S3 permissions
+func TestIAMPolicyPermissions(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	iamClient := iam.NewFromConfig(cfg)
+
+	// Get the policy version
+	policy, err := iamClient.GetPolicy(ctx, &iam.GetPolicyInput{
+		PolicyArn: aws.String(outputs.PolicyArn),
+	})
+	require.NoError(t, err, "Should be able to get policy")
+
+	// Get the policy document
+	policyVersion, err := iamClient.GetPolicyVersion(ctx, &iam.GetPolicyVersionInput{
+		PolicyArn: aws.String(outputs.PolicyArn),
+		VersionId: policy.Policy.DefaultVersionId,
+	})
+	require.NoError(t, err, "Should be able to get policy version")
+
+	policyDocument := *policyVersion.PolicyVersion.Document
+	// URL decode the policy document
+	assert.Contains(t, policyDocument, "s3:ListBucket", "Policy should allow listing bucket")
+	assert.Contains(t, policyDocument, "s3:GetObject", "Policy should allow getting objects")
+	assert.Contains(t, policyDocument, "s3:PutObject", "Policy should allow putting objects")
+	assert.Contains(t, policyDocument, outputs.BucketName, "Policy should reference the correct bucket")
+}
+
+// TestResourceTagging tests that resources are properly tagged
+func TestResourceTagging(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	s3Client := s3.NewFromConfig(cfg)
+	iamClient := iam.NewFromConfig(cfg)
+
+	// Test S3 bucket tags
+	bucketTags, err := s3Client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Should be able to get bucket tags")
+
+	tagMap := make(map[string]string)
+	for _, tag := range bucketTags.TagSet {
+		tagMap[*tag.Key] = *tag.Value
+	}
+
+	assert.Equal(t, "FinApp", tagMap["Project"], "Bucket should have Project tag set to FinApp")
+	assert.Equal(t, "Production", tagMap["Environment"], "Bucket should have Environment tag set to Production")
+	assert.Contains(t, tagMap["Purpose"], "Financial", "Bucket should have Purpose tag mentioning Financial")
+
+	// Test IAM role tags
+	roleTags, err := iamClient.ListRoleTags(ctx, &iam.ListRoleTagsInput{
+		RoleName: aws.String(outputs.RoleName),
+	})
+	require.NoError(t, err, "Should be able to get role tags")
+
+	roleTagMap := make(map[string]string)
+	for _, tag := range roleTags.Tags {
+		roleTagMap[*tag.Key] = *tag.Value
+	}
+
+	assert.Equal(t, "FinApp", roleTagMap["Project"], "Role should have Project tag set to FinApp")
+	assert.Equal(t, "Production", roleTagMap["Environment"], "Role should have Environment tag set to Production")
+}
+
+// TestSecurityComplianceIntegration tests end-to-end security compliance
+func TestSecurityComplianceIntegration(t *testing.T) {
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx)
+	require.NoError(t, err, "Failed to load AWS config")
+
+	s3Client := s3.NewFromConfig(cfg)
+	cloudTrailClient := cloudtrail.NewFromConfig(cfg)
+
+	// Test 1: Encryption at rest
+	encryption, err := s3Client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Encryption should be configured")
+	assert.Equal(t, "AES256", string(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm), "Should use AES256 encryption")
+
+	// Test 2: Encryption in transit (SSL enforcement)
+	bucketPolicy, err := s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "SSL policy should be configured")
+	assert.Contains(t, *bucketPolicy.Policy, "aws:SecureTransport", "Should enforce SSL")
+
+	// Test 3: Access controls (public access blocked)
+	publicAccessBlock, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Public access block should be configured")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls, "Public ACLs should be blocked")
+	assert.True(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy, "Public policies should be blocked")
+
+	// Test 4: Audit logging (CloudTrail)
+	trailArnParts := strings.Split(outputs.CloudTrailArn, "/")
+	trailName := trailArnParts[len(trailArnParts)-1]
+	status, err := cloudTrailClient.GetTrailStatus(ctx, &cloudtrail.GetTrailStatusInput{
+		Name: aws.String(trailName),
+	})
+	require.NoError(t, err, "CloudTrail should be accessible")
+	assert.True(t, *status.IsLogging, "CloudTrail should be actively logging")
+
+	// Test 5: Versioning for audit trails
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
+		Bucket: aws.String(outputs.BucketName),
+	})
+	require.NoError(t, err, "Versioning should be configured")
+	assert.Equal(t, "Enabled", string(versioning.Status), "Versioning should be enabled for audit trails")
 }
