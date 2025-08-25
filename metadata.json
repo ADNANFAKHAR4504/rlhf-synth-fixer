@@ -1,6 +1,7 @@
 {
   "taskId": "trainr967",
   "problemId": "Security_Configuration_as_Code_Terraform_HCL_r8y3ndfh2lg7",
+  "po_id": "trainr967",
   "platform": "cdktf",
   "language": "go",
   "subtask": "Security Configuration as Code",
@@ -30,7 +31,6 @@
     "https://registry.terraform.io/",
     "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html"
   ],
-  "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
     "IaC Optimization",
