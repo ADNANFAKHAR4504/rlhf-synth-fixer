@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Serverless Computing",
-    "Event-Driven Architecture", 
+    "Event-Driven Architecture",
     "Security Configuration",
     "Monitoring Setup",
     "Access Control",
@@ -24,5 +24,11 @@
     "AWS IAM",
     "Amazon CloudWatch",
     "AWS CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
