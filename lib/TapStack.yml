@@ -8,6 +8,7 @@ Parameters:
     Description: Unique timestamp for resource names
     Default: 'manual-20250822'
 
+#Trigger
 Resources:
   VPC:
     Type: AWS::EC2::VPC

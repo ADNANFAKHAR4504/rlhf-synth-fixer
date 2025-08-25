@@ -1,16 +1,10 @@
 ```yaml
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Production-ready web application baseline with VPC, subnets, ALB, EC2, and RDS.
-
 Parameters:
   DBUsername:
     Type: String
     Default: admin
-  DBPassword:
-    Type: String
-    Default: dummyPassword123
-    NoEcho: true
   TimestampSuffix:
     Type: String
     Description: Unique timestamp for resource names
@@ -35,12 +29,6 @@ Resources:
           Value: !Sub 'igw-${TimestampSuffix}'
         - Key: Environment
           Value: Production
-
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -295,6 +283,7 @@ Resources:
               - Key: Environment
                 Value: Production
 
+  #Triggers
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -340,17 +329,24 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: mysql
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: '{{resolve:secretsmanager:secret-291545-safe:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       PubliclyAccessible: false
-      MultiAZ: false
+      MultiAZ: true
+      # StorageEncrypted: true   # <-- Removed KMS encryption requirement
       Tags:
         - Key: Name
           Value: !Sub 'db-${TimestampSuffix}'
         - Key: Environment
           Value: Production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
 Outputs:
   ALBDNSName:
