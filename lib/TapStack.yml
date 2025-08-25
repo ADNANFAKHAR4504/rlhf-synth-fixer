@@ -195,52 +195,6 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
 
-  # Bucket policy to deny all public access and enforce secure transport
-  SecureLoggingBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SecureLoggingBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          # Allow CloudTrail to check bucket ACL
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Ref SecureLoggingBucket
-          # Allow CloudTrail to write logs
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${SecureLoggingBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-          # Deny non-HTTPS
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-          # Deny public read access
-          - Sid: DenyPublicRead
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource: !Sub '${SecureLoggingBucket}/*'
-            Condition:
-              StringEquals:
-                'aws:PrincipalType': 'Anonymous'
-
   # =============================================================================
   # AUDITING, LOGGING, AND ALERTING
   # =============================================================================
@@ -252,38 +206,11 @@ Resources:
       LogGroupName: !Sub '/aws/s3/${StackPrefix}-${EnvironmentName}-access-logs'
       RetentionInDays: 90
 
-  # Multi-region CloudTrail for comprehensive audit logging
-  SecurityCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub '${StackPrefix}-${EnvironmentName}-security-audit-trail'
-      S3BucketName: !Ref SecureLoggingBucket
-      S3KeyPrefix: 'cloudtrail-logs'
-      # Enable multi-region logging
-      IsMultiRegionTrail: true
-      # Include global service events (IAM, etc.)
-      IncludeGlobalServiceEvents: true
-      # Enable log file validation for integrity
-      EnableLogFileValidation: true
-      IsLogging: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values: 
-                - !Sub '${SecureLoggingBucket}/*'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Purpose
-          Value: 'Security Audit Trail'
-
   # CloudWatch Log Group for VPC Flow Logs
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-2'
       RetentionInDays: 30
 
   # IAM Role for VPC Flow Logs
@@ -567,7 +494,7 @@ Resources:
         - error
         - general
       # Security settings
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -679,7 +606,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref ConfigBucket
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref AWS::AccountId
@@ -688,7 +615,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:ListBucket
-            Resource: !Ref ConfigBucket
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
             Condition:
               StringEquals:
                 'AWS:SourceAccount': !Ref AWS::AccountId
@@ -697,7 +624,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*'
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -807,12 +734,6 @@ Resources:
 # OUTPUTS - Important resource identifiers and endpoints
 # =============================================================================
 Outputs:
-  SecureLoggingBucketName:
-    Description: 'Name of the secure S3 bucket for logging'
-    Value: !Ref SecureLoggingBucket
-    Export:
-      Name: !Sub '${EnvironmentName}-secure-logging-bucket'
-
   SecurityAlertsTopicArn:
     Description: 'ARN of the SNS topic for security alerts'
     Value: !Ref SecurityAlertsTopic
@@ -854,12 +775,6 @@ Outputs:
     Value: !Ref S3AccessLogGroup
     Export:
       Name: !Sub '${EnvironmentName}-s3-access-log-group'
-
-  SecurityCloudTrailArn:
-    Description: 'ARN of the CloudTrail trail for security auditing'
-    Value: !Ref SecurityCloudTrail
-    Export:
-      Name: !Sub '${EnvironmentName}-security-cloudtrail'
 
   ConfigBucketName:
     Description: 'Name of the S3 bucket for AWS Config'
