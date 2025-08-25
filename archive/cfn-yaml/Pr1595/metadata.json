@@ -9,14 +9,14 @@
   "subtask": "CI/CD Pipeline Infrastructure",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "Monitoring Setup",
     "Access Control"
   ],
   "training_quality": 8,
   "aws_services": [
     "AWS::S3::Bucket",
-    "AWS::Logs::LogGroup", 
+    "AWS::Logs::LogGroup",
     "AWS::IAM::Role",
     "AWS::Lambda::Function",
     "AWS::CodeBuild::Project",
@@ -25,5 +25,11 @@
     "AWS::CodePipeline::Pipeline",
     "AWS::Events::Rule",
     "AWS::SNS::TopicPolicy"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
 }
