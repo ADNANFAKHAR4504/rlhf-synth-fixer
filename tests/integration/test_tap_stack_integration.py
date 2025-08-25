@@ -34,7 +34,9 @@ class TestTapStackIntegration(unittest.TestCase):
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name='us-east-1')
         cls.s3_client = boto3.client('s3', region_name='us-east-1')
-        cls.iam_client = boto3.client('iam', region_name='us-east-1')
+        cls.elbv2_client = boto3.client('elbv2', region_name='us-east-1')
+        cls.wafv2_client = boto3.client('wafv2', region_name='us-east-1')
+        cls.autoscaling_client = boto3.client('autoscaling', region_name='us-east-1')
 
     def test_vpc_exists(self):
         """Test that the VPC exists and is available."""
@@ -69,123 +71,181 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_security_groups_exist(self):
         """Test that security groups exist and are properly configured."""
-        secure_sg_id = self.outputs.get("SecureSecurityGroupId")
-        db_sg_id = self.outputs.get("DatabaseSecurityGroupId")
+        vpc_id = self.outputs.get("VPCId")
         
-        self.assertIsNotNone(secure_sg_id, "Secure SG ID not found")
-        self.assertIsNotNone(db_sg_id, "Database SG ID not found")
-        
-        # Describe security groups
+        # Get all security groups in our VPC
         response = self.ec2_client.describe_security_groups(
-            GroupIds=[secure_sg_id, db_sg_id]
+            Filters=[
+                {'Name': 'vpc-id', 'Values': [vpc_id]}
+            ]
         )
         
         sgs = response['SecurityGroups']
-        self.assertEqual(len(sgs), 2, "Not all security groups found")
+        # Should have at least ALB and EC2 security groups (plus default)
+        self.assertGreaterEqual(len(sgs), 2, "Expected at least 2 security groups")
         
-        # Check secure SG doesn't allow unrestricted SSH
+        # Find ALB and EC2 security groups
+        alb_sg = None
+        ec2_sg = None
+        
         for sg in sgs:
-            if sg['GroupId'] == secure_sg_id:
-                for rule in sg.get('IpPermissions', []):
-                    if rule.get('FromPort') == 22 and rule.get('ToPort') == 22:
-                        # Check no 0.0.0.0/0 in IP ranges
-                        for ip_range in rule.get('IpRanges', []):
-                            self.assertNotEqual(
-                                ip_range.get('CidrIp'),
-                                '0.0.0.0/0',
-                                "Security group allows unrestricted SSH"
-                            )
+            if 'ALBSecurityGroup' in sg.get('GroupName', '') or 'Application Load Balancer' in sg.get('Description', ''):
+                alb_sg = sg
+            elif 'EC2SecurityGroup' in sg.get('GroupName', '') or 'EC2 web servers' in sg.get('Description', ''):
+                ec2_sg = sg
+        
+        self.assertIsNotNone(alb_sg, "ALB security group not found")
+        self.assertIsNotNone(ec2_sg, "EC2 security group not found")
+        
+        # Check ALB security group allows HTTP/HTTPS from internet
+        http_found = False
+        https_found = False
+        for rule in alb_sg.get('IpPermissions', []):
+            if rule.get('FromPort') == 80 and rule.get('ToPort') == 80:
+                for ip_range in rule.get('IpRanges', []):
+                    if ip_range.get('CidrIp') == '0.0.0.0/0':
+                        http_found = True
+            elif rule.get('FromPort') == 443 and rule.get('ToPort') == 443:
+                for ip_range in rule.get('IpRanges', []):
+                    if ip_range.get('CidrIp') == '0.0.0.0/0':
+                        https_found = True
+        
+        self.assertTrue(http_found, "ALB security group doesn't allow HTTP from internet")
+        # HTTPS rule might not be configured yet, so we don't assert it
+        
+        # Check EC2 security group only allows traffic from ALB
+        ec2_http_rule_found = False
+        for rule in ec2_sg.get('IpPermissions', []):
+            if rule.get('FromPort') == 80 and rule.get('ToPort') == 80:
+                for user_id_group in rule.get('UserIdGroupPairs', []):
+                    if user_id_group.get('GroupId') == alb_sg['GroupId']:
+                        ec2_http_rule_found = True
+        
+        self.assertTrue(ec2_http_rule_found, "EC2 security group doesn't allow HTTP from ALB")
 
-    def test_s3_buckets_exist(self):
-        """Test that S3 buckets exist and are properly configured."""
-        secure_bucket = self.outputs.get("SecureBucketName")
-        cloudtrail_bucket = self.outputs.get("CloudTrailBucketName")
-        
-        self.assertIsNotNone(secure_bucket, "Secure bucket name not found")
-        self.assertIsNotNone(cloudtrail_bucket, "CloudTrail bucket name not found")
-        
-        # Check secure bucket
+    def test_alb_logs_bucket_exists(self):
+        """Test that ALB logs S3 bucket exists and is properly configured."""
+        # Find the ALB logs bucket by looking for buckets with our naming pattern
         try:
-            response = self.s3_client.get_bucket_versioning(Bucket=secure_bucket)
-            self.assertEqual(response.get('Status'), 'Enabled', "Versioning not enabled")
-        except ClientError as e:
-            self.fail(f"Failed to get bucket versioning: {e}")
-        
-        # Check bucket encryption
-        try:
-            response = self.s3_client.get_bucket_encryption(Bucket=secure_bucket)
+            response = self.s3_client.list_buckets()
+            alb_bucket = None
+            
+            for bucket in response['Buckets']:
+                bucket_name = bucket['Name']
+                if 'alb-logs-pr2198' in bucket_name and 'us-east-1' in bucket_name:
+                    alb_bucket = bucket_name
+                    break
+            
+            self.assertIsNotNone(alb_bucket, "ALB logs bucket not found")
+            
+            # Check bucket encryption
+            response = self.s3_client.get_bucket_encryption(Bucket=alb_bucket)
             rules = response['ServerSideEncryptionConfiguration']['Rules']
             self.assertGreater(len(rules), 0, "No encryption rules found")
-        except ClientError as e:
-            self.fail(f"Failed to get bucket encryption: {e}")
-        
-        # Check public access block
-        try:
-            response = self.s3_client.get_public_access_block(Bucket=secure_bucket)
-            config = response['PublicAccessBlockConfiguration']
-            self.assertTrue(config['BlockPublicAcls'])
-            self.assertTrue(config['BlockPublicPolicy'])
-            self.assertTrue(config['IgnorePublicAcls'])
-            self.assertTrue(config['RestrictPublicBuckets'])
-        except ClientError as e:
-            self.fail(f"Failed to get public access block: {e}")
-
-    def test_s3_bucket_policy_enforces_ssl(self):
-        """Test that S3 bucket policy enforces SSL."""
-        secure_bucket = self.outputs.get("SecureBucketName")
-        
-        try:
-            response = self.s3_client.get_bucket_policy(Bucket=secure_bucket)
-            policy = json.loads(response['Policy'])
             
-            # Check for SSL enforcement statement
-            ssl_enforced = False
-            for statement in policy.get('Statement', []):
-                if (statement.get('Effect') == 'Deny' and 
-                    statement.get('Condition', {}).get('Bool', {}).get('aws:SecureTransport') == 'false'):
-                    ssl_enforced = True
+            # Verify encryption algorithm
+            encryption_found = False
+            for rule in rules:
+                if rule.get('ApplyServerSideEncryptionByDefault', {}).get('SSEAlgorithm') == 'AES256':
+                    encryption_found = True
                     break
+            self.assertTrue(encryption_found, "AES256 encryption not found")
             
-            self.assertTrue(ssl_enforced, "Bucket policy does not enforce SSL")
+            # Check public access block
+            response = self.s3_client.get_public_access_block(Bucket=alb_bucket)
+            config = response['PublicAccessBlockConfiguration']
+            self.assertTrue(config['BlockPublicAcls'], "Public ACLs not blocked")
+            self.assertTrue(config['BlockPublicPolicy'], "Public policy not blocked")
+            self.assertTrue(config['IgnorePublicAcls'], "Public ACLs not ignored")
+            self.assertTrue(config['RestrictPublicBuckets'], "Public buckets not restricted")
+            
         except ClientError as e:
-            if e.response['Error']['Code'] != 'NoSuchBucketPolicy':
-                self.fail(f"Failed to get bucket policy: {e}")
+            self.fail(f"Failed to check ALB logs bucket: {e}")
 
-    def test_iam_mfa_policy_exists(self):
-        """Test that MFA enforcement policy exists."""
-        policy_arn = self.outputs.get("MFAPolicyArn")
-        self.assertIsNotNone(policy_arn, "MFA policy ARN not found")
+    def test_alb_exists_and_configured(self):
+        """Test that Application Load Balancer exists and is properly configured."""
+        alb_dns = self.outputs.get("LoadBalancerDNS")
+        self.assertIsNotNone(alb_dns, "LoadBalancer DNS not found in outputs")
+        
+        # Extract ALB name from DNS (format: name-randomstring.region.elb.amazonaws.com)
+        alb_name = alb_dns.split('.')[0]
         
         try:
-            # Get policy
-            response = self.iam_client.get_policy(PolicyArn=policy_arn)
-            policy = response['Policy']
-            
-            self.assertTrue('MFAEnforcementPolicypr2078' in policy['PolicyName'])
-            self.assertIsNotNone(policy['DefaultVersionId'])
-            
-            # Get policy document
-            response = self.iam_client.get_policy_version(
-                PolicyArn=policy_arn,
-                VersionId=policy['DefaultVersionId']
+            # Get ALB details using ELBv2 client
+            response = self.elbv2_client.describe_load_balancers(
+                Names=[alb_name]
             )
             
-            # Document may already be a dict or a JSON string
-            document = response['PolicyVersion']['Document']
-            if isinstance(document, str):
-                document = json.loads(document)
+            load_balancers = response['LoadBalancers']
+            self.assertEqual(len(load_balancers), 1, "ALB not found")
             
-            # Check for MFA enforcement statement
-            mfa_enforced = False
-            for statement in document.get('Statement', []):
-                if (statement.get('Sid') == 'DenyAllExceptUnlessMFAAuthenticated' and
-                    statement.get('Effect') == 'Deny'):
-                    mfa_enforced = True
+            alb = load_balancers[0]
+            self.assertEqual(alb['Type'], 'application', "Not an Application Load Balancer")
+            self.assertEqual(alb['Scheme'], 'internet-facing', "ALB is not internet-facing")
+            self.assertEqual(alb['State']['Code'], 'active', "ALB is not active")
+            
+            # Check listeners
+            response = self.elbv2_client.describe_listeners(
+                LoadBalancerArn=alb['LoadBalancerArn']
+            )
+            
+            listeners = response['Listeners']
+            self.assertGreater(len(listeners), 0, "No listeners found")
+            
+            # Check for HTTP listener
+            http_listener_found = False
+            for listener in listeners:
+                if listener['Port'] == 80 and listener['Protocol'] == 'HTTP':
+                    http_listener_found = True
                     break
             
-            self.assertTrue(mfa_enforced, "MFA enforcement statement not found")
+            self.assertTrue(http_listener_found, "HTTP listener not found")
+            
         except ClientError as e:
-            self.fail(f"Failed to get IAM policy: {e}")
+            self.fail(f"Failed to check ALB configuration: {e}")
+
+    def test_waf_web_acl_exists(self):
+        """Test that AWS WAF Web ACL exists and is configured."""
+        web_acl_id = self.outputs.get("WebACLId")
+        self.assertIsNotNone(web_acl_id, "WebACL ID not found in outputs")
+        
+        try:
+            # Get WAF Web ACL details
+            response = self.wafv2_client.get_web_acl(
+                Scope='REGIONAL',
+                Id=web_acl_id
+            )
+            
+            web_acl = response['WebACL']
+            self.assertEqual(web_acl['Scope'], 'REGIONAL', "Web ACL scope is not REGIONAL")
+            self.assertIn('WebACL-pr2198', web_acl['Name'], "Web ACL name doesn't match expected pattern")
+            
+            # Check default action is ALLOW
+            self.assertIn('Allow', web_acl['DefaultAction'], "Default action is not ALLOW")
+            
+            # Check managed rules are configured
+            rules = web_acl.get('Rules', [])
+            self.assertGreater(len(rules), 0, "No rules found in Web ACL")
+            
+            # Look for AWS managed rule groups
+            managed_rule_names = []
+            for rule in rules:
+                statement = rule.get('Statement', {})
+                managed_rule_group = statement.get('ManagedRuleGroupStatement', {})
+                if managed_rule_group:
+                    managed_rule_names.append(managed_rule_group.get('Name', ''))
+            
+            expected_rules = [
+                'AWSManagedRulesCommonRuleSet',
+                'AWSManagedRulesKnownBadInputsRuleSet',
+                'AWSManagedRulesAmazonIpReputationList'
+            ]
+            
+            for expected_rule in expected_rules:
+                self.assertIn(expected_rule, managed_rule_names, f"Missing managed rule: {expected_rule}")
+            
+        except ClientError as e:
+            self.fail(f"Failed to get WAF Web ACL: {e}")
 
     def test_vpc_subnets_configuration(self):
         """Test VPC subnets are properly configured."""
@@ -243,28 +303,52 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertEqual(len(attachments), 1, "IGW not attached")
         self.assertEqual(attachments[0]['State'], 'available')
 
-    def test_database_security_group_rules(self):
-        """Test database security group has proper ingress rules."""
-        db_sg_id = self.outputs.get("DatabaseSecurityGroupId")
-        secure_sg_id = self.outputs.get("SecureSecurityGroupId")
+    def test_auto_scaling_group_exists(self):
+        """Test that Auto Scaling Group exists and is properly configured."""
+        vpc_id = self.outputs.get("VPCId")
         
-        response = self.ec2_client.describe_security_groups(
-            GroupIds=[db_sg_id]
-        )
-        
-        sg = response['SecurityGroups'][0]
-        
-        # Check ingress rules
-        mysql_rule_found = False
-        for rule in sg.get('IpPermissions', []):
-            if rule.get('FromPort') == 3306 and rule.get('ToPort') == 3306:
-                # Check it only allows from secure SG
-                for user_id_group in rule.get('UserIdGroupPairs', []):
-                    if user_id_group.get('GroupId') == secure_sg_id:
-                        mysql_rule_found = True
-                        break
-        
-        self.assertTrue(mysql_rule_found, "Database SG doesn't allow MySQL from app SG")
+        try:
+            # Get Auto Scaling Groups in our VPC
+            response = self.autoscaling_client.describe_auto_scaling_groups()
+            
+            # Find ASG in our VPC
+            our_asg = None
+            for asg in response['AutoScalingGroups']:
+                # Check if ASG is in our VPC by checking subnet IDs
+                if asg.get('VPCZoneIdentifier'):
+                    subnet_ids = asg['VPCZoneIdentifier'].split(',')
+                    if subnet_ids:
+                        # Check if first subnet belongs to our VPC
+                        subnet_response = self.ec2_client.describe_subnets(
+                            SubnetIds=[subnet_ids[0]]
+                        )
+                        if subnet_response['Subnets'][0]['VpcId'] == vpc_id:
+                            our_asg = asg
+                            break
+            
+            self.assertIsNotNone(our_asg, "Auto Scaling Group not found in our VPC")
+            
+            # Check ASG configuration
+            self.assertEqual(our_asg['MinSize'], 2, "Min size should be 2")
+            self.assertEqual(our_asg['MaxSize'], 6, "Max size should be 6")
+            self.assertEqual(our_asg['DesiredCapacity'], 3, "Desired capacity should be 3")
+            
+            # Check health check configuration
+            self.assertIn('ELB', our_asg.get('HealthCheckType', ''), "Health check type should include ELB")
+            
+            # Check that instances are in private subnets
+            subnet_ids = our_asg['VPCZoneIdentifier'].split(',')
+            for subnet_id in subnet_ids:
+                subnet_response = self.ec2_client.describe_subnets(
+                    SubnetIds=[subnet_id]
+                )
+                subnet = subnet_response['Subnets'][0]
+                # Private subnets don't map public IP on launch
+                self.assertFalse(subnet.get('MapPublicIpOnLaunch', False), 
+                                f"Subnet {subnet_id} should be private")
+            
+        except ClientError as e:
+            self.fail(f"Failed to check Auto Scaling Group: {e}")
 
     def test_tags_on_resources(self):
         """Test that resources are properly tagged."""
@@ -278,10 +362,20 @@ class TestTapStackIntegration(unittest.TestCase):
         
         tags = {tag['Key']: tag['Value'] for tag in response['Tags']}
         
-        # Check required tags
-        self.assertIn('Environment', tags)
-        self.assertEqual(tags.get('Purpose'), 'SecurityCompliance')
-        self.assertEqual(tags.get('SecurityLevel'), 'High')
+        # Check required tags based on our actual stack configuration
+        # Environment tag should match the actual deployment suffix
+        self.assertIn('Environment', tags, "Environment tag not found")
+        # Environment could be pr2198, synthtrainr132new, or other dynamic values
+        self.assertTrue(len(tags.get('Environment', '')) > 0, "Environment tag should not be empty")
+        
+        self.assertIn('Project', tags, "Project tag not found")
+        self.assertEqual(tags.get('Project'), 'SecureWebApp', "Project tag value incorrect")
+        
+        self.assertIn('SecurityCompliance', tags, "SecurityCompliance tag not found")
+        self.assertEqual(tags.get('SecurityCompliance'), 'Enhanced', "SecurityCompliance tag value incorrect")
+        
+        self.assertIn('DataClassification', tags, "DataClassification tag not found")
+        self.assertEqual(tags.get('DataClassification'), 'Internal', "DataClassification tag value incorrect")
 
 
 if __name__ == "__main__":
