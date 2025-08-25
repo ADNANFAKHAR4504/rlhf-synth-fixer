@@ -30,16 +30,21 @@ variable "instance_class" {
       "db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large",
       "db.t3.xlarge", "db.t3.2xlarge", "db.m5.large", "db.m5.xlarge",
       "db.m5.2xlarge", "db.m5.4xlarge", "db.m5.8xlarge", "db.m5.12xlarge",
-      "db.m5.16xlarge", "db.m5.24xlarge"
+      "db.m5.16xlarge", "db.m5.24xlarge", "db.r5.large", "db.r5.xlarge"
     ], var.instance_class)
     error_message = "Instance class must be a valid RDS instance type."
   }
 }
 
 variable "engine_version" {
-  description = "MySQL engine version (if null, will use latest available)"
+  description = "MySQL engine version"
   type        = string
-  default     = null
+  default     = "8.0.42"
+  
+  validation {
+    condition     = can(regex("^8\\.0\\.[0-9]+$", var.engine_version))
+    error_message = "Engine version must be a valid MySQL 8.0.x version."
+  }
 }
 
 variable "allocated_storage" {
@@ -88,8 +93,8 @@ variable "db_name" {
   default     = "webapp"
   
   validation {
-    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]*$", var.db_name))
-    error_message = "Database name must start with a letter and contain only alphanumeric characters and underscores."
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]*$", var.db_name)) && length(var.db_name) <= 64
+    error_message = "Database name must start with a letter, contain only alphanumeric characters and underscores, and be max 64 characters."
   }
 }
 
@@ -124,19 +129,6 @@ variable "kms_key_id" {
   description = "KMS key ID for encryption (if null, uses default)"
   type        = string
   default     = null
-}
-
-variable "log_retention_days" {
-  description = "CloudWatch log retention period in days"
-  type        = number
-  default     = 7
-  
-  validation {
-    condition = contains([
-      1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653
-    ], var.log_retention_days)
-    error_message = "Log retention days must be a valid CloudWatch retention period."
-  }
 }
 
 variable "tags" {

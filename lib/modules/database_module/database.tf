@@ -1,14 +1,4 @@
-# Data source to get available MySQL engine versions
-data "aws_rds_engine_version" "mysql" {
-  engine             = "mysql"
-  preferred_versions = ["8.0.34", "8.0.33", "8.0.32", "8.0.28"]
-}
-
-# Data source to get the latest MySQL 8.0 version
-data "aws_rds_engine_version" "mysql_latest" {
-  engine  = "mysql"
-  version = "8.0"
-}
+# Remove the problematic data sources - we'll use a direct version approach
 
 # Random password generation when not provided
 resource "random_password" "db_password" {
@@ -79,6 +69,11 @@ resource "aws_db_parameter_group" "main" {
     value = "2"
   }
 
+  parameter {
+    name  = "innodb_log_buffer_size"
+    value = "16777216"
+  }
+
   tags = var.tags
 
   lifecycle {
@@ -104,9 +99,9 @@ resource "aws_db_option_group" "main" {
 resource "aws_db_instance" "main" {
   identifier = "${var.name_prefix}-database"
 
-  # Engine Configuration - Use data source for version
+  # Engine Configuration - Direct version specification
   engine         = "mysql"
-  engine_version = var.engine_version != null ? var.engine_version : data.aws_rds_engine_version.mysql.version
+  engine_version = var.engine_version
   instance_class = var.instance_class
 
   # Storage Configuration
@@ -156,6 +151,9 @@ resource "aws_db_instance" "main" {
   # Auto minor version upgrade
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
 
+  # Enable logging
+  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-database"
   })
@@ -199,28 +197,6 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
   count      = var.instance_class != "db.t3.micro" ? 1 : 0
   role       = aws_iam_role.rds_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
-# CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "mysql_error" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/error"
-  retention_in_days = var.log_retention_days
-
-  tags = var.tags
-}
-
-resource "aws_cloudwatch_log_group" "mysql_general" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/general"
-  retention_in_days = var.log_retention_days
-
-  tags = var.tags
-}
-
-resource "aws_cloudwatch_log_group" "mysql_slowquery" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/slowquery"
-  retention_in_days = var.log_retention_days
-
-  tags = var.tags
 }
 
 # CloudWatch Alarms for Database Monitoring
@@ -272,6 +248,44 @@ resource "aws_cloudwatch_metric_alarm" "database_free_storage" {
   statistic           = "Average"
   threshold           = "2000000000" # 2GB in bytes
   alarm_description   = "This metric monitors RDS free storage space"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.identifier
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_read_latency" {
+  alarm_name          = "${var.name_prefix}-database-read-latency"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ReadLatency"
+  namespace           = "AWS/RDS"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "0.2"
+  alarm_description   = "This metric monitors RDS read latency"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.main.identifier
+  }
+
+  tags = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_write_latency" {
+  alarm_name          = "${var.name_prefix}-database-write-latency"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "WriteLatency"
+  namespace           = "AWS/RDS"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "0.2"
+  alarm_description   = "This metric monitors RDS write latency"
   treat_missing_data  = "notBreaching"
 
   dimensions = {

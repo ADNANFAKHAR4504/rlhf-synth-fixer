@@ -48,8 +48,3 @@ output "db_option_group_name" {
   description = "Database option group name"
   value       = aws_db_option_group.main.name
 }
-
-output "available_mysql_versions" {
-  description = "Available MySQL versions in this region"
-  value       = data.aws_rds_engine_version.mysql.valid_major_targets
-}

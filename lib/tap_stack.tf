@@ -41,11 +41,13 @@ module "database" {
   db_subnet_group_name  = module.networking.db_subnet_group_name
   vpc_security_group_ids = [module.networking.database_security_group_id]
   
-  instance_class      = local.current_db_config.instance_class
-  allocated_storage   = local.current_db_config.allocated_storage
-  backup_retention    = local.current_db_config.backup_retention
-  multi_az           = local.current_db_config.multi_az
-  deletion_protection = local.current_db_config.deletion_protection
+  instance_class              = local.current_db_config.instance_class
+  allocated_storage          = local.current_db_config.allocated_storage
+  backup_retention           = local.current_db_config.backup_retention
+  multi_az                   = local.current_db_config.multi_az
+  deletion_protection        = local.current_db_config.deletion_protection
+  auto_minor_version_upgrade = local.current_db_config.auto_minor_version_upgrade
+  engine_version             = local.current_db_config.engine_version
   
   db_username = var.db_username
   db_password = var.db_password

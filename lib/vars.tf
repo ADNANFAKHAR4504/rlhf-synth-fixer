@@ -26,7 +26,7 @@ locals {
     }
   }
 
-  # Database configurations with version flexibility
+  # Database configurations with MySQL 8.0.42
   db_configs = {
     staging = {
       instance_class              = "db.t3.micro"
@@ -35,7 +35,7 @@ locals {
       multi_az                   = false
       deletion_protection        = false
       auto_minor_version_upgrade = true
-      engine_version            = null # Use latest available
+      engine_version            = "8.0.42"
     }
     production = {
       instance_class              = "db.t3.medium"
@@ -43,10 +43,11 @@ locals {
       backup_retention           = 30
       multi_az                   = true
       deletion_protection        = true
-      auto_minor_version_upgrade = false # Control upgrades manually
-      engine_version            = null # Use latest available
+      auto_minor_version_upgrade = false
+      engine_version            = "8.0.42"
     }
   }
+  
   
   network_configs = {
     staging = {
