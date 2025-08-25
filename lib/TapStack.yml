@@ -221,10 +221,6 @@ Resources:
       VpcId: !Ref TAPVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: '0.0.0.0/0'
@@ -246,10 +242,6 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref TAPALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
           SourceSecurityGroupId: !Ref TAPALBSecurityGroup
       Tags:
         - Key: Name
@@ -506,36 +498,12 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
-      LoadBalancerArn: !Ref TAPApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-  TAPALBListenerHTTPS:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TAPALBTargetGroup
       LoadBalancerArn: !Ref TAPApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref TAPSSLCertificate
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
-  TAPSSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub '${AWS::StackName}.example.com'
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub 'TAPSSLCert${EnvironmentSuffix}'
-        - Key: AutoTerminate
-          Value: '30'
+      Port: 80
+      Protocol: HTTP
+
   TAPRDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
