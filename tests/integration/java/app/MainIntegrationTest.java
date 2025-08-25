@@ -4,12 +4,13 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
 /**
  * Integration tests for the Main CDK application.
  *
- * These tests verify the integration between different components of the TapStack
+ * These tests verify the integration between different components of the RegionalStack
  * and may involve more complex scenarios than unit tests.
  *
  * Note: These tests still use synthetic AWS resources and do not require
@@ -28,16 +29,14 @@ public class MainIntegrationTest {
         App app = new App();
 
         // Create stack with production-like configuration
-        TapStack stack = new TapStack(app, "TapStackProd", TapStackProps.builder()
-                .environmentSuffix("prod")
-                .build());
+        RegionalStack stack = new RegionalStack(app, "NovaStackProd",
+                StackProps.builder().build());
 
         // Create template and verify it can be synthesized
         Template template = Template.fromStack(stack);
 
         // Verify stack configuration
         assertThat(stack).isNotNull();
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
         assertThat(template).isNotNull();
     }
 
@@ -55,12 +54,11 @@ public class MainIntegrationTest {
         for (String env : environments) {
             // Create a new app for each environment to avoid synthesis conflicts
             App app = new App();
-            TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
-                    .environmentSuffix(env)
-                    .build());
+            RegionalStack stack = new RegionalStack(app, "NovaStack" + env,
+                    StackProps.builder().build());
 
-            // Verify each environment configuration
-            assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
+            // Verify stack is created for each environment
+            assertThat(stack).isNotNull();
 
             // Verify template can be created for each environment
             Template template = Template.fromStack(stack);
@@ -78,9 +76,8 @@ public class MainIntegrationTest {
     public void testStackWithNestedComponents() {
         App app = new App();
 
-        TapStack stack = new TapStack(app, "TapStackIntegration", TapStackProps.builder()
-                .environmentSuffix("integration")
-                .build());
+        RegionalStack stack = new RegionalStack(app, "NovaStackIntegration",
+                StackProps.builder().build());
 
         Template template = Template.fromStack(stack);
 
@@ -89,7 +86,5 @@ public class MainIntegrationTest {
         assertThat(template).isNotNull();
 
         // When nested stacks are added, additional assertions would go here
-        // For example:
-        // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
     }
 }
