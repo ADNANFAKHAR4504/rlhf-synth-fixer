@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 describe("Terraform main.tf static validation", () => {
-  const mainTfPath = path.resolve(__dirname, "../lib/main.tf");
+  const mainTfPath = path.resolve(__dirname, "../lib/tap_stack.tf");
   let mainTfContent: string;
 
   beforeAll(() => {
