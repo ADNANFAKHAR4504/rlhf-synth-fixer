@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py", 
+  "complexity": "hard",
+  "po_id": "trainr191cdkpy",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security Configuration",
+    "Web Application Deployment", 
+    "Network Infrastructure Design",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "WAF v2",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "Systems Manager",
+    "VPC Flow Logs"
+  ]
+}
