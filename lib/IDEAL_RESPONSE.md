@@ -54,11 +54,16 @@ resource "aws_s3_bucket_versioning" "logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
+
   rule {
-    apply_server_side_encryption_by_default { sse_algorithm = "aws:kms" }
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.logs.arn  # <-- explicit CMK reference
+    }
     bucket_key_enabled = true
   }
 }
+
 
 resource "aws_s3_bucket_logging" "logs" {
   bucket        = aws_s3_bucket.logs.id
@@ -341,43 +346,53 @@ resource "aws_iam_role" "config" {
   tags               = local.tags
 }
 
-# REMOVE this (or comment it out)
-# resource "aws_iam_role_policy_attachment" "config" {
-#   role       = aws_iam_role.config.name
-#   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
-# }
-
-# ADD this instead
 resource "aws_iam_role_policy" "config_inline" {
-  count  = var.enable_aws_config ? 1 : 0
-  name   = "${local.name_prefix}-config-inline"
-  role   = aws_iam_role.config[0].id
+  count = var.enable_aws_config ? 1 : 0
+  name  = "${local.name_prefix}-config-inline"
+  role  = aws_iam_role.config[0].id
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # AWS Config service permissions (per AWS managed policy scope)
-      {
-        Effect   = "Allow",
-        Action   = [
-          "config:*",
-          "iam:PassRole"
-        ],
-        Resource = "*"
-      },
-      # S3 permissions for delivery channel
+      # Minimal AWS Config permissions to create/start the recorder and manage delivery
       {
         Effect = "Allow",
         Action = [
-          "s3:PutObject",
+          "config:PutConfigurationRecorder",
+          "config:PutDeliveryChannel",
+          "config:StartConfigurationRecorder",
+          "config:StopConfigurationRecorder",
+          "config:DescribeConfigurationRecorders",
+          "config:DescribeDeliveryChannels",
+          "config:DescribeConfigurationRecorderStatus",
+          "config:PutRetentionConfiguration"
+        ],
+        Resource = "*"
+      },
+      # S3 access limited to the logs bucket and the aws-config prefix
+      {
+        Effect = "Allow",
+        Action = [
           "s3:GetBucketAcl",
           "s3:ListBucket"
         ],
-        Resource = "*"
+        Resource = [
+          aws_s3_bucket.logs.arn
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject"
+        ],
+        Resource = [
+          "${aws_s3_bucket.logs.arn}/aws-config/*"
+        ]
       }
     ]
   })
 }
+
 
 
 
