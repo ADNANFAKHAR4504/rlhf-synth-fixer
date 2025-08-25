@@ -488,7 +488,9 @@ resource "aws_cloudwatch_log_group" "security_logs" {
 resource "aws_cloudwatch_log_metric_filter" "failed_logins" {
   name           = "SecConfig-Failed-Console-Logins"
   log_group_name = aws_cloudwatch_log_group.security_logs.name
-  pattern        = "[version, account, time, id, ..., eventType=\"AwsConsoleSignIn\", ..., responseElements.ConsoleLogin=\"Failure\"]"
+
+  # Use JSON matching instead of dot notation
+  pattern = "{ ($.eventName = \"ConsoleLogin\") && ($.responseElements.ConsoleLogin = \"Failure\") }"
 
   metric_transformation {
     name      = "ConsoleLoginFailures"
@@ -496,6 +498,7 @@ resource "aws_cloudwatch_log_metric_filter" "failed_logins" {
     value     = "1"
   }
 }
+
 
 # CloudWatch Alarm for failed login attempts
 resource "aws_cloudwatch_metric_alarm" "failed_logins" {
