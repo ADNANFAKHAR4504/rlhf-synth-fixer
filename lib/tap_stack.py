@@ -24,9 +24,13 @@ from typing import Optional
 
 class TapStackProps(StackProps):
     """Properties for TapStack"""
-    def __init__(self, environment_suffix: str, **kwargs):
+    def __init__(self, environment_suffix: str, kms_key_arn: Optional[str] = None, ebs_kms_key_arn_or_alias: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.environment_suffix = environment_suffix
+        # Optional: import an existing KMS key for all resources (S3/RDS/EBS)
+        self.kms_key_arn = kms_key_arn
+        # Optional: override the EBS volume KMS key only (accepts full ARN or alias like 'alias/aws/ebs')
+        self.ebs_kms_key_arn_or_alias = ebs_kms_key_arn_or_alias
 
 
 class TapStack(Stack):
@@ -39,75 +43,102 @@ class TapStack(Stack):
         self.environment_suffix = props.environment_suffix if props else 'dev'
         self.region_name = self.region or 'us-east-1'
         
-        self.kms_key = kms.Key(
-            self, f'KmsKey{self.environment_suffix}',
-            description=f'KMS key for {self.environment_suffix} environment in {cdk.Aws.REGION}',
-            enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY if self.environment_suffix != 'prod' else RemovalPolicy.RETAIN,
-            policy=iam.PolicyDocument(
-                statements=[
-                    iam.PolicyStatement(
-                        sid='Enable IAM User Permissions',
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.AccountRootPrincipal()],
-                        actions=['kms:*'],
-                        resources=['*']
-                    ),
-                    iam.PolicyStatement(
-                        sid='Allow EC2 Service',
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal('ec2.amazonaws.com')],
-                        actions=[
-                            'kms:Decrypt',
-                            'kms:DescribeKey',
-                            'kms:Encrypt',
-                            'kms:GenerateDataKey*',
-                            'kms:ReEncrypt*'
-                        ],
-                        resources=['*']
-                    ),
-                    iam.PolicyStatement(
-                        sid='Allow Auto Scaling',
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal('autoscaling.amazonaws.com')],
-                        actions=[
-                            'kms:Decrypt',
-                            'kms:DescribeKey',
-                            'kms:Encrypt',
-                            'kms:GenerateDataKey*',
-                            'kms:ReEncrypt*'
-                        ],
-                        resources=['*']
-                    ),
-                    iam.PolicyStatement(
-                        sid='Allow S3 Service',
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal('s3.amazonaws.com')],
-                        actions=[
-                            'kms:Decrypt',
-                            'kms:DescribeKey',
-                            'kms:Encrypt',
-                            'kms:GenerateDataKey*',
-                            'kms:ReEncrypt*'
-                        ],
-                        resources=['*']
-                    ),
-                    iam.PolicyStatement(
-                        sid='Allow RDS Service',
-                        effect=iam.Effect.ALLOW,
-                        principals=[iam.ServicePrincipal('rds.amazonaws.com')],
-                        actions=[
-                            'kms:Decrypt',
-                            'kms:DescribeKey',
-                            'kms:Encrypt',
-                            'kms:GenerateDataKey*',
-                            'kms:ReEncrypt*'
-                        ],
-                        resources=['*']
-                    )
-                ]
+        # Determine KMS key to use for the stack
+        if props and getattr(props, 'kms_key_arn', None):
+            # Import existing KMS key by ARN
+            self.kms_key = kms.Key.from_key_arn(
+                self, f'ImportedKmsKey{self.environment_suffix}', props.kms_key_arn
             )
-        )
+        else:
+            # Create a new KMS key with required service permissions
+            self.kms_key = kms.Key(
+                self, f'KmsKey{self.environment_suffix}',
+                description=f'KMS key for {self.environment_suffix} environment in {cdk.Aws.REGION}',
+                enable_key_rotation=True,
+                removal_policy=RemovalPolicy.DESTROY if self.environment_suffix != 'prod' else RemovalPolicy.RETAIN,
+                policy=iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            sid='Enable IAM User Permissions',
+                            effect=iam.Effect.ALLOW,
+                            principals=[iam.AccountRootPrincipal()],
+                            actions=['kms:*'],
+                            resources=['*']
+                        ),
+                        iam.PolicyStatement(
+                            sid='Allow EC2 Service',
+                            effect=iam.Effect.ALLOW,
+                            principals=[iam.ServicePrincipal('ec2.amazonaws.com')],
+                            actions=[
+                                'kms:Decrypt',
+                                'kms:DescribeKey',
+                                'kms:Encrypt',
+                                'kms:GenerateDataKey*',
+                                'kms:ReEncrypt*',
+                                'kms:CreateGrant'
+                            ],
+                            resources=['*']
+                        ),
+                        iam.PolicyStatement(
+                            sid='Allow Auto Scaling',
+                            effect=iam.Effect.ALLOW,
+                            principals=[iam.ServicePrincipal('autoscaling.amazonaws.com')],
+                            actions=[
+                                'kms:Decrypt',
+                                'kms:DescribeKey',
+                                'kms:Encrypt',
+                                'kms:GenerateDataKey*',
+                                'kms:ReEncrypt*',
+                                'kms:CreateGrant'
+                            ],
+                            resources=['*']
+                        ),
+                        iam.PolicyStatement(
+                            sid='Allow S3 Service',
+                            effect=iam.Effect.ALLOW,
+                            principals=[iam.ServicePrincipal('s3.amazonaws.com')],
+                            actions=[
+                                'kms:Decrypt',
+                                'kms:DescribeKey',
+                                'kms:Encrypt',
+                                'kms:GenerateDataKey*',
+                                'kms:ReEncrypt*',
+                                'kms:CreateGrant'
+                            ],
+                            resources=['*']
+                        ),
+                        iam.PolicyStatement(
+                            sid='Allow RDS Service',
+                            effect=iam.Effect.ALLOW,
+                            principals=[iam.ServicePrincipal('rds.amazonaws.com')],
+                            actions=[
+                                'kms:Decrypt',
+                                'kms:DescribeKey',
+                                'kms:Encrypt',
+                                'kms:GenerateDataKey*',
+                                'kms:ReEncrypt*',
+                                'kms:CreateGrant'
+                            ],
+                            resources=['*']
+                        )
+                    ]
+                )
+            )
+        
+        # Determine EBS KMS key override if provided (e.g., alias/aws/ebs)
+        if props and getattr(props, 'ebs_kms_key_arn_or_alias', None):
+            override = props.ebs_kms_key_arn_or_alias
+            if override.startswith('arn:'):
+                self.ebs_kms_key = kms.Key.from_key_arn(
+                    self, f'EbsKmsKey{self.environment_suffix}', override
+                )
+            else:
+                # Treat as alias name, e.g., 'alias/aws/ebs' or custom alias
+                self.ebs_kms_key = kms.Alias.from_alias_name(
+                    self, f'EbsKmsAlias{self.environment_suffix}', override
+                )
+        else:
+            self.ebs_kms_key = self.kms_key
         
         self.vpc = self.create_vpc()
         self.security_groups = self.create_security_groups()
@@ -352,11 +383,15 @@ class TapStack(Stack):
                     volume=ec2.BlockDeviceVolume.ebs(
                         volume_size=8,
                         encrypted=True,
-                        kms_key=self.kms_key
+                        kms_key=self.ebs_kms_key
                     )
                 )
             ]
         )
+        # Ensure the launch template waits for the KMS key to be fully created/enabled
+        # Only add dependency if using a newly created key for EBS
+        if self.ebs_kms_key is self.kms_key and isinstance(self.kms_key, kms.Key):
+            launch_template.node.add_dependency(self.kms_key)
         
         asg = autoscaling.AutoScalingGroup(
             self, f'Asg{self.environment_suffix}',
@@ -369,6 +404,9 @@ class TapStack(Stack):
             health_check=autoscaling.HealthCheck.elb(grace=Duration.minutes(3)),
             auto_scaling_group_name=f'asg-{self.environment_suffix}'
         )
+        # Extra safeguard to ensure ASG depends on the KMS key if using created key for EBS
+        if self.ebs_kms_key is self.kms_key and isinstance(self.kms_key, kms.Key):
+            asg.node.add_dependency(self.kms_key)
         
         asg.attach_to_application_target_group(self.target_group)
         return asg
@@ -457,7 +495,9 @@ class TapStack(Stack):
                  description='Auto Scaling Group Name')
         
         # KMS outputs
-        CfnOutput(self, 'KmsKeyId', value=self.kms_key.key_id, description='KMS Key ID')
+        # Use the ARN as a universal identifier accepted by DescribeKey for both created and imported keys
+        CfnOutput(self, 'KmsKeyId', value=self.kms_key.key_arn, description='KMS Key ID or ARN')
+        CfnOutput(self, 'KmsKeyArn', value=self.kms_key.key_arn, description='KMS Key ARN')
         
         # Route53 outputs
         CfnOutput(self, 'HostedZoneId', 

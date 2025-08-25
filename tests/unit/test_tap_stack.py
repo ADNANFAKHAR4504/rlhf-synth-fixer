@@ -183,10 +183,10 @@ class TestTapStack(unittest.TestCase):
             "Name": f"tg-{self.environment_suffix}",
             "Port": 80,
             "Protocol": "HTTP",
-            "HealthCheckPath": "/",
-            "HealthCheckIntervalSeconds": 30,
+            "HealthCheckPath": "/health",
+            "HealthCheckIntervalSeconds": 15,
             "HealthyThresholdCount": 2,
-            "UnhealthyThresholdCount": 3
+            "UnhealthyThresholdCount": 2
         })
         
         # Check for listener
@@ -204,7 +204,7 @@ class TestTapStack(unittest.TestCase):
             "AutoScalingGroupName": f"asg-{self.environment_suffix}",
             "MinSize": "1",
             "MaxSize": "3",
-            "DesiredCapacity": "2",
+            "DesiredCapacity": "1",
             "HealthCheckType": "ELB"
         })
         

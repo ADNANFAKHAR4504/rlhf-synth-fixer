@@ -29,9 +29,15 @@ Tags.of(app).add('Environment', environment_suffix)
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
 
-# Create a TapStackProps object to pass environment_suffix
+# Optional KMS configuration (can be provided via cdk context or environment variables)
+kms_key_arn = app.node.try_get_context('kmsKeyArn') or os.getenv('KMS_KEY_ARN')
+ebs_kms_key = app.node.try_get_context('ebsKmsKeyArnOrAlias') or os.getenv('EBS_KMS_KEY_ARN_OR_ALIAS')
+
+# Create a TapStackProps object to pass environment_suffix and optional KMS settings
 props = TapStackProps(
     environment_suffix=environment_suffix,
+    kms_key_arn=kms_key_arn if kms_key_arn else None,
+    ebs_kms_key_arn_or_alias=ebs_kms_key if ebs_kms_key else None,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
         region=os.getenv('CDK_DEFAULT_REGION')

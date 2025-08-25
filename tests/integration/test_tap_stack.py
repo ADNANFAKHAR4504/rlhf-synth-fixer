@@ -210,8 +210,8 @@ class TestTapStackIntegration(unittest.TestCase):
         
         self.assertEqual(asg['MinSize'], 1)
         self.assertEqual(asg['MaxSize'], 3)
-        self.assertEqual(asg['DesiredCapacity'], 2)
-        self.assertEqual(asg['HealthCheckType'], 'EC2')
+        self.assertEqual(asg['DesiredCapacity'], 1)
+        self.assertEqual(asg['HealthCheckType'], 'ELB')
         
         # Verify target group attachment
         self.assertTrue(len(asg['TargetGroupARNs']) > 0)
