@@ -26,23 +26,28 @@ locals {
     }
   }
 
+  # Database configurations with version flexibility
   db_configs = {
     staging = {
-      instance_class      = "db.t3.micro"
-      allocated_storage   = 20
-      backup_retention    = 7
-      multi_az           = false
-      deletion_protection = false
+      instance_class              = "db.t3.micro"
+      allocated_storage          = 20
+      backup_retention           = 7
+      multi_az                   = false
+      deletion_protection        = false
+      auto_minor_version_upgrade = true
+      engine_version            = null # Use latest available
     }
     production = {
-      instance_class      = "db.t3.medium"
-      allocated_storage   = 100
-      backup_retention    = 30
-      multi_az           = true
-      deletion_protection = true
+      instance_class              = "db.t3.medium"
+      allocated_storage          = 100
+      backup_retention           = 30
+      multi_az                   = true
+      deletion_protection        = true
+      auto_minor_version_upgrade = false # Control upgrades manually
+      engine_version            = null # Use latest available
     }
   }
-
+  
   network_configs = {
     staging = {
       vpc_cidr = "10.0.0.0/16"

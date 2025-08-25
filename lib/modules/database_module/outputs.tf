@@ -10,7 +10,7 @@ output "db_port" {
 
 output "db_instance_id" {
   description = "RDS instance ID"
-  value       = aws_db_instance.main.id
+  value       = aws_db_instance.main.identifier
 }
 
 output "db_instance_arn" {
@@ -23,6 +23,11 @@ output "db_name" {
   value       = aws_db_instance.main.db_name
 }
 
+output "db_engine_version" {
+  description = "Database engine version"
+  value       = aws_db_instance.main.engine_version
+}
+
 output "parameter_store_username" {
   description = "Parameter Store path for database username"
   value       = aws_ssm_parameter.db_username.name
@@ -32,4 +37,19 @@ output "parameter_store_password" {
   description = "Parameter Store path for database password"
   value       = aws_ssm_parameter.db_password.name
   sensitive   = true
+}
+
+output "db_parameter_group_name" {
+  description = "Database parameter group name"
+  value       = aws_db_parameter_group.main.name
+}
+
+output "db_option_group_name" {
+  description = "Database option group name"
+  value       = aws_db_option_group.main.name
+}
+
+output "available_mysql_versions" {
+  description = "Available MySQL versions in this region"
+  value       = data.aws_rds_engine_version.mysql.valid_versions
 }

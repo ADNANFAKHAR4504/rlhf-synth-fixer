@@ -24,18 +24,44 @@ variable "instance_class" {
   description = "RDS instance class"
   type        = string
   default     = "db.t3.micro"
+  
+  validation {
+    condition = contains([
+      "db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large",
+      "db.t3.xlarge", "db.t3.2xlarge", "db.m5.large", "db.m5.xlarge",
+      "db.m5.2xlarge", "db.m5.4xlarge", "db.m5.8xlarge", "db.m5.12xlarge",
+      "db.m5.16xlarge", "db.m5.24xlarge"
+    ], var.instance_class)
+    error_message = "Instance class must be a valid RDS instance type."
+  }
+}
+
+variable "engine_version" {
+  description = "MySQL engine version (if null, will use latest available)"
+  type        = string
+  default     = null
 }
 
 variable "allocated_storage" {
   description = "Allocated storage in GB"
   type        = number
   default     = 20
+  
+  validation {
+    condition     = var.allocated_storage >= 20 && var.allocated_storage <= 65536
+    error_message = "Allocated storage must be between 20 and 65536 GB."
+  }
 }
 
 variable "backup_retention" {
   description = "Backup retention period in days"
   type        = number
   default     = 7
+  
+  validation {
+    condition     = var.backup_retention >= 0 && var.backup_retention <= 35
+    error_message = "Backup retention must be between 0 and 35 days."
+  }
 }
 
 variable "multi_az" {
@@ -50,23 +76,67 @@ variable "deletion_protection" {
   default     = false
 }
 
+variable "auto_minor_version_upgrade" {
+  description = "Enable automatic minor version upgrades"
+  type        = bool
+  default     = true
+}
+
 variable "db_name" {
   description = "Name of the database"
   type        = string
   default     = "webapp"
+  
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]*$", var.db_name))
+    error_message = "Database name must start with a letter and contain only alphanumeric characters and underscores."
+  }
 }
 
 variable "db_username" {
   description = "Database master username"
   type        = string
   sensitive   = true
+  
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9_]*$", var.db_username)) && length(var.db_username) <= 16
+    error_message = "Username must start with a letter, contain only alphanumeric characters and underscores, and be max 16 characters."
+  }
 }
 
 variable "db_password" {
-  description = "Database master password"
+  description = "Database master password (if null, will be auto-generated)"
   type        = string
   default     = null
   sensitive   = true
+  
+  validation {
+    condition = var.db_password == null || (
+      length(var.db_password) >= 8 && 
+      length(var.db_password) <= 128 &&
+      can(regex("^[a-zA-Z0-9!#$%&*()_+=$${}<>:?-]*$", var.db_password))
+    )
+    error_message = "Password must be 8-128 characters and contain only allowed characters."
+  }
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for encryption (if null, uses default)"
+  type        = string
+  default     = null
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch log retention period in days"
+  type        = number
+  default     = 7
+  
+  validation {
+    condition = contains([
+      1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653
+    ], var.log_retention_days)
+    error_message = "Log retention days must be a valid CloudWatch retention period."
+  }
 }
 
 variable "tags" {
