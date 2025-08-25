@@ -22,9 +22,9 @@ Refactor the existing configuration into a **modular, secure, and maintainable C
 
 - Refactor existing resources into **reusable CDKTF Constructs** for better organization and maintenance.
 - At a minimum, create the following constructs:
-  - `NetworkingModule` – VPC, subnets, route tables, and gateways.
-  - `ComputeModule` – EC2 instances, Auto Scaling Groups, and Launch Templates.
-  - `DatabaseModule` – RDS instances and related resources.
+- `NetworkingModule` VPC, subnets, route tables, and gateways.
+- `ComputeModule` EC2 instances, Auto Scaling Groups, and Launch Templates.
+- `DatabaseModule` RDS instances and related resources.
 
 - Each module should accept **TypeScript interfaces** for configuration (e.g., CIDR blocks, instance sizes, tags).
 
@@ -33,16 +33,16 @@ Refactor the existing configuration into a **modular, secure, and maintainable C
 ### **3. Lifecycle Policies**
 
 - Implement `lifecycle` rules for critical resources (e.g., VPC, RDS, IAM roles) to:
-  - Prevent accidental deletion (`prevent_destroy = true`).
-  - Allow scaling or updates without downtime.
+- Prevent accidental deletion (`prevent_destroy = true`).
+- Allow scaling or updates without downtime.
 
 ---
 
 ### **4. Naming Conventions**
 
 - Apply a **consistent and descriptive naming standard** for all resources:
-  - Format: `{env}-{resource-type}-{unique-id}` (e.g., `prod-vpc-001`, `dev-db-002`).
-  - Ensure the convention is enforced across all constructs by centralizing the naming logic.
+- Format: `{env}-{resource-type}-{unique-id}` (e.g., `prod-vpc-001`, `dev-db-002`).
+- Ensure the convention is enforced across all constructs by centralizing the naming logic.
 
 ---
 
@@ -50,25 +50,25 @@ Refactor the existing configuration into a **modular, secure, and maintainable C
 
 - **Main Stack File** (e.g., `main.ts`) instantiating the monolith constructs for all modules.
 - **Required Modules**:
-  - `networking-module`
-  - `compute-module`
-  - `database-module`
+- `networking-module`
+- `compute-module`
+- `database-module`
 
 - **Backend Configuration File** (S3 + DynamoDB) for remote state.
 - All code must be **syntactically correct**, **TypeScript CDKTF idiomatic**, and pass:
-  - `cdktf synth`
-  - `terraform validate`
-  - `terraform plan`
+- `cdktf synth`
+- `terraform validate`
+- `terraform plan`
 
 ---
 
 ## **Deliverables**
 
 - CDKTF TypeScript code implementing:
-  - **Secure remote state** with AWS S3 + DynamoDB.
-  - **Reusable modules** for Networking, Compute, and Database.
-  - **Lifecycle protections** for critical resources.
-  - **Naming convention enforcement** across all resources.
+- **Secure remote state** with AWS S3 + DynamoDB.
+- **Reusable modules** for Networking, Compute, and Database.
+- **Lifecycle protections** for critical resources.
+- **Naming convention enforcement** across all resources.
 
 - No hardcoded secrets or credentials.
 - Assume AWS provider credentials are configured via `~/.aws/credentials` or environment variables.

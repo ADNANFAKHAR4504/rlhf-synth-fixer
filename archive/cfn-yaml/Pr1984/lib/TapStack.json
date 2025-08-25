@@ -1,0 +1,1640 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secure Web Application Infrastructure - Security Configuration as Code",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcCidr",
+            "PublicSubnet1Cidr",
+            "PublicSubnet2Cidr",
+            "PrivateSubnet1Cidr",
+            "PrivateSubnet2Cidr"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DatabaseName",
+            "DatabaseUsername"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Instance Configuration"
+          },
+          "Parameters": [
+            "InstanceType",
+            "LatestAmiId"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Security Configuration"
+          },
+          "Parameters": [
+            "AllowedSSHCidr"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    },
+    "PublicSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "CIDR block for public subnet 1"
+    },
+    "PublicSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "CIDR block for public subnet 2"
+    },
+    "PrivateSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "CIDR block for private subnet 1"
+    },
+    "PrivateSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.4.0/24",
+      "Description": "CIDR block for private subnet 2"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Default": "prodwebappdb",
+      "Description": "Database name"
+    },
+    "DatabaseUsername": {
+      "Type": "String",
+      "Default": "dbadmin",
+      "Description": "Database master username"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro",
+      "AllowedValues": [
+        "t3.micro",
+        "t3.small",
+        "t3.medium"
+      ],
+      "Description": "EC2 instance type"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "Latest Amazon Linux 2 AMI ID from Systems Manager Parameter Store"
+    },
+    "AllowedSSHCidr": {
+      "Type": "String",
+      "Default": "10.0.0.0/8",
+      "Description": "CIDR block allowed for SSH access to bastion host (restrict to your organization's IP range)",
+      "AllowedPattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$",
+      "ConstraintDescription": "Must be a valid CIDR block (e.g., 203.0.113.0/24)"
+    }
+  },
+  "Resources": {
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false
+      }
+    },
+    "AppKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "KMS Key for application encryption",
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow use of the key for S3 and RDS",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "s3.amazonaws.com",
+                  "rds.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  {
+                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                  }
+                ]
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow SNS",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "sns.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Name",
+            "Value": "prod-app-kms-key"
+          }
+        ]
+      }
+    },
+    "AppKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/prod-app-key-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "AppKMSKey"
+        }
+      }
+    },
+    "AppVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCidr"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-vpc"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-igw"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "InternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        },
+        "VpcId": {
+          "Ref": "AppVPC"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1Cidr"
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-public-subnet-1"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2Cidr"
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-public-subnet-2"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1Cidr"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-private-subnet-1"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2Cidr"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-private-subnet-2"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "NatGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-nat-eip-1"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "NatGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-nat-eip-2"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "NatGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-nat-1"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "NatGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-nat-2"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-public-rt"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DefaultPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-private-rt-1"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-private-rt-2"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
+      }
+    },
+    "WebServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "prod-webapp-web-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for web servers",
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "SourceSecurityGroupId": {
+              "Ref": "LoadBalancerSecurityGroup"
+            },
+            "Description": "HTTP from Load Balancer"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "LoadBalancerSecurityGroup"
+            },
+            "Description": "HTTPS from Load Balancer"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "SourceSecurityGroupId": {
+              "Ref": "BastionSecurityGroup"
+            },
+            "Description": "SSH from Bastion"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-web-sg"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "LoadBalancerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "prod-webapp-alb-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for load balancer",
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP from internet"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS from internet"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-alb-sg"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "prod-webapp-db-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for database",
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "WebServerSecurityGroup"
+            },
+            "Description": "MySQL from web servers"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-db-sg"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "BastionSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "prod-webapp-bastion-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for bastion host",
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": {
+              "Ref": "AllowedSSHCidr"
+            },
+            "Description": "SSH from authorized IP ranges only"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-bastion-sg"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "AppS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "prod-webapp-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "AppKMSKey"
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {
+            "Ref": "LoggingBucket"
+          },
+          "LogFilePrefix": "access-logs/"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-bucket"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "LoggingBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "prod-webapp-logs-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "AppKMSKey"
+                }
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-logs-bucket"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "CloudTrailLoggingBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LoggingBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "LoggingBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${LoggingBucket.Arn}/cloudtrail-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "AWS:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-webapp-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for web application",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DatabaseUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "AppKMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-db-secret"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "SecretRDSInstanceAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DatabaseSecret"
+        },
+        "TargetId": {
+          "Ref": "Database"
+        },
+        "TargetType": "AWS::RDS::DBInstance"
+      }
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "prod-webapp-db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-db-subnet-group"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "Database": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "prod-webapp-database-${EnvironmentSuffix}"
+        },
+        "DBName": {
+          "Ref": "DatabaseName"
+        },
+        "DBInstanceClass": "db.t3.micro",
+        "Engine": "mysql",
+        "EngineVersion": "8.0.37",
+        "MasterUsername": {
+          "Ref": "DatabaseUsername"
+        },
+        "ManageMasterUserPassword": true,
+        "MasterUserSecret": {
+          "SecretArn": {
+            "Ref": "DatabaseSecret"
+          },
+          "KmsKeyId": {
+            "Ref": "AppKMSKey"
+          }
+        },
+        "AllocatedStorage": "20",
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "AppKMSKey"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "MultiAZ": false,
+        "PubliclyAccessible": false,
+        "DeletionProtection": false,
+        "EnablePerformanceInsights": false,
+        "MonitoringInterval": 0,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-database"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "prod-webapp-launch-template-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Ref": "LatestAmiId"
+          },
+          "InstanceType": {
+            "Ref": "InstanceType"
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "WebServerSecurityGroup"
+            }
+          ],
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y aws-cli amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"metrics\": {\n    \"namespace\": \"ProdWebApp/EC2\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/prod-webapp-${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
+            }
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": "prod-webapp-instance"
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "prod-webapp-asg-${EnvironmentSuffix}"
+        },
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
+        },
+        "MinSize": 1,
+        "MaxSize": 4,
+        "DesiredCapacity": 2,
+        "TargetGroupARNs": [
+          {
+            "Ref": "TargetGroup"
+          }
+        ],
+        "HealthCheckType": "ELB",
+        "HealthCheckGracePeriod": 300,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-asg",
+            "PropagateAtLaunch": false
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production",
+            "PropagateAtLaunch": false
+          }
+        ]
+      }
+    },
+    "ScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": 300,
+        "ScalingAdjustment": 1
+      }
+    },
+    "ScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": 300,
+        "ScalingAdjustment": -1
+      }
+    },
+    "CPUAlarmHigh": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "prod-webapp-cpu-high",
+        "AlarmDescription": "Scale up on high CPU",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 70,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ScaleUpPolicy"
+          },
+          {
+            "Ref": "SNSTopic"
+          }
+        ]
+      }
+    },
+    "CPUAlarmLow": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "prod-webapp-cpu-low",
+        "AlarmDescription": "Scale down on low CPU",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 20,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ScaleDownPolicy"
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-webapp-alb-${EnvironmentSuffix}"
+        },
+        "Scheme": "internet-facing",
+        "Type": "application",
+        "SecurityGroups": [
+          {
+            "Ref": "LoadBalancerSecurityGroup"
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-alb"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-tg-${EnvironmentSuffix}"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "AppVPC"
+        },
+        "HealthCheckPath": "/health",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-targets"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "Listener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 80,
+        "Protocol": "HTTP"
+      }
+    },
+    "WebACL": {
+      "Type": "AWS::WAFv2::WebACL",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "prod-webapp-waf-${EnvironmentSuffix}"
+        },
+        "Scope": "REGIONAL",
+        "DefaultAction": {
+          "Allow": {}
+        },
+        "Rules": [
+          {
+            "Name": "AWSManagedRulesCommonRuleSet",
+            "Priority": 1,
+            "OverrideAction": {
+              "None": {}
+            },
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesCommonRuleSet"
+              }
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "CommonRuleSetMetric"
+            }
+          },
+          {
+            "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+            "Priority": 2,
+            "OverrideAction": {
+              "None": {}
+            },
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+              }
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "KnownBadInputsRuleSetMetric"
+            }
+          },
+          {
+            "Name": "AWSManagedRulesSQLiRuleSet",
+            "Priority": 3,
+            "OverrideAction": {
+              "None": {}
+            },
+            "Statement": {
+              "ManagedRuleGroupStatement": {
+                "VendorName": "AWS",
+                "Name": "AWSManagedRulesSQLiRuleSet"
+              }
+            },
+            "VisibilityConfig": {
+              "SampledRequestsEnabled": true,
+              "CloudWatchMetricsEnabled": true,
+              "MetricName": "SQLiRuleSetMetric"
+            }
+          }
+        ],
+        "VisibilityConfig": {
+          "SampledRequestsEnabled": true,
+          "CloudWatchMetricsEnabled": true,
+          "MetricName": "prod-webapp-waf"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-waf"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "WebACLAssociation": {
+      "Type": "AWS::WAFv2::WebACLAssociation",
+      "Properties": {
+        "ResourceArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "WebACLArn": {
+          "Fn::GetAtt": [
+            "WebACL",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "EC2LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/ec2/prod-webapp-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "AppKMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "S3LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/s3/prod-webapp-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "AppKMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "WAFLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/wafv2/prod-webapp-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "AppKMSKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "prod-webapp-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Production Web App Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "AppKMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-alerts"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "CloudTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "prod-webapp-cloudtrail-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "LoggingBucket"
+        },
+        "S3KeyPrefix": "cloudtrail-logs/",
+        "IncludeGlobalServiceEvents": true,
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "KMSKeyId": {
+          "Ref": "AppKMSKey"
+        },
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  {
+                    "Fn::Sub": "${AppS3Bucket.Arn}/*"
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "AppS3Bucket",
+                      "Arn"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "prod-webapp-cloudtrail"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "AppVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "Application Load Balancer DNS name",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"
+        }
+      }
+    },
+    "DatabaseEndpoint": {
+      "Description": "RDS database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "Database",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 bucket name",
+      "Value": {
+        "Ref": "AppS3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "AppKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "WebACLArn": {
+      "Description": "WAF Web ACL ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "WebACL",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WebACLArn"
+        }
+      }
+    },
+    "CloudTrailArn": {
+      "Description": "CloudTrail ARN for audit logging",
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudTrail",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudTrailArn"
+        }
+      }
+    }
+  }
+}

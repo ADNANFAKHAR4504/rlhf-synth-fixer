@@ -14,7 +14,7 @@ You are an expert AWS infrastructure architect. Build complete, production-ready
 ### File Structure Constraints:
 Based on user's project structure, work within these files ONLY:
 - `tap_stack.py` - Main infrastructure code with embedded Lambda
-- `test_tap_stack.py` (unit tests) - Complete unit test suite  
+- `test_tap_stack.py` (unit tests) - Complete unit test suite 
 - `test_tap_stack.py` (integration tests) - Complete integration test suite
 - `README.md` - Complete setup and deployment guide
 - Other config files as shown in user's project
@@ -41,7 +41,7 @@ Based on user's project structure, work within these files ONLY:
 ### Test Requirements:
 - **Unit tests** with Pulumi mocks for all components
 - **Integration tests** against live AWS resources
-- **End-to-end testing** of S3 → Lambda trigger workflow
+- **End-to-end testing** of S3 Lambda trigger workflow
 - **Security validation** tests
 - **Multi-AZ resilience** tests
 

@@ -1,3 +1,10 @@
+# CloudFormation Template - Financial Services Infrastructure
+
+This template creates a secure and compliant infrastructure for financial services applications.
+
+## TapStack.yml
+
+```yaml
 # infrastructure.yaml
 # CloudFormation template for a secure and compliant financial services application
 
@@ -5,7 +12,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Core infrastructure for a financial services application adhering to security and compliance best practices.
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: dev
     AllowedPattern: '^[a-zA-Z0-9]+$'
@@ -27,7 +34,7 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -208,7 +215,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -244,7 +251,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -320,7 +327,7 @@ Resources:
       S3BucketName: !Ref CloudTrailLogBucket
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -393,7 +400,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -410,7 +417,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -478,7 +485,7 @@ Resources:
       TopicName: "financial-secure-topic"
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -527,7 +534,7 @@ Resources:
               Name: AWSManagedRulesCommonRuleSet
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -551,7 +558,7 @@ Resources:
         - !Ref RDSSecurityGroup
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -580,7 +587,7 @@ Resources:
           - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -603,7 +610,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: !Ref Project
         - Key: Owner
@@ -633,3 +640,4 @@ Outputs:
   RDSInstanceEndpoint:
     Description: FinancialDB Endpoint Address
     Value: !GetAtt FinancialDB.Endpoint.Address
+```

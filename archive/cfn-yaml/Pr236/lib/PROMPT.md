@@ -1,20 +1,20 @@
-Here’s a **high-level, comprehensive user prompt** that you can use to generate or request a CloudFormation YAML template for the network infrastructure described:
+Heres a **high-level, comprehensive user prompt** that you can use to generate or request a CloudFormation YAML template for the network infrastructure described:
 
 ---
 
-### ✅ Prompt Title:
+### Prompt Title:
 
 **Generate a basic public network infrastructure in AWS using CloudFormation YAML (Production Environment)**
 
 ---
 
-### 📌 Prompt Description:
+### Prompt Description:
 
 Act as an **expert AWS Solutions Architect**. Your task is to write a **CloudFormation YAML template** to configure a **basic network infrastructure** in the `us-east-1` AWS region. This infrastructure will support a **production environment** and must follow **AWS best practices for naming, tagging, and internet accessibility**.
 
 ---
 
-### 🧩 Infrastructure Requirements:
+### Infrastructure Requirements:
 
 #### 1. **VPC**
 
@@ -24,8 +24,8 @@ Act as an **expert AWS Solutions Architect**. Your task is to write a **CloudFor
 
 * Create **two public subnets** inside the VPC:
 
-  * `PublicSubnetA` with CIDR block `10.0.1.0/24`
-  * `PublicSubnetB` with CIDR block `10.0.2.0/24`
+* `PublicSubnetA` with CIDR block `10.0.1.0/24`
+* `PublicSubnetB` with CIDR block `10.0.2.0/24`
 
 #### 3. **Internet Gateway**
 
@@ -45,11 +45,11 @@ Act as an **expert AWS Solutions Architect**. Your task is to write a **CloudFor
 
 * All resources must be tagged with:
 
-  ```yaml
-  Tags:
-    - Key: Environment
-      Value: Production
-  ```
+```yaml
+Tags:
+- Key: Environment
+Value: Production
+```
 
 #### 7. **Best Practices**
 

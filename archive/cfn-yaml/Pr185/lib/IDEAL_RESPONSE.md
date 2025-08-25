@@ -1,5 +1,10 @@
-```
+# CloudFormation Template - Static Web Application Infrastructure
 
+This CloudFormation template deploys a secure, reusable AWS infrastructure for hosting a static web application using S3 and CloudFront with Origin Access Control (OAC).
+
+## TapStack.yml
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to deploy a secure, reusable AWS infrastructure for a static web application.
 
@@ -254,3 +259,23 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CustomDomainURL'
 ```
+
+## Architecture Overview
+
+This template creates a secure static web hosting infrastructure with:
+
+1. **S3 Bucket** for storing static web content with encryption and versioning
+2. **CloudFront Distribution** for global content delivery with Origin Access Control (OAC)
+3. **Security Headers Policy** for enhanced security
+4. **Logging Bucket** for CloudFront access logs
+5. **Optional Custom Domain** support with ACM certificate
+
+## Key Features
+
+- **Security**: Uses OAC instead of OAI for enhanced S3 access control
+- **Encryption**: All S3 buckets use AES256 encryption
+- **Versioning**: Enabled on web content bucket with lifecycle rules
+- **Security Headers**: Comprehensive security headers including CSP, HSTS, and more
+- **Logging**: CloudFront access logs stored in dedicated S3 bucket
+- **Custom Domain**: Optional support for custom domains with ACM certificates
+- **Environment Isolation**: All resources tagged with environment suffix for multi-environment deployments
