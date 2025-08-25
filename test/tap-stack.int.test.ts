@@ -1,16 +1,16 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
   GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
   GetRolePolicyCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import fs from 'fs';
 import path from 'path';
@@ -27,7 +27,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('Multi-Region Infrastructure Integration Tests', () => {
   const regions = ['us-east-1', 'us-west-2'];
-  
+
   regions.forEach((region) => {
     describe(`Infrastructure in ${region}`, () => {
       let ec2Client: EC2Client;
@@ -42,7 +42,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
         test('VPC exists with correct CIDR block', async () => {
           const vpcIdKey = `VpcId-${region}`;
           const vpcId = outputs[vpcIdKey] || outputs[`${region}-VpcId`];
-          
+
           if (!vpcId) {
             console.log('VPC ID not found in outputs, checking by tags...');
             const response = await ec2Client.send(new DescribeVpcsCommand({
@@ -51,10 +51,10 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
                 { Name: 'tag:Region', Values: [region] },
               ],
             }));
-            
+
             expect(response.Vpcs).toBeDefined();
             expect(response.Vpcs!.length).toBeGreaterThan(0);
-            
+
             const vpc = response.Vpcs![0];
             expect(vpc.CidrBlock).toBe('10.0.0.0/16');
             expect(vpc.DhcpOptionsId).toBeDefined(); // DNS settings are in DHCP options
@@ -66,7 +66,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
 
             expect(response.Vpcs).toBeDefined();
             expect(response.Vpcs!.length).toBe(1);
-            
+
             const vpc = response.Vpcs![0];
             expect(vpc.CidrBlock).toBe('10.0.0.0/16');
             expect(vpc.DhcpOptionsId).toBeDefined(); // DNS settings are in DHCP options
@@ -84,10 +84,10 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
           expect(response.Subnets).toBeDefined();
           expect(response.Subnets!.length).toBeGreaterThanOrEqual(4); // At least 2 public + 2 private
 
-          const publicSubnets = response.Subnets!.filter(subnet => 
+          const publicSubnets = response.Subnets!.filter(subnet =>
             subnet.MapPublicIpOnLaunch === true
           );
-          const privateSubnets = response.Subnets!.filter(subnet => 
+          const privateSubnets = response.Subnets!.filter(subnet =>
             subnet.MapPublicIpOnLaunch === false
           );
 
@@ -97,7 +97,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
           // Verify subnets are in different AZs
           const publicAZs = new Set(publicSubnets.map(s => s.AvailabilityZone));
           const privateAZs = new Set(privateSubnets.map(s => s.AvailabilityZone));
-          
+
           expect(publicAZs.size).toBeGreaterThanOrEqual(2);
           expect(privateAZs.size).toBeGreaterThanOrEqual(2);
         }, 30000);
@@ -131,7 +131,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
           const igw = response.InternetGateways![0];
           expect(igw.Attachments).toBeDefined();
           expect(igw.Attachments!.length).toBeGreaterThan(0);
-          expect(igw.Attachments![0].State).toBe('attached');
+          expect(igw.Attachments![0].State).toBe('available');
         }, 30000);
 
         test('route tables are configured correctly', async () => {
@@ -167,7 +167,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
       describe('IAM Roles Configuration', () => {
         test('EC2 role exists with correct policies', async () => {
           const roleName = `ec2-role-${environmentSuffix}-${region.replace(/-/g, '')}`;
-          
+
           try {
             const roleResponse = await iamClient.send(new GetRoleCommand({
               RoleName: roleName,
@@ -195,7 +195,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
 
             expect(inlinePolicyResponse.PolicyDocument).toBeDefined();
             const policyDoc = JSON.parse(decodeURIComponent(inlinePolicyResponse.PolicyDocument!));
-            
+
             const hasLogsPermissions = policyDoc.Statement.some((stmt: any) =>
               stmt.Effect === 'Allow' &&
               stmt.Action.includes('logs:CreateLogGroup')
@@ -210,19 +210,19 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
 
         test('cross-region replication role exists', async () => {
           const roleName = `cross-region-role-${environmentSuffix}-${region.replace(/-/g, '')}`;
-          
+
           try {
             const roleResponse = await iamClient.send(new GetRoleCommand({
               RoleName: roleName,
             }));
 
             expect(roleResponse.Role).toBeDefined();
-            
+
             // Verify S3 can assume this role
             const assumeRolePolicy = JSON.parse(
               decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!)
             );
-            
+
             const canS3Assume = assumeRolePolicy.Statement.some((stmt: any) =>
               stmt.Effect === 'Allow' &&
               stmt.Principal?.Service === 's3.amazonaws.com' &&
@@ -257,7 +257,7 @@ describe('Multi-Region Infrastructure Integration Tests', () => {
 
       for (const region of regions) {
         const ec2Client = new EC2Client({ region });
-        
+
         // Get VPC info
         const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
           Filters: [
