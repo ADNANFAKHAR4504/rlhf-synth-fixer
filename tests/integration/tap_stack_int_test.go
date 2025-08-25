@@ -1,4 +1,4 @@
-package integration
+package lib
 
 import (
 	"encoding/json"
