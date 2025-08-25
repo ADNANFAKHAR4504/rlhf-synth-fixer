@@ -12,23 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Define the config struct locally for testing
-type TapStackConfig struct {
-	Region          *string
-	Environment     *string
-	Project         *string
-	Owner           *string
-	CostCenter      *string
-	VpcCidr         *string
-	AllowedIpRanges []*string
-}
-
-// Mock NewTapStack function for testing
-func NewTapStack(scope constructs.Construct, id *string, environmentSuffix string) cdktf.TerraformStack {
-	stack := cdktf.NewTerraformStack(scope, id)
-	return stack
-}
-
 // TestTapStackCreation tests the basic creation of the TapStack
 func TestTapStackCreation(t *testing.T) {
 	// Set up test environment
@@ -65,7 +48,7 @@ func TestTapStackConfiguration(t *testing.T) {
 	stack := NewTapStack(app, jsii.String("TestConfigStack"), "unittest")
 	assert.NotNil(t, stack)
 
-	// Verify configuration values - Now we're actually using the config variable
+	// Verify configuration values
 	assert.Equal(t, "us-west-2", *config.Region)
 	assert.Equal(t, "unittest", *config.Environment)
 	assert.Equal(t, "test-project", *config.Project)
@@ -110,7 +93,6 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 			defer os.Unsetenv("ENVIRONMENT_SUFFIX")
 
 			app := cdktf.NewApp(nil)
-			// Removed unused config variable
 
 			stack := NewTapStack(app, jsii.String("TestEnvStack"), tt.expectedSuffix)
 			assert.NotNil(t, stack)
@@ -172,7 +154,6 @@ func TestS3BackendConfiguration(t *testing.T) {
 			defer os.Unsetenv("ENVIRONMENT_SUFFIX")
 
 			app := cdktf.NewApp(nil)
-			// Removed unused config variable
 
 			stack := NewTapStack(app, jsii.String("TestBackendStack"), "backend-test")
 			assert.NotNil(t, stack)
@@ -244,13 +225,10 @@ func TestTapStackConfigValidation(t *testing.T) {
 			if tt.isValid {
 				stack := NewTapStack(app, jsii.String("TestValidationStack"), "validation-test")
 				assert.NotNil(t, stack)
-				// Now we're using the config from the test case
 				assert.NotNil(t, tt.config)
 				assert.NotNil(t, tt.config.Region)
 				assert.NotNil(t, tt.config.Environment)
 			} else {
-				// For invalid configurations, we would expect panics or errors
-				// This would be implemented based on actual validation logic
 				assert.NotNil(t, tt.config)
 			}
 		})
@@ -381,7 +359,6 @@ func TestStackResourceNaming(t *testing.T) {
 	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
 
 	app := cdktf.NewApp(nil)
-	// Removed unused config variable
 
 	stack := NewTapStack(app, jsii.String("TestNamingStack"), "naming-test")
 	assert.NotNil(t, stack)
@@ -465,7 +442,7 @@ func TestTagsConfiguration(t *testing.T) {
 	stack := NewTapStack(app, jsii.String("TestTagsStack"), "tags-test")
 	assert.NotNil(t, stack)
 
-	// Verify tag values - Now we're actually using the config variable
+	// Verify tag values
 	assert.Equal(t, "production", *config.Environment)
 	assert.Equal(t, "security-infra", *config.Project)
 	assert.Equal(t, "security-team", *config.Owner)
@@ -494,7 +471,7 @@ func TestSecurityConfiguration(t *testing.T) {
 	stack := NewTapStack(app, jsii.String("TestSecurityStack"), "security-test")
 	assert.NotNil(t, stack)
 
-	// Verify security configurations - Now we're actually using the config variable
+	// Verify security configurations
 	assert.Len(t, config.AllowedIpRanges, 2)
 	assert.Equal(t, "203.0.113.0/24", *config.AllowedIpRanges[0])
 	assert.Equal(t, "198.51.100.0/24", *config.AllowedIpRanges[1])
@@ -507,8 +484,6 @@ func TestSecurityConfiguration(t *testing.T) {
 func BenchmarkTapStackCreation(b *testing.B) {
 	os.Setenv("ENVIRONMENT_SUFFIX", "benchmark")
 	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
-
-	// Removed unused config variable since it's not needed for benchmarking
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

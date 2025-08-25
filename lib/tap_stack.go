@@ -189,39 +189,51 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		Description: jsii.String("KMS key for CloudTrail log encryption"),
 		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
 		Policy: jsii.String(fmt.Sprintf(`{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "Enable IAM User Permissions",
-                "Effect": "Allow",
-                "Principal": {
-                    "AWS": "arn:aws:iam::%s:root"
-                },
-                "Action": "kms:*",
-                "Resource": "*"
-            },
-            {
-                "Sid": "Allow CloudWatch Logs",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "logs.us-west-2.amazonaws.com"
-                },
-                "Action": [
-                    "kms:Encrypt",
-                    "kms:Decrypt",
-                    "kms:ReEncrypt*",
-                    "kms:GenerateDataKey*",
-                    "kms:DescribeKey"
-                ],
-                "Resource": "*",
-                "Condition": {
-                    "ArnEquals": {
-                        "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:us-west-2:%s:log-group:/aws/cloudtrail/tap-trail-%s"
-                    }
-                }
-            }
-        ]
-    }`, *currentAccount.AccountId(), *currentAccount.AccountId(), environmentSuffix)),
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::%s:root"
+					},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow CloudTrail to encrypt logs",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*",
+					"Condition": {
+						"StringEquals": {
+							"kms:EncryptionContext:aws:cloudtrail:arn": "arn:aws:cloudtrail:us-west-2:%s:trail/tap-main-trail-%s"
+						}
+					}
+				},
+				{
+					"Sid": "Allow CloudWatch Logs",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "logs.us-west-2.amazonaws.com"
+					},
+					"Action": [
+						"kms:Encrypt",
+						"kms:Decrypt",
+						"kms:ReEncrypt*",
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*"
+				}
+			]
+		}`, *currentAccount.AccountId(), *currentAccount.AccountId(), environmentSuffix)),
 		EnableKeyRotation: jsii.Bool(true),
 		Tags: &map[string]*string{
 			"Name":        jsii.String(fmt.Sprintf("tap-cloudtrail-kms-key-%s", environmentSuffix)),
