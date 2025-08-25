@@ -191,7 +191,47 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
-	// Create CloudTrail for audit logging
+	// Create bucket policy for CloudTrail
+	_, err = s3.NewBucketPolicy(ctx, "healthapp-audit-bucket-policy", &s3.BucketPolicyArgs{
+		Bucket: auditBucket.ID(),
+		Policy: pulumi.All(auditBucket.Arn, current.AccountId).ApplyT(func(args []interface{}) (string, error) {
+			bucketArn := args[0].(string)
+			accountId := args[1].(string)
+			return fmt.Sprintf(`{
+				"Version": "2012-10-17",
+				"Statement": [
+					{
+						"Sid": "AWSCloudTrailAclCheck",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "cloudtrail.amazonaws.com"
+						},
+						"Action": "s3:GetBucketAcl",
+						"Resource": "%s"
+					},
+					{
+						"Sid": "AWSCloudTrailWrite",
+						"Effect": "Allow",
+						"Principal": {
+							"Service": "cloudtrail.amazonaws.com"
+						},
+						"Action": "s3:PutObject",
+						"Resource": "%s/*",
+						"Condition": {
+							"StringEquals": {
+								"s3:x-amz-acl": "bucket-owner-full-control"
+							}
+						}
+					}
+				]
+			}`, bucketArn, bucketArn), nil
+		}).(pulumi.StringOutput),
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create CloudTrail for audit logging (depends on bucket policy)
 	cloudTrail, err := cloudtrail.NewTrail(ctx, "healthapp-cloudtrail", &cloudtrail.TrailArgs{
 		Name:                       pulumi.Sprintf("healthapp-audit-trail-%s", environmentSuffix),
 		S3BucketName:               auditBucket.ID(),
@@ -199,7 +239,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		IsMultiRegionTrail:         pulumi.Bool(true),
 		EnableLogFileValidation:    pulumi.Bool(true),
 		Tags:                       commonTags,
-	})
+	}, pulumi.DependsOn([]pulumi.Resource{auditBucket}))
 	if err != nil {
 		return err
 	}
