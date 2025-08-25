@@ -222,6 +222,21 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+  
+  MyHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: tapstack2144.com.
+
+  MyDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref MyHostedZone
+      Name: app.tapstack2144.com.
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - !GetAtt RDSInstance.Endpoint.Address
 
 Outputs:
   VPCId:
@@ -239,3 +254,6 @@ Outputs:
   StackName:
     Description: Name of this CloudFormation stack
     Value: !Ref AWS::StackName
+  HostedZoneId:
+    Description: "Route 53 Hosted Zone ID"
+    Value: !Ref MyHostedZone

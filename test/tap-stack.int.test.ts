@@ -16,6 +16,11 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
 } from '@aws-sdk/client-ec2';
+import {
+  Route53Client,
+  ListHostedZonesByNameCommand,
+  ListResourceRecordSetsCommand,
+} from '@aws-sdk/client-route-53';
 
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -26,6 +31,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
   const s3Client = new S3Client({ region });
   const cwClient = new CloudWatchClient({ region });
   const ec2Client = new EC2Client({ region });
+  const r53Client = new Route53Client({ region });
 
   describe('RDS Instance', () => {
     test('RDS instance should be available and accessible', async () => {
@@ -56,6 +62,25 @@ describe('TapStack CloudFormation Integration Tests', () => {
     });
   });
 
+  describe('CloudWatch Alarm', () => {
+    test('CloudWatch CPU alarm should be present', async () => {
+      const stackName = outputs.StackName;
+      expect(stackName).toBeDefined();
+
+      const expectedAlarmName = `High-CPU-EC2-${stackName}`;
+
+      const result = await cwClient.send(
+        new DescribeAlarmsCommand({ AlarmNames: [expectedAlarmName] })
+      );
+
+      const alarm = result.MetricAlarms?.[0];
+      expect(alarm).toBeDefined();
+      expect(alarm?.AlarmName).toBe(expectedAlarmName);
+      expect(alarm?.MetricName).toBe('CPUUtilization');
+      expect(alarm?.Threshold).toBe(80);
+    });
+  });
+
   describe('VPC & Subnets', () => {
     test('VPC should exist', async () => {
       const vpcId = outputs.VPCId;
@@ -81,6 +106,47 @@ describe('TapStack CloudFormation Integration Tests', () => {
       result.Subnets?.forEach(subnet => {
         expect(subnet.VpcId).toBe(outputs.VPCId);
       });
+    });
+  });
+
+  describe('Route 53 Hosted Zone & Record', () => {
+    test('Hosted zone should exist and match expected domain', async () => {
+      const domainName = outputs.RDSDNSName.split('.').slice(1).join('.') + '.'; // Remove 'db.' and add trailing dot
+      const result = await r53Client.send(
+        new ListHostedZonesByNameCommand({ DNSName: domainName })
+      );
+
+      const zone = result.HostedZones?.find(z => z.Name === domainName);
+      expect(zone).toBeDefined();
+      expect(zone?.Id).toContain(outputs.HostedZoneId);
+    });
+
+    test('CNAME record for RDS should exist in hosted zone and match RDS endpoint', async () => {
+      const dnsName = outputs.RDSDNSName;
+      const domainName = dnsName.split('.').slice(1).join('.') + '.';
+      const recordName = dnsName + '.';
+
+      const zoneResult = await r53Client.send(
+        new ListHostedZonesByNameCommand({ DNSName: domainName })
+      );
+
+      const hostedZone = zoneResult.HostedZones?.find(z => z.Name === domainName);
+      expect(hostedZone).toBeDefined();
+
+      const recordResult = await r53Client.send(
+        new ListResourceRecordSetsCommand({
+          HostedZoneId: hostedZone!.Id,
+          StartRecordName: recordName,
+          StartRecordType: 'CNAME',
+        })
+      );
+
+      const recordSet = recordResult.ResourceRecordSets?.find(
+        r => r.Name === recordName && r.Type === 'CNAME'
+      );
+
+      expect(recordSet).toBeDefined();
+      expect(recordSet?.ResourceRecords?.[0].Value).toBe(outputs.RDSInstanceEndpoint);
     });
   });
 });

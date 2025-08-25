@@ -15,11 +15,7 @@ At least one private subnet
 
 Subnets must span at least two Availability Zones (AZs) for high availability.
 
-3. Cross-Region Connectivity
-
-Implement VPC Peering between regions to support cross-region communication between resources.
-
-4. RDS Deployment
+3. RDS Deployment
 
 Deploy one RDS instance per region
 
@@ -29,7 +25,7 @@ Use private subnets for deployment
 
 Ensure multi-AZ deployment for high availability (where supported)
 
-5. IAM Access Control
+4. IAM Access Control
 
 Define IAM roles and policies:
 
@@ -37,7 +33,7 @@ Least-privilege access
 
 Secure interaction between services (e.g., EC2 → RDS, Lambda → S3)
 
-6. Monitoring & Alerts
+5. Monitoring & Alerts
 
 Use CloudWatch for monitoring:
 
@@ -45,21 +41,19 @@ All major resources (EC2, RDS, NAT Gateway, etc.)
 
 Set up alarms for critical metrics (e.g., CPU utilization, RDS availability)
 
-7. S3 Logging & Replication
+6. S3 Logging
 
 Create S3 buckets for logs (VPC flow logs, CloudTrail, etc.)
 
-Enable cross-region replication for durability
-
 Enforce encryption and access logging
 
-8. Network Security
+7. Network Security
 
 Ensure servers in private subnets are not publicly accessible
 
 Provide outbound internet access for private subnet resources via NAT Gateway
 
-9. DNS & Domain Management
+8. DNS & Domain Management
 
 Configure Route 53:
 
