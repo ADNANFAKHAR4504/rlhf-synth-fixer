@@ -17,22 +17,40 @@ const elbv2 = new AWS.ELBv2();
 
 // Load stack outputs
 const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
-const outputs: { [key: string]: string } = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 describe('TapStack Integration Tests', () => {
   let accountId: string;
+  let outputs: { [key: string]: string };
 
   beforeAll(async () => {
-    // Ensure outputs are loaded
-    expect(outputs).toHaveProperty('VPCId');
-    expect(outputs).toHaveProperty('DataBucketName');
-    expect(outputs).toHaveProperty('LogBucketName');
-    expect(outputs).toHaveProperty('DynamoDBTableName');
-    expect(outputs).toHaveProperty('RDSEndpoint');
-    expect(outputs).toHaveProperty('RDSSecretArn');
-    expect(outputs).toHaveProperty('LambdaFunctionArn');
-    expect(outputs).toHaveProperty('ALBArn');
-    expect(outputs).toHaveProperty('EnvironmentName');
+    // Transform nested outputs to flat key-value pairs
+    if (!rawOutputs.TapStackpr2053 || !Array.isArray(rawOutputs.TapStackpr2053)) {
+      throw new Error('Invalid all-outputs.json format: Expected TapStackpr2053 array');
+    }
+    outputs = rawOutputs.TapStackpr2053.reduce((acc: { [key: string]: string }, output: { OutputKey: string; OutputValue: string }) => {
+      acc[output.OutputKey] = output.OutputValue;
+      return acc;
+    }, {});
+
+    // Add EnvironmentName, inferred from ExportName prefixes
+    outputs.EnvironmentName = 'production';
+
+    // Ensure all required outputs are present
+    const requiredOutputs = [
+      'VPCId',
+      'DataBucketName',
+      'LogBucketName',
+      'DynamoDBTableName',
+      'RDSEndpoint',
+      'RDSSecretArn',
+      'LambdaFunctionArn',
+      'ALBArn',
+    ];
+    const missingOutputs = requiredOutputs.filter(key => !outputs[key]);
+    if (missingOutputs.length > 0) {
+      throw new Error(`Missing required outputs in all-outputs.json: ${missingOutputs.join(', ')}`);
+    }
 
     // Get account ID for IAM tests
     const sts = new AWS.STS();
