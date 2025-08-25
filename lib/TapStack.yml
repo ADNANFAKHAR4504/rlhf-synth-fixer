@@ -534,7 +534,6 @@ Resources:
         - !Ref AcmeWebTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
-      DefaultCooldown: 300
       Tags:
         - Key: Name
           Value: !Sub 'AcmeWeb-${Environment}-ASG-Instance'
@@ -626,11 +625,12 @@ Resources:
   AcmeWebDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'acmeweb-${Environment}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       StorageType: gp2
@@ -718,10 +718,7 @@ Outputs:
     Value: !If
       - ShouldCreateKeyPair
       - !Ref AcmeWebKeyPair
-      - !If
-        - UseExistingKeyPair
-        - !Ref ExistingKeyPairName
-        - 'No Key Pair'
+      - !Ref ExistingKeyPairName
     Export:
       Name: !Sub '${AWS::StackName}-KeyPair-Name'
 
