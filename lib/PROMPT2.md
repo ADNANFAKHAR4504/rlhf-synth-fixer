@@ -1,72 +1,36 @@
-Above code failed with following errors at build stage please fix and generate proper code
+## Enhanced AWS Infrastructure Requirements - Security and Compliance Focus
 
-```java
-FAILURE: Build failed with an exception.
+Our AWS cloud migration project requires additional security enhancements and compliance features beyond the basic migration. We need to extend the existing Pulumi Java infrastructure to meet enterprise security standards and regulatory requirements.
 
-* What went wrong:
-Execution failed for task ':compileJava'.
-> Compilation failed; see the compiler output below.
+### Additional Security Requirements:
 
-  Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/migration/custom/SecretsManagerMirgration.java:13: error: cannot find symbol
-  import app.utils.ResourceNaming;
-                  ^
-    symbol:   class ResourceNaming
-    location: package app.utils
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/infrastructure/InfrastructureStack.java:14: error: cannot find symbol
-  import app.utils.ResourceNaming;
-                  ^
-    symbol:   class ResourceNaming
-    location: package app.utils
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/utils/TaggingPolicy.java:3: error: cannot find symbol
-  import com.pulumi.aws.DefaultTagsArgs;
-                       ^
-    symbol:   class DefaultTagsArgs
-    location: package com.pulumi.aws
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/utils/TaggingPolicy.java:9: error: cannot find symbol
-      public static DefaultTagsArgs getDefaultTags(String environment) {
-                    ^
-    symbol:   class DefaultTagsArgs
-    location: class TaggingPolicy
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/migration/custom/SecretsManagerMirgration.java:33: error: cannot find symbol
-          String secretName = ResourceNaming.generateResourceName(
-                              ^
-    symbol:   variable ResourceNaming
-    location: class SecretsManagerMigration
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/migration/custom/SecretsManagerMirgration.java:50: error: cannot find symbol
-              "password", "placeholder-" + ResourceNaming.generateRandomString(16),
-                                           ^
-    symbol:   variable ResourceNaming
-    location: class SecretsManagerMigration
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/infrastructure/InfrastructureStack.java:32: error: cannot find symbol
-          String vpcName = ResourceNaming.generateResourceName(
-                           ^
-    symbol:   variable ResourceNaming
-    location: class InfrastructureStack
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/infrastructure/InfrastructureStack.java:49: error: cannot find symbol
-          String sgName = ResourceNaming.generateResourceName(
-                          ^
-    symbol:   variable ResourceNaming
-    location: class InfrastructureStack
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/infrastructure/InfrastructureStack.java:101: error: cannot find symbol
-          String keyName = ResourceNaming.generateResourceName(
-                           ^
-    symbol:   variable ResourceNaming
-    location: class InfrastructureStack
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/utils/TaggingPolicy.java:10: error: cannot find symbol
-          return DefaultTagsArgs.builder()
-                 ^
-    symbol:   variable DefaultTagsArgs
-    location: class TaggingPolicy/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:56: error: incompatible types: cannot infer type-variable(s) U
-              ctx.export("migrationStatus", secretsMigration.apply(status ->
-                                                                  ^
-      (argument mismatch; bad return type in lambda expression
-        no instance(s) of type variable(s) K,V exist so that Map<K,V> conforms to Output<U>)
-    where U,T,K,V are type-variables:
-      U extends Object declared in method <U>apply(Function<T,Output<U>>)
-      T extends Object declared in interface Output
-      K extends Object declared in method <K,V>of(K,V)
-      V extends Object declared in method <K,V>of(K,V)/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/migration/custom/SecretsManagerMirgration.java:18: error: class SecretsManagerMigration is public, should be declared in a file named SecretsManagerMigration.java
-  public class SecretsManagerMigration extends CustomResource {
-         ^
-  12 errors
-```
+**Enhanced Resource Security:**
+- All resources must include comprehensive security tags including sensitivity level (public, internal, confidential, restricted)
+- Implement resource-level encryption using customer-managed KMS keys with automatic key rotation
+- Security groups must follow principle of least privilege with detailed logging capabilities
+- All VPCs should include VPC Flow Logs enabled and configured to send to CloudWatch
+
+**Resource Naming and Organization:**
+- Implement a centralized resource naming utility that generates consistent, unique names across all environments
+- Resource names should include environment, resource type, purpose, and a random identifier for uniqueness
+- Names must be sanitized and comply with AWS naming conventions
+
+**Custom Migration Utilities:**
+- Develop custom resource classes for complex migration scenarios
+- Include utilities for migrating existing secrets to AWS Secrets Manager with proper encryption
+- Custom resources should extend Pulumi's CustomResource class for proper lifecycle management
+
+**Environment Configuration:**
+- Implement environment-specific configurations for CIDR blocks, encryption settings, and compliance requirements
+- Production environments require stricter settings (90-day key rotation, enhanced monitoring)
+- Development environments can have relaxed settings but maintain security baselines
+
+### Technical Implementation:
+
+The solution should be modular with separate utility classes for:
+- `TaggingPolicy`: Centralized tag management and compliance
+- `ResourceNaming`: Consistent naming across all resources
+- `EnvironmentConfig`: Environment-specific configuration management
+- `SecretsManagerMigration`: Custom migration logic for secrets
+
+All components must be thoroughly tested with both unit and integration tests achieving minimum 90% code coverage.

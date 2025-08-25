@@ -1,16 +1,39 @@
-Above code is failled with following errors can you please fix them
+## Production-Ready Infrastructure Hardening Requirements
 
-```java
-Execution failed for task ':compileJava'.
-> Compilation failed; see the compiler output below.
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:27: error: no suitable method found for defaultTags(Map<String,String>)
-                  .defaultTags(TaggingPolicy.getDefaultTags(environment))
-                  ^
-      method Builder.defaultTags(Output<ProviderDefaultTagsArgs>) is not applicable
-        (argument mismatch; Map<String,String> cannot be converted to Output<ProviderDefaultTagsArgs>)
-      method Builder.defaultTags(ProviderDefaultTagsArgs) is not applicable
-        (argument mismatch; Map<String,String> cannot be converted to ProviderDefaultTagsArgs)/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/migration/custom/SecretsManagerMirgration.java:20: error: class SecretsManagerMigration is public, should be declared in a file named SecretsManagerMigration.java
-  public class SecretsManagerMigration extends CustomResource {
-         ^
-  2 errors
-```
+As we finalize our AWS infrastructure migration, we need to ensure production readiness with enterprise-grade hardening and operational excellence practices.
+
+### Production Readiness Requirements:
+
+**Provider Configuration:**
+- AWS Provider must be configured with appropriate default tagging strategy
+- Implement proper type safety for all Pulumi Provider arguments
+- Ensure compatibility with latest Pulumi AWS provider version
+
+**File Organization and Code Quality:**
+- All Java classes must follow proper naming conventions and be placed in correctly named files
+- Implement strict code quality standards with proper class structure
+- Follow Java package organization best practices
+
+**Operational Excellence:**
+- All infrastructure components must include proper monitoring and alerting capabilities  
+- Resources should be designed for easy maintenance and updates
+- Implement proper error handling and validation throughout the codebase
+
+### Final Quality Assurance:
+
+**Type Safety:**
+- All Pulumi resource arguments must use proper type-safe builder patterns
+- Ensure compatibility between different Pulumi resource types
+- Validate all Output and Input types are correctly handled
+
+**Code Organization:**
+- Ensure all public classes are declared in files with matching names
+- Implement proper Java package structure with logical separation of concerns
+- All utility classes should be properly tested and documented
+
+**Integration Requirements:**
+- The final solution must compile cleanly without any compilation errors
+- All tests must pass with comprehensive coverage
+- Code must be lint-compliant and follow Java best practices
+
+This represents our final review to ensure the infrastructure code meets production standards and is ready for deployment across all environments.
