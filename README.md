@@ -1,181 +1,378 @@
-# Secure Web Application Infrastructure
+# IMPORTANT
 
-This AWS CDK Python project creates a highly secure, scalable web application infrastructure incorporating the latest AWS security features and best practices for 2025.
+# Get ready.
 
-## Architecture
+# Medium: solution in 30 mins
 
-### Core Components
+# Hard: 2h
 
-- **VPC**: Multi-AZ deployment with public and private subnets
-- **Application Load Balancer (ALB)**: Internet-facing load balancer in public subnets
-- **Auto Scaling Group**: EC2 instances in private subnets for high availability
-- **Security Groups**: Least privilege access controls
-- **AWS WAF v2**: Web application firewall with managed rule sets
-- **VPC Flow Logs**: Network traffic monitoring
+# expert: 4h
 
-### Security Features
+# ! Team Secret: Call me...
 
-#### Latest AWS Security Enhancements (2025)
+# TAP - Task Assignment Platform
 
-- **AWS WAF v2 Managed Rules**: Protection against OWASP Top 10 and known bad inputs
-- **Enhanced Security Groups**: Least privilege principle with specific port access
-- **VPC Flow Logs**: Complete network traffic monitoring for security analysis
-- **EBS Encryption**: All storage volumes encrypted at rest
-- **IMDSv2**: Enhanced EC2 metadata security (Instance Metadata Service v2)
-- **Systems Manager Integration**: Secure instance management without SSH
+A TypeScript CDK project for creating and managing RLHF (Reinforcement Learning from Human Feedback) tasks.
 
-#### Security Best Practices Implemented
+## Requirements
 
-1. **Defense in Depth**: Multiple layers of security controls
-2. **Least Privilege Access**: IAM roles with minimal required permissions
-3. **Encryption**: Data encrypted at rest and in transit
-4. **Network Segmentation**: Private subnets for application servers
-5. **Monitoring & Logging**: Comprehensive logging for security analysis
-6. **High Availability**: Multi-AZ deployment for resilience
+**Runtime Versions**: This project requires specific versions of the following tools:
 
-### Infrastructure Specifications
+- **Node.js**: v22.17.0 exactly
+- **Python**: 3.12.11 exactly
+- **Pipenv**: 2025.0.4 exactly
 
-#### Networking
+### Quick Setup
 
-- **VPC CIDR**: 10.0.0.0/16
-- **Availability Zones**: 3 (for high availability)
-- **Public Subnets**: /24 networks for ALB
-- **Private Subnets**: /24 networks for EC2 instances
-- **NAT Gateways**: 2 (for redundancy)
-
-#### Compute
-
-- **AMI**: Latest Amazon Linux 2023 (latest generation)
-- **Instance Type**: t3.micro (burstable performance)
-- **Auto Scaling**: 2-6 instances (desired: 3)
-- **Health Checks**: ELB health checks with 5-minute grace period
-
-#### Load Balancing
-
-- **Type**: Application Load Balancer (Layer 7)
-- **Scheme**: Internet-facing
-- **Health Check**: HTTP on port 80, path "/"
-- **Security**: AWS WAF v2 protection enabled
-
-#### Security Groups
-
-- **ALB Security Group**: Allows HTTP (80) and HTTPS (443) from internet
-- **EC2 Security Group**: Allows HTTP (80) only from ALB security group
-
-## Deployment
-
-### Prerequisites
-
-- AWS CLI configured
-- AWS CDK installed (`npm install -g aws-cdk`)
-- Python 3.8+
-- AWS account with appropriate permissions
-
-### Deployment Steps
-
-1. **Install Dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Bootstrap CDK (first time only)**
-
-   ```bash
-   cdk bootstrap
-   ```
-
-3. **Deploy the Stack**
-
-   ```bash
-   cdk deploy
-   ```
-
-4. **Access the Application**
-   - The ALB DNS name will be output after deployment
-   - Visit the URL to see the secure web application
-
-### Customization
-
-#### Environment Suffix
-
-Set custom environment suffix:
+Run the setup script to automatically check your runtime versions and install dependencies:
 
 ```bash
-cdk deploy --context environmentSuffix=prod
+./setup.sh
 ```
 
-#### Region Deployment
+### Manual Setup
+
+**Node.js Setup:**
+If you're using NVM:
 
 ```bash
-export CDK_DEFAULT_REGION=us-west-2
-cdk deploy
+nvm use
 ```
 
-## Security Compliance
+If you're using nodenv:
 
-### AWS Well-Architected Framework
+```bash
+nodenv install 22.17.0
+nodenv local 22.17.0
+```
 
-This architecture follows AWS Well-Architected principles:
+**Python Setup:**
+If you're using pyenv:
 
-- **Security**: Multi-layered security controls, least privilege access
-- **Reliability**: Multi-AZ deployment, auto-scaling, health checks
-- **Performance**: Application Load Balancer with health checks
-- **Cost Optimization**: Right-sized instances, auto-scaling
-- **Operational Excellence**: Infrastructure as Code, monitoring
+```bash
+pyenv install 3.12.11
+pyenv local 3.12.11
+```
 
-### Compliance Features
+If you're using conda:
 
-- **Data Encryption**: EBS volumes encrypted
-- **Network Security**: VPC Flow Logs, Security Groups
-- **Access Control**: IAM roles with minimal permissions
-- **Monitoring**: CloudWatch metrics and logs
-- **Audit Trail**: CloudTrail integration via Systems Manager
+```bash
+conda install python=3.12.11
+```
 
-## Monitoring & Maintenance
+**Pipenv Setup:**
 
-### Logging
+```bash
+pip install pipenv==2025.0.4
+```
 
-- **VPC Flow Logs**: Network traffic analysis
-- **ALB Access Logs**: HTTP request logging
-- **CloudWatch**: Instance and application metrics
-- **AWS WAF Logs**: Web application security events
+**Verify all versions:**
 
-### Monitoring
+```bash
+node --version    # Should output: v22.17.0
+python --version  # Should output: Python 3.12.11
+pipenv --version  # Should output: pipenv, version 2025.0.4
+```
 
-- **CloudWatch Dashboards**: Infrastructure metrics
-- **Auto Scaling Metrics**: Instance health and performance
-- **Load Balancer Metrics**: Request count, latency, errors
-- **Security Metrics**: WAF blocked requests, unusual patterns
+## AWS CLI Access
 
-### Maintenance
+Since engineers don't have direct access to the AWS Console, an EC2 instance has been provided for making queries to the AWS CLI.
 
-- **Updates**: EC2 instances automatically updated on launch
-- **Scaling**: Auto-scaling based on demand
-- **Security**: WAF rules automatically updated by AWS
-- **Patching**: Systems Manager for secure patch management
+**Login to the EC2 instance:**
 
-## Cost Considerations
+```bash
+ssh -o PreferredAuthentications=password trainer@52.201.128.13
+```
 
-- **Instance Type**: t3.micro for cost-effectiveness
-- **NAT Gateways**: 2 for balance of cost and availability
-- **EBS Volumes**: GP3 for cost-optimized performance
-- **Monitoring**: Standard CloudWatch metrics included
+**Password**: Ask your team leader for the password.
 
-## Security Incident Response
+Once connected to the EC2 instance, you can use standard AWS CLI commands to interact with your AWS resources, check deployment status, and troubleshoot issues.
 
-### Immediate Actions
+## CLI Usage
 
-1. Check AWS WAF metrics for blocked requests
-2. Review VPC Flow Logs for unusual traffic
-3. Monitor CloudWatch alarms for anomalies
-4. Use Systems Manager for secure instance access
+This project includes a CLI tool for creating RLHF tasks with predefined templates and metadata.
 
-### Investigation Tools
+### Create an RLHF Task
 
-- **VPC Flow Logs**: Network traffic analysis
-- **AWS WAF Logs**: Web attack details
-- **CloudWatch Logs**: Application and system logs
-- **AWS Config**: Configuration change tracking
+```bash
+npm start rlhf-task
+```
 
-This infrastructure provides enterprise-grade security while maintaining simplicity and cost-effectiveness, incorporating the latest AWS security features and industry best practices.
+If required, run the following command for installing dependencies. Run this command at the root of the repository.
+
+```bash
+npm ci
+```
+
+This command will launch an interactive prompt that guides you through:
+
+1. **Platform Selection**: Choose the Infrastructure as Code platform:
+   - **CDK**: AWS Cloud Development Kit (TypeScript, Python)
+   - **CDKTF**: CDK for Terraform (TypeScript, Python)
+   - **CloudFormation**: AWS CloudFormation (YAML or JSON)
+   - **Terraform**: Terraform HCL
+   - **Pulumi**: Pulumi (TypeScript, Python, Java)
+2. **Language Selection**: Select based on your platform choice:
+   - **CDK**: TypeScript, Python
+   - **CDKTF**: TypeScript, Python
+   - **CloudFormation**: YAML or JSON
+   - **Terraform**: HCL
+   - **Pulumi**: TypeScript, Python, Java
+3. **Complexity Level**: Set the task complexity (Medium, Hard, Expert)
+4. **Turn Type**: Choose between Single or Multi-turn interactions
+5. **Task ID**: Enter a unique identifier for the task
+6. **Team Selection**: Choose from team 1-6 or the synth team
+
+The CLI will:
+
+- Copy the appropriate template from `templates/{platform}-{language}/`
+- Generate a `metadata.json` file with your task configuration
+- Set up the project structure for your RLHF task
+
+#### Creating a CDK TypeScript Task
+
+Choose **CDK** platform and **TypeScript** language to create an AWS CDK project with:
+
+- TypeScript stack definitions
+- CDK-specific build and deploy scripts
+- Unit and integration tests using CDK testing framework
+
+#### Creating a CloudFormation YAML Task
+
+Choose **CloudFormation** platform and **YAML** language to create a CloudFormation project with:
+
+- YAML template definitions
+- CloudFormation-specific deploy and destroy scripts
+- Stack-level parameter and tag support
+
+#### Creating a CloudFormation JSON Task
+
+Choose **CloudFormation** platform and **JSON** language to create a CloudFormation project with:
+
+- JSON template definitions
+- CloudFormation-specific deploy and destroy scripts
+- Stack-level parameter and tag support
+
+#### Creating a Pulumi Java Task
+
+Choose **Pulumi** platform and **Java** language to create a Pulumi project with:
+
+- Java source code using Pulumi AWS SDK
+- Gradle build configuration with testing framework
+- Unit and integration tests using JUnit
+- Checkstyle linting configuration
+
+### Generated Files
+
+After running the CLI, you'll have:
+
+- **metadata.json**: Contains task metadata (platform, language, complexity, turn type, task ID)
+- **Project files**: Copied from the selected template (bin/, lib/, test/, cdk.json)
+
+## Development Commands
+
+### Build and Test Commands
+
+- `npm ci` installs dependencies exactly as specified in package-lock.json
+- `npm run build` compile typescript to js
+- `npm run watch` watch for changes and compile
+- `npm run test` perform the jest unit tests
+- `npm run test:unit` perform only unit tests
+- `npm run test:integration` perform only integration tests
+
+### CDK Commands
+
+- `npm run cdk:synth` synthesize CloudFormation template from CDK code
+- `npm run cdk:deploy` deploy CDK stack to your default AWS account/region
+- `npm run cdk:destroy` destroy CDK stack and all resources
+- `npx cdk diff` compare deployed stack with current state
+- `npx cdk bootstrap` bootstrap CDK in your AWS account/region
+
+### CloudFormation Commands
+
+- `npm run cfn:deploy-yaml` deploy CloudFormation YAML stack to AWS
+- `npm run cfn:deploy-json` deploy CloudFormation JSON stack to AWS
+- `npm run cfn:destroy-yaml` destroy CloudFormation YAML stack and all resources
+- `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
+
+### Terraform Commands
+Quick Note:
+Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
+
+- To init Terraform config: `npm run tf:init`
+- To preview changes: `npm run tf:plan`
+- To Deploy your changes: `npm run tf:deploy`
+- To Destroy your changes: `npm run tf:destroy`
+- To Refresh TF state your changes: `npm run tf:refresh`
+- To Get lost state file: `npm run tf:reconfigure`
+- To Format your changes: `npm run tf:fmt`
+- For Quick reminder: `npm run tf:help`
+- For Validate Hashicorp syntax: `npm run tf:validate`
+- For Get TF state in json: `npm run tf:output`
+
+### Java Development Commands
+
+**Prerequisites for Java Development:**
+
+- **Java 17 or later** (required for CI compatibility)
+- **Gradle** (included as wrapper in project)
+
+#### Gradle Installation Guide
+
+If you don't have Java installed or need Java 17:
+
+**Option 1: Using SDKMAN (Recommended)**
+```bash
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install Java 17
+sdk install java 17.0.9-tem
+sdk use java 17.0.9-tem
+
+# Verify installation
+java -version  # Should show Java 17
+```
+
+**Option 2: Using Package Managers**
+
+On macOS:
+```bash
+brew install openjdk@17
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+```
+
+On Ubuntu/Debian:
+```bash
+sudo apt update
+sudo apt install openjdk-17-jdk
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+On Windows:
+- Download OpenJDK 17 from [Adoptium](https://adoptium.net/)
+- Install and set JAVA_HOME environment variable
+
+#### Java Build Commands
+
+**Note**: This project uses Gradle wrapper (`./gradlew`), so you don't need to install Gradle separately.
+
+```bash
+# Build the Java project
+./gradlew build
+
+# Clean build artifacts
+./gradlew clean
+
+# View available Gradle tasks
+./gradlew tasks
+```
+
+#### Java Testing Commands
+
+**Unit Tests:**
+```bash
+# Run all unit tests (shows pass/fail results)
+./gradlew test
+
+# Run unit tests with coverage report and summary
+./gradlew test showCoverage
+
+# Run specific test class
+./gradlew test --tests "app.MainTest"
+
+# Force clean run (ignore cache)
+./gradlew clean test showCoverage
+```
+
+**Integration Tests:**
+```bash
+# Run integration tests
+./gradlew integrationTest
+
+# Run ALL tests with detailed results and coverage
+./gradlew testAll
+
+# Run all tests (unit + integration) with coverage verification
+./gradlew check showCoverage
+
+# View coverage report only (after running tests)
+./gradlew showCoverage
+```
+
+**Test Reports:**
+After running tests, reports are available at:
+- Unit test report: `build/reports/tests/test/index.html`
+- Integration test report: `build/reports/tests/integrationTest/index.html`
+- Coverage report: `build/reports/jacoco/test/html/index.html`
+
+#### Java Linting Commands
+
+This project uses Checkstyle for Java code quality:
+
+```bash
+# Run Checkstyle linting
+./gradlew checkstyleMain checkstyleTest
+
+# Run all quality checks (includes tests + linting)
+./gradlew check
+
+# Generate Checkstyle reports
+./gradlew checkstyleMain
+# Report available at: build/reports/checkstyle/main.html
+```
+
+### CloudFormation (cfn-yaml/cfn-json) S3 Bucket Setup
+
+**Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.
+
+This is a **one-time setup** per region. Run this command before your first deployment in a new region:
+
+```bash
+# Replace 'us-east-2' with your target region
+aws s3 mb s3://iac-rlhf-cfn-states-us-east-2 --region us-east-2
+```
+
+The bucket naming pattern is: `iac-rlhf-cfn-states-${AWS_REGION}`
+
+After creating the bucket, set your region environment variable:
+
+```bash
+export AWS_REGION=us-east-2
+```
+
+Then proceed with your normal CloudFormation deployment:
+
+```bash
+PLATFORM="cfn" npm run cfn:deploy-yaml
+```
+
+## Templates
+
+Templates are stored in the `templates/` directory and organized by platform and language:
+
+```text
+templates/
+├── cdk-ts/       # CDK TypeScript template
+├── cdk-ts/       # CDK TypeScript template
+├── cfn-yaml/     # CloudFormation YAML template
+├── cfn-json/     # CloudFormation JSON template
+├── tf-hcl/       # Terraform Hashicorp template
+└── ...
+```
+
+Each template contains a complete project structure that gets copied when creating a new RLHF task.
+
+## Special Instructions/Guidelines for CDK Terraform
+
+- The workflow has been created in a way that the trainer does not need to worry about configuring the AWS Provider or the Remote S3 Backend - it comes configured in the `lib/tap-stack.ts` or `lib/tap-stack.py` file.
+- To ensure the above setup executes correctly, please make any stacks you create extend the `Construct` class instead of the `TerraformStack` class, as opposed to the usual practice. The `TerraformStack` requires its own backend to be configured and we do not want a situation of duplicate backends in the same application, across stacks.
+- Please prompt the LLM models you use for the problem accordingly - include something like the following snippet in your prompt -
+  ```
+  - Complete **CDKTF code in TypeScript**, including all necessary imports and constructs
+    - Create the entire solution as a single stack.
+    - Make the stack extend the Construct class instead of the TerraformStack class.
+    - Omit code to initialize AWS Providers or backends.
+    - Generate only the code for this stack, do not include main entrypoint code.
+  ```
