@@ -53,7 +53,9 @@ func TestMain(m *testing.M) {
 	outputsFile := "../cfn-outputs/flat-outputs.json"
 	data, err := ioutil.ReadFile(outputsFile)
 	if err != nil {
-		os.Exit(0)
+		fmt.Printf("Failed to read outputs file %s: %v\n", outputsFile, err)
+		os.Exit(1)
+	}
 
 	if err := json.Unmarshal(data, &outputs); err != nil {
 		fmt.Printf("Failed to parse outputs: %v\n", err)
