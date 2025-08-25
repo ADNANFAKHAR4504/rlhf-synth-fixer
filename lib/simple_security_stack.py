@@ -67,7 +67,7 @@ class SimpleSecurityStack(Stack):
         self.app_sg = ec2.SecurityGroup(
             self, "AppSecurityGroup",
             vpc=self.vpc,
-            security_group_name=f"tap-{environment_suffix}-app-sg",
+            security_group_name=f"tap-{environment_suffix}-app-sg-primary-1",
             description="Application security group",
             allow_all_outbound=True
         )
@@ -81,7 +81,7 @@ class SimpleSecurityStack(Stack):
         self.alb_sg = ec2.SecurityGroup(
             self, "ALBSecurityGroup",
             vpc=self.vpc,
-            security_group_name=f"tap-{environment_suffix}-alb-sg",
+            security_group_name=f"tap-{environment_suffix}-alb-sg-primary-1",
             description="ALB security group",
             allow_all_outbound=True
         )
@@ -107,7 +107,7 @@ class SimpleSecurityStack(Stack):
         # Lambda function
         self.lambda_function = _lambda.Function(
             self, "SecureFunction",
-            function_name=f"tap-{environment_suffix}-function",
+            function_name=f"tap-{environment_suffix}-function-primary-1",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -134,7 +134,7 @@ def handler(event, context):
         # API Gateway
         self.api = apigateway.LambdaRestApi(
             self, "SecureApi",
-            rest_api_name=f"tap-{environment_suffix}-api",
+            rest_api_name=f"tap-{environment_suffix}-api-primary-1",
             handler=self.lambda_function,
             deploy_options=apigateway.StageOptions(
                 stage_name="prod",
@@ -187,7 +187,7 @@ def handler(event, context):
         # Bastion Host
         self.bastion = ec2.Instance(
             self, "Bastion",
-            instance_name=f"tap-{environment_suffix}-bastion",
+            instance_name=f"tap-{environment_suffix}-bastion-primary-1",
             instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
             machine_image=ec2.MachineImage.latest_amazon_linux2(),
             vpc=self.vpc,

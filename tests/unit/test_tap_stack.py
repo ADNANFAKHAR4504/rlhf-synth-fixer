@@ -132,7 +132,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
         
         # Check ALB security group
         self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
-            "GroupName": f"tap-{self.env_suffix}-alb-sg",
+            "GroupName": f"tap-{self.env_suffix}-alb-sg-primary-1",
             "GroupDescription": "ALB security group",
             "SecurityGroupIngress": Match.array_with([
                 Match.object_like({
@@ -149,7 +149,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
         # ASSERT - Expect 2 functions: the main one + auto-delete S3 objects function
         self.template.resource_count_is("AWS::Lambda::Function", 2)
         self.template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"tap-{self.env_suffix}-function",
+            "FunctionName": f"tap-{self.env_suffix}-function-primary-1",
             "Runtime": "python3.11",
             "Handler": "index.handler",
             "Environment": {
@@ -185,7 +185,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
         # ASSERT
         self.template.resource_count_is("AWS::ApiGateway::RestApi", 1)
         self.template.has_resource_properties("AWS::ApiGateway::RestApi", {
-            "Name": f"tap-{self.env_suffix}-api"
+            "Name": f"tap-{self.env_suffix}-api-primary-1"
         })
         
         # Check for deployment
@@ -236,7 +236,7 @@ class TestSimpleSecurityStack(unittest.TestCase):
             "Tags": Match.array_with([
                 Match.object_like({
                     "Key": "Name",
-                    "Value": f"tap-{self.env_suffix}-bastion"
+                    "Value": f"tap-{self.env_suffix}-bastion-primary-1"
                 })
             ])
         })
@@ -282,8 +282,8 @@ class TestSimpleSecurityStack(unittest.TestCase):
         # Check various resources for env suffix
         resources = [
             ("AWS::EC2::VPC", "Name", f"tap-{self.env_suffix}-vpc"),
-            ("AWS::Lambda::Function", "FunctionName", f"tap-{self.env_suffix}-function"),
-            ("AWS::ApiGateway::RestApi", "Name", f"tap-{self.env_suffix}-api"),
+            ("AWS::Lambda::Function", "FunctionName", f"tap-{self.env_suffix}-function-primary-1"),
+            ("AWS::ApiGateway::RestApi", "Name", f"tap-{self.env_suffix}-api-primary-1"),
             ("AWS::ElasticLoadBalancingV2::LoadBalancer", "Name", f"tap-{self.env_suffix}-alb-primary-1"),
             ("AWS::ElasticLoadBalancingV2::TargetGroup", "Name", f"tap-{self.env_suffix}-tg-primary-1")
         ]
