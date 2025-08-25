@@ -18,7 +18,7 @@ func TestTapStackUnitValidation(t *testing.T) {
 
 	// Create stack
 	stack := NewTapStack(app, "TestStack", config)
-	
+
 	// Synthesize to get Terraform configuration
 	manifest := cdktf.Testing_Synth(stack, nil)
 
@@ -114,7 +114,7 @@ func TestTapStackSecurityCompliance(t *testing.T) {
 
 	// Create stack
 	stack := NewTapStack(app, "SecurityTestStack", config)
-	
+
 	// Synthesize
 	manifest := cdktf.Testing_Synth(stack, nil)
 
@@ -128,11 +128,11 @@ func TestTapStackSecurityCompliance(t *testing.T) {
 	// Security Test 1: Ensure S3 bucket policy denies non-HTTPS requests
 	s3BucketPolicies, ok := resources["aws_s3_bucket_policy"].(map[string]interface{})
 	assert.True(t, ok, "Should have S3 bucket policies")
-	
+
 	for _, policyConfig := range s3BucketPolicies {
 		policyMap := policyConfig.(map[string]interface{})
 		policyJSON := policyMap["policy"].(string)
-		
+
 		// Check that policy contains secure transport requirement
 		assert.Contains(t, policyJSON, "aws:SecureTransport", "S3 bucket policy should enforce secure transport")
 		assert.Contains(t, policyJSON, "false", "S3 bucket policy should deny when SecureTransport is false")
@@ -141,7 +141,7 @@ func TestTapStackSecurityCompliance(t *testing.T) {
 	// Security Test 2: Verify KMS key policies are restrictive
 	kmsKeys, ok := resources["aws_kms_key"].(map[string]interface{})
 	assert.True(t, ok, "Should have KMS keys")
-	
+
 	for _, keyConfig := range kmsKeys {
 		keyMap := keyConfig.(map[string]interface{})
 		if policy, hasPolicy := keyMap["policy"]; hasPolicy {
@@ -176,7 +176,7 @@ func TestTapStackSecurityCompliance(t *testing.T) {
 	for _, policyConfig := range iamPolicies {
 		policyMap := policyConfig.(map[string]interface{})
 		policyJSON := policyMap["policy"].(string)
-		
+
 		// Should not contain overly broad permissions
 		assert.NotContains(t, policyJSON, "\"*\"", "IAM policies should not grant all permissions on all resources")
 	}
