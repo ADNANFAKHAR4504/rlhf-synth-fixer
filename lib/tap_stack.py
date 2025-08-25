@@ -138,7 +138,10 @@ class TapStack(Stack):
                     self, f'EbsKmsAlias{self.environment_suffix}', override
                 )
         else:
-            self.ebs_kms_key = self.kms_key
+            # Default to AWS-managed EBS key to avoid InvalidKMSKey.InvalidState during instance launch
+            self.ebs_kms_key = kms.Alias.from_alias_name(
+                self, f'EbsKmsAliasDefault{self.environment_suffix}', 'alias/aws/ebs'
+            )
         
         self.vpc = self.create_vpc()
         self.security_groups = self.create_security_groups()
