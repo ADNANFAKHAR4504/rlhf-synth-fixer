@@ -24,13 +24,42 @@ type FlatOutputs struct {
 	PolicyArn                   string `json:"policyArn"`
 	CloudTrailArn               string `json:"cloudTrailArn"`
 	ConfigRecorderName          string `json:"configRecorderName"`
-	EncryptionEnabled           bool   `json:"encryptionEnabled"`
-	SSLEnforced                 bool   `json:"sslEnforced"`
-	PublicAccessBlocked         bool   `json:"publicAccessBlocked"`
-	VersioningEnabled           bool   `json:"versioningEnabled"`
-	ObjectLockEnabled           bool   `json:"objectLockEnabled"`
-	AuditLoggingEnabled         bool   `json:"auditLoggingEnabled"`
-	ComplianceMonitoringEnabled bool   `json:"complianceMonitoringEnabled"`
+	EncryptionEnabled           string `json:"encryptionEnabled"`
+	SSLEnforced                 string `json:"sslEnforced"`
+	PublicAccessBlocked         string `json:"publicAccessBlocked"`
+	VersioningEnabled           string `json:"versioningEnabled"`
+	ObjectLockEnabled           string `json:"objectLockEnabled"`
+	AuditLoggingEnabled         string `json:"auditLoggingEnabled"`
+	ComplianceMonitoringEnabled string `json:"complianceMonitoringEnabled"`
+}
+
+// Helper methods to convert string booleans to actual booleans
+func (o *FlatOutputs) IsEncryptionEnabled() bool {
+	return o.EncryptionEnabled == "true"
+}
+
+func (o *FlatOutputs) IsSSLEnforced() bool {
+	return o.SSLEnforced == "true"
+}
+
+func (o *FlatOutputs) IsPublicAccessBlocked() bool {
+	return o.PublicAccessBlocked == "true"
+}
+
+func (o *FlatOutputs) IsVersioningEnabled() bool {
+	return o.VersioningEnabled == "true"
+}
+
+func (o *FlatOutputs) IsObjectLockEnabled() bool {
+	return o.ObjectLockEnabled == "true"
+}
+
+func (o *FlatOutputs) IsAuditLoggingEnabled() bool {
+	return o.AuditLoggingEnabled == "true"
+}
+
+func (o *FlatOutputs) IsComplianceMonitoringEnabled() bool {
+	return o.ComplianceMonitoringEnabled == "true"
 }
 
 // loadOutputs loads the flat outputs from the JSON file
@@ -107,22 +136,22 @@ func TestSecurityCompliance(t *testing.T) {
 	outputs := loadOutputs(t)
 
 	// Test encryption is enabled
-	assert.True(t, outputs.EncryptionEnabled, "Encryption should be enabled for financial data")
+	assert.True(t, outputs.IsEncryptionEnabled(), "Encryption should be enabled for financial data")
 
 	// Test SSL/TLS enforcement
-	assert.True(t, outputs.SSLEnforced, "SSL/TLS should be enforced for all connections")
+	assert.True(t, outputs.IsSSLEnforced(), "SSL/TLS should be enforced for all connections")
 
 	// Test public access is blocked
-	assert.True(t, outputs.PublicAccessBlocked, "Public access should be completely blocked")
+	assert.True(t, outputs.IsPublicAccessBlocked(), "Public access should be completely blocked")
 
 	// Test versioning is enabled
-	assert.True(t, outputs.VersioningEnabled, "Versioning should be enabled for audit trails")
+	assert.True(t, outputs.IsVersioningEnabled(), "Versioning should be enabled for audit trails")
 
 	// Test audit logging is enabled
-	assert.True(t, outputs.AuditLoggingEnabled, "Audit logging should be enabled for compliance")
+	assert.True(t, outputs.IsAuditLoggingEnabled(), "Audit logging should be enabled for compliance")
 
 	// Test compliance monitoring is enabled
-	assert.True(t, outputs.ComplianceMonitoringEnabled, "Compliance monitoring should be enabled")
+	assert.True(t, outputs.IsComplianceMonitoringEnabled(), "Compliance monitoring should be enabled")
 }
 
 // TestFinancialComplianceIntegration tests financial compliance requirements
@@ -131,12 +160,12 @@ func TestFinancialComplianceIntegration(t *testing.T) {
 
 	// Verify all required security features are enabled
 	securityFeatures := map[string]bool{
-		"Encryption":            outputs.EncryptionEnabled,
-		"SSL/TLS Enforcement":   outputs.SSLEnforced,
-		"Public Access Block":   outputs.PublicAccessBlocked,
-		"Versioning":            outputs.VersioningEnabled,
-		"Audit Logging":         outputs.AuditLoggingEnabled,
-		"Compliance Monitoring": outputs.ComplianceMonitoringEnabled,
+		"Encryption":            outputs.IsEncryptionEnabled(),
+		"SSL/TLS Enforcement":   outputs.IsSSLEnforced(),
+		"Public Access Block":   outputs.IsPublicAccessBlocked(),
+		"Versioning":            outputs.IsVersioningEnabled(),
+		"Audit Logging":         outputs.IsAuditLoggingEnabled(),
+		"Compliance Monitoring": outputs.IsComplianceMonitoringEnabled(),
 	}
 
 	for feature, enabled := range securityFeatures {
@@ -190,14 +219,14 @@ func TestAuditingCapabilities(t *testing.T) {
 
 	// Verify CloudTrail is configured
 	assert.NotEmpty(t, outputs.CloudTrailArn, "CloudTrail must be configured for auditing")
-	assert.True(t, outputs.AuditLoggingEnabled, "Audit logging must be enabled")
+	assert.True(t, outputs.IsAuditLoggingEnabled(), "Audit logging must be enabled")
 
 	// Verify Config is configured for compliance monitoring
 	assert.NotEmpty(t, outputs.ConfigRecorderName, "AWS Config must be configured for compliance")
-	assert.True(t, outputs.ComplianceMonitoringEnabled, "Compliance monitoring must be enabled")
+	assert.True(t, outputs.IsComplianceMonitoringEnabled(), "Compliance monitoring must be enabled")
 
 	// Verify versioning for audit trails
-	assert.True(t, outputs.VersioningEnabled, "S3 versioning must be enabled for audit trails")
+	assert.True(t, outputs.IsVersioningEnabled(), "S3 versioning must be enabled for audit trails")
 }
 
 // TestDataProtection tests data protection measures
@@ -205,13 +234,13 @@ func TestDataProtection(t *testing.T) {
 	outputs := loadOutputs(t)
 
 	// Test encryption at rest
-	assert.True(t, outputs.EncryptionEnabled, "Data must be encrypted at rest")
+	assert.True(t, outputs.IsEncryptionEnabled(), "Data must be encrypted at rest")
 
 	// Test encryption in transit
-	assert.True(t, outputs.SSLEnforced, "Data must be encrypted in transit")
+	assert.True(t, outputs.IsSSLEnforced(), "Data must be encrypted in transit")
 
 	// Test access controls
-	assert.True(t, outputs.PublicAccessBlocked, "Public access must be blocked")
+	assert.True(t, outputs.IsPublicAccessBlocked(), "Public access must be blocked")
 	assert.NotEmpty(t, outputs.PolicyArn, "Least-privilege policy must be configured")
 }
 
@@ -221,10 +250,10 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	// Step 1: Verify S3 bucket is created with security features
 	assert.NotEmpty(t, outputs.BucketName, "S3 bucket should be created")
-	assert.True(t, outputs.EncryptionEnabled, "Bucket should have encryption")
-	assert.True(t, outputs.VersioningEnabled, "Bucket should have versioning")
-	assert.True(t, outputs.SSLEnforced, "Bucket should enforce SSL")
-	assert.True(t, outputs.PublicAccessBlocked, "Bucket should block public access")
+	assert.True(t, outputs.IsEncryptionEnabled(), "Bucket should have encryption")
+	assert.True(t, outputs.IsVersioningEnabled(), "Bucket should have versioning")
+	assert.True(t, outputs.IsSSLEnforced(), "Bucket should enforce SSL")
+	assert.True(t, outputs.IsPublicAccessBlocked(), "Bucket should block public access")
 
 	// Step 2: Verify IAM resources for access control
 	assert.NotEmpty(t, outputs.RoleArn, "IAM role should be created")
@@ -236,6 +265,6 @@ func TestEndToEndWorkflow(t *testing.T) {
 	assert.NotEmpty(t, outputs.ConfigRecorderName, "AWS Config should be configured")
 
 	// Step 4: Verify all compliance features are enabled
-	assert.True(t, outputs.AuditLoggingEnabled, "Audit logging should be enabled")
-	assert.True(t, outputs.ComplianceMonitoringEnabled, "Compliance monitoring should be enabled")
+	assert.True(t, outputs.IsAuditLoggingEnabled(), "Audit logging should be enabled")
+	assert.True(t, outputs.IsComplianceMonitoringEnabled(), "Compliance monitoring should be enabled")
 }
