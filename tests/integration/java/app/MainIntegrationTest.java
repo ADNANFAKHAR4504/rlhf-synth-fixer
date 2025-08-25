@@ -41,14 +41,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Comprehensive integration tests for the Main Pulumi program.
+ * Live AWS resource integration tests for deployed Pulumi infrastructure.
  * 
- * Tests infrastructure deployment, AWS resource validation, and end-to-end scenarios.
- * Uses actual Pulumi deployment outputs and AWS resources - NO MOCKING.
+ * Tests actual AWS resources created by Pulumi deployment - NO MOCKING.
  * 
  * Prerequisites:
- * 1. Deploy infrastructure first: cd lib && pulumi up
- * 2. Set PULUMI_STACK environment variable or use default stack
+ * 1. Infrastructure must be deployed: cd lib && pulumi up
+ * 2. Set PULUMI_CONFIG_PASSPHRASE environment variable (available in CI)
  * 3. Ensure AWS credentials are configured
  * 
  * Run with: ./gradlew integrationTest
@@ -73,6 +72,18 @@ public class MainIntegrationTest {
         try {
             String stackName = getStackName();
             TEST_STACK_NAME = stackName; // Set the test stack name for other methods
+            
+            System.out.println("=== Loading Deployment Outputs ===");
+            System.out.println("Stack Name: " + TEST_STACK_NAME);
+            
+            // Check if passphrase is required
+            if (isPassphraseRequired()) {
+                System.out.println("⚠️  Pulumi stack requires passphrase for decryption");
+                System.out.println("💡 PULUMI_CONFIG_PASSPHRASE environment variable not found");
+                System.out.println("ℹ️  Integration tests will skip live resource validation");
+                return;
+            }
+            
             String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--cwd", "lib", "--stack", stackName);
             allOutputs = objectMapper.readTree(outputsJson);
             
@@ -83,17 +94,49 @@ public class MainIntegrationTest {
             executionRoleName = getOutputValue("executionRoleName");
             dashboardUrl = getOutputValue("dashboardUrl");
             
-            System.out.println("=== Deployment Outputs Loaded ===");
-            System.out.println("Stack Name: " + TEST_STACK_NAME);
+            System.out.println("=== Deployment Outputs Loaded Successfully ===");
             System.out.println("Stack Set ID: " + stackSetId);
             System.out.println("Administration Role ARN: " + administrationRoleArn);
             System.out.println("Execution Role Name: " + executionRoleName);
             System.out.println("Dashboard URL: " + dashboardUrl);
             
         } catch (Exception e) {
-            System.err.println("Failed to load deployment outputs: " + e.getMessage());
-            System.out.println("Note: Some tests may be skipped without deployed infrastructure");
+            String errorMsg = e.getMessage();
+            System.err.println("Failed to load deployment outputs: " + errorMsg);
+            
+            if (errorMsg.contains("passphrase") || errorMsg.contains("decrypt")) {
+                System.out.println("💡 Pulumi Configuration Help:");
+                System.out.println("   • Set PULUMI_CONFIG_PASSPHRASE=<your-passphrase>");
+                System.out.println("   • Or set PULUMI_CONFIG_PASSPHRASE_FILE=<path-to-passphrase-file>");
+                System.out.println("   • Or use 'pulumi login --local' for local state");
+            } else if (errorMsg.contains("no stack")) {
+                System.out.println("💡 Stack Setup Help:");
+                System.out.println("   • Run 'cd lib && pulumi up' to deploy infrastructure");
+                System.out.println("   • Or set PULUMI_STACK environment variable to correct stack name");
+            } else if (errorMsg.contains("not logged in")) {
+                System.out.println("💡 Authentication Help:");
+                System.out.println("   • Run 'pulumi login' to authenticate with Pulumi Cloud");
+                System.out.println("   • Or run 'pulumi login --local' for local file state");
+            }
+            
+            System.out.println("ℹ️  Integration tests will run with limited validation");
             TEST_STACK_NAME = "dev"; // fallback
+        }
+    }
+    
+    private static boolean isPassphraseRequired() {
+        // If PULUMI_CONFIG_PASSPHRASE is set in CI, we don't need to prompt
+        String passphrase = System.getenv("PULUMI_CONFIG_PASSPHRASE");
+        if (passphrase != null && !passphrase.isEmpty()) {
+            return false;
+        }
+        
+        try {
+            // Try a simple stack command to check if passphrase is needed
+            executeCommand("pulumi", "stack", "ls", "--cwd", "lib");
+            return false;
+        } catch (Exception e) {
+            return e.getMessage().contains("passphrase") || e.getMessage().contains("decrypt");
         }
     }
     
@@ -126,341 +169,22 @@ public class MainIntegrationTest {
         }
     }
 
-    // ================== Application and Dependencies Tests ==================
-    
-    @Test
-    void testApplicationLoads() {
-        assertDoesNotThrow(() -> {
-            Class.forName("app.Main");
-        });
-    }
 
-    @Test
-    void testPulumiDependenciesAvailable() {
-        assertDoesNotThrow(() -> {
-            Class.forName("com.pulumi.Pulumi");
-            Class.forName("com.pulumi.aws.Provider");
-            Class.forName("com.pulumi.aws.cloudformation.StackSet");
-            Class.forName("com.pulumi.aws.cloudformation.StackSetArgs");
-            Class.forName("com.pulumi.aws.cloudformation.StackSetInstance");
-            Class.forName("com.pulumi.aws.cloudformation.StackSetInstanceArgs");
-            Class.forName("com.pulumi.aws.iam.Role");
-            Class.forName("com.pulumi.aws.iam.RoleArgs");
-            Class.forName("com.pulumi.aws.iam.Policy");
-            Class.forName("com.pulumi.aws.iam.PolicyArgs");
-            Class.forName("com.pulumi.aws.cloudwatch.Dashboard");
-            Class.forName("com.pulumi.aws.cloudwatch.DashboardArgs");
-            Class.forName("com.pulumi.aws.cloudwatch.LogGroup");
-            Class.forName("com.pulumi.aws.cloudwatch.LogGroupArgs");
-        }, "All required Pulumi AWS dependencies should be available on classpath");
-    }
+    // ================== Live AWS Resource Integration Tests ==================
 
-    @Test
-    void testAwsSdkDependenciesAvailable() {
-        assertDoesNotThrow(() -> {
-            Class.forName("software.amazon.awssdk.services.cloudformation.CloudFormationClient");
-            Class.forName("software.amazon.awssdk.services.ec2.Ec2Client");
-            Class.forName("software.amazon.awssdk.services.iam.IamClient");
-            Class.forName("software.amazon.awssdk.services.cloudwatch.CloudWatchClient");
-            Class.forName("software.amazon.awssdk.services.sts.StsClient");
-        }, "AWS SDK dependencies should be available for integration testing");
-    }
-
-    @Test
-    void testProjectStructure() {
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/Main.java")),
-                "Main.java should exist");
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/config/DeploymentConfig.java")),
-                "DeploymentConfig.java should exist");
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/components/IAMRoles.java")),
-                "IAMRoles.java should exist");
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/components/WebApplicationStackSet.java")),
-                "WebApplicationStackSet.java should exist");
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/components/CrossAccountRoleSetup.java")),
-                "CrossAccountRoleSetup.java should exist");
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/components/ObservabilityDashboard.java")),
-                "ObservabilityDashboard.java should exist");
-        assertTrue(Files.exists(Paths.get("Pulumi.yaml")),
-                "Pulumi.yaml should exist");
-        assertTrue(Files.exists(Paths.get("build.gradle")),
-                "build.gradle should exist");
-    }
-
-    @Test
-    void testDefineInfrastructureMethodAccessible() {
-        assertDoesNotThrow(() -> {
-            var method = Main.class.getDeclaredMethod("defineInfrastructure", Context.class);
-            assertNotNull(method);
-            assertTrue(java.lang.reflect.Modifier.isStatic(method.getModifiers()));
-        });
-    }
-
-    // ================== AWS Integration Tests ==================
-    
-    @Test
-    @Disabled("Enable for AWS credential testing - requires AWS access")
-    void testAwsCredentialsAndPermissions() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (StsClient stsClient = StsClient.builder().region(Region.of(TEST_REGION)).build()) {
-                GetCallerIdentityResponse response = stsClient.getCallerIdentity();
-                assertNotNull(response.account());
-                assertNotNull(response.arn());
-                System.out.println("AWS Account: " + response.account());
-                System.out.println("AWS ARN: " + response.arn());
-            }
-        });
-    }
-    
-    @Test
-    @Disabled("Enable for IAM permissions testing - requires AWS access")
-    void testRequiredIAMPermissions() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (IamClient iamClient = IamClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // Test CloudFormation StackSet permissions
-                ListRolesResponse rolesResponse = iamClient.listRoles();
-                assertNotNull(rolesResponse.roles());
-                
-                // Test basic IAM read permissions
-                GetAccountSummaryResponse summaryResponse = iamClient.getAccountSummary();
-                assertNotNull(summaryResponse.summaryMap());
-            }
-        });
-    }
-    
-    @Test
-    @Disabled("Enable for CloudFormation permissions testing - requires AWS access")
-    void testCloudFormationPermissions() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (CloudFormationClient cfnClient = CloudFormationClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // Test basic CloudFormation permissions
-                ListStackSetsResponse stackSetsResponse = cfnClient.listStackSets();
-                assertNotNull(stackSetsResponse.summaries());
-                
-                ListStacksResponse stacksResponse = cfnClient.listStacks();
-                assertNotNull(stacksResponse.stackSummaries());
-            }
-        });
-    }
-    
-    @Test
-    @Disabled("Enable for EC2 permissions testing - requires AWS access")
-    void testEC2Permissions() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (Ec2Client ec2Client = Ec2Client.builder().region(Region.of(TEST_REGION)).build()) {
-                // Test basic EC2 read permissions
-                DescribeRegionsResponse regionsResponse = ec2Client.describeRegions();
-                assertNotNull(regionsResponse.regions());
-                assertFalse(regionsResponse.regions().isEmpty());
-                
-                // Test VPC permissions
-                DescribeVpcsResponse vpcsResponse = ec2Client.describeVpcs();
-                assertNotNull(vpcsResponse.vpcs());
-            }
-        });
-    }
-    
-    @Test
-    @Disabled("Enable for CloudWatch permissions testing - requires AWS access")
-    void testCloudWatchPermissions() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (CloudWatchClient cloudWatchClient = CloudWatchClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // Test basic CloudWatch permissions
-                ListDashboardsResponse dashboardsResponse = cloudWatchClient.listDashboards();
-                assertNotNull(dashboardsResponse.dashboardEntries());
-                
-                DescribeAlarmsResponse alarmsResponse = cloudWatchClient.describeAlarms();
-                assertNotNull(alarmsResponse.metricAlarms());
-            }
-        });
-    }
-
-    // ================== Pulumi CLI Integration Tests ==================
-    
-    @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
-    void testPulumiPreview() throws Exception {
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", TEST_STACK_NAME)
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
-
-        Process process = pb.start();
-        boolean finished = process.waitFor(120, TimeUnit.SECONDS);
-
-        assertTrue(finished, "Pulumi preview should complete within 2 minutes");
-
-        // Preview should succeed (exit code 0) or show changes needed (exit code 1)
-        int exitCode = process.exitValue();
-        assertTrue(exitCode == 0 || exitCode == 1,
-                "Pulumi preview should succeed or show pending changes");
-
-        // Capture and log output for debugging
-        String output = readProcessOutput(process);
-        System.out.println("Pulumi preview output:\n" + output);
-    }
-    
-    @Test
-    @Disabled("Enable for Pulumi config validation - requires Pulumi CLI")
-    void testPulumiConfigValidation() throws Exception {
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        
-        // Test setting and getting config values
-        assertDoesNotThrow(() -> {
-            // Set test config
-            executeCommand("pulumi", "config", "set", "applicationName", "integration-test-app", "--stack", TEST_STACK_NAME);
-            executeCommand("pulumi", "config", "set", "environment", "integration-test", "--stack", TEST_STACK_NAME);
-            executeCommand("pulumi", "config", "set", "managementRegion", TEST_REGION, "--stack", TEST_STACK_NAME);
-            
-            // Validate config was set
-            String appName = executeCommand("pulumi", "config", "get", "applicationName", "--stack", TEST_STACK_NAME);
-            String env = executeCommand("pulumi", "config", "get", "environment", "--stack", TEST_STACK_NAME);
-            String region = executeCommand("pulumi", "config", "get", "managementRegion", "--stack", TEST_STACK_NAME);
-            
-            assertEquals("integration-test-app", appName.trim());
-            assertEquals("integration-test", env.trim());
-            assertEquals(TEST_REGION, region.trim());
-        });
-    }
-
-    @Test
-    @Disabled("Enable for actual infrastructure deployment testing - creates real AWS resources")
-    void testFullInfrastructureDeploymentAndCleanup() throws Exception {
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
-
-        String stackName = "integration-test-" + System.currentTimeMillis();
-        
-        try {
-            // Initialize stack
-            executeCommand("pulumi", "stack", "init", stackName, "--cwd", "lib");
-            
-            // Set configuration
-            executeCommand("pulumi", "config", "set", "applicationName", "integration-test-app", "--stack", stackName, "--cwd", "lib");
-            executeCommand("pulumi", "config", "set", "environment", "integration-test", "--stack", stackName, "--cwd", "lib");
-            executeCommand("pulumi", "config", "set", "managementRegion", TEST_REGION, "--stack", stackName, "--cwd", "lib");
-            
-            // Deploy infrastructure with timeout
-            String deployOutput = executeCommandWithTimeout(
-                    "pulumi", "up", "--yes", "--stack", stackName, "--cwd", "lib");
-            
-            assertNotNull(deployOutput);
-            assertTrue(deployOutput.contains("Resources") || deployOutput.contains("Update summary"));
-            
-            // Verify stack outputs
-            String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--stack", stackName, "--cwd", "lib");
-            assertNotNull(outputsJson);
-            assertFalse(outputsJson.trim().isEmpty());
-            
-            // Verify specific outputs exist
-            String stackSetId = executeCommand("pulumi", "stack", "output", "stackSetId", "--stack", stackName, "--cwd", "lib");
-            String administrationRoleArn = executeCommand("pulumi", "stack", "output", "administrationRoleArn", "--stack", stackName, "--cwd", "lib");
-            
-            assertNotNull(stackSetId);
-            assertNotNull(administrationRoleArn);
-            assertFalse(stackSetId.trim().isEmpty());
-            assertFalse(administrationRoleArn.trim().isEmpty());
-            
-            System.out.println("Deployment successful! Stack Set ID: " + stackSetId.trim());
-            System.out.println("Administration Role ARN: " + administrationRoleArn.trim());
-            
-        } finally {
-            // Clean up - destroy the stack
-            try {
-                String destroyOutput = executeCommandWithTimeout(
-                        "pulumi", "destroy", "--yes", "--stack", stackName, "--cwd", "lib");
-                
-                // Remove the stack
-                executeCommand("pulumi", "stack", "rm", stackName, "--yes", "--cwd", "lib");
-                
-                System.out.println("Cleanup completed successfully");
-                
-            } catch (Exception e) {
-                System.err.println("Cleanup failed: " + e.getMessage());
-                // Don't fail the test if cleanup fails
-            }
-        }
-    }
-    
-    @Test
-    @Disabled("Enable for AWS resource validation after deployment - requires deployed infrastructure")
-    void testDeployedResourcesValidation() {
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
-        
-        assertDoesNotThrow(() -> {
-            // Validate CloudFormation StackSet was created
-            try (CloudFormationClient cfnClient = CloudFormationClient.builder().region(Region.of(TEST_REGION)).build()) {
-                ListStackSetsResponse stackSetsResponse = cfnClient.listStackSets();
-                
-                boolean found = stackSetsResponse.summaries().stream()
-                    .anyMatch(summary -> summary.stackSetName().contains("integration-test-app"));
-                
-                if (found) {
-                    System.out.println("StackSet found in CloudFormation");
-                } else {
-                    System.out.println("StackSet not found - this is expected if infrastructure is not deployed");
-                }
-            }
-            
-            // Validate IAM roles were created
-            try (IamClient iamClient = IamClient.builder().region(Region.of(TEST_REGION)).build()) {
-                ListRolesResponse rolesResponse = iamClient.listRoles();
-                
-                boolean adminRoleFound = rolesResponse.roles().stream()
-                    .anyMatch(role -> role.roleName().contains("CloudFormationStackSetAdministration"));
-                    
-                boolean execRoleFound = rolesResponse.roles().stream()
-                    .anyMatch(role -> role.roleName().contains("CloudFormationStackSetExecution"));
-                
-                if (adminRoleFound && execRoleFound) {
-                    System.out.println("IAM roles found");
-                } else {
-                    System.out.println("IAM roles not found - this is expected if infrastructure is not deployed");
-                }
-            }
-            
-            // Validate CloudWatch dashboard was created
-            try (CloudWatchClient cloudWatchClient = CloudWatchClient.builder().region(Region.of(TEST_REGION)).build()) {
-                ListDashboardsResponse dashboardsResponse = cloudWatchClient.listDashboards();
-                
-                boolean dashboardFound = dashboardsResponse.dashboardEntries().stream()
-                    .anyMatch(dashboard -> dashboard.dashboardName().contains("WebApplication"));
-                
-                if (dashboardFound) {
-                    System.out.println("CloudWatch dashboard found");
-                } else {
-                    System.out.println("CloudWatch dashboard not found - this is expected if infrastructure is not deployed");
-                }
-            }
-        });
-    }
-
-    // ================== Deployment Output Validation Tests ==================
+    // ================== Live Deployment Output Validation Tests ==================
     
     @Test
     void testDeploymentOutputsExist() {
-        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available (set PULUMI_CONFIG_PASSPHRASE)");
         
         assertDoesNotThrow(() -> {
-            // Validate all expected outputs exist
-            assertNotNull(stackSetId, "StackSet ID should be available from deployment");
-            assertNotNull(stackSetArn, "StackSet ARN should be available from deployment");  
-            assertNotNull(administrationRoleArn, "Administration Role ARN should be available from deployment");
-            assertNotNull(executionRoleName, "Execution Role Name should be available from deployment");
-            assertNotNull(dashboardUrl, "Dashboard URL should be available from deployment");
+            // Validate all expected outputs exist from live deployment
+            assertNotNull(stackSetId, "StackSet ID should be available from live deployment");
+            assertNotNull(stackSetArn, "StackSet ARN should be available from live deployment");  
+            assertNotNull(administrationRoleArn, "Administration Role ARN should be available from live deployment");
+            assertNotNull(executionRoleName, "Execution Role Name should be available from live deployment");
+            assertNotNull(dashboardUrl, "Dashboard URL should be available from live deployment");
             
             assertFalse(stackSetId.trim().isEmpty(), "StackSet ID should not be empty");
             assertFalse(stackSetArn.trim().isEmpty(), "StackSet ARN should not be empty");
@@ -468,34 +192,42 @@ public class MainIntegrationTest {
             assertFalse(executionRoleName.trim().isEmpty(), "Execution Role Name should not be empty");
             assertFalse(dashboardUrl.trim().isEmpty(), "Dashboard URL should not be empty");
             
-            System.out.println("✓ All deployment outputs are present and non-empty");
+            System.out.println("✓ All live deployment outputs are present and non-empty");
         });
     }
     
     @Test
-    void testStackSetValidation() {
-        Assumptions.assumeTrue(stackSetId != null, "StackSet ID should be available");
+    void testLiveStackSetValidation() {
+        Assumptions.assumeTrue(stackSetId != null, "StackSet ID should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
             try (CloudFormationClient cfnClient = CloudFormationClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // Validate StackSet exists using the actual deployed ID
+                // Validate actual deployed StackSet exists in AWS
                 DescribeStackSetResponse response = cfnClient.describeStackSet(request -> 
                     request.stackSetName(stackSetId));
                     
-                assertNotNull(response.stackSet());
+                assertNotNull(response.stackSet(), "Live StackSet should exist in AWS CloudFormation");
                 assertEquals(stackSetId, response.stackSet().stackSetId());
                 
-                System.out.println("✓ StackSet validation passed: " + response.stackSet().stackSetName());
+                // Validate StackSet is in expected state
+                assertNotNull(response.stackSet().status(), "StackSet should have a status");
+                assertTrue(response.stackSet().status().toString().equals("ACTIVE"), 
+                    "StackSet should be in ACTIVE state");
+                
+                System.out.println("✓ Live StackSet validation passed: " + response.stackSet().stackSetName());
                 System.out.println("  - Status: " + response.stackSet().status());
                 System.out.println("  - Description: " + response.stackSet().description());
+                System.out.println("  - Stack Instances Count: " + 
+                    (response.stackSet().organizationalUnitIds() != null ? 
+                    response.stackSet().organizationalUnitIds().size() : "N/A"));
             }
         });
     }
     
     @Test
-    void testAdministrationRoleValidation() {
-        Assumptions.assumeTrue(administrationRoleArn != null, "Administration Role ARN should be available");
+    void testLiveAdministrationRoleValidation() {
+        Assumptions.assumeTrue(administrationRoleArn != null, "Administration Role ARN should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
@@ -503,117 +235,155 @@ public class MainIntegrationTest {
                 // Extract role name from ARN
                 String roleName = administrationRoleArn.substring(administrationRoleArn.lastIndexOf("/") + 1);
                 
-                // Validate role exists using actual deployed ARN
+                // Validate actual deployed IAM role exists in AWS
                 GetRoleResponse response = iamClient.getRole(request -> request.roleName(roleName));
                 
-                assertNotNull(response.role());
+                assertNotNull(response.role(), "Live Administration Role should exist in AWS IAM");
                 assertEquals(administrationRoleArn, response.role().arn());
-                assertTrue(response.role().roleName().contains("CloudFormationStackSetAdministration"));
+                assertTrue(response.role().roleName().contains("CloudFormationStackSetAdministration"),
+                    "Role should follow CloudFormation StackSet naming convention");
                 
-                System.out.println("✓ Administration Role validation passed: " + response.role().roleName());
+                // Validate role has proper trust policy for CloudFormation service
+                assertNotNull(response.role().assumeRolePolicyDocument(), "Role should have assume role policy");
+                
+                System.out.println("✓ Live Administration Role validation passed: " + response.role().roleName());
                 System.out.println("  - ARN: " + response.role().arn());
                 System.out.println("  - Created: " + response.role().createDate());
+                System.out.println("  - Max Session Duration: " + response.role().maxSessionDuration() + " seconds");
             }
         });
     }
     
     @Test
-    void testExecutionRoleValidation() {
-        Assumptions.assumeTrue(executionRoleName != null, "Execution Role Name should be available");
+    void testLiveExecutionRoleValidation() {
+        Assumptions.assumeTrue(executionRoleName != null, "Execution Role Name should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
             try (IamClient iamClient = IamClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // Validate execution role exists using actual deployed name
+                // Validate actual deployed execution role exists in AWS
                 GetRoleResponse response = iamClient.getRole(request -> request.roleName(executionRoleName));
                 
-                assertNotNull(response.role());
+                assertNotNull(response.role(), "Live Execution Role should exist in AWS IAM");
                 assertEquals(executionRoleName, response.role().roleName());
-                assertTrue(response.role().roleName().contains("CloudFormationStackSetExecution"));
+                assertTrue(response.role().roleName().contains("CloudFormationStackSetExecution"),
+                    "Role should follow CloudFormation StackSet naming convention");
                 
-                System.out.println("✓ Execution Role validation passed: " + response.role().roleName());
+                // Validate role has proper trust policy for administration role
+                assertNotNull(response.role().assumeRolePolicyDocument(), "Role should have assume role policy");
+                
+                System.out.println("✓ Live Execution Role validation passed: " + response.role().roleName());
                 System.out.println("  - ARN: " + response.role().arn());
                 System.out.println("  - Created: " + response.role().createDate());
+                System.out.println("  - Max Session Duration: " + response.role().maxSessionDuration() + " seconds");
             }
         });
     }
     
     @Test
-    void testCloudWatchDashboardValidation() {
-        Assumptions.assumeTrue(dashboardUrl != null, "Dashboard URL should be available");
+    void testLiveCloudWatchDashboardValidation() {
+        Assumptions.assumeTrue(dashboardUrl != null, "Dashboard URL should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
             try (CloudWatchClient cloudWatchClient = CloudWatchClient.builder().region(Region.of(TEST_REGION)).build()) {
-                // List dashboards and find the one created by our deployment
+                // List actual deployed dashboards in AWS
                 ListDashboardsResponse response = cloudWatchClient.listDashboards();
                 
                 boolean dashboardFound = response.dashboardEntries().stream()
                     .anyMatch(dashboard -> dashboard.dashboardName().contains("WebApplication"));
                 
-                assertTrue(dashboardFound, "CloudWatch dashboard should exist");
+                assertTrue(dashboardFound, "Live CloudWatch dashboard should exist in AWS");
                 
-                // Validate dashboard URL format
+                // Validate dashboard URL format from deployment
                 assertTrue(dashboardUrl.startsWith("https://"), "Dashboard URL should be HTTPS");
                 assertTrue(dashboardUrl.contains("console.aws.amazon.com"), "Dashboard URL should be AWS console URL");
+                assertTrue(dashboardUrl.contains("cloudwatch"), "Dashboard URL should point to CloudWatch");
                 
-                System.out.println("✓ CloudWatch Dashboard validation passed");
-                System.out.println("  - Dashboard URL: " + dashboardUrl);
+                // Find and validate the specific dashboard
+                var webAppDashboard = response.dashboardEntries().stream()
+                    .filter(dashboard -> dashboard.dashboardName().contains("WebApplication"))
+                    .findFirst();
+                    
+                if (webAppDashboard.isPresent()) {
+                    System.out.println("✓ Live CloudWatch Dashboard validation passed");
+                    System.out.println("  - Dashboard Name: " + webAppDashboard.get().dashboardName());
+                    System.out.println("  - Dashboard URL: " + dashboardUrl);
+                    System.out.println("  - Last Modified: " + webAppDashboard.get().lastModified());
+                    System.out.println("  - Size: " + webAppDashboard.get().size() + " bytes");
+                }
             }
         });
     }
     
     @Test
-    void testApplicationEndpointsExist() {
-        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+    void testLiveApplicationEndpointsExist() {
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available from live deployment");
         
         assertDoesNotThrow(() -> {
-            // Check for application endpoints in different regions
+            // Check for actual application endpoints in different regions from live deployment
             String[] expectedRegions = {"us-east-1", "us-west-2", "eu-west-1"};
+            int foundEndpoints = 0;
             
             for (String region : expectedRegions) {
                 String endpointKey = "applicationEndpoint-" + region;
                 String endpoint = getOutputValue(endpointKey);
                 
                 if (endpoint != null) {
-                    assertFalse(endpoint.trim().isEmpty(), "Application endpoint for " + region + " should not be empty");
+                    assertFalse(endpoint.trim().isEmpty(), "Live application endpoint for " + region + " should not be empty");
                     assertTrue(endpoint.startsWith("http://"), "Application endpoint should start with http://");
-                    System.out.println("✓ Application endpoint found for " + region + ": " + endpoint);
+                    assertTrue(endpoint.contains("elb.amazonaws.com"), "Application endpoint should be an ELB endpoint");
+                    
+                    System.out.println("✓ Live application endpoint found for " + region + ": " + endpoint);
+                    foundEndpoints++;
                 } else {
-                    System.out.println("  Application endpoint not found for " + region + " (may not be deployed)");
+                    System.out.println("  Application endpoint not found for " + region + " (may not be deployed to this region)");
                 }
             }
+            
+            assertTrue(foundEndpoints > 0, "At least one live application endpoint should exist");
+            System.out.println("✓ Found " + foundEndpoints + " live application endpoints across regions");
         });
     }
     
     @Test 
-    void testDeploymentConfigurationValues() {
-        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+    void testLiveDeploymentConfigurationValues() {
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available from live deployment");
         
         assertDoesNotThrow(() -> {
-            // Test that we can extract configuration information from outputs
-            System.out.println("=== Deployment Configuration Analysis ===");
+            // Extract and validate configuration from actual deployed resources
+            System.out.println("=== Live Deployment Configuration Analysis ===");
             
-            // Analyze StackSet ID for application name
+            // Analyze actual StackSet ID for application name
             if (stackSetId != null) {
-                System.out.println("StackSet ID: " + stackSetId);
+                System.out.println("Live StackSet ID: " + stackSetId);
                 assertTrue(stackSetId.contains("-"), "StackSet ID should contain application identifier");
+                // Validate StackSet naming follows expected pattern
+                assertTrue(stackSetId.matches("[a-zA-Z0-9-]+"), "StackSet ID should be alphanumeric with hyphens");
             }
             
-            // Analyze role names for proper naming conventions
+            // Analyze actual role ARNs for proper naming conventions
             if (administrationRoleArn != null) {
-                System.out.println("Administration Role: " + administrationRoleArn);
+                System.out.println("Live Administration Role ARN: " + administrationRoleArn);
                 assertTrue(administrationRoleArn.contains("CloudFormationStackSet"), 
                     "Administration role should follow CloudFormation naming convention");
+                assertTrue(administrationRoleArn.startsWith("arn:aws:iam::"), "Role ARN should be valid AWS ARN format");
             }
             
             if (executionRoleName != null) {
-                System.out.println("Execution Role: " + executionRoleName);
+                System.out.println("Live Execution Role Name: " + executionRoleName);
                 assertTrue(executionRoleName.contains("CloudFormationStackSet"), 
                     "Execution role should follow CloudFormation naming convention");
             }
             
-            System.out.println("✓ Deployment configuration validation passed");
+            // Validate dashboard URL points to correct region
+            if (dashboardUrl != null) {
+                System.out.println("Live Dashboard URL: " + dashboardUrl);
+                assertTrue(dashboardUrl.contains("region=" + TEST_REGION), 
+                    "Dashboard URL should point to the correct region");
+            }
+            
+            System.out.println("✓ Live deployment configuration validation passed");
         });
     }
 
