@@ -89,7 +89,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 
 	// Integration Test 2: Verify KMS key exists and has proper configuration
 	t.Run("KMSKeyConfiguration", func(t *testing.T) {
-		keyAlias := fmt.Sprintf("alias/s3-webapp-encryp-key-%s", envSuffix)
+		keyAlias := fmt.Sprintf("alias/s3-webapp-encrypt-key-%s", envSuffix)
 
 		// Find the KMS key by alias
 		aliasOutput, err := kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{

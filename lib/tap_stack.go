@@ -156,7 +156,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 
 	// KMS Key Alias
 	kmsalias.NewKmsAlias(stack, jsii.String("S3EncryptionKeyAlias"), &kmsalias.KmsAliasConfig{
-		Name:        jsii.String(fmt.Sprintf("alias/s3-webapp-encryp-key-%s", config.EnvironmentSuffix)),
+		Name:        jsii.String(fmt.Sprintf("alias/s3-webapp-encrypt-key-%s", config.EnvironmentSuffix)),
 		TargetKeyId: s3KmsKey.Id(),
 	})
 
@@ -272,7 +272,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 
 	// IAM Role for Application Servers
 	appRole := iamrole.NewIamRole(stack, jsii.String("AppRole"), &iamrole.IamRoleConfig{
-		Name: jsii.String(fmt.Sprintf("secure-webapp-role-%s", config.EnvironmentSuffix)),
+		Name: jsii.String(fmt.Sprintf("secure-webapp-approle-%s", config.EnvironmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -292,7 +292,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 
 	// IAM Policy for S3 access (least privilege)
 	s3AccessPolicy := iampolicy.NewIamPolicy(stack, jsii.String("S3AccessPolicy"), &iampolicy.IamPolicyConfig{
-		Name:        jsii.String(fmt.Sprintf("secure-webapp-s3-access-policy-%s", config.EnvironmentSuffix)),
+		Name:        jsii.String(fmt.Sprintf("secure-webapp-s3-policy-%s", config.EnvironmentSuffix)),
 		Description: jsii.String("Least privilege policy for S3 access"),
 		Policy: jsii.String(fmt.Sprintf(`{
 			"Version": "2012-10-17",
@@ -336,7 +336,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 
 	// CloudWatch Log Group for Security Events
 	securityLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("SecurityEventsLogGroup"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:            jsii.String(fmt.Sprintf("/aws/security/events/tapstack%s", config.EnvironmentSuffix)),
+		Name:            jsii.String(fmt.Sprintf("/aws/security/events/stack%s", config.EnvironmentSuffix)),
 		RetentionInDays: jsii.Number(90),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("security-events-logs-%s", config.EnvironmentSuffix)),
@@ -362,7 +362,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 
 	// Application Load Balancer
 	appLoadBalancer := lb.NewLb(stack, jsii.String("AppLoadBalancer"), &lb.LbConfig{
-		Name:                     jsii.String(fmt.Sprintf("secure-webapp-app-alb-%s", config.EnvironmentSuffix)),
+		Name:                     jsii.String(fmt.Sprintf("secure-webapp-appalb-%s", config.EnvironmentSuffix)),
 		LoadBalancerType:         jsii.String("application"),
 		IpAddressType:            jsii.String("ipv4"),
 		Subnets:                  jsii.Strings(*publicSubnet1.Id(), *publicSubnet2.Id()),
@@ -370,13 +370,13 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 		EnableHttp2:              jsii.Bool(true),
 		EnableDeletionProtection: jsii.Bool(false),
 		Tags: &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("secure-webapp-app-alb-%s", config.EnvironmentSuffix)),
+			"Name": jsii.String(fmt.Sprintf("secure-webapp-appalb-%s", config.EnvironmentSuffix)),
 		},
 	})
 
 	// Target Group for Application Servers
 	appTargetGroup := lbtargetgroup.NewLbTargetGroup(stack, jsii.String("AppTargetGroup"), &lbtargetgroup.LbTargetGroupConfig{
-		Name:       jsii.String(fmt.Sprintf("secure-webapp-app-tg-%s", config.EnvironmentSuffix)),
+		Name:       jsii.String(fmt.Sprintf("secure-webapp-apptg-%s", config.EnvironmentSuffix)),
 		Port:       jsii.Number(443),
 		Protocol:   jsii.String("HTTPS"),
 		VpcId:      webAppVpc.Id(),
@@ -393,7 +393,7 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 			UnhealthyThreshold: jsii.Number(2),
 		},
 		Tags: &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("secure-webapp-app-target-group-%s", config.EnvironmentSuffix)),
+			"Name": jsii.String(fmt.Sprintf("secure-webapp-apptarget-group-%s", config.EnvironmentSuffix)),
 		},
 	})
 
