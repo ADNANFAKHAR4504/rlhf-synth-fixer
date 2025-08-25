@@ -205,7 +205,7 @@ class TestTapStack(unittest.TestCase):
             "MinSize": "1",
             "MaxSize": "3",
             "DesiredCapacity": "2",
-            "HealthCheckType": "EC2"
+            "HealthCheckType": "ELB"
         })
         
         # Check for launch template

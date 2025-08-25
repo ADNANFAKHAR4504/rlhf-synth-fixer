@@ -310,12 +310,12 @@ class TapStack(Stack):
             health_check=elbv2.HealthCheck(
                 enabled=True,
                 healthy_threshold_count=2,
-                interval=cdk.Duration.seconds(30),
-                path='/',
+                interval=cdk.Duration.seconds(15),
+                path='/health',
                 port='80',
                 protocol=elbv2.Protocol.HTTP,
                 timeout=cdk.Duration.seconds(5),
-                unhealthy_threshold_count=3
+                unhealthy_threshold_count=2
             )
         )
         
@@ -331,11 +331,11 @@ class TapStack(Stack):
     def create_asg(self):
         user_data = ec2.UserData.for_linux()
         user_data.add_commands(
-            'yum update -y',
             'yum install -y httpd',
             'systemctl start httpd',
             'systemctl enable httpd',
-            f'echo "<h1>Hello from {self.environment_suffix} in {self.region_name}</h1>" > /var/www/html/index.html'
+            f'echo "<h1>Hello from {self.environment_suffix} in {self.region_name}</h1>" > /var/www/html/index.html',
+            'echo "OK" > /var/www/html/health'
         )
         
         launch_template = ec2.LaunchTemplate(
@@ -364,9 +364,9 @@ class TapStack(Stack):
             launch_template=launch_template,
             min_capacity=1,
             max_capacity=3,
-            desired_capacity=2,
+            desired_capacity=1,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            health_check=autoscaling.HealthCheck.elb(grace=Duration.minutes(5)),
+            health_check=autoscaling.HealthCheck.elb(grace=Duration.minutes(3)),
             auto_scaling_group_name=f'asg-{self.environment_suffix}'
         )
         
