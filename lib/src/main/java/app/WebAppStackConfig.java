@@ -10,7 +10,6 @@ public class WebAppStackConfig {
 
   private final String awsRegion;
   private final String environmentSuffix;
-  private final String keyPairName;
   private final String instanceType;
 
   public WebAppStackConfig() {
@@ -23,10 +22,6 @@ public class WebAppStackConfig {
       Optional.ofNullable(System.getenv("ENVIRONMENT_SUFFIX")).orElse("dev");
 
     // Instance configuration with defaults
-    this.keyPairName =
-      Optional
-        .ofNullable(System.getenv("KEY_PAIR_NAME"))
-        .orElse("webapp-keypair");
     this.instanceType =
       Optional.ofNullable(System.getenv("INSTANCE_TYPE")).orElse("t3.micro");
   }
@@ -37,10 +32,6 @@ public class WebAppStackConfig {
 
   public String getEnvironmentSuffix() {
     return environmentSuffix;
-  }
-
-  public String getKeyPairName() {
-    return keyPairName;
   }
 
   public String getInstanceType() {

@@ -43,14 +43,6 @@ class WebAppStackConfigTest {
   }
 
   @Test
-  void testGetKeyPairName() {
-    WebAppStackConfig config = new WebAppStackConfig();
-    String keyPairName = config.getKeyPairName();
-    assertNotNull(keyPairName);
-    assertEquals("webapp-keypair", keyPairName); // Default value
-  }
-
-  @Test
   void testGetAllowedCidrBlocks() {
     WebAppStackConfig config = new WebAppStackConfig();
     String[] cidrBlocks = config.getAllowedCidrBlocks();
