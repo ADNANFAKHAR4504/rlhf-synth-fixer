@@ -1,1 +1,1 @@
-# Unit tests for the TAP infrastructure stack
+# Test package initialization

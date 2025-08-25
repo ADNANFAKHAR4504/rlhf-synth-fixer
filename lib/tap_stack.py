@@ -24,8 +24,11 @@ from constructs import Construct
 
 class TapStackProps:
     """Properties for the TapStack"""
-    def __init__(self, environment_suffix: str = 'dev', **kwargs):
+    def __init__(self, environment_suffix: str = 'dev', env=None, **kwargs):
         self.environment_suffix = environment_suffix
+        self.env = env
+        if env:
+            kwargs['env'] = env
         self.kwargs = kwargs
 
 

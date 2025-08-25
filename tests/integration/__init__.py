@@ -1,1 +1,1 @@
-# Integration tests for the TAP infrastructure stack
+# Integration tests package initialization
