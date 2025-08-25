@@ -17,7 +17,7 @@ Error: Process completed with exit code 1
 
 I already updated the imports too. here’s what my lib/tap_stack.go looks like now (just sharing the imports part):
 
-```txt
+```go
 package lib
 
 import (
