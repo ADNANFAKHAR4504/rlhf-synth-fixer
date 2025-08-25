@@ -1,3 +1,8 @@
+The error occurs because you have defined the AWS provider in both `providers.tf` and `tap_stack.tf`. To resolve this, you should remove the provider configuration from `tap_stack.tf` and ensure that it's only defined once in `providers.tf`.
+
+Here's the corrected `tap_stack.tf` without the duplicate provider configuration:
+
+```hcl
 # Create a VPC
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
@@ -131,3 +136,14 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2-instance-profile"
   role = aws_iam_role.ec2_role.name
 }
+```
+
+Ensure that your `providers.tf` file contains the AWS provider configuration:
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+```
+
+With this setup, the `tap_stack.tf` file no longer contains a duplicate provider configuration, and Terraform should initialize correctly. Run `terraform init`, `terraform plan`, and `terraform apply` again to deploy the infrastructure.
