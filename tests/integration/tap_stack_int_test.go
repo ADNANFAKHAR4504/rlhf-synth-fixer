@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -483,11 +484,27 @@ func TestIAMPolicyPermissions(t *testing.T) {
 	require.NoError(t, err, "Should be able to get policy version")
 
 	policyDocument := *policyVersion.PolicyVersion.Document
+	
 	// URL decode the policy document
-	assert.Contains(t, policyDocument, "s3:ListBucket", "Policy should allow listing bucket")
-	assert.Contains(t, policyDocument, "s3:GetObject", "Policy should allow getting objects")
-	assert.Contains(t, policyDocument, "s3:PutObject", "Policy should allow putting objects")
-	assert.Contains(t, policyDocument, outputs.BucketName, "Policy should reference the correct bucket")
+
+	decodedPolicy, err := url.QueryUnescape(policyDocument)
+	require.NoError(t, err, "Should be able to decode policy document")
+
+	// Parse as JSON to validate structure
+	var policyJSON map[string]interface{}
+	err = json.Unmarshal([]byte(decodedPolicy), &policyJSON)
+	require.NoError(t, err, "Policy should be valid JSON")
+
+	// Check policy contains required permissions
+	assert.Contains(t, decodedPolicy, "s3:ListBucket", "Policy should allow listing bucket")
+	assert.Contains(t, decodedPolicy, "s3:GetObject", "Policy should allow getting objects")
+	assert.Contains(t, decodedPolicy, "s3:PutObject", "Policy should allow putting objects")
+	assert.Contains(t, decodedPolicy, outputs.BucketName, "Policy should reference the correct bucket")
+
+	// Verify policy structure
+	statements, ok := policyJSON["Statement"].([]interface{})
+	require.True(t, ok, "Policy should have Statement array")
+	assert.GreaterOrEqual(t, len(statements), 2, "Policy should have at least 2 statements")
 }
 
 // TestResourceTagging tests that resources are properly tagged
