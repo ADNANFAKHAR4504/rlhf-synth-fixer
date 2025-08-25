@@ -12,6 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.48.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.56.2
+	github.com/aws/aws-sdk-go-v2/service/configservice v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.245.2
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
@@ -19,7 +20,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.76.2
 	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.32.4
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.38.2
 	github.com/aws/aws-sdk-go-v2/service/securityhub v1.62.2
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
