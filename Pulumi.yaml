@@ -1,0 +1,7 @@
+name: financial-infrastructure
+runtime: java
+description: Secure AWS infrastructure for financial services
+config:
+  aws:region: us-east-1
+  financial-infrastructure:environment: production
+  financial-infrastructure:companyName: YourCompany
