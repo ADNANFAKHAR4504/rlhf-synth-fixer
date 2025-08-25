@@ -135,7 +135,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Java Pulumi project detected"
     pulumi login "$PULUMI_BACKEND_URL"
     echo "Building Java project first..."
-    mvn clean compile
+    ./gradlew clean compileJava
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
     echo "Deploying infrastructure ..."
