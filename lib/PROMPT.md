@@ -45,10 +45,9 @@ Please create Pulumi Go code that implements the following components:
 - Alert on resource usage spikes
 - Include metrics for Lambda function performance
 
-### TLS & Certificates
-- Use AWS Certificate Manager for TLS certificates
+### TLS
 - Ensure all communications are over HTTPS
-- Configure SSL/TLS for load balancers and applications
+- Configure SSL/TLS for load balancers and applications using cloudfront
 
 ### Resource Management
 - Apply detailed tags to all resources for cost tracking and management
