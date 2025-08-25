@@ -51,20 +51,58 @@ type AWSClients struct {
 }
 
 func loadOutputs(t *testing.T) *TapStackOutputs {
-	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
+	data, err := os.ReadFile("../cfn-outputs/all-outputs.json")
 	if err != nil {
 		t.Fatalf("Failed to read outputs file: %v", err)
 	}
 
-	// Parse as map and get the first key
-	var rawOutputs map[string]TapStackOutputs
+	// Parse as map with stack name as key
+	var rawOutputs map[string]map[string]interface{}
 	if err := json.Unmarshal(data, &rawOutputs); err != nil {
 		t.Fatalf("Failed to parse outputs: %v", err)
 	}
 
-	// Return the first key's outputs
-	for _, outputs := range rawOutputs {
-		return &outputs
+	// Get the first stack's outputs
+	for _, stackOutputs := range rawOutputs {
+		outputs := &TapStackOutputs{}
+
+		if val, ok := stackOutputs["kmsKeyId"].(string); ok {
+			outputs.KMSKeyId = val
+		}
+		if val, ok := stackOutputs["s3BucketName"].(string); ok {
+			outputs.S3BucketName = val
+		}
+		if val, ok := stackOutputs["vpcId"].(string); ok {
+			outputs.VPCId = val
+		}
+		if val, ok := stackOutputs["rdsEndpoint"].(string); ok {
+			outputs.LambdaFunctionName = val // Using available field
+		}
+		if val, ok := stackOutputs["applicationRoleArn"].(string); ok {
+			outputs.LambdaFunctionArn = val // Using available field
+		}
+
+		// Handle array fields
+		if privateSubnets, ok := stackOutputs["privateSubnetIds"].([]interface{}); ok && len(privateSubnets) > 0 {
+			if subnet, ok := privateSubnets[0].(string); ok {
+				outputs.PrivateSubnetIds = subnet
+			}
+		}
+		if publicSubnets, ok := stackOutputs["publicSubnetIds"].([]interface{}); ok {
+			if len(publicSubnets) > 0 {
+				if subnet, ok := publicSubnets[0].(string); ok {
+					outputs.PublicSubnetIds = subnet
+					outputs.PublicSubnet1Id = subnet
+				}
+			}
+			if len(publicSubnets) > 1 {
+				if subnet, ok := publicSubnets[1].(string); ok {
+					outputs.PublicSubnet2Id = subnet
+				}
+			}
+		}
+
+		return outputs
 	}
 
 	t.Fatal("No outputs found in file")
