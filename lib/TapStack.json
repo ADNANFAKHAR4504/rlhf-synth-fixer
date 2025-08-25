@@ -291,6 +291,27 @@
                                     }
                                 }
                             }
+                        },
+                        {
+                            "Sid": "AWSVPCFlowLogsListBucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "VpcFlowLogsBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -433,7 +454,7 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "vpc-flow-logs.amazonaws.com"
+                                "Service": "delivery.logs.amazonaws.com"
                             },
                             "Action": "sts:AssumeRole"
                         }
@@ -449,7 +470,8 @@
                                     "Effect": "Allow",
                                     "Action": [
                                         "s3:PutObject",
-                                        "s3:GetBucketAcl"
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
                                     ],
                                     "Resource": [
                                         {
@@ -624,7 +646,10 @@
         },
         "VPCFlowLog": {
             "Type": "AWS::EC2::FlowLog",
-            "DependsOn": "VpcFlowLogsBucketPolicy",
+            "DependsOn": [
+                "VpcFlowLogsBucketPolicy",
+                "VPCFlowLogRole"
+            ],
             "Properties": {
                 "ResourceId": {
                     "Ref": "SecureVPC"
@@ -639,6 +664,12 @@
                 },
                 "LogDestinationType": "s3",
                 "LogFormat": "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}",
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",

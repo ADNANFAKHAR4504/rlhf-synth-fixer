@@ -163,7 +163,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(role.Type).toBe('AWS::IAM::Role');
 
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(trustPolicy.Statement[0].Principal.Service).toBe('vpc-flow-logs.amazonaws.com');
+      expect(trustPolicy.Statement[0].Principal.Service).toBe('delivery.logs.amazonaws.com');
     });
 
     test('cross-account role should have least-privilege policies', () => {
