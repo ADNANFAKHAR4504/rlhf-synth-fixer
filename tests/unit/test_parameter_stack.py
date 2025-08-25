@@ -25,7 +25,7 @@ class TestParameterStack(unittest.TestCase):
     def test_creates_api_key_parameter(self):
         """Test that API key parameter is created"""
         self.template.has_resource_properties("AWS::SSM::Parameter", {
-            "Name": f"/webapp/{self.env_suffix.lower()}/api-key",
+            "Name": f"/webapp/{self.env_suffix.lower()}/api-key-primary-1",
             "Type": "String",
             "Description": f"API Key for web application - {self.env_suffix}"
         })
@@ -34,7 +34,7 @@ class TestParameterStack(unittest.TestCase):
     def test_creates_db_password_parameter(self):
         """Test that database password parameter is created"""
         self.template.has_resource_properties("AWS::SSM::Parameter", {
-            "Name": f"/webapp/{self.env_suffix.lower()}/db-password",
+            "Name": f"/webapp/{self.env_suffix.lower()}/db-password-primary-1",
             "Type": "String",
             "Description": f"Database password for web application - {self.env_suffix}"
         })
@@ -43,7 +43,7 @@ class TestParameterStack(unittest.TestCase):
     def test_creates_app_config_parameter(self):
         """Test that application config parameter is created"""
         self.template.has_resource_properties("AWS::SSM::Parameter", {
-            "Name": f"/webapp/{self.env_suffix.lower()}/app-config",
+            "Name": f"/webapp/{self.env_suffix.lower()}/app-config-primary-1",
             "Type": "String",
             "Description": f"Application configuration - {self.env_suffix}",
             "Value": '{"debug": false, "log_level": "info"}'

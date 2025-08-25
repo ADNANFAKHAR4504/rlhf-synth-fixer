@@ -121,9 +121,9 @@ class TestTapStackIntegration(unittest.TestCase):
             self.skipTest("Environment suffix not found in outputs")
         
         parameter_names = [
-            f"/webapp/{suffix}/api-key",
-            f"/webapp/{suffix}/db-password",
-            f"/webapp/{suffix}/app-config"
+            f"/webapp/{suffix}/api-key-primary-1",
+            f"/webapp/{suffix}/db-password-primary-1",
+            f"/webapp/{suffix}/app-config-primary-1"
         ]
         
         for param_name in parameter_names:
