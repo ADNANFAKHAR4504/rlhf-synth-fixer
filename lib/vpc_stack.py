@@ -1,12 +1,7 @@
 """VPC Stack for highly available web application infrastructure."""
 
-from aws_cdk import (
-    NestedStack,
-    aws_ec2 as ec2,
-    CfnOutput,
-    Tags,
-    RemovalPolicy,
-)
+from aws_cdk import CfnOutput, NestedStack, RemovalPolicy, Tags
+from aws_cdk import aws_ec2 as ec2
 from constructs import Construct
 
 
@@ -44,11 +39,16 @@ class VpcStack(NestedStack):
         Tags.of(self.vpc).add("Environment", "production")
         
         # Create VPC Flow Logs for monitoring
+        import time
+
         from aws_cdk import aws_logs as logs
+
+        # Add timestamp to make log group name unique
+        timestamp = int(time.time())
         
         flow_log_group = logs.LogGroup(
             self, "prod-vpc-flow-log-group",
-            log_group_name=f"/aws/vpc/flowlogs-{self.environment_suffix}",
+            log_group_name=f"/aws/vpc/flowlogs-{self.environment_suffix}-{timestamp}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
