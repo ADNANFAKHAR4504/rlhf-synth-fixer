@@ -1274,17 +1274,17 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS INSTANCES
 # RDS PostgreSQL instance in primary region
-data "aws_rds_engine_version" "postgresql" {
-  provider = aws.us_east_1
-  engine   = "postgres"
-}
+#data "aws_rds_engine_version" "postgresql" {
+#  provider = aws.us_east_1
+#  engine   = "postgres"
+#}
 
 resource "aws_db_instance" "primary" {
   provider = aws.us_east_1
   
   identifier     = "${var.project_name}-postgres-primary"
   engine         = "postgres"
-  engine_version = data.aws_rds_engine_version.postgresql.latest_version
+  engine_version = 15
   instance_class = "db.t3.micro"
   
   allocated_storage     = 20
