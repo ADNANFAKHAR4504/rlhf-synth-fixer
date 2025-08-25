@@ -24,6 +24,7 @@ fi
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running JUnit tests..."
   chmod +x ./gradlew
+  ./gradlew clean test jacocoTestCoverageVerification
   ./gradlew test jacocoTestReport --build-cache --no-daemon
   
   echo "📊 Checking for generated coverage reports..."
