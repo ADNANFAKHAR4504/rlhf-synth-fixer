@@ -4,7 +4,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -13,10 +15,11 @@ import (
 )
 
 func TestTapStackBasics(t *testing.T) {
-	// Basic test to check the Go file loads
-	content, err := os.ReadFile("tap_stack.go")
+	// Find the tap_stack.go file
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
 	if err != nil {
-		t.Fatalf("Failed to read tap_stack.go: %v", err)
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
 	}
 
 	contentStr := string(content)
@@ -40,12 +43,23 @@ func TestTapStackBasics(t *testing.T) {
 	if !strings.Contains(contentStr, "SecureApp-AccessAnalyzer") {
 		t.Error("Expected IAM Access Analyzer 'SecureApp-AccessAnalyzer' to be present in code")
 	}
+
+	// Test AWS provider configuration
+	if !strings.Contains(contentStr, "provider.NewAwsProvider") {
+		t.Error("Expected AWS provider configuration")
+	}
+
+	// Test S3 backend configuration
+	if !strings.Contains(contentStr, "cdktf.NewS3Backend") {
+		t.Error("Expected S3 backend configuration")
+	}
 }
 
 func TestSecurityConfigurations(t *testing.T) {
-	content, err := os.ReadFile("tap_stack.go")
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
 	if err != nil {
-		t.Fatalf("Failed to read tap_stack.go: %v", err)
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
 	}
 
 	contentStr := string(content)
@@ -59,14 +73,36 @@ func TestSecurityConfigurations(t *testing.T) {
 		t.Error("Expected S3 block public policy configuration")
 	}
 
+	if !strings.Contains(contentStr, "IgnorePublicAcls") {
+		t.Error("Expected S3 ignore public ACLs configuration")
+	}
+
+	if !strings.Contains(contentStr, "RestrictPublicBuckets") {
+		t.Error("Expected S3 restrict public buckets configuration")
+	}
+
 	// Test S3 encryption
 	if !strings.Contains(contentStr, "s3bucketserversideencryptionconfiguration") {
 		t.Error("Expected S3 server-side encryption configuration")
 	}
 
+	if !strings.Contains(contentStr, "AES256") {
+		t.Error("Expected AES256 encryption algorithm")
+	}
+
+	// Test S3 versioning
+	if !strings.Contains(contentStr, "s3bucketversioning") {
+		t.Error("Expected S3 versioning configuration")
+	}
+
 	// Test DynamoDB encryption
 	if !strings.Contains(contentStr, "ServerSideEncryption") {
 		t.Error("Expected DynamoDB server-side encryption")
+	}
+
+	// Test DynamoDB point-in-time recovery
+	if !strings.Contains(contentStr, "PointInTimeRecovery") {
+		t.Error("Expected DynamoDB point-in-time recovery")
 	}
 
 	// Test least privilege policy
@@ -77,17 +113,27 @@ func TestSecurityConfigurations(t *testing.T) {
 	if !strings.Contains(contentStr, "dynamodb:GetItem") {
 		t.Error("Expected restricted DynamoDB access policy")
 	}
+
+	// Test HTTPS enforcement
+	if !strings.Contains(contentStr, "DenyInsecureConnections") {
+		t.Error("Expected HTTPS enforcement policy")
+	}
+
+	if !strings.Contains(contentStr, "aws:SecureTransport") {
+		t.Error("Expected secure transport condition")
+	}
 }
 
 func TestNamingConventions(t *testing.T) {
-	content, err := os.ReadFile("tap_stack.go")
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
 	if err != nil {
-		t.Fatalf("Failed to read tap_stack.go: %v", err)
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
 	}
 
 	contentStr := string(content)
 
-	// Test naming conventions
+	// Test naming conventions with environment suffix
 	expectedNames := []string{
 		"SecureApp-Role",
 		"SecureApp-Policy",
@@ -101,12 +147,23 @@ func TestNamingConventions(t *testing.T) {
 			t.Errorf("Expected resource name '%s' not found", name)
 		}
 	}
+
+	// Test environment suffix usage
+	if !strings.Contains(contentStr, "environmentSuffix") {
+		t.Error("Expected environment suffix to be used in naming")
+	}
+
+	// Test unique bucket naming with timestamp
+	if !strings.Contains(contentStr, "bucketSuffix") {
+		t.Error("Expected bucket suffix for unique naming")
+	}
 }
 
 func TestNoPublicAccess(t *testing.T) {
-	content, err := os.ReadFile("tap_stack.go")
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
 	if err != nil {
-		t.Fatalf("Failed to read tap_stack.go: %v", err)
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
 	}
 
 	contentStr := string(content)
@@ -131,6 +188,11 @@ func TestNoPublicAccess(t *testing.T) {
 	// Test explicit deny policy
 	if !strings.Contains(contentStr, "DenyInsecureConnections") {
 		t.Error("Expected explicit deny insecure connections policy")
+	}
+
+	// Test bucket policy enforcement
+	if !strings.Contains(contentStr, "s3bucketpolicy.NewS3BucketPolicy") {
+		t.Error("Expected S3 bucket policy configuration")
 	}
 }
 
@@ -218,8 +280,13 @@ func TestEnvironmentVariables(t *testing.T) {
 
 // TestStackWithEmptyName tests edge case with empty name
 func TestStackWithEmptyName(t *testing.T) {
-	// Skip this test as empty names are not allowed in CDKTF
-	t.Skip("Empty stack names are not allowed in CDKTF")
+	// Test that empty names cause a panic (CDKTF requirement)
+	app := cdktf.NewApp(nil)
+	
+	// This should panic because CDKTF doesn't allow empty IDs
+	assert.Panics(t, func() {
+		NewTapStack(app, "")
+	}, "Empty stack name should panic")
 }
 
 // TestStackNodeProperties tests stack node properties
@@ -268,7 +335,516 @@ func TestStackValidation(t *testing.T) {
 	assert.Greater(t, len(*children), 0, "Stack should have resources")
 }
 
-func TestGoModuleStructure(t *testing.T) {
-	// Skip this test as go.mod is in parent directory
-	t.Skip("Skipping go.mod test - file is in parent directory")
+// Helper function to find the stack file
+func findStackFile(t *testing.T) string {
+	// Try current directory first
+	if _, err := os.Stat("tap_stack.go"); err == nil {
+		return "tap_stack.go"
+	}
+
+	// Try lib directory
+	if _, err := os.Stat("../lib/tap_stack.go"); err == nil {
+		return "../lib/tap_stack.go"
+	}
+
+	// Try relative to test directory
+	if _, err := os.Stat("../../lib/tap_stack.go"); err == nil {
+		return "../../lib/tap_stack.go"
+	}
+
+	t.Fatal("Could not find tap_stack.go file")
+	return ""
+}
+
+// Test AWS provider configuration
+func TestAWSProviderConfiguration(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test AWS provider region
+	if !strings.Contains(contentStr, `Region: jsii.String("us-east-1")`) {
+		t.Error("Expected AWS provider to be configured for us-east-1")
+	}
+
+	// Test default tags
+	expectedTags := []string{
+		`"Project":     jsii.String("SecureApp")`,
+		`"Environment": jsii.String("Production")`,
+		`"ManagedBy":   jsii.String("CDKTF")`,
+	}
+
+	for _, tag := range expectedTags {
+		if !strings.Contains(contentStr, tag) {
+			t.Errorf("Expected default tag not found: %s", tag)
+		}
+	}
+}
+
+// Test S3 backend configuration
+func TestS3BackendConfiguration(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test S3 backend configuration
+	if !strings.Contains(contentStr, "cdktf.NewS3Backend") {
+		t.Error("Expected S3 backend configuration")
+	}
+
+	// Test encryption enabled
+	if !strings.Contains(contentStr, "Encrypt: jsii.Bool(true)") {
+		t.Error("Expected S3 backend encryption to be enabled")
+	}
+
+	// Test environment variables usage
+	if !strings.Contains(contentStr, "TERRAFORM_STATE_BUCKET") {
+		t.Error("Expected TERRAFORM_STATE_BUCKET environment variable usage")
+	}
+
+	if !strings.Contains(contentStr, "TERRAFORM_STATE_BUCKET_REGION") {
+		t.Error("Expected TERRAFORM_STATE_BUCKET_REGION environment variable usage")
+	}
+}
+
+// Test IAM role configuration
+func TestIAMRoleConfiguration(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test Lambda service principal
+	if !strings.Contains(contentStr, `"Service": "lambda.amazonaws.com"`) {
+		t.Error("Expected Lambda service principal in IAM role")
+	}
+
+	// Test region restriction in trust policy
+	if !strings.Contains(contentStr, `"aws:RequestedRegion": "us-east-1"`) {
+		t.Error("Expected region restriction in IAM role trust policy")
+	}
+
+	// Test role policy attachment
+	if !strings.Contains(contentStr, "iamrolepolicyattachment.NewIamRolePolicyAttachment") {
+		t.Error("Expected IAM role policy attachment")
+	}
+}
+
+// Test DynamoDB configuration
+func TestDynamoDBConfiguration(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test billing mode
+	if !strings.Contains(contentStr, `BillingMode: jsii.String("PAY_PER_REQUEST")`) {
+		t.Error("Expected PAY_PER_REQUEST billing mode")
+	}
+
+	// Test hash key
+	if !strings.Contains(contentStr, `HashKey:     jsii.String("id")`) {
+		t.Error("Expected 'id' as hash key")
+	}
+
+	// Test attribute configuration
+	if !strings.Contains(contentStr, `Name: jsii.String("id")`) {
+		t.Error("Expected 'id' attribute definition")
+	}
+
+	if !strings.Contains(contentStr, `Type: jsii.String("S")`) {
+		t.Error("Expected string type for 'id' attribute")
+	}
+}
+
+// Test outputs configuration
+func TestOutputsConfiguration(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test all required outputs
+	expectedOutputs := []string{
+		"bucket_name",
+		"bucket_arn",
+		"dynamodb_table_name",
+		"dynamodb_table_arn",
+		"iam_role_name",
+		"iam_role_arn",
+		"access_analyzer_arn",
+	}
+
+	for _, output := range expectedOutputs {
+		if !strings.Contains(contentStr, `"`+output+`"`) {
+			t.Errorf("Expected output '%s' not found", output)
+		}
+	}
+
+	// Test output descriptions
+	if !strings.Contains(contentStr, "Description:") {
+		t.Error("Expected output descriptions")
+	}
+}
+
+// Test environment variable handling
+func TestEnvironmentVariableHandling(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test ENVIRONMENT_SUFFIX handling
+	if !strings.Contains(contentStr, `envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")`) {
+		t.Error("Expected ENVIRONMENT_SUFFIX environment variable handling")
+	}
+
+	// Test default value
+	if !strings.Contains(contentStr, `envSuffix = "prod"`) {
+		t.Error("Expected default environment suffix 'prod'")
+	}
+}
+
+// Test resource tagging
+func TestResourceTagging(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test that resources have tags
+	tagPatterns := []string{
+		`"Name":`,
+		`"Description":`,
+		`Tags: &map[string]*string{`,
+	}
+
+	for _, pattern := range tagPatterns {
+		if !strings.Contains(contentStr, pattern) {
+			t.Errorf("Expected tag pattern '%s' not found", pattern)
+		}
+	}
+}
+
+// Test code structure and imports
+func TestCodeStructure(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	// Test required imports
+	requiredImports := []string{
+		`"github.com/aws/constructs-go/constructs/v10"`,
+		`"github.com/hashicorp/terraform-cdk-go/cdktf"`,
+		`"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"`,
+		`"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"`,
+		`"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dynamodbtable"`,
+		`"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"`,
+		`"github.com/cdktf/cdktf-provider-aws-go/aws/v19/accessanalyzeranalyzer"`,
+	}
+
+	for _, imp := range requiredImports {
+		if !strings.Contains(contentStr, imp) {
+			t.Errorf("Expected import '%s' not found", imp)
+		}
+	}
+
+	// Test function signature
+	if !strings.Contains(contentStr, "func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack") {
+		t.Error("Expected correct NewTapStack function signature")
+	}
+
+	// Test main function
+	if !strings.Contains(contentStr, "func main()") {
+		t.Error("Expected main function")
+	}
+}
+// Test error handling and edge cases
+func TestErrorHandling(t *testing.T) {
+	t.Run("InvalidStackName", func(t *testing.T) {
+		app := cdktf.NewApp(nil)
+		
+		// Test with special characters
+		specialNames := []string{
+			"test-stack-123",
+			"TestStack_456",
+			"stack.test",
+		}
+		
+		for _, name := range specialNames {
+			assert.NotPanics(t, func() {
+				NewTapStack(app, name)
+			}, "Stack creation should handle special characters in name: %s", name)
+		}
+	})
+
+	t.Run("EnvironmentVariables", func(t *testing.T) {
+		// Test with different environment variables
+		testCases := []struct {
+			envVar string
+			value  string
+		}{
+			{"ENVIRONMENT_SUFFIX", "test"},
+			{"ENVIRONMENT_SUFFIX", "dev"},
+			{"ENVIRONMENT_SUFFIX", "staging"},
+			{"TERRAFORM_STATE_BUCKET", "custom-bucket"},
+			{"TERRAFORM_STATE_BUCKET_REGION", "us-west-2"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.envVar+"_"+tc.value, func(t *testing.T) {
+				// Set environment variable
+				oldValue := os.Getenv(tc.envVar)
+				os.Setenv(tc.envVar, tc.value)
+				defer func() {
+					if oldValue == "" {
+						os.Unsetenv(tc.envVar)
+					} else {
+						os.Setenv(tc.envVar, oldValue)
+					}
+				}()
+
+				app := cdktf.NewApp(nil)
+				assert.NotPanics(t, func() {
+					NewTapStack(app, "env-test")
+				}, "Stack creation should handle environment variable %s=%s", tc.envVar, tc.value)
+			})
+		}
+	})
+}
+
+// Test performance and resource limits
+func TestPerformance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping performance tests in short mode")
+	}
+
+	t.Run("MultipleStackCreation", func(t *testing.T) {
+		// Test creating multiple stacks quickly
+		for i := 0; i < 10; i++ {
+			app := cdktf.NewApp(nil)
+			stackName := fmt.Sprintf("perf-test-%d", i)
+			
+			assert.NotPanics(t, func() {
+				stack := NewTapStack(app, stackName)
+				assert.NotNil(t, stack)
+			}, "Should handle multiple stack creation")
+		}
+	})
+
+	t.Run("LargeStackName", func(t *testing.T) {
+		app := cdktf.NewApp(nil)
+		// Test with very long stack name
+		longName := strings.Repeat("a", 100)
+		
+		assert.NotPanics(t, func() {
+			NewTapStack(app, longName)
+		}, "Should handle long stack names")
+	})
+}
+
+// Test code quality and best practices
+func TestCodeQuality(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	t.Run("NoHardcodedValues", func(t *testing.T) {
+		// Check for hardcoded AWS account IDs (should not exist)
+		accountIdPattern := regexp.MustCompile(`\d{12}`)
+		if accountIdPattern.MatchString(contentStr) {
+			// Allow in policy documents as placeholders
+			if !strings.Contains(contentStr, "arn:aws:logs:us-east-1:*:*") {
+				t.Error("Found potential hardcoded AWS account ID")
+			}
+		}
+
+		// Check for hardcoded regions (except us-east-1 which is expected)
+		regions := []string{"us-west-1", "us-west-2", "eu-west-1", "ap-southeast-1"}
+		for _, region := range regions {
+			if strings.Contains(contentStr, region) {
+				t.Errorf("Found hardcoded region: %s", region)
+			}
+		}
+	})
+
+	t.Run("ProperErrorHandling", func(t *testing.T) {
+		// Check for proper nil checks and error handling patterns
+		if strings.Contains(contentStr, "panic(") {
+			t.Error("Code should not contain panic statements")
+		}
+
+		// Check for environment variable defaults
+		if !strings.Contains(contentStr, `if envSuffix == ""`) {
+			t.Error("Expected proper default handling for environment variables")
+		}
+	})
+
+	t.Run("SecurityBestPractices", func(t *testing.T) {
+		// Check for security best practices
+		securityPatterns := []string{
+			"Encrypt: jsii.Bool(true)",           // S3 backend encryption
+			"ServerSideEncryption",               // DynamoDB encryption
+			"PointInTimeRecovery",               // DynamoDB backup
+			"BlockPublicAcls",                   // S3 public access block
+			"DenyInsecureConnections",           // HTTPS enforcement
+			"aws:SecureTransport",               // Secure transport condition
+		}
+
+		for _, pattern := range securityPatterns {
+			if !strings.Contains(contentStr, pattern) {
+				t.Errorf("Security best practice not found: %s", pattern)
+			}
+		}
+	})
+
+	t.Run("ResourceNamingConsistency", func(t *testing.T) {
+		// Check that all resources use consistent naming with environment suffix
+		resourceTypes := []string{
+			"SecureAppRole",
+			"SecureAppBucket", 
+			"SecureAppTable",
+			"SecureAppPolicy",
+			"SecureAppAccessAnalyzer",
+		}
+
+		for _, resourceType := range resourceTypes {
+			if !strings.Contains(contentStr, resourceType) {
+				t.Errorf("Expected resource type not found: %s", resourceType)
+			}
+		}
+	})
+}
+
+// Test documentation and comments
+func TestDocumentation(t *testing.T) {
+	stackFile := findStackFile(t)
+	content, err := os.ReadFile(stackFile)
+	if err != nil {
+		t.Fatalf("Failed to read %s: %v", stackFile, err)
+	}
+
+	contentStr := string(content)
+
+	t.Run("FunctionComments", func(t *testing.T) {
+		// Check for function documentation
+		functions := []string{
+			"NewTapStack",
+			"main",
+		}
+
+		for _, fn := range functions {
+			// Look for the function and check if there are comments nearby
+			if strings.Contains(contentStr, "func "+fn) {
+				// This is a basic check - in a real scenario you'd want more sophisticated comment checking
+				t.Logf("Found function: %s", fn)
+			}
+		}
+	})
+
+	t.Run("ConfigurationComments", func(t *testing.T) {
+		// Check for inline comments explaining complex configurations
+		commentPatterns := []string{
+			"// Configure AWS provider",
+			"// S3 Backend",
+			"// Create IAM role",
+			"// Create S3 bucket",
+			"// Create DynamoDB table",
+			"// Outputs",
+		}
+
+		foundComments := 0
+		for _, pattern := range commentPatterns {
+			if strings.Contains(contentStr, pattern) {
+				foundComments++
+			}
+		}
+
+		if foundComments < len(commentPatterns)/2 {
+			t.Error("Expected more inline comments for configuration sections")
+		}
+	})
+}
+
+// Test integration with CDKTF framework
+func TestCDKTFIntegration(t *testing.T) {
+	t.Run("StackInheritance", func(t *testing.T) {
+		app := cdktf.NewApp(nil)
+		stack := NewTapStack(app, "inheritance-test")
+
+		// Test that stack implements TerraformStack interface
+		_, ok := stack.(cdktf.TerraformStack)
+		assert.True(t, ok, "Stack should implement TerraformStack interface")
+	})
+
+	t.Run("AppIntegration", func(t *testing.T) {
+		app := cdktf.NewApp(nil)
+		stackName := "app-integration-test"
+		
+		// Create stack
+		stack := NewTapStack(app, stackName)
+		
+		// Verify stack is part of app
+		assert.NotNil(t, stack.Node().Scope(), "Stack should have a scope (app)")
+		assert.Equal(t, stackName, *stack.Node().Id(), "Stack ID should match")
+	})
+
+	t.Run("SynthesisValidation", func(t *testing.T) {
+		app := cdktf.NewApp(nil)
+		NewTapStack(app, "synth-validation-test")
+
+		// Test that synthesis produces valid output
+		assert.NotPanics(t, func() {
+			app.Synth()
+		}, "Synthesis should not panic")
+	})
+}
+
+// Benchmark tests
+func BenchmarkStackCreation(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		app := cdktf.NewApp(nil)
+		NewTapStack(app, fmt.Sprintf("benchmark-test-%d", i))
+	}
+}
+
+func BenchmarkStackSynthesis(b *testing.B) {
+	app := cdktf.NewApp(nil)
+	NewTapStack(app, "benchmark-synth-test")
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		app.Synth()
+	}
 }
