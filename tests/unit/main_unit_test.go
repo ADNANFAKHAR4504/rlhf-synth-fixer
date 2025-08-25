@@ -194,9 +194,6 @@ func TestInfrastructureOutputs(t *testing.T) {
 			"appRoleArn",
 			"privateSubnet1Id",
 			"privateSubnet2Id",
-			"configRecorderName",
-			"configDeliveryChannelName",
-			"configBucketName",
 		}
 
 		// Simulate exports
@@ -207,5 +204,11 @@ func TestInfrastructureOutputs(t *testing.T) {
 		return nil
 	}, pulumi.WithMocks("project", "stack", mocks{}))
 
+	assert.NoError(t, err)
+}
+
+// Test the main function
+func TestMainFunction(t *testing.T) {
+	err := pulumi.RunErr(CreateInfrastructure, pulumi.WithMocks("project", "stack", mocks{}))
 	assert.NoError(t, err)
 }

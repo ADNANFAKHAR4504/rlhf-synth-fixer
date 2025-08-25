@@ -119,7 +119,7 @@ func TestInfrastructureValidation(t *testing.T) {
 	t.Run("should validate environment suffix", func(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			environmentSuffix := "test-env"
-			
+
 			// Validate environment suffix format
 			assert.NotEmpty(t, environmentSuffix, "Environment suffix should not be empty")
 			assert.True(t, len(environmentSuffix) > 0, "Environment suffix should have length > 0")
@@ -134,15 +134,14 @@ func TestInfrastructureValidation(t *testing.T) {
 	t.Run("should validate common tags", func(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			commonTags := pulumi.StringMap{
-				"Environment": pulumi.String("production"),
-				"Project":     pulumi.String("secure-web-app"),
-				"Owner":       pulumi.String("devops-team"),
-				"Purpose":     pulumi.String("security-configuration"),
+				"Project":     pulumi.String("HealthApp"),
+				"Environment": pulumi.String("Production"),
+				"Compliance":  pulumi.String("HIPAA"),
 				"ManagedBy":   pulumi.String("pulumi"),
 			}
 
 			// Validate required tags
-			requiredTags := []string{"Environment", "Project", "Owner", "Purpose", "ManagedBy"}
+			requiredTags := []string{"Project", "Environment", "Compliance", "ManagedBy"}
 			for _, tag := range requiredTags {
 				assert.Contains(t, commonTags, tag, "Required tag %s should be present", tag)
 			}
@@ -150,6 +149,7 @@ func TestInfrastructureValidation(t *testing.T) {
 			// Validate tag values
 			assert.NotEmpty(t, commonTags["Environment"], "Environment tag should not be empty")
 			assert.NotEmpty(t, commonTags["Project"], "Project tag should not be empty")
+			assert.NotEmpty(t, commonTags["Compliance"], "Compliance tag should not be empty")
 
 			return nil
 		}, pulumi.WithMocks("project", "stack", mocks{}))
@@ -163,12 +163,13 @@ func TestInfrastructureValidation(t *testing.T) {
 
 			// Test resource naming patterns
 			resourceNames := map[string]string{
-				"kms-key":     fmt.Sprintf("secure-app-key-%s", environmentSuffix),
-				"vpc":         fmt.Sprintf("secure-vpc-%s", environmentSuffix),
-				"bucket":      fmt.Sprintf("secure-app-bucket-%s", environmentSuffix),
-				"lambda":      fmt.Sprintf("s3-processor-%s", environmentSuffix),
-				"bastion":     fmt.Sprintf("bastion-host-%s", environmentSuffix),
-				"web-server":  fmt.Sprintf("web-server-1-%s", environmentSuffix),
+				"kms-key":      fmt.Sprintf("healthapp-kms-key-%s", environmentSuffix),
+				"vpc":          fmt.Sprintf("healthapp-vpc-%s", environmentSuffix),
+				"phi-bucket":   fmt.Sprintf("healthapp-phi-data-%s", environmentSuffix),
+				"audit-bucket": fmt.Sprintf("healthapp-audit-logs-%s", environmentSuffix),
+				"db-secret":    fmt.Sprintf("healthapp/db/credentials-%s", environmentSuffix),
+				"api-secret":   fmt.Sprintf("healthapp/api/keys-%s", environmentSuffix),
+				"app-role":     fmt.Sprintf("healthapp-application-role-%s", environmentSuffix),
 			}
 
 			for resourceType, name := range resourceNames {
@@ -203,7 +204,7 @@ func TestConfigurationEdgeCases(t *testing.T) {
 	t.Run("should handle very long environment suffix", func(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			environmentSuffix := "very-long-environment-suffix-that-might-cause-issues"
-			
+
 			// In real implementation, you might want to truncate or validate length
 			if len(environmentSuffix) > 20 {
 				environmentSuffix = environmentSuffix[:20]
@@ -219,7 +220,7 @@ func TestConfigurationEdgeCases(t *testing.T) {
 	t.Run("should handle special characters in environment suffix", func(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			environmentSuffix := "test-env-123"
-			
+
 			// Validate that suffix contains only allowed characters
 			allowedChars := "abcdefghijklmnopqrstuvwxyz0123456789-"
 			for _, char := range strings.ToLower(environmentSuffix) {
@@ -276,14 +277,14 @@ func TestSecurityConfigurations(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			// Test security configuration validation
 			securitySettings := map[string]bool{
-				"s3-encryption":           true,
-				"s3-versioning":           true,
-				"s3-public-access-block":  true,
-				"vpc-dns-hostnames":       true,
-				"vpc-dns-support":         true,
-				"cloudfront-https-only":   true,
-				"lambda-vpc-enabled":      true,
-				"kms-encryption":          true,
+				"s3-encryption":          true,
+				"s3-versioning":          true,
+				"s3-public-access-block": true,
+				"vpc-dns-hostnames":      true,
+				"vpc-dns-support":        true,
+				"cloudfront-https-only":  true,
+				"lambda-vpc-enabled":     true,
+				"kms-encryption":         true,
 			}
 
 			for setting, expected := range securitySettings {
@@ -300,11 +301,11 @@ func TestSecurityConfigurations(t *testing.T) {
 		err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 			// Test network security configurations
 			networkConfig := map[string]string{
-				"vpc-cidr":           "10.0.0.0/16",
-				"public-subnet-1":    "10.0.1.0/24",
-				"public-subnet-2":    "10.0.2.0/24",
-				"private-subnet-1":   "10.0.10.0/24",
-				"private-subnet-2":   "10.0.11.0/24",
+				"vpc-cidr":         "10.0.0.0/16",
+				"public-subnet-1":  "10.0.1.0/24",
+				"public-subnet-2":  "10.0.2.0/24",
+				"private-subnet-1": "10.0.10.0/24",
+				"private-subnet-2": "10.0.11.0/24",
 			}
 
 			for name, cidr := range networkConfig {

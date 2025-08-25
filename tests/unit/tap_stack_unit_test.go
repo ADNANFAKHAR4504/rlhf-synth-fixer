@@ -42,8 +42,10 @@ func (mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.Propert
 	}
 
 	outs["tags"] = resource.NewObjectProperty(resource.PropertyMap{
-		"Environment": resource.NewStringProperty("production"),
-		"Project":     resource.NewStringProperty("secure-web-app"),
+		"Project":     resource.NewStringProperty("HealthApp"),
+		"Environment": resource.NewStringProperty("Production"),
+		"Compliance":  resource.NewStringProperty("HIPAA"),
+		"ManagedBy":   resource.NewStringProperty("pulumi"),
 	})
 
 	return args.Name + "_id", outs, nil
@@ -127,29 +129,6 @@ func (rt *resourceTracker) Call(args pulumi.MockCallArgs) (resource.PropertyMap,
 		}, nil
 	}
 	return resource.PropertyMap{}, nil
-}
-
-func TestMainFunction(t *testing.T) {
-	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-		if environmentSuffix == "" {
-			environmentSuffix = "dev"
-		}
-
-		commonTags := pulumi.StringMap{
-			"Environment": pulumi.String("production"),
-			"Project":     pulumi.String("secure-web-app"),
-			"Owner":       pulumi.String("devops-team"),
-			"Purpose":     pulumi.String("security-configuration"),
-			"ManagedBy":   pulumi.String("pulumi"),
-			"Suffix":      pulumi.String(environmentSuffix),
-		}
-
-		assert.NotNil(t, commonTags)
-		return nil
-	}, pulumi.WithMocks("project", "stack", mocks{}))
-
-	assert.NoError(t, err)
 }
 
 func TestKMSKeyCreation(t *testing.T) {
@@ -250,7 +229,7 @@ func TestTagMerging(t *testing.T) {
 func TestResourceNamingConventions(t *testing.T) {
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		environmentSuffix := "test"
-		
+
 		expectedBucketName := "secure-app-bucket-" + environmentSuffix
 		expectedVPCName := "secure-vpc-" + environmentSuffix
 		expectedRoleName := "ec2-role-" + environmentSuffix
@@ -291,9 +270,7 @@ func TestConfigurationValidation(t *testing.T) {
 func TestCompleteInfrastructureDeployment(t *testing.T) {
 	mockProvider := &resourceTracker{resources: make(map[string]resource.PropertyMap)}
 
-	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return nil
-	}, pulumi.WithMocks("project", "stack", mockProvider))
+	err := pulumi.RunErr(CreateInfrastructure, pulumi.WithMocks("project", "stack", mockProvider))
 
 	assert.NoError(t, err)
 
