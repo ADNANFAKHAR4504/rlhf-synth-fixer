@@ -103,6 +103,7 @@ func (stack *TapStack) createOutputs() {
 	}
 }
 
+
 func str(v string) *string { return &v }
 func num(v float64) *float64 { return &v }
 func boolPtr(v bool) *bool { return &v }
