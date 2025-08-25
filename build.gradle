@@ -1,4 +1,4 @@
-import groovy.xml.XmlParser
+import groovy.xml.XmlParser;
 
 plugins {
     id 'java'
@@ -36,29 +36,36 @@ configurations.all {
 }
 
 dependencies {
-    // Pulumi (if needed)
+
+    // Fixed Pulumi core dependencies - using stable versions that work together
+
     implementation 'com.pulumi:pulumi:0.11.0'
     implementation 'com.pulumi:aws:6.52.0'
 
-    // Utilities
+    // Additional Pulumi core classes that might be needed
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.google.guava:guava:33.0.0-jre'
 
-    // ✅ AWS CDK (BOM for consistency)
-    implementation platform("software.amazon.awscdk:aws-cdk-lib:2.204.0")
-    implementation 'software.amazon.awscdk:aws-cdk-lib'
+    // AWS CDK dependencies
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
     implementation 'software.constructs:constructs:10.4.2'
 
-    // Tests
+    // AWS CDK dependencies
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
+    implementation 'software.constructs:constructs:10.4.2'
+
+    // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.mockito:mockito-core:5.11.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
     testImplementation 'org.assertj:assertj-core:3.24.2'
+
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+
+    testImplementation 'org.assertj:assertj-core:3.24.2'
 }
 
-// Application entry point
 application {
     mainClass = 'app.Main'
 }
@@ -87,9 +94,9 @@ sourceSets {
     }
 }
 
-// Configure integration test configurations
+// Configure integration test configurations after source sets are defined
 configurations {
-    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestImplementation.extendsFrom testImplementation  
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
@@ -99,6 +106,28 @@ dependencies {
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.16.1'
     integrationTestImplementation 'software.amazon.awssdk:ec2:2.21.29'
     integrationTestImplementation 'software.amazon.awssdk:core:2.21.29'
+}
+
+// Configure JAR with main class for Pulumi
+jar {
+    manifest {
+        attributes(
+                'Main-Class': 'app.Main'
+        )
+    }
+
+    // Create fat JAR with all dependencies
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName = 'app.jar'
+    zip64 = true  // Enable zip64 for large archives
+}
+
+// AWS SDK dependencies for live resource testing (integration tests only)
+dependencies {
     integrationTestImplementation 'software.amazon.awssdk:s3:2.24.12'
     integrationTestImplementation 'software.amazon.awssdk:kms:2.24.12'
     integrationTestImplementation 'software.amazon.awssdk:iam:2.24.12'
@@ -106,24 +135,13 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:sts:2.24.12'
 }
 
-// Configure JAR with fat JAR
-jar {
-    manifest {
-        attributes('Main-Class': 'app.Main')
-    }
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    archiveFileName = 'app.jar'
-    zip64 = true
-}
-
-// JUnit config
+// JUnit configuration
 test {
     useJUnitPlatform()
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
+
+    // Show test results in console
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
@@ -131,7 +149,10 @@ test {
         showExceptions true
         showStackTraces true
     }
+
+    // Always run tests, never use cache
     outputs.upToDateWhen { false }
+
     finalizedBy jacocoTestReport
 }
 
@@ -139,9 +160,12 @@ test {
 tasks.register('integrationTest', Test) {
     description = 'Runs integration tests.'
     group = 'verification'
+
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     useJUnitPlatform()
+
+    // Show test results in console
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
@@ -149,11 +173,14 @@ tasks.register('integrationTest', Test) {
         showExceptions true
         showStackTraces true
     }
+
+    // Always run tests, never use cache
     outputs.upToDateWhen { false }
+
     shouldRunAfter test
 }
 
-// Checkstyle
+// Checkstyle configuration
 checkstyle {
     toolVersion = '10.12.7'
     configFile = file('config/checkstyle/checkstyle.xml')
@@ -161,7 +188,7 @@ checkstyle {
     maxWarnings = 0
 }
 
-// JaCoCo
+// JaCoCo configuration
 jacoco {
     toolVersion = "0.8.8"
 }
@@ -173,12 +200,18 @@ jacocoTestReport {
         html.required = true
         csv.required = false
     }
+
     executionData fileTree(project.buildDir.absolutePath).include("jacoco/*.exec")
+
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: ['**/Main.class'])
+            fileTree(dir: it, exclude: [
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
+            ])
         }))
     }
+
     finalizedBy jacocoTestCoverageVerification
 }
 
@@ -186,7 +219,9 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
     violationRules {
         rule {
-            limit { minimum = 0.09 }
+            limit {
+                minimum = 0.09
+            }
         }
         rule {
             element = 'CLASS'
@@ -195,21 +230,29 @@ jacocoTestCoverageVerification {
                 value = 'COVEREDRATIO'
                 minimum = 0.09
             }
+            // Exclude Main class and infrastructure classes from coverage requirements
             excludes = [
                 'app.Main',
                 'app.WebAppStack',
-                'app.WebAppStack.*'
+                'app.WebAppStack.NetworkResources',
+                'app.WebAppStack.SecurityResources',
+                'app.WebAppStack.ComputeResources',
+                'app.WebAppStack.LoadBalancerResources',
+                'app.WebAppStack.StorageResources'
             ]
         }
     }
 }
 
+// Custom task to show coverage summary
 tasks.register('showCoverage') {
     dependsOn jacocoTestReport
     doLast {
         def reportFile = file("$buildDir/reports/jacoco/test/html/index.html")
         def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
+
         if (xmlReportFile.exists()) {
+            // Parse XML to get coverage percentage
             def xml = new XmlParser().parse(xmlReportFile)
             def counter = xml.counter.find { it.'@type' == 'LINE' }
             if (counter) {
@@ -217,22 +260,29 @@ tasks.register('showCoverage') {
                 def missed = counter.'@missed'.toInteger()
                 def total = covered + missed
                 def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+
                 println "\n📊 Code Coverage Summary:"
                 println "Lines Covered: ${covered}/${total} (${percentage}%)"
                 println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
             }
         }
+
         if (reportFile.exists()) {
             println "📄 Detailed HTML Report: file://${reportFile.absolutePath}"
         }
     }
 }
 
+// Custom task to run all tests with detailed output
 tasks.register('testAll') {
     dependsOn test, integrationTest, showCoverage
     group = 'verification'
     description = 'Runs all tests and displays coverage summary'
-    doFirst { println "\n🚀 Running all tests with coverage analysis..." }
+
+    doFirst {
+        println "\n🚀 Running all tests with coverage analysis..."
+    }
 }
 
+// Make check depend on integration tests and coverage
 check.dependsOn integrationTest, jacocoTestCoverageVerification
