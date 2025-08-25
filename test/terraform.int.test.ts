@@ -313,8 +313,8 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       });
 
       const response = await s3Client.send(locationCmd);
-      // us-east-1 returns null for LocationConstraint
-      expect(response.LocationConstraint).toBeNull();
+      // us-east-1 returns null or undefined for LocationConstraint
+      expect(response.LocationConstraint == null).toBe(true);
 
       // Verify bucket exists
       const headCmd = new HeadBucketCommand({
@@ -474,7 +474,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(assumeRolePolicy.Statement[0].Action).toBe('sts:AssumeRole');
 
       // Get role policy (inline policy)
-      const policyName = `${roleName.split('-role')[0]}-ec2-s3-policy`;
+      const policyName = `secure-tap-ec2-s3-policy`;
       const policyCmd = new GetRolePolicyCommand({
         RoleName: roleName,
         PolicyName: policyName
