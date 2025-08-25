@@ -18,11 +18,17 @@
   "training_quality": 8.5,
   "aws_services": [
     "AWS API Gateway",
-    "AWS Lambda", 
+    "AWS Lambda",
     "AWS KMS",
     "AWS IAM",
     "AWS CloudWatch",
     "AWS X-Ray",
     "AWS CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
