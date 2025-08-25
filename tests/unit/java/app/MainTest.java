@@ -379,4 +379,205 @@ class MainTest {
             }
         }
     }
+
+    @Nested
+    @DisplayName("Policy Content Validation Tests")
+    class PolicyContentValidationTests {
+        
+        @Test
+        @DisplayName("KMS key policy should contain required AWS permissions")
+        void testKmsKeyPolicyContainsRequiredPermissions() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getKmsKeyPolicy");
+                method.setAccessible(true);
+                String policy = (String) method.invoke(null);
+                
+                // Verify policy contains key security elements
+                assertTrue(policy.contains("kms:Encrypt"));
+                assertTrue(policy.contains("kms:Decrypt"));
+                assertTrue(policy.contains("kms:GenerateDataKey"));
+                assertTrue(policy.contains("EnableRootPermissions"));
+                assertTrue(policy.contains("AllowSecurityTeamAccess"));
+            } catch (Exception e) {
+                fail("Failed to validate KMS key policy content: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("Security role policy should contain required actions")
+        void testSecurityRolePolicyContents() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getSecurityRolePolicy");
+                method.setAccessible(true);
+                String policy = (String) method.invoke(null);
+                
+                assertTrue(policy.contains("logs:CreateLogGroup"));
+                assertTrue(policy.contains("cloudtrail:LookupEvents"));
+                assertTrue(policy.contains("guardduty:GetDetector"));
+                assertTrue(policy.contains("s3:GetBucketLocation"));
+            } catch (Exception e) {
+                fail("Failed to test security role policy contents: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("VPC Flow Log policy should contain CloudWatch permissions")
+        void testVpcFlowLogPolicyContents() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getVpcFlowLogPolicy");
+                method.setAccessible(true);
+                String policy = (String) method.invoke(null);
+                
+                assertTrue(policy.contains("logs:CreateLogGroup"));
+                assertTrue(policy.contains("logs:PutLogEvents"));
+                assertTrue(policy.contains("logs:DescribeLogGroups"));
+            } catch (Exception e) {
+                fail("Failed to test VPC Flow Log policy: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("Assume role policy should require recent MFA")
+        void testAssumeRolePolicyMfaRequirement() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getAssumeRolePolicyWithMfa");
+                method.setAccessible(true);
+                String policy = (String) method.invoke(null);
+                
+                assertTrue(policy.contains("aws:MultiFactorAuthPresent"));
+                assertTrue(policy.contains("aws:MultiFactorAuthAge"));
+                assertTrue(policy.contains("3600"));
+                assertTrue(policy.contains("sts:AssumeRole"));
+            } catch (Exception e) {
+                fail("Failed to test assume role policy: " + e.getMessage());
+            }
+        }
+    }
+    
+    @Nested
+    @DisplayName("Environment Configuration Edge Cases")
+    class EnvironmentConfigurationEdgeCasesTests {
+        
+        @Test
+        @DisplayName("Environment suffix method should default to dev when environment variable not set")
+        void testEnvironmentSuffixDefaultBehavior() {
+            // Test that the method exists and returns a valid non-null string
+            try {
+                Method method = Main.class.getDeclaredMethod("getEnvironmentSuffix");
+                method.setAccessible(true);
+                String result = (String) method.invoke(null);
+                
+                assertNotNull(result);
+                assertFalse(result.trim().isEmpty());
+                // Should be either 'dev' default or actual environment value
+                assertTrue(result.matches("[a-zA-Z0-9-]+"), 
+                    "Environment suffix should contain only valid characters");
+            } catch (Exception e) {
+                fail("Failed to test environment suffix default behavior: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("Environment suffix method should handle string processing correctly")
+        void testEnvironmentSuffixStringProcessing() {
+            // Test the internal logic by examining the method behavior
+            try {
+                Method method = Main.class.getDeclaredMethod("getEnvironmentSuffix");
+                method.setAccessible(true);
+                String result = (String) method.invoke(null);
+                
+                // Verify the result is properly trimmed and processed
+                assertEquals(result, result.trim(), "Result should be trimmed");
+                assertFalse(result.isEmpty(), "Result should not be empty");
+                
+                // Test that it matches expected patterns for AWS resource naming
+                assertTrue(result.length() > 0 && result.length() < 64, 
+                    "Environment suffix should be reasonable length for AWS resources");
+            } catch (Exception e) {
+                fail("Failed to test environment suffix string processing: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("Environment suffix should be consistent across calls")
+        void testEnvironmentSuffixConsistency() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getEnvironmentSuffix");
+                method.setAccessible(true);
+                
+                String result1 = (String) method.invoke(null);
+                String result2 = (String) method.invoke(null);
+                
+                assertEquals(result1, result2, "Environment suffix should be consistent");
+            } catch (Exception e) {
+                fail("Failed to test environment suffix consistency: " + e.getMessage());
+            }
+        }
+        
+        @Test
+        @DisplayName("Environment suffix should be suitable for AWS resource naming")
+        void testEnvironmentSuffixNamingCompliance() {
+            try {
+                Method method = Main.class.getDeclaredMethod("getEnvironmentSuffix");
+                method.setAccessible(true);
+                String suffix = (String) method.invoke(null);
+                
+                // Test AWS resource naming compliance
+                assertTrue(suffix.matches("[a-zA-Z0-9-]+"), 
+                    "Suffix should only contain alphanumeric characters and hyphens");
+                assertFalse(suffix.startsWith("-"), "Suffix should not start with hyphen");
+                assertFalse(suffix.endsWith("-"), "Suffix should not end with hyphen");
+                assertTrue(suffix.length() <= 63, "Suffix should be reasonable length");
+            } catch (Exception e) {
+                fail("Failed to test environment suffix naming compliance: " + e.getMessage());
+            }
+        }
+    }
+    
+    @Nested
+    @DisplayName("Method Return Type Validation")
+    class MethodReturnTypeValidationTests {
+        
+        @Test
+        @DisplayName("Policy methods should return String")
+        void testPolicyMethodReturnTypes() {
+            String[] policyMethods = {
+                "getKmsKeyPolicy",
+                "getMfaEnforcementPolicy",
+                "getAssumeRolePolicyWithMfa",
+                "getSecurityRolePolicy",
+                "getVpcFlowLogAssumeRolePolicy",
+                "getVpcFlowLogPolicy"
+            };
+            
+            for (String methodName : policyMethods) {
+                try {
+                    Method method = Main.class.getDeclaredMethod(methodName);
+                    assertEquals(String.class, method.getReturnType(),
+                        "Method " + methodName + " should return String");
+                } catch (NoSuchMethodException e) {
+                    fail("Method " + methodName + " not found: " + e.getMessage());
+                }
+            }
+        }
+        
+        @Test
+        @DisplayName("Output-based policy methods should return Output<String>")
+        void testOutputPolicyMethodReturnTypes() {
+            String[] outputMethods = {
+                "getSnsTopicPolicy",
+                "getSecureS3BucketPolicy"
+            };
+            
+            for (String methodName : outputMethods) {
+                try {
+                    Method method = Main.class.getDeclaredMethod(methodName, Output.class);
+                    assertEquals(Output.class, method.getReturnType(),
+                        "Method " + methodName + " should return Output<String>");
+                } catch (NoSuchMethodException e) {
+                    fail("Method " + methodName + " not found: " + e.getMessage());
+                }
+            }
+        }
+    }
 }

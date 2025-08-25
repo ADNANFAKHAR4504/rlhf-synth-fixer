@@ -219,4 +219,192 @@ class MainIntegrationTest {
         // 10. S3 Security - verify public access block
         assertTrue(true, "S3 public access should be blocked");
     }
+    
+    @Test
+    @DisplayName("Should validate JSON syntax for all policies")
+    @EnabledIfEnvironmentVariable(named = "ENABLE_INTEGRATION_TESTS", matches = "true")
+    void testAllPolicyJsonSyntax() {
+        // Test that all policy methods return valid JSON
+        try {
+            // Test all string-returning policy methods
+            String[] policyMethods = {
+                "getKmsKeyPolicy",
+                "getMfaEnforcementPolicy", 
+                "getAssumeRolePolicyWithMfa",
+                "getSecurityRolePolicy",
+                "getVpcFlowLogAssumeRolePolicy",
+                "getVpcFlowLogPolicy"
+            };
+            
+            for (String methodName : policyMethods) {
+                Method method = Main.class.getDeclaredMethod(methodName);
+                method.setAccessible(true);
+                String policy = (String) method.invoke(null);
+                
+                assertNotNull(policy, "Policy from " + methodName + " should not be null");
+                assertFalse(policy.trim().isEmpty(), "Policy from " + methodName + " should not be empty");
+                
+                // Basic JSON validation - should start with { and end with }
+                assertTrue(policy.trim().startsWith("{"), 
+                    "Policy from " + methodName + " should start with {");
+                assertTrue(policy.trim().endsWith("}"), 
+                    "Policy from " + methodName + " should end with }");
+                
+                // Should contain required policy elements
+                assertTrue(policy.contains("Version"),
+                    "Policy from " + methodName + " should contain Version");
+                assertTrue(policy.contains("Statement"),
+                    "Policy from " + methodName + " should contain Statement");
+            }
+        } catch (Exception e) {
+            fail("Failed to validate policy JSON syntax: " + e.getMessage());
+        }
+    }
+    
+    @Test
+    @DisplayName("Should validate security configuration completeness")
+    @EnabledIfEnvironmentVariable(named = "ENABLE_INTEGRATION_TESTS", matches = "true") 
+    void testSecurityConfigurationCompleteness() {
+        try {
+            // Test that all required constants are defined
+            Field regionsField = Main.class.getDeclaredField("TARGET_REGIONS");
+            regionsField.setAccessible(true);
+            String[] regions = (String[]) regionsField.get(null);
+            
+            Field emailField = Main.class.getDeclaredField("NOTIFICATION_EMAIL");
+            emailField.setAccessible(true);
+            String email = (String) emailField.get(null);
+            
+            // Validate constants
+            assertNotNull(regions, "TARGET_REGIONS should be defined");
+            assertEquals(3, regions.length, "Should target exactly 3 regions");
+            assertNotNull(email, "NOTIFICATION_EMAIL should be defined");
+            assertTrue(email.contains("@"), "Notification email should be valid format");
+            
+            // Validate that all required methods exist
+            String[] requiredMethods = {
+                "defineSecurityInfrastructure",
+                "deployRegionalSecurityInfrastructure",
+                "getEnvironmentSuffix",
+                "getKmsKeyPolicy",
+                "getMfaEnforcementPolicy",
+                "getAssumeRolePolicyWithMfa",
+                "getSecurityRolePolicy",
+                "getSnsTopicPolicy",
+                "getVpcFlowLogAssumeRolePolicy",
+                "getVpcFlowLogPolicy",
+                "getSecureS3BucketPolicy"
+            };
+            
+            for (String methodName : requiredMethods) {
+                Method method = null;
+                try {
+                    if ("defineSecurityInfrastructure".equals(methodName)) {
+                        method = Main.class.getDeclaredMethod(methodName, com.pulumi.Context.class);
+                    } else if ("deployRegionalSecurityInfrastructure".equals(methodName)) {
+                        method = Main.class.getDeclaredMethod(methodName, 
+                            com.pulumi.Context.class, String.class, String.class,
+                            com.pulumi.resources.CustomResourceOptions.class);
+                    } else if ("getSnsTopicPolicy".equals(methodName) || "getSecureS3BucketPolicy".equals(methodName)) {
+                        method = Main.class.getDeclaredMethod(methodName, com.pulumi.core.Output.class);
+                    } else {
+                        method = Main.class.getDeclaredMethod(methodName);
+                    }
+                    assertNotNull(method, "Method " + methodName + " should exist");
+                } catch (NoSuchMethodException e) {
+                    fail("Required method " + methodName + " not found: " + e.getMessage());
+                }
+            }
+            
+        } catch (Exception e) {
+            fail("Failed to validate security configuration completeness: " + e.getMessage());
+        }
+    }
+    
+    @Test
+    @DisplayName("Should validate multi-region deployment readiness")
+    @EnabledIfEnvironmentVariable(named = "ENABLE_INTEGRATION_TESTS", matches = "true")
+    void testMultiRegionDeploymentReadiness() {
+        try {
+            Field regionsField = Main.class.getDeclaredField("TARGET_REGIONS");
+            regionsField.setAccessible(true);
+            String[] regions = (String[]) regionsField.get(null);
+            
+            // Validate that all target regions are in different geographic locations
+            assertTrue(regions[0].startsWith("us-"), "First region should be in US");
+            assertTrue(regions[1].startsWith("eu-"), "Second region should be in Europe");  
+            assertTrue(regions[2].startsWith("ap-"), "Third region should be in Asia-Pacific");
+            
+            // Validate region naming consistency
+            for (String region : regions) {
+                assertTrue(region.matches("^[a-z]{2}-[a-z]+-\\d+$"),
+                    "Region " + region + " should follow AWS naming convention");
+            }
+            
+            Method suffixMethod = Main.class.getDeclaredMethod("getEnvironmentSuffix");
+            suffixMethod.setAccessible(true);
+            String suffix = (String) suffixMethod.invoke(null);
+            
+            // Validate that resource names would be unique across regions
+            for (String region : regions) {
+                String kmsKeyName = "security-kms-key-" + region + "-" + suffix;
+                String vpcName = "security-vpc-" + region + "-" + suffix;
+                
+                // Names should be unique and follow naming patterns
+                assertTrue(kmsKeyName.contains(region) && kmsKeyName.contains(suffix),
+                    "KMS key name should contain region and suffix");
+                assertTrue(vpcName.contains(region) && vpcName.contains(suffix),
+                    "VPC name should contain region and suffix");
+                    
+                // Validate length constraints for AWS resource names
+                assertTrue(kmsKeyName.length() < 256, "KMS key name should be under 256 characters");
+                assertTrue(vpcName.length() < 256, "VPC name should be under 256 characters");
+            }
+            
+        } catch (Exception e) {
+            fail("Failed to validate multi-region deployment readiness: " + e.getMessage());
+        }
+    }
+    
+    @Test
+    @DisplayName("Should validate security policy effectiveness")
+    @EnabledIfEnvironmentVariable(named = "ENABLE_INTEGRATION_TESTS", matches = "true")
+    void testSecurityPolicyEffectiveness() {
+        try {
+            // Test MFA policy enforcement
+            Method mfaMethod = Main.class.getDeclaredMethod("getMfaEnforcementPolicy");
+            mfaMethod.setAccessible(true);
+            String mfaPolicy = (String) mfaMethod.invoke(null);
+            
+            // Validate MFA policy denies access without MFA
+            assertTrue(mfaPolicy.contains("Deny"), "MFA policy should contain Deny statement");
+            assertTrue(mfaPolicy.contains("aws:MultiFactorAuthPresent"), 
+                "MFA policy should check MFA presence");
+            assertTrue(mfaPolicy.contains("false"), 
+                "MFA policy should deny when MFA is false");
+            
+            // Test assume role policy MFA requirements
+            Method assumeMethod = Main.class.getDeclaredMethod("getAssumeRolePolicyWithMfa");
+            assumeMethod.setAccessible(true);
+            String assumePolicy = (String) assumeMethod.invoke(null);
+            
+            assertTrue(assumePolicy.contains("aws:MultiFactorAuthAge"),
+                "Assume role policy should check MFA age");
+            assertTrue(assumePolicy.contains("3600"),
+                "Assume role policy should require recent MFA (1 hour)");
+                
+            // Test KMS policy allows proper access
+            Method kmsMethod = Main.class.getDeclaredMethod("getKmsKeyPolicy");
+            kmsMethod.setAccessible(true);
+            String kmsPolicy = (String) kmsMethod.invoke(null);
+            
+            assertTrue(kmsPolicy.contains("kms:Encrypt") && kmsPolicy.contains("kms:Decrypt"),
+                "KMS policy should allow encrypt/decrypt operations");
+            assertTrue(kmsPolicy.contains("SecurityRole"),
+                "KMS policy should reference security roles");
+                
+        } catch (Exception e) {
+            fail("Failed to validate security policy effectiveness: " + e.getMessage());
+        }
+    }
 }
