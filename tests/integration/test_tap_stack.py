@@ -60,8 +60,14 @@ class TestTapStackIntegration(unittest.TestCase):
         vpc = response['Vpcs'][0]
         
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
+        dns_hostnames = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsHostnames'
+        )
+        dns_support = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id, Attribute='enableDnsSupport'
+        )
+        self.assertTrue(dns_hostnames['EnableDnsHostnames']['Value'])
+        self.assertTrue(dns_support['EnableDnsSupport']['Value'])
         
         # Verify subnets exist
         subnets_response = self.ec2_client.describe_subnets(
@@ -271,7 +277,7 @@ class TestTapStackIntegration(unittest.TestCase):
         
         if cpu_alarm:
             self.assertEqual(cpu_alarm['MetricName'], 'CPUUtilization')
-            self.assertEqual(cpu_alarm['Namespace'], 'AWS/AutoScaling')
+            self.assertEqual(cpu_alarm['Namespace'], 'AWS/EC2')
             self.assertEqual(cpu_alarm['Statistic'], 'Average')
             self.assertEqual(cpu_alarm['Threshold'], 80.0)
             self.assertEqual(cpu_alarm['ComparisonOperator'], 'GreaterThanThreshold')
