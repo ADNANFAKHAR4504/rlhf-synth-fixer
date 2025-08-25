@@ -409,7 +409,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('CloudWatch log group has retention period', () => {
-      expect(stackContent).toMatch(/retention_in_days\s*=\s*14/);
+      expect(stackContent).toMatch(/retention_in_days\s*=\s*30/);
     });
 
     test('CloudWatch log group uses KMS encryption', () => {

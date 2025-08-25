@@ -28,6 +28,9 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+# Data source for current AWS account
+data "aws_caller_identity" "current" {}
+
 # Local values for common tags and configurations
 locals {
   project_name = "iac-aws-nova-model-breaking"
@@ -49,6 +52,31 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${local.project_name} encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = "kms:*"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
   tags = merge(local.common_tags, {
     Name = "${local.project_name}-kms-key"
@@ -449,11 +477,11 @@ resource "aws_lb_target_group" "main" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/"
+    path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5
-    unhealthy_threshold = 2
+    unhealthy_threshold = 3
   }
 
   tags = merge(local.common_tags, {
@@ -500,13 +528,52 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    set -e
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+    echo "Starting EC2 setup..."
+
+    # Update system
     yum update -y
+
+    # Install AWS CLI and CloudWatch agent
+    yum install -y amazon-cloudwatch-agent awscli
+
+    # Start and enable Apache
     yum install -y httpd
     systemctl start httpd
     systemctl enable httpd
+
+    # Create test page
     echo "<h1>Hello from ${local.project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
     echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+
+    # Create health check endpoint
+    echo "OK" > /var/www/html/health
+
+    # Configure CloudWatch agent
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWCONFIG'
+    {
+      "logs": {
+        "logs_collected": {
+          "files": {
+            "collect_list": [
+              {
+                "file_path": "/var/log/httpd/access_log",
+                "log_group_name": "/aws/ec2/${local.project_name}/access",
+                "log_stream_name": "{instance_id}"
+              }
+            ]
+          }
+        }
+      }
+    }
+    CWCONFIG
+
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+    echo "EC2 setup complete"
   EOF
   )
 
@@ -611,11 +678,11 @@ resource "aws_db_instance" "main" {
 # CloudWatch Log Group for application logs
 resource "aws_cloudwatch_log_group" "app_logs" {
   name              = "/aws/ec2/${local.project_name}"
-  retention_in_days = 14
   kms_key_id        = aws_kms_key.main.arn
+  retention_in_days = 30
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-log-group"
+    Name = "${local.project_name}-application-log-group"
   })
 }
 
