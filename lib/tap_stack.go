@@ -561,34 +561,6 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/CloudTrailLogsRole"),
 	})
 
-	// RDS Enhanced Monitoring role
-	rdsMonitoringRole := iamrole.NewIamRole(stack, jsii.String("rds-monitoring-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String(fmt.Sprintf("tap-rds-enhanced-monitoring-role-%s", environmentSuffix)),
-		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Action": "sts:AssumeRole",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "monitoring.rds.amazonaws.com"
-					}
-				}
-			]
-		}`),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("tap-rds-enhanced-monitoring-role-%s", environmentSuffix)),
-			"Service":     jsii.String("RDS"),
-			"Environment": config.Environment,
-		},
-	})
-
-	// Attach AWS managed policy for RDS Enhanced Monitoring
-	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack, jsii.String("rds-enhanced-monitoring"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
-		Role:      rdsMonitoringRole.Name(),
-		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"),
-	})
-
 	// S3 Bucket for application data
 	appDataBucket := s3bucket.NewS3Bucket(stack, jsii.String("app-data-bucket"), &s3bucket.S3BucketConfig{
 		Bucket: jsii.String(fmt.Sprintf("tap-app-data-bucket-%s", environmentSuffix)),
@@ -711,7 +683,6 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	rdsInstance := dbinstance.NewDbInstance(stack, jsii.String("postgres-db"), &dbinstance.DbInstanceConfig{
 		Identifier:            jsii.String(fmt.Sprintf("tap-postgres-db-%s", environmentSuffix)),
 		Engine:                jsii.String("postgres"),
-		EngineVersion:         jsii.String("15.4"),
 		InstanceClass:         jsii.String("db.t3.micro"),
 		AllocatedStorage:      jsii.Number(20),
 		StorageType:           jsii.String("gp3"),
@@ -727,8 +698,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		MaintenanceWindow:     jsii.String("sun:04:00-sun:05:00"),
 		MultiAz:               jsii.Bool(true),
 		PubliclyAccessible:    jsii.Bool(false),
-		MonitoringInterval:    jsii.Number(60),
-		MonitoringRoleArn:     rdsMonitoringRole.Arn(),
+		MonitoringInterval:    jsii.Number(0),
 		EnabledCloudwatchLogsExports: &[]*string{
 			jsii.String("postgresql"),
 		},
@@ -930,11 +900,6 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	cdktf.NewTerraformOutput(stack, jsii.String("cloudtrail_role_arn"), &cdktf.TerraformOutputConfig{
 		Value:       cloudtrailRole.Arn(),
 		Description: jsii.String("ARN of the CloudTrail role"),
-	})
-
-	cdktf.NewTerraformOutput(stack, jsii.String("rds_monitoring_role_arn"), &cdktf.TerraformOutputConfig{
-		Value:       rdsMonitoringRole.Arn(),
-		Description: jsii.String("ARN of the RDS monitoring role"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("cloudtrail_trail_arn"), &cdktf.TerraformOutputConfig{
