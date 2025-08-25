@@ -10,10 +10,10 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-// Prefer env var; else resolve ../main.tf relative to this test file
+// Prefer env var; else resolve ../tap_stack.tf relative to this test file
 const TF_MAIN_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
-  : path.resolve(__dirname, "../main.tf");
+  : path.resolve(__dirname, "../tap_stack.tf");
 
 // Helper function to extract locals block content properly handling nested braces
 function extractLocalsBlock(hcl: string): string | null {
