@@ -44,9 +44,11 @@ elif [ "$LANGUAGE" = "go" ]; then
         exit 1
     fi
 
-    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    PKGS=$(go list ./lib/... ./tests/... 2>/dev/null || true)
     if [ -n "$PKGS" ]; then
+        echo "Found Go packages to vet: $PKGS"
         echo "$PKGS" | xargs -r go vet
+        echo "✅ Go vet completed successfully"
     else
         echo "No Go packages found under lib or tests to vet."
     fi
