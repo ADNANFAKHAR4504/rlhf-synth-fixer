@@ -525,10 +525,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 				"LOG_GROUP":   lambdaLogGroup.Name(),
 			},
 		},
-		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
-			SubnetIds:        &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
-			SecurityGroupIds: &[]*string{},
-		},
+
 		DependsOn: &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-vpc-logging-function", envPrefix)),
