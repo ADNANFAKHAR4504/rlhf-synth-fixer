@@ -7,17 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
-	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -84,8 +79,8 @@ func TestDeployedInfrastructure(t *testing.T) {
 			t.Error("VPC should exist")
 		} else {
 			vpc := vpcOutput.Vpcs[0]
-			if *vpc.State != "available" {
-				t.Errorf("Expected VPC state to be available, got %s", *vpc.State)
+			if string(vpc.State) != "available" {
+				t.Errorf("Expected VPC state to be available, got %s", string(vpc.State))
 			}
 		}
 	})
