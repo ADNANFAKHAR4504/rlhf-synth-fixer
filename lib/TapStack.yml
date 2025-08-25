@@ -1,423 +1,379 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Secure FinTech Infrastructure'
+Description: Corrected CloudFormation template for a secure FinTech application infrastructure with VPC, S3, DynamoDB, RDS, IAM, CloudTrail, and Lambda remediation.
 
+# Parameters for customizable inputs
 Parameters:
   EnvironmentName:
     Type: String
-    Default: 'production'
-    AllowedValues:
-      - 'production'
-      - 'staging'
-      - 'development'
-    Description: 'Environment name for resource tagging and configuration'
-
+    Default: production
+    AllowedValues: ['production', 'staging', 'development']
+    Description: Environment type for resource tagging and configuration (lowercase only).
   CostCenter:
     Type: String
-    Default: 'Finance'
-    AllowedValues:
-      - 'Finance'
-      - 'IT'
-      - 'Operations'
-    Description: 'Cost center for resource allocation'
-
-  VpcCidr:
+    Default: Finance
+    Description: Cost center for resource tagging.
+  VpcCidrBlock:
     Type: String
-    Default: '10.0.0.0/16'
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-    Description: 'CIDR block for the VPC'
-
-  DBUsername:
+    Default: 10.0.0.0/16
+    Description: CIDR block for the VPC.
+  PublicSubnet1Cidr:
     Type: String
-    Default: 'tapuser'
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    Description: 'Database master username'
+    Default: 10.0.1.0/24
+    Description: CIDR block for public subnet 1.
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for public subnet 2.
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for private subnet 1.
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: CIDR block for private subnet 2.
+  AdminUserName:
+    Type: String
+    Default: fintech-admin
+    Description: Name of the IAM admin user.
 
-  FlowLogRetentionDays:
-    Type: Number
-    Default: 90
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
-    Description: 'Retention period for VPC Flow Logs in days'
+# Mappings for region-specific configurations
+Mappings:
+  RegionMap:
+    us-east-1:
+      AvailabilityZone1: us-east-1a
+      AvailabilityZone2: us-east-1b
+    us-west-2:
+      AvailabilityZone1: us-west-2a
+      AvailabilityZone2: us-west-2b
 
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentName, 'production']
-
+# Resources section
 Resources:
-  # KMS Key for Secrets Manager
-  TapSecretsKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: 'KMS Key for Secrets Manager encryption'
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - kms:Create*
-              - kms:Describe*
-              - kms:Enable*
-              - kms:List*
-              - kms:Put*
-              - kms:Update*
-              - kms:Revoke*
-              - kms:Disable*
-              - kms:Get*
-              - kms:Delete*
-              - kms:TagResource
-              - kms:UntagResource
-              - kms:ScheduleKeyDeletion
-              - kms:CancelKeyDeletion
-              - kms:GenerateDataKey*
-              - kms:Decrypt
-              - kms:CreateGrant
-            Resource: '*'
-          - Sid: Allow Secrets Manager to use key
-            Effect: Allow
-            Principal:
-              Service: secretsmanager.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
-            Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapSecretsKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/tapstack-secrets-${EnvironmentName}-${AWS::Region}'
-      TargetKeyId: !Ref TapSecretsKMSKey
-
-  # Secrets Manager Secret for RDS Credentials
-  TapDBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'tap-db-credentials-${EnvironmentName}-${AWS::StackName}'
-      Description: 'RDS credentials for TapStack'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludeCharacters: '"''\/@'
-      KmsKeyId: !Ref TapSecretsKMSKey
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # KMS Key for encryption (S3, CloudTrail, RDS)
-  TapKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: 'KMS Key for TapStack encryption'
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - kms:Create*
-              - kms:Describe*
-              - kms:Enable*
-              - kms:List*
-              - kms:Put*
-              - kms:Update*
-              - kms:Revoke*
-              - kms:Disable*
-              - kms:Get*
-              - kms:Delete*
-              - kms:TagResource
-              - kms:UntagResource
-              - kms:ScheduleKeyDeletion
-              - kms:CancelKeyDeletion
-            Resource: '*'
-          - Sid: Allow CloudTrail to encrypt logs
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow RDS to use key
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow S3 to use key
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/tapstack-${EnvironmentName}-${AWS::Region}'
-      TargetKeyId: !Ref TapKMSKey
-
-  # VPC and Networking
-  TapVPC:
+  # VPC Configuration
+  FinTechVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: !Ref VpcCidrBlock
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub 'TapVPC-${EnvironmentName}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet2
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet2
 
   # Internet Gateway
-  TapInternetGateway:
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub 'TapIGW-${EnvironmentName}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapInternetGatewayAttachment:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: !Ref TapInternetGateway
-      VpcId: !Ref TapVPC
+      VpcId: !Ref FinTechVPC
+      InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets
-  TapPublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref TapVPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: '10.0.1.0/24'
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapPublicSubnet1-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapPublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref TapVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.2.0/24'
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapPublicSubnet2-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # Private Subnets
-  TapPrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref TapVPC
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: '10.0.3.0/24'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapPrivateSubnet1-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapPrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref TapVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.4.0/24'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapPrivateSubnet2-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # NAT Gateways
-  TapNatGateway1EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: TapInternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapNatGW1EIP-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapNatGateway1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt TapNatGateway1EIP.AllocationId
-      SubnetId: !Ref TapPublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapNatGW1-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapNatGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: TapInternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapNatGW2EIP-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapNatGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt TapNatGateway2EIP.AllocationId
-      SubnetId: !Ref TapPublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapNatGW2-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # Route Tables
-  TapPublicRouteTable:
+  # Route Table for Public Subnets
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref TapVPC
+      VpcId: !Ref FinTechVPC
       Tags:
-        - Key: Name
-          Value: !Sub 'TapPublicRoutes-${EnvironmentName}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapDefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: TapInternetGatewayAttachment
     Properties:
-      RouteTableId: !Ref TapPublicRouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref TapInternetGateway
+      GatewayId: !Ref InternetGateway
 
-  TapPublicSubnet1RouteTableAssociation:
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref TapPublicRouteTable
-      SubnetId: !Ref TapPublicSubnet1
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
 
-  TapPublicSubnet2RouteTableAssociation:
+  PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref TapPublicRouteTable
-      SubnetId: !Ref TapPublicSubnet2
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
 
-  TapPrivateRouteTable1:
-    Type: AWS::EC2::RouteTable
+  # Security Group for ALB (Allow 80, 443)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref TapVPC
+      GroupDescription: Security group for ALB allowing HTTP and HTTPS
+      VpcId: !Ref FinTechVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
         - Key: Name
-          Value: !Sub 'TapPrivateRoutes1-${EnvironmentName}'
+          Value: !Sub ${EnvironmentName}-alb-sg
+
+  # Security Group for RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS allowing access from private subnets
+      VpcId: !Ref FinTechVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCidrBlock
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-rds-sg
+
+  # S3 Bucket for App Data
+  AppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-appdata-a1b2c3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveAndDeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
+      Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapDefaultPrivateRoute1:
-    Type: AWS::EC2::Route
+  AppDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
-      RouteTableId: !Ref TapPrivateRouteTable1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref TapNatGateway1
+      Bucket: !Ref AppDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub ${AppDataBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
 
-  TapPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  # S3 Bucket for CloudTrail Logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      RouteTableId: !Ref TapPrivateRouteTable1
-      SubnetId: !Ref TapPrivateSubnet1
-
-  TapPrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref TapVPC
+      BucketName: !Sub ${EnvironmentName}-ctlogs-a1b2c3
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       Tags:
-        - Key: Name
-          Value: !Sub 'TapPrivateRoutes2-${EnvironmentName}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapDefaultPrivateRoute2:
-    Type: AWS::EC2::Route
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
-      RouteTableId: !Ref TapPrivateRouteTable2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref TapNatGateway2
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub ${CloudTrailBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:PutObject
+            Resource:
+              - !GetAtt CloudTrailBucket.Arn
+              - !Sub ${CloudTrailBucket.Arn}/*
 
-  TapPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+  # DynamoDB Table
+  FinTechTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      RouteTableId: !Ref TapPrivateRouteTable2
-      SubnetId: !Ref TapPrivateSubnet2
+      TableName: !Sub ${EnvironmentName}-fintech-data
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # RDS Instance (PostgreSQL)
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-fintech-db
+      Engine: postgres
+      EngineVersion: '13.15'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageEncrypted: true
+      MasterUsername: admin
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${EnvironmentName}-rds-secret:SecretString:password}}"
+      MultiAZ: true
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudTrail Configuration
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub ${EnvironmentName}-fintech-trail
+      S3BucketName: !Ref CloudTrailBucket
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
 
   # VPC Flow Logs
-  TapVPCFlowLogRole:
+  FlowLogRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -428,7 +384,7 @@ Resources:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: TapVPCFlowLogDeliveryRolePolicy
+        - PolicyName: FlowLogPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -437,8 +393,6 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
                 Resource: '*'
       Tags:
         - Key: Environment
@@ -446,268 +400,67 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapVPCFlowLogGroup:
+  FlowLogLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/tap-${EnvironmentName}-${AWS::StackName}'
-      RetentionInDays: !Ref FlowLogRetentionDays
+      LogGroupName: !Sub /aws/vpc/${EnvironmentName}-flowlogs
+      RetentionInDays: 90
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapVPCFlowLog:
+  VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
+      ResourceId: !Ref FinTechVPC
       ResourceType: VPC
-      ResourceId: !Ref TapVPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref TapVPCFlowLogGroup
-      DeliverLogsPermissionArn: !GetAtt TapVPCFlowLogRole.Arn
+      LogGroupName: !Ref FlowLogLogGroup
+      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
+
+  # IAM Configuration
+  AdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref AdminUserName
+      ManagedPolicyArns:
+        - !Ref AdminPolicy
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # Security Groups
-  TapWebSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  AdminPolicy:
+    Type: AWS::IAM::ManagedPolicy
     Properties:
-      GroupDescription: 'Security group for web tier - allows HTTP/HTTPS'
-      VpcId: !Ref TapVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTP access from internet'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS access from internet'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: 'All outbound traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapWebSG-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapApplicationSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for application tier'
-      VpcId: !Ref TapVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          SourceSecurityGroupId: !Ref TapWebSecurityGroup
-          Description: 'Application access from web tier'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: 'All outbound traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapApplicationSG-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapDatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for database tier'
-      VpcId: !Ref TapVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref TapApplicationSecurityGroup
-          Description: 'PostgreSQL access from application tier'
-      Tags:
-        - Key: Name
-          Value: !Sub 'TapDatabaseSG-${EnvironmentName}'
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # S3 Buckets
-  TapDataBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Delete
-    Properties:
-      BucketName: !Sub 'tap-data-${AWS::AccountId}-${EnvironmentName}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: TransitionToGlacier
-            Status: Enabled
-            NoncurrentVersionTransitions:
-              - StorageClass: GLACIER
-                TransitionInDays: 30
-            NoncurrentVersionExpirationInDays: 365
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapCloudTrailBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Delete
-    Properties:
-      BucketName: !Sub 'tap-cloudtrail-${AWS::AccountId}-${EnvironmentName}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TapKMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  TapCloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TapCloudTrailBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt TapCloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${TapCloudTrailBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - dynamodb:*
+              - rds:DescribeDBInstances
+            Resource:
+              - !GetAtt AppDataBucket.Arn
+              - !Sub ${AppDataBucket.Arn}/*
+              - !GetAtt FinTechTable.Arn
+              - !GetAtt RDSInstance.DBInstanceArn
 
-  # DynamoDB Table
-  TapTransactionsTable:
-    Type: AWS::DynamoDB::Table
+  MFADevice:
+    Type: AWS::IAM::VirtualMFADevice
     Properties:
-      TableName: !Sub 'TapTransactions-${EnvironmentName}'
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: TransactionId
-          AttributeType: S
-        - AttributeName: UserId
-          AttributeType: S
-        - AttributeName: Timestamp
-          AttributeType: N
-      KeySchema:
-        - AttributeName: TransactionId
-          KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: UserIndex
-          KeySchema:
-            - AttributeName: UserId
-              KeyType: HASH
-            - AttributeName: Timestamp
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: alias/aws/dynamodb
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
+      VirtualMfaDeviceName: !Sub ${EnvironmentName}-admin-mfa
+      Users:
+        - !Ref AdminUser
 
-  # RDS Subnet Group
-  TapDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: 'Subnet group for TapStack RDS'
-      SubnetIds:
-        - !Ref TapPrivateSubnet1
-        - !Ref TapPrivateSubnet2
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # RDS Instance
-  TapDatabase:
-    Type: AWS::RDS::DBInstance
-    DependsOn:
-      - TapDBPasswordSecret
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub 'tap-db-${EnvironmentName}'
-      DBInstanceClass: db.t3.medium
-      Engine: postgres
-      EngineVersion: '13.15'
-      AllocatedStorage: 20
-      StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref TapKMSKey
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:TapDBPasswordSecret:SecretString:password}}'
-      DBSubnetGroupName: !Ref TapDBSubnetGroup
-      VPCSecurityGroups:
-        - !Ref TapDatabaseSecurityGroup
-      MultiAZ: !If [IsProduction, true, false]
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: !If [IsProduction, true, false]
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # Lambda Execution Role
-  TapLambdaExecutionRole:
+  # Lambda for Remediation
+  RemediationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -717,162 +470,19 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: TapRemediationPolicy
+        - PolicyName: RemediationPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetBucketPublicAccessBlock
                   - s3:PutBucketPublicAccessBlock
-                  - s3:GetEncryptionConfiguration
-                  - s3:PutEncryptionConfiguration
-                  - s3:GetBucketVersioning
-                  - s3:PutBucketVersioning
-                  - s3:GetBucketTagging
-                  - s3:PutBucketTagging
-                  - s3:ListBucket
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource:
-                  - !GetAtt TapDataBucket.Arn
-                  - !Sub '${TapDataBucket.Arn}/*'
-                  - !GetAtt TapCloudTrailBucket.Arn
-                  - !Sub '${TapCloudTrailBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - dynamodb:DescribeTable
-                  - dynamodb:UpdateTable
-                Resource: !GetAtt TapTransactionsTable.Arn
-              - Effect: Allow
-                Action:
-                  - rds:DescribeDBInstances
-                  - rds:ModifyDBInstance
-                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:tap-db-${EnvironmentName}'
-              - Effect: Allow
-                Action:
+                  - s3:PutBucketPolicy
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TapRemediation-${EnvironmentName}:*'
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref TapDBPasswordSecret
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # Lambda Function for Remediation
-  TapRemediationFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub 'TapRemediation-${EnvironmentName}'
-      Runtime: python3.9
-      Handler: index.lambda_handler
-      Role: !GetAtt TapLambdaExecutionRole.Arn
-      Timeout: 300
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref EnvironmentName
-          COST_CENTER: !Ref CostCenter
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          import os
-          
-          def lambda_handler(event, context):
-              print(f"Received event: {json.dumps(event)}")
-              
-              s3_client = boto3.client('s3')
-              dynamodb_client = boto3.client('dynamodb')
-              rds_client = boto3.client('rds')
-              
-              environment = os.environ.get('ENVIRONMENT', 'production')
-              cost_center = os.environ.get('COST_CENTER', 'Finance')
-              
-              try:
-                  # Example remediation: Ensure S3 bucket public access is blocked
-                  if 'Records' in event:
-                      for record in event['Records']:
-                          if 's3' in record:
-                              bucket_name = record['s3']['bucket']['name']
-                              ensure_bucket_security(s3_client, bucket_name)
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps({
-                          'message': 'Remediation completed successfully',
-                          'environment': environment
-                      })
-                  }
-              except Exception as e:
-                  print(f"Error in remediation: {str(e)}")
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps({
-                          'error': str(e)
-                      })
-                  }
-          
-          def ensure_bucket_security(s3_client, bucket_name):
-              try:
-                  s3_client.put_public_access_block(
-                      Bucket=bucket_name,
-                      PublicAccessBlockConfiguration={
-                          'BlockPublicAcls': True,
-                          'IgnorePublicAcls': True,
-                          'BlockPublicPolicy': True,
-                          'RestrictPublicBuckets': True
-                      }
-                  )
-                  print(f"Applied public access block to bucket: {bucket_name}")
-              except Exception as e:
-                  print(f"Error applying public access block: {str(e)}")
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  # IAM Roles and Users
-  TapAdminRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: sts:AssumeRole
-            Condition:
-              Bool:
-                aws:MultiFactorAuthPresent: true
-      Policies:
-        - PolicyName: TapAdminPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:*
-                  - rds:*
-                  - dynamodb:*
-                  - lambda:*
-                  - cloudtrail:*
-                  - kms:*
-                  - ec2:*
-                  - logs:*
-                  - iam:*
-                  - cloudformation:*
-                  - secretsmanager:*
+                  - config:PutEvaluations
                 Resource: '*'
       Tags:
         - Key: Environment
@@ -880,177 +490,93 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapDeveloperRole:
-    Type: AWS::IAM::Role
+  RemediationLambda:
+    Type: AWS::Lambda::Function
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: sts:AssumeRole
-            Condition:
-              Bool:
-                aws:MultiFactorAuthPresent: true
-      Policies:
-        - PolicyName: TapDeveloperPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt TapDataBucket.Arn
-                  - !Sub '${TapDataBucket.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                Resource:
-                  - !GetAtt TapTransactionsTable.Arn
-                  - !Sub '${TapTransactionsTable.Arn}/index/*'
-              - Effect: Allow
-                Action:
-                  - rds:DescribeDBInstances
-                Resource: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:tap-db-${EnvironmentName}'
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource: !GetAtt TapRemediationFunction.Arn
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref TapDBPasswordSecret
+      FunctionName: !Sub ${EnvironmentName}-remediation-function
+      Handler: index.handler
+      Role: !GetAtt RemediationRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          
+          def handler(event, context):
+              s3_client = boto3.client('s3')
+              buckets = s3_client.list_buckets()['Buckets']
+              for bucket in buckets:
+                  bucket_name = bucket['Name']
+                  try:
+                      s3_client.put_public_access_block(
+                          Bucket=bucket_name,
+                          PublicAccessBlockConfiguration={
+                              'BlockPublicAcls': True,
+                              'IgnorePublicAcls': True,
+                              'BlockPublicPolicy': True,
+                              'RestrictPublicBuckets': True
+                          }
+                      )
+                  except Exception as e:
+                      print(f"Error remediating {bucket_name}: {str(e)}")
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Remediation complete')
+              }
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  TapAdminUser:
-    Type: AWS::IAM::User
+  # CloudWatch Event Rule to Trigger Lambda
+  RemediationEventRule:
+    Type: AWS::Events::Rule
     Properties:
-      Policies:
-        - PolicyName: AssumeAdminRole
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: sts:AssumeRole
-                Resource: !GetAtt TapAdminRole.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
+      Description: Triggers Lambda to remediate non-compliant S3 buckets
+      ScheduleExpression: rate(1 day)
+      Targets:
+        - Arn: !GetAtt RemediationLambda.Arn
+          Id: RemediationLambdaTarget
 
-  TapDeveloperUser:
-    Type: AWS::IAM::User
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      Policies:
-        - PolicyName: AssumeDeveloperRole
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: sts:AssumeRole
-                Resource: !GetAtt TapDeveloperRole.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RemediationLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RemediationEventRule.Arn
 
-  # CloudTrail
-  TapCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: TapCloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub 'TapCloudTrail-${EnvironmentName}'
-      S3BucketName: !Ref TapCloudTrailBucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: false
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref TapKMSKey
-      IsLogging: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
+# Outputs for key resource references
 Outputs:
   VPCId:
-    Description: 'VPC ID'
-    Value: !Ref TapVPC
+    Description: ID of the VPC
+    Value: !Ref FinTechVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
-
-  PublicSubnet1Id:
-    Description: 'Public Subnet 1 ID'
-    Value: !Ref TapPublicSubnet1
+      Name: !Sub ${EnvironmentName}-vpc-id
+  AppDataBucketName:
+    Description: Name of the application data bucket
+    Value: !Ref AppDataBucket
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
-
-  PublicSubnet2Id:
-    Description: 'Public Subnet 2 ID'
-    Value: !Ref TapPublicSubnet2
+      Name: !Sub ${EnvironmentName}-appdata-bucket
+  CloudTrailBucketName:
+    Description: Name of the CloudTrail logs bucket
+    Value: !Ref CloudTrailBucket
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
-
-  PrivateSubnet1Id:
-    Description: 'Private Subnet 1 ID'
-    Value: !Ref TapPrivateSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
-
-  PrivateSubnet2Id:
-    Description: 'Private Subnet 2 ID'
-    Value: !Ref TapPrivateSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
-
-  DataBucketName:
-    Description: 'S3 Data Bucket Name'
-    Value: !Ref TapDataBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-DataBucket-Name'
-
-  DatabaseEndpoint:
-    Description: 'RDS Database Endpoint'
-    Value: !GetAtt TapDatabase.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-Database-Endpoint'
-
+      Name: !Sub ${EnvironmentName}-cloudtrail-bucket
   DynamoDBTableName:
-    Description: 'DynamoDB Table Name'
-    Value: !Ref TapTransactionsTable
+    Description: Name of the DynamoDB table
+    Value: !Ref FinTechTable
     Export:
-      Name: !Sub '${AWS::StackName}-DynamoDB-Table'
-
-  LambdaFunctionArn:
-    Description: 'Lambda Remediation Function ARN'
-    Value: !GetAtt TapRemediationFunction.Arn
+      Name: !Sub ${EnvironmentName}-dynamodb-table
+  RDSEndpoint:
+    Description: Endpoint of the RDS instance
+    Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-Lambda-ARN'
-
-  KMSKeyId:
-    Description: 'KMS Key ID for TapStack encryption'
-    Value: !Ref TapKMSKey
+      Name: !Sub ${EnvironmentName}-rds-endpoint
+  RemediationLambdaArn:
+    Description: ARN of the remediation Lambda function
+    Value: !GetAtt RemediationLambda.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKey-ID'
-
-  SecretArn:
-    Description: 'Secrets Manager Secret ARN for RDS Credentials'
-    Value: !Ref TapDBPasswordSecret
-    Export:
-      Name: !Sub '${AWS::StackName}-Secret-ARN'
+      Name: !Sub ${EnvironmentName}-remediation-lambda-arn
