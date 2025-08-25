@@ -9,7 +9,7 @@
   "subtask": "Network Infrastructure Design",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Security Configuration",
     "Resource Scaling",
     "Performance Optimization"
@@ -25,5 +25,11 @@
     "IAM",
     "Route53",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
