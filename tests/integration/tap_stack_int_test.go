@@ -783,6 +783,7 @@ func TestDeploymentReadiness(t *testing.T) {
 
 	t.Logf("Stack synthesis completed successfully in %v", synthTime)
 }
+
 // TestNewTapStackIntegration tests the full NewTapStack function integration
 func TestNewTapStackIntegration(t *testing.T) {
 	if testing.Short() {
@@ -793,7 +794,7 @@ func TestNewTapStackIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "integration-test",
 		StateBucket:       "test-bucket",
@@ -802,7 +803,7 @@ func TestNewTapStackIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "IntegrationTestStack", props)
 	app.Synth()
 
@@ -841,7 +842,7 @@ func testVPCInfrastructureIntegration(t *testing.T, tfPath string) {
 
 	// Verify complete VPC infrastructure
 	requiredVPCResources := []string{
-		"aws_vpc", "aws_internet_gateway", "aws_subnet", 
+		"aws_vpc", "aws_internet_gateway", "aws_subnet",
 		"aws_route_table", "aws_route", "aws_route_table_association",
 		"aws_nat_gateway", "aws_eip",
 	}
@@ -916,7 +917,7 @@ func TestResourceTaggingIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "tag-test",
 		StateBucket:       "test-bucket",
@@ -925,7 +926,7 @@ func TestResourceTaggingIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "TagTestStack", props)
 	app.Synth()
 
@@ -1013,7 +1014,7 @@ func TestCostOptimizationIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "cost-test",
 		StateBucket:       "test-bucket",
@@ -1022,7 +1023,7 @@ func TestCostOptimizationIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "CostTestStack", props)
 	app.Synth()
 
@@ -1098,7 +1099,7 @@ func TestDisasterRecoveryIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "dr-test",
 		StateBucket:       "test-bucket",
@@ -1107,7 +1108,7 @@ func TestDisasterRecoveryIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "DRTestStack", props)
 	app.Synth()
 
@@ -1132,14 +1133,14 @@ func TestDisasterRecoveryIntegration(t *testing.T) {
 		if subnets, ok := resources["aws_subnet"]; ok {
 			subnetMap := subnets.(map[string]interface{})
 			azSet := make(map[string]bool)
-			
+
 			for _, subnetConfig := range subnetMap {
 				configMap := subnetConfig.(map[string]interface{})
 				if az, ok := configMap["availability_zone"]; ok {
 					azSet[az.(string)] = true
 				}
 			}
-			
+
 			if len(azSet) < 2 {
 				t.Error("infrastructure should span multiple availability zones for DR")
 			}
@@ -1152,14 +1153,14 @@ func TestDisasterRecoveryIntegration(t *testing.T) {
 		if s3Buckets, ok := resources["aws_s3_bucket"]; ok {
 			bucketMap := s3Buckets.(map[string]interface{})
 			hasBackupBucket := false
-			
+
 			for bucketName := range bucketMap {
 				if strings.Contains(bucketName, "logs") || strings.Contains(bucketName, "backup") {
 					hasBackupBucket = true
 					break
 				}
 			}
-			
+
 			if !hasBackupBucket {
 				t.Error("should have backup/logs bucket for DR purposes")
 			}
@@ -1193,6 +1194,7 @@ func TestDisasterRecoveryIntegration(t *testing.T) {
 		}
 	})
 }
+
 // TestEnvironmentVariableIntegration validates environment variable handling
 func TestEnvironmentVariableIntegration(t *testing.T) {
 	if testing.Short() {
@@ -1236,7 +1238,7 @@ func TestEnvironmentVariableIntegration(t *testing.T) {
 			outdir := filepath.Join(tmpDir, "cdktf.out")
 
 			app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-			
+
 			props := &TapStackProps{
 				EnvironmentSuffix: "default-env",
 				StateBucket:       "default-bucket",
@@ -1245,7 +1247,7 @@ func TestEnvironmentVariableIntegration(t *testing.T) {
 				RepositoryName:    "test-repo",
 				CommitAuthor:      "test-author",
 			}
-			
+
 			stackName := fmt.Sprintf("EnvTestStack%s", tc.environmentSuffix)
 			NewTapStack(app, stackName, props)
 			app.Synth()
@@ -1314,7 +1316,7 @@ func TestSecurityHardeningIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "security-test",
 		StateBucket:       "test-bucket",
@@ -1323,7 +1325,7 @@ func TestSecurityHardeningIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "SecurityTestStack", props)
 	app.Synth()
 
@@ -1347,7 +1349,7 @@ func TestSecurityHardeningIntegration(t *testing.T) {
 	t.Run("EncryptionCompliance", func(t *testing.T) {
 		// Verify all storage resources use encryption
 		storageResources := []string{"aws_s3_bucket", "aws_cloudwatch_log_group"}
-		
+
 		for _, resourceType := range storageResources {
 			if resourceMap, ok := resources[resourceType]; ok {
 				resourceInstances := resourceMap.(map[string]interface{})
@@ -1403,7 +1405,7 @@ func TestSecurityHardeningIntegration(t *testing.T) {
 			roleMap := iamRoles.(map[string]interface{})
 			for roleName, roleConfig := range roleMap {
 				configMap := roleConfig.(map[string]interface{})
-				
+
 				// Verify assume role policy is restrictive
 				if assumeRolePolicy, ok := configMap["assume_role_policy"].(string); ok {
 					if strings.Contains(assumeRolePolicy, "*") {
@@ -1439,7 +1441,7 @@ func TestPerformanceOptimizationIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "perf-test",
 		StateBucket:       "test-bucket",
@@ -1448,7 +1450,7 @@ func TestPerformanceOptimizationIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "PerfTestStack", props)
 	app.Synth()
 
@@ -1474,7 +1476,7 @@ func TestPerformanceOptimizationIntegration(t *testing.T) {
 			lambdaMap := lambdaFunctions.(map[string]interface{})
 			for lambdaName, lambdaConfig := range lambdaMap {
 				configMap := lambdaConfig.(map[string]interface{})
-				
+
 				// Verify runtime is current
 				if runtime, ok := configMap["runtime"]; ok {
 					runtimeStr := runtime.(string)
@@ -1498,11 +1500,11 @@ func TestPerformanceOptimizationIntegration(t *testing.T) {
 			vpcMap := vpcs.(map[string]interface{})
 			for vpcName, vpcConfig := range vpcMap {
 				configMap := vpcConfig.(map[string]interface{})
-				
+
 				if dnsHostnames, ok := configMap["enable_dns_hostnames"]; !ok || dnsHostnames != true {
 					t.Errorf("VPC %s should have DNS hostnames enabled for performance", vpcName)
 				}
-				
+
 				if dnsSupport, ok := configMap["enable_dns_support"]; !ok || dnsSupport != true {
 					t.Errorf("VPC %s should have DNS support enabled for performance", vpcName)
 				}
@@ -1513,14 +1515,14 @@ func TestPerformanceOptimizationIntegration(t *testing.T) {
 		if subnets, ok := resources["aws_subnet"]; ok {
 			subnetMap := subnets.(map[string]interface{})
 			azCount := make(map[string]int)
-			
+
 			for _, subnetConfig := range subnetMap {
 				configMap := subnetConfig.(map[string]interface{})
 				if az, ok := configMap["availability_zone"]; ok {
 					azCount[az.(string)]++
 				}
 			}
-			
+
 			if len(azCount) < 2 {
 				t.Error("subnets should span multiple AZs for better performance and availability")
 			}
@@ -1538,7 +1540,7 @@ func TestComplianceIntegration(t *testing.T) {
 	outdir := filepath.Join(tmpDir, "cdktf.out")
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-	
+
 	props := &TapStackProps{
 		EnvironmentSuffix: "compliance-test",
 		StateBucket:       "test-bucket",
@@ -1547,7 +1549,7 @@ func TestComplianceIntegration(t *testing.T) {
 		RepositoryName:    "test-repo",
 		CommitAuthor:      "test-author",
 	}
-	
+
 	NewTapStack(app, "ComplianceTestStack", props)
 	app.Synth()
 
@@ -1574,12 +1576,12 @@ func TestComplianceIntegration(t *testing.T) {
 			flowLogMap := flowLogs.(map[string]interface{})
 			for flowLogName, flowConfig := range flowLogMap {
 				configMap := flowConfig.(map[string]interface{})
-				
+
 				// Verify comprehensive logging
 				if trafficType, ok := configMap["traffic_type"]; !ok || trafficType != "ALL" {
 					t.Errorf("flow log %s should capture ALL traffic for compliance", flowLogName)
 				}
-				
+
 				// Verify log retention for compliance
 				if logDestType, ok := configMap["log_destination_type"]; !ok || logDestType != "s3" {
 					t.Errorf("flow log %s should use S3 for long-term retention compliance", flowLogName)
@@ -1594,7 +1596,7 @@ func TestComplianceIntegration(t *testing.T) {
 			logGroupMap := logGroups.(map[string]interface{})
 			for logGroupName, logConfig := range logGroupMap {
 				configMap := logConfig.(map[string]interface{})
-				
+
 				if retention, ok := configMap["retention_in_days"]; ok {
 					retentionDays := retention.(float64)
 					if retentionDays < 7 {
@@ -1611,7 +1613,7 @@ func TestComplianceIntegration(t *testing.T) {
 	t.Run("DataProtectionCompliance", func(t *testing.T) {
 		// Verify encryption at rest
 		encryptedResources := []string{"aws_s3_bucket_server_side_encryption_configuration", "aws_lambda_function", "aws_cloudwatch_log_group"}
-		
+
 		for _, resourceType := range encryptedResources {
 			if resourceMap, ok := resources[resourceType]; ok {
 				resourceInstances := resourceMap.(map[string]interface{})
@@ -1641,7 +1643,7 @@ func TestComplianceIntegration(t *testing.T) {
 			roleMap := iamRoles.(map[string]interface{})
 			for roleName, roleConfig := range roleMap {
 				configMap := roleConfig.(map[string]interface{})
-				
+
 				// Verify role has tags for compliance tracking
 				if tags, ok := configMap["tags"]; ok {
 					tagsMap := tags.(map[string]interface{})

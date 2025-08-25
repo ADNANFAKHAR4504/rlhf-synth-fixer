@@ -171,7 +171,7 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Filename:     jsii.String("lib/lambda.zip"),
+		Filename:     jsii.String("./lib/lambda.zip"),
 		KmsKeyArn:    kmsKey.Arn(),
 		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
@@ -485,7 +485,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Filename:     jsii.String("lib/lambda.zip"),
+		Filename:     jsii.String("./lib/lambda.zip"),
 		KmsKeyArn:    kmsKey.Arn(),
 		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
