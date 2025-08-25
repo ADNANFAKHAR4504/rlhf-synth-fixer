@@ -4,86 +4,177 @@ package lib_test
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
-	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	"github.com/aws/jsii-runtime-go"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestTapStackIntegration(t *testing.T) {
-	defer jsii.Close()
+// Outputs represents the structure of cfn-outputs/flat-outputs.json
+type Outputs struct {
+	VPCId           string `json:"VPCId"`
+	SecurityGroupId string `json:"SecurityGroupId"`
+	VPCCidr         string `json:"VPCCidr"`
+}
 
+// loadOutputs loads deployment outputs from cfn-outputs/flat-outputs.json
+func loadOutputs(t *testing.T) *Outputs {
+	data, err := os.ReadFile("../../cfn-outputs/flat-outputs.json")
+	if err != nil {
+		t.Skipf("Cannot load cfn-outputs/flat-outputs.json: %v", err)
+	}
+
+	var outputs Outputs
+	err = json.Unmarshal(data, &outputs)
+	require.NoError(t, err, "Failed to parse cfn-outputs/flat-outputs.json")
+
+	return &outputs
+}
+
+func TestTapStackIntegration(t *testing.T) {
 	// Skip if running in CI without AWS credentials
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Run("can deploy and destroy stack successfully", func(t *testing.T) {
+	t.Run("deployed VPC has correct CIDR block", func(t *testing.T) {
 		// ARRANGE
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		cfg, err := config.LoadDefaultConfig(ctx)
 		require.NoError(t, err, "Failed to load AWS config")
 
-		cfnClient := cloudformation.NewFromConfig(cfg)
-		stackName := "TapStackIntegrationTest"
+		ec2Client := ec2.NewFromConfig(cfg)
+		outputs := loadOutputs(t)
 
-		// Clean up any existing stack
-		defer func() {
-			_, _ = cfnClient.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-				StackName: aws.String(stackName),
-			})
-		}()
-
-		// ACT
-		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String(stackName), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String("inttest"),
+		// ACT - Describe VPC
+		vpcResp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+			VpcIds: []string{outputs.VPCId},
 		})
+		require.NoError(t, err, "Failed to describe VPC")
+		require.Len(t, vpcResp.Vpcs, 1, "Expected exactly one VPC")
 
 		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, "inttest", *stack.EnvironmentSuffix)
-
-		// Note: Actual deployment testing would require CDK CLI or programmatic deployment
-		// This is a placeholder for more comprehensive integration testing
-		t.Log("Stack created successfully in memory. Full deployment testing requires CDK CLI integration.")
+		vpc := vpcResp.Vpcs[0]
+		assert.Equal(t, "10.0.0.0/16", *vpc.CidrBlock, "VPC should have correct CIDR block")
+		assert.Equal(t, ec2types.VpcStateAvailable, vpc.State, "VPC should be available")
+		
+		// Check DNS attributes separately using DescribeVpcAttribute
+		dnsSupport, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+			VpcId:     &outputs.VPCId,
+			Attribute: ec2types.VpcAttributeNameEnableDnsSupport,
+		})
+		require.NoError(t, err, "Failed to get DNS support attribute")
+		assert.True(t, *dnsSupport.EnableDnsSupport.Value, "VPC should have DNS support enabled")
+		
+		dnsHostnames, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
+			VpcId:     &outputs.VPCId,
+			Attribute: ec2types.VpcAttributeNameEnableDnsHostnames,
+		})
+		require.NoError(t, err, "Failed to get DNS hostnames attribute")
+		assert.True(t, *dnsHostnames.EnableDnsHostnames.Value, "VPC should have DNS hostnames enabled")
 	})
 
-	t.Run("stack resources are created with correct naming", func(t *testing.T) {
+	t.Run("deployed security group has correct rules", func(t *testing.T) {
 		// ARRANGE
-		app := awscdk.NewApp(nil)
-		envSuffix := "integration"
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-		// ACT
-		stack := lib.NewTapStack(app, jsii.String("TapStackResourceTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(envSuffix),
+		cfg, err := config.LoadDefaultConfig(ctx)
+		require.NoError(t, err, "Failed to load AWS config")
+
+		ec2Client := ec2.NewFromConfig(cfg)
+		outputs := loadOutputs(t)
+
+		// ACT - Describe Security Group
+		sgResp, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+			GroupIds: []string{outputs.SecurityGroupId},
 		})
+		require.NoError(t, err, "Failed to describe security group")
+		require.Len(t, sgResp.SecurityGroups, 1, "Expected exactly one security group")
 
 		// ASSERT
-		assert.NotNil(t, stack)
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
+		sg := sgResp.SecurityGroups[0]
+		assert.Equal(t, "corpSecurityGroup", *sg.GroupName, "Security group should have correct name")
+		assert.Contains(t, *sg.Description, "Strict security group", "Security group should have correct description")
 
-		// Add more specific resource assertions here when resources are actually created
-		// For example:
-		// - Verify S3 bucket naming conventions
-		// - Check that all resources have proper tags
-		// - Validate resource configurations
+		// ASSERT - Inbound rules
+		require.Len(t, sg.IpPermissions, 1, "Security group should have exactly one inbound rule")
+		inboundRule := sg.IpPermissions[0]
+		assert.Equal(t, "tcp", *inboundRule.IpProtocol, "Inbound rule should be TCP")
+		assert.Equal(t, int32(80), *inboundRule.FromPort, "Inbound rule should allow port 80")
+		assert.Equal(t, int32(80), *inboundRule.ToPort, "Inbound rule should allow port 80")
+		require.Len(t, inboundRule.IpRanges, 1, "Inbound rule should have exactly one IP range")
+		assert.Equal(t, "203.0.113.0/24", *inboundRule.IpRanges[0].CidrIp, "Inbound rule should allow only specific CIDR")
+
+		// ASSERT - Outbound rules (should be empty for strict security)
+		assert.Empty(t, sg.IpPermissionsEgress, "Security group should have no outbound rules for strict security")
 	})
 
-	t.Run("Write Integration Tests", func(t *testing.T) {
-		// ARRANGE & ASSERT
-		t.Skip("Integration test for TapStack should be implemented here.")
+	t.Run("VPC has correct subnets and Internet Gateway", func(t *testing.T) {
+		// ARRANGE
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		cfg, err := config.LoadDefaultConfig(ctx)
+		require.NoError(t, err, "Failed to load AWS config")
+
+		ec2Client := ec2.NewFromConfig(cfg)
+		outputs := loadOutputs(t)
+
+		// ACT - Describe subnets
+		subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
+			Filters: []ec2types.Filter{
+				{
+					Name:   aws.String("vpc-id"),
+					Values: []string{outputs.VPCId},
+				},
+			},
+		})
+		require.NoError(t, err, "Failed to describe subnets")
+
+		// ASSERT - Should have 4 subnets (2 AZs * 2 types)
+		assert.Len(t, subnetsResp.Subnets, 4, "VPC should have 4 subnets")
+
+		// ACT - Describe Internet Gateway
+		igwResp, err := ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
+			Filters: []ec2types.Filter{
+				{
+					Name:   aws.String("attachment.vpc-id"),
+					Values: []string{outputs.VPCId},
+				},
+			},
+		})
+		require.NoError(t, err, "Failed to describe internet gateways")
+
+		// ASSERT - Should have one Internet Gateway attached
+		assert.Len(t, igwResp.InternetGateways, 1, "VPC should have exactly one Internet Gateway")
+		assert.Len(t, igwResp.InternetGateways[0].Attachments, 1, "Internet Gateway should be attached to VPC")
+		assert.Equal(t, outputs.VPCId, *igwResp.InternetGateways[0].Attachments[0].VpcId, "Internet Gateway should be attached to correct VPC")
+	})
+
+	t.Run("outputs are correctly exported", func(t *testing.T) {
+		// ARRANGE
+		outputs := loadOutputs(t)
+
+		// ASSERT - All required outputs should be present
+		assert.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
+		assert.NotEmpty(t, outputs.SecurityGroupId, "SecurityGroupId should be exported")
+		assert.NotEmpty(t, outputs.VPCCidr, "VPCCidr should be exported")
+		assert.Equal(t, "10.0.0.0/16", outputs.VPCCidr, "VPCCidr should match expected value")
+
+		// ASSERT - IDs should follow AWS format
+		assert.Regexp(t, "^vpc-[a-f0-9]+$", outputs.VPCId, "VPCId should follow AWS VPC ID format")
+		assert.Regexp(t, "^sg-[a-f0-9]+$", outputs.SecurityGroupId, "SecurityGroupId should follow AWS Security Group ID format")
 	})
 }
 
