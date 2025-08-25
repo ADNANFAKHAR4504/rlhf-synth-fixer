@@ -259,10 +259,10 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 
 	// Create CloudTrail for audit logging with specific naming pattern
 	trail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix), &cloudtrail.TrailArgs{
-		Name:         pulumi.Sprintf("healthapp-cloudtrail-pr2146-%s", current.AccountId[:7]),
-		S3BucketName: auditBucket.ID(),
-		S3KeyPrefix:  pulumi.String("healthapp-logs/"),
-		KmsKeyId:     kmsKey.Arn,
+		Name:                       pulumi.Sprintf("healthapp-cloudtrail-pr2146-%s", current.AccountId[:7]),
+		S3BucketName:               auditBucket.ID(),
+		S3KeyPrefix:                pulumi.String("healthapp-logs/"),
+		KmsKeyId:                   kmsKey.Arn,
 		IncludeGlobalServiceEvents: pulumi.Bool(true),
 		IsMultiRegionTrail:         pulumi.Bool(false),
 		EnableLogFileValidation:    pulumi.Bool(true),
