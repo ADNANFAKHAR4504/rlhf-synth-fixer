@@ -1,3 +1,6 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Secure FinTech Infrastructure'
+
 Parameters:
   EnvironmentName:
     Type: String
@@ -31,14 +34,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database master username'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    Description: 'Database master password (must be 8-41 alphanumeric characters)'
-
   FlowLogRetentionDays:
     Type: Number
     Default: 90
@@ -49,19 +44,76 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
 
 Resources:
-  # Secrets Manager Secret for RDS Password
-  TapDBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
+  # KMS Key for Secrets Manager
+  TapSecretsKMSKey:
+    Type: AWS::KMS::Key
     Properties:
-      Name: !Sub 'tap-db-password-${EnvironmentName}'
-      SecretString: !Sub '{"username": "${DBUsername}", "password": "${DBPassword}"}'
+      Description: 'KMS Key for Secrets Manager encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow Secrets Manager to use key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # KMS Key for encryption
+  TapSecretsKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/tapstack-secrets-${EnvironmentName}-${AWS::Region}'
+      TargetKeyId: !Ref TapSecretsKMSKey
+
+  # Secrets Manager Secret for RDS Credentials
+  TapDBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'tap-db-credentials-${EnvironmentName}-${AWS::StackName}'
+      Description: 'RDS credentials for TapStack'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"''\/@'
+      KmsKeyId: !Ref TapSecretsKMSKey
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # KMS Key for encryption (S3, CloudTrail, RDS)
   TapKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -394,7 +446,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${EnvironmentName}-${AWS::StackName}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/tap-${EnvironmentName}-${AWS::StackName}'
       RetentionInDays: !Ref FlowLogRetentionDays
       Tags:
         - Key: Environment
@@ -493,7 +545,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'tap-data-${AWS::AccountId}-${EnvironmentName}-${AWS::Region}'
+      BucketName: !Sub 'tap-data-${AWS::AccountId}-${EnvironmentName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -524,7 +576,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'tap-cloudtrail-${AWS::AccountId}-${EnvironmentName}-${AWS::Region}'
+      BucketName: !Sub 'tap-cloudtrail-${AWS::AccountId}-${EnvironmentName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -621,7 +673,8 @@ Resources:
   # RDS Instance
   TapDatabase:
     Type: AWS::RDS::DBInstance
-    DependsOn: TapDBPasswordSecret
+    DependsOn:
+      - TapDBPasswordSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -701,6 +754,10 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TapRemediation-${EnvironmentName}:*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref TapDBPasswordSecret
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -811,6 +868,7 @@ Resources:
                   - logs:*
                   - iam:*
                   - cloudformation:*
+                  - secretsmanager:*
                 Resource: '*'
       Tags:
         - Key: Environment
@@ -864,6 +922,10 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt TapRemediationFunction.Arn
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref TapDBPasswordSecret
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -982,3 +1044,9 @@ Outputs:
     Value: !Ref TapKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMSKey-ID'
+
+  SecretArn:
+    Description: 'Secrets Manager Secret ARN for RDS Credentials'
+    Value: !Ref TapDBPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-Secret-ARN'
