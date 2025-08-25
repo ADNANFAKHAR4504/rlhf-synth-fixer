@@ -372,6 +372,7 @@ variable "db_password" {
   description = "Database password"
   type        = string
   sensitive   = true
+  default     = "devpassword123!" # <-- Only for dev, remove for prod!
 }
 
 variable "db_backup_retention_period" {
