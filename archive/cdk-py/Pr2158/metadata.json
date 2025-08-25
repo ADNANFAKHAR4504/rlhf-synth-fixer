@@ -9,7 +9,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization", 
+    "IaC Optimization",
     "Security Configuration",
     "Performance Optimization",
     "Multi-Environment Setup",
@@ -20,10 +20,16 @@
   "training_quality": 9,
   "aws_services": [
     "S3",
-    "DynamoDB", 
+    "DynamoDB",
     "IAM",
     "CloudWatch",
     "Systems Manager Parameter Store",
     "KMS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
