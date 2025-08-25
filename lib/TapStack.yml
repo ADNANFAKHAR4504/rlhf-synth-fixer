@@ -30,7 +30,7 @@ Parameters:
     AllowedValues: ['production', 'staging', 'development']
   StackPrefix:
     Type: String
-    Default: 'tapstack2034'
+    Default: 'tapstack2215'
     Description: 'Unique stack prefix for resource names'
 
 # =============================================================================
@@ -203,21 +203,24 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Deny all public access
-          - Sid: DenyPublicAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
+          # Allow CloudTrail to check bucket ACL
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Ref SecureLoggingBucket
+          # Allow CloudTrail to write logs
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureLoggingBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
-              StringNotEquals:
-                'aws:PrincipalServiceName':
-                  - cloudtrail.amazonaws.com
-                  - config.amazonaws.com
-                  - vpc-flow-logs.amazonaws.com
-          # Enforce HTTPS only
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+          # Deny non-HTTPS
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
@@ -228,22 +231,15 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-          # Allow CloudTrail to write logs
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Ref SecureLoggingBucket
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${SecureLoggingBucket}/cloudtrail-logs/*'
+          # Deny public read access
+          - Sid: DenyPublicRead
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${SecureLoggingBucket}/*'
             Condition:
               StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+                'aws:PrincipalType': 'Anonymous'
 
   # =============================================================================
   # AUDITING, LOGGING, AND ALERTING
@@ -325,7 +321,7 @@ Resources:
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref VPCFlowLogsGroup
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
-      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${action}'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -547,7 +543,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${StackPrefix}-${EnvironmentName}-secure-db'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.42'
+      EngineVersion: '8.0.37'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true  # Enable encryption at rest
@@ -566,13 +562,10 @@ Resources:
       # Monitoring and logging
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
-      EnablePerformanceInsights: true
-      PerformanceInsightsRetentionPeriod: 7
       # Enable all log types for security monitoring
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
       # Security settings
       DeletionProtection: true
       Tags:
@@ -626,8 +619,8 @@ Resources:
           echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf
           echo "net.ipv4.conf.default.send_redirects = 0" >> /etc/sysctl.conf
           sysctl -p
-      # Enable termination protection
-      DisableApiTermination: true
+      # Enable termination protection (set to false for stack delete compatibility)
+      DisableApiTermination: false
       # Use encrypted EBS volumes
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -721,8 +714,6 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
         - PolicyName: ConfigBucketAccess
           PolicyDocument:
@@ -732,12 +723,12 @@ Resources:
                 Action:
                   - s3:GetBucketAcl
                   - s3:ListBucket
-                Resource: !Ref ConfigBucket
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ConfigBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
 
   # AWS Config Configuration Recorder
   ConfigRecorder:
