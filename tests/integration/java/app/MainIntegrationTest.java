@@ -2,6 +2,7 @@ package app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pulumi.Context;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,7 @@ public class MainIntegrationTest {
 
     private static final String TEST_REGION = "us-east-1";
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static String TEST_STACK_NAME; // Will be populated from actual stack
     
     // Deployment outputs - populated from actual Pulumi stack
     private static String stackSetId;
@@ -70,6 +72,7 @@ public class MainIntegrationTest {
         // Get deployment outputs from actual Pulumi stack
         try {
             String stackName = getStackName();
+            TEST_STACK_NAME = stackName; // Set the test stack name for other methods
             String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--cwd", "lib", "--stack", stackName);
             allOutputs = objectMapper.readTree(outputsJson);
             
@@ -81,6 +84,7 @@ public class MainIntegrationTest {
             dashboardUrl = getOutputValue("dashboardUrl");
             
             System.out.println("=== Deployment Outputs Loaded ===");
+            System.out.println("Stack Name: " + TEST_STACK_NAME);
             System.out.println("Stack Set ID: " + stackSetId);
             System.out.println("Administration Role ARN: " + administrationRoleArn);
             System.out.println("Execution Role Name: " + executionRoleName);
@@ -88,7 +92,8 @@ public class MainIntegrationTest {
             
         } catch (Exception e) {
             System.err.println("Failed to load deployment outputs: " + e.getMessage());
-            System.err.println("Make sure infrastructure is deployed and Pulumi CLI is available");
+            System.out.println("Note: Some tests may be skipped without deployed infrastructure");
+            TEST_STACK_NAME = "dev"; // fallback
         }
     }
     
