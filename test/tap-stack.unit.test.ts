@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+console.log('AWS_SESSION_TOKEN:', process.env.AWS_SESSION_TOKEN || '(not set)');
+
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Template', () => {
