@@ -69,7 +69,6 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
-# Keep exactly one ownership_controls for logs and use BucketOwnerPreferred so ACL condition works
 resource "aws_s3_bucket_ownership_controls" "logs" {
   bucket = aws_s3_bucket.logs.id
   rule { object_ownership = "BucketOwnerPreferred" }
@@ -144,7 +143,7 @@ resource "aws_iam_role_policy" "trail_cw" {
 }
 
 # =========== S3 bucket policy for CloudTrail + Config ===========
-# Use your existing caller identity (keep only one in the whole file)
+
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "kms_policy" {
@@ -255,7 +254,6 @@ data "aws_iam_policy_document" "logs_bucket" {
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
 
-  # Use inline JSON so the integration test can see the exact ACL condition string.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
