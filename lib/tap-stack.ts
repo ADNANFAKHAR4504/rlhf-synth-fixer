@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codecommit from 'aws-cdk-lib/aws-codecommit';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -20,11 +19,25 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
+    const environmentSuffix = props?.environmentSuffix || 'pr2056';
+
+    // =============================================
+    // S3 Bucket for Source Code
+    // =============================================
+    const sourceBucket = new s3.Bucket(this, 'SourceCodeBucket', {
+      bucketName: `nova-model-source-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      versioned: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
     // =============================================
     // S3 Bucket for Artifacts
     // =============================================
     const artifactsBucket = new s3.Bucket(this, 'PipelineArtifactsBucket', {
-      bucketName: `nova-model-pipeline-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      bucketName: `nova-model-pipeline-artifacts-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -39,25 +52,18 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // =============================================
-    // CodeCommit Repository
-    // =============================================
-    const repository = new codecommit.Repository(this, 'NovaModelRepository', {
-      repositoryName: 'nova-model-breaking',
-      description: 'Repository for IaC - AWS Nova Model Breaking project',
-    });
 
     // =============================================
     // CloudWatch Log Groups
     // =============================================
     const buildLogGroup = new logs.LogGroup(this, 'BuildLogGroup', {
-      logGroupName: '/aws/codebuild/nova-model-build',
+      logGroupName: `/aws/codebuild/nova-model-build-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const pipelineLogGroup = new logs.LogGroup(this, 'PipelineLogGroup', {
-      logGroupName: '/aws/codepipeline/nova-model-pipeline',
+      logGroupName: `/aws/codepipeline/nova-model-pipeline-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -110,13 +116,14 @@ export class TapStack extends cdk.Stack {
     pipelineRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
-        'codecommit:GetBranch',
-        'codecommit:GetCommit',
-        'codecommit:GetRepository',
-        'codecommit:ListBranches',
-        'codecommit:ListRepositories',
+        's3:GetBucketVersioning',
+        's3:GetObject',
+        's3:GetObjectVersion',
       ],
-      resources: [repository.repositoryArn],
+      resources: [
+        sourceBucket.bucketArn,
+        `${sourceBucket.bucketArn}/*`,
+      ],
     }));
 
     pipelineRole.addToPolicy(new iam.PolicyStatement({
@@ -194,20 +201,25 @@ export class TapStack extends cdk.Stack {
     buildRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
-        'codecommit:GitPull',
+        's3:GetBucketVersioning',
+        's3:GetObject',
+        's3:GetObjectVersion',
       ],
-      resources: [repository.repositoryArn],
+      resources: [
+        sourceBucket.bucketArn,
+        `${sourceBucket.bucketArn}/*`,
+      ],
     }));
 
     // =============================================
     // CodeBuild Project
     // =============================================
     const buildProject = new codebuild.Project(this, 'NovaModelBuildProject', {
-      projectName: 'nova-model-build',
+      projectName: `nova-model-build-${environmentSuffix}`,
       description: 'Build project for Nova Model Breaking application',
-      source: codebuild.Source.codeCommit({
-        repository: repository,
-        branchOrRef: 'main',
+      source: codebuild.Source.s3({
+        bucket: sourceBucket,
+        path: 'source.zip',
       }),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
@@ -224,7 +236,7 @@ export class TapStack extends cdk.Stack {
             value: artifactsBucket.bucketName,
           },
           'PROJECT_NAME': {
-            value: 'nova-model-breaking',
+            value: `nova-model-breaking-${environmentSuffix}`,
           },
           'BUILD_ENV': {
             value: 'production',
@@ -301,7 +313,7 @@ export class TapStack extends cdk.Stack {
     // CodePipeline
     // =============================================
     const pipeline = new codepipeline.Pipeline(this, 'NovaModelPipeline', {
-      pipelineName: 'nova-model-pipeline',
+      pipelineName: `nova-model-pipeline-${environmentSuffix}`,
       artifactBucket: artifactsBucket,
       role: pipelineRole,
       stages: [
@@ -309,12 +321,11 @@ export class TapStack extends cdk.Stack {
         {
           stageName: 'Source',
           actions: [
-            new codepipeline_actions.CodeCommitSourceAction({
+            new codepipeline_actions.S3SourceAction({
               actionName: 'Source',
-              repository: repository,
-              branch: 'main',
+              bucket: sourceBucket,
+              bucketKey: 'source.zip',
               output: sourceOutput,
-              trigger: codepipeline_actions.CodeCommitTrigger.EVENTS,
             }),
           ],
         },
@@ -344,7 +355,7 @@ export class TapStack extends cdk.Stack {
           actions: [
             new codepipeline_actions.CloudFormationCreateUpdateStackAction({
               actionName: 'Deploy-US-East-1',
-              stackName: 'nova-model-stack-us-east-1',
+              stackName: `nova-model-stack-${environmentSuffix}-us-east-1`,
               templatePath: buildOutput.atPath('template.yaml'),
               adminPermissions: false,
               role: deploymentRole,
@@ -362,7 +373,7 @@ export class TapStack extends cdk.Stack {
           actions: [
             new codepipeline_actions.CloudFormationCreateUpdateStackAction({
               actionName: 'Deploy-US-West-2',
-              stackName: 'nova-model-stack-us-west-2',
+              stackName: `nova-model-stack-${environmentSuffix}-us-west-2`,
               templatePath: buildOutput.atPath('template.yaml'),
               adminPermissions: false,
               role: deploymentRole,
@@ -394,9 +405,9 @@ export class TapStack extends cdk.Stack {
     // =============================================
     // Outputs
     // =============================================
-    new cdk.CfnOutput(this, 'RepositoryCloneUrl', {
-      value: repository.repositoryCloneUrlHttp,
-      description: 'CodeCommit Repository Clone URL',
+    new cdk.CfnOutput(this, 'SourceBucketName', {
+      value: sourceBucket.bucketName,
+      description: 'S3 Source Bucket Name',
     });
 
     new cdk.CfnOutput(this, 'PipelineName', {
