@@ -270,12 +270,6 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
-      - name: Download Deployment Outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: cfn-outputs
-          path: .
-
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
