@@ -20,7 +20,7 @@
   "training_quality": 8,
   "aws_services": [
     "EC2",
-    "VPC", 
+    "VPC",
     "Application Load Balancer",
     "Auto Scaling Groups",
     "Internet Gateway",
@@ -30,5 +30,11 @@
     "S3",
     "Launch Templates",
     "Target Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
 }
