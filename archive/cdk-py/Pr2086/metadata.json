@@ -10,7 +10,7 @@
   "subject_labels": [
     "Web Application Deployment",
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "Security Configuration",
     "Monitoring Setup",
@@ -20,7 +20,7 @@
   "training_quality": 9,
   "aws_services": [
     "EC2",
-    "VPC", 
+    "VPC",
     "ELB",
     "Auto Scaling",
     "RDS",
@@ -31,5 +31,11 @@
     "Secrets Manager",
     "Systems Manager",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
