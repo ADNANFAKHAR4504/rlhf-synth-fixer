@@ -19,7 +19,6 @@ public class MigrationManager {
     
     public Output<String> migrateSecrets(Key kmsKey) {
         SecretsManagerMigration secretsMigration = new SecretsManagerMigration(
-            name + "-secrets-migration",
             envConfig,
             awsProvider,
             kmsKey

@@ -7,8 +7,6 @@ import com.pulumi.aws.secretsmanager.SecretArgs;
 import com.pulumi.aws.secretsmanager.SecretVersion;
 import com.pulumi.aws.secretsmanager.SecretVersionArgs;
 import com.pulumi.core.Output;
-import com.pulumi.resources.CustomResource;
-import com.pulumi.resources.ResourceArgs;
 import com.pulumi.resources.CustomResourceOptions;
 import app.config.EnvironmentConfig;
 import app.utils.ResourceNaming;
@@ -17,14 +15,13 @@ import app.utils.TaggingPolicy;
 import java.util.Map;
 import java.util.HashMap;
 
-public class SecretsManagerMigration extends CustomResource {
+public class SecretsManagerMigration {
     private final EnvironmentConfig envConfig;
     private final Provider awsProvider;
     private final Key kmsKey;
     
-    public SecretsManagerMigration(String name, EnvironmentConfig envConfig, 
+    public SecretsManagerMigration(EnvironmentConfig envConfig, 
                                  Provider awsProvider, Key kmsKey) {
-        super("custom:migration:SecretsManager", name, ResourceArgs.Empty, null);
         this.envConfig = envConfig;
         this.awsProvider = awsProvider;
         this.kmsKey = kmsKey;
