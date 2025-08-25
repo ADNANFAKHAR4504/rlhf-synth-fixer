@@ -7,35 +7,37 @@ import software.amazon.awscdk.StackProps;
 import software.constructs.Construct;
 
 /**
- * Simple regional stack definition for the IaC – AWS Nova Model Breaking project.
- * This stack will later be extended to add resources (VPC, ASG, RDS, etc.).
+ * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
+ * Resources such as VPC, AutoScaling, RDS, and S3 will be added here in future iterations.
  */
-class RegionalStack extends Stack {
+public class RegionalStack extends Stack {
     public RegionalStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
-        // TODO: Add resources such as VPC, AutoScaling, RDS, S3, etc.
+        // TODO: Add resources (VPC, AutoScalingGroup, RDS, S3, Route53, CloudWatch, IAM, etc.)
     }
 }
 
 /**
- * Main entry point for the CDK Java application.
- * Provisions two stacks across us-east-1 and us-west-2.
+ * Main entry point for the AWS CDK Java application.
+ * Provisions stacks across us-east-1 and us-west-2 for HA/DR.
  */
 public final class Main {
 
     private Main() {
-        // prevent instantiation
+        // Prevent instantiation
     }
 
     public static void main(final String[] args) {
         App app = new App();
 
+        // Resolve AWS account from environment variables
         String account = System.getenv("CDK_DEFAULT_ACCOUNT");
         if (account == null) {
             throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
         }
 
+        // Get environment suffix (default: dev)
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
@@ -59,6 +61,7 @@ public final class Main {
                                 .build())
                         .build());
 
+        // Synthesize app into CloudFormation templates
         app.synth();
     }
 }
