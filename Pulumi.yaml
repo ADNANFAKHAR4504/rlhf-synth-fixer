@@ -1,8 +1,7 @@
-name: TapStack
-runtime:
-  name: go
+name: tap-stack
+runtime: go
 description: Multi-region AWS infrastructure with CloudFront, ALB, EC2, RDS, and DynamoDB Global Tables
-main: ./lib
+
 config:
   projectName:
     type: string
@@ -17,10 +16,10 @@ config:
     type: string
     default: '10.0.0.0/16'
   asgMinSize:
-    type: number
+    type: integer
     default: 2
   asgMaxSize:
-    type: number
+    type: integer
     default: 10
   dbInstanceClass:
     type: string

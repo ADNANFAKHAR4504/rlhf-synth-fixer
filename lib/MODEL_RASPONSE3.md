@@ -1,4 +1,44 @@
+```yaml
+name: tap-stack
+runtime: go
+description: Multi-region AWS infrastructure with CloudFront, ALB, EC2, RDS, and DynamoDB Global Tables
 
+config:
+  projectName:
+    type: string
+    default: 'tap'
+  environment:
+    type: string
+    default: 'prod'
+  notificationEmail:
+    type: string
+    default: 'admin@example.com'
+  vpcCidr:
+    type: string
+    default: '10.0.0.0/16'
+  asgMinSize:
+    type: integer
+    default: 2
+  asgMaxSize:
+    type: integer
+    default: 10
+  dbInstanceClass:
+    type: string
+    default: 'db.t3.micro'
+```
+
+```go
+module tap-stack
+
+go 1.21
+
+require (
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.22.2
+	github.com/pulumi/pulumi/sdk/v3 v3.105.0
+)
+```
+
+````go
 package lib
 
 import (
@@ -650,7 +690,8 @@ systemctl restart httpd`),
 	}
 
 	// Create SSM parameters
-	_, err = ssm.NewParameter(ctx, fmt.Sprintf("project-param-%s", region), &ssm.ParameterArgs{
+	_, err = ssm.NewParameter(ctx, fmt.Sprintf("project-param-%s```go
+", region), &ssm.ParameterArgs{
 		Name:  pulumi.Sprintf("/%s/%s/project", projectName, environment),
 		Type:  pulumi.String("String"),
 		Value: pulumi.String(projectName),
@@ -1119,3 +1160,4 @@ func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulu
 
 	return nil
 }
+````

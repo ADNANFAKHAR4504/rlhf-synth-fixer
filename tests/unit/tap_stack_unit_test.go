@@ -1,5 +1,5 @@
 // tests/unit/tap_stack_unit_test.go
-package unit
+package lib
 
 import (
 	"context"
