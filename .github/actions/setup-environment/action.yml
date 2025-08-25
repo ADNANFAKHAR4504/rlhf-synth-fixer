@@ -1,5 +1,6 @@
-name: 'Setup Environment'
-description: 'Sets up Node.js, Python and Terraform environment and restores build artifacts'
+
+name: "Setup Environment"
+description: "Sets up Node.js, Python, Java and Terraform environment and restores build artifacts"
 inputs:
   node-version:
     description: 'Node.js version to use'
@@ -10,7 +11,7 @@ inputs:
     required: false
     default: 'true'
   language:
-    description: 'Project language (ts, py, go, yaml, json, hcl)'
+    description: "Project language (ts, py, java, go, yaml, json, hcl)"
     required: false
     default: ''
   terraform-version:
@@ -89,14 +90,14 @@ runs:
           ${{ runner.os }}-cdktf-gen-
 
     - name: Setup Java 17
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      if: ${{ (inputs.platform == 'pulumi' && inputs.language == 'java') || (inputs.platform == 'cdk' && inputs.language == 'java') || inputs.platform == '' }}
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
     - name: Setup Gradle
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      if: ${{ (inputs.platform == 'pulumi' && inputs.language == 'java') || (inputs.platform == 'cdk' && inputs.language == 'java') || inputs.platform == '' }}
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-home-cache-cleanup: true
