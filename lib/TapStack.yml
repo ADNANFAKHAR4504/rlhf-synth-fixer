@@ -161,7 +161,7 @@ Resources:
           - Sid: "AWSVPCFlowLogsAclCheck"
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service: vpc-flow-logs.amazonaws.com
             Action: "s3:GetBucketAcl"
             Resource: !GetAtt VpcFlowLogsBucket.Arn
             Condition:
@@ -170,7 +170,7 @@ Resources:
           - Sid: "AWSVPCFlowLogsWrite"
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service: vpc-flow-logs.amazonaws.com
             Action: "s3:PutObject"
             Resource: !Sub "${VpcFlowLogsBucket.Arn}/*"
             Condition:
@@ -180,7 +180,7 @@ Resources:
           - Sid: "AWSVPCFlowLogsListBucket"
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service: vpc-flow-logs.amazonaws.com
             Action: "s3:ListBucket"
             Resource: !GetAtt VpcFlowLogsBucket.Arn
             Condition:
