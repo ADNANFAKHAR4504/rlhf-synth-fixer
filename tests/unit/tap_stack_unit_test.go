@@ -75,5 +75,14 @@ func (m mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 			"accountId": resource.NewStringProperty("123456789012"),
 		}, nil
 	}
+	if args.Token == "aws:index/getAvailabilityZones:getAvailabilityZones" {
+		return resource.PropertyMap{
+			"names": resource.NewArrayProperty([]resource.PropertyValue{
+				resource.NewStringProperty("us-west-2a"),
+				resource.NewStringProperty("us-west-2b"),
+				resource.NewStringProperty("us-west-2c"),
+			}),
+		}, nil
+	}
 	return args.Args, nil
 }
