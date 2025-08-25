@@ -48,7 +48,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.logs.arn  # <-- explicit CMK reference
+      kms_master_key_id = aws_kms_key.logs.arn  
     }
     bucket_key_enabled = true
   }
@@ -111,7 +111,7 @@ resource "aws_iam_role" "trail_cw" {
   tags               = local.tags
 }
 
-# Split policy: scoped actions to log group; global actions to "*"
+
 data "aws_iam_policy_document" "trail_cw_policy" {
   statement {
     effect = "Allow"
@@ -353,7 +353,8 @@ resource "aws_iam_role_policy" "config_inline" {
           "config:DescribeConfigurationRecorders",
           "config:DescribeDeliveryChannels",
           "config:DescribeConfigurationRecorderStatus",
-          "config:PutRetentionConfiguration"
+          "config:PutRetentionConfiguration",
+          "config:DeliverConfigSnapshot"
         ],
         Resource = "*"
       },
