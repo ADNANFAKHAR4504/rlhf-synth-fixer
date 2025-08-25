@@ -7,12 +7,12 @@ import * as path from "path";
 // Prefer env var; else resolve ../tap_stack.tf relative to this test file
 const TF_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
-  : path.resolve(__dirname, "../tap_stack.tf");
+  : path.resolve(__dirname, "../lib/tap_stack.tf");
 
 // Also check vars.tf for variable definitions
 const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
-  : path.resolve(__dirname, "../vars.tf");
+  : path.resolve(__dirname, "../lib/vars.tf");
 
 // Helper function to extract locals block content properly handling nested braces
 function extractLocalsBlock(hcl: string): string | null {
