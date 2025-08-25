@@ -50,6 +50,8 @@ public final class Main {
      */
     static void defineInfrastructure(Context ctx) {
 
+        String stackName = ctx.stackName().toLowerCase();
+
         List<String> allowedRegions = Arrays.asList("us-west-2", "us-east-1");
         String currentRegion = ctx.config().get("aws:region").orElse("us-west-2");
 
@@ -62,22 +64,22 @@ public final class Main {
         }
 
         // Create IAM components first (needed for other resources)
-        var iamComponent = new IamComponent("iam", currentRegion);
+        var iamComponent = new IamComponent("iam-" + stackName, currentRegion);
 
         // Create networking infrastructure
-        var networkingComponent = new NetworkingComponent("networking", currentRegion);
+        var networkingComponent = new NetworkingComponent("networking-" + stackName, currentRegion);
 
         // Create storage with encryption
-        var storageComponent = new StorageComponent("storage", currentRegion);
+        var storageComponent = new StorageComponent("storage-" + stackName, currentRegion);
 
         // Create compute resources
-        var computeComponent = new ComputeComponent("compute",
+        var computeComponent = new ComputeComponent("compute-" + stackName,
                 networkingComponent,
                 iamComponent,
                 currentRegion);
 
         // Enable auditing and compliance
-        var auditingComponent = new AuditingComponent("auditing",
+        var auditingComponent = new AuditingComponent("auditing-" + stackName,
                 storageComponent,
                 currentRegion);
 
