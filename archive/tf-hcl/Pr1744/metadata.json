@@ -30,5 +30,11 @@
     "Config",
     "GuardDuty",
     "SNS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
 }
