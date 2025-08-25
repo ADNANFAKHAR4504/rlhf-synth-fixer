@@ -29,7 +29,7 @@ data "aws_ami" "amazon_linux" {
 
 # IAM Module
 module "iam" {
-  source = "./modules/iam"
+  source = "./modules/iam_module"
   
   name_prefix = local.name_prefix
   tags        = local.common_tags
@@ -37,7 +37,7 @@ module "iam" {
 
 # Networking Module
 module "networking" {
-  source = "./modules/networking"
+  source = "./modules/networking_module"
   
   name_prefix         = local.name_prefix
   vpc_cidr           = local.current_network_config.vpc_cidr
@@ -50,7 +50,7 @@ module "networking" {
 
 # Database Module
 module "database" {
-  source = "./modules/database"
+  source = "./modules/database_module"
   
   name_prefix           = local.name_prefix
   db_subnet_group_name  = module.networking.db_subnet_group_name
@@ -70,7 +70,7 @@ module "database" {
 
 # Compute Module
 module "compute" {
-  source = "./modules/compute"
+  source = "./modules/compute_module"
   
   name_prefix                = local.name_prefix
   vpc_id                    = module.networking.vpc_id
