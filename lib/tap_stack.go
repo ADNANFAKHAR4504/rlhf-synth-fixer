@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/acm"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudfront"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
@@ -12,6 +11,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lambda"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"os"
 )
 
 // Helper function to merge tags
@@ -33,7 +33,7 @@ func main() {
 		if environmentSuffix == "" {
 			environmentSuffix = "dev"
 		}
-		
+
 		// Common tags for all resources
 		commonTags := pulumi.StringMap{
 			"Environment": pulumi.String("production"),
@@ -279,9 +279,9 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					Protocol: pulumi.String("tcp"),
-					FromPort: pulumi.Int(22),
-					ToPort:   pulumi.Int(22),
+					Protocol:       pulumi.String("tcp"),
+					FromPort:       pulumi.Int(22),
+					ToPort:         pulumi.Int(22),
 					SecurityGroups: pulumi.StringArray{bastionSG.ID()},
 				},
 				&ec2.SecurityGroupIngressArgs{
@@ -481,11 +481,11 @@ def lambda_handler(event, context):
 
 		// Create Lambda function
 		lambdaFunction, err := lambda.NewFunction(ctx, fmt.Sprintf("s3-processor-%s", environmentSuffix), &lambda.FunctionArgs{
-			Name:       pulumi.Sprintf("s3-object-processor-%s", environmentSuffix),
-			Runtime:    pulumi.String("python3.9"),
-			Handler:    pulumi.String("index.lambda_handler"),
-			Role:       lambdaRole.Arn,
-			Code:       pulumi.NewAssetArchive(map[string]interface{}{
+			Name:    pulumi.Sprintf("s3-object-processor-%s", environmentSuffix),
+			Runtime: pulumi.String("python3.9"),
+			Handler: pulumi.String("index.lambda_handler"),
+			Role:    lambdaRole.Arn,
+			Code: pulumi.NewAssetArchive(map[string]interface{}{
 				"index.py": pulumi.NewStringAsset(lambdaCode),
 			}),
 			Timeout:    pulumi.Int(30),
@@ -618,13 +618,92 @@ echo "Web server setup complete" > /var/log/setup.log
 			}
 		}
 
-		// Request SSL certificate from ACM
-		certificate, err := acm.NewCertificate(ctx, fmt.Sprintf("ssl-certificate-%s", environmentSuffix), &acm.CertificateArgs{
-			DomainName:       pulumi.String("*.example.com"), // Replace with your domain
-			ValidationMethod: pulumi.String("DNS"),
+		// Create CloudFront Origin Access Control
+		oac, err := cloudfront.NewOriginAccessControl(ctx, fmt.Sprintf("s3-oac-%s", environmentSuffix), &cloudfront.OriginAccessControlArgs{
+			Name:                         pulumi.Sprintf("s3-oac-%s", environmentSuffix),
+			Description:                  pulumi.String("OAC for S3 bucket access"),
+			OriginAccessControlOriginType: pulumi.String("s3"),
+			SigningBehavior:              pulumi.String("always"),
+			SigningProtocol:              pulumi.String("sigv4"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create CloudFront distribution
+		distribution, err := cloudfront.NewDistribution(ctx, fmt.Sprintf("s3-distribution-%s", environmentSuffix), &cloudfront.DistributionArgs{
+			Origins: cloudfront.DistributionOriginArray{
+				&cloudfront.DistributionOriginArgs{
+					DomainName:            bucket.BucketDomainName,
+					OriginId:              pulumi.String("S3-secure-web-app"),
+					OriginAccessControlId: oac.ID(),
+					S3OriginConfig: &cloudfront.DistributionOriginS3OriginConfigArgs{
+						OriginAccessIdentity: pulumi.String(""),
+					},
+				},
+			},
+			Enabled:           pulumi.Bool(true),
+			IsIpv6Enabled:     pulumi.Bool(true),
+			Comment:           pulumi.String("CloudFront distribution for S3 bucket"),
+			DefaultRootObject: pulumi.String("index.html"),
+			DefaultCacheBehavior: &cloudfront.DistributionDefaultCacheBehaviorArgs{
+				AllowedMethods:  pulumi.StringArray{pulumi.String("DELETE"), pulumi.String("GET"), pulumi.String("HEAD"), pulumi.String("OPTIONS"), pulumi.String("PATCH"), pulumi.String("POST"), pulumi.String("PUT")},
+				CachedMethods:   pulumi.StringArray{pulumi.String("GET"), pulumi.String("HEAD")},
+				TargetOriginId:  pulumi.String("S3-secure-web-app"),
+				ViewerProtocolPolicy: pulumi.String("redirect-to-https"),
+				MinTtl:          pulumi.Int(0),
+				DefaultTtl:      pulumi.Int(3600),
+				MaxTtl:          pulumi.Int(86400),
+				ForwardedValues: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs{
+					QueryString: pulumi.Bool(false),
+					Cookies: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs{
+						Forward: pulumi.String("none"),
+					},
+				},
+			},
+			PriceClass: pulumi.String("PriceClass_100"),
+			Restrictions: &cloudfront.DistributionRestrictionsArgs{
+				GeoRestriction: &cloudfront.DistributionRestrictionsGeoRestrictionArgs{
+					RestrictionType: pulumi.String("none"),
+				},
+			},
+			ViewerCertificate: &cloudfront.DistributionViewerCertificateArgs{
+				CloudfrontDefaultCertificate: pulumi.Bool(true),
+			},
 			Tags: mergeTags(pulumi.StringMap{
-				"Name": pulumi.Sprintf("secure-web-app-certificate-%s", environmentSuffix),
+				"Name": pulumi.Sprintf("secure-web-app-distribution-%s", environmentSuffix),
 			}, commonTags),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Update S3 bucket policy to allow CloudFront access
+		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("cloudfront-bucket-policy-%s", environmentSuffix), &s3.BucketPolicyArgs{
+			Bucket: bucket.ID(),
+			Policy: pulumi.All(bucket.Arn, distribution.Arn).ApplyT(func(args []interface{}) (string, error) {
+				bucketArn := args[0].(string)
+				distributionArn := args[1].(string)
+				return fmt.Sprintf(`{
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Sid": "AllowCloudFrontServicePrincipal",
+							"Effect": "Allow",
+							"Principal": {
+								"Service": "cloudfront.amazonaws.com"
+							},
+							"Action": "s3:GetObject",
+							"Resource": "%s/*",
+							"Condition": {
+								"StringEquals": {
+									"AWS:SourceArn": "%s"
+								}
+							}
+						}
+					]
+				}`, bucketArn, distributionArn), nil
+			}).(pulumi.StringOutput),
 		})
 		if err != nil {
 			return err
@@ -671,31 +750,7 @@ echo "Web server setup complete" > /var/log/setup.log
 			return err
 		}
 
-		// S3 bucket notification to trigger Lambda
-		_, err = s3.NewBucketNotification(ctx, fmt.Sprintf("bucket-notification-%s", environmentSuffix), &s3.BucketNotificationArgs{
-			Bucket: bucket.ID(),
-			LambdaFunctions: s3.BucketNotificationLambdaFunctionArray{
-				&s3.BucketNotificationLambdaFunctionArgs{
-					LambdaFunctionArn: lambdaFunction.Arn,
-					Events:            pulumi.StringArray{pulumi.String("s3:ObjectCreated:*")},
-				},
-			},
-		})
-		if err != nil {
-			return err
-		}
 
-		// Lambda permission for S3 to invoke
-		_, err = lambda.NewPermission(ctx, fmt.Sprintf("lambda-s3-permission-%s", environmentSuffix), &lambda.PermissionArgs{
-			StatementId: pulumi.String("AllowExecutionFromS3Bucket"),
-			Action:      pulumi.String("lambda:InvokeFunction"),
-			Function:    lambdaFunction.Name,
-			Principal:   pulumi.String("s3.amazonaws.com"),
-			SourceArn:   bucket.Arn,
-		})
-		if err != nil {
-			return err
-		}
 
 		// Outputs
 		ctx.Export("vpcId", vpc.ID())
@@ -703,7 +758,8 @@ echo "Web server setup complete" > /var/log/setup.log
 		ctx.Export("s3BucketName", bucket.ID())
 		ctx.Export("lambdaFunctionName", lambdaFunction.Name)
 		ctx.Export("kmsKeyId", kmsKey.KeyId)
-		ctx.Export("certificateArn", certificate.Arn)
+		ctx.Export("cloudfrontDomainName", distribution.DomainName)
+		ctx.Export("cloudfrontDistributionId", distribution.ID())
 		ctx.Export("region", pulumi.String(region.Name))
 
 		return nil
