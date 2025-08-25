@@ -317,7 +317,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 
 	// Create API key secret for external integrations
 	apiKeySecret, err := secretsmanager.NewSecret(ctx, fmt.Sprintf("healthapp-api-keys-%s", envSuffix), &secretsmanager.SecretArgs{
-		Description: pulumi.String("API keys for external healthcare integrations"),
+		Description: pulumi.String("HealthApp API keys for external healthcare integrations"),
 		KmsKeyId:    kmsKey.ID(),
 		Tags:        commonTags,
 	})
