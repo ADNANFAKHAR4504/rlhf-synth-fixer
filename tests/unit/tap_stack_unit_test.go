@@ -696,3 +696,417 @@ func TestResourceCount(t *testing.T) {
 		t.Errorf("expected at least %d resources, got: %d", expectedMinResources, totalResources)
 	}
 }
+// TestNewTapStackFunction tests the main NewTapStack function
+func TestNewTapStackFunction(t *testing.T) {
+	// Force a clean output location per test
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+
+	// Set environment variables
+	old := os.Getenv("AWS_REGION")
+	t.Cleanup(func() { _ = os.Setenv("AWS_REGION", old) })
+	_ = os.Setenv("AWS_REGION", "us-east-1")
+
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	stack := NewTapStack(app, "TestStack", props)
+	if stack == nil {
+		t.Fatal("NewTapStack should return a stack")
+	}
+	
+	app.Synth()
+
+	tfPath := filepath.Join(outdir, "stacks", "TestStack", "cdk.tf.json")
+	if _, err := os.Stat(tfPath); err != nil {
+		t.Fatalf("expected synthesized file at %s: %v", tfPath, err)
+	}
+
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Verify VPC resources exist (these are only in NewTapStack, not BuildSecurityStack)
+	vpc := getResource(tfConfig, "aws_vpc", "main-vpc")
+	if vpc == nil {
+		t.Fatal("VPC resource not found in NewTapStack")
+	}
+	
+	// Verify subnets exist
+	publicSubnet1 := getResource(tfConfig, "aws_subnet", "public-subnet-1")
+	if publicSubnet1 == nil {
+		t.Fatal("Public subnet 1 not found in NewTapStack")
+	}
+	
+	privateSubnet1 := getResource(tfConfig, "aws_subnet", "private-subnet-1")
+	if privateSubnet1 == nil {
+		t.Fatal("Private subnet 1 not found in NewTapStack")
+	}
+	
+	// Verify Internet Gateway
+	igw := getResource(tfConfig, "aws_internet_gateway", "main-igw")
+	if igw == nil {
+		t.Fatal("Internet Gateway not found in NewTapStack")
+	}
+	
+	// Verify NAT Gateway
+	natGw := getResource(tfConfig, "aws_nat_gateway", "main-nat")
+	if natGw == nil {
+		t.Fatal("NAT Gateway not found in NewTapStack")
+	}
+}
+
+// TestTapStackPropsValidation tests TapStackProps struct
+func TestTapStackPropsValidation(t *testing.T) {
+	props := &TapStackProps{
+		EnvironmentSuffix: "test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-west-2",
+		AwsRegion:         "us-west-2",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	if props.EnvironmentSuffix != "test" {
+		t.Errorf("expected EnvironmentSuffix 'test', got: %s", props.EnvironmentSuffix)
+	}
+	
+	if props.StateBucket != "test-bucket" {
+		t.Errorf("expected StateBucket 'test-bucket', got: %s", props.StateBucket)
+	}
+	
+	if props.AwsRegion != "us-west-2" {
+		t.Errorf("expected AwsRegion 'us-west-2', got: %s", props.AwsRegion)
+	}
+}
+
+// TestEnvironmentVariableHandling tests environment variable handling
+func TestEnvironmentVariableHandling(t *testing.T) {
+	// Test with custom environment variables
+	oldEnvSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	oldStateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	oldStateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	
+	t.Cleanup(func() {
+		_ = os.Setenv("ENVIRONMENT_SUFFIX", oldEnvSuffix)
+		_ = os.Setenv("TERRAFORM_STATE_BUCKET", oldStateBucket)
+		_ = os.Setenv("TERRAFORM_STATE_BUCKET_REGION", oldStateBucketRegion)
+	})
+	
+	_ = os.Setenv("ENVIRONMENT_SUFFIX", "custom-env")
+	_ = os.Setenv("TERRAFORM_STATE_BUCKET", "custom-bucket")
+	_ = os.Setenv("TERRAFORM_STATE_BUCKET_REGION", "eu-west-1")
+	
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "default-env",
+		StateBucket:       "default-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	stack := NewTapStack(app, "EnvTestStack", props)
+	if stack == nil {
+		t.Fatal("NewTapStack should return a stack")
+	}
+	
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "EnvTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Verify backend configuration uses environment variables
+	terraform, ok := tfConfig["terraform"].(map[string]interface{})
+	if !ok {
+		t.Fatal("terraform configuration not found")
+	}
+	
+	backend, ok := terraform["backend"].(map[string]interface{})
+	if !ok {
+		t.Fatal("backend configuration not found")
+	}
+	
+	s3Backend, ok := backend["s3"].(map[string]interface{})
+	if !ok {
+		t.Fatal("s3 backend configuration not found")
+	}
+	
+	if bucket, ok := s3Backend["bucket"]; !ok || bucket != "custom-bucket" {
+		t.Errorf("expected backend bucket 'custom-bucket', got: %v", bucket)
+	}
+	
+	if region, ok := s3Backend["region"]; !ok || region != "eu-west-1" {
+		t.Errorf("expected backend region 'eu-west-1', got: %v", region)
+	}
+}
+
+// TestVPCConfiguration tests VPC infrastructure in NewTapStack
+func TestVPCConfiguration(t *testing.T) {
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "vpc-test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	NewTapStack(app, "VPCTestStack", props)
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "VPCTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Test VPC configuration
+	vpc := getResource(tfConfig, "aws_vpc", "main-vpc")
+	if vpc == nil {
+		t.Fatal("VPC not found")
+	}
+	
+	if cidr, ok := vpc["cidr_block"]; !ok || cidr != "10.0.0.0/16" {
+		t.Errorf("expected VPC CIDR '10.0.0.0/16', got: %v", cidr)
+	}
+	
+	if dnsHostnames, ok := vpc["enable_dns_hostnames"]; !ok || dnsHostnames != true {
+		t.Errorf("expected DNS hostnames enabled, got: %v", dnsHostnames)
+	}
+	
+	// Test public subnets
+	publicSubnet1 := getResource(tfConfig, "aws_subnet", "public-subnet-1")
+	if publicSubnet1 == nil {
+		t.Fatal("Public subnet 1 not found")
+	}
+	
+	if cidr, ok := publicSubnet1["cidr_block"]; !ok || cidr != "10.0.1.0/24" {
+		t.Errorf("expected public subnet 1 CIDR '10.0.1.0/24', got: %v", cidr)
+	}
+	
+	if az, ok := publicSubnet1["availability_zone"]; !ok || az != "us-east-1a" {
+		t.Errorf("expected public subnet 1 AZ 'us-east-1a', got: %v", az)
+	}
+	
+	// Test private subnets
+	privateSubnet1 := getResource(tfConfig, "aws_subnet", "private-subnet-1")
+	if privateSubnet1 == nil {
+		t.Fatal("Private subnet 1 not found")
+	}
+	
+	if cidr, ok := privateSubnet1["cidr_block"]; !ok || cidr != "10.0.10.0/24" {
+		t.Errorf("expected private subnet 1 CIDR '10.0.10.0/24', got: %v", cidr)
+	}
+}
+
+// TestRouteTableConfiguration tests route table setup
+func TestRouteTableConfiguration(t *testing.T) {
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "rt-test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	NewTapStack(app, "RTTestStack", props)
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "RTTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Test route tables
+	publicRt := getResource(tfConfig, "aws_route_table", "public-rt")
+	if publicRt == nil {
+		t.Fatal("Public route table not found")
+	}
+	
+	privateRt := getResource(tfConfig, "aws_route_table", "private-rt")
+	if privateRt == nil {
+		t.Fatal("Private route table not found")
+	}
+	
+	// Test routes
+	publicRoute := getResource(tfConfig, "aws_route", "public-internet-route")
+	if publicRoute == nil {
+		t.Fatal("Public internet route not found")
+	}
+	
+	if dest, ok := publicRoute["destination_cidr_block"]; !ok || dest != "0.0.0.0/0" {
+		t.Errorf("expected public route destination '0.0.0.0/0', got: %v", dest)
+	}
+	
+	privateRoute := getResource(tfConfig, "aws_route", "private-nat-route")
+	if privateRoute == nil {
+		t.Fatal("Private NAT route not found")
+	}
+	
+	if dest, ok := privateRoute["destination_cidr_block"]; !ok || dest != "0.0.0.0/0" {
+		t.Errorf("expected private route destination '0.0.0.0/0', got: %v", dest)
+	}
+}
+
+// TestNATGatewayConfiguration tests NAT Gateway and EIP setup
+func TestNATGatewayConfiguration(t *testing.T) {
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "nat-test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	NewTapStack(app, "NATTestStack", props)
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "NATTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Test EIP
+	eip := getResource(tfConfig, "aws_eip", "nat-eip")
+	if eip == nil {
+		t.Fatal("NAT EIP not found")
+	}
+	
+	if domain, ok := eip["domain"]; !ok || domain != "vpc" {
+		t.Errorf("expected EIP domain 'vpc', got: %v", domain)
+	}
+	
+	// Test NAT Gateway
+	natGw := getResource(tfConfig, "aws_nat_gateway", "main-nat")
+	if natGw == nil {
+		t.Fatal("NAT Gateway not found")
+	}
+	
+	if allocId, ok := natGw["allocation_id"]; !ok || allocId == nil {
+		t.Error("NAT Gateway missing allocation ID")
+	}
+	
+	if subnetId, ok := natGw["subnet_id"]; !ok || subnetId == nil {
+		t.Error("NAT Gateway missing subnet ID")
+	}
+}
+
+// TestS3BackendConfiguration tests S3 backend setup
+func TestS3BackendConfiguration(t *testing.T) {
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "backend-test",
+		StateBucket:       "backend-test-bucket",
+		StateBucketRegion: "us-west-2",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	NewTapStack(app, "BackendTestStack", props)
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "BackendTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	// Test backend configuration
+	terraform, ok := tfConfig["terraform"].(map[string]interface{})
+	if !ok {
+		t.Fatal("terraform configuration not found")
+	}
+	
+	backend, ok := terraform["backend"].(map[string]interface{})
+	if !ok {
+		t.Fatal("backend configuration not found")
+	}
+	
+	s3Backend, ok := backend["s3"].(map[string]interface{})
+	if !ok {
+		t.Fatal("s3 backend configuration not found")
+	}
+	
+	if bucket, ok := s3Backend["bucket"]; !ok || bucket != "backend-test-bucket" {
+		t.Errorf("expected backend bucket 'backend-test-bucket', got: %v", bucket)
+	}
+	
+	if region, ok := s3Backend["region"]; !ok || region != "us-west-2" {
+		t.Errorf("expected backend region 'us-west-2', got: %v", region)
+	}
+	
+	if key, ok := s3Backend["key"]; !ok || key != "backend-test/BackendTestStack.tfstate" {
+		t.Errorf("expected backend key 'backend-test/BackendTestStack.tfstate', got: %v", key)
+	}
+}
+
+// TestFullStackOutputs tests all outputs from NewTapStack
+func TestFullStackOutputs(t *testing.T) {
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdktf.out")
+	
+	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
+	
+	props := &TapStackProps{
+		EnvironmentSuffix: "output-test",
+		StateBucket:       "test-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+	}
+	
+	NewTapStack(app, "OutputTestStack", props)
+	app.Synth()
+	
+	tfPath := filepath.Join(outdir, "stacks", "OutputTestStack", "cdk.tf.json")
+	tfConfig := parseTerraformJSON(t, tfPath)
+	
+	outputs, ok := tfConfig["output"].(map[string]interface{})
+	if !ok {
+		t.Fatal("no outputs found")
+	}
+	
+	// Test VPC outputs (only in NewTapStack)
+	requiredOutputs := []string{
+		"kms_key_id", "s3_bucket_name", "lambda_function_name",
+		"vpc_id", "public_subnet_ids", "private_subnet_ids",
+	}
+	
+	for _, outputName := range requiredOutputs {
+		if _, exists := outputs[outputName]; !exists {
+			t.Errorf("required output '%s' not found", outputName)
+		}
+	}
+	
+	// Verify VPC output description
+	if vpcOutput, ok := outputs["vpc_id"].(map[string]interface{}); ok {
+		if desc, ok := vpcOutput["description"]; !ok || desc != "VPC ID" {
+			t.Errorf("unexpected VPC output description: %v", desc)
+		}
+	}
+}
