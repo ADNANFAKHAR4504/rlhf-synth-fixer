@@ -1,7 +1,9 @@
 package main
 
 import (
-	"github.com/aws/constructs-go/constructs/v10"
+	"fmt"
+	"os"
+
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
@@ -9,17 +11,24 @@ import (
 func main() {
 	app := cdktf.NewApp(nil)
 
+	// Get environment suffix
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "dev"
+	}
+	environmentSuffix = fmt.Sprintf("cdktf-%s", environmentSuffix)
+
 	// Create the main stack with comprehensive security configuration
-	NewTapStack(app, "tap-production-stack", &TapStackConfig{
-		Environment: "production",
-		Project:     "tap-security-platform",
-		Owner:       "security-team",
-		CostCenter:  "security-ops",
-		Region:      "us-west-2",
-		VpcCidr:     "10.0.0.0/16",
-		AllowedIpRanges: []string{
-			"203.0.113.0/24", // Example corporate IP range
-			"198.51.100.0/24", // Example VPN IP range
+	NewTapStack(app, jsii.String(fmt.Sprintf("TapStack%s", environmentSuffix)), &TapStackConfig{
+		Region:      jsii.String("us-west-2"),
+		Environment: jsii.String("production"),
+		Project:     jsii.String("security-infra"),
+		Owner:       jsii.String("security-team"),
+		CostCenter:  jsii.String("infrastructure"),
+		VpcCidr:     jsii.String("10.0.0.0/16"),
+		AllowedIpRanges: []*string{
+			jsii.String("203.0.113.0/24"),  // Example corporate IP range
+			jsii.String("198.51.100.0/24"), // Example VPN IP range
 		},
 	})
 
