@@ -1,98 +1,42 @@
-Above code is failing with following errors at build stage fix the code and generate a proper one
+## Production-Ready Infrastructure with Advanced Security Controls
 
-```java
-//home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:284: error: cannot find symbol
-> Task :compileJava
-                        String bucketArn = values.t1;
-                                                 ^
-  symbol:   variable t1
-  location: variable values of type List<String>
-/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:285: error: cannot find symbol
-                        String kmsArn = values.t2;
-                                              ^
-  symbol:   variable t2
-  location: variable values of type List<String>
-/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:283: error: incompatible types: cannot infer type-variable(s) U
-                    .policy(Output.all(appBucket.arn(), kmsKey.arn()).apply(values -> {
-                                                                           ^
-    (argument mismatch; bad return type in lambda expression
-      String cannot be converted to Output<U>)
-  where U,T are type-variables:
-    U extends Object declared in method <U>apply(Function<T,Output<U>>)
-    T extends Object declared in interface Output
-/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:342: error: cannot find symbol
-            var amiLookup = Ec2Functions.getAmi(GetAmiArgs.builder()
-                                                ^
-  symbol:   variable GetAmiArgs
-  location: class Main
-/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:345: error: cannot find symbol
-                .filters(GetAmiFilterArgs.builder()
-                         ^
-  symbol:   variable GetAmiFilterArgs
-  location: class Main
-/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:445: error: no suitable method found for alarmActions(Output<String>)
-                        .alarmActions(snsTopic.arn())
-                        ^
-    method Builder.alarmActions(Output<List<String>>) is not applicable
-      (argument mismatch; Output<String> cannot be converted to Output<List<String>>)
-    method Builder.alarmActions(List<String>) is not applicable
-      (argument mismatch; Output<String> cannot be converted to List<String>)
-    method Builder.alarmActions(String...) is not applicable
-      (varargs mismatch; Output<String> cannot be converted to String)
-Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output
-6 errors
+We need to create a production-grade AWS infrastructure for our financial services application with enterprise-level security controls and operational excellence. This implementation should demonstrate best practices for regulatory compliance and operational monitoring.
 
+The infrastructure must implement:
 
-> Task :compileJava FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1755940743824.json
+**Enterprise Security Framework:**
+- Comprehensive IAM role hierarchy with service-specific policies
+- Multi-layered encryption strategy using customer-managed KMS keys
+- S3 bucket security configurations with access logging and event notifications
+- VPC Flow Logs for network traffic analysis and security monitoring
+- AWS Config rules for compliance validation and drift detection
 
-FAILURE: Build failed with an exception.
-[Incubating] Problems report is available at: file:///home/runner/work/iac-test-automations/iac-test-automations/build/reports/problems/problems-report.html
+**High Availability Architecture:**
+- Multi-AZ VPC design with proper subnet segregation
+- Auto Scaling groups with launch templates and instance refresh policies
+- Application Load Balancer with SSL certificate management
+- RDS instances with automated backups and read replicas
+- ElastiCache cluster for application performance optimization
 
-* What went wrong:
-Execution failed for task ':compileJava'.
-> Compilation failed; see the compiler output below.
-  Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:445: error: no suitable method found for alarmActions(Output<String>)
-                          .alarmActions(snsTopic.arn())
-                          ^
-      method Builder.alarmActions(Output<List<String>>) is not applicable
-        (argument mismatch; Output<String> cannot be converted to Output<List<String>>)
-      method Builder.alarmActions(List<String>) is not applicable
-        (argument mismatch; Output<String> cannot be converted to List<String>)
-      method Builder.alarmActions(String...) is not applicable
-        (varargs mismatch; Output<String> cannot be converted to String)/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:284: error: cannot find symbol
-                          String bucketArn = values.t1;
-                                                   ^
-    symbol:   variable t1
-    location: variable values of type List<String>
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:285: error: cannot find symbol
-                          String kmsArn = values.t2;
-                                                ^
-    symbol:   variable t2
-    location: variable values of type List<String>
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:342: error: cannot find symbol
-              var amiLookup = Ec2Functions.getAmi(GetAmiArgs.builder()
+**Comprehensive Monitoring Stack:**
+- CloudWatch Logs groups for centralized application logging
+- Custom CloudWatch metrics for business-specific KPIs
+- CloudWatch Alarms with automatic remediation actions
+- AWS X-Ray for distributed tracing and performance analysis
+- CloudTrail with management and data event logging
 
-                                                  ^
-Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
-    symbol:   variable GetAmiArgs
+**Disaster Recovery and Business Continuity:**
+- Cross-region backup strategies for critical data
+- Automated failover mechanisms for database systems
+- S3 Cross-Region Replication for data durability
+- EBS snapshot automation with retention policies
+- Route 53 health checks and DNS failover
 
-You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+**Operational Excellence:**
+- Systems Manager for patch management and compliance
+- Parameter Store for secure configuration management
+- CloudFormation or CDK for infrastructure as code
+- Resource tagging strategy for cost optimization and governance
+- AWS Well-Architected Framework compliance
 
-For more on this, please refer to https://docs.gradle.org/8.12/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
-1 actionable task: 1 executed
-    location: class Main
-  /home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:345: error: cannot find symbol
-                  .filters(GetAmiFilterArgs.builder()
-                           ^
-    symbol:   variable GetAmiFilterArgs
-    location: class Main/home/runner/work/iac-test-automations/iac-test-automations/lib/src/main/java/app/Main.java:283: error: incompatible types: cannot infer type-variable(s) U
-                      .policy(Output.all(appBucket.arn(), kmsKey.arn()).apply(values -> {
-                                                                             ^
-      (argument mismatch; bad return type in lambda expression
-        String cannot be converted to Output<U>)
-    where U,T are type-variables:
-      U extends Object declared in method <U>apply(Function<T,Output<U>>)
-      T extends Object declared in interface Output
-  6 errors
-```
+The solution should be cost-optimized, security-hardened, and ready for regulatory audits. All components must integrate seamlessly and provide comprehensive visibility into system health and performance.

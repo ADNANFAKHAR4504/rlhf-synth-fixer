@@ -1,43 +1,51 @@
-# Model Implementation Issues
+# Infrastructure Implementation Corrections
 
-The initial infrastructure implementation required several key corrections to work properly with AWS services.
+The infrastructure code required significant modifications to address compilation errors, deployment failures, and compliance requirements. This document outlines the primary technical issues encountered and their resolutions.
 
-## Java Type Compatibility Issues
+## Compilation and Type System Issues
 
-The original Pulumi Java code had several type mismatch problems that prevented compilation.
+### Import Resolution Failures
+Multiple Pulumi Java SDK imports were incorrect or referenced deprecated classes. The code attempted to import non-existent classes like TrailEventSelectorArgs, BucketServerSideEncryptionConfigurationRuleArgs, and SecurityGroupIngressArgs. These imports were corrected to use the proper Pulumi AWS SDK class names and package structures.
 
-The EC2 instance configuration required fixing the security group assignment. The `vpcSecurityGroupIds` method expects an `Output<List<String>>` but was receiving an `Output<String>`. This was resolved by properly wrapping the single security group ID in an Output list.
+### Output Type Handling
+The original code had numerous lambda return type inference problems. Methods expecting Output types were receiving raw Java types, causing compilation failures. Lambda expressions in policy creation and resource configuration needed proper Output wrapping and type conversion.
 
-Lambda return type inference also caused compilation issues in IAM policy creation. The complex Output transformations were simplified to avoid lambda return type conflicts.
+The bucket policy creation used improper Output.apply() syntax with String return types instead of Output<String>, preventing successful compilation. This required refactoring to use proper Output transformation patterns.
 
-CloudWatch alarm actions had similar Output type handling problems. The SNS topic ARN needed proper conversion to an Output list for the alarm actions parameter.
+### Method Signature Mismatches
+Several AWS resource configurations used incorrect method names or parameter types. For example, alarmName() method calls were used instead of name(), and CloudWatch alarm actions expected Output<List<String>> but received Output<String> parameters.
 
-## AWS Service Integration Problems  
+## AWS Service Configuration Problems
 
-The S3 bucket policy had malformed resource ARN references that caused deployment failures. The policy was using placeholder text instead of the actual bucket name variable, leading to "MalformedPolicy: Policy has invalid resource" errors.
+### KMS Key Configuration
+The KMS key specification used an invalid keySpec parameter that does not exist in the Pulumi AWS SDK. The key configuration was corrected to use proper key usage and specification parameters according to AWS KMS requirements.
 
-CloudTrail deployment failed with "InsufficientEncryptionPolicyException" because the KMS key lacked proper permissions for CloudTrail service access. The key policy needed explicit statements allowing CloudTrail to encrypt and decrypt logs.
+### S3 Bucket Encryption Setup
+Server-side encryption configuration used deprecated or incorrect argument classes. The encryption rules required updating to use current Pulumi AWS SDK patterns for S3 bucket encryption configuration.
 
-The KMS key policy also caused "MalformedPolicyDocumentException" errors due to wildcard principals and missing root account permissions that would prevent future policy updates.
+### EC2 Instance Configuration
+AMI lookup operations used incorrect function calls and argument builders. The EC2 instance creation required proper AMI resolution using correct Pulumi EC2 functions and filter arguments.
 
-## Test Coverage Gaps
+Root block device configuration referenced non-existent InstanceRootBlockDeviceArgs classes. This was resolved by using proper EBS block device configuration syntax.
 
-The initial implementation had insufficient test coverage, failing to meet the 50% threshold requirements. The main infrastructure code wasn't properly broken down into testable methods.
+### Security Group Rules
+Security group ingress and egress rule configuration used incorrect argument builders. The rules needed conversion to use proper SecurityGroup rule configuration methods supported by the current Pulumi AWS SDK.
 
-Method length violations occurred because infrastructure creation was handled in a single large method instead of being decomposed into smaller, focused functions.
+### CloudTrail Event Configuration
+CloudTrail event selector configuration referenced deprecated classes and used improper data resource specification. The trail configuration was updated to use supported event selector syntax and proper S3 resource ARN formatting.
 
-Checkstyle violations included wildcard imports, incorrect operator wrapping, and indentation issues that needed systematic fixes.
+## Infrastructure Architecture Corrections
 
-## Resource Naming and Randomization
+### Resource Naming Strategy
+Implemented consistent resource naming with environment suffixes to prevent conflicts during parallel deployments. All AWS resources now include randomized identifiers to ensure uniqueness across different deployment environments.
 
-Resource names needed unique random suffixes to prevent conflicts between multiple deployments in the same environment. The implementation added proper randomization to all AWS resource names.
+### IAM Policy Refinements
+IAM policies were corrected to follow least privilege principles while maintaining necessary permissions for application functionality. Policy documents were restructured to use proper JSON formatting and valid AWS policy syntax.
 
-The bucket naming required coordination between bucket creation and policy generation to ensure consistent naming throughout the infrastructure stack.
+### Network Security Configuration
+Security group rules were refined to restrict access to only required ports and protocols. The network configuration ensures proper isolation while allowing necessary communication between application components.
 
-## Security and Compliance Issues
+### Monitoring and Alerting Setup
+CloudWatch alarm configuration was corrected to use proper metric specifications and notification targets. SNS topic integration required proper ARN handling and subscription configuration.
 
-IAM policies needed refinement to follow least-privilege principles while still allowing necessary operations for the financial application.
-
-The security group rules required adjustment to properly restrict traffic while allowing necessary communication patterns for the application architecture.
-
-EBS volume encryption configuration needed proper KMS key integration to meet security requirements for financial data storage.
+These corrections ensure the infrastructure code compiles successfully, deploys without errors, and meets security and compliance requirements for financial services applications.
