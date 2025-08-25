@@ -1,20 +1,231 @@
 package app;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+import software.amazon.awscdk.services.autoscaling.HealthCheck;
+import software.amazon.awscdk.services.autoscaling.UpdatePolicy;
+import software.amazon.awscdk.services.autoscaling.UpdateType;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Subnet;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ListenerAction;
+import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.rds.Credentials;
+import software.amazon.awscdk.services.rds.DatabaseInstance;
+import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.PostgresEngineVersion;
+import software.amazon.awscdk.services.rds.StorageType;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.s3.LifecycleTransition;
+import software.amazon.awscdk.services.s3.StorageClass;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.constructs.Construct;
 
 /**
- * RegionalStack represents a single-region deployment.
- * Resources (VPC, ASG, RDS, S3, etc.) will be added here in future iterations.
+ * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
+ * Includes VPC, Auto Scaling Group, ALB, RDS, S3 logging, IAM, Security, and CloudWatch.
  */
 class RegionalStack extends Stack {
-    public RegionalStack(final Construct scope, final String id, final StackProps props) {
+    public RegionalStack(final Construct scope, final String id, final StackProps props, String environmentSuffix) {
         super(scope, id, props);
 
-        // TODO: Add resources (VPC, AutoScalingGroup, ELB, RDS, S3, Route53, IAM, CloudWatch, etc.)
+        // VPC with public/private subnets
+        Vpc vpc = Vpc.Builder.create(this, "NovaVpc-" + environmentSuffix)
+                .maxAzs(2)
+                .subnetConfiguration(List.of(
+                        SubnetConfiguration.builder()
+                                .name("public")
+                                .subnetType(SubnetType.PUBLIC)
+                                .cidrMask(24)
+                                .build(),
+                        SubnetConfiguration.builder()
+                                .name("private")
+                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                                .cidrMask(24)
+                                .build()))
+                .build();
+
+        // S3 log bucket
+        Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
+                .versioned(true)
+                .lifecycleRules(List.of(
+                        LifecycleRule.builder()
+                                .expiration(Duration.days(365))
+                                .transitions(List.of(LifecycleTransition.builder()
+                                        .storageClass(StorageClass.GLACIER)
+                                        .transitionAfter(Duration.days(90))
+                                        .build()))
+                                .build()))
+                .build();
+
+        // IAM Role for EC2
+        Role ec2Role = Role.Builder.create(this, "NovaEc2Role-" + environmentSuffix)
+                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
+                .build();
+
+        // Security Group for ALB/ASG
+        SecurityGroup appSg = SecurityGroup.Builder.create(this, "NovaAppSg-" + environmentSuffix)
+                .vpc(vpc)
+                .allowAllOutbound(true)
+                .build();
+        appSg.addIngressRule(appSg, Port.tcp(80), "Allow HTTP within SG");
+
+        // Auto Scaling Group
+        AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "NovaAsg-" + environmentSuffix)
+                .vpc(vpc)
+                .instanceType(InstanceType.of(InstanceClass.BURSTABLE2, InstanceSize.MICRO))
+                .machineImage(MachineImage.latestAmazonLinux2())
+                .minCapacity(2)
+                .maxCapacity(4)
+                .role(ec2Role)
+                .healthCheck(HealthCheck.elb())
+                .updatePolicy(UpdatePolicy.rollingUpdate(UpdateType.REPLACING_UPDATE))
+                .build();
+
+        // Application Load Balancer
+        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "NovaAlb-" + environmentSuffix)
+                .vpc(vpc)
+                .internetFacing(true)
+                .securityGroup(appSg)
+                .build();
+
+        ApplicationTargetGroup tg = ApplicationTargetGroup.Builder.create(this, "NovaAlbTg-" + environmentSuffix)
+                .vpc(vpc)
+                .protocol(ApplicationProtocol.HTTP)
+                .port(80)
+                .targetType(TargetType.INSTANCE)
+                .build();
+
+        alb.addListener("HttpListener",
+                software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
+                        .port(80)
+                        .defaultAction(ListenerAction.forward(List.of(tg)))
+                        .build());
+
+        asg.attachToApplicationTargetGroup(tg);
+
+        // RDS Multi-AZ PostgreSQL
+        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "NovaRds-" + environmentSuffix)
+                .engine(DatabaseInstanceEngine.postgres(PostgresEngineVersion.VER_13))
+                .vpc(vpc)
+                .multiAz(true)
+                .storageEncrypted(true)
+                .allocatedStorage(20)
+                .maxAllocatedStorage(100)
+                .storageType(StorageType.GP2)
+                .credentials(Credentials.fromGeneratedSecret("postgres"))
+                .build();
+
+        // CloudWatch Alarm for ASG CPU
+        Alarm cpuAlarm = Alarm.Builder.create(this, "NovaAsgCpuAlarm-" + environmentSuffix)
+                .metric(Metric.Builder.create()
+                        .namespace("AWS/EC2")
+                        .metricName("CPUUtilization")
+                        .statistic("Average")
+                        .period(Duration.minutes(5))
+                        .build())
+                .threshold(80)
+                .evaluationPeriods(2)
+                .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                .build();
+
+        // ---------------------
+        // Outputs for integration testing
+        // ---------------------
+        CfnOutput.Builder.create(this, "VpcId")
+                .value(vpc.getVpcId())
+                .exportName("NovaVpcId-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "VpcCidr")
+                .value(vpc.getVpcCidrBlock())
+                .exportName("NovaVpcCidr-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "SubnetIds")
+                .value(vpc.getPublicSubnets().stream().map(Subnet::getSubnetId).collect(Collectors.joining(",")))
+                .exportName("NovaVpcSubnetIds-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "AlbDns")
+                .value(alb.getLoadBalancerDnsName())
+                .exportName("NovaAlbDns-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "AlbArn")
+                .value(alb.getLoadBalancerArn())
+                .exportName("NovaAlbArn-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "AlbSgId")
+                .value(appSg.getSecurityGroupId())
+                .exportName("NovaAlbSgId-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "TargetGroupArn")
+                .value(tg.getTargetGroupArn())
+                .exportName("NovaAlbTgArn-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "AsgName")
+                .value(asg.getAutoScalingGroupName())
+                .exportName("NovaAsgName-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "RdsEndpoint")
+                .value(rds.getDbInstanceEndpointAddress())
+                .exportName("NovaRdsEndpoint-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "RdsArn")
+                .value(rds.getInstanceArn())
+                .exportName("NovaRdsArn-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "LogBucketName")
+                .value(logBucket.getBucketName())
+                .exportName("NovaLogsBucket-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "LogBucketArn")
+                .value(logBucket.getBucketArn())
+                .exportName("NovaLogsBucketArn-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "LogBucketDomain")
+                .value(logBucket.getBucketDomainName())
+                .exportName("NovaLogsBucketDomain-" + environmentSuffix)
+                .build();
+
+        CfnOutput.Builder.create(this, "CpuAlarmName")
+                .value(cpuAlarm.getAlarmName())
+                .exportName("NovaCpuAlarm-" + environmentSuffix)
+                .build();
     }
 }
 
@@ -24,20 +235,16 @@ class RegionalStack extends Stack {
  */
 public final class Main {
 
-    private Main() {
-        // Prevent instantiation
-    }
+    private Main() {}
 
     public static void main(final String[] args) {
         App app = new App();
 
-        // Resolve AWS account from environment variables
         String account = System.getenv("CDK_DEFAULT_ACCOUNT");
         if (account == null) {
             throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
         }
 
-        // Determine environment suffix (default: dev)
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
@@ -50,7 +257,8 @@ public final class Main {
                                 .account(account)
                                 .region("us-east-1")
                                 .build())
-                        .build());
+                        .build(),
+                environmentSuffix);
 
         // Secondary region: us-west-2
         new RegionalStack(app, "NovaStack-" + environmentSuffix + "-usw2",
@@ -59,9 +267,9 @@ public final class Main {
                                 .account(account)
                                 .region("us-west-2")
                                 .build())
-                        .build());
+                        .build(),
+                environmentSuffix);
 
-        // Synthesize into CloudFormation templates
         app.synth();
     }
 }
