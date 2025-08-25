@@ -1,0 +1,1 @@
+Hey above response has corrupted the tap-stack.go. Please complete and give me the full file.

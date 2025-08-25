@@ -1,78 +1,27 @@
-We need to design and deploy a **security-focused AWS infrastructure** using **CDK for Terraform (Go)**.  
-The idea is to take the kind of security controls we’d normally write in a CloudFormation YAML template and implement them in CDKTF (Go) instead.  
+I need help creating a comprehensive security-focused AWS infrastructure using CDKTF with Go. The setup needs to meet our company's strict security standards and include the following components:
 
----
+1. IAM Configuration: Implement IAM roles using solely AWS Managed Policies
 
-## What we want to achieve
+2. Network Infrastructure: Create a VPC with 2 public and 2 private subnets distributed across 2 availability zones in us-west-2 for high availability. Include proper routing and NAT gateways.
 
-- **IAM**  
-  - Create IAM roles but only attach **AWS Managed Policies** (no inline or custom policies).  
-  - Follow least privilege by selecting only the required managed policies.  
+3. Security Groups: Configure security groups that restrict inbound and outbound traffic to specific IP ranges only. No overly permissive rules.
 
-- **S3 Buckets**  
-  - All buckets must be **private by default**.  
-  - Enable server-side encryption with **SSE-KMS**.  
-  - Log buckets included—no exceptions.  
+4. S3 Storage: Ensure that all S3 buckets are configured to be private by default.
 
-- **Tagging**  
-  - Every resource must include the tag:  
-    ```
-    Environment: Production
-    ```  
+5. Logging Infrastructure: Enable logging for all AWS Lambda functions deployed also Set up AWS CloudTrail to capture all management events across our infrastructure for compliance auditing.
 
-- **Lambda Logging**  
-  - All AWS Lambda functions deployed must have **logging enabled** (via CloudWatch Log Groups).  
+6. RDS: Use AWS KMS to encrypt RDS instances, ensuring data security.
 
-- **VPC**  
-  - A highly available VPC setup with **public and private subnets across two Availability Zones**.  
-  - Ensure proper routing for internet access from public subnets and NAT for private subnets.  
+7. Database Security: Configure KMS encryption for RDS instances using customer-managed keys. Implement proper key rotation policies and access controls following the new FIPS 140-3 Level 3 certified HSM standards.
 
-- **RDS Security**  
-  - All RDS instances must use **AWS KMS-managed keys** for encryption at rest.  
+8. Resource Management: Apply consistent tagging across all resources to support cost management and resource tracking. Include tags for environment, project, owner, and cost-center.
 
-- **CloudTrail**  
-  - Enable CloudTrail across **all AWS regions**.  
-  - Store CloudTrail logs in an encrypted, private S3 bucket.  
+9. Modular Design: Structure the code to be modular and reusable, allowing for easy scaling and configuration management across different environments.
 
----
+The infrastructure code should be production-ready, following AWS Well-Architected Framework security principles, and incorporate the latest 2025 security features including enhanced KMS capabilities and the new Security Hub controls. Please provide complete CDKTF Go code with one code block per file.
 
-## Files to create
+I want a clean two-file setup for your CDKTF Go project:
 
-- **modules.go** → This file will contain all the actual resource definitions:  
-  - IAM roles (with AWS Managed Policies only).  
-  - KMS keys.  
-  - S3 buckets (main + log bucket).  
-  - Security groups.  
-  - CloudTrail setup.  
-  - RDS instance with KMS encryption.  
-  - Lambda function definitions with logging enabled.  
-  - VPC with subnets across 2 AZs.  
+main.go → entrypoint, just instantiates my app and stack.
 
-- **tap-stack.go** → This is where everything is tied together:  
-  - Import the modules from above.  
-  - Pass in variables like VPC CIDR, subnet CIDRs, RDS KMS key ID, etc.  
-  - Expose outputs such as IAM role ARN, S3 bucket names, VPC ID, RDS endpoint, and CloudTrail ARN.  
-
----
-
-## Key Requirements
-
-- Use **us-west-2 (Oregon)** region.  
-- Naming convention: `project-name-resource`.  
-- IAM roles must only use AWS Managed Policies.  
-- All S3 buckets must default to private + KMS encryption.  
-- Every resource must include the tag `Environment: Production`.  
-- Lambda functions must send logs to CloudWatch.  
-- VPC must span 2 AZs with both public and private subnets.  
-- RDS instances must use KMS-managed encryption.  
-- CloudTrail must be enabled **in all regions**.  
-- The CDKTF code must pass `terraform validate` and `terraform plan`.  
-
----
-
-## What to deliver
-
-Two Go files:  
-
-1. `modules.go` → all resource definitions.  
-2. `tap-stack.go` → wiring and outputs.
+tap-stack.go → defines a TapStack struct where you put all AWS modules/resources.

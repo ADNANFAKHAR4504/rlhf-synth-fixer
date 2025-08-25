@@ -1,588 +1,648 @@
-I'll create a security-focused AWS infrastructure using CDK for Terraform (Go) that meets all your requirements. Here are the two files:
+I'll help you create a comprehensive security-focused AWS infrastructure using CDKTF with Go. Let me break this down into modular components following best practices.
 
-## modules.go
+## Project Structure
+
+```
+aws-secure-infrastructure/
+├── main.go
+├── go.mod
+├── go.sum
+├── modules/
+│   ├── iam/
+│   │   └── iam.go
+│   ├── networking/
+│   │   └── vpc.go
+│   ├── security/
+│   │   └── security_groups.go
+│   ├── storage/
+│   │   └── s3.go
+│   ├── logging/
+│   │   └── logging.go
+│   ├── security_hub/
+│   │   └── security_hub.go
+│   ├── database/
+│   │   └── rds.go
+│   └── common/
+│       └── tags.go
+└── cdktf.json
+```
+
+## go.mod
 
 ```go
-package main
+module aws-secure-infrastructure
+
+go 1.21
+
+require (
+    github.com/aws/constructs-go/constructs/v10 v10.3.0
+    github.com/aws/jsii-runtime-go v1.95.0
+    github.com/hashicorp/terraform-cdk-go/cdktf v0.20.0
+    github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.0.0
+)
+```
+
+## cdktf.json
+
+```json
+{
+  "language": "go",
+  "app": "go run main.go",
+  "projectId": "aws-secure-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
+```
+
+## modules/common/tags.go
+
+```go
+package common
 
 import (
-	"fmt"
-
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudtrail"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbinstance"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lambdafunction"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 )
 
-// SecurityInfrastructure contains all the security-focused infrastructure components
-type SecurityInfrastructure struct {
-	// KMS Keys
-	S3KMSKey  kmskey.KmsKey
-	RDSKMSKey kmskey.KmsKey
-
-	// IAM Roles
-	LambdaRole     iamrole.IamRole
-	CloudTrailRole iamrole.IamRole
-
-	// S3 Buckets
-	MainBucket      s3bucket.S3Bucket
-	LogBucket       s3bucket.S3Bucket
-	CloudTrailBucket s3bucket.S3Bucket
-
-	// VPC Components
-	VPC               vpc.Vpc
-	InternetGateway   internetgateway.InternetGateway
-	PublicSubnet1     subnet.Subnet
-	PublicSubnet2     subnet.Subnet
-	PrivateSubnet1    subnet.Subnet
-	PrivateSubnet2    subnet.Subnet
-	PublicRouteTable  routetable.RouteTable
-	PrivateRouteTable1 routetable.RouteTable
-	PrivateRouteTable2 routetable.RouteTable
-	NATGateway1       natgateway.NatGateway
-	NATGateway2       natgateway.NatGateway
-	EIP1              eip.Eip
-	EIP2              eip.Eip
-
-	// Security Groups
-	LambdaSG securitygroup.SecurityGroup
-	RDSSSG   securitygroup.SecurityGroup
-
-	// RDS Components
-	DBSubnetGroup dbsubnetgroup.DbSubnetGroup
-	RDSInstance   dbinstance.DbInstance
-
-	// Lambda Components
-	LambdaLogGroup cloudwatchloggroup.CloudwatchLogGroup
-	LambdaFunction lambdafunction.LambdaFunction
-
-	// CloudTrail
-	CloudTrail cloudtrail.Cloudtrail
+type TagConfig struct {
+	Environment string
+	Project     string
+	Owner       string
+	CostCenter  string
 }
 
-// CreateKMSKeys creates KMS keys for S3 and RDS encryption
-func CreateKMSKeys(scope constructs.Construct, projectName string) (kmskey.KmsKey, kmskey.KmsKey) {
-	// S3 KMS Key
-	s3Key := kmskey.NewKmsKey(scope, jsii.String("s3-kms-key"), &kmskey.KmsKeyConfig{
-		Description: jsii.String("KMS key for S3 bucket encryption"),
-		Policy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Sid": "Enable IAM User Permissions",
-					"Effect": "Allow",
-					"Principal": {
-						"AWS": "arn:aws:iam::*:root"
-					},
-					"Action": "kms:*",
-					"Resource": "*"
-				},
-				{
-					"Sid": "Allow CloudTrail to encrypt logs",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "cloudtrail.amazonaws.com"
-					},
-					"Action": [
-						"kms:GenerateDataKey*",
-						"kms:DescribeKey"
-					],
-					"Resource": "*"
-				}
-			]
-		}`),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-s3-kms-key", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// RDS KMS Key
-	rdsKey := kmskey.NewKmsKey(scope, jsii.String("rds-kms-key"), &kmskey.KmsKeyConfig{
-		Description: jsii.String("KMS key for RDS encryption"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-rds-kms-key", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	return s3Key, rdsKey
+func GetCommonTags(config TagConfig) *map[string]*string {
+	return &map[string]*string{
+		"Environment":          jsii.String(config.Environment),
+		"Project":              jsii.String(config.Project),
+		"Owner":                jsii.String(config.Owner),
+		"CostCenter":           jsii.String(config.CostCenter),
+		"ManagedBy":            jsii.String("CDKTF"),
+		"SecurityCompliance":   jsii.String("Required"),
+		"DataClassification":   jsii.String("Confidential"),
+		"BackupRequired":       jsii.String("true"),
+		"MonitoringEnabled":    jsii.String("true"),
+		"CreatedDate":          jsii.String("2025-01-01"),
+	}
 }
 
-// CreateIAMRoles creates IAM roles with AWS managed policies only
-func CreateIAMRoles(scope constructs.Construct, projectName string) (iamrole.IamRole, iamrole.IamRole) {
+func MergeTags(commonTags *map[string]*string, additionalTags map[string]*string) *map[string]*string {
+	merged := make(map[string]*string)
+	
+	// Copy common tags
+	for k, v := range *commonTags {
+		merged[k] = v
+	}
+	
+	// Add additional tags
+	for k, v := range additionalTags {
+		merged[k] = v
+	}
+	
+	return &merged
+}
+```
+
+## modules/iam/iam.go
+
+```go
+package iam
+
+import (
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
+	"aws-secure-infrastructure/modules/common"
+)
+
+type IAMConfig struct {
+	Tags common.TagConfig
+}
+
+type IAMRoles struct {
+	LambdaExecutionRole   iamrole.IamRole
+	EC2InstanceRole       iamrole.IamRole
+	RDSEnhancedMonitoringRole iamrole.IamRole
+}
+
+func CreateIAMRoles(scope constructs.Construct, id string, config IAMConfig) *IAMRoles {
+	commonTags := common.GetCommonTags(config.Tags)
+
 	// Lambda Execution Role
-	lambdaRole := iamrole.NewIamRole(scope, jsii.String("lambda-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String(fmt.Sprintf("%s-lambda-role", projectName)),
-		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Action": "sts:AssumeRole",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "lambda.amazonaws.com"
-					}
+	lambdaAssumeRolePolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "lambda.amazonaws.com"
 				}
-			]
-		}`),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-lambda-role", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+			}
+		]
+	}`
+
+	lambdaRole := iamrole.NewIamRole(scope, jsii.String("lambda-execution-role"), &iamrole.IamRoleConfig{
+		Name:             jsii.String("secure-lambda-execution-role"),
+		AssumeRolePolicy: jsii.String(lambdaAssumeRolePolicy),
+		Description:      jsii.String("IAM role for Lambda functions with security logging"),
+		Tags:             common.MergeTags(commonTags, map[string]*string{
+			"ResourceType": jsii.String("IAMRole"),
+			"Purpose":      jsii.String("LambdaExecution"),
+		}),
 	})
 
-	// Attach AWS managed policy for Lambda basic execution
+	// Attach AWS managed policies to Lambda role
 	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("lambda-basic-execution"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      lambdaRole.Name(),
 		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"),
 	})
 
-	// CloudTrail Service Role
-	cloudTrailRole := iamrole.NewIamRole(scope, jsii.String("cloudtrail-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String(fmt.Sprintf("%s-cloudtrail-role", projectName)),
-		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Action": "sts:AssumeRole",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "cloudtrail.amazonaws.com"
-					}
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("lambda-vpc-execution"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+		Role:      lambdaRole.Name(),
+		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"),
+	})
+
+	// EC2 Instance Role
+	ec2AssumeRolePolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "ec2.amazonaws.com"
 				}
-			]
-		}`),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-cloudtrail-role", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+			}
+		]
+	}`
+
+	ec2Role := iamrole.NewIamRole(scope, jsii.String("ec2-instance-role"), &iamrole.IamRoleConfig{
+		Name:             jsii.String("secure-ec2-instance-role"),
+		AssumeRolePolicy: jsii.String(ec2AssumeRolePolicy),
+		Description:      jsii.String("IAM role for EC2 instances with security monitoring"),
+		Tags:             common.MergeTags(commonTags, map[string]*string{
+			"ResourceType": jsii.String("IAMRole"),
+			"Purpose":      jsii.String("EC2Instance"),
+		}),
 	})
 
-	// Attach AWS managed policy for CloudTrail
-	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("cloudtrail-service-role"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
-		Role:      cloudTrailRole.Name(),
-		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/CloudWatchLogsFullAccess"),
+	// Attach AWS managed policies to EC2 role
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("ec2-ssm-managed"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+		Role:      ec2Role.Name(),
+		PolicyArn: jsii.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
 	})
 
-	return lambdaRole, cloudTrailRole
-}
-
-// CreateS3Buckets creates private S3 buckets with KMS encryption
-func CreateS3Buckets(scope constructs.Construct, projectName string, kmsKey kmskey.KmsKey) (s3bucket.S3Bucket, s3bucket.S3Bucket, s3bucket.S3Bucket) {
-	// Main S3 Bucket
-	mainBucket := s3bucket.NewS3Bucket(scope, jsii.String("main-bucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String(fmt.Sprintf("%s-main-bucket", projectName)),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-main-bucket", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("ec2-cloudwatch-agent"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+		Role:      ec2Role.Name(),
+		PolicyArn: jsii.String("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"),
 	})
 
-	// Log S3 Bucket
-	logBucket := s3bucket.NewS3Bucket(scope, jsii.String("log-bucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String(fmt.Sprintf("%s-log-bucket", projectName)),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-log-bucket", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+	// RDS Enhanced Monitoring Role
+	rdsAssumeRolePolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "monitoring.rds.amazonaws.com"
+				}
+			}
+		]
+	}`
+
+	rdsRole := iamrole.NewIamRole(scope, jsii.String("rds-enhanced-monitoring-role"), &iamrole.IamRoleConfig{
+		Name:             jsii.String("secure-rds-enhanced-monitoring-role"),
+		AssumeRolePolicy: jsii.String(rdsAssumeRolePolicy),
+		Description:      jsii.String("IAM role for RDS Enhanced Monitoring"),
+		Tags:             common.MergeTags(commonTags, map[string]*string{
+			"ResourceType": jsii.String("IAMRole"),
+			"Purpose":      jsii.String("RDSMonitoring"),
+		}),
 	})
 
-	// CloudTrail S3 Bucket
-	cloudTrailBucket := s3bucket.NewS3Bucket(scope, jsii.String("cloudtrail-bucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String(fmt.Sprintf("%s-cloudtrail-bucket", projectName)),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-cloudtrail-bucket", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(scope, jsii.String("rds-enhanced-monitoring"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+		Role:      rdsRole.Name(),
+		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"),
 	})
 
-	// Configure encryption and public access blocking for all buckets
-	buckets := []s3bucket.S3Bucket{mainBucket, logBucket, cloudTrailBucket}
-	bucketNames := []string{"main", "log", "cloudtrail"}
-
-	for i, bucket := range buckets {
-		// Enable KMS encryption
-		s3bucketencryption.NewS3BucketEncryption(scope, jsii.String(fmt.Sprintf("%s-bucket-encryption", bucketNames[i])), &s3bucketencryption.S3BucketEncryptionConfig{
-			Bucket: bucket.Id(),
-			ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
-				Rule: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
-					ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-						KmsMasterKeyId: kmsKey.Arn(),
-						SseAlgorithm:   jsii.String("aws:kms"),
-					},
-				},
-			},
-		})
-
-		// Block public access
-		s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(scope, jsii.String(fmt.Sprintf("%s-bucket-pab", bucketNames[i])), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
-			Bucket:                bucket.Id(),
-			BlockPublicAcls:       jsii.Bool(true),
-			BlockPublicPolicy:     jsii.Bool(true),
-			IgnorePublicAcls:      jsii.Bool(true),
-			RestrictPublicBuckets: jsii.Bool(true),
-		})
+	return &IAMRoles{
+		LambdaExecutionRole:       lambdaRole,
+		EC2InstanceRole:           ec2Role,
+		RDSEnhancedMonitoringRole: rdsRole,
 	}
+}
+```
 
-	return mainBucket, logBucket, cloudTrailBucket
+## modules/networking/vpc.go
+
+```go
+package networking
+
+import (
+	"fmt"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpcflowlog"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"aws-secure-infrastructure/modules/common"
+)
+
+type NetworkingConfig struct {
+	VpcCidr           string
+	AvailabilityZones []string
+	Tags              common.TagConfig
 }
 
-// CreateVPC creates a highly available VPC with public and private subnets across 2 AZs
-func CreateVPC(scope constructs.Construct, projectName string, vpcCidr string, publicSubnet1Cidr, publicSubnet2Cidr, privateSubnet1Cidr, privateSubnet2Cidr string) (vpc.Vpc, subnet.Subnet, subnet.Subnet, subnet.Subnet, subnet.Subnet, internetgateway.InternetGateway, natgateway.NatGateway, natgateway.NatGateway) {
+type NetworkingResources struct {
+	VPC            vpc.Vpc
+	PublicSubnets  []subnet.Subnet
+	PrivateSubnets []subnet.Subnet
+	InternetGW     internetgateway.InternetGateway
+	NATGateways    []natgateway.NatGateway
+}
+
+func CreateNetworking(scope constructs.Construct, id string, config NetworkingConfig) *NetworkingResources {
+	commonTags := common.GetCommonTags(config.Tags)
+
 	// Create VPC
-	mainVPC := vpc.NewVpc(scope, jsii.String("main-vpc"), &vpc.VpcConfig{
-		CidrBlock:          jsii.String(vpcCidr),
+	mainVpc := vpc.NewVpc(scope, jsii.String("main-vpc"), &vpc.VpcConfig{
+		CidrBlock:          jsii.String(config.VpcCidr),
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-vpc", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+		Tags:               common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-vpc"),
+			"ResourceType": jsii.String("VPC"),
+		}),
 	})
 
 	// Create Internet Gateway
 	igw := internetgateway.NewInternetGateway(scope, jsii.String("internet-gateway"), &internetgateway.InternetGatewayConfig{
-		VpcId: mainVPC.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-igw", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+		VpcId: mainVpc.Id(),
+		Tags:  common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-igw"),
+			"ResourceType": jsii.String("InternetGateway"),
+		}),
 	})
 
-	// Create Public Subnets
-	publicSubnet1 := subnet.NewSubnet(scope, jsii.String("public-subnet-1"), &subnet.SubnetConfig{
-		VpcId:               mainVPC.Id(),
-		CidrBlock:           jsii.String(publicSubnet1Cidr),
-		AvailabilityZone:    jsii.String("us-west-2a"),
-		MapPublicIpOnLaunch: jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-public-subnet-1", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
+	// Create subnets
+	var publicSubnets []subnet.Subnet
+	var privateSubnets []subnet.Subnet
+	var natGateways []natgateway.NatGateway
 
-	publicSubnet2 := subnet.NewSubnet(scope, jsii.String("public-subnet-2"), &subnet.SubnetConfig{
-		VpcId:               mainVPC.Id(),
-		CidrBlock:           jsii.String(publicSubnet2Cidr),
-		AvailabilityZone:    jsii.String("us-west-2b"),
-		MapPublicIpOnLaunch: jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-public-subnet-2", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
+	for i, az := range config.AvailabilityZones {
+		// Public subnet
+		publicCidr := fmt.Sprintf("10.0.%d.0/24", i*2+1)
+		publicSubnet := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-%d", i)), &subnet.SubnetConfig{
+			VpcId:                   mainVpc.Id(),
+			CidrBlock:              jsii.String(publicCidr),
+			AvailabilityZone:       jsii.String(az),
+			MapPublicIpOnLaunch:    jsii.Bool(true),
+			Tags:                   common.MergeTags(commonTags, map[string]*string{
+				"Name":         jsii.String(fmt.Sprintf("secure-public-subnet-%d", i+1)),
+				"Type":         jsii.String("Public"),
+				"ResourceType": jsii.String("Subnet"),
+			}),
+		})
+		publicSubnets = append(publicSubnets, publicSubnet)
 
-	// Create Private Subnets
-	privateSubnet1 := subnet.NewSubnet(scope, jsii.String("private-subnet-1"), &subnet.SubnetConfig{
-		VpcId:            mainVPC.Id(),
-		CidrBlock:        jsii.String(privateSubnet1Cidr),
-		AvailabilityZone: jsii.String("us-west-2a"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-1", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
+		// Private subnet
+		privateCidr := fmt.Sprintf("10.0.%d.0/24", i*2+2)
+		privateSubnet := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-%d", i)), &subnet.SubnetConfig{
+			VpcId:            mainVpc.Id(),
+			CidrBlock:        jsii.String(privateCidr),
+			AvailabilityZone: jsii.String(az),
+			Tags:             common.MergeTags(commonTags, map[string]*string{
+				"Name":         jsii.String(fmt.Sprintf("secure-private-subnet-%d", i+1)),
+				"Type":         jsii.String("Private"),
+				"ResourceType": jsii.String("Subnet"),
+			}),
+		})
+		privateSubnets = append(privateSubnets, privateSubnet)
 
-	privateSubnet2 := subnet.NewSubnet(scope, jsii.String("private-subnet-2"), &subnet.SubnetConfig{
-		VpcId:            mainVPC.Id(),
-		CidrBlock:        jsii.String(privateSubnet2Cidr),
-		AvailabilityZone: jsii.String("us-west-2b"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-2", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
+		// Elastic IP for NAT Gateway
+		natEip := eip.NewEip(scope, jsii.String(fmt.Sprintf("nat-eip-%d", i)), &eip.EipConfig{
+			Domain: jsii.String("vpc"),
+			Tags:   common.MergeTags(commonTags, map[string]*string{
+				"Name":         jsii.String(fmt.Sprintf("secure-nat-eip-%d", i+1)),
+				"ResourceType": jsii.String("ElasticIP"),
+			}),
+		})
 
-	// Create Elastic IPs for NAT Gateways
-	eip1 := eip.NewEip(scope, jsii.String("nat-eip-1"), &eip.EipConfig{
-		Domain: jsii.String("vpc"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-nat-eip-1", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
+		// NAT Gateway
+		natGw := natgateway.NewNatGateway(scope, jsii.String(fmt.Sprintf("nat-gateway-%d", i)), &natgateway.NatGatewayConfig{
+			AllocationId: natEip.Id(),
+			SubnetId:     publicSubnet.Id(),
+			Tags:         common.MergeTags(commonTags, map[string]*string{
+				"Name":         jsii.String(fmt.Sprintf("secure-nat-gw-%d", i+1)),
+				"ResourceType": jsii.String("NATGateway"),
+			}),
+		})
+		natGateways = append(natGateways, natGw)
+	}
 
-	eip2 := eip.NewEip(scope, jsii.String("nat-eip-2"), &eip.EipConfig{
-		Domain: jsii.String("vpc"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-nat-eip-2", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// Create NAT Gateways
-	natGW1 := natgateway.NewNatGateway(scope, jsii.String("nat-gateway-1"), &natgateway.NatGatewayConfig{
-		AllocationId: eip1.Id(),
-		SubnetId:     publicSubnet1.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-nat-gw-1", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	natGW2 := natgateway.NewNatGateway(scope, jsii.String("nat-gateway-2"), &natgateway.NatGatewayConfig{
-		AllocationId: eip2.Id(),
-		SubnetId:     publicSubnet2.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-nat-gw-2", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// Create Route Tables
+	// Create route tables
+	// Public route table
 	publicRT := routetable.NewRouteTable(scope, jsii.String("public-route-table"), &routetable.RouteTableConfig{
-		VpcId: mainVPC.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-public-rt", projectName)),
-			"Environment": jsii.String("Production"),
-		},
+		VpcId: mainVpc.Id(),
+		Tags:  common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-public-rt"),
+			"Type":         jsii.String("Public"),
+			"ResourceType": jsii.String("RouteTable"),
+		}),
 	})
 
-	privateRT1 := routetable.NewRouteTable(scope, jsii.String("private-route-table-1"), &routetable.RouteTableConfig{
-		VpcId: mainVPC.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-rt-1", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	privateRT2 := routetable.NewRouteTable(scope, jsii.String("private-route-table-2"), &routetable.RouteTableConfig{
-		VpcId: mainVPC.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-rt-2", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// Create Routes
+	// Public route to Internet Gateway
 	route.NewRoute(scope, jsii.String("public-route"), &route.RouteConfig{
 		RouteTableId:         publicRT.Id(),
 		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
 		GatewayId:            igw.Id(),
 	})
 
-	route.NewRoute(scope, jsii.String("private-route-1"), &route.RouteConfig{
-		RouteTableId:         privateRT1.Id(),
-		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
-		NatGatewayId:         natGW1.Id(),
+	// Associate public subnets with public route table
+	for i, pubSubnet := range publicSubnets {
+		routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("public-rt-association-%d", i)), &routetableassociation.RouteTableAssociationConfig{
+			SubnetId:     pubSubnet.Id(),
+			RouteTableId: publicRT.Id(),
+		})
+	}
+
+	// Private route tables (one per AZ for high availability)
+	for i, natGw := range natGateways {
+		privateRT := routetable.NewRouteTable(scope, jsii.String(fmt.Sprintf("private-route-table-%d", i)), &routetable.RouteTableConfig{
+			VpcId: mainVpc.Id(),
+			Tags:  common.MergeTags(commonTags, map[string]*string{
+				"Name":         jsii.String(fmt.Sprintf("secure-private-rt-%d", i+1)),
+				"Type":         jsii.String("Private"),
+				"ResourceType": jsii.String("RouteTable"),
+			}),
+		})
+
+		// Private route to NAT Gateway
+		route.NewRoute(scope, jsii.String(fmt.Sprintf("private-route-%d", i)), &route.RouteConfig{
+			RouteTableId:         privateRT.Id(),
+			DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+			NatGatewayId:         natGw.Id(),
+		})
+
+		// Associate private subnet with private route table
+		routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("private-rt-association-%d", i)), &routetableassociation.RouteTableAssociationConfig{
+			SubnetId:     privateSubnets[i].Id(),
+			RouteTableId: privateRT.Id(),
+		})
+	}
+
+	// VPC Flow Logs
+	flowLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("vpc-flow-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:            jsii.String("/aws/vpc/flowlogs"),
+		RetentionInDays: jsii.Number(30),
+		Tags:            common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("vpc-flow-logs"),
+			"ResourceType": jsii.String("CloudWatchLogGroup"),
+		}),
 	})
 
-	route.NewRoute(scope, jsii.String("private-route-2"), &route.RouteConfig{
-		RouteTableId:         privateRT2.Id(),
-		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
-		NatGatewayId:         natGW2.Id(),
+	vpcflowlog.NewVpcFlowLog(scope, jsii.String("vpc-flow-log"), &vpcflowlog.VpcFlowLogConfig{
+		IamRoleArn:               jsii.String("arn:aws:iam::123456789012:role/flowlogsRole"), // Replace with actual role
+		LogDestination:           flowLogGroup.Arn(),
+		LogDestinationType:       jsii.String("cloud-watch-logs"),
+		ResourceId:               mainVpc.Id(),
+		ResourceType:             jsii.String("VPC"),
+		TrafficType:              jsii.String("ALL"),
+		LogFormat:                jsii.String("${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}"),
+		MaxAggregationInterval:   jsii.Number(60),
+		Tags:                     common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("vpc-flow-log"),
+			"ResourceType": jsii.String("VPCFlowLog"),
+		}),
 	})
 
-	// Associate Route Tables with Subnets
-	routetableassociation.NewRouteTableAssociation(scope, jsii.String("public-rta-1"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     publicSubnet1.Id(),
-		RouteTableId: publicRT.Id(),
-	})
-
-	routetableassociation.NewRouteTableAssociation(scope, jsii.String("public-rta-2"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     publicSubnet2.Id(),
-		RouteTableId: publicRT.Id(),
-	})
-
-	routetableassociation.NewRouteTableAssociation(scope, jsii.String("private-rta-1"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     privateSubnet1.Id(),
-		RouteTableId: privateRT1.Id(),
-	})
-
-	routetableassociation.NewRouteTableAssociation(scope, jsii.String("private-rta-2"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     privateSubnet2.Id(),
-		RouteTableId: privateRT2.Id(),
-	})
-
-	return mainVPC, publicSubnet1, publicSubnet2, privateSubnet1, privateSubnet2, igw, natGW1, natGW2
-}
-
-// CreateSecurityGroups creates security groups for Lambda and RDS
-func CreateSecurityGroups(scope constructs.Construct, projectName string, vpcId *string) (securitygroup.SecurityGroup, securitygroup.SecurityGroup) {
-	// Lambda Security Group
-	lambdaSG := securitygroup.NewSecurityGroup(scope, jsii.String("lambda-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("%s-lambda-sg", projectName)),
-		Description: jsii.String("Security group for Lambda functions"),
-		VpcId:       vpcId,
-		Egress: &[]*securitygroup.SecurityGroupEgress{
-			{
-				FromPort:   jsii.Number(0),
-				ToPort:     jsii.Number(65535),
-				Protocol:   jsii.String("tcp"),
-				CidrBlocks: &[]*string{jsii.String("0.0.0.0/0")},
-			},
-		},
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-lambda-sg", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// RDS Security Group
-	rdsSG := securitygroup.NewSecurityGroup(scope, jsii.String("rds-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("%s-rds-sg", projectName)),
-		Description: jsii.String("Security group for RDS instances"),
-		VpcId:       vpcId,
-		Ingress: &[]*securitygroup.SecurityGroupIngress{
-			{
-				FromPort:        jsii.Number(3306),
-				ToPort:          jsii.Number(3306),
-				Protocol:        jsii.String("tcp"),
-				SecurityGroups:  &[]*string{lambdaSG.Id()},
-				Description:     jsii.String("MySQL access from Lambda"),
-			},
-		},
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-rds-sg", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	return lambdaSG, rdsSG
-}
-
-// CreateRDS creates an RDS instance with KMS encryption
-func CreateRDS(scope constructs.Construct, projectName string, privateSubnet1, privateSubnet2 subnet.Subnet, rdsSG securitygroup.SecurityGroup, kmsKey kmskey.KmsKey) dbinstance.DbInstance {
-	// Create DB Subnet Group
-	dbSubnetGroup := dbsubnetgroup.NewDbSubnetGroup(scope, jsii.String("db-subnet-group"), &dbsubnetgroup.DbSubnetGroupConfig{
-		Name:       jsii.String(fmt.Sprintf("%s-db-subnet-group", projectName)),
-		SubnetIds:  &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-db-subnet-group", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// Create RDS Instance
-	rdsInstance := dbinstance.NewDbInstance(scope, jsii.String("rds-instance"), &dbinstance.DbInstanceConfig{
-		Identifier:     jsii.String(fmt.Sprintf("%s-rds-instance", projectName)),
-		Engine:         jsii.String("mysql"),
-		EngineVersion:  jsii.String("8.0"),
-		InstanceClass:  jsii.String("db.t3.micro"),
-		AllocatedStorage: jsii.Number(20),
-		DbName:         jsii.String("production"),
-		Username:       jsii.String("admin"),
-		Password:       jsii.String("changeme123!"), // In production, use AWS Secrets Manager
-		VpcSecurityGroupIds: &[]*string{rdsSG.Id()},
-		DbSubnetGroupName:   dbSubnetGroup.Name(),
-		StorageEncrypted:    jsii.Bool(true),
-		KmsKeyId:           kmsKey.Arn(),
-		BackupRetentionPeriod: jsii.Number(7),
-		BackupWindow:       jsii.String("03:00-04:00"),
-		MaintenanceWindow:  jsii.String("sun:04:00-sun:05:00"),
-		SkipFinalSnapshot:  jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-rds-instance", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	return rdsInstance
-}
-
-// CreateLambda creates a Lambda function with CloudWatch logging enabled
-func CreateLambda(scope constructs.Construct, projectName string, lambdaRole iamrole.IamRole, lambdaSG securitygroup.SecurityGroup, privateSubnet1, privateSubnet2 subnet.Subnet) lambdafunction.LambdaFunction {
-	// Create CloudWatch Log Group
-	logGroup := cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("lambda-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:            jsii.String(fmt.Sprintf("/aws/lambda/%s-function", projectName)),
-		RetentionInDays: jsii.Number(14),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-lambda-logs", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	// Create Lambda Function
-	lambdaFunc := lambdafunction.NewLambdaFunction(scope, jsii.String("lambda-function"), &lambdafunction.LambdaFunctionConfig{
-		FunctionName: jsii.String(fmt.Sprintf("%s-function", projectName)),
-		Role:         lambdaRole.Arn(),
-		Handler:      jsii.String("index.handler"),
-		Runtime:      jsii.String("python3.9"),
-		Filename:     jsii.String("lambda.zip"), // You'll need to create this zip file
-		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
-			SecurityGroupIds: &[]*string{lambdaSG.Id()},
-			SubnetIds:        &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
-		},
-		DependsOn: &[]cdktf.ITerraformDependable{logGroup},
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-function", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	return lambdaFunc
-}
-
-// CreateCloudTrail creates CloudTrail with multi-region logging
-func CreateCloudTrail(scope constructs.Construct, projectName string, s3Bucket s3bucket.S3Bucket, kmsKey kmskey.KmsKey) cloudtrail.Cloudtrail {
-	trail := cloudtrail.NewCloudtrail(scope, jsii.String("cloudtrail"), &cloudtrail.CloudtrailConfig{
-		Name:                         jsii.String(fmt.Sprintf("%s-cloudtrail", projectName)),
-		S3BucketName:                 s3Bucket.Id(),
-		IncludeGlobalServiceEvents:   jsii.Bool(true),
-		IsMultiRegionTrail:           jsii.Bool(true),
-		EnableLogFileValidation:      jsii.Bool(true),
-		KmsKeyId:                     kmsKey.Arn(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-cloudtrail", projectName)),
-			"Environment": jsii.String("Production"),
-		},
-	})
-
-	return trail
+	return &NetworkingResources{
+		VPC:            mainVpc,
+		PublicSubnets:  publicSubnets,
+		PrivateSubnets: privateSubnets,
+		InternetGW:     igw,
+		NATGateways:    natGateways,
+	}
 }
 ```
 
-## tap-stack.go
+## modules/security/security_groups.go
 
 ```go
-package main
+package security
 
 import (
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygrouprule"
+	"aws-secure-infrastructure/modules/common"
 )
 
-// TapStackConfig holds configuration for the TAP stack
-type TapStackConfig struct {
-	ProjectName        string
-	VPCCidr           string
-	PublicSubnet1Cidr  string
-	PublicSubnet2Cidr  string
-	PrivateSubnet1Cidr string
-	PrivateSubnet2Cidr string
+type SecurityGroupConfig struct {
+	VpcId           string
+	AllowedCidrBlocks []string
+	Tags            common.TagConfig
 }
 
-// TapStack represents the main infrastructure stack
-type TapStack struct {
-	cdktf.TerraformStack
-	Infrastructure *SecurityInfrastructure
+type SecurityGroups struct {
+	WebSecurityGroup      securitygroup.SecurityGroup
+	DatabaseSecurityGroup securitygroup.SecurityGroup
+	LambdaSecurityGroup   securitygroup.SecurityGroup
 }
 
-// NewTapStack creates a new TAP stack with security-focused infrastructure
-func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) *TapStack {
-	stack := cdktf.NewTerraformStack(scope, &id)
+func CreateSecurityGroups(scope constructs.Construct, id string, config SecurityGroupConfig) *SecurityGroups {
+	commonTags := common.GetCommonTags(config.Tags)
 
-	// Configure AWS Provider
-	provider.NewAwsProvider(
+	// Web Security Group
+	webSG := securitygroup.NewSecurityGroup(scope, jsii.String("web-security-group"), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String("secure-web-sg"),
+		Description: jsii.String("Security group for web servers with restricted access"),
+		VpcId:       jsii.String(config.VpcId),
+		Tags:        common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-web-sg"),
+			"Purpose":      jsii.String("WebServer"),
+			"ResourceType": jsii.String("SecurityGroup"),
+		}),
+	})
+
+	// Web Security Group Rules - Inbound
+	for i, cidr := range config.AllowedCidrBlocks {
+		// HTTPS
+		securitygrouprule.NewSecurityGroupRule(scope, jsii.String("web-https-inbound-"+string(rune(i))), &securitygrouprule.SecurityGroupRuleConfig{
+			Type:              jsii.String("ingress"),
+			FromPort:          jsii.Number(443),
+			ToPort:            jsii.Number(443),
+			Protocol:          jsii.String("tcp"),
+			CidrBlocks:        &[]*string{jsii.String(cidr)},
+			SecurityGroupId:   webSG.Id(),
+			Description:       jsii.String("HTTPS access from approved networks"),
+		})
+
+		// HTTP (redirect to HTTPS)
+		securitygrouprule.NewSecurityGroupRule(scope, jsii.String("web-http-inbound-"+string(rune(i))), &securitygrouprule.SecurityGroupRuleConfig{
+			Type:              jsii.String("ingress"),
+			FromPort:          jsii.Number(80),
+			ToPort:            jsii.Number(80),
+			Protocol:          jsii.String("tcp"),
+			CidrBlocks:        &[]*string{jsii.String(cidr)},
+			SecurityGroupId:   webSG.Id(),
+			Description:       jsii.String("HTTP access for redirect to HTTPS"),
+		})
+	}
+
+	// Web Security Group Rules - Outbound (restrictive)
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("web-https-outbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:            jsii.String("egress"),
+		FromPort:        jsii.Number(443),
+		ToPort:          jsii.Number(443),
+		Protocol:        jsii.String("tcp"),
+		CidrBlocks:      &[]*string{jsii.String("0.0.0.0/0")},
+		SecurityGroupId: webSG.Id(),
+		Description:     jsii.String("HTTPS outbound for API calls and updates"),
+	})
+
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("web-dns-outbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:            jsii.String("egress"),
+		FromPort:        jsii.Number(53),
+		ToPort:          jsii.Number(53),
+		Protocol:        jsii.String("udp"),
+		CidrBlocks:      &[]*string{jsii.String("0.0.0.0/0")},
+		SecurityGroupId: webSG.Id(),
+		Description:     jsii.String("DNS resolution"),
+	})
+
+	// Database Security Group
+	dbSG := securitygroup.NewSecurityGroup(scope, jsii.String("database-security-group"), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String("secure-database-sg"),
+		Description: jsii.String("Security group for database servers with application access only"),
+		VpcId:       jsii.String(config.VpcId),
+		Tags:        common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-database-sg"),
+			"Purpose":      jsii.String("Database"),
+			"ResourceType": jsii.String("SecurityGroup"),
+		}),
+	})
+
+	// Database Security Group Rules - Inbound (only from web SG)
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("db-mysql-inbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:                     jsii.String("ingress"),
+		FromPort:                 jsii.Number(3306),
+		ToPort:                   jsii.Number(3306),
+		Protocol:                 jsii.String("tcp"),
+		SourceSecurityGroupId:    webSG.Id(),
+		SecurityGroupId:          dbSG.Id(),
+		Description:              jsii.String("MySQL access from web servers only"),
+	})
+
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("db-postgres-inbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:                     jsii.String("ingress"),
+		FromPort:                 jsii.Number(5432),
+		ToPort:                   jsii.Number(5432),
+		Protocol:                 jsii.String("tcp"),
+		SourceSecurityGroupId:    webSG.Id(),
+		SecurityGroupId:          dbSG.Id(),
+		Description:              jsii.String("PostgreSQL access from web servers only"),
+	})
+
+	// Lambda Security Group
+	lambdaSG := securitygroup.NewSecurityGroup(scope, jsii.String("lambda-security-group"), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String("secure-lambda-sg"),
+		Description: jsii.String("Security group for Lambda functions with restricted network access"),
+		VpcId:       jsii.String(config.VpcId),
+		Tags:        common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-lambda-sg"),
+			"Purpose":      jsii.String("Lambda"),
+			"ResourceType": jsii.String("SecurityGroup"),
+		}),
+	})
+
+	// Lambda Security Group Rules - Outbound only
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("lambda-https-outbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:            jsii.String("egress"),
+		FromPort:        jsii.Number(443),
+		ToPort:          jsii.Number(443),
+		Protocol:        jsii.String("tcp"),
+		CidrBlocks:      &[]*string{jsii.String("0.0.0.0/0")},
+		SecurityGroupId: lambdaSG.Id(),
+		Description:     jsii.String("HTTPS outbound for AWS API calls"),
+	})
+
+	securitygrouprule.NewSecurityGroupRule(scope, jsii.String("lambda-db-outbound"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:                        jsii.String("egress"),
+		FromPort:                    jsii.Number(3306),
+		ToPort:                      jsii.Number(5432),
+		Protocol:                    jsii.String("tcp"),
+		SourceSecurityGroupId:       dbSG.Id(),
+		SecurityGroupId:             lambdaSG.Id(),
+		Description:                 jsii.String("Database access for Lambda functions"),
+	})
+
+	return &SecurityGroups{
+		WebSecurityGroup:      webSG,
+		DatabaseSecurityGroup: dbSG,
+		LambdaSecurityGroup:   lambdaSG,
+	}
+}
+```
+
+## modules/storage/s3.go
+
+```go
+package storage
+
+import (
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketversioning"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketlogging"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketnotification"
+	"aws-secure-infrastructure/modules/common"
+)
+
+type S3Config struct {
+	KmsKeyId string
+	Tags     common.TagConfig
+}
+
+type S3Resources struct {
+	ApplicationBucket s3bucket.S3Bucket
+	LoggingBucket     s3bucket.S3Bucket
+	BackupBucket      s3bucket.S3Bucket
+}
+
+func CreateS3Buckets(scope constructs.Construct, id string, config S3Config) *S3Resources {
+	commonTags := common.GetCommonTags(config.Tags)
+
+	// Logging bucket (for access logs)
+	loggingBucket := s3bucket.NewS3Bucket(scope, jsii.String("logging-bucket"), &s3bucket.S3BucketConfig{
+		Bucket: jsii.String("secure-app-logs-bucket-unique-12345"),
+		Tags:   common.MergeTags(commonTags, map[string]*string{
+			"Name":         jsii.String("secure-logging-bucket"),
+			"Purpose":      jsii.String("AccessLogging"),
+			"ResourceType": jsii.String("S3Bucket"),
+		}),
+	})
+
+	// Block all public access for
