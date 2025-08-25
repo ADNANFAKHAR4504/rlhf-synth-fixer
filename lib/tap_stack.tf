@@ -484,13 +484,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 60
+    interval            = 120
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 10
-    unhealthy_threshold = 5
+    timeout             = 30
+    unhealthy_threshold = 3
   }
 
         tags = merge(local.common_tags, {
@@ -560,6 +560,14 @@ resource "aws_launch_template" "main" {
 
     # Create health check endpoint
     echo "OK" > /var/www/html/health
+    chmod 644 /var/www/html/health
+    
+    # Ensure Apache is running and healthy
+    systemctl status httpd || systemctl start httpd
+    sleep 5
+    
+    # Test health endpoint
+    curl -f http://localhost/health || echo "Health check failed, but continuing..."
 
     # Configure CloudWatch agent
     cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWCONFIG'
@@ -608,7 +616,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 600
+  health_check_grace_period = 900
 
   min_size         = 2
   max_size         = 6
