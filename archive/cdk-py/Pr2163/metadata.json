@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr157cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-25T10:37:16+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Application Load Balancer (ALB)",
+    "Auto Scaling Groups",
+    "Security Groups",
+    "IAM",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

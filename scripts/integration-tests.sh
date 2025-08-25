@@ -35,6 +35,8 @@ elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
   if [ "$PLATFORM" = "cdktf" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    # Ensure CDKTF Go deps and .gen are prepared (idempotent, uses cache)
+    bash ./scripts/cdktf-go-prepare.sh
 
     # --- FIX: remove legacy terraform.tfstate for clean CI runs ---
     if [ -f "terraform.tfstate" ]; then
@@ -51,20 +53,6 @@ elif [ "$LANGUAGE" = "go" ]; then
       exit 1
     fi
 
-    # Ensure CDKTF core deps are present to satisfy .gen imports
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    go clean -modcache || true
-    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-    go mod tidy
-
-  elif [ "$PLATFORM" = "pulumi" ]; then
-    echo "🔧 Pulumi Go project detected, ensuring dependencies..."
-    cd lib
-    go mod tidy
-    cd ..
   fi
 
   if [ -d "lib" ]; then
