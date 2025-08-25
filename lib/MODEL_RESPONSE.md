@@ -1,27 +1,23 @@
-# Multi-Environment AWS Infrastructure CDK Solution
+Ok so I needed to build this multi-environment CDK thing for work. Basically we have dev, test, and prod environments and needed them to be properly isolated but still use the same codebase.
 
-I need to create a comprehensive CDK Python solution for multi-environment infrastructure with proper security boundaries and environment-specific configurations.
+Started with the basic structure - made a TapStack class that takes an environment suffix. The tricky part was getting all the environment-specific stuff right. Dev environment needs to be cheap so I used pay-per-request DynamoDB and short log retention. Prod needs to be more robust so it gets provisioned capacity and longer retention.
 
-Here's what I built:
+For security I made sure each environment can't mess with the others. The admin role has explicit deny policies that check resource tags. S3 buckets and DynamoDB tables are named with the environment suffix so there's no collision.
 
-## Architecture Overview
+The S3 setup was interesting - had to use the new object ownership settings and make sure SSL is enforced. KMS keys rotate automatically and each environment gets its own alias.
 
-The solution creates separate resource stacks for each environment (dev, test, prod) with environment-specific S3 buckets with security features, DynamoDB tables with resource-based policies, IAM roles with strict environment isolation, CloudWatch logging with environment-appropriate retention, and Systems Manager parameters with encryption.
+DynamoDB configuration varies by environment. Dev gets the cheaper STANDARD_INFREQUENT_ACCESS table class while prod gets STANDARD. Point-in-time recovery only enabled for test and prod.
 
-The main stack implementation is in lib/tap_stack.py. It uses a TapStackProps dataclass to pass environment configuration. Each environment gets specific configuration including log retention (7-90 days), DynamoDB billing mode (pay-per-request vs provisioned), S3 versioning and lifecycle rules, and KMS key deletion windows.
+IAM was the most complex part. Application role gets minimal permissions scoped to just resources in its environment. Had to be careful with the resource ARN patterns to prevent cross-environment access.
 
-Key security features include KMS keys with automatic rotation and environment-specific aliases, S3 buckets with KMS encryption, SSL enforcement, and public access blocking, DynamoDB tables with customer-managed encryption and point-in-time recovery for production, IAM roles with least privilege access and cross-environment access prevention.
+CloudWatch logs have different retention based on environment - 7 days for dev, 90 for prod. Added metric filters to catch errors automatically.
 
-The environment configuration method returns different settings based on the environment suffix. Development uses 7-day log retention, pay-per-request billing, no versioning, and shorter lifecycle. Production uses 90-day retention, provisioned billing, versioning enabled, and longer lifecycle with archiving rules.
+Systems Manager parameters store environment-specific config like database connection strings and API rate limits. Everything encrypted with the environment KMS key.
 
-Resource creation methods handle KMS key creation with aliases and CloudWatch Logs permissions, S3 buckets with latest security features like object ownership enforcement, DynamoDB tables with GSI and environment-appropriate configurations, application and admin IAM roles with environment-specific permissions, CloudWatch log groups with metric filters for error monitoring, SSM parameters for configuration storage.
+For deployment just run cdk deploy with the environmentSuffix context. Pretty straightforward once you get the patterns down.
 
-The admin role includes explicit deny policies to prevent cross-environment access using resource tags. All resources are tagged consistently for cost tracking and management.
+One gotcha was making sure removal policies are different per environment. Dev resources can be destroyed easily but prod resources should be retained.
 
-For deployment, install dependencies with pip install -r requirements.txt then deploy to different environments using cdk deploy -c environmentSuffix=dev/test/prod.
+The tagging strategy helps with cost allocation. Each resource gets tagged with environment, application, owner, etc.
 
-Cost optimization includes development environments using pay-per-request billing, shorter retention periods, and auto-delete policies. Production uses provisioned capacity, longer retention, and RETAIN policies.
-
-The solution provides comprehensive monitoring with CloudWatch logs, metric filters for error counting, and environment-appropriate retention. Parameter management uses Systems Manager with encryption and environment-specific paths.
-
-This architecture ensures proper environment isolation while maintaining consistent deployment patterns across all environments.
+Overall it works well - same code deploys to all environments but with appropriate settings for each. Cost optimization for dev, robustness for prod.
