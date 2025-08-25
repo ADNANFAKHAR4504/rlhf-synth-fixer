@@ -138,6 +138,46 @@ resource "aws_iam_role_policy" "trail_cw" {
 # =========== S3 bucket policy for CloudTrail + Config ===========
 data "aws_caller_identity" "current" {}
 
+data "aws_iam_policy_document" "kms_policy" {
+  statement {
+    sid    = "AllowAccountRootAdmin"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  # Allow CloudWatch Logs and CloudTrail to use the key
+  statement {
+    sid    = "AllowLogsAndCloudTrailUse"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = [
+        "logs.${var.region}.amazonaws.com",
+        "cloudtrail.amazonaws.com"
+      ]
+    }
+    actions = [
+      "kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_kms_key" "logs" {
+  description             = "CMK for ${var.project_name} log encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy                  = data.aws_iam_policy_document.kms_policy.json
+  tags                    = local.tags
+}
+
+
 data "aws_iam_policy_document" "logs_bucket" {
   statement {
     sid    = "AWSCloudTrailWrite"
@@ -230,40 +270,81 @@ data "aws_iam_policy_document" "config_assume" {
 
 
 resource "aws_iam_role" "config" {
+  count              = var.enable_aws_config ? 1 : 0
   name               = "${local.name_prefix}-config-role"
   assume_role_policy = data.aws_iam_policy_document.config_assume.json
   tags               = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+# REMOVE this (or comment it out)
+# resource "aws_iam_role_policy_attachment" "config" {
+#   role       = aws_iam_role.config.name
+#   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+# }
+
+# ADD this instead
+resource "aws_iam_role_policy" "config_inline" {
+  count  = var.enable_aws_config ? 1 : 0
+  name   = "${local.name_prefix}-config-inline"
+  role   = aws_iam_role.config[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # AWS Config service permissions (per AWS managed policy scope)
+      {
+        Effect   = "Allow",
+        Action   = [
+          "config:*",
+          "iam:PassRole"
+        ],
+        Resource = "*"
+      },
+      # S3 permissions for delivery channel
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
 }
 
+
+
+
 resource "aws_config_configuration_recorder" "rec" {
+  count    = var.enable_aws_config ? 1 : 0
   name     = "${local.name_prefix}-rec"
-  role_arn = aws_iam_role.config.arn
+  role_arn = aws_iam_role.config[0].arn
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
-  depends_on = [aws_iam_role_policy_attachment.config]
+  depends_on = [aws_iam_role_policy.config_inline]
 }
 
 resource "aws_config_delivery_channel" "dc" {
+  count          = var.enable_aws_config ? 1 : 0
   name           = "${local.name_prefix}-dc"
   s3_bucket_name = aws_s3_bucket.logs.bucket
   s3_key_prefix  = "aws-config"
 }
 
 resource "aws_config_configuration_recorder_status" "status" {
-  name       = aws_config_configuration_recorder.rec.name
+  count     = var.enable_aws_config ? 1 : 0
+  name      = aws_config_configuration_recorder.rec[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.dc]
 }
 
 # =========== GuardDuty ===========
 resource "aws_guardduty_detector" "this" {
+  count  = var.enable_guardduty ? 1 : 0
   enable = true
   tags   = local.tags
 }

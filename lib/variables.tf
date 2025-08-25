@@ -19,3 +19,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_aws_config" {
+  description = "Create AWS Config recorder & delivery channel"
+  type        = bool
+  default     = true
+}
+
+variable "enable_guardduty" {
+  description = "Create GuardDuty detector"
+  type        = bool
+  default     = true
+}
