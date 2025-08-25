@@ -14,7 +14,21 @@ terraform {
   backend "s3" {}
 }
 
-# Primary AWS provider for general resources
+# Default provider for current environment
 provider "aws" {
-  region = var.aws_region
+  region = var.region
+  
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
+# Optional: Provider alias for cross-region deployments
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
+  
+  default_tags {
+    tags = local.common_tags
+  }
 }

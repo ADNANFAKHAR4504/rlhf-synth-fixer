@@ -1,22 +1,7 @@
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
+# Data sources
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
-provider "aws" {
-  region = var.region
-  
-  default_tags {
-    tags = local.common_tags
-  }
-}
-
-# Data source for AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -87,41 +72,7 @@ module "compute" {
   volume_size      = local.current_instance_config.volume_size
   
   instance_profile_name = module.iam.instance_profile_name
-  
-  # Database connection info for user data
-  db_endpoint = module.database.db_endpoint
+  db_endpoint          = module.database.db_endpoint
   
   tags = local.common_tags
-}
-
-
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = module.networking.vpc_id
-}
-
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = module.compute.alb_dns_name
-}
-
-output "alb_zone_id" {
-  description = "Zone ID of the Application Load Balancer"
-  value       = module.compute.alb_zone_id
-}
-
-output "database_endpoint" {
-  description = "RDS instance endpoint"
-  value       = module.database.db_endpoint
-  sensitive   = true
-}
-
-output "database_port" {
-  description = "RDS instance port"
-  value       = module.database.db_port
-}
-
-output "autoscaling_group_arn" {
-  description = "ARN of the Auto Scaling Group"
-  value       = module.compute.autoscaling_group_arn
 }
