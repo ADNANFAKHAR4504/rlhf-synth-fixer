@@ -63,7 +63,7 @@ import java.util.Map;
  * 
  * This class implements comprehensive security configurations across multiple AWS regions
  * including data encryption, IAM security, network protection, logging, monitoring,
- * and threat detection using the latest AWS security features.
+ * and threat detection using the latest AWS security features. 
  *
  * @version 1.0
  * @since 1.0
