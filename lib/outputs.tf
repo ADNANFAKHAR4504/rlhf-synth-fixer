@@ -6,8 +6,8 @@ output "cloudtrail_arn" {
 }
 
 output "guardduty_detector_id" {
-  description = "GuardDuty detector ID (null if disabled or pre-existing)"
-  value       = length(aws_guardduty_detector.this) > 0 ? aws_guardduty_detector.this[0].id : null
+  description = "GuardDuty detector ID (only when enabled)"
+  value       = try(aws_guardduty_detector.this[0].id, null)
 }
 
 output "sns_topic_arn" {
@@ -15,7 +15,8 @@ output "sns_topic_arn" {
   value       = aws_sns_topic.security.arn
 }
 
+# outputs.tf
 output "logs_bucket_name" {
-  description = "Primary S3 logs bucket name"
-  value       = aws_s3_bucket.logs.bucket
+  description = "Name of the S3 bucket storing CloudTrail/Config logs"
+  value       = aws_s3_bucket.logs_bucket.bucket
 }
