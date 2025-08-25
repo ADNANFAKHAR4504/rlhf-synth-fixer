@@ -284,7 +284,46 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 				Protocol:   pulumi.String("tcp"),
 				FromPort:   pulumi.Int(22),
 				ToPort:     pulumi.Int(22),
+				CidrBlocks: pulumi.StringArray{pulumi.String("203.0.113.0/24")}, // Restricted IP range
+			},
+		},
+		Egress: ec2.SecurityGroupEgressArray{
+			&ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
 				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create web server security group
+	webSg, err := ec2.NewSecurityGroup(ctx, "healthapp-web-sg", &ec2.SecurityGroupArgs{
+		Name:        pulumi.Sprintf("healthapp-web-sg-%s", environmentSuffix),
+		Description: pulumi.String("Security group for web servers"),
+		VpcId:       vpc.ID(),
+		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:       pulumi.String("tcp"),
+				FromPort:       pulumi.Int(22),
+				ToPort:         pulumi.Int(22),
+				SecurityGroups: pulumi.StringArray{bastionSg.ID()},
+			},
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:   pulumi.String("tcp"),
+				FromPort:   pulumi.Int(80),
+				ToPort:     pulumi.Int(80),
+				CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+			},
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:   pulumi.String("tcp"),
+				FromPort:   pulumi.Int(443),
+				ToPort:     pulumi.Int(443),
+				CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
 			},
 		},
 		Egress: ec2.SecurityGroupEgressArray{
@@ -556,6 +595,99 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
+	// Get latest Amazon Linux AMI
+	amiData, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
+		MostRecent: pulumi.BoolRef(true),
+		Owners:     []string{"amazon"},
+		Filters: []ec2.GetAmiFilter{
+			{Name: "name", Values: []string{"amzn2-ami-hvm-*-x86_64-gp2"}},
+		},
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// Create IAM instance profile for EC2
+	instanceProfile, err := iam.NewInstanceProfile(ctx, "healthapp-instance-profile", &iam.InstanceProfileArgs{
+		Name: pulumi.Sprintf("healthapp-instance-profile-%s", environmentSuffix),
+		Role: appRole.Name,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create bastion host
+	bastionHost, err := ec2.NewInstance(ctx, "healthapp-bastion", &ec2.InstanceArgs{
+		InstanceType:        pulumi.String("t3.micro"),
+		Ami:                 pulumi.String(amiData.Id),
+		SubnetId:            publicSubnet1.ID(),
+		VpcSecurityGroupIds: pulumi.StringArray{bastionSg.ID()},
+		IamInstanceProfile:  instanceProfile.Name,
+		UserData: pulumi.String(`#!/bin/bash
+			yum update -y
+			yum install -y aws-cli
+		`),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.Sprintf("healthapp-bastion-%s", environmentSuffix),
+			"Project":     pulumi.String("HealthApp"),
+			"Environment": pulumi.String("Production"),
+			"Compliance":  pulumi.String("HIPAA"),
+			"ManagedBy":   pulumi.String("pulumi"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create web servers in private subnets
+	webServer1, err := ec2.NewInstance(ctx, "healthapp-web-1", &ec2.InstanceArgs{
+		InstanceType:        pulumi.String("t3.small"),
+		Ami:                 pulumi.String(amiData.Id),
+		SubnetId:            privateSubnet1.ID(),
+		VpcSecurityGroupIds: pulumi.StringArray{webSg.ID()},
+		IamInstanceProfile:  instanceProfile.Name,
+		UserData: pulumi.String(`#!/bin/bash
+			yum update -y
+			yum install -y httpd aws-cli
+			systemctl start httpd
+			systemctl enable httpd
+		`),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.Sprintf("healthapp-web-1-%s", environmentSuffix),
+			"Project":     pulumi.String("HealthApp"),
+			"Environment": pulumi.String("Production"),
+			"Compliance":  pulumi.String("HIPAA"),
+			"ManagedBy":   pulumi.String("pulumi"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	webServer2, err := ec2.NewInstance(ctx, "healthapp-web-2", &ec2.InstanceArgs{
+		InstanceType:        pulumi.String("t3.small"),
+		Ami:                 pulumi.String(amiData.Id),
+		SubnetId:            privateSubnet2.ID(),
+		VpcSecurityGroupIds: pulumi.StringArray{webSg.ID()},
+		IamInstanceProfile:  instanceProfile.Name,
+		UserData: pulumi.String(`#!/bin/bash
+			yum update -y
+			yum install -y httpd aws-cli
+			systemctl start httpd
+			systemctl enable httpd
+		`),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.Sprintf("healthapp-web-2-%s", environmentSuffix),
+			"Project":     pulumi.String("HealthApp"),
+			"Environment": pulumi.String("Production"),
+			"Compliance":  pulumi.String("HIPAA"),
+			"ManagedBy":   pulumi.String("pulumi"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
 	// Create Lambda function for S3 processing
 	lambdaFunction, err := lambda.NewFunction(ctx, "healthapp-s3-processor", &lambda.FunctionArgs{
 		Name:       pulumi.Sprintf("healthapp-s3-processor-%s", environmentSuffix),
@@ -582,7 +714,65 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
-	// Create CloudWatch alarms
+	// Create CloudWatch alarms for EC2 instances
+	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-bastion-cpu", &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.Sprintf("healthapp-bastion-cpu-%s", environmentSuffix),
+		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+		EvaluationPeriods:  pulumi.Int(2),
+		MetricName:         pulumi.String("CPUUtilization"),
+		Namespace:          pulumi.String("AWS/EC2"),
+		Period:             pulumi.Int(300),
+		Statistic:          pulumi.String("Average"),
+		Threshold:          pulumi.Float64(80),
+		AlarmDescription:   pulumi.String("Bastion host CPU utilization"),
+		Dimensions: pulumi.StringMap{
+			"InstanceId": bastionHost.ID(),
+		},
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-web1-cpu", &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.Sprintf("healthapp-web1-cpu-%s", environmentSuffix),
+		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+		EvaluationPeriods:  pulumi.Int(2),
+		MetricName:         pulumi.String("CPUUtilization"),
+		Namespace:          pulumi.String("AWS/EC2"),
+		Period:             pulumi.Int(300),
+		Statistic:          pulumi.String("Average"),
+		Threshold:          pulumi.Float64(80),
+		AlarmDescription:   pulumi.String("Web server 1 CPU utilization"),
+		Dimensions: pulumi.StringMap{
+			"InstanceId": webServer1.ID(),
+		},
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-web2-cpu", &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.Sprintf("healthapp-web2-cpu-%s", environmentSuffix),
+		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+		EvaluationPeriods:  pulumi.Int(2),
+		MetricName:         pulumi.String("CPUUtilization"),
+		Namespace:          pulumi.String("AWS/EC2"),
+		Period:             pulumi.Int(300),
+		Statistic:          pulumi.String("Average"),
+		Threshold:          pulumi.Float64(80),
+		AlarmDescription:   pulumi.String("Web server 2 CPU utilization"),
+		Dimensions: pulumi.StringMap{
+			"InstanceId": webServer2.ID(),
+		},
+		Tags: commonTags,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create CloudWatch alarms for Lambda and security monitoring
 	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-lambda-errors", &cloudwatch.MetricAlarmArgs{
 		Name:               pulumi.Sprintf("healthapp-lambda-errors-%s", environmentSuffix),
 		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
@@ -602,8 +792,8 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
-	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-s3-unauthorized-access", &cloudwatch.MetricAlarmArgs{
-		Name:               pulumi.Sprintf("healthapp-s3-unauthorized-%s", environmentSuffix),
+	_, err = cloudwatch.NewMetricAlarm(ctx, "healthapp-unauthorized-access", &cloudwatch.MetricAlarmArgs{
+		Name:               pulumi.Sprintf("healthapp-unauthorized-access-%s", environmentSuffix),
 		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
 		EvaluationPeriods:  pulumi.Int(1),
 		MetricName:         pulumi.String("4xxErrors"),
@@ -611,7 +801,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		Period:             pulumi.Int(300),
 		Statistic:          pulumi.String("Sum"),
 		Threshold:          pulumi.Float64(5),
-		AlarmDescription:   pulumi.String("S3 unauthorized access attempts"),
+		AlarmDescription:   pulumi.String("Unauthorized access attempts detected"),
 		Dimensions: pulumi.StringMap{
 			"BucketName": phiBucket.ID(),
 		},
@@ -622,26 +812,15 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	}
 
 	// Export outputs
-	ctx.Export("vpcId", vpc.ID())
-	ctx.Export("kmsKeyId", kmsKey.KeyId)
-	ctx.Export("kmsKeyArn", kmsKey.Arn)
-	ctx.Export("phiBucketName", phiBucket.ID())
-	ctx.Export("auditBucketName", auditBucket.ID())
-	ctx.Export("cloudTrailArn", cloudTrail.Arn)
-	ctx.Export("dbSecretArn", dbSecret.Arn)
-	ctx.Export("apiKeySecretArn", apiKeySecret.Arn)
-	ctx.Export("appRoleArn", appRole.Arn)
-	ctx.Export("lambdaRoleArn", lambdaRole.Arn)
-	ctx.Export("lambdaFunctionArn", lambdaFunction.Arn)
-	ctx.Export("publicSubnet1Id", publicSubnet1.ID())
-	ctx.Export("publicSubnet2Id", publicSubnet2.ID())
-	ctx.Export("privateSubnet1Id", privateSubnet1.ID())
-	ctx.Export("privateSubnet2Id", privateSubnet2.ID())
-	ctx.Export("bastionSecurityGroupId", bastionSg.ID())
-	ctx.Export("lambdaSecurityGroupId", lambdaSg.ID())
-	ctx.Export("internetGatewayId", igw.ID())
-	ctx.Export("natGateway1Id", natGw1.ID())
-	ctx.Export("natGateway2Id", natGw2.ID())
+	ctx.Export("vpc_id", vpc.ID())
+	ctx.Export("kms_key_id", kmsKey.KeyId)
+	ctx.Export("s3_bucket_name", phiBucket.ID())
+	ctx.Export("lambda_function_name", lambdaFunction.Name)
+	ctx.Export("public_subnet_ids", pulumi.Sprintf("%s,%s", publicSubnet1.ID(), publicSubnet2.ID()))
+	ctx.Export("private_subnet_ids", pulumi.Sprintf("%s,%s", privateSubnet1.ID(), privateSubnet2.ID()))
+	ctx.Export("bastion_instance_id", bastionHost.ID())
+	ctx.Export("web_server_1_id", webServer1.ID())
+	ctx.Export("web_server_2_id", webServer2.ID())
 
 	return nil
 }

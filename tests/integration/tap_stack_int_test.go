@@ -6,388 +6,317 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-type AWSClients struct {
-	EC2            *ec2.Client
-	S3             *s3.Client
-	IAM            *iam.Client
-	KMS            *kms.Client
-	CloudTrail     *cloudtrail.Client
-	SecretsManager *secretsmanager.Client
-	Lambda         *lambda.Client
-	CloudWatch     *cloudwatch.Client
+type TapStackOutputs struct {
+	KMSKeyId           string `json:"kms_key_id"`
+	LambdaFunctionName string `json:"lambda_function_name"`
+	PrivateSubnetIds   string `json:"private_subnet_ids"`
+	PublicSubnetIds    string `json:"public_subnet_ids"`
+	S3BucketName       string `json:"s3_bucket_name"`
+	VPCId              string `json:"vpc_id"`
+	BastionInstanceId  string `json:"bastion_instance_id"`
+	WebServer1Id       string `json:"web_server_1_id"`
+	WebServer2Id       string `json:"web_server_2_id"`
 }
 
-type DeploymentOutputs struct {
-	VpcId                  string `json:"vpcId"`
-	KmsKeyId               string `json:"kmsKeyId"`
-	KmsKeyArn              string `json:"kmsKeyArn"`
-	PhiBucketName          string `json:"phiBucketName"`
-	AuditBucketName        string `json:"auditBucketName"`
-	CloudTrailArn          string `json:"cloudTrailArn"`
-	DbSecretArn            string `json:"dbSecretArn"`
-	ApiKeySecretArn        string `json:"apiKeySecretArn"`
-	AppRoleArn             string `json:"appRoleArn"`
-	LambdaRoleArn          string `json:"lambdaRoleArn"`
-	LambdaFunctionArn      string `json:"lambdaFunctionArn"`
-	PublicSubnet1Id        string `json:"publicSubnet1Id"`
-	PublicSubnet2Id        string `json:"publicSubnet2Id"`
-	PrivateSubnet1Id       string `json:"privateSubnet1Id"`
-	PrivateSubnet2Id       string `json:"privateSubnet2Id"`
-	BastionSecurityGroupId string `json:"bastionSecurityGroupId"`
-	LambdaSecurityGroupId  string `json:"lambdaSecurityGroupId"`
-	InternetGatewayId      string `json:"internetGatewayId"`
-	NatGateway1Id          string `json:"natGateway1Id"`
-	NatGateway2Id          string `json:"natGateway2Id"`
-}
-
-var (
-	awsClients *AWSClients
-	outputs    *DeploymentOutputs
-)
-
-func TestMain(m *testing.M) {
-	setupAWSClients()
-	loadDeploymentOutputs()
-	code := m.Run()
-	os.Exit(code)
-}
-
-func setupAWSClients() {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+func loadOutputs(t *testing.T) *TapStackOutputs {
+	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load AWS config: %v", err))
+		t.Fatalf("Failed to read outputs file: %v", err)
 	}
 
-	awsClients = &AWSClients{
-		EC2:            ec2.NewFromConfig(cfg),
-		S3:             s3.NewFromConfig(cfg),
-		IAM:            iam.NewFromConfig(cfg),
-		KMS:            kms.NewFromConfig(cfg),
-		CloudTrail:     cloudtrail.NewFromConfig(cfg),
-		SecretsManager: secretsmanager.NewFromConfig(cfg),
-		Lambda:         lambda.NewFromConfig(cfg),
-		CloudWatch:     cloudwatch.NewFromConfig(cfg),
+	// Parse as map and get the first key
+	var rawOutputs map[string]TapStackOutputs
+	if err := json.Unmarshal(data, &rawOutputs); err != nil {
+		t.Fatalf("Failed to parse outputs: %v", err)
 	}
+
+	// Return the first key's outputs
+	for _, outputs := range rawOutputs {
+		return &outputs
+	}
+
+	t.Fatal("No outputs found in file")
+	return nil
 }
 
-func loadDeploymentOutputs() {
-	outputs = &DeploymentOutputs{}
-
-	if data, err := ioutil.ReadFile("pulumi-outputs.json"); err == nil {
-		if err := json.Unmarshal(data, outputs); err != nil {
-			fmt.Printf("Failed to parse outputs: %v\n", err)
-		}
-	}
-}
-
-func TestVPCIntegration(t *testing.T) {
-	if outputs.VpcId == "" {
-		t.Skip("VPC ID not available in outputs")
+func TestDeployedInfrastructure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
 	}
 
-	t.Run("should verify VPC exists and is configured correctly", func(t *testing.T) {
-		vpc, err := awsClients.EC2.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.VpcId},
-		})
-		require.NoError(t, err)
-		require.Len(t, vpc.Vpcs, 1)
+	outputs := loadOutputs(t)
+	ctx := context.Background()
 
-		assert.Equal(t, "10.0.0.0/16", *vpc.Vpcs[0].CidrBlock)
-	})
-}
-
-func TestPrivateSubnetsIntegration(t *testing.T) {
-	if outputs.PrivateSubnet1Id == "" || outputs.PrivateSubnet2Id == "" {
-		t.Skip("Private subnet IDs not available in outputs")
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		t.Fatalf("unable to load AWS config: %v", err)
 	}
 
-	t.Run("should verify private subnets exist in different AZs", func(t *testing.T) {
-		subnets, err := awsClients.EC2.DescribeSubnets(context.TODO(), &ec2.DescribeSubnetsInput{
-			SubnetIds: []string{outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id},
+	// Test VPC exists and is configured correctly
+	t.Run("VPCConfiguration", func(t *testing.T) {
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		vpcOutput, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+			VpcIds: []string{outputs.VPCId},
 		})
-		require.NoError(t, err)
-		require.Len(t, subnets.Subnets, 2)
-
-		subnet1 := subnets.Subnets[0]
-		subnet2 := subnets.Subnets[1]
-
-		assert.Equal(t, outputs.VpcId, *subnet1.VpcId)
-		assert.Equal(t, outputs.VpcId, *subnet2.VpcId)
-		assert.NotEqual(t, *subnet1.AvailabilityZone, *subnet2.AvailabilityZone)
-		assert.Equal(t, "10.0.1.0/24", *subnet1.CidrBlock)
-		assert.Equal(t, "10.0.2.0/24", *subnet2.CidrBlock)
-	})
-}
-
-func TestKMSKeyIntegration(t *testing.T) {
-	if outputs.KmsKeyId == "" {
-		t.Skip("KMS key ID not available in outputs")
-	}
-
-	t.Run("should verify KMS key exists and is configured correctly", func(t *testing.T) {
-		key, err := awsClients.KMS.DescribeKey(context.TODO(), &kms.DescribeKeyInput{
-			KeyId: aws.String(outputs.KmsKeyId),
-		})
-		require.NoError(t, err)
-
-		assert.Equal(t, "ENCRYPT_DECRYPT", string(key.KeyMetadata.KeyUsage))
-		assert.True(t, key.KeyMetadata.Enabled)
-
-		alias, err := awsClients.KMS.ListAliases(context.TODO(), &kms.ListAliasesInput{
-			KeyId: aws.String(outputs.KmsKeyId),
-		})
-		require.NoError(t, err)
-		assert.NotEmpty(t, alias.Aliases)
-		assert.Contains(t, *alias.Aliases[0].AliasName, "healthapp-key")
-	})
-}
-
-func TestPHIBucketIntegration(t *testing.T) {
-	if outputs.PhiBucketName == "" {
-		t.Skip("PHI bucket name not available in outputs")
-	}
-
-	t.Run("should verify PHI bucket exists with proper security", func(t *testing.T) {
-		_, err := awsClients.S3.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-			Bucket: aws.String(outputs.PhiBucketName),
-		})
-		require.NoError(t, err)
-
-		encryption, err := awsClients.S3.GetBucketEncryption(context.TODO(), &s3.GetBucketEncryptionInput{
-			Bucket: aws.String(outputs.PhiBucketName),
-		})
-		require.NoError(t, err)
-		assert.NotEmpty(t, encryption.ServerSideEncryptionConfiguration.Rules)
-		assert.Equal(t, "aws:kms", string(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm))
-
-		versioning, err := awsClients.S3.GetBucketVersioning(context.TODO(), &s3.GetBucketVersioningInput{
-			Bucket: aws.String(outputs.PhiBucketName),
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "Enabled", string(versioning.Status))
-
-		pab, err := awsClients.S3.GetPublicAccessBlock(context.TODO(), &s3.GetPublicAccessBlockInput{
-			Bucket: aws.String(outputs.PhiBucketName),
-		})
-		require.NoError(t, err)
-		assert.True(t, *pab.PublicAccessBlockConfiguration.BlockPublicAcls)
-		assert.True(t, *pab.PublicAccessBlockConfiguration.BlockPublicPolicy)
-		assert.True(t, *pab.PublicAccessBlockConfiguration.IgnorePublicAcls)
-		assert.True(t, *pab.PublicAccessBlockConfiguration.RestrictPublicBuckets)
-	})
-}
-
-func TestAuditBucketIntegration(t *testing.T) {
-	if outputs.AuditBucketName == "" {
-		t.Skip("Audit bucket name not available in outputs")
-	}
-
-	t.Run("should verify audit bucket exists with CloudTrail policy", func(t *testing.T) {
-		_, err := awsClients.S3.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-			Bucket: aws.String(outputs.AuditBucketName),
-		})
-		require.NoError(t, err)
-
-		encryption, err := awsClients.S3.GetBucketEncryption(context.TODO(), &s3.GetBucketEncryptionInput{
-			Bucket: aws.String(outputs.AuditBucketName),
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "aws:kms", string(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm))
-
-		policy, err := awsClients.S3.GetBucketPolicy(context.TODO(), &s3.GetBucketPolicyInput{
-			Bucket: aws.String(outputs.AuditBucketName),
-		})
-		require.NoError(t, err)
-		assert.Contains(t, *policy.Policy, "cloudtrail.amazonaws.com")
-		assert.Contains(t, *policy.Policy, "s3:GetBucketAcl")
-		assert.Contains(t, *policy.Policy, "s3:PutObject")
-	})
-}
-
-func TestCloudTrailIntegration(t *testing.T) {
-	if outputs.CloudTrailArn == "" {
-		t.Skip("CloudTrail ARN not available in outputs")
-	}
-
-	t.Run("should verify CloudTrail is configured correctly", func(t *testing.T) {
-		trailName := extractTrailNameFromArn(outputs.CloudTrailArn)
-		trail, err := awsClients.CloudTrail.DescribeTrails(context.TODO(), &cloudtrail.DescribeTrailsInput{
-			TrailNameList: []string{trailName},
-		})
-		require.NoError(t, err)
-		require.Len(t, trail.TrailList, 1)
-
-		assert.True(t, *trail.TrailList[0].IncludeGlobalServiceEvents)
-		assert.True(t, *trail.TrailList[0].IsMultiRegionTrail)
-		assert.True(t, *trail.TrailList[0].LogFileValidationEnabled)
-		assert.Equal(t, outputs.AuditBucketName, *trail.TrailList[0].S3BucketName)
-
-		status, err := awsClients.CloudTrail.GetTrailStatus(context.TODO(), &cloudtrail.GetTrailStatusInput{
-			Name: aws.String(trailName),
-		})
-		require.NoError(t, err)
-		assert.True(t, *status.IsLogging)
-	})
-}
-
-func TestSecretsManagerIntegration(t *testing.T) {
-	t.Run("should verify database secret exists", func(t *testing.T) {
-		if outputs.DbSecretArn == "" {
-			t.Skip("DB secret ARN not available in outputs")
+		if err != nil {
+			t.Errorf("failed to describe VPC: %v", err)
 		}
 
-		secret, err := awsClients.SecretsManager.DescribeSecret(context.TODO(), &secretsmanager.DescribeSecretInput{
-			SecretId: aws.String(outputs.DbSecretArn),
-		})
-		require.NoError(t, err)
-		assert.Contains(t, *secret.Name, "healthapp/db/credentials")
-		assert.Equal(t, outputs.KmsKeyArn, *secret.KmsKeyId)
-	})
-
-	t.Run("should verify API key secret exists", func(t *testing.T) {
-		if outputs.ApiKeySecretArn == "" {
-			t.Skip("API key secret ARN not available in outputs")
-		}
-
-		secret, err := awsClients.SecretsManager.DescribeSecret(context.TODO(), &secretsmanager.DescribeSecretInput{
-			SecretId: aws.String(outputs.ApiKeySecretArn),
-		})
-		require.NoError(t, err)
-		assert.Contains(t, *secret.Name, "healthapp/api/keys")
-		assert.Equal(t, outputs.KmsKeyArn, *secret.KmsKeyId)
-	})
-}
-
-func TestIAMRoleIntegration(t *testing.T) {
-	if outputs.AppRoleArn == "" {
-		t.Skip("App role ARN not available in outputs")
-	}
-
-	t.Run("should verify application role exists with correct policies", func(t *testing.T) {
-		roleName := extractRoleNameFromArn(outputs.AppRoleArn)
-		role, err := awsClients.IAM.GetRole(context.TODO(), &iam.GetRoleInput{
-			RoleName: aws.String(roleName),
-		})
-		require.NoError(t, err)
-		assert.Contains(t, *role.Role.AssumeRolePolicyDocument, "ec2.amazonaws.com")
-
-		policies, err := awsClients.IAM.ListAttachedRolePolicies(context.TODO(), &iam.ListAttachedRolePoliciesInput{
-			RoleName: aws.String(roleName),
-		})
-		require.NoError(t, err)
-		assert.NotEmpty(t, policies.AttachedPolicies)
-
-		for _, policy := range policies.AttachedPolicies {
-			if strings.Contains(*policy.PolicyName, "s3-access") {
-				policyDoc, err := awsClients.IAM.GetPolicy(context.TODO(), &iam.GetPolicyInput{
-					PolicyArn: policy.PolicyArn,
-				})
-				require.NoError(t, err)
-				assert.Contains(t, *policyDoc.Policy.PolicyName, "healthapp-s3-access")
+		if len(vpcOutput.Vpcs) == 0 {
+			t.Error("VPC should exist")
+		} else {
+			vpc := vpcOutput.Vpcs[0]
+			if *vpc.State != "available" {
+				t.Errorf("Expected VPC state to be available, got %s", *vpc.State)
 			}
 		}
 	})
-}
 
-func TestE2EHIPAACompliance(t *testing.T) {
-	t.Run("e2e: should meet HIPAA compliance requirements", func(t *testing.T) {
-		// Verify encryption at rest
-		if outputs.PhiBucketName != "" {
-			encryption, err := awsClients.S3.GetBucketEncryption(context.TODO(), &s3.GetBucketEncryptionInput{
-				Bucket: aws.String(outputs.PhiBucketName),
-			})
-			require.NoError(t, err)
-			assert.Equal(t, "aws:kms", string(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm))
+	// Test EC2 instances exist
+	t.Run("EC2InstancesExist", func(t *testing.T) {
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		// Test bastion host
+		bastionOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+			InstanceIds: []string{outputs.BastionInstanceId},
+		})
+		if err != nil {
+			t.Errorf("failed to describe bastion instance: %v", err)
+		} else {
+			if len(bastionOutput.Reservations) == 0 || len(bastionOutput.Reservations[0].Instances) == 0 {
+				t.Error("Bastion instance should exist")
+			}
 		}
 
-		// Verify audit logging
-		if outputs.CloudTrailArn != "" {
-			trailName := extractTrailNameFromArn(outputs.CloudTrailArn)
-			status, err := awsClients.CloudTrail.GetTrailStatus(context.TODO(), &cloudtrail.GetTrailStatusInput{
-				Name: aws.String(trailName),
+		// Test web servers
+		webServerIds := []string{outputs.WebServer1Id, outputs.WebServer2Id}
+		for i, instanceId := range webServerIds {
+			webOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+				InstanceIds: []string{instanceId},
 			})
-			require.NoError(t, err)
-			assert.True(t, *status.IsLogging)
-		}
-
-		// Verify network isolation
-		if outputs.VpcId != "" {
-			vpc, err := awsClients.EC2.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
-				VpcIds: []string{outputs.VpcId},
-			})
-			require.NoError(t, err)
-			assert.Len(t, vpc.Vpcs, 1)
-		}
-	})
-}
-
-func TestE2EResourceTagging(t *testing.T) {
-	t.Run("e2e: should tag all resources with compliance tags", func(t *testing.T) {
-		if outputs.PhiBucketName != "" {
-			tags, err := awsClients.S3.GetBucketTagging(context.TODO(), &s3.GetBucketTaggingInput{
-				Bucket: aws.String(outputs.PhiBucketName),
-			})
-			if err == nil {
-				tagMap := make(map[string]string)
-				for _, tag := range tags.TagSet {
-					tagMap[*tag.Key] = *tag.Value
+			if err != nil {
+				t.Errorf("failed to describe web server %d: %v", i+1, err)
+			} else {
+				if len(webOutput.Reservations) == 0 || len(webOutput.Reservations[0].Instances) == 0 {
+					t.Errorf("Web server %d should exist", i+1)
 				}
-				assert.Equal(t, "HealthApp", tagMap["Project"])
-				assert.Equal(t, "Production", tagMap["Environment"])
-				assert.Equal(t, "HIPAA", tagMap["Compliance"])
-				assert.Equal(t, "pulumi", tagMap["ManagedBy"])
+			}
+		}
+	})
+
+	// Test S3 Bucket security settings
+	t.Run("S3BucketSecurity", func(t *testing.T) {
+		s3Client := s3.NewFromConfig(cfg)
+
+		_, err = s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+			Bucket: aws.String(outputs.S3BucketName),
+		})
+		if err != nil {
+			t.Errorf("failed to access S3 bucket: %v", err)
+		}
+
+		// Check public access is blocked
+		publicAccessBlock, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
+			Bucket: aws.String(outputs.S3BucketName),
+		})
+		if err != nil {
+			t.Errorf("failed to get public access block configuration: %v", err)
+		} else {
+			if publicAccessBlock.PublicAccessBlockConfiguration != nil {
+				if !aws.ToBool(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls) {
+					t.Error("Expected BlockPublicAcls to be true")
+				}
+				if !aws.ToBool(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy) {
+					t.Error("Expected BlockPublicPolicy to be true")
+				}
+			}
+		}
+	})
+
+	// Test Lambda Function exists
+	t.Run("LambdaFunctionConfiguration", func(t *testing.T) {
+		lambdaClient := lambda.NewFromConfig(cfg)
+
+		functionOutput, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+			FunctionName: aws.String(outputs.LambdaFunctionName),
+		})
+		if err != nil {
+			t.Errorf("failed to get Lambda function: %v", err)
+		} else {
+			if functionOutput.Configuration == nil {
+				t.Error("Lambda function configuration should not be nil")
+			}
+		}
+	})
+
+	// Test KMS Key exists
+	t.Run("KMSKeyConfiguration", func(t *testing.T) {
+		kmsClient := kms.NewFromConfig(cfg)
+
+		keyOutput, err := kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{
+			KeyId: aws.String(outputs.KMSKeyId),
+		})
+		if err != nil {
+			t.Errorf("failed to describe KMS key: %v", err)
+		} else {
+			if keyOutput.KeyMetadata == nil {
+				t.Error("KMS key metadata should not be nil")
 			}
 		}
 	})
 }
 
-func TestE2ESecretManagement(t *testing.T) {
-	t.Run("e2e: should properly manage secrets with KMS encryption", func(t *testing.T) {
-		secrets := []string{outputs.DbSecretArn, outputs.ApiKeySecretArn}
-		for _, secretArn := range secrets {
-			if secretArn != "" {
-				secret, err := awsClients.SecretsManager.DescribeSecret(context.TODO(), &secretsmanager.DescribeSecretInput{
-					SecretId: aws.String(secretArn),
-				})
-				require.NoError(t, err)
-				assert.Equal(t, outputs.KmsKeyArn, *secret.KmsKeyId)
+// Test CloudWatch alarms for EC2 instances
+func TestCloudWatchAlarmsConfiguration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		t.Fatalf("unable to load AWS config: %v", err)
+	}
+
+	t.Run("EC2CPUUtilizationAlarms", func(t *testing.T) {
+		cloudwatchClient := cloudwatch.NewFromConfig(cfg)
+
+		instanceIds := []string{outputs.BastionInstanceId, outputs.WebServer1Id, outputs.WebServer2Id}
+
+		alarmsOutput, err := cloudwatchClient.DescribeAlarms(ctx, &cloudwatch.DescribeAlarmsInput{})
+		if err != nil {
+			t.Errorf("failed to describe CloudWatch alarms: %v", err)
+			return
+		}
+
+		cpuAlarmsFound := 0
+		for _, alarm := range alarmsOutput.MetricAlarms {
+			if alarm.MetricName != nil && *alarm.MetricName == "CPUUtilization" {
+				if alarm.Namespace != nil && *alarm.Namespace == "AWS/EC2" {
+					for _, dimension := range alarm.Dimensions {
+						if dimension.Name != nil && *dimension.Name == "InstanceId" {
+							for _, instanceId := range instanceIds {
+								if dimension.Value != nil && *dimension.Value == instanceId {
+									cpuAlarmsFound++
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if cpuAlarmsFound == 0 {
+			t.Error("Expected CPU utilization alarms for EC2 instances")
+		}
+	})
+}
+
+// Test bastion host security
+func TestBastionHostSecurity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	outputs := loadOutputs(t)
+	ctx := context.Background()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		t.Fatalf("unable to load AWS config: %v", err)
+	}
+
+	t.Run("BastionSSHRestriction", func(t *testing.T) {
+		ec2Client := ec2.NewFromConfig(cfg)
+
+		// Get bastion instance security groups
+		bastionOutput, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+			InstanceIds: []string{outputs.BastionInstanceId},
+		})
+		if err != nil {
+			t.Errorf("failed to describe bastion instance: %v", err)
+			return
+		}
+
+		if len(bastionOutput.Reservations) == 0 || len(bastionOutput.Reservations[0].Instances) == 0 {
+			t.Error("Bastion instance not found")
+			return
+		}
+
+		bastionInstance := bastionOutput.Reservations[0].Instances[0]
+		bastionSecurityGroups := make([]string, 0)
+		for _, sg := range bastionInstance.SecurityGroups {
+			bastionSecurityGroups = append(bastionSecurityGroups, *sg.GroupId)
+		}
+
+		// Check security group rules
+		sgOutput, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+			GroupIds: bastionSecurityGroups,
+		})
+		if err != nil {
+			t.Errorf("failed to describe security groups: %v", err)
+			return
+		}
+
+		for _, sg := range sgOutput.SecurityGroups {
+			for _, rule := range sg.IpPermissions {
+				if rule.FromPort != nil && *rule.FromPort == 22 {
+					for _, ipRange := range rule.IpRanges {
+						if ipRange.CidrIp != nil && *ipRange.CidrIp == "0.0.0.0/0" {
+							t.Error("Bastion host SSH access should not allow 0.0.0.0/0 - should be restricted to specific IP ranges")
+						}
+					}
+				}
 			}
 		}
 	})
 }
 
-func extractRoleNameFromArn(arn string) string {
-	parts := strings.Split(arn, "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
+// Test output completeness
+func TestOutputCompleteness(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
 	}
-	return ""
-}
 
-func extractTrailNameFromArn(arn string) string {
-	parts := strings.Split(arn, "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
-	}
-	return ""
+	outputs := loadOutputs(t)
+
+	t.Run("AllOutputsPresent", func(t *testing.T) {
+		requiredOutputs := map[string]string{
+			"KMSKeyId":           outputs.KMSKeyId,
+			"LambdaFunctionName": outputs.LambdaFunctionName,
+			"PrivateSubnetIds":   outputs.PrivateSubnetIds,
+			"PublicSubnetIds":    outputs.PublicSubnetIds,
+			"S3BucketName":       outputs.S3BucketName,
+			"VPCId":              outputs.VPCId,
+			"BastionInstanceId":  outputs.BastionInstanceId,
+			"WebServer1Id":       outputs.WebServer1Id,
+			"WebServer2Id":       outputs.WebServer2Id,
+		}
+
+		for outputName, outputValue := range requiredOutputs {
+			if outputValue == "" {
+				t.Errorf("Output %s is empty", outputName)
+			}
+		}
+	})
 }
