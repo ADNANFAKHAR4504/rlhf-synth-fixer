@@ -1743,7 +1743,7 @@ resource "aws_db_instance" "main_use1" {
   multi_az               = local.is_production
   auto_minor_version_upgrade = true
   deletion_protection    = false
-  skip_final_snapshot    = false
+  skip_final_snapshot    = true
   final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-use1" : null
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -1789,7 +1789,7 @@ resource "aws_db_instance" "main_apse2" {
   multi_az               = local.is_production
   auto_minor_version_upgrade = true
   deletion_protection    = false
-  skip_final_snapshot    = false
+  skip_final_snapshot    = true
   final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-apse2" : null
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -2421,7 +2421,7 @@ resource "aws_lb" "main_use1" {
   subnets            = [aws_subnet.public_use1_a.id, aws_subnet.public_use1_b.id]
   provider           = aws.use1
   
-  enable_deletion_protection = local.is_production
+  enable_deletion_protection = false
   
   access_logs {
     bucket  = aws_s3_bucket.alb_logs_use1.bucket
@@ -2446,7 +2446,7 @@ resource "aws_lb" "main_apse2" {
   subnets            = [aws_subnet.public_apse2_a.id, aws_subnet.public_apse2_b.id]
   provider           = aws.apse2
   
-  enable_deletion_protection = local.is_production
+  enable_deletion_protection = false
   
   access_logs {
     bucket  = aws_s3_bucket.alb_logs_apse2.bucket
