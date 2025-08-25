@@ -8,9 +8,9 @@ plugins {
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
+        vendor = JvmVendorSpec.ADOPTIUM
     }
 }
-
 
 repositories {
     maven {
@@ -34,15 +34,26 @@ configurations.all {
 }
 
 dependencies {
+    // Pulumi dependencies
     implementation 'com.pulumi:pulumi:1.16.1'
     implementation 'com.pulumi:aws:7.5.0'
     implementation 'com.pulumi:tls:5.2.0'
+    
+    // AWS CDK dependencies
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
+    implementation 'software.constructs:constructs:10.4.2'
+    
+    // Additional utilities
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.guava:guava:33.0.0-jre'
 
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.mockito:mockito-core:5.11.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
 }
 
 application {
@@ -73,7 +84,34 @@ sourceSets {
     }
 }
 
-// Configure JAR with main class for Pulumi
+// Configure integration test configurations after source sets are defined
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Integration test dependencies - consolidated from both versions
+dependencies {
+    // AWS SDK BOM for consistent versions
+    integrationTestImplementation platform('software.amazon.awssdk:bom:2.25.16')
+    integrationTestImplementation 'software.amazon.awssdk:s3'
+    integrationTestImplementation 'software.amazon.awssdk:ec2'
+    integrationTestImplementation 'software.amazon.awssdk:iam'
+    integrationTestImplementation 'software.amazon.awssdk:kms'
+    integrationTestImplementation 'software.amazon.awssdk:cloudformation'
+    integrationTestImplementation 'software.amazon.awssdk:cloudtrail'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatch'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
+    integrationTestImplementation 'software.amazon.awssdk:sns'
+    integrationTestImplementation 'software.amazon.awssdk:sts'
+    integrationTestImplementation 'software.amazon.awssdk:core'
+    
+    // JSON parsing for outputs
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.17.1'
+}
+
+// Configure JAR with main class
 jar {
     manifest {
         attributes(
@@ -88,39 +126,7 @@ jar {
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = 'app.jar'
-}
-
-
-// Configure integration test dependencies
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-// Add AWS SDK dependencies for integration tests
-dependencies {
-    integrationTestImplementation platform('software.amazon.awssdk:bom:2.25.16')
-    integrationTestImplementation 'software.amazon.awssdk:s3'
-    integrationTestImplementation 'software.amazon.awssdk:ec2'
-    integrationTestImplementation 'software.amazon.awssdk:iam'
-    integrationTestImplementation 'software.amazon.awssdk:kms'
-    integrationTestImplementation 'software.amazon.awssdk:cloudformation'
-    integrationTestImplementation 'software.amazon.awssdk:cloudtrail'
-    integrationTestImplementation 'software.amazon.awssdk:cloudwatch'
-    integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
-    integrationTestImplementation 'software.amazon.awssdk:sts'
-    
-    // JSON parsing for Pulumi outputs
-    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
-}
-
-// AWS SDK dependencies for live resource testing (integration tests only)
-dependencies {
-    integrationTestImplementation 'software.amazon.awssdk:s3:2.24.12'
-    integrationTestImplementation 'software.amazon.awssdk:kms:2.24.12'
-    integrationTestImplementation 'software.amazon.awssdk:iam:2.24.12'
-    integrationTestImplementation 'software.amazon.awssdk:sns:2.24.12'
-    integrationTestImplementation 'software.amazon.awssdk:sts:2.24.12'
+    zip64 = true  // Enable zip64 for large archives
 }
 
 // JUnit configuration
@@ -176,7 +182,6 @@ checkstyle {
     maxWarnings = 0
 }
 
-
 // JaCoCo configuration
 jacoco {
     toolVersion = "0.8.8"
@@ -209,13 +214,31 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.01
+                minimum = 0.09
             }
+        }
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.09
+            }
+            // Exclude Main class and infrastructure classes from coverage requirements
+            excludes = [
+                'app.Main',
+                'app.WebAppStack',
+                'app.WebAppStack.NetworkResources',
+                'app.WebAppStack.SecurityResources',
+                'app.WebAppStack.ComputeResources',
+                'app.WebAppStack.LoadBalancerResources',
+                'app.WebAppStack.StorageResources'
+            ]
         }
     }
 }
 
-// Custom task to show coverage summary
+// Custom task to show coverage summary - enhanced version with fallback
 tasks.register('showCoverage') {
     dependsOn jacocoTestReport
     doLast {
@@ -238,12 +261,28 @@ tasks.register('showCoverage') {
 
                     println "\n📊 Code Coverage Summary:"
                     println "Lines Covered: ${covered}/${total} (${percentage}%)"
-                    println "Coverage Status: ${percentage >= 1 ? '✅ PASSED' : '❌ FAILED'} (minimum: 1%)"
+                    println "Coverage Status: ${percentage >= 9 ? '✅ PASSED' : '❌ FAILED'} (minimum: 9%)"
                 }
             } catch (Exception e) {
-                println "\n📊 Code Coverage Summary:"
-                println "Coverage report parsing failed, but tests completed successfully"
-                println "Coverage Status: ✅ PASSED (verification successful)"
+                // Fallback to simple XML parsing
+                try {
+                    def xml = new XmlParser().parse(xmlReportFile)
+                    def counter = xml.counter.find { it.'@type' == 'LINE' }
+                    if (counter) {
+                        def covered = counter.'@covered'.toInteger()
+                        def missed = counter.'@missed'.toInteger()
+                        def total = covered + missed
+                        def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+
+                        println "\n📊 Code Coverage Summary:"
+                        println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                        println "Coverage Status: ${percentage >= 9 ? '✅ PASSED' : '❌ FAILED'} (minimum: 9%)"
+                    }
+                } catch (Exception e2) {
+                    println "\n📊 Code Coverage Summary:"
+                    println "Coverage report parsing failed, but tests completed successfully"
+                    println "Coverage Status: ✅ PASSED (verification successful)"
+                }
             }
         }
 
@@ -265,4 +304,4 @@ tasks.register('testAll') {
 }
 
 // Make check depend on integration tests and coverage
-//check.dependsOn integrationTest, jacocoTestCoverageVerification
+check.dependsOn integrationTest, jacocoTestCoverageVerification
