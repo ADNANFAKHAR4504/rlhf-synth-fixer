@@ -20,7 +20,9 @@ const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
 const outputs: { [key: string]: string } = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 describe('TapStack Integration Tests', () => {
-  beforeAll(() => {
+  let accountId: string;
+
+  beforeAll(async () => {
     // Ensure outputs are loaded
     expect(outputs).toHaveProperty('VPCId');
     expect(outputs).toHaveProperty('DataBucketName');
@@ -30,18 +32,28 @@ describe('TapStack Integration Tests', () => {
     expect(outputs).toHaveProperty('RDSSecretArn');
     expect(outputs).toHaveProperty('LambdaFunctionArn');
     expect(outputs).toHaveProperty('ALBArn');
+    expect(outputs).toHaveProperty('EnvironmentName');
+
+    // Get account ID for IAM tests
+    const sts = new AWS.STS();
+    const identity = await sts.getCallerIdentity().promise();
+    accountId = identity.Account!;
   });
 
   // VPC Configuration Tests
   describe('VPC Configuration', () => {
     it('should have a VPC with correct CIDR and DNS settings', async () => {
-      const response = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] }).promise();
-      expect(response.Vpcs).toHaveLength(1);
-      const vpc = response.Vpcs![0];
+      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.VPCId] }).promise();
+      expect(vpcResponse.Vpcs).toHaveLength(1);
+      const vpc = vpcResponse.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames?.Value).toBe(true);
-      expect(vpc.EnableDnsSupport?.Value).toBe(true);
       expect(vpc.Tags).toContainEqual({ Key: 'Name', Value: `${outputs.EnvironmentName}-fintech-vpc` });
+
+      // Check DNS settings using describeVpcAttribute
+      const dnsHostnames = await ec2.describeVpcAttribute({ VpcId: outputs.VPCId, Attribute: 'enableDnsHostnames' }).promise();
+      expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
+      const dnsSupport = await ec2.describeVpcAttribute({ VpcId: outputs.VPCId, Attribute: 'enableDnsSupport' }).promise();
+      expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
     });
 
     it('should have public and private subnets', async () => {
@@ -200,7 +212,7 @@ describe('TapStack Integration Tests', () => {
     it('should have a secret for RDS credentials', async () => {
       const response = await secretsmanager.describeSecret({ SecretId: outputs.RDSSecretArn }).promise();
       expect(response.Name).toBe(`${outputs.EnvironmentName}-fintech-rds-credentials`);
-      expect(response.KMSKeyId).toContain('key');
+      expect(response.KmsKeyId).toContain('key');
       expect(response.Tags).toContainEqual({ Key: 'Environment', Value: outputs.EnvironmentName });
     });
 
@@ -217,7 +229,7 @@ describe('TapStack Integration Tests', () => {
       const policy = JSON.parse(decodeURIComponent(response.Role.AssumeRolePolicyDocument!));
       expect(policy.Statement).toContainEqual({
         Effect: 'Allow',
-        Principal: { AWS: `arn:aws:iam::${AWS.config.credentials?.IdentityId}:root` },
+        Principal: { AWS: `arn:aws:iam::${accountId}:root` },
         Action: 'sts:AssumeRole',
         Condition: { Bool: { 'aws:MultiFactorAuthPresent': 'true' } },
       });
@@ -237,6 +249,11 @@ describe('TapStack Integration Tests', () => {
         Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
         Resource: [expect.stringContaining('fintech-data'), expect.stringContaining('fintech-data/*')],
       });
+      expect(doc.Statement).toContainEqual({
+        Effect: 'Allow',
+        Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:Scan'],
+        Resource: expect.stringContaining('fintech-table'),
+      });
     });
 
     // Edge Case: Attempt to access a non-existent role
@@ -253,8 +270,10 @@ describe('TapStack Integration Tests', () => {
       expect(trail.S3BucketName).toBe(outputs.LogBucketName);
       expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.EnableLogFileValidation).toBe(true);
-      expect(trail.IsLogging).toBe(true);
+      expect(trail.LogFileValidationEnabled).toBe(true);
+
+      const status = await cloudtrail.getTrailStatus({ Name: `${outputs.EnvironmentName}-fintech-trail` }).promise();
+      expect(status.IsLogging).toBe(true);
     });
 
     // Edge Case: Attempt to get a non-existent trail
@@ -288,10 +307,10 @@ describe('TapStack Integration Tests', () => {
       expect(alb.Type).toBe('application');
       const subnetResponse = await ec2.describeSubnets({ Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }] }).promise();
       const publicSubnetIds = subnetResponse.Subnets!.filter(s => s.MapPublicIpOnLaunch).map(s => s.SubnetId!);
-      expect(alb.Subnets).toEqual(expect.arrayContaining(publicSubnetIds));
+      expect(alb.AvailabilityZones!.map(az => az.SubnetId!)).toEqual(expect.arrayContaining(publicSubnetIds));
       expect(alb.SecurityGroups).toHaveLength(1);
 
-      const sgResponse = await ec2.describeSecurityGroups({ GroupIds: alb.SecurityGroups }).promise();
+      const sgResponse = await ec2.describeSecurityGroups({ GroupIds: alb.SecurityGroups! }).promise();
       const sg = sgResponse.SecurityGroups![0];
       expect(sg.IpPermissions).toContainEqual({
         IpProtocol: 'tcp',
