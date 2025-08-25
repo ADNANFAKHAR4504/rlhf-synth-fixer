@@ -992,7 +992,7 @@ Resources:
             Principal: { Service: config.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
       Tags:
         - { Key: Environment, Value: !Ref EnvironmentName }
         - { Key: CostCenter, Value: !Ref CostCenter }
