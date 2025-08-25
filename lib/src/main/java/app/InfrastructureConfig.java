@@ -1,5 +1,4 @@
-// src/main/java/com/company/infrastructure/config/InfrastructureConfig.java
-package com.company.infrastructure.config;
+package app;
 
 import com.pulumi.Context;
 

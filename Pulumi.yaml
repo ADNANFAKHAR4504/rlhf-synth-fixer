@@ -1,7 +1,5 @@
-name: financial-infrastructure
+name: TapStack
 runtime: java
-description: Secure AWS infrastructure for financial services
+description: Web Application Deployment with Auto Scaling and Load Balancer
 config:
   aws:region: us-east-1
-  financial-infrastructure:environment: production
-  financial-infrastructure:companyName: YourCompany

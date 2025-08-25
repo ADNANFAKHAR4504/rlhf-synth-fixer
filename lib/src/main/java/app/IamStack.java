@@ -1,11 +1,11 @@
-// src/main/java/com/company/infrastructure/security/IamStack.java
-package com.company.infrastructure.security;
+package app;
 
-import com.company.infrastructure.config.InfrastructureConfig;
-import com.company.infrastructure.utils.TagUtils;
+import app.InfrastructureConfig;
+import app.TagUtils;
 import com.pulumi.aws.iam.*;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
+import com.pulumi.resources.CustomResourceOptions;
 
 public class IamStack extends ComponentResource {
     private final Role lambdaExecutionRole;
@@ -34,18 +34,18 @@ public class IamStack extends ComponentResource {
                 }
                 """)
             .tags(tags)
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
         
         // Attach managed policies to Lambda role
         new RolePolicyAttachment(config.getResourceName("rpa", "lambda-basic"), RolePolicyAttachmentArgs.builder()
             .role(lambdaExecutionRole.name())
             .policyArn("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
             
         new RolePolicyAttachment(config.getResourceName("rpa", "lambda-vpc"), RolePolicyAttachmentArgs.builder()
             .role(lambdaExecutionRole.name())
             .policyArn("arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole")
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
         
         // AWS Config Service Role
         this.configServiceRole = new Role(config.getResourceName("role", "config-service"), RoleArgs.builder()
@@ -64,13 +64,13 @@ public class IamStack extends ComponentResource {
                 }
                 """)
             .tags(tags)
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
         
         // Attach managed policy to Config role
         new RolePolicyAttachment(config.getResourceName("rpa", "config-service"), RolePolicyAttachmentArgs.builder()
             .role(configServiceRole.name())
             .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
         
         // CloudTrail Service Role (if needed for CloudWatch Logs)
         this.cloudTrailRole = new Role(config.getResourceName("role", "cloudtrail"), RoleArgs.builder()
@@ -89,7 +89,7 @@ public class IamStack extends ComponentResource {
                 }
                 """)
             .tags(tags)
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
         
         // Custom policy for CloudTrail to write to CloudWatch Logs
         var cloudTrailLogsPolicy = new Policy(config.getResourceName("policy", "cloudtrail-logs"), PolicyArgs.builder()
@@ -112,12 +112,12 @@ public class IamStack extends ComponentResource {
                 }
                 """)
             .tags(tags)
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
             
         new RolePolicyAttachment(config.getResourceName("rpa", "cloudtrail-logs"), RolePolicyAttachmentArgs.builder()
             .role(cloudTrailRole.name())
             .policyArn(cloudTrailLogsPolicy.arn())
-            .build(), ComponentResourceOptions.builder().parent(this).build());
+            .build(), CustomResourceOptions.builder().parent(this).build());
     }
     
     public Role getLambdaExecutionRole() { return lambdaExecutionRole; }

@@ -1,7 +1,6 @@
-// src/main/java/com/company/infrastructure/utils/TagUtils.java
-package com.company.infrastructure.utils;
+package app;
 
-import com.company.infrastructure.config.InfrastructureConfig;
+import app.InfrastructureConfig;
 import java.util.Map;
 
 public class TagUtils {
