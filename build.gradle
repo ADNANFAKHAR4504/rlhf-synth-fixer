@@ -168,7 +168,10 @@ jacocoTestReport {
 
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it)
+            fileTree(dir: it, exclude: [
+                    // Exclude main method from coverage (hard to test)
+                    '**/Main.class'
+            ])
         }))
     }
 
@@ -203,7 +206,7 @@ tasks.register('showCoverage') {
 
         if (xmlReportFile.exists()) {
             // Parse XML to get coverage percentage
-            def xml = new groovy.xml.XmlParser().parse(xmlReportFile)
+            def xml = new XmlParser().parse(xmlReportFile)
             def counter = xml.counter.find { it.@type == 'LINE' }
             if (counter) {
                 def covered = counter.@covered.toInteger()
