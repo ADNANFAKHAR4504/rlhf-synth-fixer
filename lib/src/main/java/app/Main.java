@@ -58,23 +58,23 @@ import java.util.Map;
 import java.util.Random;
 
 public final class Main {
-    
+
     private Main() {
         // Private constructor to prevent instantiation
     }
-    
+
     private static final String REGION = "us-east-1";
     private static final String RANDOM_SUFFIX = generateRandomSuffix();
-    
+
     public static void defineInfrastructure(final com.pulumi.Context ctx) {
         // Method stub for testing - actual infrastructure is defined in main()
         throw new RuntimeException("This method is only for testing purposes");
     }
-    
+
     public static void main(final String[] args) {
         Pulumi.run(ctx -> createInfrastructure(ctx));
     }
-    
+
     // Extracted infrastructure creation method for testing
     public static void createInfrastructure(final com.pulumi.Context ctx) {
         var awsProvider = createAwsProvider();
@@ -86,24 +86,24 @@ public final class Main {
         var securityGroup = createSecurityGroup(providerOptions, vpcResources.getVpc());
         var iamResources = createIamResources(providerOptions);
         var snsTopic = createSnsTopic(providerOptions);
-        createEc2Instances(providerOptions, vpcResources, securityGroup, 
+        createEc2Instances(providerOptions, vpcResources, securityGroup,
             iamResources, kmsKey, snsTopic);
         var cloudTrail = createCloudTrail(providerOptions, cloudtrailBucket, kmsKey);
         exportOutputs(ctx, vpcResources, kmsKey, appBucket, snsTopic, cloudTrail, securityGroup);
     }
-    
+
     private static Provider createAwsProvider() {
         return new Provider("aws-provider", ProviderArgs.builder()
             .region(REGION)
             .build());
     }
-    
+
     private static CustomResourceOptions createProviderOptions(final Provider awsProvider) {
         return CustomResourceOptions.builder()
             .provider(awsProvider)
             .build();
     }
-    
+
     private static Key createKmsKey(final CustomResourceOptions providerOptions) {
         return new Key("financial-app-kms-key-" + RANDOM_SUFFIX, KeyArgs.builder()
             .description("KMS key for financial application encryption")
@@ -117,11 +117,11 @@ public final class Main {
             ))
             .build(), providerOptions);
     }
-    
-    private static Bucket createCloudTrailS3Bucket(final CustomResourceOptions providerOptions, 
+
+    private static Bucket createCloudTrailS3Bucket(final CustomResourceOptions providerOptions,
                                                    final Key kmsKey) {
         String cloudtrailBucketName = "financial-cloudtrail-logs-" + RANDOM_SUFFIX;
-        var cloudtrailBucket = new Bucket("financial-cloudtrail-logs-" + RANDOM_SUFFIX, 
+        var cloudtrailBucket = new Bucket("financial-cloudtrail-logs-" + RANDOM_SUFFIX,
             BucketArgs.builder()
                 .bucket(cloudtrailBucketName)
                 .forceDestroy(true)
@@ -130,7 +130,7 @@ public final class Main {
                     "Environment", "production"
                 ))
                 .build(), providerOptions);
-                
+
         // Configure S3 bucket encryption for CloudTrail
         new BucketServerSideEncryptionConfigurationV2(
             "cloudtrail-bucket-encryption-" + RANDOM_SUFFIX,
@@ -145,20 +145,20 @@ public final class Main {
                     .bucketKeyEnabled(true)
                     .build())
                 .build(), providerOptions);
-                
+
         // Create S3 bucket policy for CloudTrail
         new BucketPolicy("cloudtrail-bucket-policy-" + RANDOM_SUFFIX,
             BucketPolicyArgs.builder()
                 .bucket(cloudtrailBucket.id())
                 .policy(buildCloudTrailBucketPolicy(cloudtrailBucketName))
                 .build(), providerOptions);
-                
+
         return cloudtrailBucket;
     }
-    
-    private static Bucket createApplicationS3Bucket(final CustomResourceOptions providerOptions, 
+
+    private static Bucket createApplicationS3Bucket(final CustomResourceOptions providerOptions,
                                                     final Key kmsKey) {
-        var appBucket = new Bucket("financial-app-data-" + RANDOM_SUFFIX, 
+        var appBucket = new Bucket("financial-app-data-" + RANDOM_SUFFIX,
             BucketArgs.builder()
                 .forceDestroy(true)
                 .tags(Map.of(
@@ -166,7 +166,7 @@ public final class Main {
                     "Environment", "production"
                 ))
                 .build(), providerOptions);
-                
+
         new BucketServerSideEncryptionConfigurationV2(
             "app-bucket-encryption-" + RANDOM_SUFFIX,
             BucketServerSideEncryptionConfigurationV2Args.builder()
@@ -180,34 +180,34 @@ public final class Main {
                     .bucketKeyEnabled(true)
                     .build())
                 .build(), providerOptions);
-                
+
         return appBucket;
     }
-    
+
     public static class VpcResources {
         private final Vpc vpc;
         private final Subnet publicSubnet;
         private final Subnet privateSubnet;
-        
+
         public VpcResources(final Vpc vpcParam, final Subnet publicSubnetParam, final Subnet privateSubnetParam) {
             this.vpc = vpcParam;
             this.publicSubnet = publicSubnetParam;
             this.privateSubnet = privateSubnetParam;
         }
-        
+
         public Vpc getVpc() {
             return vpc;
         }
-        
+
         public Subnet getPublicSubnet() {
             return publicSubnet;
         }
-        
+
         public Subnet getPrivateSubnet() {
             return privateSubnet;
         }
     }
-    
+
     private static VpcResources createVpcInfrastructure(final CustomResourceOptions providerOptions) {
         // Create VPC
         var vpc = new Vpc("financial-app-vpc-" + RANDOM_SUFFIX, VpcArgs.builder()
@@ -219,18 +219,18 @@ public final class Main {
                 "Environment", "production"
             ))
             .build(), providerOptions);
-            
+
         // Create Internet Gateway
-        var igw = new InternetGateway("financial-app-igw-" + RANDOM_SUFFIX, 
+        var igw = new InternetGateway("financial-app-igw-" + RANDOM_SUFFIX,
             InternetGatewayArgs.builder()
                 .vpcId(vpc.id())
                 .tags(Map.of(
                     "Name", "financial-app-igw-" + RANDOM_SUFFIX
                 ))
                 .build(), providerOptions);
-                
+
         // Create public subnet
-        var publicSubnet = new Subnet("financial-app-public-subnet-" + RANDOM_SUFFIX, 
+        var publicSubnet = new Subnet("financial-app-public-subnet-" + RANDOM_SUFFIX,
             SubnetArgs.builder()
                 .vpcId(vpc.id())
                 .cidrBlock("10.0.1.0/24")
@@ -241,9 +241,9 @@ public final class Main {
                     "Type", "public"
                 ))
                 .build(), providerOptions);
-                
+
         // Create private subnet
-        var privateSubnet = new Subnet("financial-app-private-subnet-" + RANDOM_SUFFIX, 
+        var privateSubnet = new Subnet("financial-app-private-subnet-" + RANDOM_SUFFIX,
             SubnetArgs.builder()
                 .vpcId(vpc.id())
                 .cidrBlock("10.0.2.0/24")
@@ -253,28 +253,28 @@ public final class Main {
                     "Type", "private"
                 ))
                 .build(), providerOptions);
-                
+
         // Create NAT Gateway infrastructure
         createNatGatewayInfrastructure(providerOptions, igw, publicSubnet, privateSubnet);
-        
+
         return new VpcResources(vpc, publicSubnet, privateSubnet);
     }
-    
+
     private static void createNatGatewayInfrastructure(final CustomResourceOptions providerOptions,
                                                        final InternetGateway igw,
                                                        final Subnet publicSubnet,
                                                        final Subnet privateSubnet) {
         // Create Elastic IP for NAT Gateway
-        var natEip = new Eip("financial-app-nat-eip-" + RANDOM_SUFFIX, 
+        var natEip = new Eip("financial-app-nat-eip-" + RANDOM_SUFFIX,
             EipArgs.builder()
                 .domain("vpc")
                 .tags(Map.of(
                     "Name", "financial-app-nat-eip-" + RANDOM_SUFFIX
                 ))
                 .build(), providerOptions);
-                
+
         // Create NAT Gateway
-        var natGateway = new NatGateway("financial-app-nat-" + RANDOM_SUFFIX, 
+        var natGateway = new NatGateway("financial-app-nat-" + RANDOM_SUFFIX,
             NatGatewayArgs.builder()
                 .allocationId(natEip.id())
                 .subnetId(publicSubnet.id())
@@ -282,64 +282,64 @@ public final class Main {
                     "Name", "financial-app-nat-" + RANDOM_SUFFIX
                 ))
                 .build(), providerOptions);
-                
+
         // Create route tables and associations
         createRouteTables(providerOptions, igw, natGateway, publicSubnet, privateSubnet);
     }
-    
+
     private static void createRouteTables(final CustomResourceOptions providerOptions,
                                           final InternetGateway igw,
                                           final NatGateway natGateway,
                                           final Subnet publicSubnet,
                                           final Subnet privateSubnet) {
         // Public route table
-        var publicRouteTable = new RouteTable("financial-app-public-rt-" + RANDOM_SUFFIX, 
+        var publicRouteTable = new RouteTable("financial-app-public-rt-" + RANDOM_SUFFIX,
             RouteTableArgs.builder()
                 .vpcId(publicSubnet.vpcId())
                 .tags(Map.of(
                     "Name", "financial-app-public-rt-" + RANDOM_SUFFIX
                 ))
                 .build(), providerOptions);
-                
-        new Route("financial-app-public-route-" + RANDOM_SUFFIX, 
+
+        new Route("financial-app-public-route-" + RANDOM_SUFFIX,
             RouteArgs.builder()
                 .routeTableId(publicRouteTable.id())
                 .destinationCidrBlock("0.0.0.0/0")
                 .gatewayId(igw.id())
                 .build(), providerOptions);
-                
+
         new RouteTableAssociation("financial-app-public-rta-" + RANDOM_SUFFIX,
             RouteTableAssociationArgs.builder()
                 .subnetId(publicSubnet.id())
                 .routeTableId(publicRouteTable.id())
                 .build(), providerOptions);
-                
+
         // Private route table
-        var privateRouteTable = new RouteTable("financial-app-private-rt-" + RANDOM_SUFFIX, 
+        var privateRouteTable = new RouteTable("financial-app-private-rt-" + RANDOM_SUFFIX,
             RouteTableArgs.builder()
                 .vpcId(privateSubnet.vpcId())
                 .tags(Map.of(
                     "Name", "financial-app-private-rt-" + RANDOM_SUFFIX
                 ))
                 .build(), providerOptions);
-                
-        new Route("financial-app-private-route-" + RANDOM_SUFFIX, 
+
+        new Route("financial-app-private-route-" + RANDOM_SUFFIX,
             RouteArgs.builder()
                 .routeTableId(privateRouteTable.id())
                 .destinationCidrBlock("0.0.0.0/0")
                 .natGatewayId(natGateway.id())
                 .build(), providerOptions);
-                
+
         new RouteTableAssociation("financial-app-private-rta-" + RANDOM_SUFFIX,
             RouteTableAssociationArgs.builder()
                 .subnetId(privateSubnet.id())
                 .routeTableId(privateRouteTable.id())
                 .build(), providerOptions);
     }
-    
-    private static SecurityGroup createSecurityGroup(final CustomResourceOptions providerOptions, 
+
+    private static SecurityGroup createSecurityGroup(final CustomResourceOptions providerOptions,
                                                      final Vpc vpc) {
-        return new SecurityGroup("financial-app-sg-" + RANDOM_SUFFIX, 
+        return new SecurityGroup("financial-app-sg-" + RANDOM_SUFFIX,
             SecurityGroupArgs.builder()
                 .name("financial-app-sg-" + RANDOM_SUFFIX)
                 .description("Security group for financial application")
@@ -371,32 +371,32 @@ public final class Main {
                 ))
                 .build(), providerOptions);
     }
-    
+
     public static class IamResources {
         private final Role ec2Role;
         private final Policy s3Policy;
         private final InstanceProfile instanceProfile;
-        
-        public IamResources(final Role ec2RoleParam, final Policy s3PolicyParam, 
+
+        public IamResources(final Role ec2RoleParam, final Policy s3PolicyParam,
                            final InstanceProfile instanceProfileParam) {
             this.ec2Role = ec2RoleParam;
             this.s3Policy = s3PolicyParam;
             this.instanceProfile = instanceProfileParam;
         }
-        
+
         public Role getEc2Role() {
             return ec2Role;
         }
-        
+
         public Policy getS3Policy() {
             return s3Policy;
         }
-        
+
         public InstanceProfile getInstanceProfile() {
             return instanceProfile;
         }
     }
-    
+
     private static IamResources createIamResources(final CustomResourceOptions providerOptions) {
         // Create IAM role for EC2 instances
         var ec2Role = new Role("financial-app-ec2-role-" + RANDOM_SUFFIX, RoleArgs.builder()
@@ -406,38 +406,38 @@ public final class Main {
                 "Environment", "production"
             ))
             .build(), providerOptions);
-            
+
         // Create IAM policy for S3 read-only access
-        var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX, 
+        var s3ReadOnlyPolicy = new Policy("financial-app-s3-readonly-" + RANDOM_SUFFIX,
             PolicyArgs.builder()
                 .description("Read-only access to specific S3 bucket")
                 .policy(buildS3ReadOnlyPolicy(REGION))
                 .build(), providerOptions);
-                
+
         // Attach policies to role
         new RolePolicyAttachment("financial-app-s3-policy-attachment-" + RANDOM_SUFFIX,
             RolePolicyAttachmentArgs.builder()
                 .role(ec2Role.name())
                 .policyArn(s3ReadOnlyPolicy.arn())
                 .build(), providerOptions);
-                
+
         new RolePolicyAttachment("financial-app-cloudwatch-policy-attachment-" + RANDOM_SUFFIX,
             RolePolicyAttachmentArgs.builder()
                 .role(ec2Role.name())
                 .policyArn("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")
                 .build(), providerOptions);
-                
+
         // Create instance profile
         var instanceProfile = new InstanceProfile("financial-app-instance-profile-" + RANDOM_SUFFIX,
             InstanceProfileArgs.builder()
                 .role(ec2Role.name())
                 .build(), providerOptions);
-                
+
         return new IamResources(ec2Role, s3ReadOnlyPolicy, instanceProfile);
     }
-    
+
     private static Topic createSnsTopic(final CustomResourceOptions providerOptions) {
-        return new Topic("financial-app-cpu-alerts-" + RANDOM_SUFFIX, 
+        return new Topic("financial-app-cpu-alerts-" + RANDOM_SUFFIX,
             TopicArgs.builder()
                 .name("financial-app-cpu-alerts-" + RANDOM_SUFFIX)
                 .tags(Map.of(
@@ -446,7 +446,7 @@ public final class Main {
                 ))
                 .build(), providerOptions);
     }
-    
+
     private static void createEc2Instances(final CustomResourceOptions providerOptions,
                                            final VpcResources vpcResources,
                                            final SecurityGroup securityGroup,
@@ -454,11 +454,11 @@ public final class Main {
                                            final Key kmsKey,
                                            final Topic snsTopic) {
         String amazonLinux2AmiId = "ami-0c02fb55956c7d316";
-        
+
         for (int i = 1; i <= 2; i++) {
             final int instanceNumber = i;
-            
-            var instance = new Instance("financial-app-instance-" + instanceNumber 
+
+            var instance = new Instance("financial-app-instance-" + instanceNumber
                 + "-" + RANDOM_SUFFIX, InstanceArgs.builder()
                 .ami(amazonLinux2AmiId)
                 .instanceType("t3.micro")
@@ -482,7 +482,7 @@ public final class Main {
                     "Application", "financial-services"
                 ))
                 .build(), providerOptions);
-                
+
             // Create CloudWatch CPU alarm for each instance
             new MetricAlarm("financial-app-cpu-alarm-" + instanceNumber + "-" + RANDOM_SUFFIX,
                 MetricAlarmArgs.builder()
@@ -503,7 +503,7 @@ public final class Main {
                     .build(), providerOptions);
         }
     }
-    
+
     private static Trail createCloudTrail(final CustomResourceOptions providerOptions,
                                           final Bucket cloudtrailBucket,
                                           final Key kmsKey) {
@@ -520,7 +520,7 @@ public final class Main {
             ))
             .build(), providerOptions);
     }
-    
+
     private static void exportOutputs(final com.pulumi.Context ctx,
                                       final VpcResources vpcResources,
                                       final Key kmsKey,
@@ -537,11 +537,11 @@ public final class Main {
         ctx.export("securityGroupId", securityGroup.id());
         ctx.export("randomSuffix", Output.of(RANDOM_SUFFIX));
     }
-    
+
     private static String generateRandomSuffix() {
         return String.valueOf(new Random().nextInt(10000));
     }
-    
+
     // Helper method to build resource name with suffix
     public static String buildResourceName(final String prefix, final String suffix) {
         if (prefix == null || prefix.isEmpty()) {
@@ -552,17 +552,17 @@ public final class Main {
         }
         return prefix + "-" + suffix;
     }
-    
+
     // Helper method to get AWS region
     public static String getRegion() {
         return REGION;
     }
-    
+
     // Helper method to get random suffix
     public static String getRandomSuffix() {
         return RANDOM_SUFFIX;
     }
-    
+
     // Helper method to validate resource tags
     public static boolean isValidResourceTag(final String key, final String value) {
         if (key == null || key.isEmpty() || value == null || value.isEmpty()) {
@@ -572,66 +572,66 @@ public final class Main {
         return key.length() <= 128 && value.length() <= 256
                && !key.startsWith("aws:") && !key.startsWith("AWS:");
     }
-    
+
     // Helper method to validate CIDR blocks
     public static boolean isValidCidrBlock(final String cidr) {
         if (cidr == null || cidr.isEmpty()) {
             return false;
         }
-        
+
         String[] parts = cidr.split("/");
         if (parts.length != 2) {
             return false;
         }
-        
+
         try {
             String ip = parts[0];
             int prefixLength = Integer.parseInt(parts[1]);
-            
+
             // Validate prefix length
             if (prefixLength < 0 || prefixLength > 32) {
                 return false;
             }
-            
+
             // Validate IP address format
             String[] ipParts = ip.split("\\.");
             if (ipParts.length != 4) {
                 return false;
             }
-            
+
             for (String part : ipParts) {
                 int octet = Integer.parseInt(part);
                 if (octet < 0 || octet > 255) {
                     return false;
                 }
             }
-            
+
             return true;
         } catch (NumberFormatException e) {
             return false;
         }
     }
-    
+
     // Helper method to validate AWS region format
     public static boolean isValidAwsRegion(final String region) {
         if (region == null || region.isEmpty()) {
             return false;
         }
-        
+
         // AWS region format: us-east-1, eu-west-1, ap-southeast-2, etc.
         return region.matches("^[a-z]{2,3}-[a-z]+-\\d+$");
     }
-    
+
     // Helper method to validate instance types
     public static boolean isValidInstanceType(final String instanceType) {
         if (instanceType == null || instanceType.isEmpty()) {
             return false;
         }
-        
+
         // Common AWS instance type formats: t3.micro, m5.large, c5n.xlarge, r5a.2xlarge, m5dn.large, etc.
         return instanceType.matches("^[a-z][0-9][a-z]*\\.[0-9]*[a-z]+$");
     }
-    
+
     // Helper method to generate availability zone name
     public static String generateAvailabilityZone(final String region, final String zone) {
         if (region == null || region.isEmpty()) {
@@ -643,21 +643,21 @@ public final class Main {
         if (!zone.matches("^[a-z]$")) {
             throw new IllegalArgumentException("Zone must be a single lowercase letter");
         }
-        
+
         return region + zone;
     }
-    
+
     // Helper method to validate port numbers
     public static boolean isValidPort(final int port) {
         return port >= 1 && port <= 65535;
     }
-    
+
     // Helper method to validate security group protocols
     public static boolean isValidProtocol(final String protocol) {
         if (protocol == null || protocol.isEmpty()) {
             return false;
         }
-        
+
         String[] validProtocols = {"tcp", "udp", "icmp", "all", "-1"};
         for (String valid : validProtocols) {
             if (valid.equalsIgnoreCase(protocol)) {
@@ -666,7 +666,7 @@ public final class Main {
         }
         return false;
     }
-    
+
     // Helper method to format resource names consistently
     public static String formatResourceName(final String type, final String name, final String suffix) {
         if (type == null || type.isEmpty()) {
@@ -678,59 +678,59 @@ public final class Main {
         if (suffix == null || suffix.isEmpty()) {
             throw new IllegalArgumentException("Suffix cannot be null or empty");
         }
-        
+
         return String.format("%s-%s-%s", type, name, suffix);
     }
-    
+
     // Helper method to validate AWS ARN format
     public static boolean isValidArn(final String arn) {
         if (arn == null || arn.isEmpty()) {
             return false;
         }
-        
+
         // Basic AWS ARN format: arn:partition:service:region:account-id:resource-type/resource-id
         // or arn:partition:service:region:account-id:resource-type:resource-id
         return arn.matches("^arn:[^:]+:[^:]+:[^:]*:[^:]*:.+$");
     }
-    
+
     // Helper method to calculate subnet size from CIDR
     public static int calculateSubnetSize(final String cidr) {
         if (!isValidCidrBlock(cidr)) {
             throw new IllegalArgumentException("Invalid CIDR block: " + cidr);
         }
-        
+
         String[] parts = cidr.split("/");
         int prefixLength = Integer.parseInt(parts[1]);
-        
+
         return (int) Math.pow(2, 32 - prefixLength);
     }
-    
+
     // Helper method to validate bucket names
     public static boolean isValidS3BucketName(final String bucketName) {
         if (bucketName == null || bucketName.isEmpty()) {
             return false;
         }
-        
+
         // S3 bucket naming rules (simplified)
         if (bucketName.length() < 3 || bucketName.length() > 63) {
             return false;
         }
-        
+
         // Must start and end with lowercase letter or number
         if (!bucketName.matches("^[a-z0-9].*[a-z0-9]$")) {
             return false;
         }
-        
+
         // Cannot contain uppercase letters, spaces, or certain special characters
         if (!bucketName.matches("^[a-z0-9.-]+$")) {
             return false;
         }
-        
+
         // Cannot be formatted as IP address
         if (bucketName.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -739,7 +739,7 @@ public final class Main {
         if (bucketName == null || bucketName.isEmpty()) {
             throw new IllegalArgumentException("Bucket name cannot be null or empty");
         }
-        
+
         return String.format("""
             {
                 "Version": "2012-10-17",
@@ -780,7 +780,7 @@ public final class Main {
         if (!isValidAwsRegion(region)) {
             throw new IllegalArgumentException("Invalid AWS region format: " + region);
         }
-        
+
         return String.format("""
             {
                 "Version": "2012-10-17",
@@ -877,12 +877,12 @@ public final class Main {
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
-            
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             %s
             EOF
-            
+
             # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
                 -a fetch-config -m ec2 \\
@@ -896,7 +896,7 @@ public final class Main {
         if (keyUsage == null || keyUsage.isEmpty()) {
             return false;
         }
-        
+
         return "ENCRYPT_DECRYPT".equals(keyUsage) || "SIGN_VERIFY".equals(keyUsage);
     }
 
@@ -910,7 +910,7 @@ public final class Main {
         if (volumeType == null || volumeType.isEmpty()) {
             return false;
         }
-        
+
         String[] validTypes = {"gp2", "gp3", "io1", "io2", "st1", "sc1", "standard"};
         for (String valid : validTypes) {
             if (valid.equals(volumeType)) {
@@ -925,7 +925,7 @@ public final class Main {
         if (volumeType == null || volumeSize <= 0) {
             return false;
         }
-        
+
         switch (volumeType) {
             case "gp2":
             case "gp3":
@@ -955,7 +955,7 @@ public final class Main {
     }
 
     // Helper method to build resource tags map
-    public static Map<String, String> buildResourceTags(final String environment, 
+    public static Map<String, String> buildResourceTags(final String environment,
                                                         final String application) {
         if (environment == null || environment.isEmpty()) {
             throw new IllegalArgumentException("Environment cannot be null or empty");
@@ -963,7 +963,7 @@ public final class Main {
         if (application == null || application.isEmpty()) {
             throw new IllegalArgumentException("Application cannot be null or empty");
         }
-        
+
         Map<String, String> tags = new java.util.HashMap<>();
         tags.put("Environment", environment);
         tags.put("Application", application);
@@ -971,9 +971,9 @@ public final class Main {
     }
 
     // Helper method to build resource tags map with additional tag
-    public static Map<String, String> buildResourceTags(final String environment, 
-                                                       final String application, 
-                                                       final String key, 
+    public static Map<String, String> buildResourceTags(final String environment,
+                                                       final String application,
+                                                       final String key,
                                                        final String value) {
         Map<String, String> tags = buildResourceTags(environment, application);
         if (key != null && !key.isEmpty() && value != null && !value.isEmpty()) {
