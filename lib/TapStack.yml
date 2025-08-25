@@ -29,6 +29,7 @@ Resources:
         - Key: Environment
           Value: Production
 
+  #Trigger
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
