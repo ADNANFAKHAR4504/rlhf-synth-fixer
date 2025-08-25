@@ -757,7 +757,7 @@ Resources:
       Name: !Sub '${StackPrefix}-${EnvironmentName}-config-delivery-channel'
       S3BucketName: !Ref ConfigBucket
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Daily
+        DeliveryFrequency: TwentyFour_Hours
 
   # Config Rule: S3 bucket public read prohibited
   ConfigRuleS3PublicRead:
