@@ -459,16 +459,7 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
           - Effect: Allow
             Principal:
-              Service: config.amazonaws.com
-            Action:
-              - s3:PutObject
-            Resource: !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
+              Service: cloudtrail.amazonaws.com
             Action:
               - s3:GetBucketAcl
             Resource: !GetAtt LogBucket.Arn
@@ -822,55 +813,6 @@ Resources:
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
-
-  # AWS Config for Compliance
-  ConfigRecorderRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: config-recorder-policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetBucketAcl
-                Resource:
-                  - !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*
-              - Effect: Allow
-                Action:
-                  - config:*
-                Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub ${EnvironmentName}-config-recorder
-      RoleARN: !GetAtt ConfigRecorderRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      S3BucketName: !Ref LogBucket
-      S3KeyPrefix: Config
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
 
 # Outputs for key resource references
 Outputs:
