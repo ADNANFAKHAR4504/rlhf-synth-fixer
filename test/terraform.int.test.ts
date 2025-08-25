@@ -240,7 +240,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       try {
         const result = await lookup(lbDomain);
         expect(result.address).toBeTruthy();
-        expect(result.family).toBeOneOf([4, 6]); // IPv4 or IPv6
+        expect([4, 6]).toContain(result.family); // IPv4 or IPv6
         
         console.log(`DNS resolution successful: ${lbDomain} -> ${result.address}`);
       } catch (error) {
