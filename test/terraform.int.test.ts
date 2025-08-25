@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const outputPath = path.resolve(process.cwd(), "flat-outputs/all-outputs.json");
+const outputPath = path.resolve(process.cwd(), "../cfn-outputs/flat-outputs.json");
 let outputs: Record<string, any>;
 
 // ------------------------------
