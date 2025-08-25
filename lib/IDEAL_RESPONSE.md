@@ -12,7 +12,7 @@ Parameters:
     ConstraintDescription: Must contain only alphanumeric characters
   TrustedAccountId:
     Type: String
-    Default: 718240086340    
+    Default: 718240086340
     Description: Trusted AWS Account ID for IAM role assume policies
     AllowedPattern: '^[0-9]{12}$'
     ConstraintDescription: Must be a valid 12-digit AWS Account ID
@@ -21,6 +21,11 @@ Parameters:
     Default: 10.0.0.0/16
     Description: IP range allowed for SSH and HTTPS access
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$'
+  EnableSecurityHub:
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
+    Description: Whether to create Security Hub (set to false if already exists)
 
 Resources:
   SecurityKMSKey:
@@ -322,10 +327,22 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
                 AWS:SourceAccount: !Ref AWS::AccountId
 
+  SecurityHub:
+    Type: AWS::SecurityHub::Hub
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      EnableDefaultStandards: true
+      Tags:
+        Name: !Sub SecurityHub-${EnvironmentSuffix}
+        Environment: !Ref EnvironmentSuffix
+    Condition: CreateSecurityHub
+
   TrustedServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub TrustedServiceRole-${EnvironmentSuffix}
+      Path: !Sub /security/${EnvironmentSuffix}/
+      RoleName: !Sub TrustedServiceRole-${EnvironmentSuffix}-${AWS::Region}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -463,15 +480,6 @@ Resources:
         Owner: AWS
         SourceIdentifier: CLOUD_TRAIL_ENABLED
 
-  SecurityHub:
-    Type: AWS::SecurityHub::Hub
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Tags:
-        Name: !Sub SecurityHub-${EnvironmentSuffix}
-        Environment: !Ref EnvironmentSuffix
-
 Outputs:
   SecurityKMSKeyId:
     Description: KMS Key ID for Security Infrastructure
@@ -526,4 +534,9 @@ Outputs:
     Value: !GetAtt TrustedServiceRole.Arn
     Export:
       Name: !Sub ${AWS::StackName}-TrustedServiceRoleArn
+
+Conditions:
+  CreateSecurityHub: !Equals 
+    - !Ref EnableSecurityHub
+    - true
 ```
