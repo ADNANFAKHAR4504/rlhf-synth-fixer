@@ -209,7 +209,7 @@ async function discoverRdsInstances() {
   // Find RDS instance by project name
   const rdsInstance = DBInstances.find(db => 
     db.DBInstanceIdentifier?.includes('iac-aws-nova') ||
-    db.Tags?.some(tag => 
+    (db as any).Tags?.some((tag: any) => 
       tag.Key === 'Project' && tag.Value?.includes('iac-aws-nova')
     )
   ) || DBInstances[0];
@@ -255,7 +255,7 @@ async function discoverAutoScalingGroups() {
   // Find ASG by project name
   const asg = AutoScalingGroups.find(group => 
     group.AutoScalingGroupName?.includes('iac-aws-nova') ||
-    group.Tags?.some(tag => 
+    group.Tags?.some((tag: any) => 
       tag.Key === 'Project' && tag.Value?.includes('iac-aws-nova')
     )
   ) || AutoScalingGroups[0];
