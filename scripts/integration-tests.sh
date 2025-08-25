@@ -52,6 +52,7 @@ elif [ "$LANGUAGE" = "go" ]; then
       echo "❌ .gen/aws missing after cdktf get; aborting"
       exit 1
     fi
+
   fi
 
   if [ -d "lib" ]; then
