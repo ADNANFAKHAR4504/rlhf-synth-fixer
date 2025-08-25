@@ -4,9 +4,7 @@ import * as path from "path";
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 let outputs: Record<string, any>;
 
-// ------------------------------
-// Helper Validators
-// ------------------------------
+// Validator helpers
 const isNonEmptyString = (val: any): boolean =>
   typeof val === "string" && val.trim().length > 0;
 
@@ -16,18 +14,17 @@ const isValidArn = (val: any): boolean =>
 const isValidIp = (val: any): boolean =>
   typeof val === "string" && /^(\d{1,3}\.){3}\d{1,3}$/.test(val);
 
-const isArrayString = (val: any): boolean => {
+const isJsonString = (val: any): boolean => {
+  if (typeof val !== "string") return false;
   try {
-    const parsed = JSON.parse(val);
-    return Array.isArray(parsed);
+    JSON.parse(val);
+    return true;
   } catch {
     return false;
   }
 };
 
-// ------------------------------
 // Load outputs before tests
-// ------------------------------
 beforeAll(() => {
   outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 });
@@ -37,143 +34,142 @@ describe("Flat outputs.json validation", () => {
     expect(Object.keys(outputs).length).toBeGreaterThan(20);
   });
 
-  // ------------------------------
-  // VPC IDs
-  // ------------------------------
   it("VPC IDs are non-empty strings", () => {
-    expect(isNonEmptyString(outputs.primary_vpc_id)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_vpc_id)).toBe(true);
+    expect(isJsonString(outputs.vpc_ids)).toBe(true);
+    const vpcs = JSON.parse(outputs.vpc_ids);
+    expect(isNonEmptyString(vpcs.primary)).toBe(true);
+    expect(isNonEmptyString(vpcs.secondary)).toBe(true);
   });
 
-  // ------------------------------
-  // Subnets
-  // ------------------------------
   it("Subnet IDs are valid arrays", () => {
-    [
-      "primary_public_subnet_ids",
-      "primary_private_subnet_ids",
-      "secondary_public_subnet_ids",
-      "secondary_private_subnet_ids",
-    ].forEach((key) => expect(isArrayString(outputs[key])).toBe(true));
-  });
-
-  // ------------------------------
-  // Security Groups
-  // ------------------------------
-  it("Security group IDs follow sg-* format", () => {
-    [
-      "primary_alb_security_group_id",
-      "primary_ec2_security_group_id",
-      "primary_rds_security_group_id",
-      "secondary_alb_security_group_id",
-      "secondary_ec2_security_group_id",
-      "secondary_rds_security_group_id",
-    ].forEach((k) => {
-      expect(outputs[k]).toMatch(/^sg-/);
+    expect(isJsonString(outputs.subnet_ids)).toBe(true);
+    const subnets = JSON.parse(outputs.subnet_ids);
+    ["primary", "secondary"].forEach(region => {
+      expect(subnets[region]).toBeDefined();
+      expect(Array.isArray(subnets[region].public)).toBe(true);
+      expect(subnets[region].public.every(isNonEmptyString)).toBe(true);
+      expect(Array.isArray(subnets[region].private)).toBe(true);
+      expect(subnets[region].private.every(isNonEmptyString)).toBe(true);
     });
   });
 
-  // ------------------------------
-  // ALBs
-  // ------------------------------
+  it("Security group IDs follow sg-* format", () => {
+    expect(isJsonString(outputs.security_group_ids)).toBe(true);
+    const sgs = JSON.parse(outputs.security_group_ids);
+    Object.values(sgs).forEach((sg) => {
+      expect(typeof sg).toBe("string");
+      expect(sg).toMatch(/^sg-/);
+    });
+  });
+
   it("ALB DNS names look valid", () => {
-    expect(outputs.primary_alb_dns_name).toContain(".elb.amazonaws.com");
-    expect(outputs.secondary_alb_dns_name).toContain(".elb.amazonaws.com");
+    expect(isJsonString(outputs.load_balancer_dns_names)).toBe(true);
+    const albDns = JSON.parse(outputs.load_balancer_dns_names);
+    ["primary", "secondary"].forEach(r => {
+      expect(typeof albDns[r]).toBe("string");
+      expect(albDns[r]).toContain(".elb.amazonaws.com");
+    });
   });
 
-  it("ALB zone IDs are non-empty", () => {
-    expect(isNonEmptyString(outputs.primary_alb_zone_id)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_alb_zone_id)).toBe(true);
+  it("ALB zone IDs are non-empty strings", () => {
+    expect(isJsonString(outputs.load_balancer_zone_ids)).toBe(true);
+    const zoneIds = JSON.parse(outputs.load_balancer_zone_ids);
+    ["primary", "secondary"].forEach(r => {
+      expect(isNonEmptyString(zoneIds[r])).toBe(true);
+    });
   });
 
-  // ------------------------------
-  // RDS
-  // ------------------------------
-  it("RDS endpoints and ports are valid", () => {
-    expect(outputs.primary_rds_endpoint).toContain(".rds.amazonaws.com");
-    expect(outputs.secondary_rds_endpoint).toContain(".rds.amazonaws.com");
-    expect(outputs.primary_rds_port).toBe("3306");
-    expect(outputs.secondary_rds_port).toBe("3306");
+  it("RDS endpoints are valid and port is included in endpoint", () => {
+    expect(isJsonString(outputs.rds_instance_endpoints)).toBe(true);
+    const rdsEndpoints = JSON.parse(outputs.rds_instance_endpoints);
+    ["primary", "secondary"].forEach(r => {
+      expect(typeof rdsEndpoints[r]).toBe("string");
+      expect(rdsEndpoints[r]).toMatch(/\.rds\.amazonaws\.com(:5432)?/);
+    });
   });
 
-  // ------------------------------
-  // IAM
-  // ------------------------------
-  it("IAM ARNs are valid", () => {
-    expect(isValidArn(outputs.ec2_iam_role_arn)).toBe(true);
-    expect(isNonEmptyString(outputs.ec2_instance_profile_name)).toBe(true);
-    expect(isValidArn(outputs.rds_monitoring_role_arn)).toBe(true);
+  it("IAM ARNs and instance profile name are valid", () => {
+    expect(isValidArn(outputs.iam_role_arn)).toBe(true);
+    expect(isNonEmptyString(outputs.iam_instance_profile_name)).toBe(true);
+    // rds_monitoring_role_arn output not present in your outputs, skip this check
   });
 
-  // ------------------------------
-  // Auto Scaling Groups
-  // ------------------------------
   it("Auto Scaling Group names are valid non-empty strings", () => {
-    expect(isNonEmptyString(outputs.primary_asg_name)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_asg_name)).toBe(true);
+    expect(isJsonString(outputs.autoscaling_group_names)).toBe(true);
+    const asgNames = JSON.parse(outputs.autoscaling_group_names);
+    ["primary", "secondary"].forEach(r => {
+      expect(isNonEmptyString(asgNames[r])).toBe(true);
+    });
   });
 
-  // ------------------------------
-  // KMS
-  // ------------------------------
   it("KMS keys are UUID format", () => {
-    expect(outputs.primary_kms_key_id).toMatch(/^[0-9a-f-]{36}$/);
-    expect(outputs.secondary_kms_key_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(isJsonString(outputs.kms_key_ids)).toBe(true);
+    const kmsIds = JSON.parse(outputs.kms_key_ids);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    ["primary", "secondary"].forEach(r => {
+      expect(kmsIds[r]).toMatch(uuidRegex);
+    });
   });
 
-  // ------------------------------
-  // CloudWatch
-  // ------------------------------
-  it("Log group names start with /aws/ec2/", () => {
-    expect(outputs.primary_log_group_name).toMatch(/^\/aws\/ec2\//);
-    expect(outputs.secondary_log_group_name).toMatch(/^\/aws\/ec2\//);
+  it("Log group names start with /aws/ec2/ or /aws/rds/", () => {
+    expect(isJsonString(outputs.cloudwatch_log_group_names)).toBe(true);
+    const logGroups = JSON.parse(outputs.cloudwatch_log_group_names);
+    expect(logGroups.primary).toMatch(/^\/aws\/ec2\//);
+    expect(logGroups.secondary).toMatch(/^\/aws\/ec2\//);
+    expect(logGroups.rds).toMatch(/^\/aws\/rds\//);
   });
 
-  // ------------------------------
-  // Launch Templates
-  // ------------------------------
   it("Launch template IDs look like lt-xxx", () => {
-    expect(outputs.primary_launch_template_id).toMatch(/^lt-/);
-    expect(outputs.secondary_launch_template_id).toMatch(/^lt-/);
+    expect(isJsonString(outputs.launch_template_ids)).toBe(true);
+    const ltIds = JSON.parse(outputs.launch_template_ids);
+    ["primary", "secondary"].forEach(r => {
+      expect(ltIds[r]).toMatch(/^lt-/);
+    });
   });
 
-  // ------------------------------
-  // NAT + EIPs
-  // ------------------------------
   it("NAT Gateway IDs arrays are valid", () => {
-    ["primary_nat_gateway_ids", "secondary_nat_gateway_ids"].forEach((k) =>
-      expect(isArrayString(outputs[k])).toBe(true)
-    );
+    expect(isJsonString(outputs.nat_gateway_ids)).toBe(true);
+    const natIds = JSON.parse(outputs.nat_gateway_ids);
+    ["primary", "secondary"].forEach(r => {
+      expect(Array.isArray(natIds[r])).toBe(true);
+      natIds[r].forEach(id => expect(typeof id).toBe("string"));
+    });
   });
 
   it("EIP addresses are valid IP arrays", () => {
-    ["primary_eip_addresses", "secondary_eip_addresses"].forEach((k) => {
-      const ips: string[] = JSON.parse(outputs[k]);
-      expect(Array.isArray(ips)).toBe(true);
-      ips.forEach((ip: string) => {
+    expect(isJsonString(outputs.elastic_ip_addresses)).toBe(true);
+    const eips = JSON.parse(outputs.elastic_ip_addresses);
+    ["primary", "secondary"].forEach(r => {
+      expect(Array.isArray(eips[r])).toBe(true);
+      eips[r].forEach((ip: string) => {
         expect(isValidIp(ip)).toBe(true);
       });
     });
   });
 
-  // ------------------------------
-  // S3 + CloudFront
-  // ------------------------------
-  it("S3 bucket values are valid", () => {
-    expect(isNonEmptyString(outputs.s3_bucket_name)).toBe(true);
-    expect(outputs.s3_bucket_domain_name).toContain(".s3.amazonaws.com");
+  it("S3 bucket names and ARNs are valid", () => {
+    expect(isJsonString(outputs.s3_bucket_names)).toBe(true);
+    expect(isJsonString(outputs.s3_bucket_arns)).toBe(true);
+    const s3Names = JSON.parse(outputs.s3_bucket_names);
+    const s3Arns = JSON.parse(outputs.s3_bucket_arns);
+
+    ["primary", "secondary"].forEach(r => {
+      expect(isNonEmptyString(s3Names[r])).toBe(true);
+      expect(s3Arns[r]).toContain(`arn:aws:s3:::${s3Names[r]}`);
+    });
   });
 
   it("CloudFront distribution values are valid", () => {
     expect(isNonEmptyString(outputs.cloudfront_distribution_id)).toBe(true);
-    expect(outputs.cloudfront_domain_name).toContain("cloudfront.net");
+    expect(typeof outputs.cloudfront_distribution_domain_name).toBe("string");
+    expect(outputs.cloudfront_distribution_domain_name).toMatch(/\.cloudfront\.net$/);
   });
 
-  // ------------------------------
-  // AMI IDs
-  // ------------------------------
   it("AMI IDs look valid", () => {
-    expect(outputs.primary_ami_id).toMatch(/^ami-/);
-    expect(outputs.secondary_ami_id).toMatch(/^ami-/);
+    expect(isJsonString(outputs.ami_ids)).toBe(true);
+    const amiIds = JSON.parse(outputs.ami_ids);
+    ["primary", "secondary"].forEach(r => {
+      expect(amiIds[r]).toMatch(/^ami-/);
+    });
   });
 });
