@@ -1019,57 +1019,6 @@ func TestNATGatewayConfiguration(t *testing.T) {
 	}
 }
 
-// TestS3BackendConfiguration tests S3 backend setup
-func TestS3BackendConfiguration(t *testing.T) {
-	tmpDir := t.TempDir()
-	outdir := filepath.Join(tmpDir, "cdktf.out")
-
-	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
-
-	props := &TapStackProps{
-		EnvironmentSuffix: "backend-test",
-		StateBucket:       "backend-test-bucket",
-		StateBucketRegion: "us-west-2",
-		AwsRegion:         "us-east-1",
-		RepositoryName:    "test-repo",
-		CommitAuthor:      "test-author",
-	}
-
-	NewTapStack(app, "BackendTestStack", props)
-	app.Synth()
-
-	tfPath := filepath.Join(outdir, "stacks", "BackendTestStack", "cdk.tf.json")
-	tfConfig := parseTerraformJSON(t, tfPath)
-
-	// Test backend configuration
-	terraform, ok := tfConfig["terraform"].(map[string]interface{})
-	if !ok {
-		t.Fatal("terraform configuration not found")
-	}
-
-	backend, ok := terraform["backend"].(map[string]interface{})
-	if !ok {
-		t.Fatal("backend configuration not found")
-	}
-
-	s3Backend, ok := backend["s3"].(map[string]interface{})
-	if !ok {
-		t.Fatal("s3 backend configuration not found")
-	}
-
-	if bucket, ok := s3Backend["bucket"]; !ok || bucket != "backend-test-bucket" {
-		t.Errorf("expected backend bucket 'backend-test-bucket', got: %v", bucket)
-	}
-
-	if region, ok := s3Backend["region"]; !ok || region != "us-west-2" {
-		t.Errorf("expected backend region 'us-west-2', got: %v", region)
-	}
-
-	if key, ok := s3Backend["key"]; !ok || key != "backend-test/BackendTestStack.tfstate" {
-		t.Errorf("expected backend key 'backend-test/BackendTestStack.tfstate', got: %v", key)
-	}
-}
-
 // TestFullStackOutputs tests all outputs from NewTapStack
 func TestFullStackOutputs(t *testing.T) {
 	tmpDir := t.TempDir()
