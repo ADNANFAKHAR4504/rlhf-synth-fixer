@@ -591,7 +591,7 @@ public class IamStack extends ComponentResource {
         // Attach managed policy to Config role
         new RolePolicyAttachment(config.getResourceName("rpa", "config-service"), RolePolicyAttachmentArgs.builder()
             .role(configServiceRole.name())
-            .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")
+            .policyArn("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole")
             .build(), ComponentResourceOptions.builder().parent(this).build());
         
         // CloudTrail Service Role (if needed for CloudWatch Logs)
