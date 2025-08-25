@@ -13,9 +13,11 @@
     "Encryption Management",
     "Compliance Monitoring",
     "Network Configuration",
-    "General Infrastructure Tooling QA"
+    "General Infrastructure Tooling QA",
+    "Live Testing Support",
+    "Stack Output Management"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "aws_services": [
     "KMS",
     "IAM",

@@ -277,7 +277,7 @@ public final class Main {
         
         // 5. S3 Buckets for CloudTrail logs
         var cloudTrailBucket = new Bucket("bucket-cloudtrail-logs", BucketArgs.builder()
-            .bucket(getResourceName(config, "cloudtrail", "logs"))
+            .bucket(getS3BucketName(config, "cloudtrail", "logs"))
             .tags(getStandardTags(config, "storage", "s3"))
             .build());
         
@@ -373,5 +373,42 @@ public final class Main {
      */
     private static String getResourceName(InfrastructureConfig config, String service, String resource) {
         return String.format("%s-%s-%s-%s", config.getCompanyName(), config.getEnvironment(), service, resource);
+    }
+
+    /**
+     * Helper method to generate S3 bucket names
+     */
+    private static String getS3BucketName(InfrastructureConfig config, String service, String resource) {
+        // Create base name and convert to lowercase (S3 requirement)
+        String baseName = String.format("%s-%s-%s-%s", 
+            config.getCompanyName(), 
+            config.getEnvironment(), 
+            service, 
+            resource).toLowerCase();
+        
+        // Replace any invalid characters and ensure proper format
+        String bucketName = baseName
+            .replaceAll("[^a-z0-9.-]", "-")  // Replace invalid chars with hyphens
+            .replaceAll("-+", "-")           // Replace consecutive hyphens with single hyphen
+            .replaceAll("^-+|-+$", "");      // Remove leading/trailing hyphens
+        
+        // Ensure bucket name is between 3-63 characters
+        if (bucketName.length() > 63) {
+            bucketName = bucketName.substring(0, 63);
+        }
+        if (bucketName.length() < 3) {
+            bucketName = bucketName + "bucket";
+        }
+        
+        // Add timestamp for global uniqueness
+        String timestamp = String.valueOf(System.currentTimeMillis()).substring(8); // Last 4 digits
+        bucketName = bucketName + "-" + timestamp;
+        
+        // Final length check
+        if (bucketName.length() > 63) {
+            bucketName = bucketName.substring(0, 63);
+        }
+        
+        return bucketName;
     }
 }
