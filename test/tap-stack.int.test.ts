@@ -47,11 +47,26 @@ if (outputs && Object.keys(outputs).length > 0) {
 
 // Helper function to get stack outputs
 function getStackOutput(stackName: string, outputKey: string): string | undefined {
-  const stackOutputs = outputs[stackName];
-  if (stackOutputs && stackOutputs[outputKey]) {
-    return stackOutputs[outputKey];
+  // Handle both nested and flat output formats
+  if (outputs[stackName] && outputs[stackName][outputKey]) {
+    return outputs[stackName][outputKey];
+  }
+  // For flat format, check if the key exists directly
+  if (outputs[outputKey]) {
+    return outputs[outputKey];
   }
   return undefined;
+}
+
+// Helper function to check if we have flat outputs (from get-outputs.sh)
+function hasFlatOutputs(): boolean {
+  const keys = Object.keys(outputs);
+  return keys.length > 0 && !keys.some(key => key.includes('TapStack'));
+}
+
+// Helper function to get expected outputs for flat format
+function getExpectedOutputs(): string[] {
+  return ['VPCId', 'LoadBalancerDNS', 'DatabaseEndpoint', 'S3BucketName', 'AutoScalingGroupName'];
 }
 
 // Helper function to make HTTP requests with timeout
@@ -83,21 +98,41 @@ describe('TapStack Integration Tests', () => {
       // Log available outputs for debugging
       console.log('Available stack outputs:', Object.keys(outputs));
       
-      // Check for expected stack names using the detected environment suffix
-      const expectedStacks = [`TapStack${environmentSuffix}-us-east-1`, `TapStack${environmentSuffix}-us-west-2`];
-      const availableStacks = Object.keys(outputs);
-      
-      console.log('Expected stacks:', expectedStacks);
-      console.log('Available stacks:', availableStacks);
-      
-      // At least one expected stack should be present
-      const hasExpectedStack = expectedStacks.some(stack => availableStacks.includes(stack));
-      expect(hasExpectedStack).toBe(true);
-      
-      // In CI/CD, we should have outputs from deploy stage
-      if (process.env.CI) {
-        expect(availableStacks.length).toBeGreaterThan(0);
-        console.log('Deploy stage outputs are available for integration testing');
+      // Check if we have flat outputs (from get-outputs.sh) or nested outputs
+      if (hasFlatOutputs()) {
+        // Flat format - check for expected output keys
+        const expectedOutputs = getExpectedOutputs();
+        const availableOutputs = Object.keys(outputs);
+        
+        console.log('Expected outputs (flat format):', expectedOutputs);
+        console.log('Available outputs (flat format):', availableOutputs);
+        
+        // At least one expected output should be present
+        const hasExpectedOutput = expectedOutputs.some(output => availableOutputs.includes(output));
+        expect(hasExpectedOutput).toBe(true);
+        
+        // In CI/CD, we should have outputs from deploy stage
+        if (process.env.CI) {
+          expect(availableOutputs.length).toBeGreaterThan(0);
+          console.log('Deploy stage outputs are available for integration testing (flat format)');
+        }
+      } else {
+        // Nested format - check for expected stack names
+        const expectedStacks = [`TapStack${environmentSuffix}-us-east-1`, `TapStack${environmentSuffix}-us-west-2`];
+        const availableStacks = Object.keys(outputs);
+        
+        console.log('Expected stacks (nested format):', expectedStacks);
+        console.log('Available stacks (nested format):', availableStacks);
+        
+        // At least one expected stack should be present
+        const hasExpectedStack = expectedStacks.some(stack => availableStacks.includes(stack));
+        expect(hasExpectedStack).toBe(true);
+        
+        // In CI/CD, we should have outputs from deploy stage
+        if (process.env.CI) {
+          expect(availableStacks.length).toBeGreaterThan(0);
+          console.log('Deploy stage outputs are available for integration testing (nested format)');
+        }
       }
     }, timeout);
 
@@ -105,16 +140,30 @@ describe('TapStack Integration Tests', () => {
       // Check for expected stack outputs
       const expectedOutputs = ['VPCId', 'LoadBalancerDNS', 'DatabaseEndpoint', 'S3BucketName', 'AutoScalingGroupName'];
       
-      for (const stackName of Object.keys(outputs)) {
-        console.log(`Validating deploy stage outputs for stack: ${stackName}`);
+      if (hasFlatOutputs()) {
+        // Flat format - validate each expected output key
+        console.log('Validating deploy stage outputs (flat format)');
         
         for (const expectedOutput of expectedOutputs) {
-          expect(outputs[stackName][expectedOutput]).toBeDefined();
-          expect(typeof outputs[stackName][expectedOutput]).toBe('string');
-          expect(outputs[stackName][expectedOutput].length).toBeGreaterThan(0);
+          expect(outputs[expectedOutput]).toBeDefined();
+          expect(typeof outputs[expectedOutput]).toBe('string');
+          expect(outputs[expectedOutput].length).toBeGreaterThan(0);
         }
         
-        console.log(`Deploy stage outputs for ${stackName} have all expected fields`);
+        console.log('Deploy stage outputs (flat format) have all expected fields');
+      } else {
+        // Nested format - validate each stack
+        for (const stackName of Object.keys(outputs)) {
+          console.log(`Validating deploy stage outputs for stack: ${stackName}`);
+          
+          for (const expectedOutput of expectedOutputs) {
+            expect(outputs[stackName][expectedOutput]).toBeDefined();
+            expect(typeof outputs[stackName][expectedOutput]).toBe('string');
+            expect(outputs[stackName][expectedOutput].length).toBeGreaterThan(0);
+          }
+          
+          console.log(`Deploy stage outputs for ${stackName} have all expected fields`);
+        }
       }
     }, timeout);
 
