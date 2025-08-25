@@ -184,7 +184,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       const functionName = outputs.lambda_function_name.value;
       
       const command = new GetFunctionCommand({ FunctionName: functionName });
-      const response = await s3Client.send(command);
+      const response = await lambdaClient.send(command);
       
       expect(response.Configuration?.Runtime).toMatch(/python3\.(11|12)/);
       expect(response.Configuration?.Handler).toBe("lambda_function.lambda_handler");
@@ -334,7 +334,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
         const response = await fetch(apiEndpoint);
         expect(response.ok).toBe(true);
         
-        const data = await response.json();
+        const data = await response.json() as any;
         expect(data.message).toBe("Hello from Lambda!");
         expect(data.timestamp).toBeDefined();
         expect(data.method).toBe("GET");
@@ -386,7 +386,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
         const apiResponse = await fetch(apiEndpoint);
         expect(apiResponse.ok).toBe(true);
         
-        const apiData = await apiResponse.json();
+        const apiData = await apiResponse.json() as any;
         expect(apiData.message).toBe("Hello from Lambda!");
       }
     }, 15000);
