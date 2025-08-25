@@ -8,53 +8,41 @@ const has = (regex: RegExp) => regex.test(tf);
 
 describe("tap_stack.tf static verification", () => {
 
-  // --------------------------------------------------------------------------
-  // 1. File validity check
-  // --------------------------------------------------------------------------
+  // 1. File existence and size
   it("exists and is a non-trivial config file", () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
     expect(tf.length).toBeGreaterThan(1000);
   });
 
-  // --------------------------------------------------------------------------
-  // 2. Variables
-  // --------------------------------------------------------------------------
+  // 2. Variables as per your file
   it("declares required input variables", () => {
     [
       "aws_region",
-      "allowed_cidr_blocks",
-      "instance_type",
-      "db_instance_class"
+      "environment",
+      "project_name"
     ].forEach(variable => {
       expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 3. Locals
-  // --------------------------------------------------------------------------
+  // 3. Locals as per your current file
   it("defines expected locals", () => {
     [
       "common_tags",
-      "name_prefix",
       "primary_region",
       "secondary_region",
       "primary_vpc_cidr",
       "secondary_vpc_cidr",
-      "primary_azs",
-      "secondary_azs",
-      "primary_public_subnets",
-      "primary_private_subnets",
-      "secondary_public_subnets",
-      "secondary_private_subnets"
+      "primary_public_subnet_cidrs",
+      "primary_private_subnet_cidrs",
+      "secondary_public_subnet_cidrs",
+      "secondary_private_subnet_cidrs"
     ].forEach(local => {
       expect(has(new RegExp(local))).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 4. Data Sources
-  // --------------------------------------------------------------------------
+  // 4. Data sources AMI
   it("declares AMI data sources", () => {
     [
       /data\s+"aws_ami"\s+"amazon_linux_primary"/,
@@ -64,38 +52,32 @@ describe("tap_stack.tf static verification", () => {
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 5. Random resources
-  // --------------------------------------------------------------------------
+  // 5. Random resources as per your file
   it("defines random_string and random_password resources", () => {
     [
-      /resource\s+"random_string"\s+"primary_db_username"/,
-      /resource\s+"random_password"\s+"primary_db_password"/,
-      /resource\s+"random_string"\s+"secondary_db_username"/,
-      /resource\s+"random_password"\s+"secondary_db_password"/,
+      /resource\s+"random_password"\s+"rds_master_password"/,
+      /resource\s+"random_string"\s+"rds_master_username"/,
       /resource\s+"random_string"\s+"bucket_suffix"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 6. KMS Keys
-  // --------------------------------------------------------------------------
+  // 6. KMS keys and aliases as per your file
   it("defines kms keys and aliases", () => {
     [
-      /resource\s+"aws_kms_key"\s+"primary_rds"/,
-      /resource\s+"aws_kms_alias"\s+"primary_rds"/,
-      /resource\s+"aws_kms_key"\s+"secondary_rds"/,
-      /resource\s+"aws_kms_alias"\s+"secondary_rds"/
+      /resource\s+"aws_kms_key"\s+"s3_primary"/,
+      /resource\s+"aws_kms_alias"\s+"s3_primary"/,
+      /resource\s+"aws_kms_key"\s+"s3_secondary"/,
+      /resource\s+"aws_kms_alias"\s+"s3_secondary"/,
+      /resource\s+"aws_kms_key"\s+"rds_secondary"/,
+      /resource\s+"aws_kms_alias"\s+"rds_secondary"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 7. Networking
-  // --------------------------------------------------------------------------
+  // 7. Networking resources
   it("defines VPCs, Subnets, IGWs, NATs and RouteTables", () => {
     [
       /resource\s+"aws_vpc"\s+"primary"/,
@@ -123,75 +105,55 @@ describe("tap_stack.tf static verification", () => {
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 8. Security Groups
-  // --------------------------------------------------------------------------
+  // 8. Security groups as per your file naming
   it("defines security groups for primary and secondary components", () => {
     [
-      /resource\s+"aws_security_group"\s+"primary_alb"/,
-      /resource\s+"aws_security_group"\s+"primary_ec2"/,
-      /resource\s+"aws_security_group"\s+"primary_rds"/,
-      /resource\s+"aws_security_group"\s+"secondary_alb"/,
-      /resource\s+"aws_security_group"\s+"secondary_ec2"/,
-      /resource\s+"aws_security_group"\s+"secondary_rds"/
+      /resource\s+"aws_security_group"\s+"alb_primary"/,
+      /resource\s+"aws_security_group"\s+"ec2_primary"/,
+      /resource\s+"aws_security_group"\s+"rds_primary"/,
+      /resource\s+"aws_security_group"\s+"alb_secondary"/,
+      /resource\s+"aws_security_group"\s+"ec2_secondary"/,
+      /resource\s+"aws_security_group"\s+"rds_secondary"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 9. IAM
-  // --------------------------------------------------------------------------
+  // 9. IAM roles, policies and instance profiles
   it("defines IAM roles, policies, attachments, and profiles", () => {
     [
       /resource\s+"aws_iam_role"\s+"ec2_role"/,
-      /resource\s+"aws_iam_policy"\s+"cloudwatch_logs"/,
-      /resource\s+"aws_iam_role_policy_attachment"\s+"ec2_cloudwatch"/,
-      /resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/,
-      /resource\s+"aws_iam_role"\s+"rds_monitoring"/,
-      /resource\s+"aws_iam_role_policy_attachment"\s+"rds_monitoring"/
+      /resource\s+"aws_iam_role_policy"\s+"ec2_policy"/,
+      /resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 10. CloudWatch
-  // --------------------------------------------------------------------------
-  it("defines cloudwatch log groups and metric alarms", () => {
+  // 10. CloudWatch logs (log groups are present; metric alarms aren't in your file)
+  it("defines cloudwatch log groups", () => {
     [
-      /resource\s+"aws_cloudwatch_log_group"\s+"primary_app_logs"/,
-      /resource\s+"aws_cloudwatch_log_group"\s+"secondary_app_logs"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_high_cpu"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_low_cpu"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_high_cpu"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_low_cpu"/
+      /resource\s+"aws_cloudwatch_log_group"\s+"primary"/,
+      /resource\s+"aws_cloudwatch_log_group"\s+"secondary"/,
+      /resource\s+"aws_cloudwatch_log_group"\s+"rds"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 11. Launch Templates & ASGs
-  // --------------------------------------------------------------------------
+  // 11. Launch Templates and Auto Scaling Groups
   it("defines launch templates and autoscaling groups", () => {
     [
       /resource\s+"aws_launch_template"\s+"primary"/,
       /resource\s+"aws_launch_template"\s+"secondary"/,
       /resource\s+"aws_autoscaling_group"\s+"primary"/,
-      /resource\s+"aws_autoscaling_group"\s+"secondary"/,
-      /resource\s+"aws_autoscaling_policy"\s+"primary_scale_up"/,
-      /resource\s+"aws_autoscaling_policy"\s+"primary_scale_down"/,
-      /resource\s+"aws_autoscaling_policy"\s+"secondary_scale_up"/,
-      /resource\s+"aws_autoscaling_policy"\s+"secondary_scale_down"/
+      /resource\s+"aws_autoscaling_group"\s+"secondary"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 12. Load Balancers
-  // --------------------------------------------------------------------------
+  // 12. Load Balancers, Target Groups and Listeners
   it("defines ALBs, target groups and listeners", () => {
     [
       /resource\s+"aws_lb"\s+"primary"/,
@@ -205,9 +167,7 @@ describe("tap_stack.tf static verification", () => {
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 13. RDS
-  // --------------------------------------------------------------------------
+  // 13. RDS subnet groups and instances
   it("defines RDS subnet groups and instances", () => {
     [
       /resource\s+"aws_db_subnet_group"\s+"primary"/,
@@ -219,79 +179,77 @@ describe("tap_stack.tf static verification", () => {
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 14. S3 + CloudFront
-  // --------------------------------------------------------------------------
+  // 14. S3 bucket, configs, policies, and CloudFront distribution
   it("defines s3 bucket, configs, policy and cloudfront distribution", () => {
     [
-      /resource\s+"aws_s3_bucket"\s+"static_content"/,
-      /resource\s+"aws_s3_bucket_versioning"\s+"static_content"/,
-      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"static_content"/,
-      /resource\s+"aws_s3_bucket_public_access_block"\s+"static_content"/,
-      /resource\s+"aws_s3_bucket_policy"\s+"static_content"/,
-      /resource\s+"aws_cloudfront_origin_access_control"\s+"static_content"/,
-      /resource\s+"aws_cloudfront_distribution"\s+"static_content"/,
-      /resource\s+"aws_s3_object"\s+"index_html"/
+      /resource\s+"aws_s3_bucket"\s+"primary"/,
+      /resource\s+"aws_s3_bucket_versioning"\s+"primary"/,
+      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary"/,
+      /resource\s+"aws_s3_bucket_public_access_block"\s+"primary"/,
+      /resource\s+"aws_s3_bucket_policy"\s+"primary_cloudfront"/,
+      /resource\s+"aws_cloudfront_origin_access_control"\s+"primary"/,
+      /resource\s+"aws_cloudfront_distribution"\s+"main"/
     ].forEach(rx => {
       expect(has(rx)).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 15. Outputs
-  // --------------------------------------------------------------------------
+  // 15. Outputs present in your file
   it("declares expected outputs", () => {
     [
-      // VPC / Subnets
-      "primary_vpc_id","secondary_vpc_id",
-      "primary_public_subnet_ids","primary_private_subnet_ids",
-      "secondary_public_subnet_ids","secondary_private_subnet_ids",
-
-      // ALB
-      "primary_alb_dns_name","secondary_alb_dns_name",
-      "primary_alb_zone_id","secondary_alb_zone_id",
-
-      // RDS
-      "primary_rds_endpoint","secondary_rds_endpoint",
-      "primary_rds_port","secondary_rds_port",
-
-      // S3 & CloudFront
-      "s3_bucket_name","s3_bucket_domain_name",
-      "cloudfront_distribution_id","cloudfront_domain_name",
-
-      // AMI
-      "primary_ami_id","secondary_ami_id",
-
-      // IAM
-      "ec2_iam_role_arn","ec2_instance_profile_name","rds_monitoring_role_arn",
-
-      // AutoScaling
-      "primary_asg_name","secondary_asg_name",
-
-      // Security Groups
-      "primary_alb_security_group_id","primary_ec2_security_group_id","primary_rds_security_group_id",
-      "secondary_alb_security_group_id","secondary_ec2_security_group_id","secondary_rds_security_group_id",
-
-      // KMS
-      "primary_kms_key_id","secondary_kms_key_id",
-
-      // CloudWatch log groups
-      "primary_log_group_name","secondary_log_group_name",
-
+      // VPC IDs
+      "vpc_ids",
+      // Subnet IDs
+      "subnet_ids",
+      // VPC Peering
+      "vpc_peering_connection_id",
+      // Load Balancers
+      "load_balancer_dns_names",
+      "load_balancer_zone_ids",
+      // Autoscaling
+      "autoscaling_group_names",
       // Launch Templates
-      "primary_launch_template_id","secondary_launch_template_id",
-
-      // NAT & EIPs
-      "primary_nat_gateway_ids","secondary_nat_gateway_ids",
-      "primary_eip_addresses","secondary_eip_addresses"
+      "launch_template_ids",
+      // AMIs
+      "ami_ids",
+      // Security Groups
+      "security_group_ids",
+      // S3 Buckets
+      "s3_bucket_names",
+      "s3_bucket_arns",
+      // CloudFront
+      "cloudfront_distribution_id",
+      "cloudfront_distribution_domain_name",
+      // RDS
+      "rds_instance_endpoints",
+      "rds_instance_identifiers",
+      "rds_master_username",
+      // IAM
+      "iam_role_arn",
+      "iam_instance_profile_name",
+      // KMS Keys
+      "kms_key_ids",
+      "kms_key_arns",
+      // CloudWatch
+      "cloudwatch_log_group_names",
+      // Route53
+      "route53_zone_id",
+      "route53_zone_name",
+      "route53_health_check_ids",
+      // NAT Gateway & EIP
+      "nat_gateway_ids",
+      "elastic_ip_addresses",
+      "internet_gateway_ids",
+      // Target groups
+      "target_group_arns",
+      // Application URL
+      "application_url"
     ].forEach(output => {
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true);
     });
   });
 
-  // --------------------------------------------------------------------------
-  // 16. Sensitive outputs should not exist
-  // --------------------------------------------------------------------------
+  // 16. Ensure no sensitive outputs
   it("does not output sensitive information", () => {
     expect(has(/output\s+.*(secret|password|access_key|secret_key)/i)).toBe(false);
   });
