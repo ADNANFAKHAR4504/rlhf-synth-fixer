@@ -14,9 +14,9 @@ import (
 
 func TestTapStackBasics(t *testing.T) {
 	// Basic test to check the Go file loads
-	content, err := os.ReadFile("main.go")
+	content, err := os.ReadFile("tap_stack.go")
 	if err != nil {
-		t.Fatalf("Failed to read main.go: %v", err)
+		t.Fatalf("Failed to read tap_stack.go: %v", err)
 	}
 
 	contentStr := string(content)
@@ -43,9 +43,9 @@ func TestTapStackBasics(t *testing.T) {
 }
 
 func TestSecurityConfigurations(t *testing.T) {
-	content, err := os.ReadFile("main.go")
+	content, err := os.ReadFile("tap_stack.go")
 	if err != nil {
-		t.Fatalf("Failed to read main.go: %v", err)
+		t.Fatalf("Failed to read tap_stack.go: %v", err)
 	}
 
 	contentStr := string(content)
@@ -80,9 +80,9 @@ func TestSecurityConfigurations(t *testing.T) {
 }
 
 func TestNamingConventions(t *testing.T) {
-	content, err := os.ReadFile("main.go")
+	content, err := os.ReadFile("tap_stack.go")
 	if err != nil {
-		t.Fatalf("Failed to read main.go: %v", err)
+		t.Fatalf("Failed to read tap_stack.go: %v", err)
 	}
 
 	contentStr := string(content)
@@ -104,9 +104,9 @@ func TestNamingConventions(t *testing.T) {
 }
 
 func TestNoPublicAccess(t *testing.T) {
-	content, err := os.ReadFile("main.go")
+	content, err := os.ReadFile("tap_stack.go")
 	if err != nil {
-		t.Fatalf("Failed to read main.go: %v", err)
+		t.Fatalf("Failed to read tap_stack.go: %v", err)
 	}
 
 	contentStr := string(content)
@@ -132,11 +132,6 @@ func TestNoPublicAccess(t *testing.T) {
 	if !strings.Contains(contentStr, "DenyInsecureConnections") {
 		t.Error("Expected explicit deny insecure connections policy")
 	}
-}
-
-func TestGoModuleStructure(t *testing.T) {
-	// Skip this test as go.mod is in parent directory
-	t.Skip("Skipping go.mod test - file is in parent directory")
 }
 
 // TestNewTapStack tests the actual stack creation function
