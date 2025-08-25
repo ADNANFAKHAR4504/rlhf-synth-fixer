@@ -131,15 +131,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Deploying infrastructure ..."
     pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
     cd ..
-  elif [ "$LANGUAGE" = "java" ]; then
-    echo "🔧 Java Pulumi project detected"
-    pulumi login "$PULUMI_BACKEND_URL"
-    echo "Building Java project first..."
-    ./gradlew clean compileJava
-    echo "Selecting or creating Pulumi stack..."
-    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    echo "Deploying infrastructure ..."
-    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
