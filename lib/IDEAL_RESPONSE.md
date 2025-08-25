@@ -975,3 +975,24 @@ output "sns_topic_arn" { value = aws_sns_topic.alerts.arn }
 output "vpc_flow_log_group" { value = aws_cloudwatch_log_group.vpc_flow.name }
 output "config_recorder_name" { value = var.enable_config ? aws_config_configuration_recorder.main[0].name : null }
 ```
+
+```hcl
+# provider.tf (for completeness in IDEAL_RESPONSE)
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+```
