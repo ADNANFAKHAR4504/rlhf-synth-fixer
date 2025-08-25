@@ -117,7 +117,7 @@ variable "department" {
 variable "project" {
   description = "Project name for tagging"
   type        = string
-  default     = "WebApp"
+  default     = "webapp"
 }
 
 variable "region" {
