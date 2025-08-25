@@ -48,6 +48,7 @@ output "guardduty_detector_id" {
   value       = try(aws_guardduty_detector.main[0].id, null)
 }
 
+
 output "config_recorder_name" {
   description = "Name of the Config recorder"
   value       = aws_config_configuration_recorder.main.name
