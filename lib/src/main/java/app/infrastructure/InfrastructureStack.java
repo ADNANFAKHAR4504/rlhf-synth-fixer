@@ -1,6 +1,8 @@
 package app.infrastructure;
 
 import com.pulumi.aws.Provider;
+import com.pulumi.aws.AwsFunctions;
+import com.pulumi.aws.inputs.GetCallerIdentityArgs;
 import com.pulumi.aws.ec2.SecurityGroup;
 import com.pulumi.aws.ec2.SecurityGroupArgs;
 import com.pulumi.aws.ec2.SecurityGroupRule;
@@ -103,7 +105,12 @@ public class InfrastructureStack {
             envConfig.getEnvironment(), "kms", "main"
         );
         
-        String keyPolicy = """
+        // Get current AWS account ID
+        Output<String> accountId = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build())
+            .applyValue(identity -> identity.accountId());
+        
+        // Create KMS key policy with dynamic account ID
+        Output<String> keyPolicy = accountId.applyValue(account -> String.format("""
             {
                 "Version": "2012-10-17",
                 "Statement": [
@@ -111,14 +118,14 @@ public class InfrastructureStack {
                         "Sid": "Enable IAM User Permissions",
                         "Effect": "Allow",
                         "Principal": {
-                            "AWS": "arn:aws:iam::*:root"
+                            "AWS": "arn:aws:iam::%s:root"
                         },
                         "Action": "kms:*",
                         "Resource": "*"
                     }
                 ]
             }
-            """;
+            """, account));
         
         return new Key(keyName, KeyArgs.builder()
             .description("KMS key for " + envConfig.getEnvironment() + " environment encryption")
