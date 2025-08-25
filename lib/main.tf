@@ -46,11 +46,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
   rule {
-    bucket_key_enabled = true
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.logs.arn
+      kms_master_key_id = aws_kms_key.logs.arn  # <-- explicit CMK reference
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -344,13 +344,14 @@ resource "aws_iam_role_policy" "config_inline" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # Minimal AWS Config permissions to set up and run the recorder
+      # Minimal AWS Config permissions to create/start the recorder and manage delivery
       {
         Effect = "Allow",
         Action = [
           "config:PutConfigurationRecorder",
           "config:PutDeliveryChannel",
           "config:StartConfigurationRecorder",
+          "config:StopConfigurationRecorder",
           "config:DescribeConfigurationRecorders",
           "config:DescribeDeliveryChannels",
           "config:DescribeConfigurationRecorderStatus",
@@ -358,25 +359,30 @@ resource "aws_iam_role_policy" "config_inline" {
         ],
         Resource = "*"
       },
-      # S3 permissions for the delivery channel (bucket ACL/list and put objects)
+      # S3 access limited to the logs bucket and the aws-config prefix
       {
         Effect = "Allow",
         Action = [
-          "s3:PutObject",
           "s3:GetBucketAcl",
           "s3:ListBucket"
         ],
-        Resource = "*"
+        Resource = [
+          aws_s3_bucket.logs.arn
+        ]
       },
-      # Pass role back to the service
       {
-        Effect   = "Allow",
-        Action   = "iam:PassRole",
-        Resource = aws_iam_role.config[0].arn
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject"
+        ],
+        Resource = [
+          "${aws_s3_bucket.logs.arn}/aws-config/*"
+        ]
       }
     ]
   })
 }
+
 
 
 
