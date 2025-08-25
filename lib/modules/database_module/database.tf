@@ -152,7 +152,7 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
 
   # Enable logging
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-database"
