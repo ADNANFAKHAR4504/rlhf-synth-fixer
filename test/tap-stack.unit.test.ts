@@ -114,7 +114,7 @@ describe('TapStack', () => {
       StorageEncrypted: false,
       BackupRetentionPeriod: 7,
       DeletionProtection: false,
-      EnablePerformanceInsights: true,
+      EnablePerformanceInsights: false, // Disabled for t3.micro instances
     });
   });
 

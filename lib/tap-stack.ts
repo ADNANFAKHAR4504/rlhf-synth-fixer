@@ -295,8 +295,7 @@ export class TapStack extends cdk.Stack {
       deletionProtection: false,
       credentials: rds.Credentials.fromGeneratedSecret('admin'),
       monitoringInterval: cdk.Duration.minutes(1),
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      enablePerformanceInsights: false, // Disabled for t3.micro instances
       cloudwatchLogsExports: ['error', 'general'],
       autoMinorVersionUpgrade: false,
     });
