@@ -6,8 +6,18 @@ import com.pulumi.aws.dynamodb.inputs.TableAttributeArgs;
 import com.pulumi.aws.dynamodb.inputs.TablePointInTimeRecoveryArgs;
 import com.pulumi.aws.ec2.Instance;
 import com.pulumi.aws.ec2.InstanceArgs;
+import com.pulumi.aws.ec2.InternetGateway;
+import com.pulumi.aws.ec2.InternetGatewayArgs;
+import com.pulumi.aws.ec2.RouteTable;
+import com.pulumi.aws.ec2.RouteTableArgs;
+import com.pulumi.aws.ec2.RouteTableAssociation;
+import com.pulumi.aws.ec2.RouteTableAssociationArgs;
 import com.pulumi.aws.ec2.SecurityGroup;
 import com.pulumi.aws.ec2.SecurityGroupArgs;
+import com.pulumi.aws.ec2.Subnet;
+import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.ec2.Vpc;
+import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.s3.Bucket;
@@ -28,6 +38,9 @@ import java.util.Map;
 public class WebAppStack extends ComponentResource {
 
   private final WebAppStackConfig config;
+  private final Vpc vpc;
+  private final Subnet publicSubnet1;
+  private final Subnet publicSubnet2;
   private final SecurityGroup webSecurityGroup;
   private final Instance webInstance;
   private final Bucket dataBucket;
@@ -37,11 +50,17 @@ public class WebAppStack extends ComponentResource {
     super("webapp:infrastructure:WebAppStack", name, options);
     this.config = new WebAppStackConfig();
 
-    // Create security group for EC2 instance
-    this.webSecurityGroup = createSecurityGroup();
+    // Create VPC and networking resources
+    var network = createNetworkResources();
+    this.vpc = network.vpc;
+    this.publicSubnet1 = network.publicSubnet1;
+    this.publicSubnet2 = network.publicSubnet2;
 
-    // Create EC2 instance
-    this.webInstance = createEC2Instance();
+    // Create security group for EC2 instance in the new VPC
+    this.webSecurityGroup = createSecurityGroup(network);
+
+    // Create EC2 instance in the new VPC/subnet
+    this.webInstance = createEC2Instance(network);
 
     // Create S3 bucket with security and versioning
     this.dataBucket = createS3Bucket();
@@ -59,11 +78,12 @@ public class WebAppStack extends ComponentResource {
   /**
    * Create security group with HTTP and SSH access
    */
-  private SecurityGroup createSecurityGroup() {
+  private SecurityGroup createSecurityGroup(NetworkResources network) {
     return new SecurityGroup(
       config.getResourceName("webapp-security-group"),
       SecurityGroupArgs
         .builder()
+        .vpcId(network.vpc.id())
         .name(config.getResourceName("webapp-security-group"))
         .description("Security group for WebApp EC2 instance")
         .ingress(
@@ -123,13 +143,14 @@ public class WebAppStack extends ComponentResource {
   /**
    * Create EC2 instance with security group
    */
-  private Instance createEC2Instance() {
+  private Instance createEC2Instance(NetworkResources network) {
     return new Instance(
       config.getResourceName("webapp-instance"),
       InstanceArgs
         .builder()
         .instanceType(config.getInstanceType())
         .ami("ami-0c02fb55956c7d316") // Amazon Linux 2 AMI (update for target region)
+        .subnetId(network.publicSubnet1.id())
         .vpcSecurityGroupIds(
           webSecurityGroup.id().applyValue(id -> List.of(id))
         )
@@ -162,6 +183,152 @@ public class WebAppStack extends ComponentResource {
         .dependsOn(webSecurityGroup)
         .build()
     );
+  }
+
+  // Helper class to hold network resources
+  private static class NetworkResources {
+
+    public final Vpc vpc;
+    public final Subnet publicSubnet1;
+    public final Subnet publicSubnet2;
+
+    public NetworkResources(
+      Vpc vpc,
+      Subnet publicSubnet1,
+      Subnet publicSubnet2
+    ) {
+      this.vpc = vpc;
+      this.publicSubnet1 = publicSubnet1;
+      this.publicSubnet2 = publicSubnet2;
+    }
+  }
+
+  // Create VPC, subnets, IGW, route table, and associations
+  private NetworkResources createNetworkResources() {
+    var vpc = new Vpc(
+      config.getResourceName("webapp-vpc"),
+      VpcArgs
+        .builder()
+        .cidrBlock("10.0.0.0/16")
+        .enableDnsHostnames(true)
+        .enableDnsSupport(true)
+        .tags(
+          Map.of(
+            "Name",
+            config.getResourceName("webapp-vpc"),
+            "Environment",
+            config.getEnvironmentSuffix(),
+            "Purpose",
+            "WebApp-Migration"
+          )
+        )
+        .build()
+    );
+
+    var igw = new InternetGateway(
+      config.getResourceName("webapp-igw"),
+      InternetGatewayArgs
+        .builder()
+        .vpcId(vpc.id())
+        .tags(
+          Map.of(
+            "Name",
+            config.getResourceName("webapp-igw"),
+            "Environment",
+            config.getEnvironmentSuffix(),
+            "Purpose",
+            "WebApp-Migration"
+          )
+        )
+        .build()
+    );
+
+    var publicSubnet1 = new Subnet(
+      config.getResourceName("webapp-public-subnet-1"),
+      SubnetArgs
+        .builder()
+        .vpcId(vpc.id())
+        .cidrBlock("10.0.1.0/24")
+        .mapPublicIpOnLaunch(true)
+        .tags(
+          Map.of(
+            "Name",
+            config.getResourceName("webapp-public-subnet-1"),
+            "Environment",
+            config.getEnvironmentSuffix(),
+            "Purpose",
+            "WebApp-Migration"
+          )
+        )
+        .build()
+    );
+
+    var publicSubnet2 = new Subnet(
+      config.getResourceName("webapp-public-subnet-2"),
+      SubnetArgs
+        .builder()
+        .vpcId(vpc.id())
+        .cidrBlock("10.0.2.0/24")
+        .mapPublicIpOnLaunch(true)
+        .tags(
+          Map.of(
+            "Name",
+            config.getResourceName("webapp-public-subnet-2"),
+            "Environment",
+            config.getEnvironmentSuffix(),
+            "Purpose",
+            "WebApp-Migration"
+          )
+        )
+        .build()
+    );
+
+    var publicRouteTable = new RouteTable(
+      config.getResourceName("webapp-public-rt"),
+      RouteTableArgs
+        .builder()
+        .vpcId(vpc.id())
+        .routes(
+          List.of(
+            com.pulumi.aws.ec2.inputs.RouteTableRouteArgs
+              .builder()
+              .cidrBlock("0.0.0.0/0")
+              .gatewayId(igw.id())
+              .build()
+          )
+        )
+        .tags(
+          Map.of(
+            "Name",
+            config.getResourceName("webapp-public-rt"),
+            "Environment",
+            config.getEnvironmentSuffix(),
+            "Purpose",
+            "WebApp-Migration"
+          )
+        )
+        .build()
+    );
+
+    new RouteTableAssociation(
+      config.getResourceName("webapp-public-rt-assoc-1"),
+      RouteTableAssociationArgs
+        .builder()
+        .subnetId(publicSubnet1.id())
+        .routeTableId(publicRouteTable.id())
+        .build()
+    );
+
+    new RouteTableAssociation(
+      config.getResourceName("webapp-public-rt-assoc-2"),
+      RouteTableAssociationArgs
+        .builder()
+        .subnetId(publicSubnet2.id())
+        .routeTableId(publicRouteTable.id())
+        .build()
+    );
+
+    return new NetworkResources(vpc, publicSubnet1, publicSubnet2);
   }
 
   /**
