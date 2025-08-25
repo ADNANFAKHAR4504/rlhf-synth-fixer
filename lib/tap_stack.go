@@ -8,15 +8,23 @@ import (
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/flowlog"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmsalias"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lambdafunction"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketserversideencryptionconfiguration"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 )
 
 type TapStackProps struct {
@@ -56,6 +64,123 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 
 	// Create environment prefix for resource naming
 	envPrefix := fmt.Sprintf("%s-cdktf", environmentSuffix)
+
+	// Create VPC
+	vpcResource := vpc.NewVpc(stack, jsii.String("main-vpc"), &vpc.VpcConfig{
+		CidrBlock:          jsii.String("10.0.0.0/16"),
+		EnableDnsHostnames: jsii.Bool(true),
+		EnableDnsSupport:   jsii.Bool(true),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-main-vpc", envPrefix)),
+		},
+	})
+
+	// Internet Gateway
+	igw := internetgateway.NewInternetGateway(stack, jsii.String("main-igw"), &internetgateway.InternetGatewayConfig{
+		VpcId: vpcResource.Id(),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-main-igw", envPrefix)),
+		},
+	})
+
+	// Public Subnets
+	publicSubnet1 := subnet.NewSubnet(stack, jsii.String("public-subnet-1"), &subnet.SubnetConfig{
+		VpcId:               vpcResource.Id(),
+		CidrBlock:           jsii.String("10.0.1.0/24"),
+		AvailabilityZone:    jsii.String("us-east-1a"),
+		MapPublicIpOnLaunch: jsii.Bool(true),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-public-subnet-1", envPrefix)),
+		},
+	})
+
+	publicSubnet2 := subnet.NewSubnet(stack, jsii.String("public-subnet-2"), &subnet.SubnetConfig{
+		VpcId:               vpcResource.Id(),
+		CidrBlock:           jsii.String("10.0.2.0/24"),
+		AvailabilityZone:    jsii.String("us-east-1b"),
+		MapPublicIpOnLaunch: jsii.Bool(true),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-public-subnet-2", envPrefix)),
+		},
+	})
+
+	// Private Subnets
+	privateSubnet1 := subnet.NewSubnet(stack, jsii.String("private-subnet-1"), &subnet.SubnetConfig{
+		VpcId:            vpcResource.Id(),
+		CidrBlock:        jsii.String("10.0.10.0/24"),
+		AvailabilityZone: jsii.String("us-east-1a"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-private-subnet-1", envPrefix)),
+		},
+	})
+
+	privateSubnet2 := subnet.NewSubnet(stack, jsii.String("private-subnet-2"), &subnet.SubnetConfig{
+		VpcId:            vpcResource.Id(),
+		CidrBlock:        jsii.String("10.0.20.0/24"),
+		AvailabilityZone: jsii.String("us-east-1b"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-private-subnet-2", envPrefix)),
+		},
+	})
+
+	// NAT Gateway
+	natGw := natgateway.NewNatGateway(stack, jsii.String("main-nat"), &natgateway.NatGatewayConfig{
+		SubnetId:         publicSubnet1.Id(),
+		ConnectivityType: jsii.String("public"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-main-nat", envPrefix)),
+		},
+	})
+
+	// Route Tables
+	publicRt := routetable.NewRouteTable(stack, jsii.String("public-rt"), &routetable.RouteTableConfig{
+		VpcId: vpcResource.Id(),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-public-rt", envPrefix)),
+		},
+	})
+
+	privateRt := routetable.NewRouteTable(stack, jsii.String("private-rt"), &routetable.RouteTableConfig{
+		VpcId: vpcResource.Id(),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-private-rt", envPrefix)),
+		},
+	})
+
+	// Routes
+	route.NewRoute(stack, jsii.String("public-internet-route"), &route.RouteConfig{
+		RouteTableId:         publicRt.Id(),
+		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+		GatewayId:            igw.Id(),
+	})
+
+	route.NewRoute(stack, jsii.String("private-nat-route"), &route.RouteConfig{
+		RouteTableId:         privateRt.Id(),
+		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+		NatGatewayId:         natGw.Id(),
+	})
+
+	// Route Table Associations
+	routetableassociation.NewRouteTableAssociation(stack, jsii.String("public-rta-1"), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     publicSubnet1.Id(),
+		RouteTableId: publicRt.Id(),
+	})
+
+	routetableassociation.NewRouteTableAssociation(stack, jsii.String("public-rta-2"), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     publicSubnet2.Id(),
+		RouteTableId: publicRt.Id(),
+	})
+
+	routetableassociation.NewRouteTableAssociation(stack, jsii.String("private-rta-1"), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     privateSubnet1.Id(),
+		RouteTableId: privateRt.Id(),
+	})
+
+	routetableassociation.NewRouteTableAssociation(stack, jsii.String("private-rta-2"), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     privateSubnet2.Id(),
+		RouteTableId: privateRt.Id(),
+	})
+
 	// Configure AWS Provider
 	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
 		Region: jsii.String(props.AwsRegion),
@@ -202,6 +327,34 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 	cdktf.NewTerraformOutput(stack, jsii.String("lambda_function_name"), &cdktf.TerraformOutputConfig{
 		Value:       lambdaFunction.FunctionName(),
 		Description: jsii.String("Lambda function name with logging enabled"),
+	})
+
+	// VPC Flow Logs
+	flowlog.NewFlowLog(stack, jsii.String("vpc-flow-logs"), &flowlog.FlowLogConfig{
+		VpcId:              vpcResource.Id(),
+		TrafficType:        jsii.String("ALL"),
+		LogDestinationType: jsii.String("s3"),
+		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
+		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-vpc-flow-logs", envPrefix)),
+		},
+	})
+
+	// VPC Outputs
+	cdktf.NewTerraformOutput(stack, jsii.String("vpc_id"), &cdktf.TerraformOutputConfig{
+		Value:       vpcResource.Id(),
+		Description: jsii.String("VPC ID"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("public_subnet_ids"), &cdktf.TerraformOutputConfig{
+		Value:       cdktf.Fn_Join(jsii.String(","), &[]*string{publicSubnet1.Id(), publicSubnet2.Id()}),
+		Description: jsii.String("Public subnet IDs"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("private_subnet_ids"), &cdktf.TerraformOutputConfig{
+		Value:       cdktf.Fn_Join(jsii.String(","), &[]*string{privateSubnet1.Id(), privateSubnet2.Id()}),
+		Description: jsii.String("Private subnet IDs"),
 	})
 
 	return stack

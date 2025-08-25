@@ -8,12 +8,12 @@ You are tasked with configuring security as code for a company's AWS infrastruct
 2. **S3 Encryption**: All S3 buckets used must have server-side encryption enabled to protect stored data
 3. **KMS Management**: Manage encryption keys using AWS KMS to control access and use of encrypted resources
 4. **IAM Least Privilege**: IAM roles should have policies defined that adhere strictly to the principle of least privilege, minimizing the potential for unauthorized access
-5. **VPC Flow Logs**: Enable VPC Flow Logs to continuously monitor and log all traffic in and out of the existing VPC with ID 'vpc-0abcd1234'
+5. **VPC** Add a VPC in the us-east-1 region with 2 public and private subnets
+5. **VPC Flow Logs**: Enable VPC Flow Logs to continuously monitor and log all traffic in and out of the the VPC
 
 ## Environment Details
 
 - **Region**: AWS US-East-1 (N. Virginia)
-- **Existing VPC**: vpc-0abcd1234 (assumed to exist)
 - **Naming Convention**: Use 'prod-*' for production resources
 - **Compliance**: Resources should adhere to company policies regarding encryption and monitoring
 
