@@ -19,9 +19,8 @@
   "context": {
     "environments": {
       "dev": {
-        "createIfNotExists": true,
-        "existingVpcId": "vpc-11111111",
-        "existingS3Bucket": "dev-logs-bucket",
+        "existingVpcId": "vpc-dev-us-east-1",
+        "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "192.168.1.0/24",
         "trustedOutboundCidrs": [
           "192.168.1.0/24"
@@ -29,9 +28,8 @@
         "environment": "Production"
       },
       "prod": {
-        "createIfNotExists": true,
-        "existingVpcId": "vpc-12345678",
-        "existingS3Bucket": "test-logs-bucket",
+        "existingVpcId": "vpc-dev-us-east-1",
+        "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "10.0.0.0/8",
         "trustedOutboundCidrs": [
           "10.0.0.0/8"

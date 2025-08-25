@@ -17,9 +17,8 @@ describe('TapStack', () => {
   // base config in env-keyed form (dev/prod shape)
   const baseConfig = {
     dev: {
-      createIfNotExists: true,
-      existingVpcId: 'vpc-12345678',
-      existingS3Bucket: 'test-logs-bucket',
+      existingVpcId: 'vpc-dev-us-east-1',
+      existingS3Bucket: 'test-logs-bucket20250819215334277900000001',
       sshCidrBlock: '10.0.0.0/8',
       trustedOutboundCidrs: ['10.0.0.0/8'],
       environment: 'Production'
@@ -35,10 +34,10 @@ describe('TapStack', () => {
 
   //
   // -------------------------
-  // Happy path: standard stack with provided dev config
+  // Resource creation tests: standard stack with provided dev config
   // -------------------------
   //
-  describe('Happy path (dev config provided)', () => {
+  describe('Resource creation tests', () => {
     beforeEach(() => {
       app = new cdk.App();
       stack = new TapStack(app, `${stackName}-Happy`, { env, environmentSuffix, config: baseConfig });
@@ -131,57 +130,25 @@ describe('TapStack', () => {
 
   //
   // -------------------------
-  // createIfNotExists = true: when resources are allowed to be created if missing
+  // S3 tests
   // -------------------------
   //
-  describe('createIfNotExists = true', () => {
-    test('Creates a new VPC if existingVpcId is defined', () => {
+  describe('S3 tests', () => {
+    test('Uses an S3 bucket if existingS3Bucket is defined', () => {
       app = new cdk.App();
       const config = {
         dev: {
           ...baseConfig.dev,
-          createIfNotExists: true
         }
       };
-      stack = new TapStack(app, `${stackName}-CreateVpc`, { env, environmentSuffix, config });
-      template = Template.fromStack(stack);
-      template.resourceCountIs('AWS::EC2::VPC', 1);
-    });
-
-    test('Creates a new S3 bucket if existingS3Bucket is defined', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-          createIfNotExists: true
-        }
-      };
-      stack = new TapStack(app, `${stackName}-CreateBucket`, { env, environmentSuffix, config });
+      stack = new TapStack(app, `${stackName}-ExistingBucket`, { env, environmentSuffix, config });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::S3::Bucket', 1);
+      // Expect no new bucket resources
+      template.resourceCountIs('AWS::S3::Bucket', 0);
 
-      const bucketResources = template.findResources('AWS::S3::Bucket');
-      const bucket = Object.values(bucketResources)[0];
-      expect(bucket.Properties).toHaveProperty('BucketEncryption');
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toEqual(
-        expect.arrayContaining([expect.objectContaining({
-          ServerSideEncryptionByDefault: expect.objectContaining({ SSEAlgorithm: 'AES256' })
-        })])
-      );
-    });
-
-    test('Throws if existingVpcId undefined', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-          existingVpcId: undefined,
-          createIfNotExists: true
-        }
-      };
-      expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
-        .toThrow(/VPC ID must be provided/);
+      // Verify outputs or references use the expected bucket name
+      expect(stack.bucket.bucketName).toEqual(config.dev.existingS3Bucket);
     });
 
     test('Throws if existingS3Bucket missing', () => {
@@ -189,56 +156,58 @@ describe('TapStack', () => {
       const config = {
         dev: {
           ...baseConfig.dev,
-          existingS3Bucket: undefined,
-          createIfNotExists: true
+          existingS3Bucket: undefined
         }
       };
       expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
         .toThrow(/S3 bucket must be provided/);
     });
 
-  }); // end createIfNotExists=true
+  }); // end S3 tests
 
   //
   // -------------------------
-  // createIfNotExists = false: error cases when existing resource is required
+  // VPC tests
   // -------------------------
   //
-  describe('createIfNotExists = false', () => {
+  describe('VPC tests', () => {
+    test('Uses a VPC if existingVpcId is defined', () => {
+      app = new cdk.App();
+      const config = {
+        dev: {
+          ...baseConfig.dev,
+        }
+      };
+      stack = new TapStack(app, `${stackName}-ExistingVpc`, { env, environmentSuffix, config });
+      template = Template.fromStack(stack);
+
+      // Expect no new vpc resources
+      template.resourceCountIs('AWS::EC2::VPC', 0);
+
+      // Verify outputs or references use the expected bucket name
+      expect(stack.vpc.vpcId).toBeDefined();
+    });
+
     test('Throws if existingVpcId undefined', () => {
       app = new cdk.App();
       const config = {
         dev: {
           ...baseConfig.dev,
-          existingVpcId: undefined,
-          createIfNotExists: false
+          existingVpcId: undefined
         }
       };
       expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
         .toThrow(/VPC ID must be provided/);
     });
 
-    test('Throws if existingS3Bucket missing', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-          existingS3Bucket: undefined,
-          createIfNotExists: false
-        }
-      };
-      expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
-        .toThrow(/S3 bucket must be provided/);
-    });
-
-  }); // end createIfNotExists=false
+  }); // end VPC tests
 
   //
   // -------------------------
   // Invalid configuration: environmentSuffix behavior & context loading
   // -------------------------
   //
-  describe('Invalid configuration and environment selection', () => {
+  describe('Configuration tests', () => {
     test('Uses provided environmentSuffix when truthy', () => {
       const localApp = new cdk.App();
       const s = new TapStack(localApp, `${stackName}-EnvProvided`, { env, environmentSuffix: 'qa', config: baseConfig });
@@ -261,7 +230,6 @@ describe('TapStack', () => {
       const badConfig = {
         dev: {
           // dev exists but intentionally missing "environment"
-          createIfNotExists: true,
           existingVpcId: 'vpc-12345678',
           existingS3Bucket: 'test-logs-bucket',
           sshCidrBlock: '10.0.0.0/8',
@@ -287,7 +255,6 @@ describe('TapStack', () => {
         context: {
           environments: {
             qa: {
-              createIfNotExists: true,
               existingVpcId: 'vpc-qa',
               existingS3Bucket: 'qa-logs',
               sshCidrBlock: '10.0.0.0/8',
@@ -321,10 +288,10 @@ describe('TapStack', () => {
 
   //
   // -------------------------
-  // Additional tests for full coverage (misc small behaviors)
+  // Additional configuration tests
   // -------------------------
   //
-  describe('Additional tests for full coverage', () => {
+  describe('Additional configuration tests', () => {
     let localApp;
     beforeEach(() => {
       jest.clearAllMocks();
@@ -352,6 +319,6 @@ describe('TapStack', () => {
         });
       }).toThrow(/No configuration found for 'prod'/);
     });
-  }); // end Additional tests
+  }); // end Additional configuration tests
 
 }); // end TapStack
