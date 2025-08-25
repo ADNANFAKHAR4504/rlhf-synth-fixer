@@ -672,13 +672,16 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
+                - Effect: Allow
+                  Action:
                   - s3:ListBucket
-                Resource:
-                  - !Sub '${ApplicationBucket}/*'
-                  - !Ref ApplicationBucket
+                  Resource:
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}'
+                - Effect: Allow
+                  Action:
+                  - s3:GetObject
+                  Resource:
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'

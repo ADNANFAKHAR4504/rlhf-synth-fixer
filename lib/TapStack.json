@@ -1308,15 +1308,22 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:GetObject",
                                         "s3:ListBucket"
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${ApplicationBucket}/*"
-                                        },
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": [
                                         {
-                                            "Ref": "ApplicationBucket"
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
                                         }
                                     ]
                                 }
