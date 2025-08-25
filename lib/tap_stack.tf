@@ -26,7 +26,7 @@ module "networking" {
   
   name_prefix         = local.name_prefix
   vpc_cidr           = local.current_network_config.vpc_cidr
-  availability_zones = var.availability_zones
+  availability_zones = local.effective_azs
   public_subnets     = local.current_network_config.public_subnets
   private_subnets    = local.current_network_config.private_subnets
   database_subnets   = local.current_network_config.database_subnets
