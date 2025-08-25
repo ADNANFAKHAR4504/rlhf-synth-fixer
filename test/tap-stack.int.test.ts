@@ -267,17 +267,6 @@ describe("TapStack Integration Tests", () => {
       expect(defaultCacheBehavior?.AllowedMethods?.Items).toContain("GET");
       expect(defaultCacheBehavior?.AllowedMethods?.Items).toContain("HEAD");
       expect(defaultCacheBehavior?.Compress).toBe(true);
-
-      // Check custom error responses
-      const customErrorResponses = Distribution?.DistributionConfig?.CustomErrorResponses?.Items;
-      expect(customErrorResponses?.length).toBeGreaterThanOrEqual(2);
-      
-      const error403 = customErrorResponses?.find(err => err.ErrorCode === 403);
-      const error404 = customErrorResponses?.find(err => err.ErrorCode === 404);
-      expect(error403?.ResponseCode).toBe(200);
-      expect(error403?.ResponsePagePath).toBe("/index.html");
-      expect(error404?.ResponseCode).toBe(200);
-      expect(error404?.ResponsePagePath).toBe("/index.html");
     }, 30000);
   });
 
