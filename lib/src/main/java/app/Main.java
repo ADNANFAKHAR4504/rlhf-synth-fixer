@@ -7,14 +7,14 @@ import software.amazon.awscdk.StackProps;
 import software.constructs.Construct;
 
 /**
- * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
- * Resources such as VPC, AutoScaling, RDS, and S3 will be added here in future iterations.
+ * RegionalStack represents a single-region deployment.
+ * Resources (VPC, ASG, RDS, S3, etc.) will be added here in future iterations.
  */
-public class RegionalStack extends Stack {
+class RegionalStack extends Stack {
     public RegionalStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
-        // TODO: Add resources (VPC, AutoScalingGroup, RDS, S3, Route53, CloudWatch, IAM, etc.)
+        // TODO: Add resources (VPC, AutoScalingGroup, ELB, RDS, S3, Route53, IAM, CloudWatch, etc.)
     }
 }
 
@@ -37,7 +37,7 @@ public final class Main {
             throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
         }
 
-        // Get environment suffix (default: dev)
+        // Determine environment suffix (default: dev)
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
@@ -61,7 +61,7 @@ public final class Main {
                                 .build())
                         .build());
 
-        // Synthesize app into CloudFormation templates
+        // Synthesize into CloudFormation templates
         app.synth();
     }
 }
