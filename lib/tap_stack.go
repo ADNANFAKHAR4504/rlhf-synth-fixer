@@ -437,7 +437,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		Name:                       pulumi.Sprintf("healthapp-audit-trail-%s", environmentSuffix),
 		S3BucketName:               auditBucket.ID(),
 		IncludeGlobalServiceEvents: pulumi.Bool(true),
-		IsMultiRegionTrail:         pulumi.Bool(true),
+		IsMultiRegionTrail:         pulumi.Bool(false),
 		EnableLogFileValidation:    pulumi.Bool(true),
 		Tags:                       commonTags,
 	}, pulumi.DependsOn([]pulumi.Resource{auditBucket}))
