@@ -1,0 +1,47 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "292096",
+  "team": "3",
+  "startedAt": "2025-08-22T15:29:32.845Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Infrastructure Design",
+    "Security Configuration",
+    "Resource Scaling",
+    "Load Balancing",
+    "Auto Scaling",
+    "VPC Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::VPCGatewayAttachment",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::SecurityGroup",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::EC2::LaunchTemplate",
+    "AWS::AutoScaling::AutoScalingGroup",
+    "AWS::AutoScaling::ScalingPolicy",
+    "AWS::CloudWatch::Alarm"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}

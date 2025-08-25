@@ -6,17 +6,26 @@ require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
 	github.com/aws/aws-sdk-go-v2 v1.38.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.51.0
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.64.2
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.48.2
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.56.2
+	github.com/aws/aws-sdk-go-v2/service/configservice v1.57.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.245.2
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
 	github.com/aws/aws-sdk-go-v2/service/kms v1.30.1
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.76.2
 	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.38.2
+	github.com/aws/aws-sdk-go-v2/service/securityhub v1.62.2
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
+	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
 	github.com/pulumi/pulumi/sdk/v3 v3.191.0
@@ -25,7 +34,7 @@ require (
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.4 // indirect
@@ -59,9 +68,9 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
-	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
 	github.com/charmbracelet/bubbletea v0.25.0 // indirect
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
@@ -84,6 +93,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.22.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -133,4 +143,9 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/frand v1.4.2 // indirect
+)
+
+require (
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
