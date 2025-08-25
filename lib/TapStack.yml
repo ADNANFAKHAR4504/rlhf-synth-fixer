@@ -1,244 +1,166 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack.yml — Secure, multi-region FinTech baseline. Creates VPC, private S3 with versioning+lifecycles,
-  KMS CMK, DynamoDB with SSE, RDS (encrypted), IAM MFA enforcement (policy+managed group), multi-region
-  CloudTrail, VPC Flow Logs, AWS Config managed rules, and a remediation Lambda to auto-fix S3 public access
-  & versioning non-compliance. All resources are tagged and created new.
+  AWS CloudFormation template for a secure, compliant FinTech application infrastructure
+  with VPC, S3, DynamoDB, RDS, CloudTrail, Lambda for remediation, and strict IAM policies.
 
-Metadata:
-  TemplateAuthor: "Security-by-default baseline"
-  Version: "1.0.2"
-  Compliance:
-    - PCI DSS readiness (logging, access control, encryption)
-    - SOC 2 controls (audit logging, change management, least privilege)
-    - CIS AWS Foundations-aligned settings where applicable
-
+# Parameters for customizable inputs
 Parameters:
-  Environment:
+  EnvironmentName:
     Type: String
-    AllowedValues: [dev, test, stage, prod]
-    Default: dev
-    Description: Environment tag for all resources
+    Description: Environment for the stack (e.g., production, staging, development)
+    AllowedValues: [production, staging, development]
+    Default: production
   CostCenter:
     Type: String
-    Default: CC-0000
-    Description: Cost allocation tag
-  VPCCIDR:
+    Description: Cost center for tagging (e.g., finance, it)
+    Default: finance
+  VPCCidrBlock:
     Type: String
+    Description: CIDR block for the VPC
     Default: 10.0.0.0/16
-    Description: CIDR for primary VPC
-  PublicSubnet1CIDR:
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+  PublicSubnet1Cidr:
     Type: String
+    Description: CIDR block for public subnet 1
     Default: 10.0.1.0/24
-  PrivateSubnet1CIDR:
+  PublicSubnet2Cidr:
     Type: String
-    Default: 10.0.11.0/24
-  AllowedIngressCIDR:
+    Description: CIDR block for public subnet 2
+    Default: 10.0.2.0/24
+  PrivateSubnet1Cidr:
     Type: String
-    Default: 0.0.0.0/0
-    Description: >
-      Source CIDR for ingress on ports 80/443 (internet by default). Tighten for prod where possible.
-  DBUsername:
+    Description: CIDR block for private subnet 1
+    Default: 10.0.3.0/24
+  PrivateSubnet2Cidr:
     Type: String
-    Default: appuser
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: "[a-zA-Z0-9_]+"
-    Description: Master username for RDS
-  RDSInstanceClass:
+    Description: CIDR block for private subnet 2
+    Default: 10.0.4.0/24
+  RDSSecretArn:
     Type: String
-    Default: db.t4g.medium
-    AllowedValues:
-      - db.t4g.medium
-      - db.t4g.large
-      - db.m6g.large
-      - db.m7g.large
-  RDSAllocatedStorage:
-    Type: Number
-    Default: 50
-    MinValue: 20
-    MaxValue: 16384
-  DynamoDBBillingMode:
-    Type: String
-    Default: PAY_PER_REQUEST
-    AllowedValues: [PROVISIONED, PAY_PER_REQUEST]
-  EnableOrganizationTrail:
-    Type: String
-    Default: "false"
-    AllowedValues: ["true", "false"]
-    Description: If true, creates an organization-level trail (requires AWS Organizations org management account).
-  LambdaScheduleMinutes:
-    Type: Number
-    Default: 15
-    MinValue: 5
-    MaxValue: 1440
-    Description: Periodic remediation frequency in minutes
-  LatestAmiId:
-    Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
-    Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-    Description: SSM Parameter path for latest AMI (used for EC2 ImageId)
+    Description: ARN of the Secrets Manager secret for RDS credentials
+    Default: arn:aws:secretsmanager:us-east-1:123456789012:secret:fintech-rds-credentials-XXXXXX
 
-Conditions:
-  IsOrgTrail: { "Fn::Equals": [ { Ref: EnableOrganizationTrail }, "true" ] }
+# Mappings for region-specific configurations
+Mappings:
+  RegionMap:
+    us-east-1:
+      AvailabilityZone1: us-east-1a
+      AvailabilityZone2: us-east-1b
+    us-west-2:
+      AvailabilityZone1: us-west-2a
+      AvailabilityZone2: us-west-2b
 
+# Resources section
 Resources:
-
-  ############################################################
-  # KMS — centralized CMK used by S3, RDS, DynamoDB, CloudTrail, CloudWatch Logs
-  ############################################################
-  SecurityKmsKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: Central CMK for data-at-rest encryption (S3, RDS, DynamoDB, CloudTrail, Logs)
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowRootAccount
-            Effect: Allow
-            Principal: { AWS: { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } }
-            Action: "kms:*"
-            Resource: "*"
-          - Sid: AllowCloudWatchLogs
-            Effect: Allow
-            Principal:
-              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
-            Action:
-              - kms:Encrypt*
-              - kms:Decrypt*
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:Describe*
-            Resource: "*"
-            Condition:
-              ArnLike:
-                kms:EncryptionContext:aws:logs:arn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${Environment}/*"
-          - Sid: AllowCloudTrail
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: kms:GenerateDataKey*
-            Resource: "*"
-            Condition:
-              StringEquals:
-                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/${Environment}-org-trail"
-          - Sid: AllowDynamoDB
-            Effect: Allow
-            Principal:
-              Service: dynamodb.amazonaws.com
-            Action:
-              - kms:Encrypt*
-              - kms:Decrypt*
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:Describe*
-            Resource: "*"
-          - Sid: AllowRDS
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:Encrypt*
-              - kms:Decrypt*
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:Describe*
-              - kms:CreateGrant
-              - kms:ListGrants
-              - kms:RevokeGrant
-            Resource: "*"
-            Condition:
-              StringEquals:
-                kms:ViaService: !Sub "rds.${AWS::Region}.amazonaws.com"
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  SecurityKmsAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub "alias/${Environment}-security-cmk"
-      TargetKeyId: !Ref SecurityKmsKey
-
-  ############################################################
-  # Networking — VPC + Subnets + IGW + RouteTables + Flow Logs
-  ############################################################
-  VPC:
+  # VPC Configuration
+  FinTechVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref VPCCIDR
+      CidrBlock: !Ref VPCCidrBlock
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub "${Environment}-vpc"
+          Value: !Sub ${EnvironmentName}-fintech-vpc
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet1
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinTechVPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-subnet2
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${Environment}-igw"
+          Value: !Sub ${EnvironmentName}-internet-gateway
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  AttachIgw:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
+      VpcId: !Ref FinTechVPC
       InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
 
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Ref PublicSubnet1CIDR
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-public-a"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: !Ref PrivateSubnet1CIDR
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-private-a"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
+  # Route Table for Public Subnets
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref FinTechVPC
       Tags:
         - Key: Name
-          Value: !Sub "${Environment}-public-rt"
+          Value: !Sub ${EnvironmentName}-public-route-table
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachIgw
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -247,122 +169,177 @@ Resources:
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
 
-  FlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      LogGroupName: !Sub "/${Environment}/vpc/flow-logs"
-      RetentionInDays: 3653
-      KmsKeyId: !GetAtt SecurityKmsKey.Arn
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # NAT Gateway for Private Subnets
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
       Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-nat-gateway-eip
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  FlowLogsRole:
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-nat-gateway
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Route Table for Private Subnets
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FinTechVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-private-route-table
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # VPC Flow Logs
+  VPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${Environment}-vpc-flow-logs-role"
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: vpc-flow-logs.amazonaws.com }
-            Action: "sts:AssumeRole"
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
       Policies:
-        - PolicyName: FlowLogsToCW
+        - PolicyName: vpc-flow-logs-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: "logs:CreateLogStream"
-                Resource: !Sub "${FlowLogsLogGroup.Arn}:*"
-              - Effect: Allow
-                Action: "logs:PutLogEvents"
-                Resource: !Sub "${FlowLogsLogGroup.Arn}:*"
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: '*'
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  VpcFlowLogs:
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vpc/${EnvironmentName}-flow-logs
+      RetentionInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  VPCFlowLogs:
     Type: AWS::EC2::FlowLog
     Properties:
-      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
-      LogDestination: !GetAtt FlowLogsLogGroup.Arn
-      LogDestinationType: cloud-watch-logs
-      ResourceId: !Ref VPC
+      ResourceId: !Ref FinTechVPC
       ResourceType: VPC
       TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-vpc-flow-logs"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # Security Groups — restrict to 80/443 ingress
-  ############################################################
-  WebSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  # KMS Key for Encryption
+  FinTechKMSKey:
+    Type: AWS::KMS::Key
     Properties:
-      GroupDescription: "Allow HTTPS/HTTP only (descriptive & least privilege)"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref AllowedIngressCIDR
-          Description: "HTTP for web traffic"
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref AllowedIngressCIDR
-          Description: "HTTPS for web traffic"
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: "Allow all egress"
+      Description: KMS key for FinTech application encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - kms:*
+            Resource: '*'
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-web-sg"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # S3 — private, versioning, default encryption, lifecycle, access logging
-  ############################################################
-  CloudTrailBucket:
+  FinTechKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${EnvironmentName}-fintech-key
+      TargetKeyId: !Ref FinTechKMSKey
+
+  # S3 Buckets
+  DataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::AccountId}-${AWS::Region}-${Environment}-cloudtrail-logs"
-      OwnershipControls:
-        Rules:
-          - ObjectOwnership: BucketOwnerPreferred
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      BucketName: !Sub ${EnvironmentName}-fintech-data-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecurityKmsKey
-            BucketKeyEnabled: true
+              KMSMasterKeyID: !Ref FinTechKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
-          - Id: NonCurrentVersionCleanup
+          - Id: GlacierTransitionRule
             Status: Enabled
             NoncurrentVersionTransitions:
               - StorageClass: GLACIER
@@ -370,381 +347,449 @@ Resources:
             NoncurrentVersionExpiration:
               NoncurrentDays: 365
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-cloudtrail-logs"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  CloudTrailBucketPolicy:
+  DataBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref CloudTrailBucket
+      Bucket: !Ref DataBucket
       PolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: "s3:PutObject"
-            Resource: !Sub "${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt DataBucket.Arn
+              - !Sub ${DataBucket.Arn}/*
             Condition:
-              StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: "s3:GetBucketAcl"
-            Resource: !GetAtt CloudTrailBucket.Arn
+              Bool:
+                aws:SecureTransport: 'false'
 
-  AppDataBucket:
+  LogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::AccountId}-${AWS::Region}-${Environment}-app-data"
-      OwnershipControls:
-        Rules:
-          - ObjectOwnership: BucketOwnerPreferred
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      BucketName: !Sub ${EnvironmentName}-fintech-logs-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecurityKmsKey
-            BucketKeyEnabled: true
+              KMSMasterKeyID: !Ref FinTechKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
-          - Id: NonCurrentVersionCleanup
+          - Id: DeleteOldLogs
             Status: Enabled
-            NoncurrentVersionTransitions:
-              - StorageClass: INTELLIGENT_TIERING
-                TransitionInDays: 30
-              - StorageClass: GLACIER
-                TransitionInDays: 180
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 730
+            ExpirationInDays: 365
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-app-data"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # DynamoDB — encrypted at rest
-  ############################################################
-  DynamoTable:
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt LogBucket.Arn
+              - !Sub ${LogBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # DynamoDB Table
+  FinTechTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-ledger"
-      BillingMode: !Ref DynamoDBBillingMode
+      TableName: !Sub ${EnvironmentName}-fintech-table
       AttributeDefinitions:
-        - AttributeName: pk
-          AttributeType: S
-        - AttributeName: sk
+        - AttributeName: Id
           AttributeType: S
       KeySchema:
-        - AttributeName: pk
+        - AttributeName: Id
           KeyType: HASH
-        - AttributeName: sk
-          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
-        KMSMasterKeyId: !Ref SecurityKmsKey
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
+        KMSMasterKeyId: !Ref FinTechKMSKey
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-ledger"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # RDS — encrypted at rest, in VPC
-  ############################################################
-  RdsSubnetGroup:
+  # RDS Instance
+  RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: !Sub "${Environment} DB subnet group"
+      DBSubnetGroupDescription: Subnet group for RDS instance
       SubnetIds:
         - !Ref PrivateSubnet1
-        - !Ref PublicSubnet1
+        - !Ref PrivateSubnet2
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-rds-subnets"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  RdsSecurityGroup:
+  RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "RDS ingress only from web SG on 3306 (app path), egress all"
-      VpcId: !Ref VPC
+      GroupDescription: Security group for RDS instance
+      VpcId: !Ref FinTechVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebSecurityGroup
-          Description: "App traffic from web tier"
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: "Allow all egress"
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VPCCidrBlock
       Tags:
         - Key: Name
-          Value: !Sub "${Environment}-rds-sg"
+          Value: !Sub ${EnvironmentName}-rds-security-group
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # Secrets Manager secret for the DB master password (dynamic reference used for RDS)
-  DbMasterSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "${Environment}-rds-master-secret"
-      Description: !Sub "Auto-generated RDS master credentials for ${Environment}"
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
-        GenerateStringKey: "password"
-        PasswordLength: 32
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  DBInstance:
+  RDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
-      Engine: mysql
-      EngineVersion: "8.0.43"
-      DBInstanceClass: !Ref RDSInstanceClass
-      AllocatedStorage: !Ref RDSAllocatedStorage
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword:
-        Fn::Join:
-          - ""
-          - - "{{resolve:secretsmanager:"
-            - !Ref DbMasterSecret
-            - ":SecretString:password::}}"
-      StorageEncrypted: true
-      KmsKeyId: !Ref SecurityKmsKey
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-fintech-db
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: '15.8'
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecretArn}:SecretString:password}}'
       MultiAZ: true
-      AutoMinorVersionUpgrade: true
-      DeletionProtection: true
-      DBSubnetGroupName: !Ref RdsSubnetGroup
+      StorageEncrypted: true
+      KmsKeyId: !Ref FinTechKMSKey
       VPCSecurityGroups:
-        - !Ref RdsSecurityGroup
-      BackupRetentionPeriod: 7
-      CopyTagsToSnapshot: true
-      PreferredBackupWindow: "03:00-04:00"
-      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
       Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-db"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # Example EC2 (for tests) — proves instances live in VPC & SG rules
-  ############################################################
-  WebInstanceProfileRole:
+  # IAM Roles and Policies
+  AdminRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${Environment}-web-ec2-role"
+      RoleName: !Sub ${EnvironmentName}-admin-role
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: ec2.amazonaws.com }
-            Action: "sts:AssumeRole"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  WebInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles:
-        - !Ref WebInstanceProfileRole
-      InstanceProfileName: !Sub "${Environment}-web-ec2-profile"
-
-  WebEC2:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref LatestAmiId
-      InstanceType: t3.micro
-      IamInstanceProfile: !Ref WebInstanceProfile
-      NetworkInterfaces:
-        - AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          GroupSet:
-            - !Ref WebSecurityGroup
-          SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-web-ec2"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-    Metadata:
-      Comment: "AMI chosen via SSM parameter to keep template adaptive and lint-friendly."
-
-  ############################################################
-  # IAM — MFA enforcement (managed policy) + group for users
-  ############################################################
-  RequireMfaPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: !Sub "${Environment}-require-mfa"
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: DenyAllIfNoMFA
-            Effect: Deny
-            Action: "*"
-            Resource: "*"
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
             Condition:
-              BoolIfExists:
-                aws:MultiFactorAuthPresent: "false"
-          - Sid: AllowMfaSelfService
-            Effect: Allow
-            Action:
-              - iam:ListMFADevices
-              - iam:CreateVirtualMFADevice
-              - iam:EnableMFADevice
-              - iam:ResyncMFADevice
-              - iam:DeactivateMFADevice
-              - iam:DeleteVirtualMFADevice
-              - iam:GetUser
-              - iam:ChangePassword
-              - iam:ListUsers
-              - sts:GetSessionToken
-            Resource: "*"
-
-  AllUsersGroup:
-    Type: AWS::IAM::Group
-    Properties:
-      GroupName: !Sub "${Environment}-all-users"
-      ManagedPolicyArns:
-        - !Ref RequireMfaPolicy
-
-  ############################################################
-  # CloudTrail — multi-region with log validation (+ org trail option)
-  ############################################################
-  CloudTrailLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/${Environment}/cloudtrail"
-      RetentionInDays: 3653
-      KmsKeyId: !GetAtt SecurityKmsKey.Arn
+              Bool:
+                aws:MultiFactorAuthPresent: 'true'
+      Policies:
+        - PolicyName: admin-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                  - dynamodb:*
+                  - rds:*
+                  - lambda:*
+                  - kms:*
+                  - cloudtrail:*
+                  - logs:*
+                  - ec2:Describe*
+                Resource: '*'
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  DeveloperRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-developer-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: sts:AssumeRole
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: 'true'
+      Policies:
+        - PolicyName: developer-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt DataBucket.Arn
+                  - !Sub ${DataBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt FinTechTable.Arn
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudTrail Configuration
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${Environment}-cloudtrail-to-cw-role"
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: "sts:AssumeRole"
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
       Policies:
-        - PolicyName: CloudTrailToCloudWatch
+        - PolicyName: cloudtrail-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub "${CloudTrailLogGroup.Arn}:*"
+                Resource: !GetAtt CloudTrailLogGroup.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  Trail:
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/cloudtrail/${EnvironmentName}-fintech-trail
+      RetentionInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub "${Environment}-org-trail"
-      IsLogging: true
+      TrailName: !Sub ${EnvironmentName}-fintech-trail
+      S3BucketName: !Ref LogBucket
       IsMultiRegionTrail: true
-      IsOrganizationTrail: !If [ IsOrgTrail, true, false ]
-      IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
-      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KMSKeyId: !Ref SecurityKmsKey
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  ############################################################
-  # AWS Config — managed rules (detect)
-  ############################################################
-  ConfigRole:
+  # Lambda for Remediation
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${Environment}-aws-config-role"
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: "sts:AssumeRole"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
       Policies:
-        - PolicyName: ConfigToS3AndCWKMS
+        - PolicyName: lambda-remediation-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: kms:Decrypt
-                Resource: !GetAtt SecurityKmsKey.Arn
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketAcl
+                  - s3:GetBucketPolicy
+                  - s3:PutBucketPolicy
+                Resource: !GetAtt DataBucket.Arn
+              - Effect: Allow
+                Action:
+                  - tag:GetResources
+                  - tag:TagResources
+                  - tag:UntagResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt FinTechKMSKey.Arn
       Tags:
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  RemediationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${EnvironmentName}-remediation-lambda
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              s3 = boto3.client('s3')
+              responseData = {}
+              try:
+                  # Enforce S3 bucket public access block
+                  s3.put_bucket_public_access_block(
+                      Bucket='${DataBucket}',
+                      PublicAccessBlockConfiguration={
+                          'BlockPublicAcls': True,
+                          'IgnorePublicAcls': True,
+                          'BlockPublicPolicy': True,
+                          'RestrictPublicBuckets': True
+                      }
+                  )
+                  responseData['Status'] = 'SUCCESS'
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              except Exception as e:
+                  responseData['Error'] = str(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+      Runtime: python3.9
+      Timeout: 60
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Application Load Balancer
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref FinTechVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb-security-group
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-fintech-alb
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # AWS Config for Compliance
+  ConfigRecorderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: config-recorder-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource:
+                  - !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*
+              - Effect: Allow
+                Action:
+                  - config:*
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: default
-      RoleARN: !GetAtt ConfigRole.Arn
+      Name: !Sub ${EnvironmentName}-config-recorder
+      RoleARN: !GetAtt ConfigRecorderRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -752,300 +797,45 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: default
-      S3BucketName: !Ref CloudTrailBucket
-      S3KeyPrefix: "aws-config"
+      S3BucketName: !Ref LogBucket
+      S3KeyPrefix: AWSLogs/Config
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Twelve_Hours
+        DeliveryFrequency: TwentyFour_Hours
 
-  RuleS3PublicReadProhibited:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: s3-bucket-public-read-prohibited
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
-      MaximumExecutionFrequency: TwentyFour_Hours
-
-  RuleS3VersioningEnabled:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: s3-bucket-versioning-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_VERSIONING_ENABLED
-
-  RuleRDSEncrypted:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: rds-storage-encrypted
-      Source:
-        Owner: AWS
-        SourceIdentifier: RDS_STORAGE_ENCRYPTED
-
-  RuleDDBEncrypted:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: dynamodb-table-encryption-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: DYNAMODB_TABLE_ENCRYPTION_ENABLED
-
-  RuleCloudTrailEnabled:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: cloudtrail-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: CLOUD_TRAIL_ENABLED
-
-  RuleRestrictedCommonPorts:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: restricted-common-ports
-      Source:
-        Owner: AWS
-        SourceIdentifier: RESTRICTED_INCOMING_TRAFFIC
-      InputParameters:
-        blockedPort1: "22"
-        blockedPort2: "3389"
-
-  RuleVPCTrafficLogging:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: vpc-flow-logs-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: VPC_FLOW_LOGS_ENABLED
-
-  ############################################################
-  # Remediation Lambda — auto-fix S3 versioning + public access block, enforce tags
-  ############################################################
-  RemediationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "${Environment}-remediator-role"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: "sts:AssumeRole"
-      Policies:
-        - PolicyName: RemediatorPermissions
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:ListAllMyBuckets
-                  - s3:GetBucketVersioning
-                  - s3:PutBucketVersioning
-                  - s3:GetBucketTagging
-                  - s3:PutBucketTagging
-                  - s3:GetBucketPublicAccessBlock
-                  - s3:PutBucketPublicAccessBlock
-                  - s3:GetEncryptionConfiguration
-                  - s3:PutEncryptionConfiguration
-                  - s3:GetBucketLocation
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - kms:Encrypt
-                  - kms:Decrypt
-                  - kms:DescribeKey
-                Resource: !GetAtt SecurityKmsKey.Arn
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  RemediationFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub "${Environment}-s3-remediator"
-      Runtime: python3.12
-      Handler: index.handler
-      Role: !GetAtt RemediationRole.Arn
-      Timeout: 120
-      MemorySize: 256
-      KmsKeyArn: !GetAtt SecurityKmsKey.Arn
-      Environment:
-        Variables:
-          REQUIRED_ENV: !Ref Environment
-          REQUIRED_CC: !Ref CostCenter
-          KMS_KEY_ARN: !GetAtt SecurityKmsKey.Arn
-      Code:
-        ZipFile: |
-          import boto3, os, json, botocore
-          s3 = boto3.client('s3')
-          REQUIRED_ENV = os.environ['REQUIRED_ENV']
-          REQUIRED_CC = os.environ['REQUIRED_CC']
-          KMS_KEY_ARN = os.environ['KMS_KEY_ARN']
-
-          def ensure_tags(bucket):
-            try:
-              resp = s3.get_bucket_tagging(Bucket=bucket)
-              tags = { t['Key']: t['Value'] for t in resp.get('TagSet', []) }
-            except botocore.exceptions.ClientError as e:
-              if e.response['Error']['Code'] == 'NoSuchTagSet':
-                tags = {}
-              else:
-                raise
-            changed = False
-            if tags.get('Environment') != REQUIRED_ENV:
-              tags['Environment'] = REQUIRED_ENV; changed = True
-            if tags.get('CostCenter') != REQUIRED_CC:
-              tags['CostCenter'] = REQUIRED_CC; changed = True
-            if changed:
-              s3.put_bucket_tagging(Bucket=bucket, Tagging={'TagSet':[{'Key':k,'Value':v} for k,v in tags.items()]})
-
-          def ensure_versioning(bucket):
-            v = s3.get_bucket_versioning(Bucket=bucket)
-            if v.get('Status') != 'Enabled':
-              s3.put_bucket_versioning(Bucket=bucket, VersioningConfiguration={'Status':'Enabled'})
-
-          def ensure_pab(bucket):
-            desired = {
-              'BlockPublicAcls': True,
-              'IgnorePublicAcls': True,
-              'BlockPublicPolicy': True,
-              'RestrictPublicBuckets': True
-            }
-            try:
-              current = s3.get_public_access_block(Bucket=bucket)['PublicAccessBlockConfiguration']
-            except botocore.exceptions.ClientError:
-              current = {}
-            if current != desired:
-              s3.put_public_access_block(Bucket=bucket, PublicAccessBlockConfiguration=desired)
-
-          def ensure_default_encryption(bucket):
-            try:
-              s3.get_bucket_encryption(Bucket=bucket)
-            except botocore.exceptions.ClientError as e:
-              if e.response['Error']['Code'] in ('ServerSideEncryptionConfigurationNotFoundError','AccessDenied'):
-                s3.put_bucket_encryption(
-                  Bucket=bucket,
-                  ServerSideEncryptionConfiguration={
-                    'Rules':[{'ApplyServerSideEncryptionByDefault':{'SSEAlgorithm':'aws:kms','KMSMasterKeyID':KMS_KEY_ARN},'BucketKeyEnabled':True}]
-                  }
-                )
-              else:
-                raise
-
-          def handler(event, context):
-            # Remediate all buckets in account/region
-            buckets = s3.list_buckets().get('Buckets', [])
-            for b in buckets:
-              name = b['Name']
-              try:
-                ensure_pab(name)
-                ensure_versioning(name)
-                ensure_default_encryption(name)
-                ensure_tags(name)
-              except Exception as ex:
-                print(f"Remediation failed for {name}: {ex}")
-            return {'status':'ok'}
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  RemediationSchedule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub "${Environment}-s3-remediation-schedule"
-      ScheduleExpression: !Sub "rate(${LambdaScheduleMinutes} minutes)"
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt RemediationFunction.Arn
-          Id: "S3Remediator"
-
-  RemediationPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref RemediationFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt RemediationSchedule.Arn
-
-  ############################################################
-  # Optional S3 Access Logs bucket (private, versioned) — useful for web/app logs
-  ############################################################
-  AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::AccountId}-${AWS::Region}-${Environment}-access-logs"
-      OwnershipControls:
-        Rules:
-          - ObjectOwnership: BucketOwnerPreferred
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref SecurityKmsKey
-            BucketKeyEnabled: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: NonCurrentVersionCleanup
-            Status: Enabled
-            NoncurrentVersionTransitions:
-              - StorageClass: GLACIER
-                TransitionInDays: 30
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 365
-      Tags:
-        - Key: Name
-          Value: !Sub "${Environment}-access-logs"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
+# Outputs for key resource references
 Outputs:
-  VpcId:
+  VPCId:
     Description: VPC ID
-    Value: !Ref VPC
+    Value: !Ref FinTechVPC
     Export:
-      Name: !Sub "${AWS::StackName}-VpcId"
-  PublicSubnetId:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet1
-  PrivateSubnetId:
-    Description: Private Subnet ID
-    Value: !Ref PrivateSubnet1
-  WebSecurityGroupId:
-    Description: Web Security Group Id (80/443 only)
-    Value: !Ref WebSecurityGroup
-  RdsEndpoint:
-    Description: RDS endpoint address
-    Value: !GetAtt DBInstance.Endpoint.Address
+      Name: !Sub ${EnvironmentName}-VPCId
+  DataBucketName:
+    Description: S3 Data Bucket Name
+    Value: !Ref DataBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-DataBucketName
+  LogBucketName:
+    Description: S3 Log Bucket Name
+    Value: !Ref LogBucket
+    Export:
+      Name: !Sub ${EnvironmentName}-LogBucketName
   DynamoDBTableName:
-    Description: DynamoDB ledger table
-    Value: !Ref DynamoTable
-  CloudTrailBucketName:
-    Description: CloudTrail S3 bucket (private, versioned, encrypted)
-    Value: !Ref CloudTrailBucket
-  RemediationFunctionName:
-    Description: Name of the S3 remediation Lambda
-    Value: !Ref RemediationFunction
-  KmsKeyArn:
-    Description: Central KMS CMK ARN
-    Value: !GetAtt SecurityKmsKey.Arn
+    Description: DynamoDB Table Name
+    Value: !Ref FinTechTable
+    Export:
+      Name: !Sub ${EnvironmentName}-DynamoDBTableName
+  RDSEndpoint:
+    Description: RDS Instance Endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-RDSEndpoint
+  LambdaFunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt RemediationLambda.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-LambdaFunctionArn
+  ALBArn:
+    Description: Application Load Balancer ARN
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+    Export:
+      Name: !Sub ${EnvironmentName}-ALBArn
