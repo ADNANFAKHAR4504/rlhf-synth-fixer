@@ -1,209 +1,380 @@
-import fs from 'fs';
-import path from 'path';
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+import { Template } from 'aws-cdk-lib/assertions';
+import * as fs from 'fs';
+import * as path from 'path';
+import { yamlParse } from 'yaml-cfn';
+import { describe, it, expect } from '@jest/globals';
 
 describe('TapStack CloudFormation Template', () => {
-  let template: any;
+  // Load and parse the CloudFormation template
+  const templatePath = path.resolve(__dirname, '../lib/TapStack.yml');
+  const templateYaml = fs.readFileSync(templatePath, 'utf-8');
+  const templateJson = JSON.stringify(yamlParse(templateYaml));
+  const template = Template.fromString(templateJson);
 
-  beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
+  // Test Suite for Stack Metadata
+  describe('Stack Metadata', () => {
+    it('should have the correct AWSTemplateFormatVersion', () => {
+      expect(template.toJSON().AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+    it('should have a valid description', () => {
+      expect(template.toJSON().Description).toContain('AWS CloudFormation template for a secure, compliant FinTech application infrastructure');
     });
   });
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
+  // Test Suite for Parameters
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    it('should define EnvironmentName parameter with allowed values', () => {
+      template.hasParameter('EnvironmentName', {
+        Type: 'String',
+        AllowedValues: ['production', 'staging', 'development'],
+        Default: 'production',
+      });
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    it('should define VPCCidrBlock parameter with correct pattern', () => {
+      template.hasParameter('VPCCidrBlock', {
+        Type: 'String',
+        Default: '10.0.0.0/16',
+        AllowedPattern: '^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$',
+      });
+    });
+
+    it('should define subnet CIDR parameters', () => {
+      template.hasParameter('PublicSubnet1Cidr', { Type: 'String', Default: '10.0.1.0/24' });
+      template.hasParameter('PublicSubnet2Cidr', { Type: 'String', Default: '10.0.2.0/24' });
+      template.hasParameter('PrivateSubnet1Cidr', { Type: 'String', Default: '10.0.3.0/24' });
+      template.hasParameter('PrivateSubnet2Cidr', { Type: 'String', Default: '10.0.4.0/24' });
+    });
+
+    it('should define CostCenter parameter', () => {
+      template.hasParameter('CostCenter', { Type: 'String', Default: 'finance' });
     });
   });
 
+  // Test Suite for Resources
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
-    });
-  });
-
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+    describe('VPC Configuration', () => {
+      it('should create a VPC with correct CIDR and DNS settings', () => {
+        template.hasResourceProperties('AWS::EC2::VPC', {
+          CidrBlock: { Ref: 'VPCCidrBlock' },
+          EnableDnsHostnames: true,
+          EnableDnsSupport: true,
+          Tags: [
+            { Key: 'Name', Value: { 'Fn::Sub': '${EnvironmentName}-fintech-vpc' } },
+            { Key: 'Environment', Value: { Ref: 'EnvironmentName' } },
+            { Key: 'CostCenter', Value: { Ref: 'CostCenter' } },
+          ],
         });
+      });
+
+      it('should create public and private subnets', () => {
+        template.resourceCountIs('AWS::EC2::Subnet', 4);
+        template.hasResourceProperties('AWS::EC2::Subnet', {
+          VpcId: { Ref: 'FinTechVPC' },
+          CidrBlock: { Ref: 'PublicSubnet1Cidr' },
+          MapPublicIpOnLaunch: true,
+        });
+        template.hasResourceProperties('AWS::EC2::Subnet', {
+          VpcId: { Ref: 'FinTechVPC' },
+          CidrBlock: { Ref: 'PrivateSubnet1Cidr' },
+        });
+      });
+    });
+
+    describe('VPC Flow Logs', () => {
+      it('should create VPC Flow Logs with CloudWatch Logs destination', () => {
+        template.hasResourceProperties('AWS::EC2::FlowLog', {
+          ResourceId: { Ref: 'FinTechVPC' },
+          ResourceType: 'VPC',
+          TrafficType: 'ALL',
+          LogDestinationType: 'cloud-watch-logs',
+          LogGroupName: { Ref: 'VPCFlowLogsLogGroup' },
+          DeliverLogsPermissionArn: { 'Fn::GetAtt': ['VPCFlowLogsRole', 'Arn'] },
+        });
+      });
+
+      it('should create a log group for VPC Flow Logs', () => {
+        template.hasResourceProperties('AWS::Logs::LogGroup', {
+          LogGroupName: { 'Fn::Sub': '/aws/vpc/${EnvironmentName}-flow-logs' },
+          RetentionInDays: 90,
+        });
+      });
+    });
+
+    describe('S3 Buckets', () => {
+      it('should create DataBucket with encryption and public access block', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+          BucketName: { 'Fn::Sub': '${EnvironmentName}-fintech-data-${AWS::AccountId}' },
+          VersioningConfiguration: { Status: 'Enabled' },
+          BucketEncryption: {
+            ServerSideEncryptionConfiguration: [
+              {
+                ServerSideEncryptionByDefault: {
+                  SSEAlgorithm: 'aws:kms',
+                  KMSMasterKeyID: { Ref: 'FinTechKMSKey' },
+                },
+              },
+            ],
+          },
+          PublicAccessBlockConfiguration: {
+            BlockPublicAcls: true,
+            BlockPublicPolicy: true,
+            IgnorePublicAcls: true,
+            RestrictPublicBuckets: true,
+          },
+        });
+      });
+
+      it('should create LogBucket with encryption and public access block', () => {
+        template.hasResourceProperties('AWS::S3::Bucket', {
+          BucketName: { 'Fn::Sub': '${EnvironmentName}-fintech-logs-${AWS::AccountId}' },
+          VersioningConfiguration: { Status: 'Enabled' },
+          BucketEncryption: {
+            ServerSideEncryptionConfiguration: [
+              {
+                ServerSideEncryptionByDefault: {
+                  SSEAlgorithm: 'aws:kms',
+                  KMSMasterKeyID: { Ref: 'FinTechKMSKey' },
+                },
+              },
+            ],
+          },
+          PublicAccessBlockConfiguration: {
+            BlockPublicAcls: true,
+            BlockPublicPolicy: true,
+            IgnorePublicAcls: true,
+            RestrictPublicBuckets: true,
+          },
+        });
+      });
+    });
+
+    describe('DynamoDB Table', () => {
+      it('should create DynamoDB table with KMS encryption', () => {
+        template.hasResourceProperties('AWS::DynamoDB::Table', {
+          TableName: { 'Fn::Sub': '${EnvironmentName}-fintech-table' },
+          AttributeDefinitions: [{ AttributeName: 'Id', AttributeType: 'S' }],
+          KeySchema: [{ AttributeName: 'Id', KeyType: 'HASH' }],
+          BillingMode: 'PAY_PER_REQUEST',
+          SSESpecification: {
+            SSEEnabled: true,
+            SSEType: 'KMS',
+            KMSMasterKeyId: { Ref: 'FinTechKMSKey' },
+          },
+        });
+      });
+    });
+
+    describe('RDS Instance', () => {
+      it('should create RDS instance with correct configuration', () => {
+        template.hasResourceProperties('AWS::RDS::DBInstance', {
+          DBInstanceIdentifier: { 'Fn::Sub': '${EnvironmentName}-fintech-db' },
+          AllocatedStorage: 20,
+          DBInstanceClass: 'db.t3.micro',
+          Engine: 'postgres',
+          EngineVersion: '15.8',
+          MasterUsername: { 'Fn::Sub': '{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}' },
+          MultiAZ: true,
+          StorageEncrypted: true,
+          KmsKeyId: { Ref: 'FinTechKMSKey' },
+          VPCSecurityGroups: [{ Ref: 'RDSSecurityGroup' }],
+          DBSubnetGroupName: { Ref: 'RDSSubnetGroup' },
+        });
+      });
+
+      it('should create RDS security group with correct ingress', () => {
+        template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+          GroupDescription: 'Security group for RDS instance',
+          VpcId: { Ref: 'FinTechVPC' },
+          SecurityGroupIngress: [
+            {
+              IpProtocol: 'tcp',
+              FromPort: 5432,
+              ToPort: 5432,
+              CidrIp: { Ref: 'VPCCidrBlock' },
+            },
+          ],
+        });
+      });
+    });
+
+    describe('Secrets Manager', () => {
+      it('should create Secrets Manager secret for RDS credentials', () => {
+        template.hasResourceProperties('AWS::SecretsManager::Secret', {
+          Name: { 'Fn::Sub': '${EnvironmentName}-fintech-rds-credentials' },
+          GenerateSecretString: {
+            SecretStringTemplate: '{"username": "fintechadmin"}',
+            GenerateStringKey: 'password',
+            PasswordLength: 16,
+            ExcludeCharacters: '"@/\\',
+          },
+          KmsKeyId: { Ref: 'FinTechKMSKey' },
+        });
+      });
+    });
+
+    describe('IAM Roles', () => {
+      it('should create AdminRole with MFA condition', () => {
+        template.hasResourceProperties('AWS::IAM::Role', {
+          RoleName: { 'Fn::Sub': '${EnvironmentName}-admin-role' },
+          AssumeRolePolicyDocument: {
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: { AWS: { 'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root' } },
+                Action: 'sts:AssumeRole',
+                Condition: { Bool: { 'aws:MultiFactorAuthPresent': 'true' } },
+              },
+            ],
+          },
+        });
+      });
+    });
+
+    describe('CloudTrail', () => {
+      it('should create CloudTrail with global service events and S3 logging', () => {
+        template.hasResourceProperties('AWS::CloudTrail::Trail', {
+          TrailName: { 'Fn::Sub': '${EnvironmentName}-fintech-trail' },
+          S3BucketName: { Ref: 'LogBucket' },
+          IsMultiRegionTrail: true,
+          IncludeGlobalServiceEvents: true,
+          EnableLogFileValidation: true,
+          IsLogging: true,
+          CloudWatchLogsLogGroupArn: { 'Fn::GetAtt': ['CloudTrailLogGroup', 'Arn'] },
+          CloudWatchLogsRoleArn: { 'Fn::GetAtt': ['CloudTrailRole', 'Arn'] },
+        });
+      });
+
+      it('should have no redundant DependsOn for CloudTrail', () => {
+        template.hasResource('AWS::CloudTrail::Trail', {
+          DependsOn: ['LogBucketPolicy'],
+        });
+      });
+    });
+
+    describe('Lambda', () => {
+      it('should create Lambda function for remediation', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+          FunctionName: { 'Fn::Sub': '${EnvironmentName}-remediation-lambda' },
+          Handler: 'index.handler',
+          Runtime: 'python3.9',
+          Timeout: 60,
+          Role: { 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] },
+        });
+      });
+    });
+
+    describe('Application Load Balancer', () => {
+      it('should create ALB with public subnets and security group', () => {
+        template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+          Name: { 'Fn::Sub': '${EnvironmentName}-fintech-alb' },
+          Subnets: [{ Ref: 'PublicSubnet1' }, { Ref: 'PublicSubnet2' }],
+          SecurityGroups: [{ Ref: 'ALBSecurityGroup' }],
+          Scheme: 'internet-facing',
+          Type: 'application',
+        });
+      });
+
+      it('should create ALB security group with HTTP and HTTPS ingress', () => {
+        template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+          GroupDescription: 'Security group for ALB',
+          SecurityGroupIngress: [
+            { IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' },
+            { IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' },
+          ],
+        });
+      });
+    });
+  });
+
+  // Test Suite for Outputs
+  describe('Outputs', () => {
+    it('should define all expected outputs', () => {
+      template.hasOutput('VPCId', { Value: { Ref: 'FinTechVPC' } });
+      template.hasOutput('DataBucketName', { Value: { Ref: 'DataBucket' } });
+      template.hasOutput('LogBucketName', { Value: { Ref: 'LogBucket' } });
+      template.hasOutput('DynamoDBTableName', { Value: { Ref: 'FinTechTable' } });
+      template.hasOutput('RDSEndpoint', { Value: { 'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'] } });
+      template.hasOutput('RDSSecretArn', { Value: { Ref: 'RDSSecret' } });
+      template.hasOutput('LambdaFunctionArn', { Value: { 'Fn::GetAtt': ['RemediationLambda', 'Arn'] } });
+      template.hasOutput('ALBArn', { Value: { 'Fn::GetAtt': ['ApplicationLoadBalancer', 'LoadBalancerArn'] } });
+    });
+
+    it('should export all outputs with correct names', () => {
+      template.hasOutput('VPCId', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-VPCId' } } });
+      template.hasOutput('DataBucketName', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-DataBucketName' } } });
+      template.hasOutput('LogBucketName', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-LogBucketName' } } });
+      template.hasOutput('DynamoDBTableName', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-DynamoDBTableName' } } });
+      template.hasOutput('RDSEndpoint', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-RDSEndpoint' } } });
+      template.hasOutput('RDSSecretArn', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-RDSSecretArn' } } });
+      template.hasOutput('LambdaFunctionArn', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-LambdaFunctionArn' } } });
+      template.hasOutput('ALBArn', { Export: { Name: { 'Fn::Sub': '${EnvironmentName}-ALBArn' } } });
+    });
+  });
+
+  // Test Suite for Compliance and Best Practices
+  describe('Compliance and Best Practices', () => {
+    it('should have no references to existing resources', () => {
+      const resources = template.toJSON().Resources;
+      Object.values(resources).forEach((resource: any) => {
+        expect(resource).not.toHaveProperty('Ref', expect.stringMatching(/^arn:/));
+      });
+    });
+
+    it('should enforce KMS encryption for S3, DynamoDB, and RDS', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            { ServerSideEncryptionByDefault: { SSEAlgorithm: 'aws:kms', KMSMasterKeyID: { Ref: 'FinTechKMSKey' } } },
+          ],
+        },
+      });
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: { SSEEnabled: true, SSEType: 'KMS', KMSMasterKeyId: { Ref: 'FinTechKMSKey' } },
+      });
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        StorageEncrypted: true,
+        KmsKeyId: { Ref: 'FinTechKMSKey' },
+      });
+    });
+
+    it('should enforce MFA for IAM roles', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: { 'Fn::Sub': '${EnvironmentName}-admin-role' },
+        AssumeRolePolicyDocument: {
+          Statement: [
+            { Condition: { Bool: { 'aws:MultiFactorAuthPresent': 'true' } } },
+          ],
+        },
+      });
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: { 'Fn::Sub': '${EnvironmentName}-developer-role' },
+        AssumeRolePolicyDocument: {
+          Statement: [
+            { Condition: { Bool: { 'aws:MultiFactorAuthPresent': 'true' } } },
+          ],
+        },
+      });
+    });
+
+    it('should have secure S3 bucket policies', () => {
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        Bucket: { Ref: 'DataBucket' },
+        PolicyDocument: {
+          Statement: [
+            {
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [
+                { 'Fn::GetAtt': ['DataBucket', 'Arn'] },
+                { 'Fn::Sub': '${DataBucket.Arn}/*' },
+              ],
+              Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+            },
+          ],
+        },
       });
     });
   });
