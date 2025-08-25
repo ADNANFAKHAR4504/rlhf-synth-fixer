@@ -333,8 +333,11 @@
         "CPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmDescription": "High CPU on EC2",
-                "Namespace": "AWS/EC2",
+                "AlarmName": {
+                    "Fn::Sub": "High-CPU-RDS-${AWS::StackName}"
+                },
+                "AlarmDescription": "High CPU on RDS instance",
+                "Namespace": "AWS/RDS",
                 "MetricName": "CPUUtilization",
                 "Statistic": "Average",
                 "Period": 300,
@@ -343,8 +346,10 @@
                 "ComparisonOperator": "GreaterThanThreshold",
                 "Dimensions": [
                     {
-                        "Name": "InstanceId",
-                        "Value": "i-placeholder"
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstance"
+                        }
                     }
                 ]
             }

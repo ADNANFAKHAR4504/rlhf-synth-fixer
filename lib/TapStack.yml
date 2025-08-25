@@ -199,8 +199,9 @@ Resources:
   CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: "High CPU on EC2"
-      Namespace: AWS/EC2
+      AlarmName: !Sub High-CPU-RDS-${AWS::StackName}
+      AlarmDescription: "High CPU on RDS instance"
+      Namespace: AWS/RDS
       MetricName: CPUUtilization
       Statistic: Average
       Period: 300
@@ -208,8 +209,8 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: InstanceId
-          Value: i-placeholder   # Replace with actual instance ID after deployment
+        - Name: DBInstanceIdentifier
+          Value: !Ref RDSInstance
 
   ### S3 Bucket for Logging ###
   LogBucket:
