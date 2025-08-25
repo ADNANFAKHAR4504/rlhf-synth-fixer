@@ -1,0 +1,127 @@
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+  
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
+# Data source for AMI
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# IAM Module
+module "iam" {
+  source = "./modules/iam"
+  
+  name_prefix = local.name_prefix
+  tags        = local.common_tags
+}
+
+# Networking Module
+module "networking" {
+  source = "./modules/networking"
+  
+  name_prefix         = local.name_prefix
+  vpc_cidr           = local.current_network_config.vpc_cidr
+  availability_zones = var.availability_zones
+  public_subnets     = local.current_network_config.public_subnets
+  private_subnets    = local.current_network_config.private_subnets
+  database_subnets   = local.current_network_config.database_subnets
+  tags               = local.common_tags
+}
+
+# Database Module
+module "database" {
+  source = "./modules/database"
+  
+  name_prefix           = local.name_prefix
+  db_subnet_group_name  = module.networking.db_subnet_group_name
+  vpc_security_group_ids = [module.networking.database_security_group_id]
+  
+  instance_class      = local.current_db_config.instance_class
+  allocated_storage   = local.current_db_config.allocated_storage
+  backup_retention    = local.current_db_config.backup_retention
+  multi_az           = local.current_db_config.multi_az
+  deletion_protection = local.current_db_config.deletion_protection
+  
+  db_username = var.db_username
+  db_password = var.db_password
+  
+  tags = local.common_tags
+}
+
+# Compute Module
+module "compute" {
+  source = "./modules/compute"
+  
+  name_prefix                = local.name_prefix
+  vpc_id                    = module.networking.vpc_id
+  public_subnet_ids         = module.networking.public_subnet_ids
+  private_subnet_ids        = module.networking.private_subnet_ids
+  alb_security_group_id     = module.networking.alb_security_group_id
+  instance_security_group_id = module.networking.instance_security_group_id
+  
+  ami_id           = data.aws_ami.amazon_linux.id
+  instance_type    = local.current_instance_config.instance_type
+  min_size         = local.current_instance_config.min_size
+  max_size         = local.current_instance_config.max_size
+  desired_capacity = local.current_instance_config.desired_capacity
+  volume_size      = local.current_instance_config.volume_size
+  
+  instance_profile_name = module.iam.instance_profile_name
+  
+  # Database connection info for user data
+  db_endpoint = module.database.db_endpoint
+  
+  tags = local.common_tags
+}
+
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = module.networking.vpc_id
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = module.compute.alb_dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = module.compute.alb_zone_id
+}
+
+output "database_endpoint" {
+  description = "RDS instance endpoint"
+  value       = module.database.db_endpoint
+  sensitive   = true
+}
+
+output "database_port" {
+  description = "RDS instance port"
+  value       = module.database.db_port
+}
+
+output "autoscaling_group_arn" {
+  description = "ARN of the Auto Scaling Group"
+  value       = module.compute.autoscaling_group_arn
+}
