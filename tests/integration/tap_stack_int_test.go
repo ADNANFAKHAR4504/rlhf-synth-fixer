@@ -467,6 +467,69 @@ func validateNetworkSecurity(t *testing.T, tfConfig map[string]interface{}) {
 		t.Fatal("no resources found")
 	}
 
+	// Check VPC infrastructure exists
+	if vpcs, ok := resources["aws_vpc"]; ok {
+		vpcMap := vpcs.(map[string]interface{})
+		if len(vpcMap) == 0 {
+			t.Error("VPC not configured")
+		}
+		for _, vpcConfig := range vpcMap {
+			configMap := vpcConfig.(map[string]interface{})
+			// Verify DNS settings for security
+			if dnsHostnames, ok := configMap["enable_dns_hostnames"]; !ok || dnsHostnames != true {
+				t.Error("VPC should have DNS hostnames enabled for proper resolution")
+			}
+			if dnsSupport, ok := configMap["enable_dns_support"]; !ok || dnsSupport != true {
+				t.Error("VPC should have DNS support enabled")
+			}
+		}
+	} else {
+		t.Error("VPC not found")
+	}
+
+	// Check subnet segmentation
+	if subnets, ok := resources["aws_subnet"]; ok {
+		subnetMap := subnets.(map[string]interface{})
+		publicSubnets := 0
+		privateSubnets := 0
+		for subnetName, subnetConfig := range subnetMap {
+			configMap := subnetConfig.(map[string]interface{})
+			if mapPublicIp, ok := configMap["map_public_ip_on_launch"]; ok && mapPublicIp == true {
+				publicSubnets++
+			} else {
+				privateSubnets++
+			}
+			// Verify subnet naming follows security conventions
+			if tags, ok := configMap["tags"]; ok {
+				tagsMap := tags.(map[string]interface{})
+				if name, ok := tagsMap["Name"]; ok {
+					nameStr := name.(string)
+					if !strings.Contains(nameStr, "public") && !strings.Contains(nameStr, "private") {
+						t.Errorf("subnet %s should have clear public/private designation", subnetName)
+					}
+				}
+			}
+		}
+		if publicSubnets < 2 {
+			t.Error("should have at least 2 public subnets for high availability")
+		}
+		if privateSubnets < 2 {
+			t.Error("should have at least 2 private subnets for high availability")
+		}
+	} else {
+		t.Error("subnets not found")
+	}
+
+	// Check NAT Gateway for private subnet internet access
+	if natGateways, ok := resources["aws_nat_gateway"]; ok {
+		natMap := natGateways.(map[string]interface{})
+		if len(natMap) == 0 {
+			t.Error("NAT Gateway not configured for private subnet internet access")
+		}
+	} else {
+		t.Error("NAT Gateway not found")
+	}
+
 	// Check VPC Flow Logs are enabled
 	if flowLogs, ok := resources["aws_flow_log"]; ok {
 		flowLogMap := flowLogs.(map[string]interface{})

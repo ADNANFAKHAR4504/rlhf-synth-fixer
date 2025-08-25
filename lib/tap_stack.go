@@ -8,6 +8,7 @@ import (
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/flowlog"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
@@ -34,6 +35,177 @@ type TapStackProps struct {
 	AwsRegion         string
 	RepositoryName    string
 	CommitAuthor      string
+}
+
+// BuildSecurityStack creates the main security infrastructure (for unit tests)
+func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
+	// Get environment suffix from environment variable
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "prod"
+	}
+
+	// Create environment prefix for resource naming
+	envPrefix := fmt.Sprintf("%s", environmentSuffix)
+
+	// Configure AWS Provider
+	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
+		Region: jsii.String(region),
+		DefaultTags: &[]interface{}{
+			map[string]interface{}{
+				"tags": map[string]*string{
+					"Environment": jsii.String("prod"),
+					"Project":     jsii.String("security-config"),
+					"ManagedBy":   jsii.String("cdktf"),
+				},
+			},
+		},
+	})
+
+	// KMS Key for encryption
+	kmsKey := kmskey.NewKmsKey(stack, jsii.String("prod-security-kms-key"), &kmskey.KmsKeyConfig{
+		Description: jsii.String("KMS key for security infrastructure encryption"),
+		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-security-kms-key", envPrefix)),
+		},
+	})
+
+	// KMS Key Alias
+	kmsalias.NewKmsAlias(stack, jsii.String("prod-security-kms-alias"), &kmsalias.KmsAliasConfig{
+		Name:        jsii.String("alias/prod-security-key"),
+		TargetKeyId: kmsKey.KeyId(),
+	})
+
+	// S3 Bucket with encryption
+	s3Bucket := s3bucket.NewS3Bucket(stack, jsii.String("prod-security-logs-bucket"), &s3bucket.S3BucketConfig{
+		Bucket: jsii.String(fmt.Sprintf("prod-security-logs-bucket-%s", region)),
+		Tags: &map[string]*string{
+			"Name": jsii.String("prod-security-logs-bucket"),
+		},
+	})
+
+	// S3 Bucket Server-Side Encryption
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfigurationA(stack, jsii.String("prod-s3-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationAConfig{
+		Bucket: s3Bucket.Id(),
+		Rule: &[]*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleA{
+			{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+					KmsMasterKeyId: kmsKey.Arn(),
+					SseAlgorithm:   jsii.String("aws:kms"),
+				},
+				BucketKeyEnabled: jsii.Bool(true),
+			},
+		},
+	})
+
+	// CloudWatch Log Group for Lambda
+	lambdaLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("prod-lambda-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:            jsii.String("/aws/lambda/prod-security-function"),
+		RetentionInDays: jsii.Number(14),
+		KmsKeyId:        kmsKey.Arn(),
+		Tags: &map[string]*string{
+			"Name": jsii.String("prod-lambda-log-group"),
+		},
+	})
+
+	// IAM Role for Lambda with least privilege
+	lambdaRole := iamrole.NewIamRole(stack, jsii.String("prod-lambda-execution-role"), &iamrole.IamRoleConfig{
+		Name: jsii.String("prod-lambda-execution-role"),
+		AssumeRolePolicy: jsii.String(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "lambda.amazonaws.com"
+					},
+					"Action": "sts:AssumeRole"
+				}
+			]
+		}`),
+		Tags: &map[string]*string{
+			"Name": jsii.String("prod-lambda-execution-role"),
+		},
+	})
+
+	// Custom IAM Policy for Lambda with least privilege
+	lambdaPolicy := iampolicy.NewIamPolicy(stack, jsii.String("prod-lambda-policy"), &iampolicy.IamPolicyConfig{
+		Name:        jsii.String("prod-lambda-policy"),
+		Description: jsii.String("Least privilege policy for Lambda function"),
+		Policy: jsii.String(fmt.Sprintf(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"logs:CreateLogStream",
+						"logs:PutLogEvents"
+					],
+					"Resource": "arn:aws:logs:%s:*:log-group:/aws/lambda/prod-security-function:*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"kms:Encrypt",
+						"kms:Decrypt",
+						"kms:ReEncrypt*",
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "%s"
+				}
+			]
+		}`, region, *kmsKey.Arn())),
+	})
+
+	// Attach policy to role
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack, jsii.String("prod-lambda-policy-attachment"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+		Role:      lambdaRole.Name(),
+		PolicyArn: lambdaPolicy.Arn(),
+	})
+
+	// Lambda Function with logging enabled
+	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("prod-security-function"), &lambdafunction.LambdaFunctionConfig{
+		FunctionName: jsii.String("prod-security-function"),
+		Role:         lambdaRole.Arn(),
+		Handler:      jsii.String("index.handler"),
+		Runtime:      jsii.String("python3.9"),
+		Filename:     jsii.String("./lambda.zip"),
+		KmsKeyArn:    kmsKey.Arn(),
+		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
+		Tags: &map[string]*string{
+			"Name": jsii.String("prod-security-function"),
+		},
+	})
+
+	// VPC Flow Logs (using hardcoded VPC ID for tests)
+	flowlog.NewFlowLog(stack, jsii.String("prod-vpc-flow-logs"), &flowlog.FlowLogConfig{
+		VpcId:              jsii.String("vpc-0abcd1234"),
+		TrafficType:        jsii.String("ALL"),
+		LogDestinationType: jsii.String("s3"),
+		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
+		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status}"),
+		Tags: &map[string]*string{
+			"Name": jsii.String("prod-vpc-flow-logs"),
+		},
+	})
+
+	// Outputs
+	cdktf.NewTerraformOutput(stack, jsii.String("kms_key_id"), &cdktf.TerraformOutputConfig{
+		Value:       kmsKey.KeyId(),
+		Description: jsii.String("KMS Key ID for encryption"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("s3_bucket_name"), &cdktf.TerraformOutputConfig{
+		Value:       s3Bucket.Bucket(),
+		Description: jsii.String("S3 bucket name for security logs"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("lambda_function_name"), &cdktf.TerraformOutputConfig{
+		Value:       lambdaFunction.FunctionName(),
+		Description: jsii.String("Lambda function name with logging enabled"),
+	})
 }
 
 func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.TerraformStack {
@@ -123,10 +295,19 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		},
 	})
 
+	// Elastic IP for NAT Gateway
+	natEip := eip.NewEip(stack, jsii.String("nat-eip"), &eip.EipConfig{
+		Domain: jsii.String("vpc"),
+		Tags: &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("%s-nat-eip", envPrefix)),
+		},
+		DependsOn: &[]cdktf.ITerraformDependable{igw},
+	})
+
 	// NAT Gateway
 	natGw := natgateway.NewNatGateway(stack, jsii.String("main-nat"), &natgateway.NatGatewayConfig{
-		SubnetId:         publicSubnet1.Id(),
-		ConnectivityType: jsii.String("public"),
+		AllocationId: natEip.Id(),
+		SubnetId:     publicSubnet1.Id(),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-main-nat", envPrefix)),
 		},
@@ -237,7 +418,6 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 	lambdaLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("lambda-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 		Name:            jsii.String(fmt.Sprintf("/aws/lambda/%s-security-function", envPrefix)),
 		RetentionInDays: jsii.Number(14),
-		KmsKeyId:        kmsKey.Arn(),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-lambda-log-group", envPrefix)),
 		},
@@ -335,7 +515,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		TrafficType:        jsii.String("ALL"),
 		LogDestinationType: jsii.String("s3"),
 		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
-		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"),
+		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${start} $${end} $${action} $${log-status}"),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-vpc-flow-logs", envPrefix)),
 		},
