@@ -1,3 +1,6 @@
+########################
+# Locals
+########################
 locals {
   name_prefix   = "${var.project_name}-${replace(var.region, "/", "-")}"
   trail_name    = "${local.name_prefix}-trail"
@@ -76,6 +79,11 @@ resource "aws_cloudwatch_log_group" "trail" {
   kms_key_id        = aws_kms_key.logs.arn
   tags              = local.tags
 }
+
+
+########################
+# Data Sources
+########################
 
 # =========== IAM for CloudTrail -> CloudWatch ===========
 data "aws_iam_policy_document" "trail_cw_assume" {

@@ -1,3 +1,10 @@
+# main.tf - Single file IAM Security Configuration as Code
+# All variables, locals, resources, and outputs in one file per team standards
+
+########################
+# Variables
+########################
+
 variable "region" {
   description = "AWS region"
   type        = string
