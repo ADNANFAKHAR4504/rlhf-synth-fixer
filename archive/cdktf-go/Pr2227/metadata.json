@@ -29,5 +29,11 @@
     "vpc",
     "ec2",
     "elbv2"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
 }
