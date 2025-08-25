@@ -457,6 +457,21 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !GetAtt LogBucket.Arn
 
   # DynamoDB Table
   FinTechTable:
@@ -853,7 +868,7 @@ Resources:
     Type: AWS::Config::DeliveryChannel
     Properties:
       S3BucketName: !Ref LogBucket
-      S3KeyPrefix: AWSLogs/Config
+      S3KeyPrefix: Config
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
