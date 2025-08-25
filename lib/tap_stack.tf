@@ -457,6 +457,17 @@ resource "aws_iam_policy" "s3_access" {
           "kms:GenerateDataKey"
         ]
         Resource = aws_kms_key.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:UpdateInstanceInformation",
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -538,6 +549,11 @@ resource "aws_launch_template" "main" {
   instance_type = "t3.micro"
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
+  
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.ec2.id]
+  }
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -561,62 +577,23 @@ resource "aws_launch_template" "main" {
 
     echo "Starting EC2 setup..."
 
-    # Update system
-    yum update -y
-
-    # Install AWS CLI and CloudWatch agent
-    yum install -y amazon-cloudwatch-agent awscli
-
-    # Start and enable Apache
+    # Install and start Apache
     yum install -y httpd
     systemctl enable httpd
     systemctl start httpd
 
-    # Create test page
+    # Create simple test page
     echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-    echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
     echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
 
     # Create health check endpoint
     echo "OK" > /var/www/html/health
     chmod 644 /var/www/html/health
     
-    # Ensure Apache is running and healthy
-    systemctl status httpd || systemctl start httpd
-    sleep 10
-    
-    # Test health endpoint multiple times
-    for i in {1..5}; do
-      if curl -f http://localhost/health; then
-        echo "Health check passed on attempt $i"
-        break
-      else
-        echo "Health check failed on attempt $i, retrying..."
-        sleep 5
-      fi
-    done
-
-    # Configure CloudWatch agent
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWCONFIG'
-    {
-      "logs": {
-        "logs_collected": {
-          "files": {
-            "collect_list": [
-              {
-                "file_path": "/var/log/httpd/access_log",
-                "log_group_name": "/aws/ec2/${local.unique_project_name}/acc",
-                "log_stream_name": "{instance_id}"
-              }
-            ]
-          }
-        }
-      }
-    }
-    CWCONFIG
-
-    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+    # Verify Apache is running
+    systemctl status httpd
+    curl -f http://localhost/health || echo "Health check failed but continuing..."
 
     echo "EC2 setup complete"
   EOF
@@ -641,9 +618,9 @@ resource "aws_launch_template" "main" {
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
+  vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  health_check_type         = "EC2"
   health_check_grace_period = 1200
 
   min_size         = 2

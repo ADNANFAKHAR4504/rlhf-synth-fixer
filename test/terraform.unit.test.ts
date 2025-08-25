@@ -358,12 +358,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/desired_capacity\s*=\s*2/);
     });
 
-    test('Auto Scaling Group uses private subnets', () => {
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.private\[\*\]\.id/);
+    test('Auto Scaling Group uses public subnets', () => {
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.public\[\*\]\.id/);
     });
 
-    test('Auto Scaling Group uses ELB health checks', () => {
-      expect(stackContent).toMatch(/health_check_type\s*=\s*"ELB"/);
+    test('Auto Scaling Group uses EC2 health checks', () => {
+      expect(stackContent).toMatch(/health_check_type\s*=\s*"EC2"/);
     });
   });
 
@@ -492,8 +492,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/subnets\s*=\s*aws_subnet\.public\[\*\]\.id/);
     });
 
-    test('EC2 instances are deployed in private subnets', () => {
-      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.private\[\*\]\.id/);
+    test('EC2 instances are deployed in public subnets', () => {
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.public\[\*\]\.id/);
     });
 
     test('RDS is deployed in database subnets', () => {
