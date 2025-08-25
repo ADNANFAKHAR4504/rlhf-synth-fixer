@@ -42,7 +42,7 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -58,12 +58,11 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+    
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Instantiate your modules here
-    const project = 'tap-project'; // You can make this configurable
+    const project = 'tap-project'; 
 
     // Create KMS key for encryption
     const kmsModule = new KmsModule(this, 'kms', {
@@ -245,6 +244,7 @@ export class TapStack extends TerraformStack {
       dbName: 'appdb',
       username: 'dbadmin',
       password: dbPasswordSecret.secretString,
+      vpcId: 'string',
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
       kmsKey: kmsModule.key,

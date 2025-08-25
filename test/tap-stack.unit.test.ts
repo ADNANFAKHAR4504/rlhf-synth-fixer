@@ -11,7 +11,7 @@ jest.mock('../lib/modules', () => ({
       arn: `arn:aws:kms:us-east-1:123456789012:key/${id}-kms-key-id`
     }
   })),
-  
+
   S3Module: jest.fn().mockImplementation((scope, id, props) => ({
     bucket: {
       bucket: props.bucketName,
@@ -19,14 +19,14 @@ jest.mock('../lib/modules', () => ({
       id: `${id}-bucket-id`
     }
   })),
-  
+
   IamModule: jest.fn().mockImplementation((scope, id) => ({
     instanceProfile: {
       name: `${id}-instance-profile`,
       arn: `arn:aws:iam::123456789012:instance-profile/${id}-instance-profile`
     }
   })),
-  
+
   VpcModule: jest.fn().mockImplementation((scope, id) => ({
     vpc: {
       id: `${id}-vpc-id`,
@@ -41,14 +41,14 @@ jest.mock('../lib/modules', () => ({
       { id: 'subnet-private-2', availabilityZone: 'us-east-1b' }
     ]
   })),
-  
+
   SecurityGroupModule: jest.fn().mockImplementation((scope, id) => ({
     securityGroup: {
       id: `${id}-sg-id`,
       arn: `arn:aws:ec2:us-east-1:123456789012:security-group/${id}-sg-id`
     }
   })),
-  
+
   Ec2Module: jest.fn().mockImplementation((scope, id) => ({
     instance: {
       id: `${id}-instance-id`,
@@ -56,7 +56,7 @@ jest.mock('../lib/modules', () => ({
       privateIp: '10.0.1.100'
     }
   })),
-  
+
   RdsModule: jest.fn().mockImplementation((scope, id) => ({
     dbInstance: {
       endpoint: `${id}-db.cluster-xyz.us-east-1.rds.amazonaws.com`,
@@ -80,7 +80,7 @@ jest.mock('@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version', () =
 }));
 
 describe('TapStack Unit Tests', () => {
-  const { 
+  const {
     KmsModule,
     S3Module,
     IamModule,
@@ -160,12 +160,12 @@ describe('TapStack Unit Tests', () => {
     test('should handle AWS region override with environment variable', () => {
       // Set environment variable to test the override branch
       process.env.AWS_REGION_OVERRIDE = 'eu-west-1';
-      
+
       const app = Testing.app();
       const props = { awsRegion: 'us-west-2' };
-      
+
       new TapStack(app, 'TestStackOverride', props);
-      
+
       // The VPC should use eu-west-1 AZs due to the override
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
@@ -179,12 +179,12 @@ describe('TapStack Unit Tests', () => {
     test('should handle AWS region override when not set', () => {
       // Ensure environment variable is not set
       delete process.env.AWS_REGION_OVERRIDE;
-      
+
       const app = Testing.app();
       const props = { awsRegion: 'eu-central-1' };
-      
+
       new TapStack(app, 'TestStackNoOverride', props);
-      
+
       // The VPC should use the provided region AZs
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
@@ -198,10 +198,10 @@ describe('TapStack Unit Tests', () => {
     test('should use default region when no region specified', () => {
       // Ensure environment variable is not set
       delete process.env.AWS_REGION_OVERRIDE;
-      
+
       const app = Testing.app();
       new TapStack(app, 'TestStackDefaultRegion');
-      
+
       // Should use default us-east-1 region
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
@@ -510,7 +510,7 @@ describe('TapStack Unit Tests', () => {
     test('should configure S3 backend with default settings', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'TestStackBackendDefault');
-      
+
       expect(stack).toBeDefined();
     });
 
@@ -521,9 +521,9 @@ describe('TapStack Unit Tests', () => {
         stateBucket: 'my-tf-states',
         stateBucketRegion: 'us-west-2'
       };
-      
+
       const stack = new TapStack(app, 'TestStackBackend', props);
-      
+
       expect(stack).toBeDefined();
     });
 
@@ -533,7 +533,7 @@ describe('TapStack Unit Tests', () => {
       const stack = new TapStack(app, stackName);
 
       expect(stack.node.id).toBe(stackName);
-      
+
       // Verify consistent naming across modules
       expect(KmsModule).toHaveBeenCalledWith(expect.anything(), 'kms', expect.anything());
       expect(VpcModule).toHaveBeenCalledWith(expect.anything(), 'vpc', expect.anything());
@@ -592,7 +592,7 @@ describe('TapStack Unit Tests', () => {
   describe('Error Handling and Edge Cases', () => {
     test('should create stack without throwing errors', () => {
       const app = Testing.app();
-      
+
       expect(() => {
         new TapStack(app, 'TestStackNoErrors');
       }).not.toThrow();
@@ -601,7 +601,7 @@ describe('TapStack Unit Tests', () => {
     test('should synthesize stack successfully', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'TestStackSynth');
-      
+
       expect(() => {
         Testing.synth(stack);
       }).not.toThrow();
@@ -609,7 +609,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should handle null props gracefully', () => {
       const app = Testing.app();
-      
+
       expect(() => {
         new TapStack(app, 'TestStackNull', null as any);
       }).not.toThrow();
@@ -621,7 +621,7 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'sparse'
         // Other properties intentionally undefined
       };
-      
+
       expect(() => {
         new TapStack(app, 'TestStackSparse', sparseProps);
       }).not.toThrow();
@@ -648,10 +648,10 @@ describe('TapStack Unit Tests', () => {
   describe('Environment Variable Handling', () => {
     test('should handle AWS_REGION_OVERRIDE environment variable when set', () => {
       process.env.AWS_REGION_OVERRIDE = 'ap-south-1';
-      
+
       const app = Testing.app();
       new TapStack(app, 'TestStackEnvOverride');
-      
+
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
         'vpc',
@@ -663,11 +663,11 @@ describe('TapStack Unit Tests', () => {
 
     test('should handle AWS_REGION_OVERRIDE when undefined', () => {
       delete process.env.AWS_REGION_OVERRIDE;
-      
+
       const app = Testing.app();
       const props = { awsRegion: 'ca-central-1' };
       new TapStack(app, 'TestStackNoEnvOverride', props);
-      
+
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
         'vpc',
@@ -679,11 +679,11 @@ describe('TapStack Unit Tests', () => {
 
     test('should handle AWS_REGION_OVERRIDE when empty string', () => {
       process.env.AWS_REGION_OVERRIDE = '';
-      
+
       const app = Testing.app();
       const props = { awsRegion: 'sa-east-1' };
       new TapStack(app, 'TestStackEmptyEnvOverride', props);
-      
+
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
         'vpc',

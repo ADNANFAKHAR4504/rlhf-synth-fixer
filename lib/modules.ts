@@ -610,6 +610,7 @@ interface RdsModuleProps {
   dbName: string;
   username: string;
   password: string;
+  vpcId: string;
   subnetIds: string[];
   securityGroupIds: string[];
   kmsKey: KmsKey;
@@ -631,6 +632,7 @@ export class RdsModule extends Construct {
       dbName,
       username,
       password,
+      vpcId,
       subnetIds,
       securityGroupIds,
       kmsKey,
@@ -640,10 +642,12 @@ export class RdsModule extends Construct {
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: `${project}-${environment}-db-subnet-group`,
       subnetIds,
+      description: `Database subnet group for ${project} ${environment}`, // Add description
       tags: {
         Name: `${project}-${environment}-db-subnet-group`,
         Project: project,
         Environment: environment,
+        VpcId: vpcId, // Tag with VPC ID for reference
       },
     });
 
@@ -664,11 +668,14 @@ export class RdsModule extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       skipFinalSnapshot: true,
+      deletionProtection: false,
+      applyImmediately: true,
       tags: {
         Name: `${project}-${environment}-db`,
         Project: project,
         Environment: environment,
       },
+      dependsOn: [this.subnetGroup],
     });
   }
 }
