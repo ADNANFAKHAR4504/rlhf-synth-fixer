@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,7 +89,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 
 	// Integration Test 2: Verify KMS key exists and has proper configuration
 	t.Run("KMSKeyConfiguration", func(t *testing.T) {
-		keyAlias := fmt.Sprintf("alias/s3-webapp-encryption-key-%s", envSuffix)
+		keyAlias := fmt.Sprintf("alias/s3-webapp-encryp-key-%s", envSuffix)
 
 		// Find the KMS key by alias
 		aliasOutput, err := kmsClient.DescribeKey(ctx, &kms.DescribeKeyInput{
