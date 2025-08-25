@@ -189,7 +189,7 @@ Resources:
                   - logs:*
                   - s3:PutObject
                   - s3:GetObject
-                Resource: "*"
+                Resource: !Sub arn:aws:s3:::${LogBucket}/*
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
