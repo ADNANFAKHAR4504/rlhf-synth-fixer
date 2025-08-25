@@ -30,5 +30,11 @@
     "Subnets",
     "InternetGateway",
     "RouteTables"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
 }
