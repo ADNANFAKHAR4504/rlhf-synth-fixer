@@ -10,8 +10,8 @@ public class InfrastructureConfig {
     
     public InfrastructureConfig(Context ctx) {
         this.ctx = ctx;
-        this.environment = ctx.config().require("TapStack:environment");
-        this.companyName = ctx.config().require("TapStack:companyName");
+        this.environment = ctx.config().require("environment");
+        this.companyName = ctx.config().require("companyName");
         this.region = "us-east-1"; // Fixed for financial services compliance
     }
     
