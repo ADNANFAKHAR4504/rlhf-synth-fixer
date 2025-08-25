@@ -85,6 +85,7 @@ class TestTapStack(unittest.TestCase):
         # Check bucket name format
         self.assertTrue('tap-processing-bucket' in bucket_name,
                         f"Bucket name doesn't include expected prefix: {bucket_name}")
+        self.assertIn('environmentSuffix', self.outputs, "environmentSuffix not found in outputs")
         self.assertTrue(self.outputs['environmentSuffix'] in bucket_name,
                         f"Bucket name doesn't include environment suffix: {bucket_name}")
     
