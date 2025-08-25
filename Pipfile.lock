@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "ec70c42c3acb38cfeba9ad02d74329f3ac6c1701e896a285261f8a48a0a47591"
+            "sha256": "ec3eed0f10b8ed8973eb2c2b0da5f2c68e3b372fbae927c225d59ed5f66ee547"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -41,20 +41,20 @@
         },
         "aws-cdk-lib": {
             "hashes": [
-                "sha256:27b44c3ce72e1d75cc8279bbe9003d1fc0249a6e80e3f1b916285403f2f87fb7",
-                "sha256:9a7e2edcd4edaf6cc2e319523ce572d440fcfc0fd16eb7d1d2025f2f30fea65c"
+                "sha256:38183380494cef1fca47660536d704b9a2af461399580220939306f0c27f9db1",
+                "sha256:cd01bff16595b8f0740b302c16ff9bcf64bf43fe035332052a0b4b89c5338710"
             ],
             "index": "pypi",
             "markers": "python_version ~= '3.9'",
-            "version": "==2.212.0"
+            "version": "==2.202.0"
         },
         "aws-cdk.asset-awscli-v1": {
             "hashes": [
-                "sha256:a957d679a118f4375307ed90b9aed7127c5c1402989438060eae4ab29ab0d13f",
-                "sha256:d1001bf56a12f7d1162d4211003d1e8f72a213159465e2d0e1c598cc0ea44aad"
+                "sha256:73a0787fedcc7e2010779593aa0c66398a4bc8e2291c918b07edc11ffd092612",
+                "sha256:bcfa7124d40b9180697489d6875ed1c34a5dbb4db6eaad68148664c0d56b5af1"
             ],
             "markers": "python_version ~= '3.9'",
-            "version": "==2.2.242"
+            "version": "==2.2.240"
         },
         "aws-cdk.asset-node-proxy-agent-v6": {
             "hashes": [
@@ -66,11 +66,11 @@
         },
         "aws-cdk.cloud-assembly-schema": {
             "hashes": [
-                "sha256:6d374b09d47ab6b7adadd95e1f69e4f4848120a4e19ea45d759ab380ee13823e",
-                "sha256:a245d2f6e978ea1e4a6565a66ac41de2e0be4400296bb7b84a7b75b293092399"
+                "sha256:02e9f90fc00684f2ee7ef4af2d008012e6383dff64216bbbacd12bccb45dd22d",
+                "sha256:5dec31738534d5421348ee86a918e8608f98ac8feacc61de464635620f908851"
             ],
             "markers": "python_version ~= '3.9'",
-            "version": "==48.5.0"
+            "version": "==44.9.0"
         },
         "aws-sam-translator": {
             "hashes": [
