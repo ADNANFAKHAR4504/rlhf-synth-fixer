@@ -111,7 +111,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	// Create public subnets
 	publicSubnet1, err := ec2.NewSubnet(ctx, "healthapp-public-subnet-1", &ec2.SubnetArgs{
 		VpcId:               vpc.ID(),
-		CidrBlock:           pulumi.String("10.0.1.0/24"),
+		CidrBlock:           pulumi.String("10.0.10.0/24"),
 		AvailabilityZone:    pulumi.String(azs.Names[0]),
 		MapPublicIpOnLaunch: pulumi.Bool(true),
 		Tags:                commonTags,
@@ -122,7 +122,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 
 	publicSubnet2, err := ec2.NewSubnet(ctx, "healthapp-public-subnet-2", &ec2.SubnetArgs{
 		VpcId:               vpc.ID(),
-		CidrBlock:           pulumi.String("10.0.2.0/24"),
+		CidrBlock:           pulumi.String("10.0.20.0/24"),
 		AvailabilityZone:    pulumi.String(azs.Names[1]),
 		MapPublicIpOnLaunch: pulumi.Bool(true),
 		Tags:                commonTags,
@@ -170,7 +170,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	// Create private subnets
 	privateSubnet1, err := ec2.NewSubnet(ctx, "healthapp-private-subnet-1", &ec2.SubnetArgs{
 		VpcId:            vpc.ID(),
-		CidrBlock:        pulumi.String("10.0.3.0/24"),
+		CidrBlock:        pulumi.String("10.0.30.0/24"),
 		AvailabilityZone: pulumi.String(azs.Names[0]),
 		Tags:             commonTags,
 	})
@@ -180,7 +180,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 
 	privateSubnet2, err := ec2.NewSubnet(ctx, "healthapp-private-subnet-2", &ec2.SubnetArgs{
 		VpcId:            vpc.ID(),
-		CidrBlock:        pulumi.String("10.0.4.0/24"),
+		CidrBlock:        pulumi.String("10.0.40.0/24"),
 		AvailabilityZone: pulumi.String(azs.Names[1]),
 		Tags:             commonTags,
 	})
