@@ -171,35 +171,10 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Code: jsii.String(`
-import json
-import os
-from datetime import datetime
-
-def handler(event, context):
-    """
-    VPC Logging test function
-    """
-    bucket_name = os.environ.get('BUCKET_NAME')
-    environment = os.environ.get('ENVIRONMENT')
-    
-    log_message = {
-        'timestamp': datetime.utcnow().isoformat(),
-        'bucket_name': bucket_name,
-        'environment': environment,
-        'message': 'VPC logging test function executed successfully'
-    }
-    
-    print(json.dumps(log_message))
-    
-    return {
-        'statusCode': 200,
-        'body': json.dumps(log_message)
-    }
-`),
-		KmsKeyArn:  kmsKey.Arn(),
-		Timeout:    jsii.Number(30),
-		MemorySize: jsii.Number(256),
+		Filename:     jsii.String("../../../lib/lambda.zip"),
+		KmsKeyArn:    kmsKey.Arn(),
+		Timeout:      jsii.Number(30),
+		MemorySize:   jsii.Number(256),
 		Environment: &lambdafunction.LambdaFunctionEnvironment{
 			Variables: &map[string]*string{
 				"BUCKET_NAME": s3Bucket.Bucket(),
@@ -537,66 +512,10 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Code: jsii.String(`
-import json
-import boto3
-import os
-from datetime import datetime
-
-def handler(event, context):
-    """
-    VPC Logging Lambda function for monitoring VPC Flow Logs
-    """
-    vpc_id = os.environ.get('VPC_ID')
-    log_bucket = os.environ.get('LOG_BUCKET')
-    environment = os.environ.get('ENVIRONMENT')
-    
-    try:
-        # Initialize AWS clients
-        ec2 = boto3.client('ec2')
-        
-        # Check VPC Flow Logs status
-        flow_logs = ec2.describe_flow_logs(
-            Filters=[
-                {'Name': 'resource-id', 'Values': [vpc_id]}
-            ]
-        )
-        
-        log_message = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'vpc_id': vpc_id,
-            'environment': environment,
-            'flow_logs_count': len(flow_logs['FlowLogs']),
-            'flow_logs_status': [fl['FlowLogStatus'] for fl in flow_logs['FlowLogs']],
-            'message': 'VPC logging monitoring completed'
-        }
-        
-        print(json.dumps(log_message))
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps(log_message)
-        }
-        
-    except Exception as e:
-        error_message = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'vpc_id': vpc_id,
-            'environment': environment,
-            'error': str(e),
-            'message': 'VPC logging monitoring failed'
-        }
-        
-        print(json.dumps(error_message))
-        
-        return {
-            'statusCode': 500,
-            'body': json.dumps(error_message)
-        }
-`),
-		KmsKeyArn:  kmsKey.Arn(),
-		Timeout:    jsii.Number(30),
-		MemorySize: jsii.Number(256),
+		Filename:     jsii.String("../../../lib/lambda.zip"),
+		KmsKeyArn:    kmsKey.Arn(),
+		Timeout:      jsii.Number(30),
+		MemorySize:   jsii.Number(256),
 		Environment: &lambdafunction.LambdaFunctionEnvironment{
 			Variables: &map[string]*string{
 				"VPC_ID":      vpcResource.Id(),
