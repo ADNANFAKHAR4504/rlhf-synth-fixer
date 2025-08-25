@@ -4,6 +4,10 @@
   "difficulty": "expert",
   "platform": "pulumi",
   "language": "go",
+  "team": "security",
+  "startedAt": "2024-01-15T10:00:00Z",
+  "po_id": "trainr327",
+  "complexity": "expert",
   "subject_labels": [
     "Security Configuration as Code",
     "S3 Security Implementation",
