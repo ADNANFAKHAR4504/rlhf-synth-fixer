@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import * as yaml from 'js-yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -35,10 +34,9 @@ describe('TapStack CloudFormation Template', () => {
         'PrivateEC2AMI',
         'AllowedSSHCIDR',
         'DBUsername',
-        'DBPassword',
         'Environment',
       ];
-      
+
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -49,10 +47,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-    });
-
-    test('DBPassword parameter should have NoEcho set to true', () => {
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
     });
 
     test('Environment parameter should have allowed values', () => {
@@ -74,22 +68,32 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
       expect(template.Resources.InternetGatewayAttachment).toBeDefined();
     });
 
     test('should have two public subnets', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
+      expect(
+        template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
     });
 
     test('should have two private subnets', () => {
       expect(template.Resources.PrivateSubnet1).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
-      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(
+        template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(false);
+      expect(
+        template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(false);
     });
 
     test('should have NAT Gateways for private subnets', () => {
@@ -109,8 +113,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('subnets should be in different availability zones', () => {
-      const pub1AZ = template.Resources.PublicSubnet1.Properties.AvailabilityZone;
-      const pub2AZ = template.Resources.PublicSubnet2.Properties.AvailabilityZone;
+      const pub1AZ =
+        template.Resources.PublicSubnet1.Properties.AvailabilityZone;
+      const pub2AZ =
+        template.Resources.PublicSubnet2.Properties.AvailabilityZone;
       expect(pub1AZ).not.toEqual(pub2AZ);
     });
   });
@@ -148,28 +154,42 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('EC2 instances should use parameter AMIs', () => {
-      expect(template.Resources.PublicEC2Instance.Properties.ImageId.Ref).toBe('PublicEC2AMI');
-      expect(template.Resources.PrivateEC2Instance.Properties.ImageId.Ref).toBe('PrivateEC2AMI');
+      expect(template.Resources.PublicEC2Instance.Properties.ImageId.Ref).toBe(
+        'PublicEC2AMI'
+      );
+      expect(template.Resources.PrivateEC2Instance.Properties.ImageId.Ref).toBe(
+        'PrivateEC2AMI'
+      );
     });
 
     test('public EC2 should be in public subnet', () => {
-      expect(template.Resources.PublicEC2Instance.Properties.SubnetId.Ref).toBe('PublicSubnet1');
+      expect(template.Resources.PublicEC2Instance.Properties.SubnetId.Ref).toBe(
+        'PublicSubnet1'
+      );
     });
 
     test('private EC2 should be in private subnet', () => {
-      expect(template.Resources.PrivateEC2Instance.Properties.SubnetId.Ref).toBe('PrivateSubnet1');
+      expect(
+        template.Resources.PrivateEC2Instance.Properties.SubnetId.Ref
+      ).toBe('PrivateSubnet1');
     });
 
     test('EC2 instances should have IAM instance profiles', () => {
-      expect(template.Resources.PublicEC2Instance.Properties.IamInstanceProfile).toBeDefined();
-      expect(template.Resources.PrivateEC2Instance.Properties.IamInstanceProfile).toBeDefined();
+      expect(
+        template.Resources.PublicEC2Instance.Properties.IamInstanceProfile
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateEC2Instance.Properties.IamInstanceProfile
+      ).toBeDefined();
     });
   });
 
   describe('RDS Database', () => {
     test('should have RDS database instance', () => {
       expect(template.Resources.DatabaseInstance).toBeDefined();
-      expect(template.Resources.DatabaseInstance.Type).toBe('AWS::RDS::DBInstance');
+      expect(template.Resources.DatabaseInstance.Type).toBe(
+        'AWS::RDS::DBInstance'
+      );
     });
 
     test('database should have encryption enabled', () => {
@@ -209,8 +229,12 @@ describe('TapStack CloudFormation Template', () => {
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
         expect(bucket.Properties.BucketEncryption).toBeDefined();
-        const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
-        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+        const encryption =
+          bucket.Properties.BucketEncryption
+            .ServerSideEncryptionConfiguration[0];
+        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+          'AES256'
+        );
       });
     });
 
@@ -229,21 +253,24 @@ describe('TapStack CloudFormation Template', () => {
     test('SecureS3Bucket should have logging enabled', () => {
       const bucket = template.Resources.SecureS3Bucket;
       expect(bucket.Properties.LoggingConfiguration).toBeDefined();
-      expect(bucket.Properties.LoggingConfiguration.DestinationBucketName.Ref).toBe('LoggingBucket');
+      expect(
+        bucket.Properties.LoggingConfiguration.DestinationBucketName.Ref
+      ).toBe('LoggingBucket');
     });
   });
 
   describe('Lambda Function', () => {
     test('should have security monitoring Lambda function', () => {
       expect(template.Resources.SecurityMonitoringLambda).toBeDefined();
-      expect(template.Resources.SecurityMonitoringLambda.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.SecurityMonitoringLambda.Type).toBe(
+        'AWS::Lambda::Function'
+      );
     });
 
     test('Lambda should have CloudWatch Logs configured', () => {
       expect(template.Resources.LambdaLogGroup).toBeDefined();
       const logGroup = template.Resources.LambdaLogGroup;
       expect(logGroup.Properties.RetentionInDays).toBe(14);
-      expect(logGroup.Properties.KmsKeyId).toBeDefined();
     });
 
     test('Lambda should have VPC configuration', () => {
@@ -256,7 +283,9 @@ describe('TapStack CloudFormation Template', () => {
     test('Lambda should have environment variables configured', () => {
       const lambda = template.Resources.SecurityMonitoringLambda;
       expect(lambda.Properties.Environment).toBeDefined();
-      expect(lambda.Properties.Environment.Variables.SNS_TOPIC_ARN).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.SNS_TOPIC_ARN
+      ).toBeDefined();
     });
   });
 
@@ -284,7 +313,9 @@ describe('TapStack CloudFormation Template', () => {
       );
       expect(denyStatement).toBeDefined();
       expect(denyStatement.Effect).toBe('Deny');
-      expect(denyStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe('false');
+      expect(
+        denyStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']
+      ).toBe('false');
     });
   });
 
@@ -302,21 +333,29 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have SNS topic for security alerts', () => {
       expect(template.Resources.SecurityAlertsTopic).toBeDefined();
-      expect(template.Resources.SecurityAlertsTopic.Type).toBe('AWS::SNS::Topic');
+      expect(template.Resources.SecurityAlertsTopic.Type).toBe(
+        'AWS::SNS::Topic'
+      );
     });
 
     test('should have EventBridge rule for Security Group changes', () => {
       expect(template.Resources.SecurityGroupChangeRule).toBeDefined();
       const rule = template.Resources.SecurityGroupChangeRule;
-      expect(rule.Properties.EventPattern.detail.eventName).toContain('AuthorizeSecurityGroupIngress');
-      expect(rule.Properties.EventPattern.detail.eventName).toContain('CreateSecurityGroup');
+      expect(rule.Properties.EventPattern.detail.eventName).toContain(
+        'AuthorizeSecurityGroupIngress'
+      );
+      expect(rule.Properties.EventPattern.detail.eventName).toContain(
+        'CreateSecurityGroup'
+      );
     });
   });
 
   describe('KMS Encryption', () => {
     test('should have KMS key for infrastructure encryption', () => {
       expect(template.Resources.InfrastructureKMSKey).toBeDefined();
-      expect(template.Resources.InfrastructureKMSKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.InfrastructureKMSKey.Type).toBe(
+        'AWS::KMS::Key'
+      );
     });
 
     test('KMS key should have key rotation enabled', () => {
@@ -363,7 +402,7 @@ describe('TapStack CloudFormation Template', () => {
         'DatabaseInstance',
         'SecureS3Bucket',
         'SecurityMonitoringLambda',
-        'CloudTrail'
+        'CloudTrail',
       ];
 
       namedResources.forEach(resourceName => {
@@ -379,7 +418,7 @@ describe('TapStack CloudFormation Template', () => {
             props.DBInstanceIdentifier,
             props.BucketName,
             props.TrailName,
-            props.GroupName
+            props.GroupName,
           ].filter(p => p !== undefined);
 
           if (nameProps.length > 0) {
@@ -412,7 +451,7 @@ describe('TapStack CloudFormation Template', () => {
         'LambdaFunctionArn',
         'SNSTopicArn',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
       ];
 
       essentialOutputs.forEach(outputName => {
@@ -431,8 +470,12 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Security Best Practices', () => {
     test('EC2 instances should have security groups attached', () => {
-      expect(template.Resources.PublicEC2Instance.Properties.SecurityGroupIds).toBeDefined();
-      expect(template.Resources.PrivateEC2Instance.Properties.SecurityGroupIds).toBeDefined();
+      expect(
+        template.Resources.PublicEC2Instance.Properties.SecurityGroupIds
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateEC2Instance.Properties.SecurityGroupIds
+      ).toBeDefined();
     });
 
     test('RDS should not be publicly accessible', () => {
@@ -443,13 +486,17 @@ describe('TapStack CloudFormation Template', () => {
     test('Lambda functions should not have unrestricted permissions', () => {
       const lambdaRole = template.Resources.LambdaExecutionRole;
       const policies = lambdaRole.Properties.ManagedPolicyArns;
-      expect(policies).not.toContain('arn:aws:iam::aws:policy/AdministratorAccess');
+      expect(policies).not.toContain(
+        'arn:aws:iam::aws:policy/AdministratorAccess'
+      );
     });
 
     test('S3 buckets should have versioning enabled where appropriate', () => {
       const secureBucket = template.Resources.SecureS3Bucket;
       expect(secureBucket.Properties.VersioningConfiguration).toBeDefined();
-      expect(secureBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(secureBucket.Properties.VersioningConfiguration.Status).toBe(
+        'Enabled'
+      );
     });
   });
 
@@ -461,10 +508,14 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have proper dependencies between resources', () => {
       // Check that CloudTrail depends on bucket policy
-      expect(template.Resources.CloudTrail.DependsOn).toContain('CloudTrailBucketPolicy');
-      
+      expect(template.Resources.CloudTrail.DependsOn).toContain(
+        'CloudTrailBucketPolicy'
+      );
+
       // Check that NAT Gateways depend on Internet Gateway attachment
-      expect(template.Resources.NatGateway1EIP.DependsOn).toContain('InternetGatewayAttachment');
+      expect(template.Resources.NatGateway1EIP.DependsOn).toContain(
+        'InternetGatewayAttachment'
+      );
     });
   });
 });

@@ -39,11 +39,6 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
-  DBPassword:
-    Type: String
-    Description: Database master password (stored in Secrets Manager)
-    NoEcho: true
-
   # Environment Tag
   Environment:
     Type: String
@@ -202,9 +197,6 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-nat-eip-1-${EnvironmentSuffix}"
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -213,9 +205,6 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-nat-eip-2-${EnvironmentSuffix}"
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -446,11 +435,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-ec2-role-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -484,11 +468,6 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref SecurityAlertsTopic
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-lambda-role-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
 
   # IAM User with MFA enforced
   SecureUser:
@@ -499,11 +478,6 @@ Resources:
       UserName: !Sub "${AWS::StackName}-secure-user-${EnvironmentSuffix}"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/ReadOnlyAccess
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-secure-user-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
 
   MFAEnforcementPolicy:
     Type: AWS::IAM::Policy
@@ -675,7 +649,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
@@ -705,7 +678,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -723,6 +695,14 @@ Resources:
           Value: !Ref Environment
 
   # ==================== Lambda Function ====================
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-security-monitoring-${EnvironmentSuffix}"
+      RetentionInDays: 14
+
   SecurityMonitoringLambda:
     Type: AWS::Lambda::Function
     DeletionPolicy: Delete
@@ -790,11 +770,6 @@ Resources:
       TopicName: !Sub "${AWS::StackName}-security-alerts-${EnvironmentSuffix}"
       DisplayName: Security Alerts
       KmsMasterKeyId: !Ref InfrastructureKMSKey
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-security-alerts-${EnvironmentSuffix}"
-        - Key: Environment
-          Value: !Ref Environment
 
   # ==================== CloudTrail ====================
   CloudTrailBucket:
@@ -810,7 +785,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
