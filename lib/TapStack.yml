@@ -327,7 +327,7 @@ Resources:
       ResourceId: !Ref SecureVPC
       ResourceType: "VPC"
       TrafficType: ALL
-      LogDestination: !Sub "${VpcFlowLogsBucket.Arn}/vpc-flow-logs/"
+      LogDestination: !Sub "arn:aws:s3:::${VpcFlowLogsBucket}/vpc-flow-logs/"
       LogDestinationType: s3
       LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
       Tags:
