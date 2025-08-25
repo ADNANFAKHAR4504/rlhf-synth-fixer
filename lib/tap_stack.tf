@@ -461,7 +461,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${substr(local.unique_project_name, 0, 32)}-alb"
+  name               = "${substr(local.unique_project_name, 0, 28)}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -476,7 +476,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${substr(local.unique_project_name, 0, 32)}-tg"
+  name     = "${substr(local.unique_project_name, 0, 28)}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -689,6 +689,8 @@ resource "aws_cloudwatch_log_group" "app_logs" {
   name              = "/aws/ec2/${local.unique_project_name}"
   kms_key_id        = aws_kms_key.main.arn
   retention_in_days = 30
+
+  depends_on = [aws_kms_key.main]
 
   tags = merge(local.common_tags, {
     Name = "${local.unique_project_name}-application-log-group"
