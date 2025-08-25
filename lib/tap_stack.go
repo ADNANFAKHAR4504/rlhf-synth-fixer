@@ -61,15 +61,13 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 		// Enable DNS support and hostnames for proper name resolution
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
-
-		// Add tags for resource identification and compliance
-		Tags: &map[string]*string{
-			"Name":        jsii.String("corpVPC"),
-			"Environment": jsii.String("production"),
-			"Purpose":     jsii.String("secure-infrastructure"),
-			"Owner":       jsii.String("corp-security-team"),
-		},
 	})
+
+	// Add tags to VPC using CDK Tags API
+	awscdk.Tags_Of(vpc).Add(jsii.String("Name"), jsii.String("corpVPC"), nil)
+	awscdk.Tags_Of(vpc).Add(jsii.String("Environment"), jsii.String("production"), nil)
+	awscdk.Tags_Of(vpc).Add(jsii.String("Purpose"), jsii.String("secure-infrastructure"), nil)
+	awscdk.Tags_Of(vpc).Add(jsii.String("Owner"), jsii.String("corp-security-team"), nil)
 
 	// Create a highly restrictive security group
 	// This security group implements zero-trust principles with explicit allow rules
@@ -82,15 +80,13 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 
 		// Disable default outbound rules - we'll add explicit rules
 		AllowAllOutbound: jsii.Bool(false),
-
-		// Add tags for compliance and identification
-		Tags: &map[string]*string{
-			"Name":          jsii.String("corpSecurityGroup"),
-			"SecurityLevel": jsii.String("strict"),
-			"Purpose":       jsii.String("restricted-web-access"),
-			"Owner":         jsii.String("corp-security-team"),
-		},
 	})
+
+	// Add tags to Security Group using CDK Tags API
+	awscdk.Tags_Of(securityGroup).Add(jsii.String("Name"), jsii.String("corpSecurityGroup"), nil)
+	awscdk.Tags_Of(securityGroup).Add(jsii.String("SecurityLevel"), jsii.String("strict"), nil)
+	awscdk.Tags_Of(securityGroup).Add(jsii.String("Purpose"), jsii.String("restricted-web-access"), nil)
+	awscdk.Tags_Of(securityGroup).Add(jsii.String("Owner"), jsii.String("corp-security-team"), nil)
 
 	// Add strict inbound rule: Allow HTTP (port 80) ONLY from specific CIDR
 	// This implements the principle of least privilege access
@@ -98,6 +94,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 		awsec2.Peer_Ipv4(jsii.String("203.0.113.0/24")), // Source: Specific CIDR block only
 		awsec2.Port_Tcp(jsii.Number(80)),                 // Port: HTTP (80)
 		jsii.String("Allow HTTP traffic from trusted CIDR block 203.0.113.0/24 only"),
+		jsii.Bool(false), // remoteRule parameter - set to false for standard rule
 	)
 
 	// Explicitly deny all outbound traffic by not adding any egress rules
