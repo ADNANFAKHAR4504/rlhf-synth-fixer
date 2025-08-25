@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strconv"
 	"time"
 
@@ -24,6 +25,12 @@ import (
 func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
 
+	// Get environment suffix from ENV variable
+	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if envSuffix == "" {
+		envSuffix = "prod"
+	}
+
 	// Configure AWS provider for us-east-1
 	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-east-1"),
@@ -40,7 +47,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create IAM role for SecureApp with Lambda service principal
 	secureAppRole := iamrole.NewIamRole(stack, jsii.String("SecureAppRole"), &iamrole.IamRoleConfig{
-		Name: jsii.String("SecureApp-Role"),
+		Name: jsii.String("SecureApp-Role-" + envSuffix),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -64,9 +71,9 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		},
 	})
 
-	// Create unique bucket name using timestamp
+	// Create unique bucket name using timestamp and environment suffix
 	bucketSuffix := strconv.FormatInt(time.Now().Unix(), 16)
-	bucketName := "secureapp-bucket-" + bucketSuffix
+	bucketName := "secureapp-bucket-" + envSuffix + "-" + bucketSuffix
 
 	// Create S3 bucket with security configurations
 	secureAppBucket := s3bucket.NewS3Bucket(stack, jsii.String("SecureAppBucket"), &s3bucket.S3BucketConfig{
@@ -109,7 +116,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create DynamoDB table with encryption
 	secureAppTable := dynamodbtable.NewDynamodbTable(stack, jsii.String("SecureAppTable"), &dynamodbtable.DynamodbTableConfig{
-		Name:        jsii.String("SecureApp-Table"),
+		Name:        jsii.String("SecureApp-Table-" + envSuffix),
 		BillingMode: jsii.String("PAY_PER_REQUEST"),
 		HashKey:     jsii.String("id"),
 		Attribute: []*dynamodbtable.DynamodbTableAttribute{
@@ -132,7 +139,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Create IAM policy for restricted S3 and DynamoDB access
 	secureAppPolicy := iampolicy.NewIamPolicy(stack, jsii.String("SecureAppPolicy"), &iampolicy.IamPolicyConfig{
-		Name: jsii.String("SecureApp-Policy"),
+		Name: jsii.String("SecureApp-Policy-" + envSuffix),
 		Policy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -190,8 +197,8 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	})
 
 	// Create IAM Access Analyzer for 2025 security monitoring
-	accessanalyzeranalyzer.NewAccessanalyzerAnalyzer(stack, jsii.String("SecureAppAccessAnalyzer"), &accessanalyzeranalyzer.AccessanalyzerAnalyzerConfig{
-		AnalyzerName: jsii.String("SecureApp-AccessAnalyzer"),
+	analyzer := accessanalyzeranalyzer.NewAccessanalyzerAnalyzer(stack, jsii.String("SecureAppAccessAnalyzer"), &accessanalyzeranalyzer.AccessanalyzerAnalyzerConfig{
+		AnalyzerName: jsii.String("SecureApp-AccessAnalyzer-" + envSuffix),
 		Type:         jsii.String("ACCOUNT"),
 		Tags: &map[string]*string{
 			"Name":        jsii.String("SecureApp-AccessAnalyzer"),
@@ -222,6 +229,42 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 				}
 			]
 		}`),
+	})
+
+	// Outputs
+	cdktf.NewTerraformOutput(stack, jsii.String("bucket_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppBucket.Id(),
+		Description: jsii.String("Name of the S3 bucket"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("bucket_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppBucket.Arn(),
+		Description: jsii.String("ARN of the S3 bucket"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("dynamodb_table_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppTable.Name(),
+		Description: jsii.String("Name of the DynamoDB table"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("dynamodb_table_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppTable.Arn(),
+		Description: jsii.String("ARN of the DynamoDB table"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("iam_role_name"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppRole.Name(),
+		Description: jsii.String("Name of the IAM role"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("iam_role_arn"), &cdktf.TerraformOutputConfig{
+		Value:       secureAppRole.Arn(),
+		Description: jsii.String("ARN of the IAM role"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("access_analyzer_arn"), &cdktf.TerraformOutputConfig{
+		Value:       analyzer.Arn(),
+		Description: jsii.String("ARN of the Access Analyzer"),
 	})
 
 	return stack
