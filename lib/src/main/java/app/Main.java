@@ -4,7 +4,6 @@ import com.pulumi.Pulumi;
 import com.pulumi.core.Output;
 import com.pulumi.aws.Provider;
 import com.pulumi.aws.ProviderArgs;
-import com.pulumi.aws.ProviderDefaultTagsArgs;
 import app.config.EnvironmentConfig;
 import app.infrastructure.InfrastructureStack;
 import app.migration.MigrationManager;
@@ -25,9 +24,7 @@ public class Main {
             // Create AWS provider with environment-specific configuration
             Provider awsProvider = new Provider("aws-provider", ProviderArgs.builder()
                 .region(region)
-                .defaultTags(ProviderDefaultTagsArgs.builder()
-                    .tags(TaggingPolicy.getDefaultTags(environment))
-                    .build())
+                // Note: Default tags will be applied individually to resources via TaggingPolicy
                 .build());
             
             // Initialize infrastructure stack
