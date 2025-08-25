@@ -1,22 +1,22 @@
+// test/tap-stack.unit.test.mjs
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { TapStack } from '../lib/tap-stack.mjs';
 
+// default environment suffix used by most tests
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack', () => {
+describe('TapStack (unit)', () => {
+  // shared test variables (recreated / overridden in inner suites as needed)
   let app;
   let stack;
   let template;
   let stackName;
   let env;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    env = { account: '111111111111', region: 'us-east-1' };
-    stackName = `TapStack${environmentSuffix}`;
-  });
-
+  // base config in env-keyed form (dev/prod shape)
   const baseConfig = {
     dev: {
       createIfNotExists: true,
@@ -28,11 +28,22 @@ describe('TapStack', () => {
     }
   };
 
-  // ------------------ Happy path ------------------
-  describe('Happy path', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    env = { account: '111111111111', region: 'us-east-1' };
+    // base stack name — tests append a suffix to keep names unique when necessary
+    stackName = `TapStack${environmentSuffix}`;
+  });
+
+  //
+  // -------------------------
+  // Happy path: standard stack with provided dev config
+  // -------------------------
+  //
+  describe('Happy path (dev config provided)', () => {
     beforeEach(() => {
       app = new cdk.App();
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config: baseConfig });
+      stack = new TapStack(app, `${stackName}-Happy`, { env, environmentSuffix, config: baseConfig });
       template = Template.fromStack(stack);
     });
 
@@ -43,13 +54,8 @@ describe('TapStack', () => {
     });
 
     test('Creates exactly 2 EC2 instances', () => {
-      // Find all resources of type AWS::EC2::Instance
       const ec2Instances = template.findResources('AWS::EC2::Instance');
-
-      // Assert that there are exactly 2 instances
       expect(Object.keys(ec2Instances)).toHaveLength(2);
-
-      // Optional: check that both are t2.micro
       Object.values(ec2Instances).forEach((instance) => {
         expect(instance.Properties.InstanceType).toBe('t2.micro');
       });
@@ -58,23 +64,10 @@ describe('TapStack', () => {
     test('Security group has correct ingress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
-
-      // Ingress rules
-      const ingressRules = sg.SecurityGroupIngress;
-      expect(ingressRules).toEqual(
+      expect(sg.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({
-            IpProtocol: 'tcp',
-            FromPort: 80,
-            ToPort: 80,
-            CidrIp: '0.0.0.0/0'
-          }),
-          expect.objectContaining({
-            IpProtocol: 'tcp',
-            FromPort: 22,
-            ToPort: 22,
-            CidrIp: '10.0.0.0/8'
-          })
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: '10.0.0.0/8' })
         ])
       );
     });
@@ -82,23 +75,10 @@ describe('TapStack', () => {
     test('Security group has correct egress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
-
-      const egressRules = sg.SecurityGroupEgress;
-
-      // Check trusted outbound CIDR
-      expect(egressRules).toEqual(
+      expect(sg.SecurityGroupEgress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({
-            IpProtocol: '-1',
-            CidrIp: '10.0.0.0/8'
-          }),
-          // HTTPS to AWS services (SSM/CloudWatch)
-          expect.objectContaining({
-            IpProtocol: 'tcp',
-            FromPort: 443,
-            ToPort: 443,
-            CidrIp: '0.0.0.0/0'
-          })
+          expect.objectContaining({ IpProtocol: '-1', CidrIp: '10.0.0.0/8' }),
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' })
         ])
       );
     });
@@ -139,172 +119,234 @@ describe('TapStack', () => {
     test('All resources have Environment tag', () => {
       const resources = template.findResources('*');
       Object.values(resources).forEach(r => {
-        expect(r.Properties?.Tags).toEqual(
-          expect.arrayContaining([{ Key: 'Environment', Value: 'Production' }])
-        );
+        expect(r.Properties?.Tags).toEqual(expect.arrayContaining([{ Key: 'Environment', Value: 'Production' }]));
       });
     });
 
     test('Outputs include EC2, SecurityGroup and LogGroup', () => {
       const outputs = template.findOutputs('*');
-      const expectedOutputs = [
-        'Instance1Id',
-        'Instance1PrivateIP',
-        'SecurityGroupId',
-        'LogGroupName'
-      ];
-      expectedOutputs.forEach(name => {
+      ['Instance1Id', 'Instance1PrivateIP', 'SecurityGroupId', 'LogGroupName'].forEach(name => {
         const outputKey = Object.keys(outputs).find(k => k.endsWith(name));
         expect(outputKey).toBeDefined();
       });
     });
-  });
+  }); // end Happy path
 
-  //------------------createIfNotExists = true ------------------
-  describe('createIfNotExists = true', () => {
+  //
+  // -------------------------
+  // createIfNotExists = true: when resources are allowed to be created if missing
+  // -------------------------
+  //
+  describe('createIfNotExists = true (fallback creation allowed)', () => {
     test('Creates a new VPC if existingVpcId missing', () => {
       app = new cdk.App();
       const config = {
-        ...baseConfig,
         dev: {
           ...baseConfig.dev,
           existingVpcId: undefined,
-          createIfNotExists: true
+          createIfNotExists: true,
+          environment: 'dev'
         }
       };
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config });
+      stack = new TapStack(app, `${stackName}-CreateVpc`, { env, environmentSuffix, config });
       template = Template.fromStack(stack);
-
       template.resourceCountIs('AWS::EC2::VPC', 1);
     });
 
     test('Creates a new S3 bucket if existingS3Bucket missing', () => {
       app = new cdk.App();
       const config = {
-        ...baseConfig,
         dev: {
           ...baseConfig.dev,
           existingS3Bucket: undefined,
-          createIfNotExists: true
+          createIfNotExists: true,
+          environment: 'dev'
         }
       };
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config });
+      stack = new TapStack(app, `${stackName}-CreateBucket`, { env, environmentSuffix, config });
       template = Template.fromStack(stack);
 
-      // Exactly 1 bucket
       template.resourceCountIs('AWS::S3::Bucket', 1);
 
-      // Encryption check
       const bucketResources = template.findResources('AWS::S3::Bucket');
       const bucket = Object.values(bucketResources)[0];
-
       expect(bucket.Properties).toHaveProperty('BucketEncryption');
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            ServerSideEncryptionByDefault: expect.objectContaining({
-              SSEAlgorithm: 'AES256'
-            })
-          })
-        ])
+        expect.arrayContaining([expect.objectContaining({
+          ServerSideEncryptionByDefault: expect.objectContaining({ SSEAlgorithm: 'AES256' })
+        })])
       );
     });
-  });
+  }); // end createIfNotExists=true
 
-  //------------------createIfNotExists = false ------------------
-  describe('createIfNotExists = false', () => {
+  //
+  // -------------------------
+  // createIfNotExists = false: error cases when existence required
+  // -------------------------
+  //
+  describe('createIfNotExists = false (require existing resources)', () => {
     test('Throws if existingVpcId missing', () => {
       app = new cdk.App();
       const config = {
-        ...baseConfig,
-        dev: {
-          ...baseConfig.dev,
-          existingVpcId: undefined,
-          createIfNotExists: false
-        }
+        dev: { ...baseConfig.dev, existingVpcId: undefined, createIfNotExists: false }
       };
-      expect(() => {
-        new TapStack(app, stackName, { env, environmentSuffix, config });
-      }).toThrow(/VPC ID must be provided/);
+      expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
+        .toThrow(/VPC ID must be provided/);
     });
 
     test('Throws if existingS3Bucket missing', () => {
       app = new cdk.App();
       const config = {
-        ...baseConfig,
-        dev: {
-          ...baseConfig.dev,
-          existingS3Bucket: undefined,
-          createIfNotExists: false
-        }
+        dev: { ...baseConfig.dev, existingS3Bucket: undefined, createIfNotExists: false }
       };
-      expect(() => {
-        new TapStack(app, stackName, { env, environmentSuffix, config });
-      }).toThrow(/S3 bucket must be provided/);
+      expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
+        .toThrow(/S3 bucket must be provided/);
     });
-  });
+  }); // end createIfNotExists=false
 
-  // ------------------ Invalid configuration ------------------
-  describe('Invalid configuration', () => {
-    // A) Provided (truthy) environmentSuffix is used
-    test('uses provided environmentSuffix when truthy', () => {
-      const app = new cdk.App();
+  //
+  // -------------------------
+  // Lookup fallback behavior — controlled (conditional) mocks to simulate failed lookups
+  // -------------------------
+  //
+  describe('Lookup fallback behavior (Vpc & S3)', () => {
+    // Restore mocks after each test so they don't leak into other suites
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
 
-      const stack = new TapStack(app, 'TapStackEnvQa', {
-        env,
-        environmentSuffix: 'qa',
-        config: baseConfig
+    describe('VPC lookup failure -> fallback / rethrow', () => {
+      test('fromLookup throws & createIfNotExists=true -> warn and create fallback VPC', () => {
+        // mock only the lookup to throw for our test case
+        const originalVpcFromLookup = ec2.Vpc.fromLookup;
+        jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation((scope, id, opts) => {
+          if (opts && opts.vpcId === 'vpc-lookup-fail') {
+            throw new Error('lookup failed');
+          }
+          return originalVpcFromLookup.call(ec2.Vpc, scope, id, opts);
+        });
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+
+        const config = {
+          dev: { ...baseConfig.dev, existingVpcId: 'vpc-lookup-fail', createIfNotExists: true, environment: 'dev' }
+        };
+
+        app = new cdk.App();
+        const thisStackName = `${stackName}-VpcFallback`;
+        stack = new TapStack(app, thisStackName, { env, environmentSuffix, config });
+        template = Template.fromStack(stack);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining(`Vpc.fromLookup failed for vpcId='${config.dev.existingVpcId}'.`)
+        );
+
+        template.resourceCountIs('AWS::EC2::VPC', 1);
       });
 
-      expect(stack.environmentSuffix).toBe('qa');
-    });
+      test('fromLookup throws & createIfNotExists=false -> original error is rethrown', () => {
+        jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation(() => { throw new Error('lookup failed'); });
 
-    // B) Missing / falsy environmentSuffix defaults to "dev"
-    test('defaults to "dev" when environmentSuffix is omitted or falsy', () => {
-      const app = new cdk.App();
+        const config = {
+          dev: { ...baseConfig.dev, existingVpcId: 'vpc-lookup-fail', createIfNotExists: false, environment: 'dev' }
+        };
 
-      // omit environmentSuffix to test defaulting
-      const stack = new TapStack(app, 'TapStackEnvDefault', {
-        env,
-        config: baseConfig
+        app = new cdk.App();
+        const thisStackName = `${stackName}-VpcNoFallback`;
+
+        expect(() => new TapStack(app, thisStackName, { env, environmentSuffix, config }))
+          .toThrow(/lookup failed/);
+      });
+    }); // end VPC fallback
+
+    describe('S3 lookup failure -> fallback / rethrow', () => {
+      test('fromBucketName throws & createIfNotExists=true -> warn and create fallback Bucket (reuses name)', () => {
+        // capture original and mock conditionally so other components (CloudWatch logging) keep working
+        const originalFromBucketName = s3.Bucket.fromBucketName;
+        const targetBucket = 'my-test-bucket-fallback';
+        jest.spyOn(s3.Bucket, 'fromBucketName').mockImplementation((scope, id, name) => {
+          if (name === targetBucket) {
+            throw new Error('bucket lookup failed');
+          }
+          return originalFromBucketName.call(s3.Bucket, scope, id, name);
+        });
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+
+        const config = {
+          dev: { ...baseConfig.dev, existingS3Bucket: targetBucket, createIfNotExists: true, environment: 'dev' }
+        };
+
+        app = new cdk.App();
+        const thisStackName = `${stackName}-BucketFallback`;
+        stack = new TapStack(app, thisStackName, { env, environmentSuffix, config });
+        template = Template.fromStack(stack);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining(`Bucket.fromBucketName failed for bucket='${targetBucket}'.`)
+        );
+
+        template.resourceCountIs('AWS::S3::Bucket', 1);
+        template.hasResourceProperties('AWS::S3::Bucket', { BucketName: targetBucket });
       });
 
-      expect(stack.environmentSuffix).toBe('dev');
-    });
+      test('fromBucketName throws & createIfNotExists=false -> original error is rethrown', () => {
+        jest.spyOn(s3.Bucket, 'fromBucketName').mockImplementation(() => { throw new Error('bucket lookup failed'); });
 
-    // Extra: test behavior for empty string (shows || treats '' as falsy)
-    test('empty string environmentSuffix falls back to "dev" (|| behavior)', () => {
-      const app = new cdk.App();
+        const cfg = {
+          dev: { ...baseConfig.dev, existingS3Bucket: 'my-test-bucket-fallback', createIfNotExists: false, environment: 'dev' }
+        };
 
-      const stack = new TapStack(app, 'TapStackEnvEmpty', {
-        env,
-        environmentSuffix: '', // empty string is falsy -> 'dev'
-        config: baseConfig
+        app = new cdk.App();
+        const thisStackName = `${stackName}-BucketNoFallback`;
+        expect(() => new TapStack(app, thisStackName, { env, environmentSuffix, config: cfg }))
+          .toThrow(/bucket lookup failed/);
       });
+    }); // end S3 fallback
+  }); // end Lookup fallback behavior
 
-      expect(stack.environmentSuffix).toBe('dev');
+  //
+  // -------------------------
+  // Invalid configuration: environmentSuffix behavior & context loading
+  // -------------------------
+  //
+  describe('Invalid configuration and environment selection', () => {
+    test('Uses provided environmentSuffix when truthy', () => {
+      const localApp = new cdk.App();
+      const s = new TapStack(localApp, `${stackName}-EnvProvided`, { env, environmentSuffix: 'qa', config: baseConfig });
+      expect(s.environmentSuffix).toBe('qa');
     });
 
-    test('Logs error instead of building resources when config.environment missing (fallback to dev present)', () => {
-      // Arrange: config has a dev key (so loadConfig can fallback), but dev has no "environment"
+    test('Defaults to "dev" when environmentSuffix omitted or falsy', () => {
+      const localApp = new cdk.App();
+      const s = new TapStack(localApp, `${stackName}-EnvDefault`, { env, config: baseConfig });
+      expect(s.environmentSuffix).toBe('dev');
+    });
+
+    test('Empty string environmentSuffix (falsy) also falls back to "dev"', () => {
+      const localApp = new cdk.App();
+      const s = new TapStack(localApp, `${stackName}-EnvEmpty`, { env, environmentSuffix: '', config: baseConfig });
+      expect(s.environmentSuffix).toBe('dev');
+    });
+
+    test('Logs error instead of building resources when config.environment missing (fallback to dev present but dev missing environment)', () => {
       const badConfig = {
         dev: {
+          // dev exists but intentionally missing "environment"
           createIfNotExists: true,
           existingVpcId: 'vpc-12345678',
           existingS3Bucket: 'test-logs-bucket',
           sshCidrBlock: '10.0.0.0/8',
-          trustedOutboundCidrs: ['10.0.0.0/8'],
-          // NOTE: intentionally missing "environment"
+          trustedOutboundCidrs: ['10.0.0.0/8']
         }
       };
 
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
       const errSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
 
-      // Act: use an environmentSuffix that is missing (so fallback occurs)
-      new TapStack(app, 'TapStackNoEnv', { env, environmentSuffix: 'qa', config: badConfig });
+      // This will cause loadConfig to fall back to dev then constructor to log error
+      new TapStack(app = new cdk.App(), `${stackName}-NoEnvironment`, { env, environmentSuffix: 'qa', config: badConfig });
 
-      // Assert: loadConfig should have warned about falling back, then constructor should log error
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to 'dev'"));
       expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("No configuration found for 'qa'"));
 
@@ -313,7 +355,7 @@ describe('TapStack', () => {
     });
 
     test('Loads config from cdk.json context when environments are provided', () => {
-      app = new cdk.App({
+      const localApp = new cdk.App({
         context: {
           environments: {
             qa: {
@@ -328,85 +370,73 @@ describe('TapStack', () => {
         }
       });
 
-      const stack = new TapStack(app, 'TapStackQA', { env, environmentSuffix: 'qa' });
-
-      expect(stack.config).toEqual(
-        expect.objectContaining({
-          existingVpcId: 'vpc-qa',
-          existingS3Bucket: 'qa-logs',
-          environment: 'QA'
-        })
-      );
+      const s = new TapStack(localApp, `${stackName}-FromContext`, { env, environmentSuffix: 'qa' });
+      expect(s.config).toEqual(expect.objectContaining({
+        existingVpcId: 'vpc-qa',
+        existingS3Bucket: 'qa-logs',
+        environment: 'QA'
+      }));
     });
 
-    test('Throws if environments context missing entirely', () => {
-      app = new cdk.App({ context: {} });
-
-      expect(() => {
-        new TapStack(app, 'TapStackQA', { env, environmentSuffix: 'qa' });
-      }).toThrow(/No configuration found in/);
+    test('Throws when environments context missing entirely', () => {
+      const localApp = new cdk.App({ context: {} });
+      expect(() => new TapStack(localApp, `${stackName}-NoContext`, { env, environmentSuffix: 'qa' }))
+        .toThrow(/No configuration found in/);
     });
 
-    test('Logs error if environment not found in cdk.json context', () => {
-      const app = new cdk.App({
-        context: { environments: { dev: undefined } }
-      });
-
-      expect(() => {
-        new TapStack(app, 'TestStack', { env: {}, environmentSuffix: 'qa', config: {} });
-      }).toThrow(/No configuration found for environment: 'qa'/);
-
+    test('Throws when environment not found in context and no fallback', () => {
+      const localApp = new cdk.App({ context: { environments: { dev: undefined } } });
+      expect(() => new TapStack(localApp, `${stackName}-MissingEnv`, { env: {}, environmentSuffix: 'qa', config: {} }))
+        .toThrow(/No configuration found for environment: 'qa'/);
     });
-  });
+  }); // end Invalid configuration
 
+  //
+  // -------------------------
+  // Additional tests for full coverage (misc small behaviors)
+  // -------------------------
+  //
   describe('Additional tests for full coverage', () => {
-
-    let app;
-
+    let localApp;
     beforeEach(() => {
       jest.clearAllMocks();
-      app = new cdk.App();
-    }); //end-test
+      localApp = new cdk.App();
+    });
 
-    test('showInfo() logs correctly', () => {
-
+    test('showInfo() printing does not crash constructor when invoked indirectly', () => {
+      // constructing with minimal dev that lacks a VPC forces the constructor path that logs errors;
+      // the original test expected a thrown VPC error here, so keep that behavior
       expect(() => {
-        new TapStack(app, 'TapStack-Extra', {
+        new TapStack(localApp, `${stackName}-Extra`, {
           env: { account: '111111111111', region: 'us-east-1' },
           environmentSuffix: 'dev',
           config: { dev: { environment: 'dev' } },
           createIfNotExists: true
         });
       }).toThrow(/VPC ID must be provided/);
+    });
 
-    }); //end-test
-
-    test('loadConfig() falls back to dev if env missing', () => {
+    test('loadConfig() fallbacks and prod-missing behavior (throws for prod)', () => {
+      // fallback (qa missing -> dev used) still eventually fails when required resources missing (VPC)
       const cfg = { qa: undefined, dev: { environment: 'dev' } };
-
       expect(() => {
-        new TapStack(app, 'TapStackFallback', {
+        new TapStack(localApp, `${stackName}-FallbackFlow`, {
           env: { account: '111111111111', region: 'us-east-1' },
           environmentSuffix: 'qa',
           config: cfg
         });
       }).toThrow(/VPC ID must be provided/);
 
-    }); //end-test
-
-    test('loadConfig() logs error if prod config missing', () => {
-      const cfg = { dev: { environment: 'dev' } };
-
+      // prod config missing should throw early at loadConfig
+      const cfgProd = { dev: { environment: 'dev' } };
       expect(() => {
-        new TapStack(app, 'TapStackProdMissing', {
+        new TapStack(localApp, `${stackName}-ProdMissing`, {
           env: { account: '111111111111', region: 'us-east-1' },
           environmentSuffix: 'prod',
-          config: cfg
+          config: cfgProd
         });
       }).toThrow(/No configuration found for 'prod'/);
+    });
+  }); // end Additional tests
 
-    }); //end-test
-
-  }); // end-describe
-
-}); // end-suite
+}); // end TapStack (unit)
