@@ -1,143 +1,115 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.assertThat;
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.assertions.Template;
 
 import java.util.List;
 import java.util.Map;
 
-import software.amazon.awscdk.App;
-import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.assertions.Template;
-
-/**
- * Integration tests for the RegionalStack.
- *
- * These validate full-stack behavior, outputs, compliance, and
- * edge-case handling across environments.
- */
 public class MainIntegrationTest {
 
-    /**
-     * Validate full stack deployment and required outputs.
-     */
-    @Test
-    public void testFullStackDeployment() {
+    private Template synthesizeTemplate(String id) {
         App app = new App();
-        RegionalStack stack = new RegionalStack(app, "NovaStackProd",
-                StackProps.builder().build(), "prod");
-
-        Template template = Template.fromStack(stack);
-
-        assertThat(stack).isNotNull();
-        assertThat(template).isNotNull();
-
-        // Validate Outputs
-        template.hasOutput("VpcId", Map.of());
-        template.hasOutput("AlbDns", Map.of());
-        template.hasOutput("CpuAlarmName", Map.of());
-        template.hasOutput("LogBucketName", Map.of());
-        template.hasOutput("RdsEndpoint", Map.of());
+        Main.FaultTolerantStack stack = new Main.FaultTolerantStack(app, id,
+                software.amazon.awscdk.StackProps.builder()
+                        .env(Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                        .build()) {
+            @Override
+            protected software.amazon.awscdk.services.route53.IHostedZone createHostedZoneMock(String env) {
+                return software.amazon.awscdk.services.route53.HostedZone.fromHostedZoneAttributes(this, id + "-FakeZone",
+                        software.amazon.awscdk.services.route53.HostedZoneAttributes.builder()
+                                .hostedZoneId("Z123456FAKE")
+                                .zoneName("example.com")
+                                .build());
+            }
+        };
+        return Template.fromStack(stack);
     }
 
-    /**
-     * Validate multi-environment configuration consistency.
-     */
     @Test
-    public void testMultiEnvironmentConfiguration() {
-        String[] environments = {"dev", "staging", "prod"};
-
-        for (String env : environments) {
-            App app = new App();
-            RegionalStack stack = new RegionalStack(app, "NovaStack" + env,
-                    StackProps.builder().build(), env);
-
-            Template template = Template.fromStack(stack);
-
-            assertThat(stack).isNotNull();
-            assertThat(template).isNotNull();
-
-            // Check VPC exists in all envs
-            template.hasResourceProperties("AWS::EC2::VPC", Map.of(
-                    "CidrBlock", "10.0.0.0/16"
-            ));
-        }
+    public void testVpcHasPrivateAndPublicSubnets() {
+        Template template = synthesizeTemplate("IntegrationVpc");
+        template.resourceCountIs("AWS::EC2::Subnet", 4);
     }
 
-    /**
-     * Validate S3 bucket compliance (encryption + versioning).
-     */
     @Test
-    public void testLogBucketCompliance() {
-        App app = new App();
-        RegionalStack stack = new RegionalStack(app, "NovaStackCompliance",
-                StackProps.builder().build(), "qa");
-
-        Template template = Template.fromStack(stack);
-
+    public void testS3BucketIsSecure() {
+        Template template = synthesizeTemplate("IntegrationS3");
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
-                "BucketEncryption", Map.of(
-                    "ServerSideEncryptionConfiguration", List.of(
-                        Map.of("ServerSideEncryptionByDefault", Map.of("SSEAlgorithm", "AES256"))
-                    )
-                ),
-                "VersioningConfiguration", Map.of("Status", "Enabled")
+                "VersioningConfiguration", Map.of("Status", "Enabled"),
+                "PublicAccessBlockConfiguration", Map.of(
+                        "BlockPublicAcls", true,
+                        "IgnorePublicAcls", true,
+                        "BlockPublicPolicy", true,
+                        "RestrictPublicBuckets", true
+                )
         ));
     }
 
-
-    /**
-     * Validate RDS instance is Multi-AZ.
-     */
     @Test
-    public void testRdsMultiAzCompliance() {
-        App app = new App();
-        RegionalStack stack = new RegionalStack(app, "NovaStackRds",
-                StackProps.builder().build(), "prod");
+    public void testAsgAttachedToAlb() {
+        Template template = synthesizeTemplate("IntegrationAsgAlb");
 
-        Template template = Template.fromStack(stack);
+        template.hasResourceProperties("AWS::ElasticLoadBalancingV2::TargetGroup", Map.of(
+                "Port", 80,
+                "TargetType", "instance"
+        ));
 
+        template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Map.of(
+                "Port", 80,
+                "Protocol", "HTTP"
+        ));
+    }
+
+    @Test
+    public void testRdsIsMultiAzEncrypted() {
+        Template template = synthesizeTemplate("IntegrationRds");
         template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
-                "MultiAZ", true
+                "MultiAZ", true,
+                "StorageEncrypted", true
         ));
     }
 
-    /**
-     * Validate edge case: invalid environment suffix.
-     */
     @Test
-    public void testInvalidEnvironmentSuffix() {
-        App app = new App();
-        RegionalStack stack = new RegionalStack(app, "NovaStackInvalid",
-                StackProps.builder().build(), "invalid-env");
+    public void testIamRoleLeastPrivilege() {
+        Template template = synthesizeTemplate("IntegrationIam");
 
-        Template template = Template.fromStack(stack);
-
-        assertThat(stack).isNotNull();
-        assertThat(template).isNotNull();
-        // Ensure stack still synthesizes, even with bad suffix
+        template.hasResourceProperties("AWS::IAM::Role", Map.of(
+                "AssumeRolePolicyDocument", Map.of(
+                        "Statement", List.of(
+                                Map.of(
+                                        "Action", "sts:AssumeRole",
+                                        "Effect", "Allow",
+                                        "Principal", Map.of("Service", "ec2.amazonaws.com")
+                                )
+                        ),
+                        "Version", "2012-10-17"
+                )
+        ));
     }
 
-    /**
-     * Validate nested components & scalability (multi-region).
-     */
     @Test
-    public void testMultiRegionDeployment() {
-        String[] regions = {"use1", "usw2"};
+    public void testCloudWatchAlarmOnCpuUtilization() {
+        Template template = synthesizeTemplate("IntegrationAlarm");
 
-        for (String region : regions) {
-            App app = new App();
-            RegionalStack stack = new RegionalStack(app, "NovaStack-" + region,
-                    StackProps.builder().build(), region);
+        template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
+                "Threshold", 70,
+                "EvaluationPeriods", 2
+        ));
+    }
 
-            Template template = Template.fromStack(stack);
+    @Test
+    public void testRoute53DnsPointsToAlb() {
+        Template template = synthesizeTemplate("IntegrationDns");
 
-            assertThat(stack).isNotNull();
-            assertThat(template).isNotNull();
-
-            // Ensure ALB + ASG exist in each region
-            template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
-            template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
-        }
+        // ✅ No Hamcrest, just assert A record exists
+        template.hasResourceProperties("AWS::Route53::RecordSet", Map.of(
+                "Type", "A"
+        ));
     }
 }

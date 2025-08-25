@@ -1,120 +1,172 @@
 package app;
 
-import software.constructs.Construct;
-import software.amazon.awscdk.*;
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.RemovalPolicy;
+
 import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.s3.*;
 import software.amazon.awscdk.services.autoscaling.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.*;
+import software.amazon.awscdk.services.s3.*;
+import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.rds.*;
 import software.amazon.awscdk.services.cloudwatch.*;
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.cloudwatch.actions.*;
+import software.amazon.awscdk.services.route53.*;
+import software.amazon.awscdk.services.route53.targets.*;
+import software.amazon.awscdk.services.sns.*;
+import software.constructs.Construct;
+
+import java.util.List;
+import java.util.Map;
 
 public class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        new RegionalStack(app, "NovaStack-use1", StackProps.builder().env(Environment.builder()
-                .region("us-east-1").build()).build(), "use1");
+        new FaultTolerantStack(app, "Nova-East", StackProps.builder()
+                .env(Environment.builder()
+                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                        .region("us-east-1")
+                        .build())
+                .build());
 
-        new RegionalStack(app, "NovaStack-usw2", StackProps.builder().env(Environment.builder()
-                .region("us-west-2").build()).build(), "usw2");
+        new FaultTolerantStack(app, "Nova-West", StackProps.builder()
+                .env(Environment.builder()
+                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                        .region("us-west-2")
+                        .build())
+                .build());
 
         app.synth();
     }
-}
 
-class RegionalStack extends Stack {
-    public RegionalStack(final Construct scope, final String id, final StackProps props, final String envSuffix) {
-        super(scope, id, props);
+    public static class FaultTolerantStack extends Stack {
+        public FaultTolerantStack(final Construct scope, final String id, final StackProps props) {
+            super(scope, id, props);
 
-        // ✅ VPC
-        Vpc vpc = Vpc.Builder.create(this, "Vpc-" + envSuffix)
-                .maxAzs(2)
-                .build();
+            String env = id.toLowerCase();
 
-        // ✅ S3 bucket for logs
-        Bucket logBucket = Bucket.Builder.create(this, "Logs-" + envSuffix)
-                .versioned(true)
-                .encryption(BucketEncryption.S3_MANAGED)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
+            // VPC
+            Vpc vpc = Vpc.Builder.create(this, env + "-vpc")
+                    .maxAzs(2)
+                    .natGateways(2)
+                    .build();
 
-        // ✅ AutoScaling Group
-        AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "Asg-" + envSuffix)
-                .vpc(vpc)
-                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
-                        InstanceClass.BURSTABLE2, InstanceSize.MICRO))
-                .machineImage(MachineImage.latestAmazonLinux2())
-                .desiredCapacity(2)
-                .minCapacity(1)
-                .maxCapacity(3)
-                .build();
+            // Logs S3 bucket
+            Bucket logBucket = Bucket.Builder.create(this, env + "-logs")
+                    .versioned(true)
+                    .encryption(BucketEncryption.KMS_MANAGED)
+                    .lifecycleRules(List.of(LifecycleRule.builder()
+                            .enabled(true)
+                            .expiration(Duration.days(365))
+                            .build()))
+                    .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                    .build();
 
-        // ✅ Application Load Balancer
-        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "Alb-" + envSuffix)
-                .vpc(vpc)
-                .internetFacing(true)
-                .build();
+            // IAM Role
+            Role ec2Role = Role.Builder.create(this, env + "-ec2-role")
+                    .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                    .managedPolicies(List.of(
+                            ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
+                            ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy")
+                    ))
+                    .build();
 
-        ApplicationListener listener = alb.addListener("HttpListener", BaseApplicationListenerProps.builder()
-                .port(80)
-                .build());
+            // Security Group
+            SecurityGroup sg = SecurityGroup.Builder.create(this, env + "-sg")
+                    .vpc(vpc)
+                    .allowAllOutbound(true)
+                    .build();
+            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "Allow HTTP");
+            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), "Allow HTTPS");
 
-        listener.addTargets("AlbTg-" + envSuffix, AddApplicationTargetsProps.builder()
-                .port(80)
-                .targets(java.util.List.of(asg))
-                .build());
+            // Auto Scaling Group
+            IMachineImage ami = MachineImage.latestAmazonLinux2();
+            AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, env + "-asg")
+                    .vpc(vpc)
+                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE2, InstanceSize.MICRO))
+                    .machineImage(ami)
+                    .minCapacity(2)
+                    .maxCapacity(6)
+                    .role(ec2Role)
+                    .securityGroup(sg)
+                    .build();
 
-        // ✅ RDS instance
-        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds-" + region)
-                .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                    .version(PostgresEngineVersion.VER_14_7)   // ✅ replace 13.7 with a supported version
-                    .build()))
-                .instanceType(ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
-                .vpc(vpc)
-                .multiAz(true)
-                .credentials(Credentials.fromGeneratedSecret("postgres"))
-                .allocatedStorage(20)
-                .storageEncrypted(true)
-                .deletionProtection(false)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
+            // Application Load Balancer
+            ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, env + "-alb")
+                    .vpc(vpc)
+                    .internetFacing(true)
+                    .build();
+            ApplicationListener listener = alb.addListener(env + "-listener",
+                    BaseApplicationListenerProps.builder()
+                            .port(80) // replace with HTTPS + ACM if needed
+                            .protocol(ApplicationProtocol.HTTP)
+                            .build());
+            listener.addTargets(env + "-targets",
+                    AddApplicationTargetsProps.builder()
+                            .port(80)
+                            .targets(List.of(asg))
+                            .build());
 
+            // RDS Multi-AZ
+            DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
+                    .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
+                            .version(PostgresEngineVersion.VER_13_7)
+                            .build()))
+                    .vpc(vpc)
+                    .allocatedStorage(20)
+                    .multiAz(true)
+                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
+                    .storageEncrypted(true)
+                    .credentials(Credentials.fromGeneratedSecret("dbadmin"))
+                    .removalPolicy(RemovalPolicy.DESTROY)
+                    .deletionProtection(false)
+                    .build();
 
-        // ✅ CPU Alarm
-        Alarm cpuAlarm = Alarm.Builder.create(this, "CpuAlarm-" + envSuffix)
-                .metric(Metric.Builder.create()
-                        .namespace("AWS/EC2")
-                        .metricName("CPUUtilization")
-                        .dimensionsMap(java.util.Map.of("AutoScalingGroupName", asg.getAutoScalingGroupName()))
-                        .statistic("Average")
-                        .period(Duration.minutes(5))
-                        .build())
-                .threshold(80)
-                .evaluationPeriods(2)
-                .build();
+            // CloudWatch CPU metric for ASG
+            Metric cpuMetric = Metric.Builder.create()
+                    .namespace("AWS/EC2")
+                    .metricName("CPUUtilization")
+                    .statistic("Average")
+                    .period(Duration.minutes(5))
+                    .dimensionsMap(Map.of(
+                            "AutoScalingGroupName", asg.getAutoScalingGroupName()
+                    ))
+                    .build();
 
+            Alarm cpuAlarm = Alarm.Builder.create(this, env + "-cpu-alarm")
+                    .metric(cpuMetric)
+                    .threshold(70)
+                    .evaluationPeriods(2)
+                    .alarmDescription("Alarm if CPU > 70% for 2 periods")
+                    .build();
 
-        // ✅ Outputs
-        CfnOutput.Builder.create(this, "VpcId")
-                .value(vpc.getVpcId())
-                .build();
+            Topic alarmTopic = new Topic(this, env + "-alarm-topic");
+            cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-        CfnOutput.Builder.create(this, "AlbDns")
-                .value(alb.getLoadBalancerDnsName())
-                .build();
+            // Route53 DNS
+            IHostedZone zone = createHostedZoneMock(env);
 
-        CfnOutput.Builder.create(this, "CpuAlarmName")
-                .value(cpuAlarm.getAlarmName())
-                .build();
+            ARecord.Builder.create(this, env + "-dns")
+                    .zone(zone)
+                    .recordName("app." + zone.getZoneName())
+                    .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+                    .ttl(Duration.minutes(1))
+                    .build();
+        }
 
-        CfnOutput.Builder.create(this, "LogBucketName")
-                .value(logBucket.getBucketName())
-                .build();
-
-        CfnOutput.Builder.create(this, "RdsEndpoint")
-                .value(rds.getDbInstanceEndpointAddress())
-                .build();
+        /**
+         * Extracted into a protected method so that tests can override with a fake zone.
+         */
+        protected IHostedZone createHostedZoneMock(String env) {
+            return HostedZone.fromLookup(this, env + "-zone",
+                    HostedZoneProviderProps.builder()
+                            .domainName("example.com")
+                            .build());
+        }
     }
 }
