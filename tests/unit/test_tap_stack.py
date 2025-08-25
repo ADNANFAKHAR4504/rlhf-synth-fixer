@@ -102,7 +102,8 @@ class TestTapStack(unittest.TestCase):
     resources = template.find_resources("AWS::IAM::Role")
     # Find the EC2 role specifically
     ec2_roles = [r for r in resources.values() 
-                 if "ec2.amazonaws.com" in str(r.get("Properties", {}).get("AssumeRolePolicyDocument", {}))]
+                 if "ec2.amazonaws.com" in str(r.get("Properties", {}).get(
+                     "AssumeRolePolicyDocument", {}))]
     self.assertGreaterEqual(len(ec2_roles), 1)
 
   @mark.it("creates security groups for ALB and EC2")
