@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 console.log('AWS_SESSION_TOKEN:', process.env.AWS_SESSION_TOKEN || '(not set)');
+console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? (process.env.AWS_ACCESS_KEY_ID.substring(0, 4) + '...' + process.env.AWS_ACCESS_KEY_ID.substring(5, process.env.AWS_ACCESS_KEY_ID.length)) : '(not set)');
+console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? (process.env.AWS_SECRET_ACCESS_KEY.substring(0, 4) + '...' + process.env.AWS_SECRET_ACCESS_KEY.substring(5, process.env.AWS_SECRET_ACCESS_KEY.length)) : '(not set)');
+console.log('AWS_DEFAULT_REGION:', process.env.AWS_DEFAULT_REGION || '(not set)');
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
