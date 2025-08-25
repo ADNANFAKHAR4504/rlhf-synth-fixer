@@ -72,9 +72,25 @@ class RegionalStack extends Stack {
                 .lifecycleRules(List.of(
                         LifecycleRule.builder()
                                 .expiration(Duration.days(365))
-                                .transitionTo(StorageClass.GLACIER, Duration.days(90))
+                                .transitions(List.of(
+                                        software.amazon.awscdk.services.s3.LifecycleTransition.builder()
+                                                .storageClass(StorageClass.GLACIER)
+                                                .transitionAfter(Duration.days(90))
+                                                .build()
+                                ))
                                 .build()))
                 .build();
+
+
+        // IAM Role
+                                software.amazon.awscdk.services.s3.LifecycleTransition.builder()
+                                        .storageClass(StorageClass.GLACIER)
+                                        .transitionAfter(Duration.days(90))
+                                        .build()
+                        ))
+                        .build()))
+        .build();
+
 
         // IAM Role
         Role ec2Role = Role.Builder.create(this, "NovaEc2Role-" + environmentSuffix)
