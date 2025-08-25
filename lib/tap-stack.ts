@@ -86,7 +86,10 @@ export class TapStack extends cdk.Stack {
 
     // CloudFormation Deployment Role
     const deploymentRole = new iam.Role(this, 'CloudFormationDeploymentRole', {
-      assumedBy: new iam.ServicePrincipal('cloudformation.amazonaws.com'),
+      assumedBy: new iam.CompositePrincipal(
+        new iam.ServicePrincipal('cloudformation.amazonaws.com'),
+        new iam.ServicePrincipal('codepipeline.amazonaws.com')
+      ),
       description: 'Role for CloudFormation to deploy resources',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
