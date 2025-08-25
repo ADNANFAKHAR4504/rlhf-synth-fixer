@@ -11,7 +11,7 @@
     "rds",
     "autoscaling"
   ],
-  "training_quality": 7,
+  "training_quality": 10,
   "aws_services": [
     "EC2",
     "VPC",
