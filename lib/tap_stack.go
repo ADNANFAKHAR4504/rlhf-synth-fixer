@@ -472,7 +472,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	}
 
 	// Create CloudTrail for audit logging (depends on bucket policy)
-	cloudTrail, err := cloudtrail.NewTrail(ctx, "healthapp-cloudtrail", &cloudtrail.TrailArgs{
+	_, err = cloudtrail.NewTrail(ctx, "healthapp-cloudtrail", &cloudtrail.TrailArgs{
 		Name:                       pulumi.Sprintf("healthapp-audit-trail-%s", environmentSuffix),
 		S3BucketName:               auditBucket.ID(),
 		IncludeGlobalServiceEvents: pulumi.Bool(true),
@@ -485,7 +485,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	}
 
 	// Create Secrets Manager secret for database credentials
-	dbSecret, err := secretsmanager.NewSecret(ctx, "healthapp-db-secret", &secretsmanager.SecretArgs{
+	_, err = secretsmanager.NewSecret(ctx, "healthapp-db-secret", &secretsmanager.SecretArgs{
 		Name:        pulumi.Sprintf("healthapp/db/credentials-%s", environmentSuffix),
 		Description: pulumi.String("Database credentials for HealthApp"),
 		KmsKeyId:    kmsKey.Arn,
@@ -496,7 +496,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	}
 
 	// Create Secrets Manager secret for API keys
-	apiKeySecret, err := secretsmanager.NewSecret(ctx, "healthapp-api-secret", &secretsmanager.SecretArgs{
+	_, err = secretsmanager.NewSecret(ctx, "healthapp-api-secret", &secretsmanager.SecretArgs{
 		Name:        pulumi.Sprintf("healthapp/api/keys-%s", environmentSuffix),
 		Description: pulumi.String("API keys for HealthApp integrations"),
 		KmsKeyId:    kmsKey.Arn,
