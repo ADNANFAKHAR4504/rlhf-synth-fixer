@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr147cdkpy",
+  "team": "synth",
+  "startedAt": "2025-08-22T20:40:00.000Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Resource Scaling",
+    "Network Configuration",
+    "Security Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "S3",
+    "VPC"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
