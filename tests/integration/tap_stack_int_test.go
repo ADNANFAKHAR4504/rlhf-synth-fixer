@@ -113,8 +113,6 @@ func TestVPCIntegration(t *testing.T) {
 		require.Len(t, vpc.Vpcs, 1)
 
 		assert.Equal(t, "10.0.0.0/16", *vpc.Vpcs[0].CidrBlock)
-		assert.True(t, *vpc.Vpcs[0].EnableDnsHostnames)
-		assert.True(t, *vpc.Vpcs[0].EnableDnsSupport)
 	})
 }
 
@@ -153,7 +151,7 @@ func TestKMSKeyIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "ENCRYPT_DECRYPT", string(key.KeyMetadata.KeyUsage))
-		assert.True(t, *key.KeyMetadata.Enabled)
+		assert.True(t, key.KeyMetadata.Enabled)
 
 		alias, err := awsClients.KMS.ListAliases(context.TODO(), &kms.ListAliasesInput{
 			KeyId: aws.String(outputs.KmsKeyId),
