@@ -89,4 +89,79 @@ public class MainTest {
             Main.defineInfrastructure(null);
         });
     }
+    
+    /**
+     * Test main method invocation structure
+     */
+    @Test
+    void testMainMethodInvocation() {
+        // Test that main method can be invoked but will fail due to Pulumi context
+        assertThrows(Exception.class, () -> {
+            Main.main(new String[]{});
+        });
+        
+        // Test with arguments
+        assertThrows(Exception.class, () -> {
+            Main.main(new String[]{"arg1", "arg2"});
+        });
+        
+        // Test with null arguments (should handle gracefully)
+        assertThrows(Exception.class, () -> {
+            Main.main(null);
+        });
+    }
+    
+    /**
+     * Test method signature consistency
+     */
+    @Test
+    void testMethodSignatures() throws NoSuchMethodException {
+        // Verify main method signature
+        Method mainMethod = Main.class.getDeclaredMethod("main", String[].class);
+        assertEquals(void.class, mainMethod.getReturnType());
+        assertTrue(java.lang.reflect.Modifier.isStatic(mainMethod.getModifiers()));
+        assertTrue(java.lang.reflect.Modifier.isPublic(mainMethod.getModifiers()));
+        
+        // Verify defineInfrastructure method signature  
+        Method defineInfraMethod = Main.class.getDeclaredMethod("defineInfrastructure", Context.class);
+        assertEquals(void.class, defineInfraMethod.getReturnType());
+        assertTrue(java.lang.reflect.Modifier.isStatic(defineInfraMethod.getModifiers()));
+        // Should be package-private, not public
+        assertFalse(java.lang.reflect.Modifier.isPublic(defineInfraMethod.getModifiers()));
+    }
+    
+    /**
+     * Test class modifiers and structure
+     */
+    @Test
+    void testClassModifiers() {
+        // Verify class is public
+        assertTrue(java.lang.reflect.Modifier.isPublic(Main.class.getModifiers()));
+        
+        // Verify class is final
+        assertTrue(java.lang.reflect.Modifier.isFinal(Main.class.getModifiers()));
+        
+        // Verify class is not abstract
+        assertFalse(java.lang.reflect.Modifier.isAbstract(Main.class.getModifiers()));
+        
+        // Verify class is not an interface
+        assertFalse(Main.class.isInterface());
+    }
+    
+    /**
+     * Test constructor accessibility
+     */
+    @Test
+    void testConstructorAccessibility() throws NoSuchMethodException {
+        var constructor = Main.class.getDeclaredConstructor();
+        
+        // Constructor should be private
+        assertTrue(java.lang.reflect.Modifier.isPrivate(constructor.getModifiers()));
+        
+        // Should not be able to create instances via reflection without making accessible
+        constructor.setAccessible(true);
+        assertDoesNotThrow(() -> {
+            constructor.newInstance();
+        });
+    }
 }

@@ -8,8 +8,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.pulumi.Context;
+import app.config.EnvironmentConfig;
+import app.utils.ResourceNaming;
 
 /**
  * Integration tests for the Main Pulumi program.
@@ -171,5 +179,199 @@ public class MainIntegrationTest {
     private boolean isTestingEnvironment() {
         String env = System.getenv("ENVIRONMENT_SUFFIX");
         return env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"));
+    }
+
+    /**
+     * Test environment configuration validation.
+     */
+    @Test
+    void testEnvironmentConfigIntegration() {
+        // Test all valid environments
+        assertDoesNotThrow(() -> new EnvironmentConfig("development"));
+        assertDoesNotThrow(() -> new EnvironmentConfig("testing"));
+        assertDoesNotThrow(() -> new EnvironmentConfig("staging"));
+        assertDoesNotThrow(() -> new EnvironmentConfig("production"));
+        
+        // Verify environment-specific VPC configurations
+        EnvironmentConfig devConfig = new EnvironmentConfig("development");
+        Map<String, String> devVpc = devConfig.getVpcConfig();
+        assertEquals("10.0.0.0/16", devVpc.get("cidrBlock"));
+        
+        EnvironmentConfig prodConfig = new EnvironmentConfig("production");
+        Map<String, String> prodVpc = prodConfig.getVpcConfig();
+        assertEquals("10.3.0.0/16", prodVpc.get("cidrBlock"));
+        assertEquals(90, prodConfig.getKmsKeyRotationDays());
+    }
+
+    /**
+     * Test resource naming uniqueness in integration context.
+     */
+    @Test
+    void testResourceNamingIntegration() {
+        String env = System.getenv("ENVIRONMENT_SUFFIX");
+        if (env == null) {
+            env = "test";
+        }
+        
+        // Generate multiple resource names and verify uniqueness
+        String name1 = ResourceNaming.generateResourceName(env, "vpc", "main");
+        String name2 = ResourceNaming.generateResourceName(env, "vpc", "main");
+        String name3 = ResourceNaming.generateResourceName(env, "s3", "bucket");
+        
+        assertNotNull(name1);
+        assertNotNull(name2);
+        assertNotNull(name3);
+        
+        // Names should be unique due to random suffix
+        assertNotEquals(name1, name2);
+        assertNotEquals(name1, name3);
+        assertNotEquals(name2, name3);
+        
+        // All names should follow the pattern and be valid AWS resource names
+        assertTrue(name1.matches("^[a-z0-9-]+$"));
+        assertTrue(name2.matches("^[a-z0-9-]+$"));
+        assertTrue(name3.matches("^[a-z0-9-]+$"));
+    }
+
+    /**
+     * Test reading and parsing deployment outputs if they exist.
+     * This test helps verify integration with CI/CD pipeline outputs.
+     */
+    @Test
+    void testDeploymentOutputsParsing() {
+        String outputsPath = "cfn-outputs/flat-outputs.json";
+        
+        if (Files.exists(Paths.get(outputsPath))) {
+            assertDoesNotThrow(() -> {
+                String content = Files.readString(Paths.get(outputsPath));
+                ObjectMapper mapper = new ObjectMapper();
+                
+                // Parse the outputs JSON
+                Map<String, Object> outputs = mapper.readValue(content, 
+                    new TypeReference<Map<String, Object>>() {});
+                
+                assertNotNull(outputs);
+                
+                // Verify common output fields if they exist
+                if (outputs.containsKey("vpcId")) {
+                    assertNotNull(outputs.get("vpcId"));
+                    assertTrue(outputs.get("vpcId").toString().startsWith("vpc-"));
+                }
+                
+                if (outputs.containsKey("kmsKeyId")) {
+                    assertNotNull(outputs.get("kmsKeyId"));
+                }
+                
+                if (outputs.containsKey("environment")) {
+                    assertNotNull(outputs.get("environment"));
+                }
+            }, "Should be able to parse deployment outputs if they exist");
+        }
+    }
+
+    /**
+     * Test that all required infrastructure classes are available and can be instantiated.
+     */
+    @Test
+    void testInfrastructureClassesAvailable() {
+        assertDoesNotThrow(() -> {
+            // Test that all classes can be loaded
+            Class.forName("app.config.EnvironmentConfig");
+            Class.forName("app.utils.ResourceNaming");
+            Class.forName("app.utils.TaggingPolicy");
+            Class.forName("app.infrastructure.InfrastructureStack");
+            Class.forName("app.migration.MigrationManager");
+            Class.forName("app.migration.custom.SecretsManagerMigration");
+        }, "All infrastructure classes should be available");
+    }
+
+    /**
+     * Test resource naming consistency across multiple calls.
+     */
+    @Test
+    void testResourceNamingConsistency() {
+        String environment = "integration-test";
+        
+        // Test that resource naming is consistent in format
+        for (int i = 0; i < 10; i++) {
+            String vpcName = ResourceNaming.generateResourceName(environment, "vpc", "main");
+            String sgName = ResourceNaming.generateResourceName(environment, "sg", "web");
+            String kmsName = ResourceNaming.generateResourceName(environment, "kms", "key");
+            
+            // Verify format consistency
+            assertTrue(vpcName.startsWith("cm-int-vpc-main-"));
+            assertTrue(sgName.startsWith("cm-int-sg-web-"));
+            assertTrue(kmsName.startsWith("cm-int-kms-key-"));
+            
+            // Verify length consistency (prefix + 6 random chars)
+            assertEquals(22, vpcName.length()); // cm-int-vpc-main-XXXXXX
+            assertEquals(20, sgName.length());  // cm-int-sg-web-XXXXXX
+            assertEquals(21, kmsName.length()); // cm-int-kms-key-XXXXXX
+        }
+    }
+
+    /**
+     * Test application with various command line argument scenarios.
+     */
+    @Test
+    void testMainApplicationArgumentHandling() {
+        // Test that Main class can handle various argument scenarios
+        // These will all fail due to Pulumi context, but should fail gracefully
+        
+        assertThrows(Exception.class, () -> Main.main(new String[]{}));
+        assertThrows(Exception.class, () -> Main.main(new String[]{"--help"}));
+        assertThrows(Exception.class, () -> Main.main(new String[]{"invalid", "args"}));
+        
+        // The important thing is that these don't cause JVM crashes or security issues
+    }
+
+    /**
+     * Test integration with environment variables that might be set in CI/CD.
+     */
+    @Test
+    void testEnvironmentVariableIntegration() {
+        String githubPrNumber = System.getenv("GITHUB_PR_NUMBER");
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        String awsRegion = System.getenv("AWS_REGION");
+        
+        if (environmentSuffix != null) {
+            assertTrue(environmentSuffix.length() > 0, "Environment suffix should not be empty if set");
+            // Environment suffix should be safe for AWS resource names
+            assertTrue(environmentSuffix.matches("^[a-zA-Z0-9-]+$"));
+        }
+        
+        if (awsRegion != null && !awsRegion.trim().isEmpty()) {
+            assertTrue(awsRegion.matches("^[a-z0-9-]+$"), "AWS region should be valid format");
+        }
+        
+        // If this is a PR build, verify the naming convention
+        if (githubPrNumber != null && environmentSuffix != null) {
+            assertTrue(environmentSuffix.contains(githubPrNumber), 
+                "Environment suffix should contain PR number for PR builds");
+        }
+    }
+
+    /**
+     * Test project metadata and configuration files.
+     */
+    @Test
+    void testProjectMetadata() throws IOException {
+        // Test that metadata.json exists and is valid
+        assertTrue(Files.exists(Paths.get("metadata.json")), "metadata.json should exist");
+        
+        String metadataContent = Files.readString(Paths.get("metadata.json"));
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> metadata = mapper.readValue(metadataContent, 
+            new TypeReference<Map<String, Object>>() {});
+        
+        assertEquals("pulumi", metadata.get("platform"));
+        assertEquals("java", metadata.get("language"));
+        assertNotNull(metadata.get("po_id"));
+        
+        // Test Pulumi.yaml exists and is readable
+        assertTrue(Files.exists(Paths.get("Pulumi.yaml")), "Pulumi.yaml should exist");
+        String pulumiConfig = Files.readString(Paths.get("Pulumi.yaml"));
+        assertTrue(pulumiConfig.contains("name:"), "Pulumi.yaml should contain project name");
+        assertTrue(pulumiConfig.contains("runtime:"), "Pulumi.yaml should contain runtime");
     }
 }
