@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
 
     const environmentSuffix = props.environmentSuffix || 'dev';
 
-    // 🔐 'KMS Key' for encryption at rest with automatic rotation
+    // 🔐 KMS Key for encryption at rest with automatic rotation
     const kmsKey = new kms.Key(this, `SecureAppKMSKey${environmentSuffix}`, {
       alias: `SecureApp-encryption-key-${environmentSuffix}`,
       description: `KMS key for SecureApp encryption at rest - ${environmentSuffix}`,
