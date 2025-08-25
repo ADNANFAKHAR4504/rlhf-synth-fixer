@@ -139,7 +139,7 @@ public final class Main {
         
         new RolePolicyAttachment("rpa-config-service", RolePolicyAttachmentArgs.builder()
             .role(configServiceRole.name())
-            .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")
+            .policyArn("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole")
             .build());
         
         // 3. VPC and Networking

@@ -316,6 +316,39 @@ var cloudTrail = new Trail("cloudtrail-main", TrailArgs.builder()
 - **RDS Encryption**: Can use either key ID or ARN
 - **Lambda Environment Variables**: Can use either key ID or ARN
 
+## 13. IAM Policy ARN Issues
+
+### Failure: Incorrect AWS Config Policy ARN
+**Issue**: Used incorrect IAM policy ARN for AWS Config service role.
+```java
+// FAILED - Incorrect policy ARN
+new RolePolicyAttachment("rpa-config-service", RolePolicyAttachmentArgs.builder()
+    .role(configServiceRole.name())
+    .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")  // Wrong policy name
+    .build());
+```
+**Error**: `Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist or is not attachable.`
+
+**Solution**: Use correct AWS Config policy ARN:
+```java
+// SUCCESS - Correct policy ARN
+new RolePolicyAttachment("rpa-config-service", RolePolicyAttachmentArgs.builder()
+    .role(configServiceRole.name())
+    .policyArn("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole")  // Correct policy name
+    .build());
+```
+
+**Common AWS Managed Policy ARNs**:
+- **AWS Config**: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+- **Lambda Basic**: `arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole`
+- **Lambda VPC**: `arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole`
+- **CloudWatch**: `arn:aws:iam::aws:policy/service-role/CloudWatchAgentServerPolicy`
+
+**Verification**: Always verify policy ARNs exist in AWS IAM console or using AWS CLI:
+```bash
+aws iam get-policy --policy-arn arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+```
+
 ## Key Lessons Learned
 
 1. **API Compatibility**: Always verify Pulumi Java SDK method availability before implementation
