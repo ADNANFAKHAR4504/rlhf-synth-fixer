@@ -252,18 +252,27 @@ tasks.register('showCoverage') {
         def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
 
         if (xmlReportFile.exists()) {
-            // Parse XML to get coverage percentage
-            def xml = new XmlParser().parse(xmlReportFile)
-            def counter = xml.counter.find { it.'@type' == 'LINE' }
-            if (counter) {
-                def covered = counter.'@covered'.toInteger()
-                def missed = counter.'@missed'.toInteger()
-                def total = covered + missed
-                def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+            try {
+                // Simple text-based parsing to avoid XML security issues
+                def xmlContent = xmlReportFile.text
+                def linePattern = /counter.*type="LINE".*covered="(\d+)".*missed="(\d+)"/
+                def matcher = xmlContent =~ linePattern
+                if (matcher.find()) {
+                    def covered = matcher.group(1).toInteger()
+                    def missed = matcher.group(2).toInteger()
+                    def total = covered + missed
+                    def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
 
+                    println "\n📊 Code Coverage Summary:"
+                    println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                    println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+                } else {
+                    println "\n📊 Code Coverage Summary:"
+                    println "Could not parse coverage data from XML report"
+                }
+            } catch (Exception e) {
                 println "\n📊 Code Coverage Summary:"
-                println "Lines Covered: ${covered}/${total} (${percentage}%)"
-                println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+                println "Error reading coverage report: ${e.message}"
             }
         }
 
