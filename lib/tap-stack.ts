@@ -1,15 +1,15 @@
 /* eslint-disable prettier/prettier */
 
 /**
-* TapStack: A comprehensive multi-environment AWS infrastructure stack
-* This stack implements AWS best practices for multi-environment deployments including:
-* - Nested stack organization through ComponentResources
-* - Multi-region deployment support
-* - Comprehensive security with IAM least privilege
-* - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
-* - Environment-specific configuration management
-* - Consistent tagging strategies
-*/
+ * TapStack: A comprehensive multi-environment AWS infrastructure stack
+ * This stack implements AWS best practices for multi-environment deployments including:
+ * - Nested stack organization through ComponentResources
+ * - Multi-region deployment support
+ * - Comprehensive security with IAM least privilege
+ * - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
+ * - Environment-specific configuration management
+ * - Consistent tagging strategies
+ */
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -52,7 +52,11 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly environment: string;
   private readonly regions: string[];
 
-  constructor(name: string, args: TapStackArgs, opts?: pulumi.ComponentResourceOptions) {
+  constructor(
+    name: string,
+    args: TapStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
     super('custom:infrastructure:TapStack', name, {}, opts);
 
     this.config = new pulumi.Config();
@@ -120,352 +124,470 @@ export class TapStack extends pulumi.ComponentResource {
     // 11. Generate outputs to JSON file for integration tests
     this.generateOutputsFile();
 
+    // In your constructor, after all resources are created, replace the existing registerOutputs() call with:
+
     this.registerOutputs({
       vpcId: this.vpc.id,
       internetGatewayId: this.internetGateway.id,
       privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
       publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
       cloudTrailBucketName: this.cloudTrailBucket.bucket,
+      cloudTrailBucketArn: this.cloudTrailBucket.arn,
       parameterStorePrefix: this.parameterStorePrefix,
+      environment: pulumi.output(this.environment),
+      regions: pulumi.output(this.regions),
+      awsRegion: aws.getRegion().then(r => r.name),
+      accountId: aws.getCallerIdentity().then(c => c.accountId),
+      logGroupName: this.logGroup.name,
+      logGroupArn: this.logGroup.arn,
+      alarmTopicArn: this.alarmTopic.arn,
+      dashboardArn: this.dashboard.dashboardArn,
       vpcFlowLogsId: this.vpcFlowLogs.id,
-      environment: this.environment,
-      regions: this.regions,
+      cloudTrailRoleArn: this.cloudTrailRole.arn,
+      deploymentRoleArn: this.deploymentRole.arn,
+      vpcFlowLogsRoleArn: this.vpcFlowLogsRole.arn,
+      stackName: pulumi.output('TapStack'),
+      timestamp: pulumi.output(new Date().toISOString()),
+      tags: pulumi.output(this.defaultTags),
+      testEnvironment: pulumi.output(
+        this.environment === 'integration-test' ||
+          this.environment.includes('test')
+      ),
+      deploymentComplete: pulumi.output(true),
     });
   }
 
   /**
    * Generate outputs to JSON file for integration tests
    */
-  private generateOutputsFile(outputsFile: string = 'cfn-outputs/flat-outputs.json') {
-    pulumi.all([
-      this.vpc.id,
-      this.internetGateway.id,
-      ...this.privateSubnets.map(s => s.id),
-      ...this.publicSubnets.map(s => s.id),
-      this.cloudTrailBucket.bucket,
-      this.cloudTrailBucket.arn,
-      this.parameterStorePrefix,
-      this.logGroup.name,
-      this.logGroup.arn,
-      this.alarmTopic.arn,
-      this.dashboard.dashboardArn,
-      this.vpcFlowLogs.id,
-      this.cloudTrailRole.arn,
-      this.deploymentRole.arn,
-      this.vpcFlowLogsRole.arn,
-      aws.getRegion().then(r => r.name),
-      aws.getCallerIdentity().then(c => c.accountId),
-    ]).apply(([
-      vpcId,
-      internetGatewayId,
-      ...rest
-    ]) => {
-      const privateSubnetIds = rest.slice(0, this.privateSubnets.length);
-      const publicSubnetIds = rest.slice(this.privateSubnets.length, this.privateSubnets.length + this.publicSubnets.length);
-      const [
-        cloudTrailBucketName,
-        cloudTrailBucketArn,
-        parameterStorePrefix,
-        logGroupName,
-        logGroupArn,
-        alarmTopicArn,
-        dashboardArn,
-        vpcFlowLogsId,
-        cloudTrailRoleArn,
-        deploymentRoleArn,
-        vpcFlowLogsRoleArn,
-        awsRegion,
-        accountId,
-      ] = rest.slice(this.privateSubnets.length + this.publicSubnets.length);
+  private generateOutputsFile(
+    outputsFile: string = 'cfn-outputs/flat-outputs.json'
+  ) {
+    pulumi
+      .all([
+        this.vpc.id,
+        this.internetGateway.id,
+        ...this.privateSubnets.map(s => s.id),
+        ...this.publicSubnets.map(s => s.id),
+        this.cloudTrailBucket.bucket,
+        this.cloudTrailBucket.arn,
+        this.parameterStorePrefix,
+        this.logGroup.name,
+        this.logGroup.arn,
+        this.alarmTopic.arn,
+        this.dashboard.dashboardArn,
+        this.vpcFlowLogs.id,
+        this.cloudTrailRole.arn,
+        this.deploymentRole.arn,
+        this.vpcFlowLogsRole.arn,
+        aws.getRegion().then(r => r.name),
+        aws.getCallerIdentity().then(c => c.accountId),
+      ])
+      .apply(([vpcId, internetGatewayId, ...rest]) => {
+        const privateSubnetIds = rest.slice(0, this.privateSubnets.length);
+        const publicSubnetIds = rest.slice(
+          this.privateSubnets.length,
+          this.privateSubnets.length + this.publicSubnets.length
+        );
+        const [
+          cloudTrailBucketName,
+          cloudTrailBucketArn,
+          parameterStorePrefix,
+          logGroupName,
+          logGroupArn,
+          alarmTopicArn,
+          dashboardArn,
+          vpcFlowLogsId,
+          cloudTrailRoleArn,
+          deploymentRoleArn,
+          vpcFlowLogsRoleArn,
+          awsRegion,
+          accountId,
+        ] = rest.slice(this.privateSubnets.length + this.publicSubnets.length);
 
-      const outputs = {
-        vpcId,
-        internetGatewayId,
-        privateSubnetIds,
-        publicSubnetIds,
-        cloudTrailBucketName,
-        cloudTrailBucketArn,
-        parameterStorePrefix,
-        environment: this.environment,
-        regions: this.regions,
-        awsRegion,
-        accountId,
-        logGroupName,
-        logGroupArn,
-        alarmTopicArn,
-        dashboardArn,
-        vpcFlowLogsId,
-        cloudTrailRoleArn,
-        deploymentRoleArn,
-        vpcFlowLogsRoleArn,
-        stackName: 'TapStack',
-        timestamp: new Date().toISOString(),
-        tags: this.defaultTags,
-        testEnvironment: this.environment === 'integration-test' || this.environment.includes('test'),
-        deploymentComplete: true,
-      };
+        const outputs = {
+          vpcId,
+          internetGatewayId,
+          privateSubnetIds,
+          publicSubnetIds,
+          cloudTrailBucketName,
+          cloudTrailBucketArn,
+          parameterStorePrefix,
+          environment: this.environment,
+          regions: this.regions,
+          awsRegion,
+          accountId,
+          logGroupName,
+          logGroupArn,
+          alarmTopicArn,
+          dashboardArn,
+          vpcFlowLogsId,
+          cloudTrailRoleArn,
+          deploymentRoleArn,
+          vpcFlowLogsRoleArn,
+          stackName: 'TapStack',
+          timestamp: new Date().toISOString(),
+          tags: this.defaultTags,
+          testEnvironment:
+            this.environment === 'integration-test' ||
+            this.environment.includes('test'),
+          deploymentComplete: true,
+        };
 
-      try {
-        // Ensure the directory exists
-        const outputDir = outputsFile.includes('/') ? outputsFile.substring(0, outputsFile.lastIndexOf('/')) : '';
-        if (outputDir && !fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
+        try {
+          // Ensure the directory exists
+          const outputDir = outputsFile.includes('/')
+            ? outputsFile.substring(0, outputsFile.lastIndexOf('/'))
+            : '';
+          if (outputDir && !fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+          }
+
+          fs.writeFileSync(
+            outputsFile,
+            JSON.stringify(outputs, null, 2),
+            'utf8'
+          );
+          if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+            console.log(`Stack outputs written to ${outputsFile}`);
+          }
+        } catch (error) {
+          console.error(`Failed to write outputs file: ${error}`);
         }
-        
-        fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
-        if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
-          console.log(`Stack outputs written to ${outputsFile}`);
-        }
-      } catch (error) {
-        console.error(`Failed to write outputs file: ${error}`);
-      }
 
-      return outputs;
-    });
+        return outputs;
+      });
   }
 
-  private createVPC(): { vpc: aws.ec2.Vpc, igw: aws.ec2.InternetGateway } {
-    const vpc = new aws.ec2.Vpc(`${this.environment}-vpc`, {
-      cidrBlock: '10.0.0.0/16',
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        ...this.defaultTags,
-        Name: `${this.environment}-vpc`,
-        Type: 'Network',
+  private createVPC(): { vpc: aws.ec2.Vpc; igw: aws.ec2.InternetGateway } {
+    const vpc = new aws.ec2.Vpc(
+      `${this.environment}-vpc`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...this.defaultTags,
+          Name: `${this.environment}-vpc`,
+          Type: 'Network',
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
-    const igw = new aws.ec2.InternetGateway(`${this.environment}-igw`, {
-      vpcId: vpc.id,
-      tags: {
-        ...this.defaultTags,
-        Name: `${this.environment}-igw`,
+    const igw = new aws.ec2.InternetGateway(
+      `${this.environment}-igw`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...this.defaultTags,
+          Name: `${this.environment}-igw`,
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
     return { vpc, igw };
   }
 
-  private createSubnets(): { private: aws.ec2.Subnet[], public: aws.ec2.Subnet[] } {
+  private createSubnets(): {
+    private: aws.ec2.Subnet[];
+    public: aws.ec2.Subnet[];
+  } {
     const availabilityZones = aws.getAvailabilityZones({ state: 'available' });
     const privateSubnets: aws.ec2.Subnet[] = [];
     const publicSubnets: aws.ec2.Subnet[] = [];
 
     for (let i = 0; i < 3; i++) {
-      const publicSubnet = new aws.ec2.Subnet(`${this.environment}-public-${i}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i * 2 + 1}.0/24`,
-        availabilityZone: availabilityZones.then(azs => azs.names[i]),
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...this.defaultTags,
-          Name: `${this.environment}-public-${i}`,
-          Type: 'Public',
-          Tier: 'Web',
+      const publicSubnet = new aws.ec2.Subnet(
+        `${this.environment}-public-${i}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `10.0.${i * 2 + 1}.0/24`,
+          availabilityZone: availabilityZones.then(azs => azs.names[i]),
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...this.defaultTags,
+            Name: `${this.environment}-public-${i}`,
+            Type: 'Public',
+            Tier: 'Web',
+          },
         },
-      }, { parent: this });
+        { parent: this }
+      );
 
-      const privateSubnet = new aws.ec2.Subnet(`${this.environment}-private-${i}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i * 2 + 2}.0/24`,
-        availabilityZone: availabilityZones.then(azs => azs.names[i]),
-        tags: {
-          ...this.defaultTags,
-          Name: `${this.environment}-private-${i}`,
-          Type: 'Private',
-          Tier: 'Application',
+      const privateSubnet = new aws.ec2.Subnet(
+        `${this.environment}-private-${i}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `10.0.${i * 2 + 2}.0/24`,
+          availabilityZone: availabilityZones.then(azs => azs.names[i]),
+          tags: {
+            ...this.defaultTags,
+            Name: `${this.environment}-private-${i}`,
+            Type: 'Private',
+            Tier: 'Application',
+          },
         },
-      }, { parent: this });
+        { parent: this }
+      );
 
       publicSubnets.push(publicSubnet);
       privateSubnets.push(privateSubnet);
 
-      const eip = new aws.ec2.Eip(`${this.environment}-nat-eip-${i}`, {
-        domain: 'vpc',
-        tags: {
-          ...this.defaultTags,
-          Name: `${this.environment}-nat-eip-${i}`,
+      const eip = new aws.ec2.Eip(
+        `${this.environment}-nat-eip-${i}`,
+        {
+          domain: 'vpc',
+          tags: {
+            ...this.defaultTags,
+            Name: `${this.environment}-nat-eip-${i}`,
+          },
         },
-      }, { parent: this });
+        { parent: this }
+      );
 
-      const natGateway = new aws.ec2.NatGateway(`${this.environment}-nat-${i}`, {
-        allocationId: eip.id,
-        subnetId: publicSubnet.id,
-        tags: {
-          ...this.defaultTags,
-          Name: `${this.environment}-nat-${i}`,
+      const natGateway = new aws.ec2.NatGateway(
+        `${this.environment}-nat-${i}`,
+        {
+          allocationId: eip.id,
+          subnetId: publicSubnet.id,
+          tags: {
+            ...this.defaultTags,
+            Name: `${this.environment}-nat-${i}`,
+          },
         },
-      }, { parent: this });
+        { parent: this }
+      );
 
-      const privateRouteTable = new aws.ec2.RouteTable(`${this.environment}-private-rt-${i}`, {
-        vpcId: this.vpc.id,
-        routes: [{
-          cidrBlock: '0.0.0.0/0',
-          natGatewayId: natGateway.id,
-        }],
-        tags: {
-          ...this.defaultTags,
-          Name: `${this.environment}-private-rt-${i}`,
+      const privateRouteTable = new aws.ec2.RouteTable(
+        `${this.environment}-private-rt-${i}`,
+        {
+          vpcId: this.vpc.id,
+          routes: [
+            {
+              cidrBlock: '0.0.0.0/0',
+              natGatewayId: natGateway.id,
+            },
+          ],
+          tags: {
+            ...this.defaultTags,
+            Name: `${this.environment}-private-rt-${i}`,
+          },
         },
-      }, { parent: this });
+        { parent: this }
+      );
 
-      new aws.ec2.RouteTableAssociation(`${this.environment}-private-rta-${i}`, {
-        subnetId: privateSubnet.id,
-        routeTableId: privateRouteTable.id,
-      }, { parent: this });
+      new aws.ec2.RouteTableAssociation(
+        `${this.environment}-private-rta-${i}`,
+        {
+          subnetId: privateSubnet.id,
+          routeTableId: privateRouteTable.id,
+        },
+        { parent: this }
+      );
     }
 
     return { private: privateSubnets, public: publicSubnets };
   }
 
   private createSecurityInfrastructure() {
-    const cloudTrailRole = new aws.iam.Role(`${this.environment}-cloudtrail-role`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'cloudtrail.amazonaws.com' },
-        }],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
-
-    const deploymentRole = new aws.iam.Role(`${this.environment}-deployment-role`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'ec2.amazonaws.com' },
-          Condition: {
-            StringEquals: {
-              'aws:RequestedRegion': this.regions,
+    const cloudTrailRole = new aws.iam.Role(
+      `${this.environment}-cloudtrail-role`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'cloudtrail.amazonaws.com' },
             },
-          },
-        }],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const deploymentPolicy = new aws.iam.Policy(`${this.environment}-deployment-policy`, {
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'ssm:GetParameter',
-              'ssm:GetParameters',
-              'ssm:GetParametersByPath',
-            ],
-            Resource: `arn:aws:ssm:*:*:parameter/${this.environment}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'cloudwatch:PutMetricData',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ],
-            Resource: '*',
-          },
-        ],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+    const deploymentRole = new aws.iam.Role(
+      `${this.environment}-deployment-role`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'ec2.amazonaws.com' },
+              Condition: {
+                StringEquals: {
+                  'aws:RequestedRegion': this.regions,
+                },
+              },
+            },
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    new aws.iam.RolePolicyAttachment(`${this.environment}-deployment-policy-attachment`, {
-      role: deploymentRole.name,
-      policyArn: deploymentPolicy.arn,
-    }, { parent: this });
+    const deploymentPolicy = new aws.iam.Policy(
+      `${this.environment}-deployment-policy`,
+      {
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'ssm:GetParameter',
+                'ssm:GetParameters',
+                'ssm:GetParametersByPath',
+              ],
+              Resource: `arn:aws:ssm:*:*:parameter/${this.environment}/*`,
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'cloudwatch:PutMetricData',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${this.environment}-deployment-policy-attachment`,
+      {
+        role: deploymentRole.name,
+        policyArn: deploymentPolicy.arn,
+      },
+      { parent: this }
+    );
 
     return { cloudTrailRole, deploymentRole };
   }
 
   private createStorageInfrastructure() {
-    const cloudTrailBucket = new aws.s3.Bucket(`${this.environment}-cloudtrail-logs`, {
-      bucket: `${this.environment}-cloudtrail-logs-${Date.now()}`,
-      forceDestroy: true,
-      tags: this.defaultTags,
-    }, { parent: this });
+    const cloudTrailBucket = new aws.s3.Bucket(
+      `${this.environment}-cloudtrail-logs`,
+      {
+        bucket: `${this.environment}-cloudtrail-logs-${Date.now()}`,
+        forceDestroy: true,
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
     // Get current AWS account ID and region for the policy
     const currentCallerIdentity = aws.getCallerIdentity();
     const currentRegion = aws.getRegion();
 
-    const bucketPolicy = new aws.s3.BucketPolicy(`${this.environment}-cloudtrail-bucket-policy`, {
-      bucket: cloudTrailBucket.id,
-      policy: pulumi.all([cloudTrailBucket.arn, currentCallerIdentity, currentRegion]).apply(([bucketArn, identity, region]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AWSCloudTrailAclCheck',
-              Effect: 'Allow',
-              Principal: { Service: 'cloudtrail.amazonaws.com' },
-              Action: 's3:GetBucketAcl',
-              Resource: bucketArn,
-              Condition: {
-                StringEquals: {
-                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`
-                }
-              }
+    const bucketPolicy = new aws.s3.BucketPolicy(
+      `${this.environment}-cloudtrail-bucket-policy`,
+      {
+        bucket: cloudTrailBucket.id,
+        policy: pulumi
+          .all([cloudTrailBucket.arn, currentCallerIdentity, currentRegion])
+          .apply(([bucketArn, identity, region]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AWSCloudTrailAclCheck',
+                  Effect: 'Allow',
+                  Principal: { Service: 'cloudtrail.amazonaws.com' },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
+                  Condition: {
+                    StringEquals: {
+                      'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`,
+                    },
+                  },
+                },
+                {
+                  Sid: 'AWSCloudTrailWrite',
+                  Effect: 'Allow',
+                  Principal: { Service: 'cloudtrail.amazonaws.com' },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                      'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`,
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      {
+        parent: this,
+        dependsOn: [cloudTrailBucket],
+      }
+    );
+
+    const encryption = new aws.s3.BucketServerSideEncryptionConfiguration(
+      `${this.environment}-cloudtrail-encryption`,
+      {
+        bucket: cloudTrailBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
             },
-            {
-              Sid: 'AWSCloudTrailWrite',
-              Effect: 'Allow',
-              Principal: { Service: 'cloudtrail.amazonaws.com' },
-              Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
-              Condition: {
-                StringEquals: { 
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`
-                }
-              }
-            }
-          ],
-        })
-      ),
-    }, { 
-      parent: this,
-      dependsOn: [cloudTrailBucket]
-    });
+          },
+        ],
+      },
+      {
+        parent: this,
+        dependsOn: [bucketPolicy],
+      }
+    );
 
-    const encryption = new aws.s3.BucketServerSideEncryptionConfiguration(`${this.environment}-cloudtrail-encryption`, {
-      bucket: cloudTrailBucket.id,
-      rules: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'AES256',
-        },
-      }],
-    }, { 
-      parent: this,
-      dependsOn: [bucketPolicy]
-    });
+    const versioning = new aws.s3.BucketVersioning(
+      `${this.environment}-cloudtrail-versioning`,
+      {
+        bucket: cloudTrailBucket.id,
+        versioningConfiguration: { status: 'Enabled' },
+      },
+      {
+        parent: this,
+        dependsOn: [bucketPolicy],
+      }
+    );
 
-    const versioning = new aws.s3.BucketVersioning(`${this.environment}-cloudtrail-versioning`, {
-      bucket: cloudTrailBucket.id,
-      versioningConfiguration: { status: 'Enabled' },
-    }, { 
-      parent: this,
-      dependsOn: [bucketPolicy]
-    });
+    const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
+      `${this.environment}-cloudtrail-public-access-block`,
+      {
+        bucket: cloudTrailBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      {
+        parent: this,
+        dependsOn: [bucketPolicy],
+      }
+    );
 
-    const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${this.environment}-cloudtrail-public-access-block`, {
-      bucket: cloudTrailBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    }, { 
-      parent: this,
-      dependsOn: [bucketPolicy]
-    });
-
-    return { cloudTrailBucket, bucketPolicy, encryption, versioning, publicAccessBlock };
+    return {
+      cloudTrailBucket,
+      bucketPolicy,
+      encryption,
+      versioning,
+      publicAccessBlock,
+    };
   }
 
   private createParameterStore(): pulumi.Output<string> {
@@ -473,19 +595,29 @@ export class TapStack extends pulumi.ComponentResource {
 
     const parameters = [
       { name: 'vpc-id', value: this.vpc.id },
-      { name: 'region', value: pulumi.output(aws.getRegion().then(r => r.name)) },
+      {
+        name: 'region',
+        value: pulumi.output(aws.getRegion().then(r => r.name)),
+      },
       { name: 'environment', value: pulumi.output(this.environment) },
-      { name: 'deployment-time', value: pulumi.output(new Date().toISOString()) },
+      {
+        name: 'deployment-time',
+        value: pulumi.output(new Date().toISOString()),
+      },
     ];
 
     parameters.forEach(param => {
-      new aws.ssm.Parameter(`${this.environment}-param-${param.name}`, {
-        name: `${prefix}/${param.name}`,
-        type: 'String',
-        value: param.value,
-        description: `${param.name} for ${this.environment} environment`,
-        tags: this.defaultTags,
-      }, { parent: this });
+      new aws.ssm.Parameter(
+        `${this.environment}-param-${param.name}`,
+        {
+          name: `${prefix}/${param.name}`,
+          type: 'String',
+          value: param.value,
+          description: `${param.name} for ${this.environment} environment`,
+          tags: this.defaultTags,
+        },
+        { parent: this }
+      );
     });
 
     return pulumi.output(prefix);
@@ -495,157 +627,216 @@ export class TapStack extends pulumi.ComponentResource {
     // Environment-specific retention periods for testing coverage
     const retentionDays = this.environment === 'prod' ? 90 : 30;
 
-    const logGroup = new aws.cloudwatch.LogGroup(`${this.environment}-logs`, {
-      name: `/aws/infrastructure/${this.environment}`,
-      retentionInDays: retentionDays,
-      tags: this.defaultTags,
-    }, { parent: this });
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `${this.environment}-logs`,
+      {
+        name: `/aws/infrastructure/${this.environment}`,
+        retentionInDays: retentionDays,
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const alarmTopic = new aws.sns.Topic(`${this.environment}-alarms`, {
-      name: `${this.environment}-infrastructure-alarms`,
-      tags: this.defaultTags,
-    }, { parent: this });
+    const alarmTopic = new aws.sns.Topic(
+      `${this.environment}-alarms`,
+      {
+        name: `${this.environment}-infrastructure-alarms`,
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const dashboard = new aws.cloudwatch.Dashboard(`${this.environment}-dashboard`, {
-      dashboardName: `${this.environment}-Infrastructure-Dashboard`,
-      dashboardBody: pulumi.output(aws.getRegion().then(region => JSON.stringify({
-        widgets: [
-          {
-            type: 'metric',
-            x: 0,
-            y: 0,
-            width: 12,
-            height: 6,
-            properties: {
-              metrics: [
-                ['AWS/VPC', 'PacketDropCount', 'VPC', this.vpc.id],
-                ['AWS/CloudTrail', 'DataEvents', 'TrailName', `${this.environment}-audit-trail`],
+    const dashboard = new aws.cloudwatch.Dashboard(
+      `${this.environment}-dashboard`,
+      {
+        dashboardName: `${this.environment}-Infrastructure-Dashboard`,
+        dashboardBody: pulumi.output(
+          aws.getRegion().then(region =>
+            JSON.stringify({
+              widgets: [
+                {
+                  type: 'metric',
+                  x: 0,
+                  y: 0,
+                  width: 12,
+                  height: 6,
+                  properties: {
+                    metrics: [
+                      ['AWS/VPC', 'PacketDropCount', 'VPC', this.vpc.id],
+                      [
+                        'AWS/CloudTrail',
+                        'DataEvents',
+                        'TrailName',
+                        `${this.environment}-audit-trail`,
+                      ],
+                    ],
+                    view: 'timeSeries',
+                    stacked: false,
+                    region: region.name,
+                    title: 'Infrastructure Metrics',
+                    period: 300,
+                  },
+                },
+                {
+                  type: 'log',
+                  x: 0,
+                  y: 6,
+                  width: 24,
+                  height: 6,
+                  properties: {
+                    query:
+                      'SOURCE \'/aws/vpc/flowlogs\'\n| fields @timestamp, srcaddr, dstaddr, action\n| filter action = "REJECT"\n| stats count() by srcaddr\n| sort count desc\n| limit 20',
+                    region: region.name,
+                    title: 'Top Rejected IPs',
+                    view: 'table',
+                  },
+                },
               ],
-              view: 'timeSeries',
-              stacked: false,
-              region: region.name,
-              title: 'Infrastructure Metrics',
-              period: 300,
-            },
-          },
-          {
-            type: 'log',
-            x: 0,
-            y: 6,
-            width: 24,
-            height: 6,
-            properties: {
-              query: 'SOURCE \'/aws/vpc/flowlogs\'\n| fields @timestamp, srcaddr, dstaddr, action\n| filter action = "REJECT"\n| stats count() by srcaddr\n| sort count desc\n| limit 20',
-              region: region.name,
-              title: 'Top Rejected IPs',
-              view: 'table',
-            },
-          },
-        ],
-      }))),
-    }, { parent: this });
+            })
+          )
+        ),
+      },
+      { parent: this }
+    );
 
     return { logGroup, alarmTopic, dashboard };
   }
 
   private createCloudTrail(storageResources: any): aws.cloudtrail.Trail {
-    const trail = new aws.cloudtrail.Trail(`${this.environment}-cloudtrail`, {
-      name: `${this.environment}-audit-trail`,
-      s3BucketName: this.cloudTrailBucket.bucket,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableLogging: true,
-      tags: this.defaultTags,
-    }, { 
-      parent: this,
-      dependsOn: [
-        this.cloudTrailBucket,
-        storageResources.bucketPolicy,
-        storageResources.encryption,
-        storageResources.versioning,
-        storageResources.publicAccessBlock
-      ]
-    });
+    const trail = new aws.cloudtrail.Trail(
+      `${this.environment}-cloudtrail`,
+      {
+        name: `${this.environment}-audit-trail`,
+        s3BucketName: this.cloudTrailBucket.bucket,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: true,
+        enableLogging: true,
+        tags: this.defaultTags,
+      },
+      {
+        parent: this,
+        dependsOn: [
+          this.cloudTrailBucket,
+          storageResources.bucketPolicy,
+          storageResources.encryption,
+          storageResources.versioning,
+          storageResources.publicAccessBlock,
+        ],
+      }
+    );
 
     return trail;
   }
 
-  private createVPCFlowLogs(): { role: aws.iam.Role, flowLogs: aws.ec2.FlowLog } {
-    const vpcFlowLogsRole = new aws.iam.Role(`${this.environment}-vpc-flow-logs-role`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'vpc-flow-logs.amazonaws.com' },
-        }],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+  private createVPCFlowLogs(): {
+    role: aws.iam.Role;
+    flowLogs: aws.ec2.FlowLog;
+  } {
+    const vpcFlowLogsRole = new aws.iam.Role(
+      `${this.environment}-vpc-flow-logs-role`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'vpc-flow-logs.amazonaws.com' },
+            },
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const vpcFlowLogsPolicy = new aws.iam.Policy(`${this.environment}-vpc-flow-logs-policy`, {
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-              'logs:DescribeLogGroups',
-              'logs:DescribeLogStreams',
-            ],
-            Resource: '*',
-          },
-        ],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+    const vpcFlowLogsPolicy = new aws.iam.Policy(
+      `${this.environment}-vpc-flow-logs-policy`,
+      {
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    new aws.iam.RolePolicyAttachment(`${this.environment}-vpc-flow-logs-policy-attachment`, {
-      role: vpcFlowLogsRole.name,
-      policyArn: vpcFlowLogsPolicy.arn,
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `${this.environment}-vpc-flow-logs-policy-attachment`,
+      {
+        role: vpcFlowLogsRole.name,
+        policyArn: vpcFlowLogsPolicy.arn,
+      },
+      { parent: this }
+    );
 
     // Environment-specific retention for flow logs
     const flowLogsRetention = this.environment === 'prod' ? 30 : 14;
 
-    const flowLogsGroup = new aws.cloudwatch.LogGroup(`${this.environment}-vpc-flow-logs`, {
-      name: '/aws/vpc/flowlogs',
-      retentionInDays: flowLogsRetention,
-      tags: this.defaultTags,
-    }, { parent: this });
+    const flowLogsGroup = new aws.cloudwatch.LogGroup(
+      `${this.environment}-vpc-flow-logs`,
+      {
+        name: '/aws/vpc/flowlogs',
+        retentionInDays: flowLogsRetention,
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const vpcFlowLogs = new aws.ec2.FlowLog(`${this.environment}-vpc-flow-logs`, {
-      iamRoleArn: vpcFlowLogsRole.arn,
-      logDestination: flowLogsGroup.arn,
-      logDestinationType: 'cloud-watch-logs',
-      trafficType: 'ALL',
-      vpcId: this.vpc.id,
-      tags: this.defaultTags,
-    }, { parent: this });
+    const vpcFlowLogs = new aws.ec2.FlowLog(
+      `${this.environment}-vpc-flow-logs`,
+      {
+        iamRoleArn: vpcFlowLogsRole.arn,
+        logDestination: flowLogsGroup.arn,
+        logDestinationType: 'cloud-watch-logs',
+        trafficType: 'ALL',
+        vpcId: this.vpc.id,
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
     return { role: vpcFlowLogsRole, flowLogs: vpcFlowLogs };
   }
 
   private createStackSetInfrastructure() {
-    const administrationRole = new aws.iam.Role(`${this.environment}-stackset-admin-role`, {
-      name: `${this.environment}-AWSCloudFormationStackSetAdministrationRole`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: { Service: 'cloudformation.amazonaws.com' },
-        }],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+    const administrationRole = new aws.iam.Role(
+      `${this.environment}-stackset-admin-role`,
+      {
+        name: `${this.environment}-AWSCloudFormationStackSetAdministrationRole`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'cloudformation.amazonaws.com' },
+            },
+          ],
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const executionRole = new aws.iam.Role(`${this.environment}-stackset-exec-role`, {
-      name: `${this.environment}-AWSCloudFormationStackSetExecutionRole`,
-      assumeRolePolicy: pulumi.interpolate`{
+    const executionRole = new aws.iam.Role(
+      `${this.environment}-stackset-exec-role`,
+      {
+        name: `${this.environment}-AWSCloudFormationStackSetExecutionRole`,
+        assumeRolePolicy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [{
           "Action": "sts:AssumeRole",
@@ -653,135 +844,174 @@ export class TapStack extends pulumi.ComponentResource {
           "Principal": { "AWS": "${administrationRole.arn}" }
         }]
       }`,
-      managedPolicyArns: ['arn:aws:iam::aws:policy/PowerUserAccess'],
-      tags: this.defaultTags,
-    }, { parent: this });
+        managedPolicyArns: ['arn:aws:iam::aws:policy/PowerUserAccess'],
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    const adminPolicy = new aws.iam.Policy(`${this.environment}-stackset-admin-policy`, {
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
-            'sts:AssumeRole',
-            'cloudformation:*',
-            'iam:PassRole',
+    const adminPolicy = new aws.iam.Policy(
+      `${this.environment}-stackset-admin-policy`,
+      {
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['sts:AssumeRole', 'cloudformation:*', 'iam:PassRole'],
+              Resource: '*',
+            },
           ],
-          Resource: '*',
-        }],
-      }),
-      tags: this.defaultTags,
-    }, { parent: this });
+        }),
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
 
-    new aws.iam.RolePolicyAttachment(`${this.environment}-stackset-admin-attachment`, {
-      role: administrationRole.name,
-      policyArn: adminPolicy.arn,
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `${this.environment}-stackset-admin-attachment`,
+      {
+        role: administrationRole.name,
+        policyArn: adminPolicy.arn,
+      },
+      { parent: this }
+    );
 
     return { administrationRole, executionRole };
   }
 
   private createCloudWatchAlarms() {
-    new aws.cloudwatch.MetricAlarm(`${this.environment}-vpc-reject-alarm`, {
-      name: `${this.environment}-vpc-high-rejects`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      metricName: 'PacketDropCount',
-      namespace: 'AWS/VPC',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 100,
-      alarmDescription: 'High number of rejected packets in VPC',
-      alarmActions: [this.alarmTopic.arn],
-      dimensions: {
-        VPC: this.vpc.id,
+    new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-vpc-reject-alarm`,
+      {
+        name: `${this.environment}-vpc-high-rejects`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'PacketDropCount',
+        namespace: 'AWS/VPC',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 100,
+        alarmDescription: 'High number of rejected packets in VPC',
+        alarmActions: [this.alarmTopic.arn],
+        dimensions: {
+          VPC: this.vpc.id,
+        },
+        tags: this.defaultTags,
       },
-      tags: this.defaultTags,
-    }, { parent: this });
+      { parent: this }
+    );
 
-    new aws.cloudwatch.MetricAlarm(`${this.environment}-cloudtrail-error-alarm`, {
-      name: `${this.environment}-cloudtrail-errors`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'ErrorCount',
-      namespace: 'AWS/CloudTrail',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 0,
-      alarmDescription: 'CloudTrail logging errors detected',
-      alarmActions: [this.alarmTopic.arn],
-      tags: this.defaultTags,
-    }, { parent: this });
-
-    new aws.cloudwatch.MetricAlarm(`${this.environment}-s3-public-access-alarm`, {
-      name: `${this.environment}-s3-public-access-attempts`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: '4xxError',
-      namespace: 'AWS/S3',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 10,
-      alarmDescription: 'High number of S3 access denied errors - potential security issue',
-      alarmActions: [this.alarmTopic.arn],
-      dimensions: {
-        BucketName: this.cloudTrailBucket.bucket,
+    new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-cloudtrail-error-alarm`,
+      {
+        name: `${this.environment}-cloudtrail-errors`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ErrorCount',
+        namespace: 'AWS/CloudTrail',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 0,
+        alarmDescription: 'CloudTrail logging errors detected',
+        alarmActions: [this.alarmTopic.arn],
+        tags: this.defaultTags,
       },
-      tags: this.defaultTags,
-    }, { parent: this });
+      { parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-s3-public-access-alarm`,
+      {
+        name: `${this.environment}-s3-public-access-attempts`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: '4xxError',
+        namespace: 'AWS/S3',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 10,
+        alarmDescription:
+          'High number of S3 access denied errors - potential security issue',
+        alarmActions: [this.alarmTopic.arn],
+        dimensions: {
+          BucketName: this.cloudTrailBucket.bucket,
+        },
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
   }
 
   private createSecurityMonitoring() {
-    new aws.cloudwatch.LogMetricFilter(`${this.environment}-root-login-filter`, {
-      name: `${this.environment}-root-login-attempts`,
-      logGroupName: this.logGroup.name,
-      pattern: '{ ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }',
-      metricTransformation: {
-        name: 'RootLoginAttempts',
-        namespace: `${this.environment}/Security`,
-        value: '1',
-        defaultValue: '0',
+    new aws.cloudwatch.LogMetricFilter(
+      `${this.environment}-root-login-filter`,
+      {
+        name: `${this.environment}-root-login-attempts`,
+        logGroupName: this.logGroup.name,
+        pattern:
+          '{ ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }',
+        metricTransformation: {
+          name: 'RootLoginAttempts',
+          namespace: `${this.environment}/Security`,
+          value: '1',
+          defaultValue: '0',
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
-    new aws.cloudwatch.MetricAlarm(`${this.environment}-root-login-alarm`, {
-      name: `${this.environment}-root-login-detected`,
-      comparisonOperator: 'GreaterThanOrEqualToThreshold',
-      evaluationPeriods: 1,
-      metricName: 'RootLoginAttempts',
-      namespace: `${this.environment}/Security`,
-      period: 300,
-      statistic: 'Sum',
-      threshold: 1,
-      alarmDescription: 'Root account login detected',
-      alarmActions: [this.alarmTopic.arn],
-      tags: this.defaultTags,
-    }, { parent: this });
-
-    new aws.cloudwatch.LogMetricFilter(`${this.environment}-unauthorized-api-filter`, {
-      name: `${this.environment}-unauthorized-api-calls`,
-      logGroupName: this.logGroup.name,
-      pattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }',
-      metricTransformation: {
-        name: 'UnauthorizedApiCalls',
+    new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-root-login-alarm`,
+      {
+        name: `${this.environment}-root-login-detected`,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        evaluationPeriods: 1,
+        metricName: 'RootLoginAttempts',
         namespace: `${this.environment}/Security`,
-        value: '1',
-        defaultValue: '0',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 1,
+        alarmDescription: 'Root account login detected',
+        alarmActions: [this.alarmTopic.arn],
+        tags: this.defaultTags,
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
-    new aws.cloudwatch.MetricAlarm(`${this.environment}-unauthorized-api-alarm`, {
-      name: `${this.environment}-unauthorized-api-calls`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'UnauthorizedApiCalls',
-      namespace: `${this.environment}/Security`,
-      period: 300,
-      statistic: 'Sum',
-      threshold: 5,
-      alarmDescription: 'High number of unauthorized API calls detected',
-      alarmActions: [this.alarmTopic.arn],
-      tags: this.defaultTags,
-    }, { parent: this });
+    new aws.cloudwatch.LogMetricFilter(
+      `${this.environment}-unauthorized-api-filter`,
+      {
+        name: `${this.environment}-unauthorized-api-calls`,
+        logGroupName: this.logGroup.name,
+        pattern:
+          '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }',
+        metricTransformation: {
+          name: 'UnauthorizedApiCalls',
+          namespace: `${this.environment}/Security`,
+          value: '1',
+          defaultValue: '0',
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-unauthorized-api-alarm`,
+      {
+        name: `${this.environment}-unauthorized-api-calls`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'UnauthorizedApiCalls',
+        namespace: `${this.environment}/Security`,
+        period: 300,
+        statistic: 'Sum',
+        threshold: 5,
+        alarmDescription: 'High number of unauthorized API calls detected',
+        alarmActions: [this.alarmTopic.arn],
+        tags: this.defaultTags,
+      },
+      { parent: this }
+    );
   }
 }
