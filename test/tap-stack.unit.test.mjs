@@ -17,7 +17,7 @@ describe('TapStack', () => {
   // base config in env-keyed form (dev/prod shape)
   const baseConfig = {
     dev: {
-      existingVpcId: 'tap-dev-vpc-us-east-1',
+      existingVpcId: 'vpc-03d43d0faacf0130c',
       existingS3Bucket: 'test-logs-bucket20250819215334277900000001',
       sshCidrBlock: '10.0.0.0/8',
       trustedOutboundCidrs: ['10.0.0.0/8'],
