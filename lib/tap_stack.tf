@@ -82,85 +82,6 @@ resource "aws_s3_bucket_policy" "website" {
   })
 }
 
-# Sample index.html file
-resource "aws_s3_object" "index_html" {
-  bucket       = aws_s3_bucket.website.id
-  key          = "index.html"
-  content_type = "text/html"
-  content      = <<-EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serverless Web App</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        #response { margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Serverless Web Application</h1>
-        <p>This is a static website hosted on S3 with a serverless backend powered by Lambda and API Gateway.</p>
-        
-        <button onclick="callAPI()">Call Lambda Function</button>
-        <div id="response"></div>
-        
-        <script>
-            async function callAPI() {
-                try {
-                    const response = await fetch('${aws_api_gateway_deployment.main.invoke_url}/hello');
-                    const data = await response.json();
-                    document.getElementById('response').innerHTML = 
-                        '<h3>Response from Lambda:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                } catch (error) {
-                    document.getElementById('response').innerHTML = 
-                        '<h3>Error:</h3><p>' + error.message + '</p>';
-                }
-            }
-        </script>
-    </div>
-</body>
-</html>
-EOF
-
-  tags = local.common_tags
-}
-
-# Sample error.html file
-resource "aws_s3_object" "error_html" {
-  bucket       = aws_s3_bucket.website.id
-  key          = "error.html"
-  content_type = "text/html"
-  content      = <<-EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error - Serverless Web App</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
-        .container { max-width: 600px; margin: 0 auto; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>404 - Page Not Found</h1>
-        <p>The page you're looking for doesn't exist.</p>
-        <a href="/">Go back to home</a>
-    </div>
-</body>
-</html>
-EOF
-
-  tags = local.common_tags
-}
-
 # IAM role for Lambda function
 resource "aws_iam_role" "lambda_role" {
   name = "lambda-role-${local.suffix}"
@@ -304,8 +225,8 @@ resource "aws_api_gateway_method_response" "hello_get_200" {
   http_method = aws_api_gateway_method.hello_get.http_method
   status_code = "200"
 
-  response_headers = {
-    "Access-Control-Allow-Origin" = true
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
   }
 }
 
@@ -316,10 +237,10 @@ resource "aws_api_gateway_method_response" "hello_options_200" {
   http_method = aws_api_gateway_method.hello_options.http_method
   status_code = "200"
 
-  response_headers = {
-    "Access-Control-Allow-Headers" = true
-    "Access-Control-Allow-Methods" = true
-    "Access-Control-Allow-Origin"  = true
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
   }
 }
 
@@ -330,10 +251,10 @@ resource "aws_api_gateway_integration_response" "hello_options" {
   http_method = aws_api_gateway_method.hello_options.http_method
   status_code = aws_api_gateway_method_response.hello_options_200.status_code
 
-  response_headers = {
-    "Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "Access-Control-Allow-Methods" = "'GET,OPTIONS'"
-    "Access-Control-Allow-Origin"  = "'*'"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
 
   depends_on = [aws_api_gateway_integration.hello_options]
@@ -380,6 +301,85 @@ resource "aws_api_gateway_stage" "main" {
   tags          = local.common_tags
 }
 
+# Sample index.html file (moved after API Gateway deployment to get the URL)
+resource "aws_s3_object" "index_html" {
+  bucket       = aws_s3_bucket.website.id
+  key          = "index.html"
+  content_type = "text/html"
+  content      = <<-EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serverless Web App</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #response { margin-top: 20px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Serverless Web Application</h1>
+        <p>This is a static website hosted on S3 with a serverless backend powered by Lambda and API Gateway.</p>
+        
+        <button onclick="callAPI()">Call Lambda Function</button>
+        <div id="response"></div>
+        
+        <script>
+            async function callAPI() {
+                try {
+                    const response = await fetch('${aws_api_gateway_stage.main.invoke_url}/hello');
+                    const data = await response.json();
+                    document.getElementById('response').innerHTML = 
+                        '<h3>Response from Lambda:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } catch (error) {
+                    document.getElementById('response').innerHTML = 
+                        '<h3>Error:</h3><p>' + error.message + '</p>';
+                }
+            }
+        </script>
+    </div>
+</body>
+</html>
+EOF
+
+  tags = local.common_tags
+}
+
+# Sample error.html file
+resource "aws_s3_object" "error_html" {
+  bucket       = aws_s3_bucket.website.id
+  key          = "error.html"
+  content_type = "text/html"
+  content      = <<-EOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Serverless Web App</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>404 - Page Not Found</h1>
+        <p>The page you're looking for doesn't exist.</p>
+        <a href="/">Go back to home</a>
+    </div>
+</body>
+</html>
+EOF
+
+  tags = local.common_tags
+}
+
 # Outputs
 output "website_url" {
   description = "URL of the static website"
@@ -388,7 +388,7 @@ output "website_url" {
 
 output "api_gateway_url" {
   description = "URL of the API Gateway"
-  value       = aws_api_gateway_deployment.main.invoke_url
+  value       = aws_api_gateway_stage.main.invoke_url
 }
 
 output "lambda_function_name" {
@@ -403,5 +403,5 @@ output "s3_bucket_name" {
 
 output "api_endpoint" {
   description = "Full API endpoint URL"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}/hello"
+  value       = "${aws_api_gateway_stage.main.invoke_url}/hello"
 }
