@@ -1,0 +1,51 @@
+{
+  "task_id": "trainr324",
+  "problem_id": "Security_Configuration_as_Code_CloudFormation_YAML_ak9m3b82l7ph",
+  "platform": "pulumi",
+  "language": "go",
+  "difficulty": "hard",
+  "subtask": "Security and Compliance Implementation",
+  "original_platform": "CloudFormation",
+  "original_language": "YAML",
+  "description": "Develop a secure AWS infrastructure for a web application with comprehensive security features including IAM roles, encrypted S3, VPC with bastion host, Lambda processing, CloudWatch monitoring, TLS certificates, and detailed tagging.",
+  "constraints": [
+    "All infrastructure must be defined in Pulumi Go",
+    "Use IAM roles and policies to enforce least privilege access",
+    "Ensure all data at rest is encrypted using AWS KMS",
+    "Implement VPC with at least 2 public and 2 private subnets across two availability zones",
+    "Use AWS Lambda functions to process data from S3 with strict timeout and memory settings",
+    "All Lambda functions must use environment variables to pass sensitive data securely",
+    "Enable versioning for all S3 buckets used",
+    "Set up CloudWatch alarms for any unauthorized access attempts or resource usage spikes",
+    "Ensure all communications are over HTTPS using ACM for TLS certificates",
+    "Apply security groups that deny all inbound traffic except from specific IP ranges",
+    "Include detailed tagging for all resources to assist in cost tracking and management"
+  ],
+  "cloud_provider": "aws",
+  "regions": ["us-east-1", "us-west-2"],
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "ACM",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Route Tables"
+  ]
+}
