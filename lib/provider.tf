@@ -8,13 +8,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
+  # Backend is configured via -backend-config in your bootstrap script
   backend "s3" {}
 }
 
-# Primary AWS provider for general resources
 provider "aws" {
-  region = var.aws_region
+  region = var.region
 }
