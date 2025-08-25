@@ -28,17 +28,20 @@ import (
 
 // DeploymentOutputs represents the outputs from Pulumi deployment
 type DeploymentOutputs struct {
-	VpcId            string `json:"vpcId"`
-	KmsKeyId         string `json:"kmsKeyId"`
-	KmsKeyArn        string `json:"kmsKeyArn"`
-	PhiBucketName    string `json:"phiBucketName"`
-	AuditBucketName  string `json:"auditBucketName"`
-	CloudTrailArn    string `json:"cloudTrailArn"`
-	DbSecretArn      string `json:"dbSecretArn"`
-	ApiKeySecretArn  string `json:"apiKeySecretArn"`
-	AppRoleArn       string `json:"appRoleArn"`
-	PrivateSubnet1Id string `json:"privateSubnet1Id"`
-	PrivateSubnet2Id string `json:"privateSubnet2Id"`
+	VpcId                     string `json:"vpcId"`
+	KmsKeyId                  string `json:"kmsKeyId"`
+	KmsKeyArn                 string `json:"kmsKeyArn"`
+	PhiBucketName             string `json:"phiBucketName"`
+	AuditBucketName           string `json:"auditBucketName"`
+	CloudTrailArn             string `json:"cloudTrailArn"`
+	DbSecretArn               string `json:"dbSecretArn"`
+	ApiKeySecretArn           string `json:"apiKeySecretArn"`
+	AppRoleArn                string `json:"appRoleArn"`
+	PrivateSubnet1Id          string `json:"privateSubnet1Id"`
+	PrivateSubnet2Id          string `json:"privateSubnet2Id"`
+	ConfigRecorderName        string `json:"configRecorderName"`
+	ConfigDeliveryChannelName string `json:"configDeliveryChannelName"`
+	ConfigBucketName          string `json:"configBucketName"`
 }
 
 var (
