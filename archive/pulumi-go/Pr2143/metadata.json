@@ -32,5 +32,24 @@
       "access_scope": "S3 bucket operations only"
     }
   },
-  "override_notice": "Task originally specified CloudFormation YAML but overridden to use Pulumi Go as per user constraint"
+  "override_notice": "Task originally specified CloudFormation YAML but overridden to use Pulumi Go as per user constraint",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "AWS Config"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
 }
