@@ -2,8 +2,8 @@
 """
 Unit tests for the TapStack CDK application.
 
-Tests verify the correct creation and configuration of AWS security resources
-including VPC, security groups, S3 buckets, IAM policies, and other components.
+Tests verify the correct creation and configuration of AWS web application resources
+including VPC, ALB, Auto Scaling Group, WAF, security groups, and other components.
 """
 
 import unittest
@@ -15,7 +15,7 @@ from lib.tap_stack import TapStack, TapStackProps
 
 
 class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-methods
-    """Unit tests for TapStack infrastructure."""
+    """Unit tests for TapStack web application infrastructure."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -45,23 +45,12 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
     def test_flow_log_group_created(self):
         """Test CloudWatch Log Group for VPC Flow Logs."""
         self.template.has_resource_properties("AWS::Logs::LogGroup", {
-            "RetentionInDays": 180
+            "RetentionInDays": 30
         })
 
-    def test_public_subnets_created(self):
-        """Test public subnets are created."""
-        self.template.resource_count_is("AWS::EC2::Subnet", 4)  # 2 public + 2 private
-        
-        # Check for public subnet properties
-        self.template.has_resource_properties("AWS::EC2::Subnet", {
-            "MapPublicIpOnLaunch": True
-        })
-
-    def test_private_subnets_created(self):
-        """Test private subnets are created."""
-        self.template.has_resource_properties("AWS::EC2::Subnet", {
-            "MapPublicIpOnLaunch": False
-        })
+    def test_subnets_created(self):
+        """Test subnets are created (3 AZs with public and private subnets)."""
+        self.template.resource_count_is("AWS::EC2::Subnet", 6)  # 3 public + 3 private
 
     def test_nat_gateways_created(self):
         """Test NAT Gateways are created for private subnets."""
@@ -71,38 +60,44 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
         """Test Internet Gateway is created."""
         self.template.has_resource("AWS::EC2::InternetGateway", {})
 
-    def test_mfa_policy_created(self):
-        """Test MFA enforcement policy is created."""
-        self.template.has_resource_properties("AWS::IAM::ManagedPolicy", {
-            "Description": "Enforce MFA for AWS console access"
+    def test_alb_security_group_created(self):
+        """Test ALB security group is created."""
+        self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
+            "GroupDescription": "Security group for Application Load Balancer"
         })
 
-    def test_mfa_policy_statements(self):
-        """Test MFA policy has correct statements."""
-        self.template.has_resource_properties("AWS::IAM::ManagedPolicy", {
-            "PolicyDocument": {
-                "Statement": Match.array_with([
-                    Match.object_like({
-                        "Sid": "AllowViewAccountInfo",
-                        "Effect": "Allow"
-                    }),
-                    Match.object_like({
-                        "Sid": "DenyAllExceptUnlessMFAAuthenticated",
-                        "Effect": "Deny"
-                    })
-                ])
+    def test_ec2_security_group_created(self):
+        """Test EC2 security group is created."""
+        self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
+            "GroupDescription": "Security group for EC2 web servers"
+        })
+
+    def test_ec2_role_created(self):
+        """Test EC2 IAM role is created with proper permissions."""
+        self.template.has_resource_properties("AWS::IAM::Role", {
+            "Description": "IAM role for web server EC2 instances",
+            "AssumeRolePolicyDocument": {
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }
+                ]
             }
         })
 
-    def test_security_audit_role_created(self):
-        """Test Security Audit Role is created."""
-        self.template.has_resource_properties("AWS::IAM::Role", {
-            "Description": "Security audit role with least privilege access"
+    def test_application_load_balancer_created(self):
+        """Test Application Load Balancer is created."""
+        self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+            "Type": "application",
+            "Scheme": "internet-facing"
         })
 
-    def test_secure_s3_bucket_created(self):
-        """Test secure S3 bucket is created with proper settings."""
-        # Check bucket exists with encryption
+    def test_alb_logs_bucket_created(self):
+        """Test S3 bucket for ALB access logs is created."""
         self.template.has_resource_properties("AWS::S3::Bucket", {
             "BucketEncryption": {
                 "ServerSideEncryptionConfiguration": [
@@ -118,100 +113,67 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
                 "BlockPublicPolicy": True,
                 "IgnorePublicAcls": True,
                 "RestrictPublicBuckets": True
-            },
-            "VersioningConfiguration": {
-                "Status": "Enabled"
             }
         })
 
-    def test_s3_bucket_policy_denies_insecure(self):
-        """Test S3 bucket policy denies insecure connections."""
-        self.template.has_resource_properties("AWS::S3::BucketPolicy", {
-            "PolicyDocument": {
-                "Statement": Match.array_with([
-                    Match.object_like({
-                        "Sid": "DenyInsecureConnections",
-                        "Effect": "Deny",
-                        "Condition": {
-                            "Bool": {
-                                "aws:SecureTransport": "false"
-                            }
-                        }
-                    })
-                ])
-            }
-        })
-
-    def test_cloudtrail_bucket_created(self):
-        """Test CloudTrail logs bucket is created."""
-        buckets = self.template.find_resources("AWS::S3::Bucket")
-        # Should have at least 2 buckets (secure bucket and cloudtrail bucket)
-        self.assertGreaterEqual(len(buckets), 2)
-
-    def test_security_groups_created(self):
-        """Test security groups are created."""
-        # Check secure security group
-        self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
-            "GroupDescription": "Secure security group - no unrestricted SSH access"
-        })
-        
-        # Check database security group
-        self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
-            "GroupDescription": "Database security group - private access only"
-        })
-
-    def test_no_unrestricted_ssh(self):
-        """Test that no security group allows unrestricted SSH access."""
-        security_groups = self.template.find_resources("AWS::EC2::SecurityGroup")
-        
-        for _, sg_props in security_groups.items():
-            if "Properties" in sg_props and "SecurityGroupIngress" in sg_props["Properties"]:
-                for rule in sg_props["Properties"]["SecurityGroupIngress"]:
-                    # Check if rule is for SSH (port 22)
-                    if rule.get("FromPort") == 22 and rule.get("ToPort") == 22:
-                        # Ensure it's not open to 0.0.0.0/0
-                        self.assertNotEqual(rule.get("CidrIp"), "0.0.0.0/0")
-
-    def test_rds_subnet_group_created(self):
-        """Test RDS subnet group is created."""
-        self.template.has_resource("AWS::RDS::DBSubnetGroup", {})
-
-    def test_rds_instance_created(self):
-        """Test RDS instance is created with security best practices."""
-        self.template.has_resource_properties("AWS::RDS::DBInstance", {
-            "StorageEncrypted": True,
-            "BackupRetentionPeriod": 7,
-            "DeletionProtection": False,  # False for test/dev
-            "AutoMinorVersionUpgrade": True
-        })
-
-    def test_redshift_subnet_group_created(self):
-        """Test Redshift subnet group is created."""
-        self.template.has_resource("AWS::Redshift::ClusterSubnetGroup", {})
-
-    def test_redshift_cluster_private(self):
-        """Test Redshift cluster is not publicly accessible."""
-        self.template.has_resource_properties("AWS::Redshift::Cluster", {
-            "PubliclyAccessible": False,
-            "Encrypted": True
-        })
-
-    def test_redshift_security_group(self):
-        """Test Redshift has its own security group."""
-        self.template.has_resource_properties("AWS::EC2::SecurityGroup", {
-            "GroupDescription": "Redshift security group - private access only"
-        })
-
-    def test_kms_key_for_ebs_encryption(self):
-        """Test KMS key is created for EBS encryption."""
-        self.template.has_resource_properties("AWS::KMS::Key", {
-            "Description": "KMS key for EBS volume encryption",
-            "EnableKeyRotation": True
-        })
-
-    def test_launch_template_with_encrypted_ebs(self):
-        """Test launch template has encrypted EBS volumes."""
+    def test_launch_template_created(self):
+        """Test Launch Template for Auto Scaling Group is created."""
         self.template.has_resource("AWS::EC2::LaunchTemplate", {})
+
+    def test_auto_scaling_group_created(self):
+        """Test Auto Scaling Group is created."""
+        self.template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
+            "MinSize": "2",
+            "MaxSize": "6",
+            "DesiredCapacity": "3"
+        })
+
+    def test_target_group_created(self):
+        """Test ALB Target Group is created."""
+        self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
+            "Port": 80,
+            "Protocol": "HTTP",
+            "TargetType": "instance"
+        })
+
+    def test_alb_listener_created(self):
+        """Test ALB Listener is created."""
+        self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
+            "Port": 80,
+            "Protocol": "HTTP"
+        })
+
+    def test_waf_web_acl_created(self):
+        """Test AWS WAF v2 Web ACL is created."""
+        self.template.has_resource_properties("AWS::WAFv2::WebACL", {
+            "Scope": "REGIONAL",
+            "DefaultAction": {
+                "Allow": {}
+            }
+        })
+
+    def test_waf_rules_configured(self):
+        """Test WAF Web ACL has security rules configured."""
+        self.template.has_resource_properties("AWS::WAFv2::WebACL", {
+            "Rules": Match.array_with([
+                Match.object_like({
+                    "Name": "AWSManagedRulesCommonRuleSet",
+                    "Priority": 1
+                }),
+                Match.object_like({
+                    "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                    "Priority": 2
+                }),
+                Match.object_like({
+                    "Name": "AWSManagedRulesAmazonIpReputationList",
+                    "Priority": 3
+                })
+            ])
+        })
+
+    def test_waf_web_acl_association(self):
+        """Test WAF Web ACL is associated with ALB."""
+        self.template.has_resource("AWS::WAFv2::WebACLAssociation", {})
 
     def test_tags_applied(self):
         """Test that tags are applied to resources."""
@@ -223,8 +185,8 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
                     "Value": "test"
                 }),
                 Match.object_like({
-                    "Key": "Purpose",
-                    "Value": "SecurityCompliance"
+                    "Key": "Project",
+                    "Value": "SecureWebApp"
                 })
             ])
         })
@@ -233,42 +195,59 @@ class TestTapStack(unittest.TestCase):  # pylint: disable=too-many-public-method
         """Test that stack outputs are defined."""
         outputs = self.template.find_outputs("*")
         
-        # Check for expected outputs
+        # Check for expected outputs based on actual stack
         expected_outputs = [
-            "VPCId",
-            "SecureSecurityGroupId",
-            "DatabaseSecurityGroupId",
-            "SecureBucketName",
-            "CloudTrailBucketName",
-            "MFAPolicyArn"
+            "LoadBalancerDNS",
+            "WebACLId", 
+            "VPCId"
         ]
         
         for output_name in expected_outputs:
             self.assertIn(output_name, outputs)
 
-    def test_removal_policies_set(self):
-        """Test removal policies are set for destroyability."""
-        # Check S3 buckets have DESTROY policy
-        buckets = self.template.find_resources("AWS::S3::Bucket")
-        for _, bucket_props in buckets.items():
-            self.assertEqual(
-                bucket_props.get("DeletionPolicy", ""),
-                "Delete"
-            )
+    def test_security_best_practices(self):
+        """Test security best practices are implemented."""
+        # Check that ALB has access logging enabled (indirectly via S3 bucket)
+        self.template.resource_count_is("AWS::S3::Bucket", 1)
+        
+        # Check that Auto Scaling Group uses encrypted EBS volumes
+        self.template.has_resource_properties("AWS::EC2::LaunchTemplate", {
+            "LaunchTemplateData": {
+                "BlockDeviceMappings": Match.array_with([
+                    Match.object_like({
+                        "Ebs": {
+                            "Encrypted": True
+                        }
+                    })
+                ])
+            }
+        })
 
-    def test_secrets_manager_for_rds(self):
-        """Test Secrets Manager is used for RDS credentials."""
-        self.template.has_resource("AWS::SecretsManager::Secret", {})
-        self.template.has_resource("AWS::SecretsManager::SecretTargetAttachment", {})
+    def test_high_availability_setup(self):
+        """Test high availability configuration."""
+        # VPC spans 3 AZs
+        self.template.has_resource_properties("AWS::EC2::VPC", {
+            "CidrBlock": "10.0.0.0/16"
+        })
+        
+        # Multiple NAT Gateways for HA
+        self.template.resource_count_is("AWS::EC2::NatGateway", 2)
+        
+        # Auto Scaling Group minimum of 2 instances
+        self.template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
+            "MinSize": "2"
+        })
 
-    def test_vpc_restrict_default_sg(self):
-        """Test VPC restricts default security group."""
-        # Check for custom resource that restricts default SG
-        self.template.has_resource("Custom::VpcRestrictDefaultSG", {})
-
-    def test_auto_delete_objects_custom_resource(self):
-        """Test auto-delete objects custom resource for S3 buckets."""
-        self.template.has_resource("Custom::S3AutoDeleteObjects", {})
+    def test_no_unrestricted_access(self):
+        """Test that security groups don't allow unrestricted access."""
+        security_groups = self.template.find_resources("AWS::EC2::SecurityGroup")
+        
+        for _, sg_props in security_groups.items():
+            if "Properties" in sg_props and "SecurityGroupIngress" in sg_props["Properties"]:
+                for rule in sg_props["Properties"]["SecurityGroupIngress"]:
+                    # Ensure no rule allows all traffic from anywhere
+                    if rule.get("IpProtocol") == "-1":  # All protocols
+                        self.assertNotEqual(rule.get("CidrIp"), "0.0.0.0/0")
 
 
 class TestTapStackProps(unittest.TestCase):
