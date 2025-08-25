@@ -22,7 +22,7 @@ class StorageStack(cdk.NestedStack):
         # Access logs bucket
         self.access_logs_bucket = s3.Bucket(
             self, f"prod-access-logs-{environment_suffix}",
-            bucket_name=f"prod-access-logs-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-1",
+            bucket_name=f"prod-access-logs-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-2",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             versioned=False,
@@ -38,7 +38,7 @@ class StorageStack(cdk.NestedStack):
         # Main application bucket
         self.app_bucket = s3.Bucket(
             self, f"prod-app-bucket-{environment_suffix}",
-            bucket_name=f"prod-app-bucket-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-1",
+            bucket_name=f"prod-app-bucket-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-2",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             versioned=True,
@@ -65,7 +65,7 @@ class StorageStack(cdk.NestedStack):
         # Backup bucket for database backups
         self.backup_bucket = s3.Bucket(
             self, f"prod-backup-bucket-{environment_suffix}",
-            bucket_name=f"prod-backup-bucket-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-1",
+            bucket_name=f"prod-backup-bucket-{environment_suffix}-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}-primary-2",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             versioned=True,
