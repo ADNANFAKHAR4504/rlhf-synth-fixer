@@ -46,16 +46,13 @@ class AppRunnerStack(cdk.NestedStack):
             self, f"prod-apprunner-service-{environment_suffix}",
             service_name=f"prod-apprunner-service-{environment_suffix}",
             source_configuration=apprunner.CfnService.SourceConfigurationProperty(
-                auto_deployments_enabled=True,
-                code_repository=apprunner.CfnService.CodeRepositoryProperty(
-                    repository_url="https://github.com/aws-containers/hello-app-runner",
-                    source_code_version=apprunner.CfnService.SourceCodeVersionProperty(
-                        type="BRANCH",
-                        value="main"
+                auto_deployments_enabled=False,  # Disable auto-deployments for public repo
+                image_repository=apprunner.CfnService.ImageRepositoryProperty(
+                    image_identifier="public.ecr.aws/aws-containers/hello-app-runner:latest",
+                    image_configuration=apprunner.CfnService.ImageConfigurationProperty(
+                        port="8000"
                     ),
-                    code_configuration=apprunner.CfnService.CodeConfigurationProperty(
-                        configuration_source="REPOSITORY"
-                    )
+                    image_repository_type="ECR_PUBLIC"
                 )
             ),
             instance_configuration=apprunner.CfnService.InstanceConfigurationProperty(
