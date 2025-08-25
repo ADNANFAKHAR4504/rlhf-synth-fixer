@@ -203,16 +203,23 @@ describe("Terraform Security Baseline - Unit", () => {
   describe("File structure integrity", () => {
     const main = read("main.tf");
 
-    test("no duplicate resource names in main.tf", () => {
-      const matches = main.match(/resource\s+"[^"]+"\s+"([^"]+)"/g) || [];
-      const names: string[] = [];
-      matches.forEach((m) => {
-        const n = m.match(/resource\s+"[^"]+"\s+"([^"]+)"/)?.[1];
-        if (n) {
-          expect(names).not.toContain(n);
-          names.push(n);
+    test('no duplicate resource addresses (type.name) in main.tf', () => {
+      const mainPath = path.join(LIB_DIR, 'main.tf');
+      const content = fs.readFileSync(mainPath, 'utf8');
+
+      // capture resource "<type>" "<name>"
+      const matches = content.match(/resource\s+"([^"]+)"\s+"([^"]+)"/g) || [];
+
+      const seen: string[] = [];
+      matches.forEach(m => {
+        const parts = m.match(/resource\s+"([^"]+)"\s+"([^"]+)"/);
+        if (parts) {
+          const addr = `${parts[1]}.${parts[2]}`; // type.name
+          expect(seen).not.toContain(addr);
+          seen.push(addr);
         }
       });
     });
+
   });
 });

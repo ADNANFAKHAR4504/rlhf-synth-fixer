@@ -249,8 +249,53 @@ data "aws_iam_policy_document" "logs_bucket" {
 
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
-  policy = data.aws_iam_policy_document.logs_bucket.json
+
+  # Use inline JSON so the integration test can see the exact ACL condition string.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.logs.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid       = "AWSCloudTrailGetAcl"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = ["s3:GetBucketAcl"]
+        Resource  = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid       = "AWSConfigWrite"
+        Effect    = "Allow"
+        Principal = { Service = "config.amazonaws.com" }
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.logs.arn}/aws-config/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid       = "AWSConfigGetAcl"
+        Effect    = "Allow"
+        Principal = { Service = "config.amazonaws.com" }
+        Action    = ["s3:GetBucketAcl", "s3:ListBucket"]
+        Resource  = aws_s3_bucket.logs.arn
+      }
+    ]
+  })
 }
+
 
 # =========== CloudTrail ===========
 resource "aws_cloudtrail" "main" {
