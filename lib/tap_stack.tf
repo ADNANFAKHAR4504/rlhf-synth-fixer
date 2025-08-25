@@ -23,13 +23,13 @@ locals {
 data "aws_caller_identity" "stack_current" {}
 data "aws_region" "stack_current" {}
 
-# tap_stack.tf (snippet)
+# Stack validation outputs
 output "stack_validation" {
-  description = "Simple sanity metadata"
+  description = "Stack validation information"
   value = {
-    stack_name = "security-iac-stack"
-    region     = var.region        # was: data.aws_region.stack_current.name
-    account_id = data.aws_caller_identity.current.account_id
+    stack_name  = local.stack_info.name
+    account_id  = data.aws_caller_identity.stack_current.account_id
+    region      = data.aws_region.stack_current.name
     deployed_at = timestamp()
   }
 }
