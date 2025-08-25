@@ -1,14 +1,9 @@
 """Database Stack with RDS MySQL Multi-AZ deployment."""
 
-from aws_cdk import (
-    NestedStack,
-    aws_rds as rds,
-    aws_ec2 as ec2,
-    aws_secretsmanager as secretsmanager,
-    Duration,
-    RemovalPolicy,
-    CfnOutput,
-)
+from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_rds as rds
+from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
 
@@ -62,7 +57,7 @@ class DatabaseStack(NestedStack):
         parameter_group = rds.ParameterGroup(
             self, "prod-db-params",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_35
+                version=rds.MysqlEngineVersion.VER_8_0_39
             ),
             description="Parameter group for production MySQL database",
             parameters={
@@ -75,7 +70,7 @@ class DatabaseStack(NestedStack):
         self.database = rds.DatabaseInstance(
             self, "prod-database",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_35
+                version=rds.MysqlEngineVersion.VER_8_0_39
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.T3, ec2.InstanceSize.MICRO
