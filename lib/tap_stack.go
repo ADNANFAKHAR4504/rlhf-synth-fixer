@@ -8,19 +8,19 @@ import (
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
-	_ "github.com/aws/constructs-go/constructs/v10/jsii"
-	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 	logs "cdk.tf/go/stack/generated/aws/cloudwatchloggroup"
+	vpcflowlog "cdk.tf/go/stack/generated/aws/flowlog"
 	iampolicy "cdk.tf/go/stack/generated/aws/iampolicy"
 	iamrole "cdk.tf/go/stack/generated/aws/iamrole"
 	iamrolepolicyattachment "cdk.tf/go/stack/generated/aws/iamrolepolicyattachment"
-	kms "cdk.tf/go/stack/generated/aws/kmskey"
 	kmskeyalias "cdk.tf/go/stack/generated/aws/kmsalias"
+	kms "cdk.tf/go/stack/generated/aws/kmskey"
 	lambdafunction "cdk.tf/go/stack/generated/aws/lambdafunction"
+	awsprovider "cdk.tf/go/stack/generated/aws/provider"
 	s3bucket "cdk.tf/go/stack/generated/aws/s3bucket"
 	s3bucketencryption "cdk.tf/go/stack/generated/aws/s3bucketserversideencryptionconfiguration"
-	vpcflowlog "cdk.tf/go/stack/generated/aws/flowlog"
-	awsprovider "cdk.tf/go/stack/generated/aws/provider"
+	_ "github.com/aws/constructs-go/constructs/v10/jsii"
+	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
 )
 
 // TapStack creates a comprehensive security configuration stack
@@ -47,7 +47,7 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 	// KMS Key for encryption
 	kmsKey := kms.NewKmsKey(stack, jsii.String("prod-security-kms-key"), &kms.KmsKeyConfig{
 		Description: jsii.String("KMS key for security infrastructure encryption"),
-		KeyUsage:   jsii.String("ENCRYPT_DECRYPT"),
+		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
 		Policy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -86,8 +86,8 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 
 	// KMS Key Alias
 	kmskeyalias.NewKmsAlias(stack, jsii.String("prod-security-kms-alias"), &kmskeyalias.KmsAliasConfig{
-		Name:         jsii.String("alias/prod-security-key"),
-		TargetKeyId:  kmsKey.KeyId(),
+		Name:        jsii.String("alias/prod-security-key"),
+		TargetKeyId: kmsKey.KeyId(),
 	})
 
 	// S3 Bucket with encryption
@@ -116,7 +116,7 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 	lambdaLogGroup := logs.NewCloudwatchLogGroup(stack, jsii.String("prod-lambda-log-group"), &logs.CloudwatchLogGroupConfig{
 		Name:            jsii.String("/aws/lambda/prod-security-function"),
 		RetentionInDays: jsii.Number(14),
-		KmsKeyId:       kmsKey.Arn(),
+		KmsKeyId:        kmsKey.Arn(),
 		Tags: &map[string]*string{
 			"Name": jsii.String("prod-lambda-log-group"),
 		},

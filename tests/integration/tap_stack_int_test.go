@@ -85,11 +85,11 @@ func testTerraformValidation(t *testing.T, stackDir string) {
 	// Check terraform plan (dry-run)
 	planCmd := exec.Command("terraform", "plan", "-input=false")
 	planCmd.Dir = stackDir
-	planCmd.Env = append(os.Environ(), 
+	planCmd.Env = append(os.Environ(),
 		"TF_VAR_region=us-east-1",
 		"AWS_REGION=us-east-1",
 	)
-	
+
 	if output, err := planCmd.CombinedOutput(); err != nil {
 		// Log the output but don't fail - planning might fail due to missing AWS credentials
 		t.Logf("terraform plan output: %s", output)
@@ -340,12 +340,12 @@ func testResourceDependencies(t *testing.T, tfPath string) {
 			flowLogMap := flowLogs.(map[string]interface{})
 			for _, flowConfig := range flowLogMap {
 				configMap := flowConfig.(map[string]interface{})
-				
+
 				// Should reference existing VPC
 				if resourceId, ok := configMap["resource_id"]; !ok || resourceId != "vpc-0abcd1234" {
 					t.Error("VPC Flow Logs should reference correct VPC ID")
 				}
-				
+
 				// Should reference S3 bucket for log destination
 				if logDest, ok := configMap["log_destination"]; !ok || logDest == nil {
 					t.Error("VPC Flow Logs should have S3 destination configured")
@@ -475,12 +475,12 @@ func validateNetworkSecurity(t *testing.T, tfConfig map[string]interface{}) {
 		}
 		for _, flowConfig := range flowLogMap {
 			configMap := flowConfig.(map[string]interface{})
-			
+
 			// Verify comprehensive logging
 			if trafficType, ok := configMap["traffic_type"]; !ok || trafficType != "ALL" {
 				t.Error("VPC Flow Logs should capture all traffic types")
 			}
-			
+
 			// Verify proper log format
 			if logFormat, ok := configMap["log_format"]; ok {
 				formatStr := logFormat.(string)
@@ -550,7 +550,7 @@ func validateAccessControls(t *testing.T, tfConfig map[string]interface{}) {
 					if statements, ok := policy["Statement"].([]interface{}); ok {
 						for _, stmt := range statements {
 							stmtMap := stmt.(map[string]interface{})
-							
+
 							// Check for overly permissive actions
 							if actions, ok := stmtMap["Action"]; ok {
 								actionStr := fmt.Sprintf("%v", actions)
@@ -558,7 +558,7 @@ func validateAccessControls(t *testing.T, tfConfig map[string]interface{}) {
 									t.Errorf("policy %s contains wildcard actions", policyName)
 								}
 							}
-							
+
 							// Check for specific resource targeting
 							if resources, ok := stmtMap["Resource"]; ok {
 								resourceStr := fmt.Sprintf("%v", resources)
@@ -600,7 +600,7 @@ func validateMonitoringAndLogging(t *testing.T, tfConfig map[string]interface{})
 		logGroupMap := logGroups.(map[string]interface{})
 		for logGroupName, logConfig := range logGroupMap {
 			configMap := logConfig.(map[string]interface{})
-			
+
 			// Verify retention is set
 			if retention, ok := configMap["retention_in_days"]; ok {
 				if retentionDays, ok := retention.(float64); !ok || retentionDays <= 0 {
@@ -609,7 +609,7 @@ func validateMonitoringAndLogging(t *testing.T, tfConfig map[string]interface{})
 			} else {
 				t.Errorf("log group %s missing retention configuration", logGroupName)
 			}
-			
+
 			// Verify encryption is enabled
 			if _, ok := configMap["kms_key_id"]; !ok {
 				t.Errorf("log group %s missing encryption", logGroupName)
@@ -624,7 +624,7 @@ func validateMonitoringAndLogging(t *testing.T, tfConfig map[string]interface{})
 		lambdaMap := lambdaFunctions.(map[string]interface{})
 		for lambdaName, lambdaConfig := range lambdaMap {
 			configMap := lambdaConfig.(map[string]interface{})
-			
+
 			// Verify depends_on includes log group to ensure logging is set up first
 			if dependsOn, ok := configMap["depends_on"]; ok {
 				dependsOnSlice := dependsOn.([]interface{})
@@ -647,7 +647,7 @@ func validateMonitoringAndLogging(t *testing.T, tfConfig map[string]interface{})
 		flowLogMap := flowLogs.(map[string]interface{})
 		for flowLogName, flowConfig := range flowLogMap {
 			configMap := flowConfig.(map[string]interface{})
-			
+
 			// Check log format includes security-relevant fields
 			if logFormat, ok := configMap["log_format"]; ok {
 				formatStr := logFormat.(string)
@@ -682,7 +682,7 @@ func TestDeploymentReadiness(t *testing.T) {
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
 	BuildSecurityStack(stack, region)
-	
+
 	start := time.Now()
 	app.Synth()
 	synthTime := time.Since(start)

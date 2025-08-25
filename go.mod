@@ -1,6 +1,6 @@
-module cdk.tf/go/stack
+module github.com/TuringGpt/iac-test-automations
 
-go 1.23
+go 1.23.12
 
 require (
 	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
@@ -130,33 +130,22 @@ require (
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
-	golang.org/x/tools v0.17.0 // indirect
+	golang.org/x/mod v0.26.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/term v0.33.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/tools v0.35.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
+	google.golang.org/grpc v1.71.1 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
+	gopkg.in/warnings.v0 v0.1.2 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	lukechampine.com/frand v1.4.2 // indirect
 )
 
-replace (
-	cdk.tf/go/stack/generated/aws/cloudwatchloggroup => ./.gen/aws/cloudwatchloggroup
-	cdk.tf/go/stack/generated/aws/cloudwatchloggroup/internal => ./.gen/aws/cloudwatchloggroup/internal
-	cdk.tf/go/stack/generated/aws/flowlog => ./.gen/aws/flowlog
-	cdk.tf/go/stack/generated/aws/flowlog/internal => ./.gen/aws/flowlog/internal
-	cdk.tf/go/stack/generated/aws/iampolicy => ./.gen/aws/iampolicy
-	cdk.tf/go/stack/generated/aws/iampolicy/internal => ./.gen/aws/iampolicy/internal
-	cdk.tf/go/stack/generated/aws/iamrole => ./.gen/aws/iamrole
-	cdk.tf/go/stack/generated/aws/iamrole/internal => ./.gen/aws/iamrole/internal
-	cdk.tf/go/stack/generated/aws/iamrolepolicyattachment => ./.gen/aws/iamrolepolicyattachment
-	cdk.tf/go/stack/generated/aws/iamrolepolicyattachment/internal => ./.gen/aws/iamrolepolicyattachment/internal
-	cdk.tf/go/stack/generated/aws/jsii => ./.gen/aws/jsii
-	cdk.tf/go/stack/generated/aws/kmsalias => ./.gen/aws/kmsalias
-	cdk.tf/go/stack/generated/aws/kmsalias/internal => ./.gen/aws/kmsalias/internal
-	cdk.tf/go/stack/generated/aws/kmskey => ./.gen/aws/kmskey
-	cdk.tf/go/stack/generated/aws/kmskey/internal => ./.gen/aws/kmskey/internal
-	cdk.tf/go/stack/generated/aws/lambdafunction => ./.gen/aws/lambdafunction
-	cdk.tf/go/stack/generated/aws/lambdafunction/internal => ./.gen/aws/lambdafunction/internal
-	cdk.tf/go/stack/generated/aws/provider => ./.gen/aws/provider
-	cdk.tf/go/stack/generated/aws/provider/internal => ./.gen/aws/provider/internal
-	cdk.tf/go/stack/generated/aws/s3bucket => ./.gen/aws/s3bucket
-	cdk.tf/go/stack/generated/aws/s3bucket/internal => ./.gen/aws/s3bucket/internal
-	cdk.tf/go/stack/generated/aws/s3bucketserversideencryptionconfiguration => ./.gen/aws/s3bucketserversideencryptionconfiguration
-	cdk.tf/go/stack/generated/aws/s3bucketserversideencryptionconfiguration/internal => ./.gen/aws/s3bucketserversideencryptionconfiguration/internal
+require (
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )
