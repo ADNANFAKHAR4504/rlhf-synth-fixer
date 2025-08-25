@@ -27,7 +27,7 @@ Parameters:
 
   TrustedAccountId:
     Type: String
-    Default: "718240086340"
+    Default: "123456789012"
     Description: "AWS Account ID that will be trusted for cross-account access"
     AllowedPattern: "^[0-9]{12}$"
     ConstraintDescription: "Must be a 12-digit AWS Account ID"
@@ -205,6 +205,31 @@ Resources:
                   - !GetAtt CloudTrailLogsBucket.Arn
                   - !Sub "${CloudTrailLogsBucket.Arn}/*"
 
+  # VPC Flow Log Service Role
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "VPCFlowLogRole-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "FlowLogsDeliveryRolePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
+                Resource:
+                  - !GetAtt VpcFlowLogsBucket.Arn
+                  - !Sub "${VpcFlowLogsBucket.Arn}/*"
+
   # CloudTrail
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -218,6 +243,13 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3EncryptionKey
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: "AWS::S3::Object"
+              Values:
+                - "arn:aws:s3:::*/*"
 
   # VPC
   SecureVPC:
@@ -276,7 +308,7 @@ Resources:
       TrafficType: ALL
       LogDestination: !GetAtt VpcFlowLogsBucket.Arn
       LogDestinationType: s3
-      LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}"
+      LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
       Tags:
         - Key: Name
           Value: !Sub "VPCFlowLog-${EnvironmentSuffix}"
