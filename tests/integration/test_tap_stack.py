@@ -190,46 +190,110 @@ class TestTapStackIntegration(unittest.TestCase):
             # Alarms might not exist in all cases, so we'll just log this
             print(f"CloudWatch alarms check: {str(e)}")
 
+    def _check_lambda_invocation_metrics(self, function_name):
+        """Helper method to check Lambda invocation metrics."""
+        try:
+            cloudwatch = boto3.client('cloudwatch', region_name='us-west-2')
+            end_time = time.time()
+            start_time = end_time - 300  # last 5 minutes
+            
+            metrics_response = cloudwatch.get_metric_statistics(
+                Namespace='AWS/Lambda',
+                MetricName='Invocations',
+                Dimensions=[{'Name': 'FunctionName', 'Value': function_name}],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=60,
+                Statistics=['Sum']
+            )
+            
+            total_invocations = sum(point['Sum'] for point in metrics_response['Datapoints'])
+            return total_invocations > 0
+        except ClientError:
+            return False
+
+    def _has_recent_log_activity(self, log_group_name, initial_count):
+        """Helper method to check for recent log activity."""
+        try:
+            streams_response = logs_client.describe_log_streams(
+                logGroupName=log_group_name,
+                orderBy='LastEventTime',
+                descending=True,
+                limit=10
+            )
+            
+            current_count = len(streams_response['logStreams'])
+            if current_count <= initial_count and current_count == 0:
+                return False
+            
+            # Check for recent activity
+            current_time = int(time.time() * 1000)
+            five_minutes_ago = current_time - (5 * 60 * 1000)
+            
+            for stream in streams_response['logStreams']:
+                if stream.get('lastEventTime', 0) > five_minutes_ago:
+                    return True
+            return False
+        except ClientError:
+            return False
+
     @mark.it("validates end-to-end S3 to Lambda trigger workflow")
     def test_s3_lambda_trigger(self):
         """Test that uploading a file to S3 triggers Lambda function"""
-        # ARRANGE
         if not self.s3_bucket_name or not self.lambda_function_name:
             self.skipTest("Required resources not available")
     
         test_file_key = f"uploads/test-file-{int(time.time())}.txt"
         test_content = b"This is a test file for serverless integration testing"
-    
+        log_group_name = f"/aws/lambda/{self.lambda_function_name}"
+        
+        # Get initial state
         try:
-            # ACT - Upload file to S3
+            initial_streams = logs_client.describe_log_streams(
+                logGroupName=log_group_name, orderBy='LastEventTime',
+                descending=True, limit=10
+            )
+            initial_count = len(initial_streams['logStreams'])
+        except ClientError:
+            initial_count = 0
+        
+        try:
+            # Upload file to S3
+            print(f"Uploading to s3://{self.s3_bucket_name}/{test_file_key}")
             s3_client.put_object(
-                Bucket=self.s3_bucket_name,
-                Key=test_file_key,
-                Body=test_content
+                Bucket=self.s3_bucket_name, Key=test_file_key, Body=test_content
             )
       
-            # Wait for Lambda to process (give it a few seconds)
-            time.sleep(5)
-      
-            # Check Lambda was invoked by looking at CloudWatch logs
-            log_group_name = f"/aws/lambda/{self.lambda_function_name}"
-      
-            # Get recent log streams
-            streams_response = logs_client.describe_log_streams(
-                logGroupName=log_group_name,
-                orderBy='LastEventTime',
-                descending=True,
-                limit=5
+            # Wait for Lambda execution with polling
+            for attempt in range(6):  # 30 seconds total, 5-second intervals
+                time.sleep(5)
+                
+                if self._has_recent_log_activity(log_group_name, initial_count):
+                    print(f"Found log activity after {(attempt + 1) * 5} seconds")
+                    return  # Success!
+                
+                print(f"Attempt {attempt + 1}: No log activity yet, waiting...")
+            
+            # Final verification using metrics as fallback
+            if self._check_lambda_invocation_metrics(self.lambda_function_name):
+                print("Lambda invocation confirmed via CloudWatch metrics")
+                return  # Success via metrics
+            
+            # If we get here, neither logs nor metrics show Lambda execution
+            self.fail(
+                f"Lambda was not triggered after S3 upload. "
+                f"Function: {self.lambda_function_name}, "
+                f"Bucket: {self.s3_bucket_name}, File: {test_file_key}"
             )
-      
-            # ASSERT
-            self.assertGreater(len(streams_response['logStreams']), 0, "No log streams found")
-      
-            # Clean up test file
-            s3_client.delete_object(Bucket=self.s3_bucket_name, Key=test_file_key)
       
         except ClientError as e:
             self.fail(f"S3 to Lambda trigger test failed: {str(e)}")
+        finally:
+            # Cleanup
+            try:
+                s3_client.delete_object(Bucket=self.s3_bucket_name, Key=test_file_key)
+            except ClientError:
+                pass
 
     @mark.it("validates Lambda function can access Secrets Manager")
     def test_lambda_secrets_access(self):
