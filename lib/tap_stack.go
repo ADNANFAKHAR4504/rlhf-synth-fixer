@@ -188,33 +188,40 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	cloudtrailKmsKey := kmskey.NewKmsKey(stack, jsii.String("cloudtrail-kms-key"), &kmskey.KmsKeyConfig{
 		Description: jsii.String("KMS key for CloudTrail log encryption"),
 		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
-		// Remove KeySpec field
 		Policy: jsii.String(fmt.Sprintf(`{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Sid": "Enable IAM User Permissions",
-				"Effect": "Allow",
-				"Principal": {
-					"AWS": "arn:aws:iam::%s:root"
-				},
-				"Action": "kms:*",
-				"Resource": "*"
-			},
-			{
-				"Sid": "Allow CloudTrail to encrypt logs",
-				"Effect": "Allow",
-				"Principal": {
-					"Service": "cloudtrail.amazonaws.com"
-				},
-				"Action": [
-					"kms:GenerateDataKey*",
-					"kms:DescribeKey"
-				],
-				"Resource": "*"
-			}
-		]
-	}`, *currentAccount.AccountId())),
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Enable IAM User Permissions",
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": "arn:aws:iam::%s:root"
+                },
+                "Action": "kms:*",
+                "Resource": "*"
+            },
+            {
+                "Sid": "Allow CloudWatch Logs",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "logs.us-west-2.amazonaws.com"
+                },
+                "Action": [
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                "Resource": "*",
+                "Condition": {
+                    "ArnEquals": {
+                        "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:us-west-2:%s:log-group:/aws/cloudtrail/tap-trail-%s"
+                    }
+                }
+            }
+        ]
+    }`, *currentAccount.AccountId(), *currentAccount.AccountId(), environmentSuffix)),
 		EnableKeyRotation: jsii.Bool(true),
 		Tags: &map[string]*string{
 			"Name":        jsii.String(fmt.Sprintf("tap-cloudtrail-kms-key-%s", environmentSuffix)),
@@ -537,17 +544,20 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	cloudtrailRole := iamrole.NewIamRole(stack, jsii.String("cloudtrail-role"), &iamrole.IamRoleConfig{
 		Name: jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", environmentSuffix)),
 		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Action": "sts:AssumeRole",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "cloudtrail.amazonaws.com"
-					}
-				}
-			]
-		}`),
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": [
+                        "cloudtrail.amazonaws.com",
+                        "logs.amazonaws.com"
+                    ]
+                }
+            }
+        ]
+    }`),
 		Tags: &map[string]*string{
 			"Name":        jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", environmentSuffix)),
 			"Service":     jsii.String("CloudTrail"),
@@ -558,7 +568,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 	// Attach AWS managed policy for CloudTrail
 	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack, jsii.String("cloudtrail-logs-policy"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      cloudtrailRole.Name(),
-		PolicyArn: jsii.String("arn:aws:iam::aws:policy/service-role/CloudTrailLogsRole"),
+		PolicyArn: jsii.String("arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"),
 	})
 
 	// S3 Bucket for application data

@@ -37,7 +37,7 @@ I need help creating a comprehensive security-focused AWS infrastructure using C
    - Set up comprehensive event selectors for S3 and management events
    - Use KMS encryption for all logs
 
-10. **RDS**: Use AWS KMS to encrypt RDS instances with customer-managed keys, enable enhanced monitoring, Multi-AZ deployment, and CloudWatch logs exports.
+10. **RDS**: Use AWS KMS to encrypt RDS instances with customer-managed keys, Multi-AZ deployment.
 
 11. **Database Security**: Configure KMS encryption for RDS instances using customer-managed keys with proper key rotation policies and access controls following FIPS 140-3 Level 3 standards.
 

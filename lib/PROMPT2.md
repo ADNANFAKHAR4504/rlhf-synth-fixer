@@ -1,4 +1,5 @@
 getting synth error please fix
+```
 Project: platform=cdktf, language=go
 ✅ CDKTF project detected, running CDKTF get and synth...
 
@@ -17,6 +18,5 @@ Command output on stderr:
     lib/tap_stack.go:436:16: too many errors
 
 
-
-
 ⠼  Synthesizing
+```

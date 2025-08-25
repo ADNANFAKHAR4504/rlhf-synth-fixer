@@ -1,36 +1,10 @@
-I see the issue. The code is too long and has compilation errors. Let me provide a corrected and more concise version that will compile successfully:
+I see the issues in the deployment. Let me fix the problems:
 
-## main.go
+1. **KMS key policy issue** - The CloudWatch Logs service principal format is incorrect
+2. **RDS version issue** - PostgreSQL version 15.4 doesn't exist
+3. **IAM policy issue** - The CloudTrail logs policy ARN is incorrect
 
-```go
-package main
-
-import (
-	"os"
-
-	"github.com/aws/constructs-go/constructs/v10"
-	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
-)
-
-func main() {
-	app := cdktf.NewApp(nil)
-
-	// Get environment suffix from environment variable, default to "dev"
-	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if environmentSuffix == "" {
-		environmentSuffix = "dev"
-	}
-
-	// Create stack with format TapStack{environmentSuffix}
-	stackName := "TapStack" + environmentSuffix
-	NewTapStack(app, jsii.String(stackName), environmentSuffix)
-
-	app.Synth()
-}
-```
-
-## tap-stack.go
+Here's the corrected `tap-stack.go` file:
 
 ```go
 package main
@@ -198,7 +172,7 @@ func createKmsKeys(stack cdktf.TerraformStack, environmentSuffix string, current
 		TargetKeyId: rdsKmsKey.KeyId(),
 	})
 
-	// Logs KMS Key
+	// Logs KMS Key - Fixed policy for CloudWatch Logs
 	logsKmsKey := kmskey.NewKmsKey(stack, jsii.String(fmt.Sprintf("logs-kms-key-%s", environmentSuffix)), &kmskey.KmsKeyConfig{
 		Description:          jsii.String(fmt.Sprintf("KMS key for CloudWatch Logs encryption - %s", environmentSuffix)),
 		DeletionWindowInDays: jsii.Number(7),
@@ -216,12 +190,23 @@ func createKmsKeys(stack cdktf.TerraformStack, environmentSuffix string, current
 				{
 					"Sid": "Allow CloudWatch Logs",
 					"Effect": "Allow",
-					"Principal": {"Service": "logs.%s.amazonaws.com"},
-					"Action": ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
-					"Resource": "*"
+					"Principal": {"Service": "logs.amazonaws.com"},
+					"Action": [
+						"kms:Encrypt",
+						"kms:Decrypt",
+						"kms:ReEncrypt*",
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*",
+					"Condition": {
+						"ArnEquals": {
+							"kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:%s:%s:log-group:/aws/cloudtrail/tap-trail-%s"
+						}
+					}
 				}
 			]
-		}`, *currentAccount.AccountId(), *currentRegion.Name())),
+		}`, *currentAccount.AccountId(), *currentRegion.Name(), *currentAccount.AccountId(), environmentSuffix)),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-logs-kms-key-%s", environmentSuffix)),
 		},
@@ -450,8 +435,8 @@ func createSecurityGroups(stack cdktf.TerraformStack, environmentSuffix string, 
 	// DB SG Rule
 	securitygrouprule.NewSecurityGroupRule(stack, jsii.String(fmt.Sprintf("db-sg-ingress-%s", environmentSuffix)), &securitygrouprule.SecurityGroupRuleConfig{
 		Type:                  jsii.String("ingress"),
-		FromPort:              jsii.Number(3306),
-		ToPort:                jsii.Number(3306),
+		FromPort:              jsii.Number(5432),
+		ToPort:                jsii.Number(5432),
 		Protocol:              jsii.String("tcp"),
 		SourceSecurityGroupId: webSg.Id(),
 		SecurityGroupId:       dbSg.Id(),
@@ -508,7 +493,12 @@ func createS3Buckets(stack cdktf.TerraformStack, environmentSuffix string, curre
 				"Effect": "Allow",
 				"Principal": {"Service": "cloudtrail.amazonaws.com"},
 				"Action": "s3:GetBucketAcl",
-				"Resource": "%s"
+				"Resource": "%s",
+				"Condition": {
+					"StringEquals": {
+						"AWS:SourceArn": "arn:aws:cloudtrail:%s:%s:trail/tap-cloudtrail-%s"
+					}
+				}
 			},
 			{
 				"Sid": "AWSCloudTrailWrite",
@@ -516,7 +506,12 @@ func createS3Buckets(stack cdktf.TerraformStack, environmentSuffix string, curre
 				"Principal": {"Service": "cloudtrail.amazonaws.com"},
 				"Action": "s3:PutObject",
 				"Resource": "%s/*",
-				"Condition": {"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
+				"Condition": {
+					"StringEquals": {
+						"s3:x-amz-acl": "bucket-owner-full-control",
+						"AWS:SourceArn": "arn:aws:cloudtrail:%s:%s:trail/tap-cloudtrail-%s"
+					}
+				}
 			},
 			{
 				"Sid": "DenyInsecureConnections",
@@ -527,7 +522,9 @@ func createS3Buckets(stack cdktf.TerraformStack, environmentSuffix string, curre
 				"Condition": {"Bool": {"aws:SecureTransport": "false"}}
 			}
 		]
-	}`, *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn())
+	}`, *cloudtrailBucket.Arn(), *currentRegion.Name(), *currentAccount.AccountId(), environmentSuffix,
+		*cloudtrailBucket.Arn(), *currentRegion.Name(), *currentAccount.AccountId(), environmentSuffix,
+		*cloudtrailBucket.Arn(), *cloudtrailBucket.Arn())
 
 	s3bucketpolicy.NewS3BucketPolicy(stack, jsii.String(fmt.Sprintf("cloudtrail-bucket-policy-%s", environmentSuffix)), &s3bucketpolicy.S3BucketPolicyConfig{
 		Bucket: cloudtrailBucket.Id(),
@@ -537,6 +534,4 @@ func createS3Buckets(stack cdktf.TerraformStack, environmentSuffix string, curre
 	return cloudtrailBucket
 }
 
-func createLogging(stack cdktf.TerraformStack, environmentSuffix string, cloudtrailBucket s3bucket.S3Bucket, logsKmsKey kmskey.KmsKey, currentRegion dataawsregion.DataAwsRegion, currentAccount dataawscalleridentity.DataAwsCallerIdentity) {
-	// CloudWatch Log Group
-	logGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String(fmt.Sprintf("cloudtrail-log-group-%s", environmentSuffix)), &cloudwatch
+func createLogging(stack cdktf.TerraformStack, environmentSuffix string, cloudtrailBucket s3bucket.S3Bucket, logsKmsKey kmskey.KmsKey, currentRegion dataawsregion.DataAwsRegion, currentAccount data
