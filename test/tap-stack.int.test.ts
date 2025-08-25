@@ -105,6 +105,8 @@ describe('TapStack Integration Tests', () => {
       expect(enc.ServerSideEncryptionConfiguration!.Rules[0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
     });
 
+  });
+
   // -------------------- DynamoDB --------------------
   describe('DynamoDB', () => {
     it('should exist with correct billing mode', async () => {
@@ -126,6 +128,9 @@ describe('TapStack Integration Tests', () => {
       const res = await rds.describeDBInstances({ DBInstanceIdentifier: 'production-fintech-db' }).promise();
       expect(res.DBInstances![0].Endpoint!.Address).toBe(outputs.RDSEndpoint);
     });
+
+    
+  });
 
   // -------------------- Secrets Manager --------------------
   describe('Secrets Manager', () => {
