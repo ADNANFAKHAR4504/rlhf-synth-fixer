@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ import (
 // setupIntegrationTests synthesizes the stack and parses the JSON output for testing.
 func setupIntegrationTests(t *testing.T) map[string]interface{} {
 	// GIVEN
-	stack := lib.NewTapStack(cdktf.NewApp(nil), "test-integration-stack")
+	stack := NewTapStack(cdktf.NewApp(nil), "test-integration-stack")
 
 	// WHEN
 	// --- FIX: Add the missing boolean argument to Testing_Synth ---
