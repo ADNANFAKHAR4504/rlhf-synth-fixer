@@ -76,37 +76,6 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 	kmsKey := kmskey.NewKmsKey(stack, jsii.String("security-kms-key"), &kmskey.KmsKeyConfig{
 		Description: jsii.String("KMS key for security infrastructure encryption"),
 		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
-		Policy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Allow",
-					"Principal": {
-						"AWS": "arn:aws:iam::*:root"
-					},
-					"Action": "kms:*",
-					"Resource": "*"
-				},
-				{
-					"Effect": "Allow",
-					"Principal": {
-						"Service": [
-							"s3.amazonaws.com",
-							"lambda.amazonaws.com",
-							"logs.amazonaws.com"
-						]
-					},
-					"Action": [
-						"kms:Encrypt",
-						"kms:Decrypt",
-						"kms:ReEncrypt*",
-						"kms:GenerateDataKey*",
-						"kms:DescribeKey"
-					],
-					"Resource": "*"
-				}
-			]
-		}`),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-security-kms-key", envPrefix)),
 		},
@@ -220,17 +189,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		},
 	})
 
-	// VPC Flow Logs
-	flowlog.NewFlowLog(stack, jsii.String("vpc-flow-logs"), &flowlog.FlowLogConfig{
-		VpcId:              jsii.String("vpc-0abcd1234"),
-		TrafficType:        jsii.String("ALL"),
-		LogDestinationType: jsii.String("s3"),
-		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
-		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"),
-		Tags: &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("%s-vpc-flow-logs", envPrefix)),
-		},
-	})
+
 
 	// Outputs
 	cdktf.NewTerraformOutput(stack, jsii.String("kms_key_id"), &cdktf.TerraformOutputConfig{
