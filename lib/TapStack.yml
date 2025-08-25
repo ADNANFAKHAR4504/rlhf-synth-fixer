@@ -172,7 +172,7 @@ Resources:
             Principal:
               Service: vpc-flow-logs.amazonaws.com
             Action: "s3:PutObject"
-            Resource: !Sub "${VpcFlowLogsBucket.Arn}/*"
+            Resource: !Sub "${VpcFlowLogsBucket.Arn}/vpc-flow-logs/*"
             Condition:
               StringEquals:
                 "s3:x-amz-acl": "bucket-owner-full-control"
@@ -186,6 +186,7 @@ Resources:
             Condition:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
+                "s3:prefix": "vpc-flow-logs/"
 
   # Cross-Account IAM Role
   CrossAccountRole:
@@ -326,7 +327,7 @@ Resources:
       ResourceId: !Ref SecureVPC
       ResourceType: "VPC"
       TrafficType: ALL
-      LogDestination: !GetAtt VpcFlowLogsBucket.Arn
+      LogDestination: !Sub "${VpcFlowLogsBucket}/vpc-flow-logs/"
       LogDestinationType: s3
       LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
       Tags:
