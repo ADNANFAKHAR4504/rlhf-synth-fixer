@@ -43,7 +43,70 @@ class TapStack(Stack):
             self, f'KmsKey{self.environment_suffix}',
             description=f'KMS key for {self.environment_suffix} environment in {cdk.Aws.REGION}',
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY if self.environment_suffix != 'prod' else RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY if self.environment_suffix != 'prod' else RemovalPolicy.RETAIN,
+            policy=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid='Enable IAM User Permissions',
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.AccountRootPrincipal()],
+                        actions=['kms:*'],
+                        resources=['*']
+                    ),
+                    iam.PolicyStatement(
+                        sid='Allow EC2 Service',
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal('ec2.amazonaws.com')],
+                        actions=[
+                            'kms:Decrypt',
+                            'kms:DescribeKey',
+                            'kms:Encrypt',
+                            'kms:GenerateDataKey*',
+                            'kms:ReEncrypt*'
+                        ],
+                        resources=['*']
+                    ),
+                    iam.PolicyStatement(
+                        sid='Allow Auto Scaling',
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal('autoscaling.amazonaws.com')],
+                        actions=[
+                            'kms:Decrypt',
+                            'kms:DescribeKey',
+                            'kms:Encrypt',
+                            'kms:GenerateDataKey*',
+                            'kms:ReEncrypt*'
+                        ],
+                        resources=['*']
+                    ),
+                    iam.PolicyStatement(
+                        sid='Allow S3 Service',
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal('s3.amazonaws.com')],
+                        actions=[
+                            'kms:Decrypt',
+                            'kms:DescribeKey',
+                            'kms:Encrypt',
+                            'kms:GenerateDataKey*',
+                            'kms:ReEncrypt*'
+                        ],
+                        resources=['*']
+                    ),
+                    iam.PolicyStatement(
+                        sid='Allow RDS Service',
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal('rds.amazonaws.com')],
+                        actions=[
+                            'kms:Decrypt',
+                            'kms:DescribeKey',
+                            'kms:Encrypt',
+                            'kms:GenerateDataKey*',
+                            'kms:ReEncrypt*'
+                        ],
+                        resources=['*']
+                    )
+                ]
+            )
         )
         
         self.vpc = self.create_vpc()
@@ -131,12 +194,12 @@ class TapStack(Stack):
                                 's3:PutObject',
                                 's3:DeleteObject'
                             ],
-                            resources=[f'arn:aws:s3:::tap-{self.environment_suffix}-*/*']
+                            resources=[f'arn:aws:s3:::s3-bucket-{self.environment_suffix}/*']
                         ),
                         iam.PolicyStatement(
                             effect=iam.Effect.ALLOW,
                             actions=['s3:ListBucket'],
-                            resources=[f'arn:aws:s3:::tap-{self.environment_suffix}-*']
+                            resources=[f'arn:aws:s3:::s3-bucket-{self.environment_suffix}']
                         )
                     ]
                 ),
@@ -303,7 +366,7 @@ class TapStack(Stack):
             max_capacity=3,
             desired_capacity=2,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            health_checks=autoscaling.HealthChecks.ec2(),
+            health_check=autoscaling.HealthCheck.elb(grace=Duration.minutes(5)),
             auto_scaling_group_name=f'asg-{self.environment_suffix}'
         )
         
