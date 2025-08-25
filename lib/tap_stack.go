@@ -226,7 +226,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		TrafficType:        jsii.String("ALL"),
 		LogDestinationType: jsii.String("s3"),
 		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
-		LogFormat:          jsii.String("${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}"),
+		LogFormat:          jsii.String("$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("%s-vpc-flow-logs", envPrefix)),
 		},
