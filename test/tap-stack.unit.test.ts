@@ -435,11 +435,7 @@ describe('TapStack', () => {
             Principal: {
               Service: 'elasticloadbalancing.amazonaws.com',
             },
-            Action: [
-              's3:PutObject',
-              's3:GetBucketAcl',
-              's3:GetBucketLocation',
-            ],
+            Action: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
             Effect: 'Allow',
             Resource: Match.anyValue(),
             Sid: 'AllowELBServicePrincipalAccess',

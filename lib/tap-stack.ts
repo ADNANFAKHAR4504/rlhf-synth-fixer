@@ -147,7 +147,7 @@ export class TapStack extends cdk.Stack {
         actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
         resources: [
           `${albLogsBucket.bucketArn}`,
-          `${albLogsBucket.bucketArn}/*`
+          `${albLogsBucket.bucketArn}/*`,
         ],
         // conditions: {
         //   StringEquals: {
@@ -176,25 +176,27 @@ export class TapStack extends cdk.Stack {
     );
 
     // 🔐 KMS key policy: allow ELB log account to encrypt
-    kmsKey.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AllowELBLogDeliveryUseOfKey',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.AccountPrincipal(elbServiceAccount)],
-      actions: [
-        'kms:Encrypt',
-        'kms:GenerateDataKey',
-        'kms:GenerateDataKeyWithoutPlaintext',
-      ],
-      resources: ['*'],
-      conditions: {
-        StringEquals: {
-          'kms:ViaService': `s3.${this.region}.amazonaws.com`,
+    kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowELBLogDeliveryUseOfKey',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AccountPrincipal(elbServiceAccount)],
+        actions: [
+          'kms:Encrypt',
+          'kms:GenerateDataKey',
+          'kms:GenerateDataKeyWithoutPlaintext',
+        ],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:ViaService': `s3.${this.region}.amazonaws.com`,
+          },
+          StringLike: {
+            'kms:EncryptionContext:aws:s3:arn': `${albLogsBucket.bucketArn}/*`,
+          },
         },
-        StringLike: {
-          'kms:EncryptionContext:aws:s3:arn': `${albLogsBucket.bucketArn}/*`,
-        },
-      },
-    }));
+      })
+    );
 
     // 🛡️ Security Groups with least privilege
     const albSecurityGroup = new ec2.SecurityGroup(
