@@ -9,8 +9,29 @@ import {
 import fs from 'fs';
 import path from 'path';
 
+interface RegionOutputs {
+  vpc_id: string;
+  vpc_cidr_block: string;
+  public_subnet_ids: string[];
+  private_subnet_ids: string[];
+  public_security_group_id: string;
+  private_security_group_id: string;
+  availability_zones: string[];
+}
+
+interface TerraformOutputs {
+  us_east_1?: RegionOutputs;
+  eu_central_1?: RegionOutputs;
+  ap_southeast_2?: RegionOutputs;
+  summary?: {
+    total_vpcs: number;
+    regions_deployed: string[];
+  };
+  [key: string]: any; // Allow dynamic access while maintaining type safety for known properties
+}
+
 describe('Multi-Region VPC Infrastructure Integration Tests', () => {
-  let outputs: any;
+  let outputs: TerraformOutputs | null = null;
   const regions = ['us-east-1', 'eu-central-1', 'ap-southeast-2'];
 
   beforeAll(async () => {
@@ -65,13 +86,13 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
       }
 
       const regionKey = region.replace(/-/g, '_');
-      const expectedCidrs = {
+      const expectedCidrs: Record<string, string> = {
         'us_east_1': '10.0.0.0/16',
         'eu_central_1': '10.1.0.0/16',
         'ap_southeast_2': '10.2.0.0/16'
       };
       
-      expect(outputs[regionKey].vpc_cidr_block).toBe(expectedCidrs[regionKey]);
+      expect(outputs[regionKey]?.vpc_cidr_block).toBe(expectedCidrs[regionKey]);
     });
 
     test.each(regions)('should have public and private subnets in region %s', (region) => {
@@ -320,19 +341,28 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
 
       const expectedRegions = ['us_east_1', 'eu_central_1', 'ap_southeast_2'];
       expectedRegions.forEach(region => {
-        expect(outputs[region]).toBeDefined();
+        expect(outputs![region]).toBeDefined();
       });
 
       expect(outputs.summary).toBeDefined();
-      expect(outputs.summary.total_vpcs).toBe(3);
-      expect(outputs.summary.regions_deployed).toContain('us-east-1');
-      expect(outputs.summary.regions_deployed).toContain('eu-central-1');
-      expect(outputs.summary.regions_deployed).toContain('ap-southeast-2');
+      if (outputs.summary) {
+        expect(outputs.summary.total_vpcs).toBe(3);
+        expect(outputs.summary.regions_deployed).toContain('us-east-1');
+        expect(outputs.summary.regions_deployed).toContain('eu-central-1');
+        expect(outputs.summary.regions_deployed).toContain('ap-southeast-2');
+      }
     });
 
     test('CIDR blocks should not overlap between regions', () => {
       if (!outputs) {
         expect(outputs).toBeDefined();
+        return;
+      }
+
+      if (!outputs.us_east_1 || !outputs.eu_central_1 || !outputs.ap_southeast_2) {
+        expect(outputs.us_east_1).toBeDefined();
+        expect(outputs.eu_central_1).toBeDefined();
+        expect(outputs.ap_southeast_2).toBeDefined();
         return;
       }
 
