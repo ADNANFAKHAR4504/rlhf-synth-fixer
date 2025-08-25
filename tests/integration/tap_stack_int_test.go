@@ -66,39 +66,38 @@ func loadOutputs(t *testing.T) *TapStackOutputs {
 	for _, stackOutputs := range rawOutputs {
 		outputs := &TapStackOutputs{}
 
-		if val, ok := stackOutputs["kmsKeyId"].(string); ok {
+		if val, ok := stackOutputs["kms_key_id"].(string); ok {
 			outputs.KMSKeyId = val
 		}
-		if val, ok := stackOutputs["s3BucketName"].(string); ok {
+		if val, ok := stackOutputs["s3_bucket_name"].(string); ok {
 			outputs.S3BucketName = val
 		}
-		if val, ok := stackOutputs["vpcId"].(string); ok {
+		if val, ok := stackOutputs["vpc_id"].(string); ok {
 			outputs.VPCId = val
 		}
-		if val, ok := stackOutputs["rdsEndpoint"].(string); ok {
-			outputs.LambdaFunctionName = val // Using available field
+		if val, ok := stackOutputs["lambda_function_name"].(string); ok {
+			outputs.LambdaFunctionName = val
 		}
-		if val, ok := stackOutputs["applicationRoleArn"].(string); ok {
-			outputs.LambdaFunctionArn = val // Using available field
+		if val, ok := stackOutputs["bastion_instance_id"].(string); ok {
+			outputs.BastionInstanceId = val
+		}
+		if val, ok := stackOutputs["web_server_1_id"].(string); ok {
+			outputs.WebServer1Id = val
+		}
+		if val, ok := stackOutputs["web_server_2_id"].(string); ok {
+			outputs.WebServer2Id = val
 		}
 
-		// Handle array fields
-		if privateSubnets, ok := stackOutputs["privateSubnetIds"].([]interface{}); ok && len(privateSubnets) > 0 {
-			if subnet, ok := privateSubnets[0].(string); ok {
-				outputs.PrivateSubnetIds = subnet
-			}
+		// Handle comma-separated subnet IDs
+		if privateSubnetsStr, ok := stackOutputs["private_subnet_ids"].(string); ok {
+			outputs.PrivateSubnetIds = privateSubnetsStr
 		}
-		if publicSubnets, ok := stackOutputs["publicSubnetIds"].([]interface{}); ok {
-			if len(publicSubnets) > 0 {
-				if subnet, ok := publicSubnets[0].(string); ok {
-					outputs.PublicSubnetIds = subnet
-					outputs.PublicSubnet1Id = subnet
-				}
-			}
-			if len(publicSubnets) > 1 {
-				if subnet, ok := publicSubnets[1].(string); ok {
-					outputs.PublicSubnet2Id = subnet
-				}
+		if publicSubnetsStr, ok := stackOutputs["public_subnet_ids"].(string); ok {
+			outputs.PublicSubnetIds = publicSubnetsStr
+			// Split comma-separated values for individual subnet IDs
+			if subnets := strings.Split(publicSubnetsStr, ","); len(subnets) >= 2 {
+				outputs.PublicSubnet1Id = subnets[0]
+				outputs.PublicSubnet2Id = subnets[1]
 			}
 		}
 
