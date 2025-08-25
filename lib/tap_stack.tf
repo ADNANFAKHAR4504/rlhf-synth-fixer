@@ -1274,7 +1274,7 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS INSTANCES
 # RDS PostgreSQL instance in primary region
-data "aws_rds_engine_versions" "postgresql" {
+data "aws_rds_engine_version" "postgresql" {
   provider = aws.us_east_1
   engine   = "postgres"
 }
@@ -1284,7 +1284,7 @@ resource "aws_db_instance" "primary" {
   
   identifier     = "${var.project_name}-postgres-primary"
   engine         = "postgres"
-  engine_version = data.aws_rds_engine_versions.postgresql.latest_version
+  engine_version = data.aws_rds_engine_version.postgresql.latest_version
   instance_class = "db.t3.micro"
   
   allocated_storage     = 20
@@ -1369,6 +1369,9 @@ resource "aws_cloudwatch_log_group" "rds" {
 
 # ROUTE 53 HOSTED ZONE AND RECORDS
 # Route 53 hosted zone
+resource "random_id" "domain_suffix" {
+  byte_length = 4
+}
 resource "aws_route53_zone" "main" {
   name = "${var.project_name}-${random_id.domain_suffix.hex}.internal"
   
