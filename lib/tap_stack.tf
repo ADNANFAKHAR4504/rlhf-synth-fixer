@@ -267,7 +267,7 @@ variable "migration_date" {
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.0.0.0/16" # <-- Change if you need a different range
 }
 
 variable "public_subnet_cidrs" {
@@ -408,6 +408,7 @@ locals {
   tags = {
     Environment = var.environment
     Project     = var.project_name
+    Owner       = "sivav-cmd" # <-- Replace with your email or team
     ManagedBy   = "terraform"
   }
 }
@@ -510,17 +511,6 @@ output "db_instance_arn" {
 output "db_instance_port" {
   description = "Port of the database instance"
   value       = aws_db_instance.main.port
-}
-
-output "db_instance_username" {
-  description = "Username for the database instance"
-  value       = aws_db_instance.main.username
-}
-
-output "db_instance_password" {
-  description = "Password for the database instance"
-  value       = aws_db_instance.main.password
-  sensitive   = true
 }
 
 output "db_instance_engine" {
