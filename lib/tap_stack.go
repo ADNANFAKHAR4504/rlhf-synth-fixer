@@ -194,9 +194,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	// Create bucket policy for CloudTrail
 	_, err = s3.NewBucketPolicy(ctx, "healthapp-audit-bucket-policy", &s3.BucketPolicyArgs{
 		Bucket: auditBucket.ID(),
-		Policy: pulumi.All(auditBucket.Arn, current.AccountId).ApplyT(func(args []interface{}) (string, error) {
-			bucketArn := args[0].(string)
-			accountId := args[1].(string)
+		Policy: auditBucket.Arn.ApplyT(func(bucketArn string) (string, error) {
 			return fmt.Sprintf(`{
 				"Version": "2012-10-17",
 				"Statement": [
