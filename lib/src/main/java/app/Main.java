@@ -81,17 +81,6 @@ class RegionalStack extends Stack {
                                 .build()))
                 .build();
 
-
-        // IAM Role
-                                software.amazon.awscdk.services.s3.LifecycleTransition.builder()
-                                        .storageClass(StorageClass.GLACIER)
-                                        .transitionAfter(Duration.days(90))
-                                        .build()
-                        ))
-                        .build()))
-        .build();
-
-
         // IAM Role
         Role ec2Role = Role.Builder.create(this, "NovaEc2Role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
