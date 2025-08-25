@@ -42,7 +42,7 @@ class DatabaseStack(cdk.NestedStack):
         self.database = rds.DatabaseInstance(
             self, f"prod-database-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_35
+                version=rds.MysqlEngineVersion.VER_8_0_42
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
