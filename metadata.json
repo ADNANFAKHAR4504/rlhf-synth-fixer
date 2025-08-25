@@ -1,0 +1,22 @@
+{
+  "task_id": "trainr354",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "IAM",
+    "S3"
+  ]
+}
