@@ -78,3 +78,15 @@ module "compute" {
   
   tags = local.common_tags
 }
+
+output "lb_domain" {
+    value = module.compute.alb_dns_name
+}
+
+output "target_group_arn" {
+    value = module.compute.target_group_arn
+}
+
+output "rds_endpoint" {
+    value = module.database.db_endpoint
+}

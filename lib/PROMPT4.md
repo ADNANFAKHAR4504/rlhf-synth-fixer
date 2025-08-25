@@ -15,5 +15,5 @@ This is the deployment error I am getting with your latest update:
 Your task is to:  
 1. Diagnose the root cause of this error.  
 2. Explain why Terraform is unable to resolve the specified RDS engine version.  
-3. Use the latest/stable available MySQL version
-4. Provide corrected Terraform HCL code for the `aws_rds_engine_version` data source and the database module.  
+3. Use MySQL version 8.0.42
+4. Provide corrected Terraform HCL code for the `aws_rds_engine_version` data source and the database module. Remove the data source if no longer needed
