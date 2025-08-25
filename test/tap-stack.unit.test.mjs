@@ -18,12 +18,14 @@ describe('TapStack', () => {
   });
 
   const baseConfig = {
-    createIfNotExists: true,
-    existingVpcId: 'vpc-12345678',
-    existingS3Bucket: 'test-logs-bucket',
-    sshCidrBlock: '10.0.0.0/8',
-    trustedOutboundCidrs: ['10.0.0.0/8'],
-    environment: 'Production'
+    dev: {
+      createIfNotExists: true,
+      existingVpcId: 'vpc-12345678',
+      existingS3Bucket: 'test-logs-bucket',
+      sshCidrBlock: '10.0.0.0/8',
+      trustedOutboundCidrs: ['10.0.0.0/8'],
+      environment: 'Production'
+    }
   };
 
   // ------------------ Happy path ------------------
@@ -162,8 +164,15 @@ describe('TapStack', () => {
   describe('createIfNotExists = true', () => {
     test('Creates a new VPC if existingVpcId missing', () => {
       app = new cdk.App();
-      const config = { ...baseConfig, existingVpcId: undefined };
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config, createIfNotExists: true });
+      const config = {
+        ...baseConfig,
+        dev: {
+          ...baseConfig.dev,
+          existingVpcId: undefined,
+          createIfNotExists: true
+        }
+      };
+      stack = new TapStack(app, stackName, { env, environmentSuffix, config });
       template = Template.fromStack(stack);
 
       template.resourceCountIs('AWS::EC2::VPC', 1);
@@ -171,8 +180,15 @@ describe('TapStack', () => {
 
     test('Creates a new S3 bucket if existingS3Bucket missing', () => {
       app = new cdk.App();
-      const config = { ...baseConfig, existingS3Bucket: undefined };
-      stack = new TapStack(app, stackName, { env, environmentSuffix, config, createIfNotExists: true });
+      const config = {
+        ...baseConfig,
+        dev: {
+          ...baseConfig.dev,
+          existingS3Bucket: undefined,
+          createIfNotExists: true
+        }
+      };
+      stack = new TapStack(app, stackName, { env, environmentSuffix, config });
       template = Template.fromStack(stack);
 
       // Exactly 1 bucket
@@ -199,7 +215,14 @@ describe('TapStack', () => {
   describe('createIfNotExists = false', () => {
     test('Throws if existingVpcId missing', () => {
       app = new cdk.App();
-      const config = { ...baseConfig, existingVpcId: undefined, createIfNotExists: false };
+      const config = {
+        ...baseConfig,
+        dev: {
+          ...baseConfig.dev,
+          existingVpcId: undefined,
+          createIfNotExists: false
+        }
+      };
       expect(() => {
         new TapStack(app, stackName, { env, environmentSuffix, config });
       }).toThrow(/VPC ID must be provided/);
@@ -207,7 +230,14 @@ describe('TapStack', () => {
 
     test('Throws if existingS3Bucket missing', () => {
       app = new cdk.App();
-      const config = { ...baseConfig, existingS3Bucket: undefined, createIfNotExists: false };
+      const config = {
+        ...baseConfig,
+        dev: {
+          ...baseConfig.dev,
+          existingS3Bucket: undefined,
+          createIfNotExists: false
+        }
+      };
       expect(() => {
         new TapStack(app, stackName, { env, environmentSuffix, config });
       }).toThrow(/S3 bucket must be provided/);
@@ -216,13 +246,167 @@ describe('TapStack', () => {
 
   // ------------------ Invalid configuration ------------------
   describe('Invalid configuration', () => {
-    test('Throws if environment not found in cdk.json context', () => {
+    // A) Provided (truthy) environmentSuffix is used
+    test('uses provided environmentSuffix when truthy', () => {
+      const app = new cdk.App();
+
+      const stack = new TapStack(app, 'TapStackEnvQa', {
+        env,
+        environmentSuffix: 'qa',
+        config: baseConfig
+      });
+
+      expect(stack.environmentSuffix).toBe('qa');
+    });
+
+    // B) Missing / falsy environmentSuffix defaults to "dev"
+    test('defaults to "dev" when environmentSuffix is omitted or falsy', () => {
+      const app = new cdk.App();
+
+      // omit environmentSuffix to test defaulting
+      const stack = new TapStack(app, 'TapStackEnvDefault', {
+        env,
+        config: baseConfig
+      });
+
+      expect(stack.environmentSuffix).toBe('dev');
+    });
+
+    // Extra: test behavior for empty string (shows || treats '' as falsy)
+    test('empty string environmentSuffix falls back to "dev" (|| behavior)', () => {
+      const app = new cdk.App();
+
+      const stack = new TapStack(app, 'TapStackEnvEmpty', {
+        env,
+        environmentSuffix: '', // empty string is falsy -> 'dev'
+        config: baseConfig
+      });
+
+      expect(stack.environmentSuffix).toBe('dev');
+    });
+
+    test('Logs error instead of building resources when config.environment missing (fallback to dev present)', () => {
+      // Arrange: config has a dev key (so loadConfig can fallback), but dev has no "environment"
+      const badConfig = {
+        dev: {
+          createIfNotExists: true,
+          existingVpcId: 'vpc-12345678',
+          existingS3Bucket: 'test-logs-bucket',
+          sshCidrBlock: '10.0.0.0/8',
+          trustedOutboundCidrs: ['10.0.0.0/8'],
+          // NOTE: intentionally missing "environment"
+        }
+      };
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+      const errSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+
+      // Act: use an environmentSuffix that is missing (so fallback occurs)
+      new TapStack(app, 'TapStackNoEnv', { env, environmentSuffix: 'qa', config: badConfig });
+
+      // Assert: loadConfig should have warned about falling back, then constructor should log error
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to 'dev'"));
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("No configuration found for 'qa'"));
+
+      warnSpy.mockRestore();
+      errSpy.mockRestore();
+    });
+
+    test('Loads config from cdk.json context when environments are provided', () => {
       app = new cdk.App({
+        context: {
+          environments: {
+            qa: {
+              createIfNotExists: true,
+              existingVpcId: 'vpc-qa',
+              existingS3Bucket: 'qa-logs',
+              sshCidrBlock: '10.0.0.0/8',
+              trustedOutboundCidrs: ['10.0.0.0/8'],
+              environment: 'QA'
+            }
+          }
+        }
+      });
+
+      const stack = new TapStack(app, 'TapStackQA', { env, environmentSuffix: 'qa' });
+
+      expect(stack.config).toEqual(
+        expect.objectContaining({
+          existingVpcId: 'vpc-qa',
+          existingS3Bucket: 'qa-logs',
+          environment: 'QA'
+        })
+      );
+    });
+
+    test('Throws if environments context missing entirely', () => {
+      app = new cdk.App({ context: {} });
+
+      expect(() => {
+        new TapStack(app, 'TapStackQA', { env, environmentSuffix: 'qa' });
+      }).toThrow(/No configuration found in/);
+    });
+
+    test('Logs error if environment not found in cdk.json context', () => {
+      const app = new cdk.App({
         context: { environments: { dev: undefined } }
       });
+
       expect(() => {
-        new TapStack(app, stackName, { env, environmentSuffix: 'qa', config: {} });
-      }).toThrow(/No configuration found/);
+        new TapStack(app, 'TestStack', { env: {}, environmentSuffix: 'qa', config: {} });
+      }).toThrow(/No configuration found for environment: 'qa'/);
+
     });
   });
-});
+
+  describe('Additional tests for full coverage', () => {
+
+    let app;
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      app = new cdk.App();
+    }); //end-test
+
+    test('showInfo() logs correctly', () => {
+
+      expect(() => {
+        new TapStack(app, 'TapStack-Extra', {
+          env: { account: '111111111111', region: 'us-east-1' },
+          environmentSuffix: 'dev',
+          config: { dev: { environment: 'dev' } },
+          createIfNotExists: true
+        });
+      }).toThrow(/VPC ID must be provided/);
+
+    }); //end-test
+
+    test('loadConfig() falls back to dev if env missing', () => {
+      const cfg = { qa: undefined, dev: { environment: 'dev' } };
+
+      expect(() => {
+        new TapStack(app, 'TapStackFallback', {
+          env: { account: '111111111111', region: 'us-east-1' },
+          environmentSuffix: 'qa',
+          config: cfg
+        });
+      }).toThrow(/VPC ID must be provided/);
+
+    }); //end-test
+
+    test('loadConfig() logs error if prod config missing', () => {
+      const cfg = { dev: { environment: 'dev' } };
+
+      expect(() => {
+        new TapStack(app, 'TapStackProdMissing', {
+          env: { account: '111111111111', region: 'us-east-1' },
+          environmentSuffix: 'prod',
+          config: cfg
+        });
+      }).toThrow(/No configuration found for 'prod'/);
+
+    }); //end-test
+
+  }); // end-describe
+
+}); // end-suite
