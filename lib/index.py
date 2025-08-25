@@ -1,7 +1,13 @@
 import json
+
 def handler(event, context):
-    print(f"Processing event: {json.dumps(event)}")
+    """
+    Simple Lambda function for security infrastructure testing
+    """
     return {
         'statusCode': 200,
-        'body': json.dumps('Security function executed successfully')
+        'body': json.dumps({
+            'message': 'Security function executed successfully',
+            'event': event
+        })
     }

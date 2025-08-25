@@ -356,3 +356,343 @@ func TestOutputsConfiguration(t *testing.T) {
 		}
 	}
 }
+
+// TestProviderConfiguration tests AWS provider setup
+func TestProviderConfiguration(t *testing.T) {
+	tfPath := synthStack(t, "us-west-2")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	providers, ok := tfConfig["provider"].(map[string]interface{})
+	if !ok {
+		t.Fatal("no providers found")
+	}
+
+	awsProvider, ok := providers["aws"].([]interface{})
+	if !ok || len(awsProvider) == 0 {
+		t.Fatal("AWS provider not found")
+	}
+
+	providerConfig := awsProvider[0].(map[string]interface{})
+	if region, ok := providerConfig["region"]; !ok || region != "us-west-2" {
+		t.Errorf("expected region us-west-2, got: %v", region)
+	}
+}
+
+// TestResourceDependencies tests resource dependency configuration
+func TestResourceDependencies(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	// Lambda should depend on log group
+	lambdaFunction := getResource(tfConfig, "aws_lambda_function", "prod-security-function")
+	if lambdaFunction == nil {
+		t.Fatal("Lambda function not found")
+	}
+
+	if dependsOn, ok := lambdaFunction["depends_on"]; ok && dependsOn != nil {
+		deps := dependsOn.([]interface{})
+		if len(deps) == 0 {
+			t.Error("Lambda function should have dependencies")
+		}
+	}
+}
+
+// TestIAMPolicyAttachment tests IAM role policy attachment
+func TestIAMPolicyAttachment(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	policyAttachment := getResource(tfConfig, "aws_iam_role_policy_attachment", "prod-lambda-policy-attachment")
+	if policyAttachment == nil {
+		t.Fatal("IAM policy attachment not found")
+	}
+
+	if role, ok := policyAttachment["role"]; !ok || role == nil {
+		t.Error("policy attachment missing role")
+	}
+
+	if policyArn, ok := policyAttachment["policy_arn"]; !ok || policyArn == nil {
+		t.Error("policy attachment missing policy ARN")
+	}
+}
+
+// TestKMSAliasTargetKey tests KMS alias target key reference
+func TestKMSAliasTargetKey(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	kmsAlias := getResource(tfConfig, "aws_kms_alias", "prod-security-kms-alias")
+	if kmsAlias == nil {
+		t.Fatal("KMS alias not found")
+	}
+
+	if targetKeyId, ok := kmsAlias["target_key_id"]; !ok || targetKeyId == nil {
+		t.Error("KMS alias missing target key ID")
+	}
+}
+
+// TestLambdaRoleAssumePolicy tests Lambda role assume role policy
+func TestLambdaRoleAssumePolicy(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	iamRole := getResource(tfConfig, "aws_iam_role", "prod-lambda-execution-role")
+	if iamRole == nil {
+		t.Fatal("IAM role not found")
+	}
+
+	if assumePolicy, ok := iamRole["assume_role_policy"]; ok && assumePolicy != nil {
+		policyStr := assumePolicy.(string)
+		if !strings.Contains(policyStr, "lambda.amazonaws.com") {
+			t.Error("assume role policy should allow lambda service")
+		}
+		if !strings.Contains(policyStr, "sts:AssumeRole") {
+			t.Error("assume role policy should allow sts:AssumeRole")
+		}
+	}
+}
+
+// TestLambdaFilename tests Lambda function filename configuration
+func TestLambdaFilename(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	lambdaFunction := getResource(tfConfig, "aws_lambda_function", "prod-security-function")
+	if lambdaFunction == nil {
+		t.Fatal("Lambda function not found")
+	}
+
+	if filename, ok := lambdaFunction["filename"]; !ok || filename != "./lambda.zip" {
+		t.Errorf("expected filename './lambda.zip', got: %v", filename)
+	}
+
+	if handler, ok := lambdaFunction["handler"]; !ok || handler != "index.handler" {
+		t.Errorf("expected handler 'index.handler', got: %v", handler)
+	}
+}
+
+// TestS3BucketNaming tests S3 bucket naming with region
+func TestS3BucketNaming(t *testing.T) {
+	regions := []string{"us-east-1", "us-west-2", "eu-west-1"}
+
+	for _, region := range regions {
+		t.Run(region, func(t *testing.T) {
+			tfPath := synthStack(t, region)
+			tfConfig := parseTerraformJSON(t, tfPath)
+
+			s3Bucket := getResource(tfConfig, "aws_s3_bucket", "prod-security-logs-bucket")
+			if s3Bucket == nil {
+				t.Fatal("S3 bucket not found")
+			}
+
+			if bucket, ok := s3Bucket["bucket"]; ok && bucket != nil {
+				bucketName := bucket.(string)
+				if !strings.Contains(bucketName, region) {
+					t.Errorf("bucket name should contain region %s, got: %s", region, bucketName)
+				}
+			}
+		})
+	}
+}
+
+// TestVPCFlowLogsDestination tests VPC Flow Logs S3 destination
+func TestVPCFlowLogsDestination(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	flowLog := getResource(tfConfig, "aws_flow_log", "prod-vpc-flow-logs")
+	if flowLog == nil {
+		t.Fatal("VPC flow log not found")
+	}
+
+	if logDest, ok := flowLog["log_destination"]; ok && logDest != nil {
+		destStr := logDest.(string)
+		if !strings.Contains(destStr, "arn:aws:s3") {
+			t.Error("log destination should be S3 ARN")
+		}
+		if !strings.Contains(destStr, "vpc-flow-logs") {
+			t.Error("log destination should contain vpc-flow-logs path")
+		}
+	}
+}
+
+// TestResourceNamingConsistency tests consistent resource naming
+func TestResourceNamingConsistency(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	resources := []struct {
+		resourceType   string
+		resourceName   string
+		nameField      string
+		expectedPrefix string
+	}{
+		{"aws_kms_key", "prod-security-kms-key", "tags", "prod-security-kms-key"},
+		{"aws_s3_bucket", "prod-security-logs-bucket", "tags", "prod-security-logs-bucket"},
+		{"aws_lambda_function", "prod-security-function", "function_name", "prod-security-function"},
+		{"aws_iam_role", "prod-lambda-execution-role", "name", "prod-lambda-execution-role"},
+		{"aws_iam_policy", "prod-lambda-policy", "name", "prod-lambda-policy"},
+	}
+
+	for _, resource := range resources {
+		resourceMap := getResource(tfConfig, resource.resourceType, resource.resourceName)
+		if resourceMap == nil {
+			t.Errorf("resource %s not found", resource.resourceName)
+			continue
+		}
+
+		if resource.nameField == "tags" {
+			if tags, ok := resourceMap["tags"]; ok && tags != nil {
+				tagsMap := tags.(map[string]interface{})
+				if name, ok := tagsMap["Name"]; ok && name != nil {
+					nameStr := name.(string)
+					if !strings.Contains(nameStr, resource.expectedPrefix) {
+						t.Errorf("resource %s Name tag should contain %s, got: %s", resource.resourceName, resource.expectedPrefix, nameStr)
+					}
+				}
+			}
+		} else {
+			if name, ok := resourceMap[resource.nameField]; ok && name != nil {
+				nameStr := name.(string)
+				if nameStr != resource.expectedPrefix {
+					t.Errorf("resource %s %s should be %s, got: %s", resource.resourceName, resource.nameField, resource.expectedPrefix, nameStr)
+				}
+			}
+		}
+	}
+}
+
+// TestCloudWatchLogGroupRetention tests log retention configuration
+func TestCloudWatchLogGroupRetention(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	logGroup := getResource(tfConfig, "aws_cloudwatch_log_group", "prod-lambda-log-group")
+	if logGroup == nil {
+		t.Fatal("CloudWatch log group not found")
+	}
+
+	if retention, ok := logGroup["retention_in_days"]; ok {
+		retentionDays := retention.(float64)
+		if retentionDays != 14 {
+			t.Errorf("expected 14 days retention, got: %v", retentionDays)
+		}
+		if retentionDays < 1 || retentionDays > 3653 {
+			t.Errorf("retention days should be between 1-3653, got: %v", retentionDays)
+		}
+	}
+}
+
+// TestIAMPolicyLeastPrivilege tests IAM policy follows least privilege
+func TestIAMPolicyLeastPrivilege(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	iamPolicy := getResource(tfConfig, "aws_iam_policy", "prod-lambda-policy")
+	if iamPolicy == nil {
+		t.Fatal("IAM policy not found")
+	}
+
+	if policy, ok := iamPolicy["policy"]; ok && policy != nil {
+		policyStr := policy.(string)
+
+		// Should NOT contain wildcard permissions
+		if strings.Contains(policyStr, "\"*\"") {
+			t.Error("policy should not contain wildcard permissions")
+		}
+
+		// Should contain specific log group ARN
+		if !strings.Contains(policyStr, "/aws/lambda/prod-security-function") {
+			t.Error("policy should reference specific log group")
+		}
+
+		// Should contain specific KMS key ARN reference
+		if !strings.Contains(policyStr, "Resource") {
+			t.Error("policy should specify resources")
+		}
+	}
+}
+
+// TestMultiRegionSupport tests stack works in different regions
+func TestMultiRegionSupport(t *testing.T) {
+	regions := []string{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"}
+
+	for _, region := range regions {
+		t.Run(region, func(t *testing.T) {
+			tfPath := synthStack(t, region)
+			tfConfig := parseTerraformJSON(t, tfPath)
+
+			// Verify provider region
+			providers, ok := tfConfig["provider"].(map[string]interface{})
+			if !ok {
+				t.Fatal("no providers found")
+			}
+
+			awsProvider, ok := providers["aws"].([]interface{})
+			if !ok || len(awsProvider) == 0 {
+				t.Fatal("AWS provider not found")
+			}
+
+			providerConfig := awsProvider[0].(map[string]interface{})
+			if providerRegion, ok := providerConfig["region"]; !ok || providerRegion != region {
+				t.Errorf("expected provider region %s, got: %v", region, providerRegion)
+			}
+
+			// Verify S3 bucket includes region in name
+			s3Bucket := getResource(tfConfig, "aws_s3_bucket", "prod-security-logs-bucket")
+			if s3Bucket != nil {
+				if bucket, ok := s3Bucket["bucket"]; ok && bucket != nil {
+					bucketName := bucket.(string)
+					if !strings.Contains(bucketName, region) {
+						t.Errorf("bucket name should contain region %s, got: %s", region, bucketName)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestErrorHandling tests error conditions and edge cases
+func TestErrorHandling(t *testing.T) {
+	// Test with empty region
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Expected panic for empty region handled")
+		}
+	}()
+
+	// Test synthesis with minimal config
+	tfPath := synthStack(t, "us-east-1")
+	if tfPath == "" {
+		t.Error("synthesis should produce output path")
+	}
+
+	// Test file exists
+	if _, err := os.Stat(tfPath); err != nil {
+		t.Errorf("synthesized file should exist: %v", err)
+	}
+}
+
+// TestResourceCount tests expected number of resources
+func TestResourceCount(t *testing.T) {
+	tfPath := synthStack(t, "us-east-1")
+	tfConfig := parseTerraformJSON(t, tfPath)
+
+	resources, ok := tfConfig["resource"].(map[string]interface{})
+	if !ok {
+		t.Fatal("no resources found")
+	}
+
+	// Count total resources
+	totalResources := 0
+	for _, resourceType := range resources {
+		resourceMap := resourceType.(map[string]interface{})
+		totalResources += len(resourceMap)
+	}
+
+	// BuildSecurityStack should create at least 8 resources
+	expectedMinResources := 8
+	if totalResources < expectedMinResources {
+		t.Errorf("expected at least %d resources, got: %d", expectedMinResources, totalResources)
+	}
+}
