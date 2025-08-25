@@ -14,7 +14,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as fs from 'fs';
-import * as path from 'path';
 
 export interface TapStackArgs {
   tags: Record<string, string>;
@@ -42,6 +41,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dashboard: aws.cloudwatch.Dashboard;
   public readonly vpcFlowLogsRole: aws.iam.Role;
   public readonly vpcFlowLogs: aws.ec2.FlowLog;
+  public readonly cloudTrail: aws.cloudtrail.Trail;
 
   // StackSet Outputs
   public readonly stackSetExecutionRole?: aws.iam.Role;
@@ -96,10 +96,10 @@ export class TapStack extends pulumi.ComponentResource {
     this.alarmTopic = monitoringResources.alarmTopic;
     this.dashboard = monitoringResources.dashboard;
 
-    // 6. CloudTrail Implementation
-    this.createCloudTrail();
+    // 6. CloudTrail Implementation (with proper dependencies)
+    this.cloudTrail = this.createCloudTrail(storageResources);
 
-    // 7. VPC Flow Logs for compliance monitoring (instead of AWS Config)
+    // 7. VPC Flow Logs for compliance monitoring
     const flowLogsResources = this.createVPCFlowLogs();
     this.vpcFlowLogsRole = flowLogsResources.role;
     this.vpcFlowLogs = flowLogsResources.flowLogs;
@@ -126,25 +126,10 @@ export class TapStack extends pulumi.ComponentResource {
       privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
       publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
       cloudTrailBucketName: this.cloudTrailBucket.bucket,
-      cloudTrailBucketArn: this.cloudTrailBucket.arn,
       parameterStorePrefix: this.parameterStorePrefix,
-      logGroupName: this.logGroup.name,
-      logGroupArn: this.logGroup.arn,
-      alarmTopicArn: this.alarmTopic.arn,
-      dashboardArn: this.dashboard.dashboardArn,
       vpcFlowLogsId: this.vpcFlowLogs.id,
-      cloudTrailRoleArn: this.cloudTrailRole.arn,
-      deploymentRoleArn: this.deploymentRole.arn,
-      vpcFlowLogsRoleArn: this.vpcFlowLogsRole.arn,
       environment: this.environment,
       regions: this.regions,
-      awsRegion: aws.getRegion().then(r => r.name),
-      accountId: aws.getCallerIdentity().then(c => c.accountId),
-      deploymentComplete: true,
-      stackName: 'TapStack',
-      timestamp: new Date().toISOString(),
-      tags: this.defaultTags,
-      testEnvironment: this.environment === 'integration-test' || this.environment.includes('test'),
     });
   }
 
@@ -221,11 +206,12 @@ export class TapStack extends pulumi.ComponentResource {
       };
 
       try {
-        const outputDir = path.dirname(outputsFile);
-        if (!fs.existsSync(outputDir)) {
+        // Ensure the directory exists
+        const outputDir = outputsFile.includes('/') ? outputsFile.substring(0, outputsFile.lastIndexOf('/')) : '';
+        if (outputDir && !fs.existsSync(outputDir)) {
           fs.mkdirSync(outputDir, { recursive: true });
         }
-
+        
         fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
         if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
           console.log(`Stack outputs written to ${outputsFile}`);
@@ -404,14 +390,14 @@ export class TapStack extends pulumi.ComponentResource {
       forceDestroy: true,
       tags: this.defaultTags,
     }, { parent: this });
-  
-    // Fixed CloudTrail bucket policy with proper account ID
-    new aws.s3.BucketPolicy(`${this.environment}-cloudtrail-bucket-policy`, {
+
+    // Get current AWS account ID and region for the policy
+    const currentCallerIdentity = aws.getCallerIdentity();
+    const currentRegion = aws.getRegion();
+
+    const bucketPolicy = new aws.s3.BucketPolicy(`${this.environment}-cloudtrail-bucket-policy`, {
       bucket: cloudTrailBucket.id,
-      policy: pulumi.all([
-        cloudTrailBucket.arn,
-        aws.getCallerIdentity().then(c => c.accountId)
-      ]).apply(([bucketArn, accountId]) =>
+      policy: pulumi.all([cloudTrailBucket.arn, currentCallerIdentity, currentRegion]).apply(([bucketArn, identity, region]) =>
         JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -421,47 +407,66 @@ export class TapStack extends pulumi.ComponentResource {
               Principal: { Service: 'cloudtrail.amazonaws.com' },
               Action: 's3:GetBucketAcl',
               Resource: bucketArn,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`
+                }
+              }
             },
             {
               Sid: 'AWSCloudTrailWrite',
               Effect: 'Allow',
               Principal: { Service: 'cloudtrail.amazonaws.com' },
               Action: 's3:PutObject',
-              Resource: `${bucketArn}/AWSLogs/${accountId}/*`,
+              Resource: `${bucketArn}/*`,
               Condition: {
-                StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
-              },
-            },
+                StringEquals: { 
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${identity.accountId}:trail/${this.environment}-audit-trail`
+                }
+              }
+            }
           ],
         })
       ),
-    }, { parent: this });
-  
-    new aws.s3.BucketVersioning(`${this.environment}-cloudtrail-versioning`, {
-      bucket: cloudTrailBucket.id,
-      versioningConfiguration: { status: 'Enabled' },
-    }, { parent: this });
-  
-    new aws.s3.BucketServerSideEncryptionConfiguration(`${this.environment}-cloudtrail-encryption`, {
+    }, { 
+      parent: this,
+      dependsOn: [cloudTrailBucket]
+    });
+
+    const encryption = new aws.s3.BucketServerSideEncryptionConfiguration(`${this.environment}-cloudtrail-encryption`, {
       bucket: cloudTrailBucket.id,
       rules: [{
         applyServerSideEncryptionByDefault: {
           sseAlgorithm: 'AES256',
         },
       }],
-    }, { parent: this });
-  
-    new aws.s3.BucketPublicAccessBlock(`${this.environment}-cloudtrail-public-access-block`, {
+    }, { 
+      parent: this,
+      dependsOn: [bucketPolicy]
+    });
+
+    const versioning = new aws.s3.BucketVersioning(`${this.environment}-cloudtrail-versioning`, {
+      bucket: cloudTrailBucket.id,
+      versioningConfiguration: { status: 'Enabled' },
+    }, { 
+      parent: this,
+      dependsOn: [bucketPolicy]
+    });
+
+    const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${this.environment}-cloudtrail-public-access-block`, {
       bucket: cloudTrailBucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
-    }, { parent: this });
-  
-    return { cloudTrailBucket };
+    }, { 
+      parent: this,
+      dependsOn: [bucketPolicy]
+    });
+
+    return { cloudTrailBucket, bucketPolicy, encryption, versioning, publicAccessBlock };
   }
-  
 
   private createParameterStore(): pulumi.Output<string> {
     const prefix = `/${this.environment}`;
@@ -487,9 +492,12 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createMonitoringInfrastructure() {
+    // Environment-specific retention periods for testing coverage
+    const retentionDays = this.environment === 'prod' ? 90 : 30;
+
     const logGroup = new aws.cloudwatch.LogGroup(`${this.environment}-logs`, {
       name: `/aws/infrastructure/${this.environment}`,
-      retentionInDays: this.environment === 'prod' ? 90 : 30,
+      retentionInDays: retentionDays,
       tags: this.defaultTags,
     }, { parent: this });
 
@@ -540,15 +548,26 @@ export class TapStack extends pulumi.ComponentResource {
     return { logGroup, alarmTopic, dashboard };
   }
 
-  private createCloudTrail() {
-    new aws.cloudtrail.Trail(`${this.environment}-cloudtrail`, {
+  private createCloudTrail(storageResources: any): aws.cloudtrail.Trail {
+    const trail = new aws.cloudtrail.Trail(`${this.environment}-cloudtrail`, {
       name: `${this.environment}-audit-trail`,
       s3BucketName: this.cloudTrailBucket.bucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogging: true,
       tags: this.defaultTags,
-    }, { parent: this });
+    }, { 
+      parent: this,
+      dependsOn: [
+        this.cloudTrailBucket,
+        storageResources.bucketPolicy,
+        storageResources.encryption,
+        storageResources.versioning,
+        storageResources.publicAccessBlock
+      ]
+    });
+
+    return trail;
   }
 
   private createVPCFlowLogs(): { role: aws.iam.Role, flowLogs: aws.ec2.FlowLog } {
@@ -589,9 +608,12 @@ export class TapStack extends pulumi.ComponentResource {
       policyArn: vpcFlowLogsPolicy.arn,
     }, { parent: this });
 
+    // Environment-specific retention for flow logs
+    const flowLogsRetention = this.environment === 'prod' ? 30 : 14;
+
     const flowLogsGroup = new aws.cloudwatch.LogGroup(`${this.environment}-vpc-flow-logs`, {
       name: '/aws/vpc/flowlogs',
-      retentionInDays: this.environment === 'prod' ? 30 : 14,
+      retentionInDays: flowLogsRetention,
       tags: this.defaultTags,
     }, { parent: this });
 
