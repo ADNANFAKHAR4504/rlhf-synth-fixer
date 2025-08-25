@@ -94,6 +94,26 @@ Resources:
       AliasName: !Sub "alias/${AWS::StackName}-infrastructure-${EnvironmentSuffix}"
       TargetKeyId: !Ref InfrastructureKMSKey
 
+  # ==================== Secrets Manager ====================
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+      Description: "Database password for RDS instance"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref InfrastructureKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-db-password-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref Environment
+
   # ==================== VPC and Networking ====================
   VPC:
     Type: AWS::EC2::VPC
@@ -615,7 +635,7 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.43"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: "{{resolve:secretsmanager:your-secret-id:SecretString:password}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabasePasswordSecret}::password}}"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
