@@ -255,7 +255,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, lint, unit-tests, deploy]
+    needs: [detect-metadata]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
