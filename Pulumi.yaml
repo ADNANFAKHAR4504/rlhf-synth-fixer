@@ -1,3 +1,5 @@
 name: TapStack
 runtime: java
 description: Java-based infrastructure as code for TAP using Pulumi
+config:
+  aws:region: us-east-1

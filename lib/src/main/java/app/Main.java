@@ -44,10 +44,10 @@ import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
 import com.pulumi.aws.s3.BucketPolicy;
 import com.pulumi.aws.s3.BucketPolicyArgs;
-import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationV2;
-import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationV2Args;
-import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationV2RuleArgs;
-import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs;
+import com.pulumi.aws.s3.BucketServerSideEncryptionConfiguration;
+import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationArgs;
+import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleArgs;
+import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs;
 import com.pulumi.aws.sns.Topic;
 import com.pulumi.aws.sns.TopicArgs;
 import com.pulumi.core.Output;
@@ -132,13 +132,13 @@ public final class Main {
                 .build(), providerOptions);
 
         // Configure S3 bucket encryption for CloudTrail
-        new BucketServerSideEncryptionConfigurationV2(
+        new BucketServerSideEncryptionConfiguration(
             "cloudtrail-bucket-encryption-" + RANDOM_SUFFIX,
-            BucketServerSideEncryptionConfigurationV2Args.builder()
+            BucketServerSideEncryptionConfigurationArgs.builder()
                 .bucket(cloudtrailBucket.id())
-                .rules(BucketServerSideEncryptionConfigurationV2RuleArgs.builder()
+                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
                     .applyServerSideEncryptionByDefault(
-                        BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs.builder()
+                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
                             .sseAlgorithm("aws:kms")
                             .kmsMasterKeyId(kmsKey.arn())
                             .build())
@@ -167,13 +167,13 @@ public final class Main {
                 ))
                 .build(), providerOptions);
 
-        new BucketServerSideEncryptionConfigurationV2(
+        new BucketServerSideEncryptionConfiguration(
             "app-bucket-encryption-" + RANDOM_SUFFIX,
-            BucketServerSideEncryptionConfigurationV2Args.builder()
+            BucketServerSideEncryptionConfigurationArgs.builder()
                 .bucket(appBucket.id())
-                .rules(BucketServerSideEncryptionConfigurationV2RuleArgs.builder()
+                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
                     .applyServerSideEncryptionByDefault(
-                        BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs.builder()
+                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
                             .sseAlgorithm("aws:kms")
                             .kmsMasterKeyId(kmsKey.arn())
                             .build())
