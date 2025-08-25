@@ -6,6 +6,12 @@ import (
 
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaydeployment"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayintegration"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaymethod"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayresource"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayrestapi"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaystage"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/configconfigrule"
@@ -194,28 +200,28 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		Provider: providerEast,
 		Name:     jsii.String(fmt.Sprintf("mfa-policy-%s", environmentSuffix)),
 		Policy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Deny",
-					"NotAction": [
-						"iam:CreateVirtualMFADevice",
-						"iam:EnableMFADevice",
-						"iam:GetUser",
-						"iam:ListMFADevices",
-						"iam:ListVirtualMFADevices",
-						"iam:ResyncMFADevice",
-						"sts:GetSessionToken"
-					],
-					"Resource": "*",
-					"Condition": {
-						"BoolIfExists": {
-							"aws:MultiFactorAuthPresent": "false"
-						}
-					}
-				}
-			]
-		}`),
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyAllIfNoMFA",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:CreateVirtualMFADevice",
+        "iam:EnableMFADevice",
+        "iam:ListMFADevices",
+        "iam:ListVirtualMFADevices",
+        "iam:ResyncMFADevice",
+        "iam:GetUser",
+        "iam:ListUsers",
+        "sts:GetSessionToken"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "BoolIfExists": { "aws:MultiFactorAuthPresent": "false" }
+      }
+    }
+  ]
+}`),
 	})
 
 	// Attach MFA policy to user
@@ -522,26 +528,44 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 			},
 			VpcSecurityGroupIds: &[]*string{webSecurityGroup.Id()},
 			UserData: jsii.String(`#!/bin/bash
-yum update -y
-yum install -y httpd awslogs
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from $(curl -s http://169.254.169.254/latest/meta-data/placement/region)</h1>" > /var/www/html/index.html
+        yum update -y
+        yum install -y httpd awslogs
+        systemctl start httpd
+        systemctl enable httpd
+        echo "<h1>Hello from $(curl -s http://169.254.169.254/latest/meta-data/placement/region)</h1>" > /var/www/html/index.html
+        
+        # Configure CloudWatch Logs
+        cat > /etc/awslogs/awslogs.conf << EOF
+        [general]
+        state_file = /var/lib/awslogs/agent-state
+        
+        [/var/log/messages]
+        file = /var/log/messages
+        log_group_name = /aws/ec2/app-logs-us-east-1-pr2114
+        log_stream_name = {instance_id}/messages
+        datetime_format = %b %d %H:%M:%S
 
-# Configure CloudWatch Logs
-cat > /etc/awslogs/awslogs.conf << EOF
-[general]
-state_file = /var/lib/awslogs/agent-state
+        [/var/log/secure]
+        file = /var/log/secure
+        log_group_name = /aws/ec2/app-logs-us-east-1-pr2114
+        log_stream_name = {instance_id}/secure
+        datetime_format = %b %d %H:%M:%S
 
-[/var/log/messages]
-file = /var/log/messages
-log_group_name = /aws/ec2/app-logs-` + region + `-` + environmentSuffix + `
-log_stream_name = {instance_id}/messages
-datetime_format = %b %d %H:%M:%S
-EOF
+        [/var/log/httpd/access_log]
+        file = /var/log/httpd/access_log
+        log_group_name = /aws/ec2/app-logs-us-east-1-pr2114
+        log_stream_name = {instance_id}/httpd_access
+        datetime_format = %d/%b/%Y:%H:%M:%S %z
 
-systemctl start awslogsd
-systemctl enable awslogsd`),
+        [/var/log/httpd/error_log]
+        file = /var/log/httpd/error_log
+        log_group_name = /aws/ec2/app-logs-us-east-1-pr2114
+        log_stream_name = {instance_id}/httpd_error
+        datetime_format = %a %b %d %H:%M:%S.%f %Y
+        EOF
+        
+        systemctl start awslogsd
+        systemctl enable awslogsd`),
 		})
 
 		// Create target group
@@ -645,6 +669,96 @@ systemctl enable awslogsd`),
 				"Name": jsii.String(fmt.Sprintf("rds-%s-%s", region, environmentSuffix)),
 			},
 		})
+
+		// API Gateway (REST) with HTTPS-only enforcement via resource policy
+		restApi := apigatewayrestapi.NewApiGatewayRestApi(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-%s", region)),
+			&apigatewayrestapi.ApiGatewayRestApiConfig{
+				Provider: regionProvider,
+				Name:     jsii.String(fmt.Sprintf("rest-api-%s-%s", region, environmentSuffix)),
+				EndpointConfiguration: &apigatewayrestapi.ApiGatewayRestApiEndpointConfiguration{
+					Types: &[]*string{jsii.String("REGIONAL")},
+				},
+				Policy: jsii.String(`{
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Sid": "HttpsOnly",
+                "Effect": "Deny",
+                "Principal": "*",
+                "Action": "execute-api:Invoke",
+                "Resource": "*",
+                "Condition": { "Bool": { "aws:SecureTransport": "false" } }
+            }]
+        }`),
+				Tags: &map[string]*string{
+					"Name": jsii.String(fmt.Sprintf("rest-api-%s-%s", region, environmentSuffix)),
+				},
+			},
+		)
+
+		apiRes := apigatewayresource.NewApiGatewayResource(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-res-health-%s", region)),
+			&apigatewayresource.ApiGatewayResourceConfig{
+				Provider:  regionProvider,
+				RestApiId: restApi.Id(),
+				ParentId:  restApi.RootResourceId(),
+				PathPart:  jsii.String("health"),
+			},
+		)
+
+		apiMethod := apigatewaymethod.NewApiGatewayMethod(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-method-get-health-%s", region)),
+			&apigatewaymethod.ApiGatewayMethodConfig{
+				Provider:      regionProvider,
+				RestApiId:     restApi.Id(),
+				ResourceId:    apiRes.Id(),
+				HttpMethod:    jsii.String("GET"),
+				Authorization: jsii.String("NONE"),
+			},
+		)
+
+		apiIntegration := apigatewayintegration.NewApiGatewayIntegration(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-integration-mock-%s", region)),
+			&apigatewayintegration.ApiGatewayIntegrationConfig{
+				Provider:              regionProvider,
+				RestApiId:             restApi.Id(),
+				ResourceId:            apiRes.Id(),
+				HttpMethod:            apiMethod.HttpMethod(),
+				Type:                  jsii.String("MOCK"),
+				IntegrationHttpMethod: jsii.String("GET"),
+				RequestTemplates: &map[string]*string{
+					"application/json": jsii.String(`{"statusCode":200}`),
+				},
+			},
+		)
+
+		deployment := apigatewaydeployment.NewApiGatewayDeployment(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-deployment-%s", region)),
+			&apigatewaydeployment.ApiGatewayDeploymentConfig{
+				Provider:  regionProvider,
+				RestApiId: restApi.Id(),
+				DependsOn: &[]cdktf.ITerraformDependable{apiMethod, apiIntegration},
+			},
+		)
+
+		apigatewaystage.NewApiGatewayStage(
+			stack,
+			jsii.String(fmt.Sprintf("rest-api-stage-%s", region)),
+			&apigatewaystage.ApiGatewayStageConfig{
+				Provider:     regionProvider,
+				RestApiId:    restApi.Id(),
+				DeploymentId: deployment.Id(),
+				StageName:    jsii.String("prod"),
+				Tags: &map[string]*string{
+					"Name": jsii.String(fmt.Sprintf("rest-api-stage-%s-%s", region, environmentSuffix)),
+				},
+			},
+		)
 	}
 
 	// Create AWS Config (only in us-east-1 to avoid duplication)
