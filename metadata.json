@@ -1,6 +1,10 @@
 {
   "task_id": "trainr314",
   "problem_id": "MultiEnvironmentConsistencyReplication_CDK_TypeScript",
+  "po_id": "trainr308",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-08-25T04:57:03+00:00",
   "subject_labels": [
     "Multi-Environment Consistency & Replication",
     "Network Infrastructure Design",
