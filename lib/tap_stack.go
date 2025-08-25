@@ -7,37 +7,65 @@ import (
 	jsii "github.com/aws/jsii-runtime-go"
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
-	// Force jsii subpackages into module graph for CI (since .gen is ignored by go mod tidy)
-	logs "cdk.tf/go/stack/generated/aws/cloudwatchloggroup"
-	vpcflowlog "cdk.tf/go/stack/generated/aws/flowlog"
-	iampolicy "cdk.tf/go/stack/generated/aws/iampolicy"
-	iamrole "cdk.tf/go/stack/generated/aws/iamrole"
-	iamrolepolicyattachment "cdk.tf/go/stack/generated/aws/iamrolepolicyattachment"
-	kmskeyalias "cdk.tf/go/stack/generated/aws/kmsalias"
-	kms "cdk.tf/go/stack/generated/aws/kmskey"
-	lambdafunction "cdk.tf/go/stack/generated/aws/lambdafunction"
-	awsprovider "cdk.tf/go/stack/generated/aws/provider"
-	s3bucket "cdk.tf/go/stack/generated/aws/s3bucket"
-	s3bucketencryption "cdk.tf/go/stack/generated/aws/s3bucketserversideencryptionconfiguration"
-	_ "github.com/aws/constructs-go/constructs/v10/jsii"
-	_ "github.com/hashicorp/terraform-cdk-go/cdktf/jsii"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/flowlog"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmsalias"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lambdafunction"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketserversideencryptionconfiguration"
 )
 
-// TapStack creates a comprehensive security configuration stack
-type TapStack struct {
-	cdktf.TerraformStack
+type TapStackProps struct {
+	EnvironmentSuffix string
+	StateBucket       string
+	StateBucketRegion string
+	AwsRegion         string
+	RepositoryName    string
+	CommitAuthor      string
 }
 
-// BuildSecurityStack creates the main security infrastructure
-func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
-	// AWS Provider
-	awsprovider.NewAwsProvider(stack, jsii.String("aws"), &awsprovider.AwsProviderConfig{
-		Region: jsii.String(region),
+func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.TerraformStack {
+	stack := cdktf.NewTerraformStack(scope, &id)
+
+	// Get environment suffix from environment variable
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = props.EnvironmentSuffix // Default from props
+	}
+
+	// Get state bucket configuration from environment variables
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = props.StateBucket // Default from props
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = props.StateBucketRegion // Default from props
+	}
+
+	// Configure S3 backend for remote state
+	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+		Bucket: jsii.String(stateBucket),
+		Key:    jsii.String(fmt.Sprintf("%s/%s.tfstate", environmentSuffix, id)),
+		Region: jsii.String(stateBucketRegion),
+	})
+
+	// Create environment prefix for resource naming
+	envPrefix := fmt.Sprintf("%s-cdktf", environmentSuffix)
+	// Configure AWS Provider
+	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
+		Region: jsii.String(props.AwsRegion),
 		DefaultTags: &[]interface{}{
 			map[string]interface{}{
 				"tags": map[string]*string{
-					"Environment": jsii.String("prod"),
-					"Project":     jsii.String("security-config"),
+					"Environment": jsii.String(environmentSuffix),
+					"Repository":  jsii.String(props.RepositoryName),
+					"Author":      jsii.String(props.CommitAuthor),
 					"ManagedBy":   jsii.String("cdktf"),
 				},
 			},
@@ -45,7 +73,7 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 	})
 
 	// KMS Key for encryption
-	kmsKey := kms.NewKmsKey(stack, jsii.String("prod-security-kms-key"), &kms.KmsKeyConfig{
+	kmsKey := kmskey.NewKmsKey(stack, jsii.String("security-kms-key"), &kmskey.KmsKeyConfig{
 		Description: jsii.String("KMS key for security infrastructure encryption"),
 		KeyUsage:    jsii.String("ENCRYPT_DECRYPT"),
 		Policy: jsii.String(`{
@@ -80,30 +108,30 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-security-kms-key"),
+			"Name": jsii.String(fmt.Sprintf("%s-security-kms-key", envPrefix)),
 		},
 	})
 
 	// KMS Key Alias
-	kmskeyalias.NewKmsAlias(stack, jsii.String("prod-security-kms-alias"), &kmskeyalias.KmsAliasConfig{
-		Name:        jsii.String("alias/prod-security-key"),
+	kmsalias.NewKmsAlias(stack, jsii.String("security-kms-alias"), &kmsalias.KmsAliasConfig{
+		Name:        jsii.String(fmt.Sprintf("alias/%s-security-key", envPrefix)),
 		TargetKeyId: kmsKey.KeyId(),
 	})
 
 	// S3 Bucket with encryption
-	s3Bucket := s3bucket.NewS3Bucket(stack, jsii.String("prod-security-logs-bucket"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String("prod-security-logs-bucket-" + region),
+	s3Bucket := s3bucket.NewS3Bucket(stack, jsii.String("security-logs-bucket"), &s3bucket.S3BucketConfig{
+		Bucket: jsii.String(fmt.Sprintf("%s-security-logs-bucket-%s", envPrefix, props.AwsRegion)),
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-security-logs-bucket"),
+			"Name": jsii.String(fmt.Sprintf("%s-security-logs-bucket", envPrefix)),
 		},
 	})
 
 	// S3 Bucket Server-Side Encryption
-	s3bucketencryption.NewS3BucketServerSideEncryptionConfigurationA(stack, jsii.String("prod-s3-encryption"), &s3bucketencryption.S3BucketServerSideEncryptionConfigurationAConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfigurationA(stack, jsii.String("s3-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationAConfig{
 		Bucket: s3Bucket.Id(),
-		Rule: &[]*s3bucketencryption.S3BucketServerSideEncryptionConfigurationRuleA{
+		Rule: &[]*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleA{
 			{
-				ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
 					KmsMasterKeyId: kmsKey.Arn(),
 					SseAlgorithm:   jsii.String("aws:kms"),
 				},
@@ -113,18 +141,18 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 	})
 
 	// CloudWatch Log Group for Lambda
-	lambdaLogGroup := logs.NewCloudwatchLogGroup(stack, jsii.String("prod-lambda-log-group"), &logs.CloudwatchLogGroupConfig{
-		Name:            jsii.String("/aws/lambda/prod-security-function"),
+	lambdaLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("lambda-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:            jsii.String(fmt.Sprintf("/aws/lambda/%s-security-function", envPrefix)),
 		RetentionInDays: jsii.Number(14),
 		KmsKeyId:        kmsKey.Arn(),
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-lambda-log-group"),
+			"Name": jsii.String(fmt.Sprintf("%s-lambda-log-group", envPrefix)),
 		},
 	})
 
 	// IAM Role for Lambda with least privilege
-	lambdaRole := iamrole.NewIamRole(stack, jsii.String("prod-lambda-execution-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String("prod-lambda-execution-role"),
+	lambdaRole := iamrole.NewIamRole(stack, jsii.String("lambda-execution-role"), &iamrole.IamRoleConfig{
+		Name: jsii.String(fmt.Sprintf("%s-lambda-execution-role", envPrefix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -138,15 +166,15 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-lambda-execution-role"),
+			"Name": jsii.String(fmt.Sprintf("%s-lambda-execution-role", envPrefix)),
 		},
 	})
 
 	// Custom IAM Policy for Lambda with least privilege
-	lambdaPolicy := iampolicy.NewIamPolicy(stack, jsii.String("prod-lambda-policy"), &iampolicy.IamPolicyConfig{
-		Name:        jsii.String("prod-lambda-policy"),
+	lambdaPolicy := iampolicy.NewIamPolicy(stack, jsii.String("lambda-policy"), &iampolicy.IamPolicyConfig{
+		Name:        jsii.String(fmt.Sprintf("%s-lambda-policy", envPrefix)),
 		Description: jsii.String("Least privilege policy for Lambda function"),
-		Policy: jsii.String(`{
+		Policy: jsii.String(fmt.Sprintf(`{
 			"Version": "2012-10-17",
 			"Statement": [
 				{
@@ -155,7 +183,7 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 						"logs:CreateLogStream",
 						"logs:PutLogEvents"
 					],
-					"Resource": "arn:aws:logs:` + region + `:*:log-group:/aws/lambda/prod-security-function:*"
+					"Resource": "arn:aws:logs:%s:*:log-group:/aws/lambda/%s-security-function:*"
 				},
 				{
 					"Effect": "Allow",
@@ -166,21 +194,21 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 						"kms:GenerateDataKey*",
 						"kms:DescribeKey"
 					],
-					"Resource": "` + *kmsKey.Arn() + `"
+					"Resource": "%s"
 				}
 			]
-		}`),
+		}`, props.AwsRegion, envPrefix, *kmsKey.Arn())),
 	})
 
 	// Attach policy to role
-	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack, jsii.String("prod-lambda-policy-attachment"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack, jsii.String("lambda-policy-attachment"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      lambdaRole.Name(),
 		PolicyArn: lambdaPolicy.Arn(),
 	})
 
 	// Lambda Function with logging enabled
-	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("prod-security-function"), &lambdafunction.LambdaFunctionConfig{
-		FunctionName: jsii.String("prod-security-function"),
+	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("security-function"), &lambdafunction.LambdaFunctionConfig{
+		FunctionName: jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
@@ -188,19 +216,19 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		KmsKeyArn:    kmsKey.Arn(),
 		DependsOn:    &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-security-function"),
+			"Name": jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
 		},
 	})
 
 	// VPC Flow Logs
-	vpcflowlog.NewFlowLog(stack, jsii.String("prod-vpc-flow-logs"), &vpcflowlog.FlowLogConfig{
+	flowlog.NewFlowLog(stack, jsii.String("vpc-flow-logs"), &flowlog.FlowLogConfig{
 		VpcId:              jsii.String("vpc-0abcd1234"),
 		TrafficType:        jsii.String("ALL"),
 		LogDestinationType: jsii.String("s3"),
 		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
 		LogFormat:          jsii.String("${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}"),
 		Tags: &map[string]*string{
-			"Name": jsii.String("prod-vpc-flow-logs"),
+			"Name": jsii.String(fmt.Sprintf("%s-vpc-flow-logs", envPrefix)),
 		},
 	})
 
@@ -219,22 +247,100 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		Value:       lambdaFunction.FunctionName(),
 		Description: jsii.String("Lambda function name with logging enabled"),
 	})
+
+	return stack
 }
 
 func main() {
 	app := cdktf.NewApp(nil)
 
-	// Get region from environment or default to us-east-1
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "us-east-1"
+	// Get environment variables from the environment or use defaults
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "dev"
 	}
 
-	// Create the security stack
-	stack := cdktf.NewTerraformStack(app, jsii.String("TapStack"))
-	BuildSecurityStack(stack, region)
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states"
+	}
 
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1"
+	}
+
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "us-east-1"
+	}
+
+	repositoryName := os.Getenv("REPOSITORY")
+	if repositoryName == "" {
+		repositoryName = "unknown"
+	}
+
+	commitAuthor := os.Getenv("COMMIT_AUTHOR")
+	if commitAuthor == "" {
+		commitAuthor = "unknown"
+	}
+
+	// Calculate the stack name
+	stackName := fmt.Sprintf("TapStack%s", environmentSuffix)
+
+	// Create the TapStack with the calculated properties
+	NewTapStack(app, stackName, &TapStackProps{
+		EnvironmentSuffix: environmentSuffix,
+		StateBucket:       stateBucket,
+		StateBucketRegion: stateBucketRegion,
+		AwsRegion:         awsRegion,
+		RepositoryName:    repositoryName,
+		CommitAuthor:      commitAuthor,
+	})
+
+	// Synthesize the app to generate the Terraform configuration
+	app.Synth()
+}vironmentSuffix = "dev"
+	}
+
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = "iac-rlhf-tf-states"
+	}
+
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = "us-east-1"
+	}
+
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "us-east-1"
+	}
+
+	repositoryName := os.Getenv("REPOSITORY")
+	if repositoryName == "" {
+		repositoryName = "unknown"
+	}
+
+	commitAuthor := os.Getenv("COMMIT_AUTHOR")
+	if commitAuthor == "" {
+		commitAuthor = "unknown"
+	}
+
+	// Calculate the stack name
+	stackName := fmt.Sprintf("TapStack%s", environmentSuffix)
+
+	// Create the TapStack with the calculated properties
+	NewTapStack(app, stackName, &TapStackProps{
+		EnvironmentSuffix: environmentSuffix,
+		StateBucket:       stateBucket,
+		StateBucketRegion: stateBucketRegion,
+		AwsRegion:         awsRegion,
+		RepositoryName:    repositoryName,
+		CommitAuthor:      commitAuthor,
+	})
+
+	// Synthesize the app to generate the Terraform configuration
 	app.Synth()
 }
-
-func str(v string) *string { return &v }
