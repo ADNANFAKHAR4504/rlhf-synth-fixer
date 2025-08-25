@@ -1,5 +1,4 @@
-// tap_stack.go
-package main
+package lib
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
@@ -37,10 +36,10 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 	vpc := awsec2.NewVpc(stack, jsii.String("corpVPC"), &awsec2.VpcProps{
 		// Define the IP address range for the VPC
 		IpAddresses: awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
-		
+
 		// Configure subnets across availability zones
 		MaxAzs: jsii.Number(2),
-		
+
 		// Define subnet configuration for public and private subnets
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
@@ -54,15 +53,15 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 				CidrMask:   jsii.Number(24),
 			},
 		},
-		
+
 		// Internet Gateway configuration
 		// This enables internet connectivity for public subnets
 		NatGateways: jsii.Number(1),
-		
+
 		// Enable DNS support and hostnames for proper name resolution
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
-		
+
 		// Add tags for resource identification and compliance
 		Tags: &map[string]*string{
 			"Name":        jsii.String("corpVPC"),
@@ -76,20 +75,20 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 	// This security group implements zero-trust principles with explicit allow rules
 	securityGroup := awsec2.NewSecurityGroup(stack, jsii.String("corpSecurityGroup"), &awsec2.SecurityGroupProps{
 		Vpc: vpc,
-		
+
 		// Descriptive name and description for security auditing
 		SecurityGroupName: jsii.String("corpSecurityGroup"),
 		Description:       jsii.String("Strict security group allowing HTTP from specific CIDR only, blocking all outbound traffic"),
-		
+
 		// Disable default outbound rules - we'll add explicit rules
 		AllowAllOutbound: jsii.Bool(false),
-		
+
 		// Add tags for compliance and identification
 		Tags: &map[string]*string{
-			"Name":           jsii.String("corpSecurityGroup"),
-			"SecurityLevel":  jsii.String("strict"),
-			"Purpose":        jsii.String("restricted-web-access"),
-			"Owner":          jsii.String("corp-security-team"),
+			"Name":          jsii.String("corpSecurityGroup"),
+			"SecurityLevel": jsii.String("strict"),
+			"Purpose":       jsii.String("restricted-web-access"),
+			"Owner":         jsii.String("corp-security-team"),
 		},
 	})
 
@@ -130,34 +129,4 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 		VPC:           vpc,
 		SecurityGroup: securityGroup,
 	}
-}
-
-// Main function for CDK app initialization
-// This sets up the CDK application and creates the secure infrastructure stack
-func main() {
-	defer jsii.Close()
-
-	// Initialize the CDK application
-	app := awscdk.NewApp(nil)
-
-	// Create the secure VPC infrastructure stack
-	NewTapStack(app, "SecureInfrastructureStack", &TapStackProps{
-		awscdk.StackProps{
-			Env: env(),
-			Tags: &map[string]*string{
-				"Project":     jsii.String("secure-infrastructure"),
-				"Environment": jsii.String("production"),
-				"Team":        jsii.String("corp-security"),
-			},
-		},
-	})
-
-	// Synthesize the CDK app to CloudFormation
-	app.Synth(nil)
-}
-
-// env determines the AWS environment (account + region) for stack deployment
-// This function provides environment configuration for the CDK stack
-func env() *awscdk.Environment {
-	return nil // Uses default environment from AWS credentials/config
 }
