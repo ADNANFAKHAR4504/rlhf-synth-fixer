@@ -11,8 +11,6 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
 import software.amazon.awscdk.services.autoscaling.HealthCheck;
-import software.amazon.awscdk.services.autoscaling.UpdatePolicy;
-import software.amazon.awscdk.services.autoscaling.UpdateType;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
@@ -35,10 +33,10 @@ import software.amazon.awscdk.services.rds.Credentials;
 import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
 import software.amazon.awscdk.services.rds.PostgresEngineVersion;
+import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
 import software.amazon.awscdk.services.rds.StorageType;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.LifecycleRule;
-import software.amazon.awscdk.services.s3.LifecycleTransition;
 import software.amazon.awscdk.services.s3.StorageClass;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
@@ -47,13 +45,12 @@ import software.constructs.Construct;
 
 /**
  * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
- * Includes VPC, Auto Scaling Group, ALB, RDS, S3 logging, IAM, Security, and CloudWatch.
  */
 class RegionalStack extends Stack {
     public RegionalStack(final Construct scope, final String id, final StackProps props, String environmentSuffix) {
         super(scope, id, props);
 
-        // VPC with public/private subnets
+        // VPC
         Vpc vpc = Vpc.Builder.create(this, "NovaVpc-" + environmentSuffix)
                 .maxAzs(2)
                 .subnetConfiguration(List.of(
@@ -69,31 +66,28 @@ class RegionalStack extends Stack {
                                 .build()))
                 .build();
 
-        // S3 log bucket
+        // S3 Bucket
         Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
                 .versioned(true)
                 .lifecycleRules(List.of(
                         LifecycleRule.builder()
                                 .expiration(Duration.days(365))
-                                .transitions(List.of(LifecycleTransition.builder()
-                                        .storageClass(StorageClass.GLACIER)
-                                        .transitionAfter(Duration.days(90))
-                                        .build()))
+                                .transitionTo(StorageClass.GLACIER, Duration.days(90))
                                 .build()))
                 .build();
 
-        // IAM Role for EC2
+        // IAM Role
         Role ec2Role = Role.Builder.create(this, "NovaEc2Role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
                 .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
                 .build();
 
-        // Security Group for ALB/ASG
+        // Security Group
         SecurityGroup appSg = SecurityGroup.Builder.create(this, "NovaAppSg-" + environmentSuffix)
                 .vpc(vpc)
                 .allowAllOutbound(true)
                 .build();
-        appSg.addIngressRule(appSg, Port.tcp(80), "Allow HTTP within SG");
+        appSg.addIngressRule(appSg, Port.tcp(80), "Allow HTTP");
 
         // Auto Scaling Group
         AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "NovaAsg-" + environmentSuffix)
@@ -103,11 +97,10 @@ class RegionalStack extends Stack {
                 .minCapacity(2)
                 .maxCapacity(4)
                 .role(ec2Role)
-                .healthCheck(HealthCheck.elb())
-                .updatePolicy(UpdatePolicy.rollingUpdate(UpdateType.REPLACING_UPDATE))
+                .healthCheck(HealthCheck.ec2())
                 .build();
 
-        // Application Load Balancer
+        // Load Balancer
         ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "NovaAlb-" + environmentSuffix)
                 .vpc(vpc)
                 .internetFacing(true)
@@ -129,9 +122,12 @@ class RegionalStack extends Stack {
 
         asg.attachToApplicationTargetGroup(tg);
 
-        // RDS Multi-AZ PostgreSQL
+        // RDS
         DatabaseInstance rds = DatabaseInstance.Builder.create(this, "NovaRds-" + environmentSuffix)
-                .engine(DatabaseInstanceEngine.postgres(PostgresEngineVersion.VER_13))
+                .engine(DatabaseInstanceEngine.postgres(
+                        PostgresInstanceEngineProps.builder()
+                                .version(PostgresEngineVersion.VER_13)
+                                .build()))
                 .vpc(vpc)
                 .multiAz(true)
                 .storageEncrypted(true)
@@ -141,7 +137,7 @@ class RegionalStack extends Stack {
                 .credentials(Credentials.fromGeneratedSecret("postgres"))
                 .build();
 
-        // CloudWatch Alarm for ASG CPU
+        // Alarm
         Alarm cpuAlarm = Alarm.Builder.create(this, "NovaAsgCpuAlarm-" + environmentSuffix)
                 .metric(Metric.Builder.create()
                         .namespace("AWS/EC2")
@@ -154,21 +150,16 @@ class RegionalStack extends Stack {
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
                 .build();
 
-        // ---------------------
-        // Outputs for integration testing
-        // ---------------------
+        // Outputs
         CfnOutput.Builder.create(this, "VpcId")
                 .value(vpc.getVpcId())
                 .exportName("NovaVpcId-" + environmentSuffix)
                 .build();
 
-        CfnOutput.Builder.create(this, "VpcCidr")
-                .value(vpc.getVpcCidrBlock())
-                .exportName("NovaVpcCidr-" + environmentSuffix)
-                .build();
-
         CfnOutput.Builder.create(this, "SubnetIds")
-                .value(vpc.getPublicSubnets().stream().map(Subnet::getSubnetId).collect(Collectors.joining(",")))
+                .value(vpc.getPublicSubnets().stream()
+                        .map(s -> s.getSubnetId())
+                        .collect(Collectors.joining(",")))
                 .exportName("NovaVpcSubnetIds-" + environmentSuffix)
                 .build();
 
@@ -177,49 +168,14 @@ class RegionalStack extends Stack {
                 .exportName("NovaAlbDns-" + environmentSuffix)
                 .build();
 
-        CfnOutput.Builder.create(this, "AlbArn")
-                .value(alb.getLoadBalancerArn())
-                .exportName("NovaAlbArn-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "AlbSgId")
-                .value(appSg.getSecurityGroupId())
-                .exportName("NovaAlbSgId-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "TargetGroupArn")
-                .value(tg.getTargetGroupArn())
-                .exportName("NovaAlbTgArn-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "AsgName")
-                .value(asg.getAutoScalingGroupName())
-                .exportName("NovaAsgName-" + environmentSuffix)
-                .build();
-
         CfnOutput.Builder.create(this, "RdsEndpoint")
                 .value(rds.getDbInstanceEndpointAddress())
                 .exportName("NovaRdsEndpoint-" + environmentSuffix)
                 .build();
 
-        CfnOutput.Builder.create(this, "RdsArn")
-                .value(rds.getInstanceArn())
-                .exportName("NovaRdsArn-" + environmentSuffix)
-                .build();
-
         CfnOutput.Builder.create(this, "LogBucketName")
                 .value(logBucket.getBucketName())
                 .exportName("NovaLogsBucket-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "LogBucketArn")
-                .value(logBucket.getBucketArn())
-                .exportName("NovaLogsBucketArn-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "LogBucketDomain")
-                .value(logBucket.getBucketDomainName())
-                .exportName("NovaLogsBucketDomain-" + environmentSuffix)
                 .build();
 
         CfnOutput.Builder.create(this, "CpuAlarmName")
@@ -231,10 +187,8 @@ class RegionalStack extends Stack {
 
 /**
  * Main entry point for the AWS CDK Java application.
- * Provisions stacks across us-east-1 and us-west-2 for HA/DR.
  */
 public final class Main {
-
     private Main() {}
 
     public static void main(final String[] args) {
@@ -250,7 +204,6 @@ public final class Main {
             environmentSuffix = "dev";
         }
 
-        // Primary region: us-east-1
         new RegionalStack(app, "NovaStack-" + environmentSuffix + "-use1",
                 StackProps.builder()
                         .env(Environment.builder()
@@ -260,7 +213,6 @@ public final class Main {
                         .build(),
                 environmentSuffix);
 
-        // Secondary region: us-west-2
         new RegionalStack(app, "NovaStack-" + environmentSuffix + "-usw2",
                 StackProps.builder()
                         .env(Environment.builder()
