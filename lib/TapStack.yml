@@ -50,14 +50,6 @@ Resources:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-          - Sid: Allow CloudTrail Usage
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - "kms:GenerateDataKey*"
-              - "kms:Decrypt"
-            Resource: "*"
           - Sid: Allow Service Usage
             Effect: Allow
             Principal:
@@ -193,7 +185,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "tap-cloudtrail-logs-${AWS::Region}-${AWS::AccountId}-pr1922-${Environment}"
+      BucketName: !Sub "tap-cloudtrail-logs-${AWS::Region}-${AWS::AccountId}-pr2233-${Environment}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -226,7 +218,6 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action:
               - s3:PutObject
-              - s3:PutObjectAcl
             Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}/*"
             Condition:
               StringEquals:
@@ -296,8 +287,6 @@ Resources:
                   - "kms:Decrypt"
                   - "kms:GenerateDataKey*"
                 Resource: !GetAtt MainKMSKey.Arn
-        - PolicyName: CloudTrailS3AndKMS
-          PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
