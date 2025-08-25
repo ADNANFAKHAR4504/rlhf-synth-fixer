@@ -1,8 +1,23 @@
-# Variable declarations
-variable "aws_region" {
-  description = "The AWS region to deploy resources"
-  type        = string
-  default     = "us-east-1"
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.2"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
 }
 
 # Random suffix for unique resource naming
@@ -50,7 +65,7 @@ resource "aws_s3_bucket_public_access_block" "website" {
 
 # S3 bucket policy for public read access to website content
 resource "aws_s3_bucket_policy" "website" {
-  bucket     = aws_s3_bucket.website.id
+  bucket = aws_s3_bucket.website.id
   depends_on = [aws_s3_bucket_public_access_block.website]
 
   policy = jsonencode({
@@ -97,7 +112,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
   source {
-    content  = <<-EOF
+    content = <<-EOF
 import json
 import datetime
 
@@ -130,11 +145,11 @@ EOF
 resource "aws_lambda_function" "main" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "serverless-webapp-${local.suffix}"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "lambda_function.lambda_handler"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.12"
-  timeout          = 10
+  runtime         = "python3.9"
+  timeout         = 10
 
   tags = local.common_tags
 }
@@ -187,8 +202,8 @@ resource "aws_api_gateway_integration" "hello_get" {
   http_method = aws_api_gateway_method.hello_get.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.main.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.main.invoke_arn
 }
 
 # API Gateway integration for OPTIONS (CORS)
@@ -291,7 +306,7 @@ resource "aws_s3_object" "index_html" {
   bucket       = aws_s3_bucket.website.id
   key          = "index.html"
   content_type = "text/html"
-  content      = <<-EOF
+  content = <<-EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -340,7 +355,7 @@ resource "aws_s3_object" "error_html" {
   bucket       = aws_s3_bucket.website.id
   key          = "error.html"
   content_type = "text/html"
-  content      = <<-EOF
+  content = <<-EOF
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -389,9 +404,4 @@ output "s3_bucket_name" {
 output "api_endpoint" {
   description = "Full API endpoint URL"
   value       = "${aws_api_gateway_stage.main.invoke_url}/hello"
-}
-
-output "aws_region" {
-  description = "AWS region where resources are deployed"
-  value       = var.aws_region
 }
