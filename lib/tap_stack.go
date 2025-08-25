@@ -41,11 +41,19 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
+	// Get availability zones for us-west-2
+	azs, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
+		State: pulumi.StringRef("available"),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
 	// Create private subnets in different AZs for high availability
 	privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-1-%s", envSuffix), &ec2.SubnetArgs{
 		VpcId:            vpc.ID(),
 		CidrBlock:        pulumi.String("10.0.1.0/24"),
-		AvailabilityZone: pulumi.String("us-east-1a"),
+		AvailabilityZone: pulumi.String(azs.Names[0]),
 		Tags:             commonTags,
 	})
 	if err != nil {
@@ -55,7 +63,7 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("healthapp-private-subnet-2-%s", envSuffix), &ec2.SubnetArgs{
 		VpcId:            vpc.ID(),
 		CidrBlock:        pulumi.String("10.0.2.0/24"),
-		AvailabilityZone: pulumi.String("us-east-1b"),
+		AvailabilityZone: pulumi.String(azs.Names[1]),
 		Tags:             commonTags,
 	})
 	if err != nil {
@@ -113,9 +121,8 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 
 	// Create KMS alias for easier reference
 	_, err = kms.NewAlias(ctx, fmt.Sprintf("healthapp-kms-alias-%s", envSuffix), &kms.AliasArgs{
-		Name:        pulumi.Sprintf("alias/healthapp-encryption-%s", envSuffix),
+		Name:        pulumi.String("alias/healthapp-encryption"),
 		TargetKeyId: kmsKey.KeyId,
-		NamePrefix:  nil,
 	})
 	if err != nil {
 		return err
@@ -250,11 +257,15 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		return err
 	}
 
-	// Create CloudTrail for audit logging
+	// Create CloudTrail for audit logging with specific naming pattern
 	trail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("healthapp-cloudtrail-%s", envSuffix), &cloudtrail.TrailArgs{
+		Name:         pulumi.Sprintf("healthapp-cloudtrail-pr2146-%s", current.AccountId[:7]),
 		S3BucketName: auditBucket.ID(),
 		S3KeyPrefix:  pulumi.String("healthapp-logs/"),
 		KmsKeyId:     kmsKey.Arn,
+		IncludeGlobalServiceEvents: pulumi.Bool(true),
+		IsMultiRegionTrail:         pulumi.Bool(false),
+		EnableLogFileValidation:    pulumi.Bool(true),
 		EventSelectors: cloudtrail.TrailEventSelectorArray{
 			&cloudtrail.TrailEventSelectorArgs{
 				ReadWriteType:                 pulumi.String("All"),
