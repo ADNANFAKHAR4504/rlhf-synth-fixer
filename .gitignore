@@ -1,5 +1,5 @@
 # Compiled JavaScript files (but keep config files)
-./bin/*.js
+/bin/*.js
 /bin/*.js
 ./lib/*.js
 /lib/*.js
@@ -8,9 +8,6 @@
 *.d.ts
 !/test/setup.js
 /lib/.terraform.lock.hcl
-
-# Ignore src folder inside lib
-lib/src/
 
 # Dependencies
 node_modules/
@@ -108,3 +105,31 @@ build
 tasks.csv
 .sherlock/data
 .sherlock/reports
+
+# Java/Gradle
+.gradle/
+build/
+gradle-app.setting
+.gradletasknamecache
+
+# Keep Gradle wrapper files (these should be committed)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# Java compiled files
+*.class
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Java JAR files (but keep Gradle wrapper)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Java test reports
+build/reports/
+build/test-results/

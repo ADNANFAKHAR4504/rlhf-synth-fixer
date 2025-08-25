@@ -4,7 +4,7 @@ locals {
 
   # Shortened base name for resources with AWS name length limits
   short_project_name = "srvls-ms" # serverless-microservices shortened
-  
+
   # Base name for all resources including environment suffix
   resource_prefix = "${local.short_project_name}${local.name_suffix}"
 
