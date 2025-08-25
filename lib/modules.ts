@@ -1,27 +1,28 @@
-import { Construct } from "constructs";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
-import { Subnet } from "@cdktf/provider-aws/lib/subnet";
-import { RouteTable } from "@cdktf/provider-aws/lib/route-table";
-import { RouteTableAssociation } from "@cdktf/provider-aws/lib/route-table-association";
-import { InternetGateway } from "@cdktf/provider-aws/lib/internet-gateway";
-import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
-import { Eip } from "@cdktf/provider-aws/lib/eip";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketWebsiteConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-website-configuration";
-import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
-import { S3BucketPolicy } from "@cdktf/provider-aws/lib/s3-bucket-policy";
-import { DataAwsIamPolicyDocument } from "@cdktf/provider-aws/lib/data-aws-iam-policy-document";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { IamInstanceProfile } from "@cdktf/provider-aws/lib/iam-instance-profile";
-import { DataAwsAmiIds } from "@cdktf/provider-aws/lib/data-aws-ami-ids";
-import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
-import { LaunchTemplate } from "@cdktf/provider-aws/lib/launch-template";
-import { Alb } from "@cdktf/provider-aws/lib/alb";
-import { LbTargetGroup } from "@cdktf/provider-aws/lib/lb-target-group";
-import { LbListener } from "@cdktf/provider-aws/lib/lb-listener";
-import { AutoscalingGroup } from "@cdktf/provider-aws/lib/autoscaling-group";  
-import { Route } from "@cdktf/provider-aws/lib/route";
+import { Construct } from 'constructs';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketWebsiteConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-website-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { Alb as ApplicationLoadBalancer } from '@cdktf/provider-aws/lib/alb';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { DataAwsAmiIds } from '@cdktf/provider-aws/lib/data-aws-ami-ids';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { Fn } from 'cdktf';
 
 export interface VpcModuleProps {
   cidrBlock: string;
@@ -41,22 +42,22 @@ export class VpcModule extends Construct {
     super(scope, id);
 
     // Create VPC
-    this.vpc = new Vpc(this, "vpc", {
+    this.vpc = new Vpc(this, 'vpc', {
       cidrBlock: props.cidrBlock,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
         Name: `${id}-vpc`,
-        Environment: "production"
-      }
+        Environment: 'production',
+      },
     });
 
     // Create Internet Gateway
-    this.internetGateway = new InternetGateway(this, "igw", {
+    this.internetGateway = new InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
-        Name: `${id}-igw`
-      }
+        Name: `${id}-igw`,
+      },
     });
 
     // Create public subnets
@@ -68,8 +69,8 @@ export class VpcModule extends Construct {
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${id}-public-subnet-${index + 1}`,
-          Type: "public"
-        }
+          Type: 'public',
+        },
       });
     });
 
@@ -81,18 +82,18 @@ export class VpcModule extends Construct {
         availabilityZone: props.availabilityZones[index],
         tags: {
           Name: `${id}-private-subnet-${index + 1}`,
-          Type: "private"
-        }
+          Type: 'private',
+        },
       });
     });
 
     // Create Elastic IPs for NAT Gateways
     const eips = this.publicSubnets.map((_, index) => {
       return new Eip(this, `nat-eip-${index}`, {
-        domain: "vpc",
+        domain: 'vpc',
         tags: {
-          Name: `${id}-nat-eip-${index + 1}`
-        }
+          Name: `${id}-nat-eip-${index + 1}`,
+        },
       });
     });
 
@@ -102,31 +103,31 @@ export class VpcModule extends Construct {
         allocationId: eips[index].id,
         subnetId: subnet.id,
         tags: {
-          Name: `${id}-nat-gateway-${index + 1}`
-        }
+          Name: `${id}-nat-gateway-${index + 1}`,
+        },
       });
     });
 
     // Create public route table
-    const publicRouteTable = new RouteTable(this, "public-rt", {
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
-        Name: `${id}-public-rt`
-      }
+        Name: `${id}-public-rt`,
+      },
     });
 
     // Add route to internet gateway
-    new Route(this, "public-route", {
+    new Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
-      gatewayId: this.internetGateway.id
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id,
     });
 
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `public-rta-${index}`, {
         subnetId: subnet.id,
-        routeTableId: publicRouteTable.id
+        routeTableId: publicRouteTable.id,
       });
     });
 
@@ -135,19 +136,19 @@ export class VpcModule extends Construct {
       const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
         vpcId: this.vpc.id,
         tags: {
-          Name: `${id}-private-rt-${index + 1}`
-        }
+          Name: `${id}-private-rt-${index + 1}`,
+        },
       });
 
       new Route(this, `private-route-${index}`, {
         routeTableId: privateRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: this.natGateways[index].id
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateways[index].id,
       });
 
       new RouteTableAssociation(this, `private-rta-${index}`, {
         subnetId: subnet.id,
-        routeTableId: privateRouteTable.id
+        routeTableId: privateRouteTable.id,
       });
     });
   }
@@ -164,55 +165,59 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Create S3 bucket
-    this.bucket = new S3Bucket(this, "bucket", {
+    this.bucket = new S3Bucket(this, 'bucket', {
       bucket: props.bucketName,
       tags: {
         Name: props.bucketName,
-        Purpose: "static-website-hosting"
-      }
+        Purpose: 'static-website-hosting',
+      },
     });
 
     // Configure bucket for static website hosting
-    new S3BucketWebsiteConfiguration(this, "website-config", {
+    new S3BucketWebsiteConfiguration(this, 'website-config', {
       bucket: this.bucket.id,
       indexDocument: {
-        suffix: "index.html"
+        suffix: 'index.html',
       },
       errorDocument: {
-        key: "error.html"
-      }
+        key: 'error.html',
+      },
     });
 
     // Configure public access block (allow public read for static website)
-    new S3BucketPublicAccessBlock(this, "public-access-block", {
+    new S3BucketPublicAccessBlock(this, 'public-access-block', {
       bucket: this.bucket.id,
       blockPublicAcls: false,
       blockPublicPolicy: false,
       ignorePublicAcls: false,
-      restrictPublicBuckets: false
+      restrictPublicBuckets: false,
     });
 
     // Create bucket policy for public read access
-    const bucketPolicyDocument = new DataAwsIamPolicyDocument(this, "bucket-policy-document", {
-      statement: [
-        {
-          sid: "PublicReadGetObject",
-          effect: "Allow",
-          principals: [
-            {
-              type: "*",
-              identifiers: ["*"]
-            }
-          ],
-          actions: ["s3:GetObject"],
-          resources: [`${this.bucket.arn}/*`]
-        }
-      ]
-    });
+    const bucketPolicyDocument = new DataAwsIamPolicyDocument(
+      this,
+      'bucket-policy-document',
+      {
+        statement: [
+          {
+            sid: 'PublicReadGetObject',
+            effect: 'Allow',
+            principals: [
+              {
+                type: '*',
+                identifiers: ['*'],
+              },
+            ],
+            actions: ['s3:GetObject'],
+            resources: [`${this.bucket.arn}/*`],
+          },
+        ],
+      }
+    );
 
-    new S3BucketPolicy(this, "bucket-policy", {
+    new S3BucketPolicy(this, 'bucket-policy', {
       bucket: this.bucket.id,
-      policy: bucketPolicyDocument.json
+      policy: bucketPolicyDocument.json,
     });
   }
 }
@@ -229,46 +234,50 @@ export class IamModule extends Construct {
     super(scope, id);
 
     // Create assume role policy document
-    const assumeRolePolicyDocument = new DataAwsIamPolicyDocument(this, "assume-role-policy", {
-      statement: [
-        {
-          actions: ["sts:AssumeRole"],
-          effect: "Allow",
-          principals: [
-            {
-              type: "Service",
-              identifiers: ["ec2.amazonaws.com"]
-            }
-          ]
-        }
-      ]
-    });
+    const assumeRolePolicyDocument = new DataAwsIamPolicyDocument(
+      this,
+      'assume-role-policy',
+      {
+        statement: [
+          {
+            actions: ['sts:AssumeRole'],
+            effect: 'Allow',
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['ec2.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
     // Create IAM role for EC2 instances
-    this.instanceRole = new IamRole(this, "instance-role", {
+    this.instanceRole = new IamRole(this, 'instance-role', {
       name: props.roleName,
       assumeRolePolicy: assumeRolePolicyDocument.json,
       tags: {
         Name: props.roleName,
-        Purpose: "ec2-web-server-role"
-      }
+        Purpose: 'ec2-web-server-role',
+      },
     });
 
     // Attach necessary policies
-    new IamRolePolicyAttachment(this, "ssm-policy-attachment", {
+    new IamRolePolicyAttachment(this, 'ssm-policy-attachment', {
       role: this.instanceRole.name,
-      policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
-    new IamRolePolicyAttachment(this, "cloudwatch-policy-attachment", {
+    new IamRolePolicyAttachment(this, 'cloudwatch-policy-attachment', {
       role: this.instanceRole.name,
-      policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+      policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
     });
 
     // Create instance profile
-    this.instanceProfile = new IamInstanceProfile(this, "instance-profile", {
+    this.instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
       name: `${props.roleName}-profile`,
-      role: this.instanceRole.name
+      role: this.instanceRole.name,
     });
   }
 }
@@ -284,123 +293,134 @@ export interface AutoScalingModuleProps {
 }
 
 export class AutoScalingModule extends Construct {
-  public readonly loadBalancer: Alb;
+  public readonly loadBalancer: ApplicationLoadBalancer;
   public readonly autoScalingGroup: AutoscalingGroup;
 
   constructor(scope: Construct, id: string, props: AutoScalingModuleProps) {
     super(scope, id);
 
     // Get latest Amazon Linux 2 AMI
-    const amiData = new DataAwsAmiIds(this, "amazon-linux-ami", {
-      owners: ["amazon"],
+    const amiData = new DataAwsAmiIds(this, 'amazon-linux-ami', {
+      owners: ['amazon'],
       filter: [
         {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"]
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
         },
         {
-          name: "state",
-          values: ["available"]
-        }
+          name: 'state',
+          values: ['available'],
+        },
       ],
-      sortAscending: false
+      sortAscending: false,
     });
 
     // Create security group for ALB
-    const albSecurityGroup = new SecurityGroup(this, "alb-sg", {
+    const albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
       name: `${id}-alb-sg`,
-      description: "Security group for Application Load Balancer",
+      description: 'Security group for Application Load Balancer',
       vpcId: props.vpcId,
       ingress: [
         {
           fromPort: 80,
           toPort: 80,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"]
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
         },
         {
           fromPort: 443,
           toPort: 443,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"]
-        }
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
       ],
       egress: [
         {
           fromPort: 0,
           toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"]
-        }
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
       ],
       tags: {
-        Name: `${id}-alb-sg`
-      }
+        Name: `${id}-alb-sg`,
+      },
     });
 
     // Create security group for EC2 instances
-    const instanceSecurityGroup = new SecurityGroup(this, "instance-sg", {
+    const instanceSecurityGroup = new SecurityGroup(this, 'instance-sg', {
       name: `${id}-instance-sg`,
-      description: "Security group for EC2 instances",
+      description: 'Security group for EC2 instances',
       vpcId: props.vpcId,
       ingress: [
         {
           fromPort: 80,
           toPort: 80,
-          protocol: "tcp",
-          securityGroups: [albSecurityGroup.id]
-        }
+          protocol: 'tcp',
+          securityGroups: [albSecurityGroup.id],
+        },
       ],
       egress: [
         {
           fromPort: 0,
           toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"]
-        }
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
       ],
       tags: {
-        Name: `${id}-instance-sg`
-      }
+        Name: `${id}-instance-sg`,
+      },
     });
 
+    // User data script for web server setup
+    const userData = `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+echo "<h1>Error Page</h1>" > /var/www/html/error.html
+`;
+
     // Create launch template
-    const launchTemplate = new LaunchTemplate(this, "launch-template", {
+    const launchTemplate = new LaunchTemplate(this, 'launch-template', {
       name: `${id}-launch-template`,
-      imageId: amiData.ids[0],
-      instanceType: "t3.micro",
+      imageId: Fn.element(amiData.ids, 0),
+      instanceType: 't3.micro',
       iamInstanceProfile: {
-        name: props.instanceProfile.name
+        name: props.instanceProfile.name,
       },
       vpcSecurityGroupIds: [instanceSecurityGroup.id],
+      userData: Buffer.from(userData).toString('base64'),
       tagSpecifications: [
         {
-          resourceType: "instance",
+          resourceType: 'instance',
           tags: {
             Name: `${id}-web-server`,
-            Environment: "production"
-          }
-        }
-      ]
+            Environment: 'production',
+          },
+        },
+      ],
     });
 
     // Create Application Load Balancer
-    this.loadBalancer = new Alb(this, "alb", {
+    this.loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
       name: `${id}-alb`,
-      loadBalancerType: "application",
+      loadBalancerType: 'application',
       securityGroups: [albSecurityGroup.id],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: false,
       tags: {
-        Name: `${id}-alb`
-      }
+        Name: `${id}-alb`,
+      },
     });
 
     // Create target group
-    const targetGroup = new LbTargetGroup(this, "target-group", {
+    const targetGroup = new LbTargetGroup(this, 'target-group', {
       name: `${id}-tg`,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       vpcId: props.vpcId,
       healthCheck: {
         enabled: true,
@@ -408,48 +428,48 @@ export class AutoScalingModule extends Construct {
         unhealthyThreshold: 2,
         timeout: 5,
         interval: 30,
-        path: "/",
-        matcher: "200"
+        path: '/',
+        matcher: '200',
       },
       tags: {
-        Name: `${id}-target-group`
-      }
+        Name: `${id}-target-group`,
+      },
     });
 
     // Create ALB listener
-    new LbListener(this, "alb-listener", {
+    new LbListener(this, 'alb-listener', {
       loadBalancerArn: this.loadBalancer.arn,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       defaultAction: [
         {
-          type: "forward",
-          targetGroupArn: targetGroup.arn
-        }
-      ]
+          type: 'forward',
+          targetGroupArn: targetGroup.arn,
+        },
+      ],
     });
 
     // Create Auto Scaling Group
-    this.autoScalingGroup = new AutoscalingGroup(this, "asg", {
+    this.autoScalingGroup = new AutoscalingGroup(this, 'asg', {
       name: `${id}-asg`,
       minSize: props.minSize,
       maxSize: props.maxSize,
       desiredCapacity: props.desiredCapacity,
       vpcZoneIdentifier: props.privateSubnetIds,
       targetGroupArns: [targetGroup.arn],
-      healthCheckType: "ELB",
+      healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
       launchTemplate: {
         id: launchTemplate.id,
-        version: "$Latest"
+        version: '$Latest',
       },
       tag: [
         {
-          key: "Name",
+          key: 'Name',
           value: `${id}-asg`,
-          propagateAtLaunch: false
-        }
-      ]
+          propagateAtLaunch: false,
+        },
+      ],
     });
   }
 }
