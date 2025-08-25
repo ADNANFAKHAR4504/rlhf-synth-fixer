@@ -229,7 +229,7 @@ class TestTapStackIntegration(unittest.TestCase):
             )
             
             web_acl = response['WebACL']
-            self.assertEqual(web_acl['Scope'], 'REGIONAL', "Web ACL scope is not REGIONAL")
+            # Note: The Web ACL response doesn't include Scope field, but we know it's REGIONAL since we specified it
             self.assertIn('WebACL-pr2198', web_acl['Name'], "Web ACL name doesn't match expected pattern")
             
             # Check default action is ALLOW
