@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Corrected CloudFormation template for a secure FinTech application infrastructure with VPC, S3, DynamoDB, RDS, IAM, CloudTrail, and Lambda remediation.
 
-# Parameters for customizable inputs
 Parameters:
   EnvironmentName:
     Type: String
@@ -36,8 +35,14 @@ Parameters:
     Type: String
     Default: fintech-admin
     Description: Name of the IAM admin user.
+  DBUsername:
+    Type: String
+    Default: admin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    Description: Database master username.
 
-# Mappings for region-specific configurations
 Mappings:
   RegionMap:
     us-east-1:
@@ -47,8 +52,85 @@ Mappings:
       AvailabilityZone1: us-west-2a
       AvailabilityZone2: us-west-2b
 
-# Resources section
 Resources:
+  # KMS Key for Secrets Manager and RDS
+  FinTechKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS Key for Secrets Manager and RDS encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+              - kms:CreateGrant
+            Resource: '*'
+          - Sid: Allow Secrets Manager to use key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: '*'
+          - Sid: Allow RDS to use key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Secrets Manager Secret for RDS Credentials
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}-rds-secret'
+      Description: RDS credentials for FinTech application
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"''\/@'
+      KmsKeyId: !Ref FinTechKMSKey
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # VPC Configuration
   FinTechVPC:
     Type: AWS::EC2::VPC
@@ -216,7 +298,7 @@ Resources:
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${EnvironmentName}-appdata-a1b2c3
+      BucketName: !Sub ${EnvironmentName}-appdata-${AWS::AccountId}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -263,7 +345,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${EnvironmentName}-ctlogs-a1b2c3
+      BucketName: !Sub ${EnvironmentName}-ctlogs-${AWS::AccountId}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -321,13 +403,14 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
+        KMSMasterKeyId: alias/aws/dynamodb
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # RDS Instance (PostgreSQL)
+  # RDS Subnet Group
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -341,21 +424,29 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # RDS Instance (PostgreSQL)
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: RDSSecret
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-fintech-db
       Engine: postgres
       EngineVersion: '13.15'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
+      StorageType: gp2
       StorageEncrypted: true
-      MasterUsername: admin
+      KmsKeyId: !Ref FinTechKMSKey
+      MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${EnvironmentName}-rds-secret:SecretString:password}}"
       MultiAZ: true
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref RDSSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: true
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -369,8 +460,14 @@ Resources:
       TrailName: !Sub ${EnvironmentName}-fintech-trail
       S3BucketName: !Ref CloudTrailBucket
       IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       IsLogging: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   # VPC Flow Logs
   FlowLogRole:
@@ -548,7 +645,6 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt RemediationEventRule.Arn
 
-# Outputs for key resource references
 Outputs:
   VPCId:
     Description: ID of the VPC
@@ -580,3 +676,8 @@ Outputs:
     Value: !GetAtt RemediationLambda.Arn
     Export:
       Name: !Sub ${EnvironmentName}-remediation-lambda-arn
+  SecretArn:
+    Description: ARN of the RDS secret
+    Value: !Ref RDSSecret
+    Export:
+      Name: !Sub ${EnvironmentName}-rds-secret-arn
