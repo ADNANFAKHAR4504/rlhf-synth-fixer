@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Web Application Deployment",
-    "Security Configuration", 
+    "Security Configuration",
     "Database Management",
     "Performance Optimization",
     "Monitoring Setup",
@@ -21,11 +21,17 @@
   "aws_services": [
     "S3",
     "Lambda",
-    "DynamoDB", 
+    "DynamoDB",
     "API Gateway",
     "IAM",
     "CloudWatch",
     "Bedrock",
     "Textract"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
