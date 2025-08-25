@@ -138,7 +138,13 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
       const statement = trustPolicy.Statement[0];
-      expect(statement.Principal.AWS).toEqual({ 'Fn::Sub': 'arn:aws:iam::${TrustedAccountId}:root' });
+      expect(statement.Principal.AWS).toEqual({
+        'Fn::If': [
+          'UseSameAccount',
+          { 'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root' },
+          { 'Fn::Sub': 'arn:aws:iam::${TrustedAccountId}:root' }
+        ]
+      });
       expect(statement.Condition.StringEquals['sts:ExternalId']).toEqual({ 'Fn::Sub': 'secure-infra-${EnvironmentSuffix}' });
     });
 
@@ -282,7 +288,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have expected number of security resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(15); // All security infrastructure resources
+      expect(resourceCount).toBe(16); // All security infrastructure resources (including VpcFlowLogsBucketPolicy)
     });
 
     test('should have three parameters for configuration', () => {

@@ -54,6 +54,16 @@
             "ConstraintDescription": "Must be a valid CIDR range"
         }
     },
+    "Conditions": {
+        "UseSameAccount": {
+            "Fn::Equals": [
+                {
+                    "Ref": "TrustedAccountId"
+                },
+                "123456789012"
+            ]
+        }
+    },
     "Resources": {
         "S3EncryptionKey": {
             "Type": "AWS::KMS::Key",
@@ -234,6 +244,58 @@
                 }
             }
         },
+        "VpcFlowLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "VpcFlowLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSVPCFlowLogsAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "VpcFlowLogsBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSVPCFlowLogsWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "CrossAccountRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -247,7 +309,15 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                    "Fn::If": [
+                                        "UseSameAccount",
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:iam::${TrustedAccountId}:root"
+                                        }
+                                    ]
                                 }
                             },
                             "Action": "sts:AssumeRole",
@@ -342,6 +412,54 @@
                                         },
                                         {
                                             "Fn::Sub": "${CloudTrailLogsBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "VPCFlowLogRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FlowLogsDeliveryRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "VpcFlowLogsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
                                         }
                                     ]
                                 }
@@ -504,57 +622,9 @@
                 }
             }
         },
-        "VPCFlowLogRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "VPCFlowLogRole-${EnvironmentSuffix}"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "vpc-flow-logs.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "flowlogsDeliveryRolePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetBucketLocation",
-                                        "s3:PutObject",
-                                        "s3:GetBucketAcl"
-                                    ],
-                                    "Resource": [
-                                        {
-                                            "Fn::GetAtt": [
-                                                "VpcFlowLogsBucket",
-                                                "Arn"
-                                            ]
-                                        },
-                                        {
-                                            "Fn::Sub": "${VpcFlowLogsBucket.Arn}/*"
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
         "VPCFlowLog": {
             "Type": "AWS::EC2::FlowLog",
+            "DependsOn": "VpcFlowLogsBucketPolicy",
             "Properties": {
                 "ResourceId": {
                     "Ref": "SecureVPC"
@@ -568,13 +638,7 @@
                     ]
                 },
                 "LogDestinationType": "s3",
-                "LogFormat": "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}",
-                "DeliverLogsPermissionArn": {
-                    "Fn::GetAtt": [
-                        "VPCFlowLogRole",
-                        "Arn"
-                    ]
-                },
+                "LogFormat": "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}",
                 "Tags": [
                     {
                         "Key": "Name",

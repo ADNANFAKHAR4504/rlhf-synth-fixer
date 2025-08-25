@@ -39,6 +39,9 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
     ConstraintDescription: "Must be a valid CIDR range"
 
+Conditions:
+  UseSameAccount: !Equals [!Ref TrustedAccountId, "123456789012"]
+
 Resources:
   # KMS Key for S3 Encryption
   S3EncryptionKey:
@@ -185,7 +188,10 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${TrustedAccountId}:root"
+              AWS: !If
+                - UseSameAccount
+                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+                - !Sub "arn:aws:iam::${TrustedAccountId}:root"
             Action: "sts:AssumeRole"
             Condition:
               StringEquals:
