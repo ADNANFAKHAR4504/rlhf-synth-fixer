@@ -52,7 +52,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-
     // =============================================
     // CloudWatch Log Groups
     // =============================================
@@ -101,118 +100,125 @@ export class TapStack extends cdk.Stack {
     // =============================================
 
     // Pipeline Role Policies
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetBucketVersioning',
-        's3:GetObject',
-        's3:GetObjectVersion',
-        's3:PutObject',
-        's3:PutObjectAcl',
-      ],
-      resources: [
-        artifactsBucket.bucketArn,
-        `${artifactsBucket.bucketArn}/*`,
-      ],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetBucketVersioning',
+          's3:GetObject',
+          's3:GetObjectVersion',
+          's3:PutObject',
+          's3:PutObjectAcl',
+        ],
+        resources: [
+          artifactsBucket.bucketArn,
+          `${artifactsBucket.bucketArn}/*`,
+        ],
+      })
+    );
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetBucketVersioning',
-        's3:GetObject',
-        's3:GetObjectVersion',
-      ],
-      resources: [
-        sourceBucket.bucketArn,
-        `${sourceBucket.bucketArn}/*`,
-      ],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetBucketVersioning',
+          's3:GetObject',
+          's3:GetObjectVersion',
+        ],
+        resources: [sourceBucket.bucketArn, `${sourceBucket.bucketArn}/*`],
+      })
+    );
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'codebuild:BatchGetBuilds',
-        'codebuild:StartBuild',
-      ],
-      resources: ['*'],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
+        resources: ['*'],
+      })
+    );
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'cloudformation:CreateStack',
-        'cloudformation:DeleteStack',
-        'cloudformation:DescribeStacks',
-        'cloudformation:UpdateStack',
-        'cloudformation:CreateChangeSet',
-        'cloudformation:DeleteChangeSet',
-        'cloudformation:DescribeChangeSet',
-        'cloudformation:ExecuteChangeSet',
-        'cloudformation:SetStackPolicy',
-        'cloudformation:ValidateTemplate',
-      ],
-      resources: ['*'],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudformation:CreateStack',
+          'cloudformation:DeleteStack',
+          'cloudformation:DescribeStacks',
+          'cloudformation:UpdateStack',
+          'cloudformation:CreateChangeSet',
+          'cloudformation:DeleteChangeSet',
+          'cloudformation:DescribeChangeSet',
+          'cloudformation:ExecuteChangeSet',
+          'cloudformation:SetStackPolicy',
+          'cloudformation:ValidateTemplate',
+        ],
+        resources: ['*'],
+      })
+    );
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'iam:PassRole',
-      ],
-      resources: [deploymentRole.roleArn],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['iam:PassRole'],
+        resources: [deploymentRole.roleArn],
+      })
+    );
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-      ],
-      resources: [pipelineLogGroup.logGroupArn],
-    }));
+    pipelineRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: [pipelineLogGroup.logGroupArn],
+      })
+    );
 
     // Build Role Policies
-    buildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents',
-      ],
-      resources: [
-        buildLogGroup.logGroupArn,
-        `${buildLogGroup.logGroupArn}:*`,
-      ],
-    }));
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: [
+          buildLogGroup.logGroupArn,
+          `${buildLogGroup.logGroupArn}:*`,
+        ],
+      })
+    );
 
-    buildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetBucketVersioning',
-        's3:GetObject',
-        's3:GetObjectVersion',
-        's3:PutObject',
-      ],
-      resources: [
-        artifactsBucket.bucketArn,
-        `${artifactsBucket.bucketArn}/*`,
-      ],
-    }));
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetBucketVersioning',
+          's3:GetObject',
+          's3:GetObjectVersion',
+          's3:PutObject',
+        ],
+        resources: [
+          artifactsBucket.bucketArn,
+          `${artifactsBucket.bucketArn}/*`,
+        ],
+      })
+    );
 
-    buildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetBucketVersioning',
-        's3:GetObject',
-        's3:GetObjectVersion',
-      ],
-      resources: [
-        sourceBucket.bucketArn,
-        `${sourceBucket.bucketArn}/*`,
-      ],
-    }));
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetBucketVersioning',
+          's3:GetObject',
+          's3:GetObjectVersion',
+        ],
+        resources: [sourceBucket.bucketArn, `${sourceBucket.bucketArn}/*`],
+      })
+    );
 
     // =============================================
     // CodeBuild Project
@@ -229,19 +235,19 @@ export class TapStack extends cdk.Stack {
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
         environmentVariables: {
-          'AWS_DEFAULT_REGION': {
+          AWS_DEFAULT_REGION: {
             value: cdk.Aws.REGION,
           },
-          'AWS_ACCOUNT_ID': {
+          AWS_ACCOUNT_ID: {
             value: cdk.Aws.ACCOUNT_ID,
           },
-          'ARTIFACTS_BUCKET': {
+          ARTIFACTS_BUCKET: {
             value: artifactsBucket.bucketName,
           },
-          'PROJECT_NAME': {
+          PROJECT_NAME: {
             value: `nova-model-breaking-${environmentSuffix}`,
           },
-          'BUILD_ENV': {
+          BUILD_ENV: {
             value: 'production',
           },
         },
@@ -291,15 +297,11 @@ export class TapStack extends cdk.Stack {
           },
         },
         artifacts: {
-          files: [
-            '**/*',
-          ],
+          files: ['**/*'],
           'base-directory': '.',
         },
         cache: {
-          paths: [
-            'node_modules/**/*',
-          ],
+          paths: ['node_modules/**/*'],
         },
       }),
       cache: codebuild.Cache.local(codebuild.LocalCacheMode.SOURCE),
@@ -342,10 +344,10 @@ export class TapStack extends cdk.Stack {
               input: sourceOutput,
               outputs: [buildOutput],
               environmentVariables: {
-                'PIPELINE_EXECUTION_ID': {
+                PIPELINE_EXECUTION_ID: {
                   value: '#{codepipeline.PipelineExecutionId}',
                 },
-                'BUILD_TRIGGER': {
+                BUILD_TRIGGER: {
                   value: 'PIPELINE',
                 },
               },
@@ -394,13 +396,13 @@ export class TapStack extends cdk.Stack {
     // =============================================
     // CloudWatch Event Rule for Pipeline Monitoring
     // =============================================
-    const pipelineEventRule = new events.Rule(this, 'PipelineEventRule', {
+    new events.Rule(this, 'PipelineEventRule', {
       description: 'Capture pipeline state changes',
       eventPattern: {
         source: ['aws.codepipeline'],
         detailType: ['CodePipeline Pipeline Execution State Change'],
         detail: {
-          'pipeline': [pipeline.pipelineName],
+          pipeline: [pipeline.pipelineName],
         },
       },
     });
