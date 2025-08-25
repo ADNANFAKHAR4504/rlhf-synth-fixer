@@ -181,12 +181,29 @@ Resources:
           exports.handler = async (event, context) => {
               console.log('Event:', JSON.stringify(event, null, 2));
               
-              const httpMethod = event.httpMethod || event.requestContext?.http?.method;
-              const pathParameters = event.pathParameters || {};
-              const body = event.body ? JSON.parse(event.body) : {};
-              const queryStringParameters = event.queryStringParameters || {};
-              
               try {
+                  // Handle different event formats (API Gateway vs Function URL)
+                  const httpMethod = event.httpMethod || 
+                                    event.requestContext?.http?.method || 
+                                    event.requestContext?.httpMethod;
+                  
+                  const pathParameters = event.pathParameters || {};
+                  
+                  // Safely parse body
+                  let body = {};
+                  if (event.body) {
+                      try {
+                          body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+                      } catch (parseError) {
+                          console.error('Body parse error:', parseError);
+                          return createResponse(400, { error: 'Invalid JSON in request body' });
+                      }
+                  }
+                  
+                  const queryStringParameters = event.queryStringParameters || {};
+                  
+                  console.log('Parsed request:', { httpMethod, pathParameters, body, queryStringParameters });
+                  
                   let result;
                   switch (httpMethod) {
                       case 'POST':
@@ -200,39 +217,54 @@ Resources:
                           }
                           break;
                       case 'PUT':
+                          if (!pathParameters.taskId) {
+                              throw new Error('taskId is required for update operations');
+                          }
                           result = await updateTask(pathParameters.taskId, body);
                           break;
                       case 'DELETE':
+                          if (!pathParameters.taskId) {
+                              throw new Error('taskId is required for delete operations');
+                          }
                           result = await deleteTask(pathParameters.taskId);
                           break;
+                      case 'OPTIONS':
+                          // Handle CORS preflight
+                          return createResponse(200, {});
                       default:
                           throw new Error(`Unsupported method: ${httpMethod}`);
                   }
                   
-                  return {
-                      statusCode: 200,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-                      },
-                      body: JSON.stringify(result)
-                  };
+                  return createResponse(200, result);
+                  
               } catch (error) {
-                  console.error('Error:', error);
-                  return {
-                      statusCode: 500,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      body: JSON.stringify({ error: error.message })
-                  };
+                  console.error('Handler error:', error);
+                  return createResponse(500, { error: error.message });
               }
           };
           
+          function createResponse(statusCode, body) {
+              return {
+                  statusCode,
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                  },
+                  body: JSON.stringify(body)
+              };
+          }
+          
           async function createTask(taskData) {
+              // Validate required fields
+              if (!taskData.userId) {
+                  throw new Error('userId is required');
+              }
+              if (!taskData.title) {
+                  throw new Error('title is required');
+              }
+              
               const taskId = uuidv4();
               const now = new Date().toISOString();
               
@@ -243,30 +275,50 @@ Resources:
                   description: taskData.description || '',
                   status: taskData.status || 'pending',
                   priority: taskData.priority || 'medium',
-                  dueDate: taskData.dueDate,
+                  dueDate: taskData.dueDate || null,
                   createdAt: now,
                   updatedAt: now
               };
               
-              await dynamodb.put({
-                  TableName: TASKS_TABLE,
-                  Item: task
-              }).promise();
+              console.log('Creating task:', task);
               
-              return task;
+              try {
+                  await dynamodb.put({
+                      TableName: TASKS_TABLE,
+                      Item: task
+                  }).promise();
+                  
+                  console.log('Task created successfully');
+                  return task;
+              } catch (dbError) {
+                  console.error('DynamoDB error:', dbError);
+                  throw new Error(`Failed to create task: ${dbError.message}`);
+              }
           }
           
           async function getTask(taskId) {
-              const result = await dynamodb.get({
-                  TableName: TASKS_TABLE,
-                  Key: { taskId }
-              }).promise();
-              
-              if (!result.Item) {
-                  throw new Error('Task not found');
+              if (!taskId) {
+                  throw new Error('taskId is required');
               }
               
-              return result.Item;
+              try {
+                  const result = await dynamodb.get({
+                      TableName: TASKS_TABLE,
+                      Key: { taskId }
+                  }).promise();
+                  
+                  if (!result.Item) {
+                      throw new Error('Task not found');
+                  }
+                  
+                  return result.Item;
+              } catch (dbError) {
+                  console.error('DynamoDB error:', dbError);
+                  if (dbError.message === 'Task not found') {
+                      throw dbError;
+                  }
+                  throw new Error(`Failed to get task: ${dbError.message}`);
+              }
           }
           
           async function listTasks(queryParams) {
@@ -276,70 +328,119 @@ Resources:
                   throw new Error('userId is required');
               }
               
-              const params = {
-                  TableName: TASKS_TABLE,
-                  IndexName: status ? 'UserStatusIndex' : 'UserCreatedAtIndex',
-                  KeyConditionExpression: userId && status 
-                      ? 'userId = :userId AND #status = :status'
-                      : 'userId = :userId',
-                  ExpressionAttributeValues: {
-                      ':userId': userId
-                  },
-                  Limit: parseInt(limit),
-                  ScanIndexForward: false
-              };
-              
-              if (status) {
-                  params.ExpressionAttributeValues[':status'] = status;
-                  params.ExpressionAttributeNames = { '#status': 'status' };
+              const parsedLimit = parseInt(limit);
+              if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+                  throw new Error('limit must be a number between 1 and 100');
               }
               
-              const result = await dynamodb.query(params).promise();
-              return {
-                  tasks: result.Items,
-                  count: result.Count,
-                  lastEvaluatedKey: result.LastEvaluatedKey
-              };
+              try {
+                  const params = {
+                      TableName: TASKS_TABLE,
+                      IndexName: status ? 'UserStatusIndex' : 'UserCreatedAtIndex',
+                      KeyConditionExpression: status 
+                          ? 'userId = :userId AND #status = :status'
+                          : 'userId = :userId',
+                      ExpressionAttributeValues: {
+                          ':userId': userId
+                      },
+                      Limit: parsedLimit,
+                      ScanIndexForward: false
+                  };
+                  
+                  if (status) {
+                      params.ExpressionAttributeValues[':status'] = status;
+                      params.ExpressionAttributeNames = { '#status': 'status' };
+                  }
+                  
+                  console.log('Query params:', params);
+                  
+                  const result = await dynamodb.query(params).promise();
+                  
+                  return {
+                      tasks: result.Items || [],
+                      count: result.Count || 0,
+                      lastEvaluatedKey: result.LastEvaluatedKey
+                  };
+              } catch (dbError) {
+                  console.error('DynamoDB error:', dbError);
+                  throw new Error(`Failed to list tasks: ${dbError.message}`);
+              }
           }
           
           async function updateTask(taskId, updateData) {
+              if (!taskId) {
+                  throw new Error('taskId is required');
+              }
+              
+              if (!updateData || Object.keys(updateData).length === 0) {
+                  throw new Error('Update data is required');
+              }
+              
               const now = new Date().toISOString();
               
               const updateExpression = [];
               const expressionAttributeNames = {};
               const expressionAttributeValues = {};
               
-              Object.keys(updateData).forEach(key => {
-                  if (key !== 'taskId' && key !== 'userId' && key !== 'createdAt') {
-                      updateExpression.push(`#${key} = :${key}`);
-                      expressionAttributeNames[`#${key}`] = key;
-                      expressionAttributeValues[`:${key}`] = updateData[key];
-                  }
+              // Filter out fields that shouldn't be updated
+              const allowedFields = ['title', 'description', 'status', 'priority', 'dueDate'];
+              const fieldsToUpdate = Object.keys(updateData).filter(key => allowedFields.includes(key));
+              
+              if (fieldsToUpdate.length === 0) {
+                  throw new Error('No valid fields to update');
+              }
+              
+              fieldsToUpdate.forEach(key => {
+                  updateExpression.push(`#${key} = :${key}`);
+                  expressionAttributeNames[`#${key}`] = key;
+                  expressionAttributeValues[`:${key}`] = updateData[key];
               });
               
               updateExpression.push('#updatedAt = :updatedAt');
               expressionAttributeNames['#updatedAt'] = 'updatedAt';
               expressionAttributeValues[':updatedAt'] = now;
               
-              const result = await dynamodb.update({
-                  TableName: TASKS_TABLE,
-                  Key: { taskId },
-                  UpdateExpression: `SET ${updateExpression.join(', ')}`,
-                  ExpressionAttributeNames: expressionAttributeNames,
-                  ExpressionAttributeValues: expressionAttributeValues,
-                  ReturnValues: 'ALL_NEW'
-              }).promise();
-              
-              return result.Attributes;
+              try {
+                  const result = await dynamodb.update({
+                      TableName: TASKS_TABLE,
+                      Key: { taskId },
+                      UpdateExpression: `SET ${updateExpression.join(', ')}`,
+                      ExpressionAttributeNames: expressionAttributeNames,
+                      ExpressionAttributeValues: expressionAttributeValues,
+                      ReturnValues: 'ALL_NEW',
+                      ConditionExpression: 'attribute_exists(taskId)'
+                  }).promise();
+                  
+                  return result.Attributes;
+              } catch (dbError) {
+                  console.error('DynamoDB error:', dbError);
+                  if (dbError.code === 'ConditionalCheckFailedException') {
+                      throw new Error('Task not found');
+                  }
+                  throw new Error(`Failed to update task: ${dbError.message}`);
+              }
           }
           
           async function deleteTask(taskId) {
-              await dynamodb.delete({
-                  TableName: TASKS_TABLE,
-                  Key: { taskId }
-              }).promise();
+              if (!taskId) {
+                  throw new Error('taskId is required');
+              }
               
-              return { message: 'Task deleted successfully' };
+              try {
+                  await dynamodb.delete({
+                      TableName: TASKS_TABLE,
+                      Key: { taskId },
+                      ConditionExpression: 'attribute_exists(taskId)'
+                  }).promise();
+                  
+                  return { message: 'Task deleted successfully' };
+              } catch (dbError) {
+                  console.error('DynamoDB error:', dbError);
+                  if (dbError.code === 'ConditionalCheckFailedException') {
+                      throw new Error('Task not found');
+                  }
+                  throw new Error(`Failed to delete task: ${dbError.message}`);
+              }
           }
       Tags:
         - Key: 'Environment'
@@ -348,6 +449,7 @@ Resources:
           Value: 'TaskManagement'
         - Key: 'Component'
           Value: 'Compute'
+ 
 
   # Lambda Function with Response Streaming for Large Datasets
   TaskStreamingFunction:
