@@ -35,10 +35,6 @@ Parameters:
     Type: String
     Description: CIDR block for private subnet 2
     Default: 10.0.4.0/24
-  RDSSecretArn:
-    Type: String
-    Description: ARN of the Secrets Manager secret for RDS credentials
-    Default: arn:aws:secretsmanager:us-east-1:123456789012:secret:fintech-rds-credentials-XXXXXX
 
 # Mappings for region-specific configurations
 Mappings:
@@ -308,6 +304,28 @@ Resources:
             Action:
               - kms:*
             Resource: '*'
+          - Sid: Allow RDS to use the key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow Secrets Manager to use the key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -319,6 +337,24 @@ Resources:
     Properties:
       AliasName: !Sub alias/${EnvironmentName}-fintech-key
       TargetKeyId: !Ref FinTechKMSKey
+
+  # Secrets Manager for RDS Credentials
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${EnvironmentName}-fintech-rds-credentials
+      Description: RDS credentials for FinTech application
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref FinTechKMSKey
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   # S3 Buckets
   DataBucket:
@@ -412,6 +448,15 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   # DynamoDB Table
   FinTechTable:
@@ -475,8 +520,8 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: postgres
       EngineVersion: '15.8'
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecretArn}:SecretString:password}}'
+      MasterUsername: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
       MultiAZ: true
       StorageEncrypted: true
       KmsKeyId: !Ref FinTechKMSKey
@@ -519,6 +564,7 @@ Resources:
                   - cloudtrail:*
                   - logs:*
                   - ec2:Describe*
+                  - secretsmanager:*
                 Resource: '*'
       Tags:
         - Key: Environment
@@ -564,6 +610,10 @@ Resources:
                 Action:
                   - rds:DescribeDBInstances
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref RDSSecret
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -591,6 +641,11 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !GetAtt CloudTrailLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource: !Sub ${LogBucket.Arn}/AWSLogs/${AWS::AccountId}/*
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -829,6 +884,11 @@ Outputs:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub ${EnvironmentName}-RDSEndpoint
+  RDSSecretArn:
+    Description: Secrets Manager Secret ARN for RDS
+    Value: !Ref RDSSecret
+    Export:
+      Name: !Sub ${EnvironmentName}-RDSSecretArn
   LambdaFunctionArn:
     Description: Lambda Function ARN
     Value: !GetAtt RemediationLambda.Arn
