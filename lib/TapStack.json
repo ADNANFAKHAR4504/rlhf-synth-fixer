@@ -11,6 +11,7 @@
         },
         "TrustedAccountId": {
             "Type": "String",
+            "Default": "718240086340",
             "Description": "Trusted AWS Account ID for IAM role assume policies",
             "AllowedPattern": "^[0-9]{12}$",
             "ConstraintDescription": "Must be a valid 12-digit AWS Account ID"
