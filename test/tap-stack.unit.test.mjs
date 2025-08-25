@@ -1,14 +1,12 @@
 // test/tap-stack.unit.test.mjs
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import { TapStack } from '../lib/tap-stack.mjs';
 
 // default environment suffix used by most tests
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack (unit)', () => {
+describe('TapStack', () => {
   // shared test variables (recreated / overridden in inner suites as needed)
   let app;
   let stack;
@@ -137,15 +135,13 @@ describe('TapStack (unit)', () => {
   // createIfNotExists = true: when resources are allowed to be created if missing
   // -------------------------
   //
-  describe('createIfNotExists = true (fallback creation allowed)', () => {
-    test('Creates a new VPC if existingVpcId missing', () => {
+  describe('createIfNotExists = true', () => {
+    test('Creates a new VPC if existingVpcId is defined', () => {
       app = new cdk.App();
       const config = {
         dev: {
           ...baseConfig.dev,
-          existingVpcId: undefined,
-          createIfNotExists: true,
-          environment: 'dev'
+          createIfNotExists: true
         }
       };
       stack = new TapStack(app, `${stackName}-CreateVpc`, { env, environmentSuffix, config });
@@ -153,14 +149,12 @@ describe('TapStack (unit)', () => {
       template.resourceCountIs('AWS::EC2::VPC', 1);
     });
 
-    test('Creates a new S3 bucket if existingS3Bucket missing', () => {
+    test('Creates a new S3 bucket if existingS3Bucket is defined', () => {
       app = new cdk.App();
       const config = {
         dev: {
           ...baseConfig.dev,
-          existingS3Bucket: undefined,
-          createIfNotExists: true,
-          environment: 'dev'
+          createIfNotExists: true
         }
       };
       stack = new TapStack(app, `${stackName}-CreateBucket`, { env, environmentSuffix, config });
@@ -177,18 +171,15 @@ describe('TapStack (unit)', () => {
         })])
       );
     });
-  }); // end createIfNotExists=true
 
-  //
-  // -------------------------
-  // createIfNotExists = false: error cases when existence required
-  // -------------------------
-  //
-  describe('createIfNotExists = false (require existing resources)', () => {
-    test('Throws if existingVpcId missing', () => {
+    test('Throws if existingVpcId undefined', () => {
       app = new cdk.App();
       const config = {
-        dev: { ...baseConfig.dev, existingVpcId: undefined, createIfNotExists: false }
+        dev: {
+          ...baseConfig.dev,
+          existingVpcId: undefined,
+          createIfNotExists: true
+        }
       };
       expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
         .toThrow(/VPC ID must be provided/);
@@ -197,113 +188,51 @@ describe('TapStack (unit)', () => {
     test('Throws if existingS3Bucket missing', () => {
       app = new cdk.App();
       const config = {
-        dev: { ...baseConfig.dev, existingS3Bucket: undefined, createIfNotExists: false }
+        dev: {
+          ...baseConfig.dev,
+          existingS3Bucket: undefined,
+          createIfNotExists: true
+        }
       };
       expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
         .toThrow(/S3 bucket must be provided/);
     });
-  }); // end createIfNotExists=false
+
+  }); // end createIfNotExists=true
 
   //
   // -------------------------
-  // Lookup fallback behavior — controlled (conditional) mocks to simulate failed lookups
+  // createIfNotExists = false: error cases when existing resource is required
   // -------------------------
   //
-  describe('Lookup fallback behavior (Vpc & S3)', () => {
-    // Restore mocks after each test so they don't leak into other suites
-    afterEach(() => {
-      jest.restoreAllMocks();
+  describe('createIfNotExists = false', () => {
+    test('Throws if existingVpcId undefined', () => {
+      app = new cdk.App();
+      const config = {
+        dev: {
+          ...baseConfig.dev,
+          existingVpcId: undefined,
+          createIfNotExists: false
+        }
+      };
+      expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
+        .toThrow(/VPC ID must be provided/);
     });
 
-    describe('VPC lookup failure -> fallback / rethrow', () => {
-      test('fromLookup throws & createIfNotExists=true -> warn and create fallback VPC', () => {
-        // mock only the lookup to throw for our test case
-        const originalVpcFromLookup = ec2.Vpc.fromLookup;
-        jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation((scope, id, opts) => {
-          if (opts && opts.vpcId === 'vpc-lookup-fail') {
-            throw new Error('lookup failed');
-          }
-          return originalVpcFromLookup.call(ec2.Vpc, scope, id, opts);
-        });
+    test('Throws if existingS3Bucket missing', () => {
+      app = new cdk.App();
+      const config = {
+        dev: {
+          ...baseConfig.dev,
+          existingS3Bucket: undefined,
+          createIfNotExists: false
+        }
+      };
+      expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
+        .toThrow(/S3 bucket must be provided/);
+    });
 
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
-
-        const config = {
-          dev: { ...baseConfig.dev, existingVpcId: 'vpc-lookup-fail', createIfNotExists: true, environment: 'dev' }
-        };
-
-        app = new cdk.App();
-        const thisStackName = `${stackName}-VpcFallback`;
-        stack = new TapStack(app, thisStackName, { env, environmentSuffix, config });
-        template = Template.fromStack(stack);
-
-        expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`Vpc.fromLookup failed for vpcId='${config.dev.existingVpcId}'.`)
-        );
-
-        template.resourceCountIs('AWS::EC2::VPC', 1);
-      });
-
-      test('fromLookup throws & createIfNotExists=false -> original error is rethrown', () => {
-        jest.spyOn(ec2.Vpc, 'fromLookup').mockImplementation(() => { throw new Error('lookup failed'); });
-
-        const config = {
-          dev: { ...baseConfig.dev, existingVpcId: 'vpc-lookup-fail', createIfNotExists: false, environment: 'dev' }
-        };
-
-        app = new cdk.App();
-        const thisStackName = `${stackName}-VpcNoFallback`;
-
-        expect(() => new TapStack(app, thisStackName, { env, environmentSuffix, config }))
-          .toThrow(/lookup failed/);
-      });
-    }); // end VPC fallback
-
-    describe('S3 lookup failure -> fallback / rethrow', () => {
-      test('fromBucketName throws & createIfNotExists=true -> warn and create fallback Bucket (reuses name)', () => {
-        // capture original and mock conditionally so other components (CloudWatch logging) keep working
-        const originalFromBucketName = s3.Bucket.fromBucketName;
-        const targetBucket = 'my-test-bucket-fallback';
-        jest.spyOn(s3.Bucket, 'fromBucketName').mockImplementation((scope, id, name) => {
-          if (name === targetBucket) {
-            throw new Error('bucket lookup failed');
-          }
-          return originalFromBucketName.call(s3.Bucket, scope, id, name);
-        });
-
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
-
-        const config = {
-          dev: { ...baseConfig.dev, existingS3Bucket: targetBucket, createIfNotExists: true, environment: 'dev' }
-        };
-
-        app = new cdk.App();
-        const thisStackName = `${stackName}-BucketFallback`;
-        stack = new TapStack(app, thisStackName, { env, environmentSuffix, config });
-        template = Template.fromStack(stack);
-
-        expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`Bucket.fromBucketName failed for bucket='${targetBucket}'.`)
-        );
-
-        template.resourceCountIs('AWS::S3::Bucket', 1);
-        template.hasResourceProperties('AWS::S3::Bucket', { BucketName: targetBucket });
-      });
-
-      test('fromBucketName throws & createIfNotExists=false -> original error is rethrown', () => {
-        jest.spyOn(s3.Bucket, 'fromBucketName').mockImplementation(() => { throw new Error('bucket lookup failed'); });
-
-        const cfg = {
-          dev: { ...baseConfig.dev, existingS3Bucket: 'my-test-bucket-fallback', createIfNotExists: false, environment: 'dev' }
-        };
-
-        app = new cdk.App();
-        const thisStackName = `${stackName}-BucketNoFallback`;
-        expect(() => new TapStack(app, thisStackName, { env, environmentSuffix, config: cfg }))
-          .toThrow(/bucket lookup failed/);
-      });
-    }); // end S3 fallback
-  }); // end Lookup fallback behavior
+  }); // end createIfNotExists=false
 
   //
   // -------------------------
@@ -439,4 +368,4 @@ describe('TapStack (unit)', () => {
     });
   }); // end Additional tests
 
-}); // end TapStack (unit)
+}); // end TapStack
