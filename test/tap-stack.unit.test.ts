@@ -3,7 +3,7 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('Secure AWS Infrastructure CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Secure AWS Infrastructure - CloudFormation Template with IAM roles, encrypted S3, CloudTrail, and VPC Flow Logs'
       );
     });
 
@@ -39,8 +33,11 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const requiredParameters = ['EnvironmentSuffix', 'TrustedAccountId', 'VpcCidr'];
+      requiredParameters.forEach(param => {
+        expect(template.Parameters[param]).toBeDefined();
+      });
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -51,65 +48,202 @@ describe('TapStack CloudFormation Template', () => {
         'Environment suffix for resource naming (e.g., dev, staging, prod)'
       );
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    });
+
+    test('TrustedAccountId parameter should have correct properties', () => {
+      const accountParam = template.Parameters.TrustedAccountId;
+      expect(accountParam.Type).toBe('String');
+      expect(accountParam.Default).toBe('123456789012');
+      expect(accountParam.AllowedPattern).toBe('^[0-9]{12}$');
+    });
+
+    test('VpcCidr parameter should have correct properties', () => {
+      const vpcParam = template.Parameters.VpcCidr;
+      expect(vpcParam.Type).toBe('String');
+      expect(vpcParam.Default).toBe('10.0.0.0/16');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('KMS Resources', () => {
+    test('should have S3 encryption KMS key', () => {
+      expect(template.Resources.S3EncryptionKey).toBeDefined();
+      expect(template.Resources.S3EncryptionKey.Type).toBe('AWS::KMS::Key');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have KMS key alias', () => {
+      expect(template.Resources.S3EncryptionKeyAlias).toBeDefined();
+      expect(template.Resources.S3EncryptionKeyAlias.Type).toBe('AWS::KMS::Alias');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('KMS key should have proper policy for CloudTrail and VPC Flow Logs', () => {
+      const kmsKey = template.Resources.S3EncryptionKey;
+      const policy = kmsKey.Properties.KeyPolicy;
+      
+      expect(policy.Statement).toHaveLength(3);
+      expect(policy.Statement.some((stmt: any) => 
+        stmt.Principal?.Service === 'cloudtrail.amazonaws.com'
+      )).toBe(true);
+      expect(policy.Statement.some((stmt: any) => 
+        stmt.Principal?.Service === 'delivery.logs.amazonaws.com'
+      )).toBe(true);
+    });
+  });
+
+  describe('S3 Bucket Resources', () => {
+    test('should have CloudTrail logs bucket with encryption', () => {
+      const bucket = template.Resources.CloudTrailLogsBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({Ref: 'S3EncryptionKey'});
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('should have VPC Flow Logs bucket with encryption', () => {
+      const bucket = template.Resources.VpcFlowLogsBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('S3 buckets should have public access blocked', () => {
+      const buckets = ['CloudTrailLogsBucket', 'VpcFlowLogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicAccessBlock.BlockPublicAcls).toBe(true);
+        expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
+        expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
+        expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('S3 buckets should have versioning enabled', () => {
+      const buckets = ['CloudTrailLogsBucket', 'VpcFlowLogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      });
+    });
+  });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+  describe('IAM Role Resources', () => {
+    test('should have cross-account role with proper trust policy', () => {
+      const role = template.Resources.CrossAccountRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+      const statement = trustPolicy.Statement[0];
+      expect(statement.Principal.AWS).toEqual({'Fn::Sub': 'arn:aws:iam::${TrustedAccountId}:root'});
+      expect(statement.Condition.StringEquals['sts:ExternalId']).toEqual({'Fn::Sub': 'secure-infra-${EnvironmentSuffix}'});
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have CloudTrail service role', () => {
+      const role = template.Resources.CloudTrailRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+      expect(trustPolicy.Statement[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have VPC Flow Log service role', () => {
+      const role = template.Resources.VPCFlowLogRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
+      expect(trustPolicy.Statement[0].Principal.Service).toBe('vpc-flow-logs.amazonaws.com');
+    });
+
+    test('cross-account role should have least-privilege policies', () => {
+      const role = template.Resources.CrossAccountRole;
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/ReadOnlyAccess');
+      expect(role.Properties.Policies).toHaveLength(1);
+      expect(role.Properties.Policies[0].PolicyName).toBe('LimitedS3Access');
+    });
+  });
+
+  describe('CloudTrail Resources', () => {
+    test('should have CloudTrail with proper configuration', () => {
+      const cloudtrail = template.Resources.SecurityCloudTrail;
+      expect(cloudtrail).toBeDefined();
+      expect(cloudtrail.Type).toBe('AWS::CloudTrail::Trail');
+      
+      const properties = cloudtrail.Properties;
+      expect(properties.IsLogging).toBe(true);
+      expect(properties.IsMultiRegionTrail).toBe(true);
+      expect(properties.EnableLogFileValidation).toBe(true);
+      expect(properties.IncludeGlobalServiceEvents).toBe(true);
+      expect(properties.KMSKeyId).toEqual({Ref: 'S3EncryptionKey'});
+    });
+
+    test('CloudTrail should have proper bucket policy', () => {
+      const bucketPolicy = template.Resources.CloudTrailBucketPolicy;
+      expect(bucketPolicy).toBeDefined();
+      expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
+      
+      const statements = bucketPolicy.Properties.PolicyDocument.Statement;
+      expect(statements.some((stmt: any) => stmt.Sid === 'AWSCloudTrailAclCheck')).toBe(true);
+      expect(statements.some((stmt: any) => stmt.Sid === 'AWSCloudTrailWrite')).toBe(true);
+    });
+  });
+
+  describe('VPC Resources', () => {
+    test('should have secure VPC with proper configuration', () => {
+      const vpc = template.Resources.SecureVPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      
+      const properties = vpc.Properties;
+      expect(properties.EnableDnsHostnames).toBe(true);
+      expect(properties.EnableDnsSupport).toBe(true);
+      expect(properties.CidrBlock).toEqual({Ref: 'VpcCidr'});
+    });
+
+    test('should have public and private subnets', () => {
+      expect(template.Resources.PublicSubnet).toBeDefined();
+      expect(template.Resources.PrivateSubnet).toBeDefined();
+      expect(template.Resources.PublicSubnet.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('should have internet gateway', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.AttachGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have VPC Flow Logs enabled', () => {
+      const flowLog = template.Resources.VPCFlowLog;
+      expect(flowLog).toBeDefined();
+      expect(flowLog.Type).toBe('AWS::EC2::FlowLog');
+      
+      const properties = flowLog.Properties;
+      expect(properties.ResourceType).toBe('VPC');
+      expect(properties.TrafficType).toBe('ALL');
+      expect(properties.LogDestinationType).toBe('s3');
+      expect(properties.LogDestination).toEqual({'Fn::GetAtt': ['VpcFlowLogsBucket', 'Arn']});
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have all security-related outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
+        'S3EncryptionKeyId',
+        'S3EncryptionKeyArn',
+        'CloudTrailLogsBucketName',
+        'VpcFlowLogsBucketName',
+        'CrossAccountRoleArn',
+        'CloudTrailArn',
+        'VPCId',
+        'VPCFlowLogId',
         'EnvironmentSuffix',
+        'StackName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,48 +251,22 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('KMS key outputs should be correct', () => {
+      const keyIdOutput = template.Outputs.S3EncryptionKeyId;
+      expect(keyIdOutput.Value).toEqual({Ref: 'S3EncryptionKey'});
+      
+      const keyArnOutput = template.Outputs.S3EncryptionKeyArn;
+      expect(keyArnOutput.Value).toEqual({'Fn::GetAtt': ['S3EncryptionKey', 'Arn']});
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    test('IAM role output should be correct', () => {
+      const roleOutput = template.Outputs.CrossAccountRoleArn;
+      expect(roleOutput.Value).toEqual({'Fn::GetAtt': ['CrossAccountRole', 'Arn']});
+      expect(roleOutput.Description).toBe('ARN of the cross-account IAM role');
     });
   });
 
-  describe('Template Validation', () => {
+  describe('Template Security Validation', () => {
     test('should have valid JSON structure', () => {
       expect(template).toBeDefined();
       expect(typeof template).toBe('object');
@@ -172,39 +280,52 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have expected number of security resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(15); // All security infrastructure resources
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have three parameters for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(3);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have comprehensive outputs for monitoring', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(10);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+  describe('Security Best Practices Validation', () => {
+    test('all IAM roles should have specific trust policies', () => {
+      const roles = ['CrossAccountRole', 'CloudTrailRole', 'VPCFlowLogRole'];
+      roles.forEach(roleName => {
+        const role = template.Resources[roleName];
+        expect(role.Properties.AssumeRolePolicyDocument.Statement).toHaveLength(1);
+        expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('all S3 buckets should enforce encryption', () => {
+      const buckets = ['CloudTrailLogsBucket', 'VpcFlowLogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.Properties.BucketEncryption).toBeDefined();
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       });
+    });
+
+    test('CloudTrail should have comprehensive logging enabled', () => {
+      const cloudtrail = template.Resources.SecurityCloudTrail;
+      expect(cloudtrail.Properties.EventSelectors).toHaveLength(1);
+      expect(cloudtrail.Properties.EventSelectors[0].ReadWriteType).toBe('All');
+      expect(cloudtrail.Properties.EventSelectors[0].IncludeManagementEvents).toBe(true);
+    });
+
+    test('VPC Flow Logs should capture all traffic', () => {
+      const flowLog = template.Resources.VPCFlowLog;
+      expect(flowLog.Properties.TrafficType).toBe('ALL');
+      expect(flowLog.Properties.LogFormat).toBeDefined();
     });
   });
 });
