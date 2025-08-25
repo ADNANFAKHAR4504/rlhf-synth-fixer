@@ -411,6 +411,7 @@ describe('TapStack', () => {
               's3:GetBucketLocation',
               's3:ListBucket',
               's3:PutBucketAcl',
+              's3:PutBucketOwnershipControls', // Critical for ALB access log ownership
             ],
             Effect: 'Allow',
             Resource: Match.anyValue(),

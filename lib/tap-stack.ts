@@ -96,6 +96,7 @@ export class TapStack extends cdk.Stack {
         encryptionKey: kmsKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
+        objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, // Critical for ALB access logs
         lifecycleRules: [
           {
             id: 'SecureApp-LogRetention',
@@ -128,6 +129,7 @@ export class TapStack extends cdk.Stack {
           's3:GetBucketLocation',
           's3:ListBucket',
           's3:PutBucketAcl',
+          's3:PutBucketOwnershipControls', // Critical for ALB access log ownership
         ],
         resources: [albLogsBucket.bucketArn],
       })
@@ -154,16 +156,11 @@ export class TapStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'AllowELBServicePrincipalAccess',
         effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('elasticloadbalancing.amazonaws.com')],
-        actions: [
-          's3:PutObject',
-          's3:GetBucketAcl',
-          's3:GetBucketLocation',
+        principals: [
+          new iam.ServicePrincipal('elasticloadbalancing.amazonaws.com'),
         ],
-        resources: [
-          albLogsBucket.bucketArn,
-          `${albLogsBucket.bucketArn}/*`,
-        ],
+        actions: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
+        resources: [albLogsBucket.bucketArn, `${albLogsBucket.bucketArn}/*`],
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
