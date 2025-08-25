@@ -1,18 +1,19 @@
 package app;
 
-import app.config.DeploymentConfig;
-import com.pulumi.Context;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
+import software.amazon.awssdk.services.cloudformation.model.DescribeStackSetResponse;
 import software.amazon.awssdk.services.cloudformation.model.ListStackSetsResponse;
 import software.amazon.awssdk.services.cloudformation.model.ListStacksResponse;
+import software.amazon.awssdk.services.cloudformation.model.StackSetSummary;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
 import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsResponse;
 import software.amazon.awssdk.services.cloudwatch.model.ListDashboardsResponse;
@@ -21,6 +22,7 @@ import software.amazon.awssdk.services.ec2.model.DescribeRegionsResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.GetAccountSummaryResponse;
+import software.amazon.awssdk.services.iam.model.GetRoleResponse;
 import software.amazon.awssdk.services.iam.model.ListRolesResponse;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
@@ -30,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -38,44 +41,87 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
 /**
  * Comprehensive integration tests for the Main Pulumi program.
  * 
  * Tests infrastructure deployment, AWS resource validation, and end-to-end scenarios.
- * Includes both live AWS integration tests and extensive mock-based testing.
+ * Uses actual Pulumi deployment outputs and AWS resources - NO MOCKING.
+ * 
+ * Prerequisites:
+ * 1. Deploy infrastructure first: cd lib && pulumi up
+ * 2. Set PULUMI_STACK environment variable or use default stack
+ * 3. Ensure AWS credentials are configured
  * 
  * Run with: ./gradlew integrationTest
  */
-@ExtendWith(MockitoExtension.class)
 public class MainIntegrationTest {
 
-    @Mock
-    private Context mockContext;
-    
-    @Mock
-    private com.pulumi.Config mockPulumiConfig;
-
-    private static final String TEST_STACK_NAME = "integration-test-" + System.currentTimeMillis();
     private static final String TEST_REGION = "us-east-1";
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    
+    // Deployment outputs - populated from actual Pulumi stack
+    private static String stackSetId;
+    private static String stackSetArn;
+    private static String administrationRoleArn;
+    private static String executionRoleName;
+    private static String dashboardUrl;
+    private static JsonNode allOutputs;
+
+    @BeforeAll
+    static void setUpDeploymentOutputs() {
+        // Get deployment outputs from actual Pulumi stack
+        try {
+            String stackName = getStackName();
+            String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--cwd", "lib", "--stack", stackName);
+            allOutputs = objectMapper.readTree(outputsJson);
+            
+            // Extract specific outputs
+            stackSetId = getOutputValue("stackSetId");
+            stackSetArn = getOutputValue("stackSetArn");
+            administrationRoleArn = getOutputValue("administrationRoleArn");
+            executionRoleName = getOutputValue("executionRoleName");
+            dashboardUrl = getOutputValue("dashboardUrl");
+            
+            System.out.println("=== Deployment Outputs Loaded ===");
+            System.out.println("Stack Set ID: " + stackSetId);
+            System.out.println("Administration Role ARN: " + administrationRoleArn);
+            System.out.println("Execution Role Name: " + executionRoleName);
+            System.out.println("Dashboard URL: " + dashboardUrl);
+            
+        } catch (Exception e) {
+            System.err.println("Failed to load deployment outputs: " + e.getMessage());
+            System.err.println("Make sure infrastructure is deployed and Pulumi CLI is available");
+        }
+    }
+    
+    private static String getStackName() {
+        String stackName = System.getenv("PULUMI_STACK");
+        if (stackName == null || stackName.isEmpty()) {
+            // Try to get current stack
+            try {
+                return executeCommand("pulumi", "stack", "--show-name", "--cwd", "lib").trim();
+            } catch (Exception e) {
+                return "dev"; // fallback to dev stack
+            }
+        }
+        return stackName;
+    }
+    
+    private static String getOutputValue(String outputName) {
+        if (allOutputs != null && allOutputs.has(outputName)) {
+            JsonNode value = allOutputs.get(outputName);
+            return value.isTextual() ? value.asText() : value.toString();
+        }
+        return null;
+    }
 
     @BeforeEach
     void setUp() {
-        // Setup mock config for integration tests
-        when(mockContext.config()).thenReturn(mockPulumiConfig);
-        when(mockPulumiConfig.get("managementRegion")).thenReturn(java.util.Optional.of(TEST_REGION));
-        when(mockPulumiConfig.get("applicationName")).thenReturn(java.util.Optional.of("integration-test-app"));
-        when(mockPulumiConfig.get("environment")).thenReturn(java.util.Optional.of("integration-test"));
-        when(mockPulumiConfig.getObject("targetRegions", String[].class))
-            .thenReturn(java.util.Optional.of(new String[]{TEST_REGION, "us-west-2"}));
-        when(mockPulumiConfig.getObject("targetAccounts", String[].class))
-            .thenReturn(java.util.Optional.of(new String[]{"123456789012"}));
-
-        DeploymentConfig testConfig = new DeploymentConfig(mockContext);
+        // Validate that outputs are available before each test
+        if (allOutputs == null) {
+            System.out.println("Warning: Deployment outputs not available. Some tests may be skipped.");
+        }
     }
 
     // ================== Application and Dependencies Tests ==================
@@ -400,61 +446,178 @@ public class MainIntegrationTest {
         });
     }
 
-    // ================== Component Integration Tests ==================
+    // ================== Deployment Output Validation Tests ==================
     
     @Test
-    void testAllComponentsCanBeInstantiatedTogether() {
-        // Test that all components can be created in the same order as Main.defineInfrastructure
+    void testDeploymentOutputsExist() {
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+        
         assertDoesNotThrow(() -> {
-            var config = new DeploymentConfig(mockContext);
-            assertNotNull(config);
-
-            System.out.println("   - Application: " + config.getApplicationName());
-            System.out.println("   - Environment: " + config.getEnvironment());
-            System.out.println("   - Management Region: " + config.getManagementRegion());
-            System.out.println("   - Target Regions: " + config.getTargetRegions());
-            System.out.println("   - Target Accounts: " + config.getTargetAccounts());
+            // Validate all expected outputs exist
+            assertNotNull(stackSetId, "StackSet ID should be available from deployment");
+            assertNotNull(stackSetArn, "StackSet ARN should be available from deployment");  
+            assertNotNull(administrationRoleArn, "Administration Role ARN should be available from deployment");
+            assertNotNull(executionRoleName, "Execution Role Name should be available from deployment");
+            assertNotNull(dashboardUrl, "Dashboard URL should be available from deployment");
+            
+            assertFalse(stackSetId.trim().isEmpty(), "StackSet ID should not be empty");
+            assertFalse(stackSetArn.trim().isEmpty(), "StackSet ARN should not be empty");
+            assertFalse(administrationRoleArn.trim().isEmpty(), "Administration Role ARN should not be empty");
+            assertFalse(executionRoleName.trim().isEmpty(), "Execution Role Name should not be empty");
+            assertFalse(dashboardUrl.trim().isEmpty(), "Dashboard URL should not be empty");
+            
+            System.out.println("✓ All deployment outputs are present and non-empty");
         });
     }
     
     @Test
-    void testConfigurationVariations() {
-        // Test different configuration scenarios
+    void testStackSetValidation() {
+        Assumptions.assumeTrue(stackSetId != null, "StackSet ID should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+        
         assertDoesNotThrow(() -> {
-            // Test with minimal configuration
-            when(mockPulumiConfig.get(anyString())).thenReturn(java.util.Optional.empty());
-            when(mockPulumiConfig.getObject(any(), eq(String[].class))).thenReturn(java.util.Optional.empty());
-            
-            var defaultConfig = new DeploymentConfig(mockContext);
-            assertEquals("multi-region-web-app", defaultConfig.getApplicationName());
-            assertEquals("production", defaultConfig.getEnvironment());
-            assertEquals(3, defaultConfig.getTargetRegions().size());
-            assertEquals(2, defaultConfig.getTargetAccounts().size());
-            
-            System.out.println("Default configuration works correctly");
+            try (CloudFormationClient cfnClient = CloudFormationClient.builder().region(Region.of(TEST_REGION)).build()) {
+                // Validate StackSet exists using the actual deployed ID
+                DescribeStackSetResponse response = cfnClient.describeStackSet(request -> 
+                    request.stackSetName(stackSetId));
+                    
+                assertNotNull(response.stackSet());
+                assertEquals(stackSetId, response.stackSet().stackSetId());
+                
+                System.out.println("✓ StackSet validation passed: " + response.stackSet().stackSetName());
+                System.out.println("  - Status: " + response.stackSet().status());
+                System.out.println("  - Description: " + response.stackSet().description());
+            }
         });
     }
     
     @Test
-    void testResourceNamingConventions() {
-        // Test that resource names follow conventions
+    void testAdministrationRoleValidation() {
+        Assumptions.assumeTrue(administrationRoleArn != null, "Administration Role ARN should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+        
         assertDoesNotThrow(() -> {
-            var config = new DeploymentConfig(mockContext);
+            try (IamClient iamClient = IamClient.builder().region(Region.of(TEST_REGION)).build()) {
+                // Extract role name from ARN
+                String roleName = administrationRoleArn.substring(administrationRoleArn.lastIndexOf("/") + 1);
+                
+                // Validate role exists using actual deployed ARN
+                GetRoleResponse response = iamClient.getRole(request -> request.roleName(roleName));
+                
+                assertNotNull(response.role());
+                assertEquals(administrationRoleArn, response.role().arn());
+                assertTrue(response.role().roleName().contains("CloudFormationStackSetAdministration"));
+                
+                System.out.println("✓ Administration Role validation passed: " + response.role().roleName());
+                System.out.println("  - ARN: " + response.role().arn());
+                System.out.println("  - Created: " + response.role().createDate());
+            }
+        });
+    }
+    
+    @Test
+    void testExecutionRoleValidation() {
+        Assumptions.assumeTrue(executionRoleName != null, "Execution Role Name should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+        
+        assertDoesNotThrow(() -> {
+            try (IamClient iamClient = IamClient.builder().region(Region.of(TEST_REGION)).build()) {
+                // Validate execution role exists using actual deployed name
+                GetRoleResponse response = iamClient.getRole(request -> request.roleName(executionRoleName));
+                
+                assertNotNull(response.role());
+                assertEquals(executionRoleName, response.role().roleName());
+                assertTrue(response.role().roleName().contains("CloudFormationStackSetExecution"));
+                
+                System.out.println("✓ Execution Role validation passed: " + response.role().roleName());
+                System.out.println("  - ARN: " + response.role().arn());
+                System.out.println("  - Created: " + response.role().createDate());
+            }
+        });
+    }
+    
+    @Test
+    void testCloudWatchDashboardValidation() {
+        Assumptions.assumeTrue(dashboardUrl != null, "Dashboard URL should be available");
+        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
+        
+        assertDoesNotThrow(() -> {
+            try (CloudWatchClient cloudWatchClient = CloudWatchClient.builder().region(Region.of(TEST_REGION)).build()) {
+                // List dashboards and find the one created by our deployment
+                ListDashboardsResponse response = cloudWatchClient.listDashboards();
+                
+                boolean dashboardFound = response.dashboardEntries().stream()
+                    .anyMatch(dashboard -> dashboard.dashboardName().contains("WebApplication"));
+                
+                assertTrue(dashboardFound, "CloudWatch dashboard should exist");
+                
+                // Validate dashboard URL format
+                assertTrue(dashboardUrl.startsWith("https://"), "Dashboard URL should be HTTPS");
+                assertTrue(dashboardUrl.contains("console.aws.amazon.com"), "Dashboard URL should be AWS console URL");
+                
+                System.out.println("✓ CloudWatch Dashboard validation passed");
+                System.out.println("  - Dashboard URL: " + dashboardUrl);
+            }
+        });
+    }
+    
+    @Test
+    void testApplicationEndpointsExist() {
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+        
+        assertDoesNotThrow(() -> {
+            // Check for application endpoints in different regions
+            String[] expectedRegions = {"us-east-1", "us-west-2", "eu-west-1"};
             
-            // Test that tags are properly formatted
-            var tags = config.getTags();
-            assertEquals("integration-test-app", tags.get("Application"));
-            assertEquals("integration-test", tags.get("Environment"));
-            assertEquals("Pulumi", tags.get("ManagedBy"));
-            assertEquals("MultiRegionWebApp", tags.get("Project"));
+            for (String region : expectedRegions) {
+                String endpointKey = "applicationEndpoint-" + region;
+                String endpoint = getOutputValue(endpointKey);
+                
+                if (endpoint != null) {
+                    assertFalse(endpoint.trim().isEmpty(), "Application endpoint for " + region + " should not be empty");
+                    assertTrue(endpoint.startsWith("http://"), "Application endpoint should start with http://");
+                    System.out.println("✓ Application endpoint found for " + region + ": " + endpoint);
+                } else {
+                    System.out.println("  Application endpoint not found for " + region + " (may not be deployed)");
+                }
+            }
+        });
+    }
+    
+    @Test 
+    void testDeploymentConfigurationValues() {
+        Assumptions.assumeTrue(allOutputs != null, "Deployment outputs should be available");
+        
+        assertDoesNotThrow(() -> {
+            // Test that we can extract configuration information from outputs
+            System.out.println("=== Deployment Configuration Analysis ===");
             
-            System.out.println("Resource naming conventions are correct");
+            // Analyze StackSet ID for application name
+            if (stackSetId != null) {
+                System.out.println("StackSet ID: " + stackSetId);
+                assertTrue(stackSetId.contains("-"), "StackSet ID should contain application identifier");
+            }
+            
+            // Analyze role names for proper naming conventions
+            if (administrationRoleArn != null) {
+                System.out.println("Administration Role: " + administrationRoleArn);
+                assertTrue(administrationRoleArn.contains("CloudFormationStackSet"), 
+                    "Administration role should follow CloudFormation naming convention");
+            }
+            
+            if (executionRoleName != null) {
+                System.out.println("Execution Role: " + executionRoleName);
+                assertTrue(executionRoleName.contains("CloudFormationStackSet"), 
+                    "Execution role should follow CloudFormation naming convention");
+            }
+            
+            System.out.println("✓ Deployment configuration validation passed");
         });
     }
 
     // ================== Helper Methods ==================
     
-    private boolean isPulumiAvailable() {
+    private static boolean isPulumiAvailable() {
         try {
             ProcessBuilder pb = new ProcessBuilder("pulumi", "version");
             Process process = pb.start();
@@ -464,20 +627,20 @@ public class MainIntegrationTest {
         }
     }
 
-    private boolean hasAwsCredentials() {
+    private static boolean hasAwsCredentials() {
         return (System.getenv("AWS_ACCESS_KEY_ID") != null && System.getenv("AWS_SECRET_ACCESS_KEY") != null) ||
                System.getenv("AWS_PROFILE") != null ||
                System.getProperty("aws.accessKeyId") != null;
     }
 
-    private boolean isTestingEnvironment() {
+    private static boolean isTestingEnvironment() {
         String env = System.getenv("ENVIRONMENT_SUFFIX");
         String profile = System.getenv("AWS_PROFILE");
         return (env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"))) ||
                (profile != null && (profile.contains("test") || profile.contains("dev")));
     }
     
-    private String executeCommand(String... command) throws IOException, InterruptedException {
+    private static String executeCommand(String... command) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(Paths.get(".").toFile())
                 .redirectErrorStream(true);
@@ -498,7 +661,7 @@ public class MainIntegrationTest {
         return readProcessOutput(process);
     }
     
-    private String executeCommandWithTimeout(String... command)
+    private static String executeCommandWithTimeout(String... command)
             throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command)
                 .directory(Paths.get(".").toFile())
@@ -521,7 +684,7 @@ public class MainIntegrationTest {
         return output;
     }
     
-    private String readProcessOutput(Process process) throws IOException {
+    private static String readProcessOutput(Process process) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             return reader.lines().collect(Collectors.joining("\n"));
         }

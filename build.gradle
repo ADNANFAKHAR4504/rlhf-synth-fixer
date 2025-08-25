@@ -109,6 +109,9 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:cloudwatch'
     integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
     integrationTestImplementation 'software.amazon.awssdk:sts'
+    
+    // JSON parsing for Pulumi outputs
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
 }
 
 // AWS SDK dependencies for live resource testing (integration tests only)
