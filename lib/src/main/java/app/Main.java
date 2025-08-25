@@ -45,8 +45,14 @@ import software.constructs.Construct;
  * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
  */
 class RegionalStack extends Stack {
-    public RegionalStack(final Construct scope, final String id, final StackProps props, String environmentSuffix) {
+    public RegionalStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
+
+        // Resolve environment suffix from context or default
+        String environmentSuffix = (String) this.getNode().tryGetContext("environmentSuffix");
+        if (environmentSuffix == null) {
+            environmentSuffix = "dev";
+        }
 
         // VPC
         Vpc vpc = Vpc.Builder.create(this, "NovaVpc-" + environmentSuffix)
@@ -64,7 +70,7 @@ class RegionalStack extends Stack {
                                 .build()))
                 .build();
 
-        // S3 Log Bucket (simplified to avoid LifecycleTransition issue)
+        // S3 Log Bucket (simplified lifecycle)
         Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
                 .versioned(true)
                 .lifecycleRules(List.of(
@@ -200,8 +206,7 @@ public final class Main {
                                 .account(account)
                                 .region("us-east-1")
                                 .build())
-                        .build(),
-                environmentSuffix);
+                        .build());
 
         new RegionalStack(app, "NovaStack-" + environmentSuffix + "-usw2",
                 StackProps.builder()
@@ -209,8 +214,7 @@ public final class Main {
                                 .account(account)
                                 .region("us-west-2")
                                 .build())
-                        .build(),
-                environmentSuffix);
+                        .build());
 
         app.synth();
     }
