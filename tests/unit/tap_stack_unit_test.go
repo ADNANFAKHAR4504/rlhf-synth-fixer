@@ -282,7 +282,7 @@ func TestEnvironmentVariables(t *testing.T) {
 func TestStackWithEmptyName(t *testing.T) {
 	// Test that empty names cause a panic (CDKTF requirement)
 	app := cdktf.NewApp(nil)
-	
+
 	// This should panic because CDKTF doesn't allow empty IDs
 	assert.Panics(t, func() {
 		NewTapStack(app, "")
@@ -586,18 +586,19 @@ func TestCodeStructure(t *testing.T) {
 		t.Error("Expected main function")
 	}
 }
+
 // Test error handling and edge cases
 func TestErrorHandling(t *testing.T) {
 	t.Run("InvalidStackName", func(t *testing.T) {
 		app := cdktf.NewApp(nil)
-		
+
 		// Test with special characters
 		specialNames := []string{
 			"test-stack-123",
 			"TestStack_456",
 			"stack.test",
 		}
-		
+
 		for _, name := range specialNames {
 			assert.NotPanics(t, func() {
 				NewTapStack(app, name)
@@ -651,7 +652,7 @@ func TestPerformance(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			app := cdktf.NewApp(nil)
 			stackName := fmt.Sprintf("perf-test-%d", i)
-			
+
 			assert.NotPanics(t, func() {
 				stack := NewTapStack(app, stackName)
 				assert.NotNil(t, stack)
@@ -663,7 +664,7 @@ func TestPerformance(t *testing.T) {
 		app := cdktf.NewApp(nil)
 		// Test with very long stack name
 		longName := strings.Repeat("a", 100)
-		
+
 		assert.NotPanics(t, func() {
 			NewTapStack(app, longName)
 		}, "Should handle long stack names")
@@ -714,12 +715,12 @@ func TestCodeQuality(t *testing.T) {
 	t.Run("SecurityBestPractices", func(t *testing.T) {
 		// Check for security best practices
 		securityPatterns := []string{
-			"Encrypt: jsii.Bool(true)",           // S3 backend encryption
-			"ServerSideEncryption",               // DynamoDB encryption
-			"PointInTimeRecovery",               // DynamoDB backup
-			"BlockPublicAcls",                   // S3 public access block
-			"DenyInsecureConnections",           // HTTPS enforcement
-			"aws:SecureTransport",               // Secure transport condition
+			"Encrypt: jsii.Bool(true)", // S3 backend encryption
+			"ServerSideEncryption",     // DynamoDB encryption
+			"PointInTimeRecovery",      // DynamoDB backup
+			"BlockPublicAcls",          // S3 public access block
+			"DenyInsecureConnections",  // HTTPS enforcement
+			"aws:SecureTransport",      // Secure transport condition
 		}
 
 		for _, pattern := range securityPatterns {
@@ -733,7 +734,7 @@ func TestCodeQuality(t *testing.T) {
 		// Check that all resources use consistent naming with environment suffix
 		resourceTypes := []string{
 			"SecureAppRole",
-			"SecureAppBucket", 
+			"SecureAppBucket",
 			"SecureAppTable",
 			"SecureAppPolicy",
 			"SecureAppAccessAnalyzer",
@@ -811,10 +812,10 @@ func TestCDKTFIntegration(t *testing.T) {
 	t.Run("AppIntegration", func(t *testing.T) {
 		app := cdktf.NewApp(nil)
 		stackName := "app-integration-test"
-		
+
 		// Create stack
 		stack := NewTapStack(app, stackName)
-		
+
 		// Verify stack is part of app
 		assert.NotNil(t, stack.Node().Scope(), "Stack should have a scope (app)")
 		assert.Equal(t, stackName, *stack.Node().Id(), "Stack ID should match")
@@ -842,7 +843,7 @@ func BenchmarkStackCreation(b *testing.B) {
 func BenchmarkStackSynthesis(b *testing.B) {
 	app := cdktf.NewApp(nil)
 	NewTapStack(app, "benchmark-synth-test")
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		app.Synth()

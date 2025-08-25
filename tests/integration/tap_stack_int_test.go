@@ -272,8 +272,8 @@ func TestDeployedInfrastructure(t *testing.T) {
 		}
 	})
 
-
 }
+
 // Test resource tagging compliance
 func TestResourceTagging(t *testing.T) {
 	if testing.Short() {
