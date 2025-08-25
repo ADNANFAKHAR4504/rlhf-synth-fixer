@@ -1,3 +1,6 @@
+## Updated main.tf
+
+```hcl
 # Data sources for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
@@ -850,3 +853,5 @@ resource "aws_ebs_volume" "encrypted_volume" {
     Project = "SecurityConfiguration"
   }
 }
+
+```

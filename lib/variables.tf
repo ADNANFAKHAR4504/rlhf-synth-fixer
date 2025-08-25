@@ -21,3 +21,9 @@ variable "project_name" {
   type        = string
   default     = "SecurityConfiguration"
 }
+
+variable "enable_guardduty" {
+  description = "Enable GuardDuty detector (set to false if already exists)"
+  type        = bool
+  default     = false
+}
