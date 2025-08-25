@@ -15,7 +15,7 @@ Allows inbound HTTP traffic (port 80) ONLY from the specific CIDR block 203.0.11
 
 Explicitly blocks ALL outbound connections by removing the default allow-all rule.
 
-Use proper CDK resource naming and tagging conventions with a 'corp' prefix for all resources.
+Use proper CDK resource naming & tagging conventions with a 'corp' prefix for all resources.
 
 Include necessary metadata and descriptions for all resources to document their security purposes.
 
