@@ -8,7 +8,7 @@ Architecture (must-have) Amazon API Gateway (HTTP API, API Gateway v2) exposes a
 
 AWS Lambda (Python 3.12) is invoked by API Gateway.
 
-Amazon S3 bucket stores the Lambda’s processed output.
+Amazon S3 bucket stores the Lambdas processed output.
 
 Functional Flow Client calls API Gateway endpoint.
 
@@ -18,7 +18,7 @@ Lambda reads request payload, processes it, and writes an object to the S3 bucke
 
 The response from Lambda is returned to the client via API Gateway.
 
-Region & Naming Region: US East (N. Virginia) — us-east-1.
+Region & Naming Region: US East (N. Virginia) us-east-1.
 
 Naming Convention: prod-- for resource Name tags and logical names where appropriate. Example: prod-lambda-processor, prod-s3-app-output, prod-apigw-http.
 
@@ -108,7 +108,7 @@ Implements least-privilege IAM for all roles/policies.
 
 Entire infrastructure defined in CloudFormation YAML.
 
-Expected Output Only a valid CloudFormation YAML template inside a single fenced code block (yaml … ).
+Expected Output Only a valid CloudFormation YAML template inside a single fenced code block (yaml ).
 
 No prose, no commentary outside the code block.
 

@@ -2,10 +2,10 @@ Prompt: Secure Multi-Tier Cloud Infrastructure with AWS CloudFormation
 Objective:
 Design and implement a secure, auditable, and well-architected multi-tier cloud environment using AWS CloudFormation written in YAML. The goal is to enforce security best practices, apply least privilege access, and ensure resource compliance through AWS-native services.
 
-💡 Scope of Work:
+Scope of Work:
 You are required to build an AWS infrastructure stack that includes networking, compute, storage, IAM, monitoring, and auditing components. The architecture must span two Availability Zones and support a private application layer, with strong controls and visibility over resource activity.
 
-🔧 Key Requirements:
+Key Requirements:
 CloudFormation Template:
 
 Use YAML format.

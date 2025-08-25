@@ -2,7 +2,7 @@
 
 ## **Goal**
 
-Generate a complete, functional, and validated **CDKTF TypeScript (TS)** codebase that provisions a **robust, scalable, and secure multi-region AWS infrastructure** as described below. All provided details must remain **exactly intact** — do not modify or omit any data.
+Generate a complete, functional, and validated **CDKTF TypeScript (TS)** codebase that provisions a **robust, scalable, and secure multi-region AWS infrastructure** as described below. All provided details must remain **exactly intact** do not modify or omit any data.
 
 ---
 

@@ -1,11 +1,11 @@
 # Prompt: Generate Pulumi TypeScript (`index.ts`)
 
-You are an expert Pulumi engineer with 10+ years of experience. Your task is to generate a **Pulumi TypeScript configuration file** named `index.ts` that meets the **exact requirements** listed in the "Provided Data" section.  
-**Do not modify, remove, or reword any part of the Provided Data** — it is immutable and must be used exactly as given.
+You are an expert Pulumi engineer with 10+ years of experience. Your task is to generate a **Pulumi TypeScript configuration file** named `index.ts` that meets the **exact requirements** listed in the "Provided Data" section. 
+**Do not modify, remove, or reword any part of the Provided Data** it is immutable and must be used exactly as given.
 
 ---
 
-## PROVIDED DATA (IMMUTABLE – DO NOT ALTER)
+## PROVIDED DATA (IMMUTABLE DO NOT ALTER)
 
 ### Constraints:
 
@@ -43,16 +43,16 @@ You are tasked with setting up a cloud environment using Pulumi to support a web
 
 ### Expected Output:
 
-Create a **Pulumi TypeScript configuration file named `index.ts`** that satisfies all the above constraints and environment requirements.  
-The code must be fully deployable using `pulumi up` and must pass all validations.  
+Create a **Pulumi TypeScript configuration file named `index.ts`** that satisfies all the above constraints and environment requirements. 
+The code must be fully deployable using `pulumi up` and must pass all validations. 
 No manual modifications should be required after generation.
 
 ---
 
 ### Proposed Statement:
 
-The infrastructure is to be deployed in the AWS `us-west-2` region with strict compliance to the given constraints.  
-This involves networking setup, application hosting, database configuration, IAM security, and object storage — all built to serve a **production-ready web application** using industry best practices.
+The infrastructure is to be deployed in the AWS `us-west-2` region with strict compliance to the given constraints. 
+This involves networking setup, application hosting, database configuration, IAM security, and object storage all built to serve a **production-ready web application** using industry best practices.
 
 ---
 
@@ -61,18 +61,18 @@ This involves networking setup, application hosting, database configuration, IAM
 1. Output only the **Pulumi TypeScript configuration file** named `index.ts`.
 2. Use idiomatic **Pulumi v3+ TypeScript** syntax.
 3. Include **configuration variables** for:
-   - VPC CIDR
-   - Public/private subnet CIDRs
-   - SSH allowed IP range
-   - Project name or tags
+- VPC CIDR
+- Public/private subnet CIDRs
+- SSH allowed IP range
+- Project name or tags
 4. Implement:
-   - A **VPC** with 3 **public and private subnets** across 3 AZs in `us-west-2`
-   - **Security groups** that allow SSH **only** from a specified IP range
-   - **EC2 instances** (type `t3.micro`) in an **auto scaling group** with a **minimum of 2 instances**
-   - An **Application Load Balancer (ALB)** with listeners forwarding to EC2 instances
-   - An **RDS MySQL instance** with **KMS-encrypted storage**
-   - **S3 buckets** with **versioning enabled** and **private access by default**
-   - **IAM roles** for EC2 and RDS that enforce **least privilege access**
+- A **VPC** with 3 **public and private subnets** across 3 AZs in `us-west-2`
+- **Security groups** that allow SSH **only** from a specified IP range
+- **EC2 instances** (type `t3.micro`) in an **auto scaling group** with a **minimum of 2 instances**
+- An **Application Load Balancer (ALB)** with listeners forwarding to EC2 instances
+- An **RDS MySQL instance** with **KMS-encrypted storage**
+- **S3 buckets** with **versioning enabled** and **private access by default**
+- **IAM roles** for EC2 and RDS that enforce **least privilege access**
 5. Apply the **tag `Environment = Production`** to **every resource**.
 6. Ensure the infrastructure runs in the **`us-west-2` region**.
 7. Use `pulumi preview` and `pulumi up` for verification.
@@ -82,6 +82,6 @@ This involves networking setup, application hosting, database configuration, IAM
 
 ## FINAL TASK FOR AI
 
-Generate the complete `index.ts` Pulumi TypeScript configuration file that **exactly matches the PROVIDED DATA** and complies with all **GENERATION RULES** above.  
-Do **not include** any explanations, Markdown, or comments outside the TypeScript file.  
+Generate the complete `index.ts` Pulumi TypeScript configuration file that **exactly matches the PROVIDED DATA** and complies with all **GENERATION RULES** above. 
+Do **not include** any explanations, Markdown, or comments outside the TypeScript file. 
 Only output the Pulumi configuration content.

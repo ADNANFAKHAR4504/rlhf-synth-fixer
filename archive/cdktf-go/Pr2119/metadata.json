@@ -1,0 +1,29 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "284221",
+  "team": "1",
+  "startedAt": "2025-08-23T13:35:10.878Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Access Control",
+    "Monitoring Setup",
+    "Serverless",
+    "Security Configuration"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}

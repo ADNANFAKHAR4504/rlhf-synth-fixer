@@ -1,4 +1,4 @@
-📝 Project Description
+Project Description
 
 This project uses the AWS Cloud Development Kit (CDK) in Python to define and deploy a serverless application. The application includes:
 
@@ -12,7 +12,7 @@ This project uses the AWS Cloud Development Kit (CDK) in Python to define and de
 
     Environment variables for runtime configuration
 
-✅ Objectives
+Objectives
 
     Use AWS Lambda to handle backend logic serverlessly
 

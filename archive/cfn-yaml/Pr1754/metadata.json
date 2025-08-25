@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291595",
+  "team": "5",
+  "startedAt": "2025-08-20T10:28:57.090Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "Auto Scaling",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "IAM",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}

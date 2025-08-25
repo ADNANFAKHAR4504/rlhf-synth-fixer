@@ -53,7 +53,7 @@ Source Stage: Pull infrastructure code from CodeCommit/GitHub.
 
 Build Stage: Validate templates using CodeBuild.
 
-Deploy Stage: Deploy stacks to dev → test → prod with manual approval for prod.
+Deploy Stage: Deploy stacks to dev test prod with manual approval for prod.
 
 Environment-aware deployments: Use CloudFormation StackSets or nested stacks for cross-environment updates.
 
