@@ -770,7 +770,6 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 				DataResource: &[]*cloudtrail.CloudtrailEventSelectorDataResource{
 					{
 						Type:   jsii.String("AWS::S3::Object"),
-						// Values: &[]*string{jsii.String("arn:aws:s3:::*/*")},
 						Values: &[]*string{jsii.String(fmt.Sprintf("%s/*", *appDataBucket.Arn()))},
 					},
 				},
