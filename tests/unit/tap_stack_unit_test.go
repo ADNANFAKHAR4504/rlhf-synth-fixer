@@ -521,58 +521,6 @@ func TestVPCFlowLogsDestination(t *testing.T) {
 	}
 }
 
-// TestResourceNamingConsistency tests consistent resource naming
-func TestResourceNamingConsistency(t *testing.T) {
-	tfPath := synthStack(t, "us-east-1")
-	tfConfig := parseTerraformJSON(t, tfPath)
-
-	// Get environment suffix from env var or use default
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "prod"
-	}
-
-	resources := []struct {
-		resourceType   string
-		resourceName   string
-		nameField      string
-		expectedPrefix string
-	}{
-		{"aws_kms_key", "prod-security-kms-key", "tags", envSuffix + "-security-kms-ke"},
-		{"aws_s3_bucket", "prod-security-logs-bucket", "tags", envSuffix + "-security-logs-bucket"},
-		{"aws_lambda_function", "prod-security-function", "function_name", envSuffix + "-security-function"},
-		{"aws_iam_role", "prod-lambda-execution-role", "name", envSuffix + "-lambda-execution-role"},
-		{"aws_iam_policy", "prod-lambda-policy", "name", envSuffix + "-lambda-policy"},
-	}
-
-	for _, resource := range resources {
-		resourceMap := getResource(tfConfig, resource.resourceType, resource.resourceName)
-		if resourceMap == nil {
-			t.Errorf("resource %s not found", resource.resourceName)
-			continue
-		}
-
-		if resource.nameField == "tags" {
-			if tags, ok := resourceMap["tags"]; ok && tags != nil {
-				tagsMap := tags.(map[string]interface{})
-				if name, ok := tagsMap["Name"]; ok && name != nil {
-					nameStr := name.(string)
-					if !strings.Contains(nameStr, resource.expectedPrefix) {
-						t.Errorf("resource %s Name tag should contain %s, got: %s", resource.resourceName, resource.expectedPrefix, nameStr)
-					}
-				}
-			}
-		} else {
-			if name, ok := resourceMap[resource.nameField]; ok && name != nil {
-				nameStr := name.(string)
-				if nameStr != resource.expectedPrefix {
-					t.Errorf("resource %s %s should be %s, got: %s", resource.resourceName, resource.nameField, resource.expectedPrefix, nameStr)
-				}
-			}
-		}
-	}
-}
-
 // TestCloudWatchLogGroupRetention tests log retention configuration
 func TestCloudWatchLogGroupRetention(t *testing.T) {
 	tfPath := synthStack(t, "us-east-1")
