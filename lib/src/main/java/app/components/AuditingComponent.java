@@ -134,7 +134,7 @@ public class AuditingComponent extends ComponentResource {
                                 .build()
                 )
                 .cloudWatchLogsGroupArn(Output.format("%s:*", cloudTrailLogGroup.arn()))
-                .cloudWatchLogsRoleArn(createCloudTrailRole())
+                .cloudWatchLogsRoleArn(createCloudTrailRole(name))
                 .tags(getTags(name + "-cloudtrail", "CloudTrail", Map.of(
                         "Purpose", "SecurityAudit",
                         "Compliance", "Required"
@@ -142,8 +142,8 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).dependsOn(bucketPolicy).build());
     }
 
-    private Output<String> createCloudTrailRole() {
-        Role cloudTrailRole = new Role("cloudtrail-logs-role",
+    private Output<String> createCloudTrailRole(String name) {
+        Role cloudTrailRole = new Role("cloudtrail-logs-role-" + name,
                 RoleArgs.builder()
                         .name("CloudTrail-LogsRole")
                         .assumeRolePolicy("""
@@ -162,7 +162,7 @@ public class AuditingComponent extends ComponentResource {
                     """)
                         .build(), CustomResourceOptions.builder().parent(this).build());
 
-        Policy cloudTrailPolicy = new Policy("cloudtrail-logs-policy",
+        Policy cloudTrailPolicy = new Policy("cloudtrail-logs-policy-" + name,
                 PolicyArgs.builder()
                         .name("CloudTrail-LogsPolicy")
                         .policy(cloudTrailLogGroup.arn().applyValue(logGroupArn -> Either.ofLeft(String.format("""
