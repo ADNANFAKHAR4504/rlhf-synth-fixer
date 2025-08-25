@@ -9,6 +9,24 @@ import {
   AWSError
 } from 'aws-sdk';
 import { Output } from 'aws-sdk/clients/cloudformation';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface Template {
+  Resources: {
+    SecurityKMSKey: {
+      Properties: {
+        KeyPolicy: {
+          Statement: Array<{
+            Sid: string;
+            [key: string]: any;
+          }>;
+        };
+      };
+    };
+    [key: string]: any;
+  };
+}
 
 describe('TapStack Integration Tests', () => {
   const stackName = `tap-stack-${process.env.ENVIRONMENT_SUFFIX || 'test'}`;
@@ -25,7 +43,21 @@ describe('TapStack Integration Tests', () => {
   // Store stack outputs with proper type
   let stackOutputs: Record<string, string> = {};
 
+  // Add template loading
+  let template: Template;
+  const requiredRules = [
+    's3-bucket-public-read-prohibited',
+    's3-bucket-public-write-prohibited',
+    'incoming-ssh-disabled',
+    'cloudtrail-enabled'
+  ];
+
   beforeAll(async () => {
+    // Load template
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent) as Template;
+
     // Get stack outputs
     const { Stacks } = await cloudformation.describeStacks({
       StackName: stackName
@@ -67,6 +99,23 @@ describe('TapStack Integration Tests', () => {
         KeyId: stackOutputs.SecurityKMSKeyId
       }).promise();
       expect(KeyRotationEnabled).toBe(true);
+    });
+  });
+
+  describe('KMS Resources', () => {
+    test('should have properly configured KMS key', () => {
+      const kmsKey = template.Resources.SecurityKMSKey;
+      const statements = kmsKey.Properties.KeyPolicy.Statement;
+      
+      type Statement = {
+        Sid: string;
+        [key: string]: any;
+      };
+      
+      expect(statements.some((s: Statement) => s.Sid === 'Enable IAM User Permissions')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow CloudTrail to encrypt logs')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow Config to encrypt data')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow CloudWatch Logs to encrypt logs')).toBe(true);
     });
   });
 
@@ -167,20 +216,13 @@ describe('TapStack Integration Tests', () => {
     test('Required config rules should be active', async () => {
       const { ConfigRules } = await configService.describeConfigRules().promise();
       
-      const requiredRules = [
-        's3-bucket-public-read-prohibited',
-        's3-bucket-public-write-prohibited',
-        'incoming-ssh-disabled',
-        'cloudtrail-enabled'
-      ];
-      
       if (!ConfigRules) {
         throw new Error('No Config Rules found');
       }
       
-      const ruleNames = ConfigRules.map(rule => rule.ConfigRuleName);
+      const ruleNames = ConfigRules.map((r: AWS.ConfigService.ConfigRule) => r.ConfigRuleName);
       
-      requiredRules.forEach(ruleName => {
+      requiredRules.forEach((ruleName: string) => {
         expect(ruleNames).toContain(ruleName);
       });
       

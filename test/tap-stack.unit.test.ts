@@ -1,13 +1,55 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+interface Statement {
+  Sid: string;
+  Effect: string;
+  Principal: any;
+  Action: string | string[];
+  Resource: string;
+}
+
+interface IngressRule {
+  IpProtocol: string;
+  FromPort: number;
+  ToPort: number;
+  CidrIp: string;
+  Description: string;
+}
+
+interface Template {
+  AWSTemplateFormatVersion: string;
+  Description: string;
+  Parameters: Record<string, any>;
+  Resources: {
+    SecurityKMSKey: {
+      Type: string;
+      Properties: {
+        EnableKeyRotation: boolean;
+        KeyPolicy: {
+          Statement: Statement[];
+        };
+      };
+    };
+    WebSecurityGroup: {
+      Type: string;
+      Properties: {
+        SecurityGroupIngress: IngressRule[];
+        SecurityGroupEgress: any[];
+      };
+    };
+    [key: string]: any;
+  };
+  Outputs: Record<string, any>;
+}
+
 describe('TapStack Template', () => {
-  let template: any;
+  let template: Template;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const jsonTemplate = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(jsonTemplate);
+    template = JSON.parse(jsonTemplate) as Template;
   });
 
   describe('Template Structure', () => {
@@ -52,10 +94,10 @@ describe('TapStack Template', () => {
       
       // Test key policy statements
       const statements = kmsKey.Properties.KeyPolicy.Statement;
-      expect(statements.some(s => s.Sid === 'Enable IAM User Permissions')).toBe(true);
-      expect(statements.some(s => s.Sid === 'Allow CloudTrail to encrypt logs')).toBe(true);
-      expect(statements.some(s => s.Sid === 'Allow Config to encrypt data')).toBe(true);
-      expect(statements.some(s => s.Sid === 'Allow CloudWatch Logs to encrypt logs')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Enable IAM User Permissions')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow CloudTrail to encrypt logs')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow Config to encrypt data')).toBe(true);
+      expect(statements.some((s: Statement) => s.Sid === 'Allow CloudWatch Logs to encrypt logs')).toBe(true);
     });
 
     test('should have proper KMS alias', () => {
@@ -95,9 +137,9 @@ describe('TapStack Template', () => {
 
       // Test ingress rules
       const ingress = sg.Properties.SecurityGroupIngress;
-      expect(ingress.find(r => r.FromPort === 80)).toBeDefined();
-      expect(ingress.find(r => r.FromPort === 443)).toBeDefined();
-      expect(ingress.find(r => r.FromPort === 22)).toBeDefined();
+      expect(ingress.find((r: IngressRule) => r.FromPort === 80)).toBeDefined();
+      expect(ingress.find((r: IngressRule) => r.FromPort === 443)).toBeDefined();
+      expect(ingress.find((r: IngressRule) => r.FromPort === 22)).toBeDefined();
     });
   });
 
