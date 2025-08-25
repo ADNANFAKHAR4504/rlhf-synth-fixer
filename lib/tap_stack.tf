@@ -514,13 +514,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 180
+    interval            = 30
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 60
-    unhealthy_threshold = 5
+    timeout             = 5
+    unhealthy_threshold = 2
   }
 
         tags = merge(local.common_tags, {
@@ -618,8 +618,8 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "EC2"
-  health_check_grace_period = 1200
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
 
   min_size         = 2
   max_size         = 6
@@ -647,6 +647,7 @@ resource "aws_autoscaling_group" "main" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [desired_capacity]
   }
 }
 
