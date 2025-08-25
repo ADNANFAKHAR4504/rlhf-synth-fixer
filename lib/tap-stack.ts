@@ -131,7 +131,10 @@ export class TapStack extends cdk.Stack {
           's3:PutBucketAcl',
           's3:PutBucketOwnershipControls', // Critical for ALB access log ownership
         ],
-        resources: [albLogsBucket.bucketArn],
+        resources: [
+          albLogsBucket.bucketArn,
+          `${albLogsBucket.bucketArn}/AWSLogs/${this.account}/elasticloadbalancing/${this.region}/*`,
+        ],
       })
     );
 
@@ -142,12 +145,15 @@ export class TapStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
         actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
-        resources: [`${albLogsBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-acl': 'bucket-owner-full-control',
-          },
-        },
+        resources: [
+          `${albLogsBucket.bucketArn}`,
+          `${albLogsBucket.bucketArn}/*`
+        ],
+        // conditions: {
+        //   StringEquals: {
+        //     's3:x-amz-acl': 'bucket-owner-full-control',
+        //   },
+        // },
       })
     );
 
@@ -161,13 +167,34 @@ export class TapStack extends cdk.Stack {
         ],
         actions: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
         resources: [albLogsBucket.bucketArn, `${albLogsBucket.bucketArn}/*`],
-        conditions: {
-          StringEquals: {
-            's3:x-amz-acl': 'bucket-owner-full-control',
-          },
-        },
+        // conditions: {
+        //   StringEquals: {
+        //     's3:x-amz-acl': 'bucket-owner-full-control',
+        //   },
+        // },
       })
     );
+
+    // 🔐 KMS key policy: allow ELB log account to encrypt
+    kmsKey.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowELBLogDeliveryUseOfKey',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.AccountPrincipal(elbServiceAccount)],
+      actions: [
+        'kms:Encrypt',
+        'kms:GenerateDataKey',
+        'kms:GenerateDataKeyWithoutPlaintext',
+      ],
+      resources: ['*'],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': `s3.${this.region}.amazonaws.com`,
+        },
+        StringLike: {
+          'kms:EncryptionContext:aws:s3:arn': `${albLogsBucket.bucketArn}/*`,
+        },
+      },
+    }));
 
     // 🛡️ Security Groups with least privilege
     const albSecurityGroup = new ec2.SecurityGroup(
