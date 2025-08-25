@@ -18,15 +18,14 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-vpc"
-  }
+  })
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.project_name}-igw" }
+  tags   = merge(local.tags, { Name = "${var.project_name}-igw" })
 }
 
 resource "aws_subnet" "public" {
@@ -35,10 +34,10 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}"
     Type = "public"
-  }
+  })
 }
 
 resource "aws_subnet" "private" {
@@ -46,10 +45,10 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
     Type = "private"
-  }
+  })
 }
 
 # --- Route Tables ---
@@ -59,13 +58,13 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  tags = { Name = "${var.project_name}-public-rt" }
+  tags = merge(local.tags, { Name = "${var.project_name}-public-rt" })
 }
 
 resource "aws_route_table" "private" {
   count  = length(aws_subnet.private)
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.project_name}-private-rt-${count.index + 1}" }
+  tags   = merge(local.tags, { Name = "${var.project_name}-private-rt-${count.index + 1}" })
 }
 
 resource "aws_route_table_association" "public" {
@@ -102,7 +101,7 @@ resource "aws_security_group" "web" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "${var.project_name}-web-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-web-sg" })
 }
 
 resource "aws_security_group" "app" {
@@ -120,7 +119,7 @@ resource "aws_security_group" "app" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "${var.project_name}-app-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-sg" })
 }
 
 resource "aws_security_group" "database" {
@@ -132,7 +131,7 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
-  tags = { Name = "${var.project_name}-db-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-db-sg" })
 }
 
 # --- Load Balancer ---
@@ -143,7 +142,7 @@ resource "aws_lb" "main" {
   security_groups            = [aws_security_group.web.id]
   subnets                    = aws_subnet.public[*].id
   enable_deletion_protection = var.enable_deletion_protection
-  tags                       = { Name = "${var.project_name}-alb" }
+  tags                       = merge(local.tags, { Name = "${var.project_name}-alb" })
 }
 
 resource "aws_lb_target_group" "app" {
@@ -160,7 +159,7 @@ resource "aws_lb_target_group" "app" {
     path                = "/health"
     matcher             = "200"
   }
-  tags = { Name = "${var.project_name}-app-tg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-tg" })
 }
 
 resource "aws_lb_listener" "app" {
@@ -183,9 +182,9 @@ resource "aws_launch_template" "app" {
   user_data              = base64encode(var.user_data_script)
   tag_specifications {
     resource_type = "instance"
-    tags          = { Name = "${var.project_name}-app-instance" }
+    tags          = merge(local.tags, { Name = "${var.project_name}-app-instance" })
   }
-  tags = { Name = "${var.project_name}-app-lt" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-lt" })
 }
 
 resource "aws_autoscaling_group" "app" {
@@ -212,7 +211,7 @@ resource "aws_autoscaling_group" "app" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
-  tags       = { Name = "${var.project_name}-db-subnet-group" }
+  tags       = merge(local.tags, { Name = "${var.project_name}-db-subnet-group" })
 }
 
 resource "aws_db_instance" "main" {
@@ -234,7 +233,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = var.db_maintenance_window
   skip_final_snapshot     = var.skip_final_snapshot
   deletion_protection     = var.enable_deletion_protection
-  tags                    = { Name = "${var.project_name}-database" }
+  tags                    = merge(local.tags, { Name = "${var.project_name}-database" })
 }
 
 # --- S3 Bucket ---
@@ -245,6 +244,16 @@ resource "aws_s3_bucket" "main" {
   tags = merge(local.tags, {
     Name = "${var.project_name}-bucket"
   })
+}
+
+output "bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.main.bucket
+}
+
+output "bucket_tags" {
+  description = "Tags applied to the S3 bucket"
+  value       = aws_s3_bucket.main.tags
 }
 
 ########################################
