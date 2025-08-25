@@ -34,9 +34,9 @@
     "AWS::S3::BucketLogging",
     "AWS::S3::BucketEncryption",
     "AWS::S3::BucketPublicAccessBlock",
+    "AWS::S3::BucketLifecycleConfiguration",
+    "AWS::S3::BucketServerSideEncryptionConfiguration",
     "AWS::KMS::Key",
-    "AWS::KMS::Alias",
-    "AWS::CloudTrail::Trail",
-    "AWS::Logs::LogGroup"
+    "AWS::KMS::Alias"
   ]
 }
