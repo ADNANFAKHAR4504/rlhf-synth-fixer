@@ -44,11 +44,16 @@ resource "aws_s3_bucket_versioning" "logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
+
   rule {
-    apply_server_side_encryption_by_default { sse_algorithm = "aws:kms" }
     bucket_key_enabled = true
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.logs.arn
+    }
   }
 }
+
 
 resource "aws_s3_bucket_logging" "logs" {
   bucket        = aws_s3_bucket.logs.id
@@ -331,31 +336,29 @@ resource "aws_iam_role" "config" {
   tags               = local.tags
 }
 
-# REMOVE this (or comment it out)
-# resource "aws_iam_role_policy_attachment" "config" {
-#   role       = aws_iam_role.config.name
-#   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
-# }
-
-# ADD this instead
 resource "aws_iam_role_policy" "config_inline" {
-  count  = var.enable_aws_config ? 1 : 0
-  name   = "${local.name_prefix}-config-inline"
-  role   = aws_iam_role.config[0].id
+  count = var.enable_aws_config ? 1 : 0
+  name  = "${local.name_prefix}-config-inline"
+  role  = aws_iam_role.config[0].id
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # AWS Config service permissions (per AWS managed policy scope)
+      # Minimal AWS Config permissions to set up and run the recorder
       {
-        Effect   = "Allow",
-        Action   = [
-          "config:*",
-          "iam:PassRole"
+        Effect = "Allow",
+        Action = [
+          "config:PutConfigurationRecorder",
+          "config:PutDeliveryChannel",
+          "config:StartConfigurationRecorder",
+          "config:DescribeConfigurationRecorders",
+          "config:DescribeDeliveryChannels",
+          "config:DescribeConfigurationRecorderStatus",
+          "config:PutRetentionConfiguration"
         ],
         Resource = "*"
       },
-      # S3 permissions for delivery channel
+      # S3 permissions for the delivery channel (bucket ACL/list and put objects)
       {
         Effect = "Allow",
         Action = [
@@ -364,6 +367,12 @@ resource "aws_iam_role_policy" "config_inline" {
           "s3:ListBucket"
         ],
         Resource = "*"
+      },
+      # Pass role back to the service
+      {
+        Effect   = "Allow",
+        Action   = "iam:PassRole",
+        Resource = aws_iam_role.config[0].arn
       }
     ]
   })
