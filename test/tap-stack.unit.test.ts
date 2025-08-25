@@ -78,12 +78,12 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
     test('KMS key should have proper policy for CloudTrail and VPC Flow Logs', () => {
       const kmsKey = template.Resources.S3EncryptionKey;
       const policy = kmsKey.Properties.KeyPolicy;
-      
+
       expect(policy.Statement).toHaveLength(3);
-      expect(policy.Statement.some((stmt: any) => 
+      expect(policy.Statement.some((stmt: any) =>
         stmt.Principal?.Service === 'cloudtrail.amazonaws.com'
       )).toBe(true);
-      expect(policy.Statement.some((stmt: any) => 
+      expect(policy.Statement.some((stmt: any) =>
         stmt.Principal?.Service === 'delivery.logs.amazonaws.com'
       )).toBe(true);
     });
@@ -94,17 +94,17 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const bucket = template.Resources.CloudTrailLogsBucket;
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({Ref: 'S3EncryptionKey'});
+      expect(encryption.ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ Ref: 'S3EncryptionKey' });
     });
 
     test('should have VPC Flow Logs bucket with encryption', () => {
       const bucket = template.Resources.VpcFlowLogsBucket;
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
     });
@@ -135,18 +135,18 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const role = template.Resources.CrossAccountRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
       const statement = trustPolicy.Statement[0];
-      expect(statement.Principal.AWS).toEqual({'Fn::Sub': 'arn:aws:iam::${TrustedAccountId}:root'});
-      expect(statement.Condition.StringEquals['sts:ExternalId']).toEqual({'Fn::Sub': 'secure-infra-${EnvironmentSuffix}'});
+      expect(statement.Principal.AWS).toEqual({ 'Fn::Sub': 'arn:aws:iam::${TrustedAccountId}:root' });
+      expect(statement.Condition.StringEquals['sts:ExternalId']).toEqual({ 'Fn::Sub': 'secure-infra-${EnvironmentSuffix}' });
     });
 
     test('should have CloudTrail service role', () => {
       const role = template.Resources.CloudTrailRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
       expect(trustPolicy.Statement[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
     });
@@ -155,7 +155,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const role = template.Resources.VPCFlowLogRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
       expect(trustPolicy.Statement[0].Principal.Service).toBe('vpc-flow-logs.amazonaws.com');
     });
@@ -173,20 +173,20 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const cloudtrail = template.Resources.SecurityCloudTrail;
       expect(cloudtrail).toBeDefined();
       expect(cloudtrail.Type).toBe('AWS::CloudTrail::Trail');
-      
+
       const properties = cloudtrail.Properties;
       expect(properties.IsLogging).toBe(true);
       expect(properties.IsMultiRegionTrail).toBe(true);
       expect(properties.EnableLogFileValidation).toBe(true);
       expect(properties.IncludeGlobalServiceEvents).toBe(true);
-      expect(properties.KMSKeyId).toEqual({Ref: 'S3EncryptionKey'});
+      expect(properties.KMSKeyId).toEqual({ Ref: 'S3EncryptionKey' });
     });
 
     test('CloudTrail should have proper bucket policy', () => {
       const bucketPolicy = template.Resources.CloudTrailBucketPolicy;
       expect(bucketPolicy).toBeDefined();
       expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-      
+
       const statements = bucketPolicy.Properties.PolicyDocument.Statement;
       expect(statements.some((stmt: any) => stmt.Sid === 'AWSCloudTrailAclCheck')).toBe(true);
       expect(statements.some((stmt: any) => stmt.Sid === 'AWSCloudTrailWrite')).toBe(true);
@@ -198,11 +198,11 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const vpc = template.Resources.SecureVPC;
       expect(vpc).toBeDefined();
       expect(vpc.Type).toBe('AWS::EC2::VPC');
-      
+
       const properties = vpc.Properties;
       expect(properties.EnableDnsHostnames).toBe(true);
       expect(properties.EnableDnsSupport).toBe(true);
-      expect(properties.CidrBlock).toEqual({Ref: 'VpcCidr'});
+      expect(properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
     });
 
     test('should have public and private subnets', () => {
@@ -222,12 +222,12 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const flowLog = template.Resources.VPCFlowLog;
       expect(flowLog).toBeDefined();
       expect(flowLog.Type).toBe('AWS::EC2::FlowLog');
-      
+
       const properties = flowLog.Properties;
       expect(properties.ResourceType).toBe('VPC');
       expect(properties.TrafficType).toBe('ALL');
       expect(properties.LogDestinationType).toBe('s3');
-      expect(properties.LogDestination).toEqual({'Fn::GetAtt': ['VpcFlowLogsBucket', 'Arn']});
+      expect(properties.LogDestination).toEqual({ 'Fn::GetAtt': ['VpcFlowLogsBucket', 'Arn'] });
     });
   });
 
@@ -253,15 +253,15 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('KMS key outputs should be correct', () => {
       const keyIdOutput = template.Outputs.S3EncryptionKeyId;
-      expect(keyIdOutput.Value).toEqual({Ref: 'S3EncryptionKey'});
-      
+      expect(keyIdOutput.Value).toEqual({ Ref: 'S3EncryptionKey' });
+
       const keyArnOutput = template.Outputs.S3EncryptionKeyArn;
-      expect(keyArnOutput.Value).toEqual({'Fn::GetAtt': ['S3EncryptionKey', 'Arn']});
+      expect(keyArnOutput.Value).toEqual({ 'Fn::GetAtt': ['S3EncryptionKey', 'Arn'] });
     });
 
     test('IAM role output should be correct', () => {
       const roleOutput = template.Outputs.CrossAccountRoleArn;
-      expect(roleOutput.Value).toEqual({'Fn::GetAtt': ['CrossAccountRole', 'Arn']});
+      expect(roleOutput.Value).toEqual({ 'Fn::GetAtt': ['CrossAccountRole', 'Arn'] });
       expect(roleOutput.Description).toBe('ARN of the cross-account IAM role');
     });
   });

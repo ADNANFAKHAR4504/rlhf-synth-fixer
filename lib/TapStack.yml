@@ -148,6 +148,33 @@ Resources:
               StringEquals:
                 "s3:x-amz-acl": "bucket-owner-full-control"
 
+  # VPC Flow Logs Bucket Policy
+  VpcFlowLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref VpcFlowLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: "AWSVPCFlowLogsAclCheck"
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt VpcFlowLogsBucket.Arn
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+          - Sid: "AWSVPCFlowLogsWrite"
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub "${VpcFlowLogsBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+                "aws:SourceAccount": !Ref AWS::AccountId
+
   # Cross-Account IAM Role
   CrossAccountRole:
     Type: AWS::IAM::Role
@@ -302,6 +329,7 @@ Resources:
   # VPC Flow Logs
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
+    DependsOn: VpcFlowLogsBucketPolicy
     Properties:
       ResourceId: !Ref SecureVPC
       ResourceType: "VPC"
