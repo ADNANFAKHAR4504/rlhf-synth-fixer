@@ -237,6 +237,16 @@ resource "aws_db_instance" "main" {
   tags                    = { Name = "${var.project_name}-database" }
 }
 
+# --- S3 Bucket ---
+resource "aws_s3_bucket" "main" {
+  bucket = "${var.project_name}-bucket-${var.environment}"
+  force_destroy = true
+
+  tags = merge(local.tags, {
+    Name = "${var.project_name}-bucket"
+  })
+}
+
 ########################################
 # 5. Variables
 ########################################
