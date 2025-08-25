@@ -66,7 +66,102 @@ This document analyzes common failure patterns, root causes, and mitigation stra
 - Implement resource naming conventions
 - Pre-validate resource configurations
 
-### 2. Test Infrastructure Failures
+### 2. IAM Cross-Account Role Failures
+
+#### 2.1 Invalid Principal in IAM Trust Policy
+
+**Symptoms:**
+
+```
+CrossAccountRole CREATE_FAILED
+Resource handler returned message: "Invalid principal in policy:
+"AWS":"arn:aws:iam::123456789012:root" (Service: Iam, Status Code: 400)
+```
+
+**Root Cause:**
+
+- Using placeholder AWS account ID `123456789012` instead of valid account
+- CloudFormation parameter `TrustedAccountId` not overridden during deployment
+- Invalid AWS account ID format or non-existent account
+
+**Impact:** HIGH
+
+- Blocks entire stack deployment due to IAM role creation failure
+- Prevents cross-account access configuration
+- Stack rollback required
+
+**Immediate Resolution:**
+
+1. **Get Current AWS Account ID:**
+
+   ```bash
+   # Get your current AWS account ID
+   CURRENT_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   echo "Current AWS Account ID: $CURRENT_ACCOUNT_ID"
+   ```
+
+2. **Deploy with Correct Account ID:**
+
+   ```bash
+   # Deploy with your actual AWS account ID
+   aws cloudformation deploy \
+     --template-file lib/TapStack.yml \
+     --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+     --parameter-overrides \
+       EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} \
+       TrustedAccountId=$CURRENT_ACCOUNT_ID \
+       VpcCidr=${VPC_CIDR:-10.0.0.0/16}
+   ```
+
+3. **Alternative: Use Current Account as Default:**
+   ```bash
+   # For self-trusting role (same account)
+   aws cloudformation deploy \
+     --template-file lib/TapStack.yml \
+     --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+     --parameter-overrides \
+       EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} \
+       TrustedAccountId=$(aws sts get-caller-identity --query Account --output text)
+   ```
+
+**Prevention Strategies:**
+
+1. **Update Template Default:**
+
+   ```yaml
+   # Option 1: Use current account as default
+   TrustedAccountId:
+     Type: String
+     Default: !Ref 'AWS::AccountId'
+     Description: 'AWS Account ID that will be trusted for cross-account access'
+   ```
+
+2. **Environment-based Configuration:**
+
+   ```bash
+   # Set environment variable for deployment
+   export TRUSTED_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   export ENVIRONMENT_SUFFIX="dev"
+
+   # Deploy with environment variables
+   ./scripts/deploy.sh
+   ```
+
+3. **Cross-Account Setup (for real cross-account access):**
+
+   ```bash
+   # For trusting a different AWS account
+   export TRUSTED_ACCOUNT_ID="111122223333"  # Replace with actual trusted account
+
+   aws cloudformation deploy \
+     --template-file lib/TapStack.yml \
+     --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+     --parameter-overrides TrustedAccountId=$TRUSTED_ACCOUNT_ID
+   ```
+
+#### 2.2 IAM Permission Escalation During Deployment
 
 #### 2.1 Integration Test Dependencies
 

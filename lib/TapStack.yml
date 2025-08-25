@@ -1,86 +1,86 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS Infrastructure - CloudFormation Template with IAM roles, encrypted S3, CloudTrail, and VPC Flow Logs'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Secure AWS Infrastructure - CloudFormation Template with IAM roles, encrypted S3, CloudTrail, and VPC Flow Logs"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'Cross-Account Access Configuration'
+          default: "Cross-Account Access Configuration"
         Parameters:
           - TrustedAccountId
       - Label:
-          default: 'Network Configuration'
+          default: "Network Configuration"
         Parameters:
           - VpcCidr
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
 
   TrustedAccountId:
     Type: String
-    Default: '123456789012'
-    Description: 'AWS Account ID that will be trusted for cross-account access'
-    AllowedPattern: '^[0-9]{12}$'
-    ConstraintDescription: 'Must be a 12-digit AWS Account ID'
+    Default: "123456789012"
+    Description: "AWS Account ID that will be trusted for cross-account access"
+    AllowedPattern: "^[0-9]{12}$"
+    ConstraintDescription: "Must be a 12-digit AWS Account ID"
 
   VpcCidr:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for the VPC'
+    Default: "10.0.0.0/16"
+    Description: "CIDR block for the VPC"
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
-    ConstraintDescription: 'Must be a valid CIDR range'
+    ConstraintDescription: "Must be a valid CIDR range"
 
 Resources:
   # KMS Key for S3 Encryption
   S3EncryptionKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS key for S3 bucket encryption - ${EnvironmentSuffix}'
+      Description: !Sub "KMS key for S3 bucket encryption - ${EnvironmentSuffix}"
       KeyPolicy:
         Statement:
-          - Sid: 'Enable IAM User Permissions'
+          - Sid: "Enable IAM User Permissions"
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: 'Allow CloudTrail to encrypt logs'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow CloudTrail to encrypt logs"
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-          - Sid: 'Allow VPC Flow Logs to encrypt logs'
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow VPC Flow Logs to encrypt logs"
             Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
             Action:
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
 
   S3EncryptionKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/secure-infrastructure-s3-${EnvironmentSuffix}'
+      AliasName: !Sub "alias/secure-infrastructure-s3-${EnvironmentSuffix}"
       TargetKeyId: !Ref S3EncryptionKey
 
   # S3 Bucket for CloudTrail Logs
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub "cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -96,7 +96,7 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: 'DeleteOldLogs'
+          - Id: "DeleteOldLogs"
             Status: Enabled
             ExpirationInDays: 90
             NoncurrentVersionExpirationInDays: 30
@@ -105,7 +105,7 @@ Resources:
   VpcFlowLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'vpc-flow-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub "vpc-flow-logs-${AWS::AccountId}-${EnvironmentSuffix}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -121,7 +121,7 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: 'DeleteOldFlowLogs'
+          - Id: "DeleteOldFlowLogs"
             Status: Enabled
             ExpirationInDays: 30
 
@@ -132,87 +132,87 @@ Resources:
       Bucket: !Ref CloudTrailLogsBucket
       PolicyDocument:
         Statement:
-          - Sid: 'AWSCloudTrailAclCheck'
+          - Sid: "AWSCloudTrailAclCheck"
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 's3:GetBucketAcl'
+            Action: "s3:GetBucketAcl"
             Resource: !GetAtt CloudTrailLogsBucket.Arn
-          - Sid: 'AWSCloudTrailWrite'
+          - Sid: "AWSCloudTrailWrite"
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailLogsBucket.Arn}/*'
+            Action: "s3:PutObject"
+            Resource: !Sub "${CloudTrailLogsBucket.Arn}/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+                "s3:x-amz-acl": "bucket-owner-full-control"
 
   # Cross-Account IAM Role
   CrossAccountRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'SecureInfrastructureCrossAccountRole-${EnvironmentSuffix}'
+      RoleName: !Sub "SecureInfrastructureCrossAccountRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:root'
-            Action: 'sts:AssumeRole'
+              AWS: !Sub "arn:aws:iam::${TrustedAccountId}:root"
+            Action: "sts:AssumeRole"
             Condition:
               StringEquals:
-                'sts:ExternalId': !Sub 'secure-infra-${EnvironmentSuffix}'
+                "sts:ExternalId": !Sub "secure-infra-${EnvironmentSuffix}"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/ReadOnlyAccess'
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
       Policies:
-        - PolicyName: 'LimitedS3Access'
+        - PolicyName: "LimitedS3Access"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:ListBucket'
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
                 Resource:
                   - !GetAtt CloudTrailLogsBucket.Arn
-                  - !Sub '${CloudTrailLogsBucket.Arn}/*'
+                  - !Sub "${CloudTrailLogsBucket.Arn}/*"
                   - !GetAtt VpcFlowLogsBucket.Arn
-                  - !Sub '${VpcFlowLogsBucket.Arn}/*'
+                  - !Sub "${VpcFlowLogsBucket.Arn}/*"
 
   # CloudTrail Service Role
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'CloudTrailRole-${EnvironmentSuffix}'
+      RoleName: !Sub "CloudTrailRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: 'CloudTrailLogsPolicy'
+        - PolicyName: "CloudTrailLogsPolicy"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:PutObject'
-                  - 's3:GetBucketAcl'
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
                 Resource:
                   - !GetAtt CloudTrailLogsBucket.Arn
-                  - !Sub '${CloudTrailLogsBucket.Arn}/*'
+                  - !Sub "${CloudTrailLogsBucket.Arn}/*"
 
   # CloudTrail
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub 'SecurityCloudTrail-${EnvironmentSuffix}'
+      TrailName: !Sub "SecurityCloudTrail-${EnvironmentSuffix}"
       S3BucketName: !Ref CloudTrailLogsBucket
-      S3KeyPrefix: 'cloudtrail-logs'
+      S3KeyPrefix: "cloudtrail-logs"
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
@@ -222,9 +222,10 @@ Resources:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
-            - Type: 'AWS::S3::Object'
+            - Type: "AWS::S3::Object"
               Values:
-                - 'arn:aws:s3:::*/*'
+                - !Sub "${CloudTrailLogsBucket}/*"
+                - !Sub "${VpcFlowLogsBucket}/*"
 
   # VPC
   SecureVPC:
@@ -235,7 +236,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'SecureVPC-${EnvironmentSuffix}'
+          Value: !Sub "SecureVPC-${EnvironmentSuffix}"
 
   # Public Subnet
   PublicSubnet:
@@ -243,11 +244,11 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'PublicSubnet-${EnvironmentSuffix}'
+          Value: !Sub "PublicSubnet-${EnvironmentSuffix}"
 
   # Private Subnet
   PrivateSubnet:
@@ -255,10 +256,10 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub 'PrivateSubnet-${EnvironmentSuffix}'
+          Value: !Sub "PrivateSubnet-${EnvironmentSuffix}"
 
   # Internet Gateway
   InternetGateway:
@@ -266,7 +267,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'IGW-${EnvironmentSuffix}'
+          Value: !Sub "IGW-${EnvironmentSuffix}"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -278,106 +279,106 @@ Resources:
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'VPCFlowLogRole-${EnvironmentSuffix}'
+      RoleName: !Sub "VPCFlowLogRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: vpc-flow-logs.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: 'flowlogsDeliveryRolePolicy'
+        - PolicyName: "flowlogsDeliveryRolePolicy"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetBucketLocation'
-                  - 's3:PutObject'
-                  - 's3:GetBucketAcl'
+                  - "s3:GetBucketLocation"
+                  - "s3:PutObject"
+                  - "s3:GetBucketAcl"
                 Resource:
                   - !GetAtt VpcFlowLogsBucket.Arn
-                  - !Sub '${VpcFlowLogsBucket.Arn}/*'
+                  - !Sub "${VpcFlowLogsBucket.Arn}/*"
 
   # VPC Flow Logs
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceId: !Ref SecureVPC
-      ResourceType: 'VPC'
+      ResourceType: "VPC"
       TrafficType: ALL
       LogDestination: !GetAtt VpcFlowLogsBucket.Arn
       LogDestinationType: s3
-      LogFormat: '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}'
+      LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}"
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'VPCFlowLog-${EnvironmentSuffix}'
+          Value: !Sub "VPCFlowLog-${EnvironmentSuffix}"
 
 Outputs:
   # KMS Key Outputs
   S3EncryptionKeyId:
-    Description: 'KMS Key ID for S3 encryption'
+    Description: "KMS Key ID for S3 encryption"
     Value: !Ref S3EncryptionKey
     Export:
-      Name: !Sub '${AWS::StackName}-S3EncryptionKeyId'
+      Name: !Sub "${AWS::StackName}-S3EncryptionKeyId"
 
   S3EncryptionKeyArn:
-    Description: 'KMS Key ARN for S3 encryption'
+    Description: "KMS Key ARN for S3 encryption"
     Value: !GetAtt S3EncryptionKey.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-S3EncryptionKeyArn'
+      Name: !Sub "${AWS::StackName}-S3EncryptionKeyArn"
 
   # S3 Bucket Outputs
   CloudTrailLogsBucketName:
-    Description: 'Name of the CloudTrail logs S3 bucket'
+    Description: "Name of the CloudTrail logs S3 bucket"
     Value: !Ref CloudTrailLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailLogsBucketName'
+      Name: !Sub "${AWS::StackName}-CloudTrailLogsBucketName"
 
   VpcFlowLogsBucketName:
-    Description: 'Name of the VPC Flow Logs S3 bucket'
+    Description: "Name of the VPC Flow Logs S3 bucket"
     Value: !Ref VpcFlowLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-VpcFlowLogsBucketName'
+      Name: !Sub "${AWS::StackName}-VpcFlowLogsBucketName"
 
   # IAM Role Outputs
   CrossAccountRoleArn:
-    Description: 'ARN of the cross-account IAM role'
+    Description: "ARN of the cross-account IAM role"
     Value: !GetAtt CrossAccountRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CrossAccountRoleArn'
+      Name: !Sub "${AWS::StackName}-CrossAccountRoleArn"
 
   # CloudTrail Outputs
   CloudTrailArn:
-    Description: 'ARN of the CloudTrail'
+    Description: "ARN of the CloudTrail"
     Value: !GetAtt SecurityCloudTrail.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+      Name: !Sub "${AWS::StackName}-CloudTrailArn"
 
   # VPC Outputs
   VPCId:
-    Description: 'ID of the secure VPC'
+    Description: "ID of the secure VPC"
     Value: !Ref SecureVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   VPCFlowLogId:
-    Description: 'ID of the VPC Flow Log'
+    Description: "ID of the VPC Flow Log"
     Value: !Ref VPCFlowLog
     Export:
-      Name: !Sub '${AWS::StackName}-VPCFlowLogId'
+      Name: !Sub "${AWS::StackName}-VPCFlowLogId"
 
   # Environment Output
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
 
   StackName:
-    Description: 'Name of this CloudFormation stack'
+    Description: "Name of this CloudFormation stack"
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub "${AWS::StackName}-StackName"
