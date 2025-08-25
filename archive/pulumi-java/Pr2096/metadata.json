@@ -30,5 +30,11 @@
     "CloudWatch",
     "Lambda",
     "CloudTrail"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "shreyaspturing",
+  "dockerS3Location": ""
 }
