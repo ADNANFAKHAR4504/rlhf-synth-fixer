@@ -9,7 +9,7 @@ plugins {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(11)
         vendor = JvmVendorSpec.ADOPTIUM
     }
 }
@@ -36,23 +36,13 @@ configurations.all {
 }
 
 dependencies {
-
-    // Fixed Pulumi core dependencies - using stable versions that work together
-
-    implementation 'com.pulumi:pulumi:0.11.0'
-    implementation 'com.pulumi:aws:6.52.0'
-
-    // Additional Pulumi core classes that might be needed
+    // AWS CDK dependencies
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
+    implementation 'software.constructs:constructs:10.4.2'
+    
+    // Additional dependencies
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.google.guava:guava:33.0.0-jre'
-
-    // AWS CDK dependencies
-    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
-    implementation 'software.constructs:constructs:10.4.2'
-
-    // AWS CDK dependencies
-    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
-    implementation 'software.constructs:constructs:10.4.2'
 
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
