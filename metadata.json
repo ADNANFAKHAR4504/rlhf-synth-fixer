@@ -1,11 +1,25 @@
 {
   "task_id": "trainr314",
   "problem_id": "MultiEnvironmentConsistencyReplication_CDK_TypeScript",
-  "subject_labels": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication",
+    "Network Infrastructure Design",
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "IaC Optimization"
+  ],
+  "subtask": "Network Infrastructure Design",
   "platform": "cdk",
   "language": "typescript",
   "difficulty": "expert",
   "category": "Multi-Environment Consistency & Replication",
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudFormation"
+  ],
   "constraints": [
     "Use AWS as the cloud provider",
     "Ensure that the VPC in both environments is created with CIDR block 10.0.0.0/16",

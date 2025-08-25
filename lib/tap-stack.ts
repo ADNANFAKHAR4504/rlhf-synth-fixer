@@ -1,26 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
-
+// This is a placeholder stack that can be used for future enhancements
+// The actual multi-region deployment is handled in bin/tap.ts
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // This stack is intentionally left empty
+    // Multi-region deployment is orchestrated directly in bin/tap.ts
+    // to ensure proper stack separation per region
   }
 }
