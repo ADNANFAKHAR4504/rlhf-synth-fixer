@@ -15,11 +15,12 @@ import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
-  certificateArn: string;
-  containerImage: string;
-  desiredCount: number;
-  minCapacity?: number;
-  maxCapacity?: number;
+  allowedCidrRanges?: string[];
+  instanceType?: ec2.InstanceType;
+  domainName?: string;
+  hostedZoneId?: string;
+  certificateArn: string; // Required for HTTPS listener
+  desiredCount?: number; // Default desired count for ECS service
 }
 
 export class TapStack extends cdk.Stack {
@@ -86,14 +87,132 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // 🪣 S3 Bucket for ALB access logs with security controls
+    // 🛡️ Security Groups with least privilege
+    const albSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `SecureAppALBSecurityGroup${environmentSuffix}`,
+      {
+        vpc,
+        securityGroupName: `SecureApp-ALB-SG-${environmentSuffix}`,
+        description: 'Security group for SecureApp ALB',
+        allowAllOutbound: false,
+      }
+    );
+
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP from anywhere'
+    );
+
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS from anywhere'
+    );
+
+    // Allow egress to ephemeral ports as needed
+    albSecurityGroup.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.allTraffic(),
+      'Allow outbound for health checks and target communication'
+    );
+
+    const ecsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `SecureAppECSSecurityGroup${environmentSuffix}`,
+      {
+        vpc,
+        securityGroupName: `SecureApp-ECS-SG-${environmentSuffix}`,
+        description: 'Security group for SecureApp ECS service',
+        allowAllOutbound: true,
+      }
+    );
+
+    ecsSecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(8080),
+      'Allow ALB to reach ECS service'
+    );
+
+    // ⚙️ ECS Cluster
+    const cluster = new ecs.Cluster(
+      this,
+      `SecureAppCluster${environmentSuffix}`,
+      {
+        vpc,
+        containerInsights: true,
+        clusterName: `SecureApp-Cluster-${environmentSuffix}`,
+      }
+    );
+
+    // 🧾 Task Execution Role with AWS managed policy
+    const executionRole = new iam.Role(
+      this,
+      `SecureAppExecutionRole${environmentSuffix}`,
+      {
+        assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+        description: 'Execution role for SecureApp ECS tasks',
+      }
+    );
+
+    executionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AmazonECSTaskExecutionRolePolicy'
+      )
+    );
+
+    // 🔐 Task Role with least privilege
+    const taskRole = new iam.Role(
+      this,
+      `SecureAppTaskRole${environmentSuffix}`,
+      {
+        assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+        description: 'Task role for SecureApp ECS tasks',
+      }
+    );
+
+    taskRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: ['*'], // Scope down to specific log group if needed
+      })
+    );
+
+    // 📦 Task Definition
+    const taskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      `SecureAppTaskDefinition${environmentSuffix}`,
+      {
+        cpu: 512,
+        memoryLimitMiB: 1024,
+        executionRole,
+        taskRole,
+      }
+    );
+
+    // 📦 Container Definition
+    const container = taskDefinition.addContainer(
+      `SecureAppContainer${environmentSuffix}`,
+      {
+        image: ecs.ContainerImage.fromRegistry(
+          'public.ecr.aws/docker/library/nginx:latest'
+        ),
+        logging: ecs.LogDrivers.awsLogs({
+          logGroup: appLogGroup,
+          streamPrefix: 'SecureApp',
+        }),
+        portMappings: [{ containerPort: 8080 }],
+      }
+    );
+
+    // 🪣 S3 Bucket for ALB access logs with security controls (SSE-S3)
     const albLogsBucket = new s3.Bucket(
       this,
       `SecureAppALBLogsBucket${environmentSuffix}`,
       {
         bucketName: `secureapp-alb-logs-${environmentSuffix}-${this.account}-${this.region}`,
-        encryption: s3.BucketEncryption.KMS,
-        encryptionKey: kmsKey,
+        encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
         objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, // Critical for ALB access logs
@@ -118,304 +237,29 @@ export class TapStack extends cdk.Stack {
     // ELB service principal for ALB access logs (region-specific)
     const elbServiceAccount = this.getELBServiceAccount();
 
-    // Grant ELB service account comprehensive bucket access for ALB logs
+    // Grant ELB delivery account permission to write access logs with the required ACL
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AllowELBServiceAccountBucketAccess',
+        sid: 'AWSALBLogDeliveryWrite',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: [
-          's3:GetBucketAcl',
-          's3:GetBucketLocation',
-          's3:ListBucket',
-          's3:PutBucketAcl',
-          's3:PutBucketOwnershipControls', // Critical for ALB access log ownership
-        ],
-        resources: [
-          albLogsBucket.bucketArn,
-          `${albLogsBucket.bucketArn}/AWSLogs/${this.account}/elasticloadbalancing/${this.region}/*`,
-        ],
+        actions: ['s3:PutObject'],
+        resources: [`${albLogsBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
+        },
       })
     );
 
-    // Grant ELB service account comprehensive object access for ALB logs
+    // Allow ELB delivery account to read bucket ACL and location
     albLogsBucket.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AllowELBServiceAccountLogDelivery',
+        sid: 'AWSALBLogDeliveryBucketInfo',
         effect: iam.Effect.ALLOW,
         principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject'],
-        resources: [
-          `${albLogsBucket.bucketArn}`,
-          `${albLogsBucket.bucketArn}/*`,
-        ],
-        // conditions: {
-        //   StringEquals: {
-        //     's3:x-amz-acl': 'bucket-owner-full-control',
-        //   },
-        // },
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
+        resources: [albLogsBucket.bucketArn],
       })
-    );
-
-    // Grant ELB service principal additional permissions for ALB access logs
-    albLogsBucket.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowELBServicePrincipalAccess',
-        effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal('elasticloadbalancing.amazonaws.com'),
-        ],
-        actions: ['s3:PutObject', 's3:GetBucketAcl', 's3:GetBucketLocation'],
-        resources: [albLogsBucket.bucketArn, `${albLogsBucket.bucketArn}/*`],
-        // conditions: {
-        //   StringEquals: {
-        //     's3:x-amz-acl': 'bucket-owner-full-control',
-        //   },
-        // },
-      })
-    );
-
-    // 🔐 KMS key policy: allow ELB log account to encrypt
-    kmsKey.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowELBLogDeliveryUseOfKey',
-        effect: iam.Effect.ALLOW,
-        principals: [new iam.AccountPrincipal(elbServiceAccount)],
-        actions: [
-          'kms:Encrypt',
-          'kms:GenerateDataKey',
-          'kms:GenerateDataKeyWithoutPlaintext',
-        ],
-        resources: ['*'],
-        conditions: {
-          StringEquals: {
-            'kms:ViaService': `s3.${this.region}.amazonaws.com`,
-          },
-          StringLike: {
-            'kms:EncryptionContext:aws:s3:arn': `${albLogsBucket.bucketArn}/*`,
-          },
-        },
-      })
-    );
-
-    // 🛡️ Security Groups with least privilege
-    const albSecurityGroup = new ec2.SecurityGroup(
-      this,
-      `SecureAppALBSecurityGroup${environmentSuffix}`,
-      {
-        vpc,
-        securityGroupName: `SecureApp-ALB-SG-${environmentSuffix}`,
-        description: 'Security group for SecureApp ALB',
-        allowAllOutbound: false,
-      }
-    );
-
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS traffic from internet'
-    );
-
-    // Redirect HTTP to HTTPS
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'HTTP traffic for redirect to HTTPS'
-    );
-
-    const ecsSecurityGroup = new ec2.SecurityGroup(
-      this,
-      `SecureAppECSSecurityGroup${environmentSuffix}`,
-      {
-        vpc,
-        securityGroupName: `SecureApp-ECS-SG-${environmentSuffix}`,
-        description: 'Security group for SecureApp ECS tasks',
-        allowAllOutbound: false,
-      }
-    );
-
-    ecsSecurityGroup.addIngressRule(
-      albSecurityGroup,
-      ec2.Port.tcp(8080), // Assuming app runs on port 8080
-      'Traffic from ALB'
-    );
-
-    // Allow outbound HTTPS for pulling images and API calls
-    ecsSecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS outbound'
-    );
-
-    // 🏗️ ECS Cluster with container insights
-    const cluster = new ecs.Cluster(
-      this,
-      `SecureAppCluster${environmentSuffix}`,
-      {
-        clusterName: `SecureApp-Cluster-${environmentSuffix}`,
-        vpc,
-        containerInsights: true,
-      }
-    );
-
-    // 📋 ECS Task Definition with least privilege IAM
-    const taskRole = new iam.Role(
-      this,
-      `SecureAppTaskRole${environmentSuffix}`,
-      {
-        roleName: `SecureApp-TaskRole-${environmentSuffix}`,
-        assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-        description: 'IAM role for SecureApp ECS tasks',
-      }
-    );
-
-    // Grant minimal permissions for application logging
-    taskRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-        resources: [appLogGroup.logGroupArn],
-      })
-    );
-
-    const executionRole = new iam.Role(
-      this,
-      `SecureAppExecutionRole${environmentSuffix}`,
-      {
-        roleName: `SecureApp-ExecutionRole-${environmentSuffix}`,
-        assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/AmazonECSTaskExecutionRolePolicy'
-          ),
-        ],
-      }
-    );
-
-    // Grant execution role access to KMS for log encryption
-    kmsKey.grantDecrypt(executionRole);
-
-    // Grant CloudWatch Logs service access to the KMS key for VPC Flow Logs
-    kmsKey.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowCloudWatchLogsAccess',
-        effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
-        ],
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:DescribeKey',
-        ],
-        resources: ['*'],
-        conditions: {
-          ArnEquals: {
-            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/vpc/SecureApp-flowlogs-${environmentSuffix}`,
-          },
-        },
-      })
-    );
-
-    // Grant CloudWatch Logs service access to the KMS key for ECS Application Logs
-    kmsKey.addToResourcePolicy(
-      new iam.PolicyStatement({
-        sid: 'AllowCloudWatchLogsAccessForECS',
-        effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
-        ],
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:DescribeKey',
-        ],
-        resources: ['*'],
-        conditions: {
-          ArnEquals: {
-            'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ecs/SecureApp-application-${environmentSuffix}`,
-          },
-        },
-      })
-    );
-
-    const taskDefinition = new ecs.FargateTaskDefinition(
-      this,
-      `SecureAppTaskDefinition${environmentSuffix}`,
-      {
-        family: `SecureApp-TaskDef-${environmentSuffix}`,
-        cpu: 512,
-        memoryLimitMiB: 1024,
-        taskRole,
-        executionRole,
-      }
-    );
-
-    taskDefinition.addContainer(`SecureAppContainer${environmentSuffix}`, {
-      containerName: `SecureApp-Container-${environmentSuffix}`,
-      image: ecs.ContainerImage.fromRegistry(props.containerImage),
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'SecureApp',
-        logGroup: appLogGroup,
-      }),
-      portMappings: [
-        {
-          containerPort: 8080,
-          protocol: ecs.Protocol.TCP,
-        },
-      ],
-      healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'curl -f http://localhost:8080/health || exit 1',
-        ],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
-      },
-    });
-
-    // 🚀 ECS Service with auto-scaling
-    const service = new ecs.FargateService(
-      this,
-      `SecureAppService${environmentSuffix}`,
-      {
-        serviceName: `SecureApp-Service-${environmentSuffix}`,
-        cluster,
-        taskDefinition,
-        desiredCount: props.desiredCount,
-        minHealthyPercent: 50,
-        maxHealthyPercent: 200,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        securityGroups: [ecsSecurityGroup],
-        platformVersion: ecs.FargatePlatformVersion.LATEST,
-      }
-    );
-
-    // Auto-scaling configuration
-    const scaling = service.autoScaleTaskCount({
-      minCapacity: props.minCapacity || 2,
-      maxCapacity: props.maxCapacity || 10,
-    });
-
-    scaling.scaleOnCpuUtilization(`SecureAppCPUScaling${environmentSuffix}`, {
-      targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.minutes(5),
-      scaleOutCooldown: cdk.Duration.minutes(2),
-    });
-
-    // 🔒 Import existing ACM certificate
-    const certificate = certificatemanager.Certificate.fromCertificateArn(
-      this,
-      `SecureAppCertificate${environmentSuffix}`,
-      props.certificateArn
     );
 
     // ⚖️ Application Load Balancer
@@ -434,13 +278,20 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Enable access logging
+    // Enable access logging (prefix must NOT contain "AWSLogs")
     alb.setAttribute('access_logs.s3.enabled', 'true');
     alb.setAttribute('access_logs.s3.bucket', albLogsBucket.bucketName);
     alb.setAttribute('access_logs.s3.prefix', 'alb-access-logs');
 
     // Disable deletion protection for QA compliance
     alb.setAttribute('deletion_protection.enabled', 'false');
+
+    // 🔒 Import existing ACM certificate
+    const certificate = certificatemanager.Certificate.fromCertificateArn(
+      this,
+      `SecureAppCertificate${environmentSuffix}`,
+      props.certificateArn
+    );
 
     // HTTPS Listener with TLS 1.2+
     const httpsListener = alb.addListener(
@@ -449,26 +300,9 @@ export class TapStack extends cdk.Stack {
         port: 443,
         protocol: elbv2.ApplicationProtocol.HTTPS,
         certificates: [certificate],
-        sslPolicy: elbv2.SslPolicy.TLS12_EXT, // TLS 1.2+
+        sslPolicy: elbv2.SslPolicy.TLS12_EXT,
       }
     );
-
-    httpsListener.addTargets(`SecureAppTargets${environmentSuffix}`, {
-      targetGroupName: `SecureApp-TG-${environmentSuffix}`,
-      port: 8080,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [service],
-      healthCheck: {
-        enabled: true,
-        path: '/health',
-        protocol: elbv2.Protocol.HTTP,
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-        timeout: cdk.Duration.seconds(5),
-        interval: cdk.Duration.seconds(30),
-      },
-      deregistrationDelay: cdk.Duration.seconds(30),
-    });
 
     // HTTP Listener for redirect to HTTPS
     alb.addListener(`SecureAppHTTPListener${environmentSuffix}`, {
@@ -486,10 +320,10 @@ export class TapStack extends cdk.Stack {
       this,
       `SecureAppWebACL${environmentSuffix}`,
       {
-        name: `SecureApp-WebACL-${environmentSuffix}`,
-        scope: 'REGIONAL',
         defaultAction: { allow: {} },
-        description: 'WAF for SecureApp ALB',
+        scope: 'REGIONAL',
+        name: `SecureApp-WebACL-${environmentSuffix}`,
+        description: 'WAF Web ACL for SecureApp',
         rules: [
           {
             name: 'AWSManagedRulesCommonRuleSet',
@@ -542,7 +376,50 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // 📤 Outputs
+    // 🛠️ Auto Scaling for ECS Service (example target tracking)
+    const service = new ecs.FargateService(
+      this,
+      `SecureAppService${environmentSuffix}`,
+      {
+        cluster,
+        taskDefinition,
+        desiredCount: props.desiredCount ?? 1,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        securityGroups: [ecsSecurityGroup],
+        minHealthyPercent: 50,
+        maxHealthyPercent: 200,
+        circuitBreaker: { rollback: true },
+      }
+    );
+
+    // Attach ECS Fargate service to ALB via the HTTPS listener.
+    // Target type is IP for Fargate; container listens on 8080.
+    service.registerLoadBalancerTargets({
+      containerName: container.containerName,
+      containerPort: 8080,
+      newTargetGroupId: `SecureAppTG${environmentSuffix}`,
+      listener: ecs.ListenerConfig.applicationListener(httpsListener, {
+        protocol: elbv2.ApplicationProtocol.HTTP, // ALB → task targets use HTTP at the target group
+        healthCheck: {
+          path: '/',
+          healthyHttpCodes: '200-399',
+          interval: cdk.Duration.seconds(30),
+        },
+      }),
+    });
+
+    const scaling = service.autoScaleTaskCount({
+      minCapacity: 1,
+      maxCapacity: 4,
+    });
+
+    scaling.scaleOnCpuUtilization(`SecureAppCPUScaling${environmentSuffix}`, {
+      targetUtilizationPercent: 60,
+      scaleInCooldown: cdk.Duration.minutes(3),
+      scaleOutCooldown: cdk.Duration.minutes(2),
+    });
+
+    // 📤 CloudFormation Outputs
     new cdk.CfnOutput(this, `SecureAppALBDNS${environmentSuffix}`, {
       value: alb.loadBalancerDnsName,
       description: `ALB DNS name for SecureApp - ${environmentSuffix}`,
