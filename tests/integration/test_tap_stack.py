@@ -35,9 +35,19 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment with deployed resources"""
-        self.s3_bucket_name = flat_outputs.get('S3BucketName')
-        self.lambda_function_arn = flat_outputs.get('LambdaFunctionArn')
-        self.secret_arn = flat_outputs.get('SecretArn')
+        # Find output keys dynamically (they may have environment suffix)
+        self.s3_bucket_name = None
+        self.lambda_function_arn = None
+        self.secret_arn = None
+        
+        # Look for keys that start with the expected names
+        for key, value in flat_outputs.items():
+            if key.startswith('S3BucketName'):
+                self.s3_bucket_name = value
+            elif key.startswith('LambdaFunctionArn'):
+                self.lambda_function_arn = value
+            elif key.startswith('SecretArn'):
+                self.secret_arn = value
     
         # Extract function name from ARN
         if self.lambda_function_arn:
