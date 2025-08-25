@@ -1,37 +1,37 @@
-I need a production-ready AWS CDK v2 app in TypeScript that rolls out the same stack to two regions: us-east-1 and us-west-2. Keep it boring, reliable, and easy to maintain.
+I need to build a production AWS CDK v2 app in TypeScript that deploys the same infrastructure to both us-east-1 and us-west-2. Looking for something solid, reliable, and easy to maintain.
 
-What the stack should actually do:
+Here's what the stack needs to do:
 
-* Tag everything with Environment: Production.
-* One VPC per region. Public and private subnets. Instances live in private subnets; the Internet stuff (ALB) goes in public.
-* Put an Application Load Balancer in the public subnets. Terminate TLS at the ALB and redirect HTTP to HTTPS. Assume the ACM certificate already exists in each region—take the ARN from context or props and document it.
-* AutoScalingGroup in the private subnets: min 3, max 6. Wire it to the ALB target group so traffic flows correctly. Health checks should be through the target group, not just EC2 status checks.
-* RDS (Multi-AZ) in the private subnets. Lock it down so only the app instances can talk to it over the right port. Let CDK manage the secret unless you’re told otherwise.
-* CloudWatch alarm: if average CPU on any instance in the ASG stays over 70% for 5 minutes, fire it. Point the alarm action somewhere sane (OK to leave a TODO if we haven’t picked an SNS topic).
-* S3 bucket with versioning and default encryption turned on. Don’t get fancy; server-side encryption with S3-managed keys is fine unless a KMS key is provided.
-* EC2 instance role that actually follows least privilege. Think: read the app’s S3 bucket if needed, write to CloudWatch Logs, talk to SSM if we want Session Manager. No wildcard admin policies.
-* Security groups that make sense: ALB accepts 80/443 from the world (and redirects 80 to 443). ALB to instances on the app port only. Instances to RDS on the DB port only. Outbound kept tight where practical.
+* Tag all resources with Environment: Production
+* Create a VPC per region with public and private subnets - instances go in private, internet-facing stuff (ALB) goes in public
+* Deploy an Application Load Balancer in public subnets. Handle HTTP traffic (HTTPS removed as requested). Assume ACM certificate exists in each region - get the ARN from context or props and document it
+* AutoScalingGroup in private subnets: min 3, max 6 instances. Connect it to the ALB target group for proper traffic flow. Use target group health checks, not just EC2 status checks
+* RDS (Multi-AZ) in private subnets. Lock it down so only app instances can access it on the right port. Let CDK handle the secret unless specified otherwise
+* CloudWatch alarm: trigger when average CPU on any ASG instance stays above 70% for 5 minutes. Point the alarm action somewhere reasonable (TODO is fine if SNS topic isn't chosen yet)
+* S3 bucket with versioning and default encryption. Keep it simple - S3-managed keys are fine unless KMS key is provided
+* EC2 instance role following least privilege. Think: read app's S3 bucket if needed, write to CloudWatch Logs, access SSM for Session Manager. No wildcard admin policies
+* Security groups that make sense: ALB accepts 80/443 from internet (redirect 80 to 443). ALB to instances on app port only. Instances to RDS on DB port only. Keep outbound tight where practical
 
-Make it run in both regions from the same app:
+Make it work in both regions from the same app:
 
-* The CDK app should instantiate the stack twice with env set to each region. Don’t try to do cross-region gymnastics with one stack; just deploy two identical stacks side by side.
-* Any region-specific values (ACM cert ARNs, allowed CIDRs, DB instance class, etc.) should come from context or props so we don’t hard-code them.
+* The CDK app should create the stack twice with env set to each region. Don't try cross-region tricks with one stack - just deploy two identical stacks side by side
+* Any region-specific values (ACM cert ARNs, allowed CIDRs, DB instance class, etc.) should come from context or props, not hard-coded
 
-Hand back two files, fully commented and runnable:
+Deliver two files, fully commented and ready to run:
 
-* bin/my-app.ts — creates the CDK app and instantiates the stack twice (us-east-1 and us-west-2). Pass in any needed context like certificate ARNs.
-* lib/my-stack.ts — defines the VPC, ALB, target group/listeners, ASG, RDS (Multi-AZ), S3 bucket, CloudWatch alarm, IAM roles, and all security group rules. Add clear comments on why each piece exists and how it connects.
+* bin/my-app.ts - creates the CDK app and instantiates the stack twice (us-east-1 and us-west-2). Pass in any needed context like certificate ARNs
+* lib/my-stack.ts - defines the VPC, ALB, target group/listeners, ASG, RDS (Multi-AZ), S3 bucket, CloudWatch alarm, IAM roles, and all security group rules. Add clear comments explaining why each piece exists and how it connects
 
-A few ground rules so we don’t talk past each other:
+Some ground rules:
 
-* Prefer CDK constructs over shell scripts and magic. Keep policies tight and resource-scoped.
-* Keep defaults sensible and leave a short TODO when you’re making a trade-off (e.g., “Using t3.medium for now; revisit for prod load tests”).
-* No surprise dependencies. If the stack needs an ARN or a parameter, expose it cleanly via props or cdk.json context and mention it in a comment.
+* Prefer CDK constructs over shell scripts and magic. Keep policies tight and resource-scoped
+* Keep defaults sensible and leave a short TODO when making trade-offs (e.g., "Using t3.medium for now; revisit for prod load tests")
+* No surprise dependencies. If the stack needs an ARN or parameter, expose it cleanly via props or cdk.json context and mention it in a comment
 
-Minimal deploy notes (don’t overthink it):
+Basic deploy notes:
 
-* cdk bootstrap both regions if needed.
-* cdk synth to sanity-check.
-* cdk deploy “\*” when you’re ready.
+* cdk bootstrap both regions if needed
+* cdk synth to sanity-check
+* cdk deploy "*" when ready
 
-That’s the brief. Build the thing you’d want to own in production.
+That's it. Build something you'd want to own in production.

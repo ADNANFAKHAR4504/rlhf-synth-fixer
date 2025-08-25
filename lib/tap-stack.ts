@@ -1,13 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -17,101 +17,92 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // Get the current region from the stack
-    const region = this.region;
-    const account = this.account;
+    const { account, region } = this;
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Generate a unique suffix for resource names to avoid conflicts
-    // Use environment suffix and region for stability, only add timestamp for truly unique resources
-    const uniqueSuffix = `${account}-${region}-${props?.environmentSuffix || 'dev'}`;
+    // Create stable unique suffix for resource naming
+    const uniqueSuffix = `${account}-${region}-${environmentSuffix}`;
 
-    // Log region-specific information for debugging
-    console.log(`🔍 Deploying to region: ${region}`);
-    console.log(`🔍 Account: ${account}`);
-    console.log(`🔍 Environment suffix: ${props?.environmentSuffix || 'dev'}`);
-    console.log(`🔍 Unique suffix: ${uniqueSuffix}`);
-
-    // Validate region for multi-region deployment
-    const supportedRegions = ['us-east-1', 'us-west-2'];
-    if (!supportedRegions.includes(region)) {
-      console.warn(
-        `⚠️ Region ${region} is not in the supported regions list: ${supportedRegions.join(', ')}`
-      );
-    }
+    // Common tags for all resources (used via cdk.Tags.of() calls)
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'ProductionVPC', {
-      maxAzs: 3, // Use 3 AZs for high availability
-      cidr: '10.0.0.0/16',
-      natGateways: 2, // Deploy NAT gateways in 2 AZs for redundancy
+      maxAzs: 2,
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'PublicSubnet',
+          name: 'Public',
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: 'PrivateSubnet',
+          name: 'Private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
-          name: 'DatabaseSubnet',
+          name: 'Database',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
+      natGateways: 1, // Reduce cost
     });
 
-    // Create security group for ALB
+    // Add tags to VPC
+    cdk.Tags.of(vpc).add('Environment', 'Production');
+
+    // Create security groups
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: true,
     });
 
-    // Allow HTTP traffic from anywhere
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic from anywhere'
-    );
-
-    // Create security group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
-      description: 'Security group for EC2 instances in Auto Scaling Group',
+      description: 'Security group for EC2 instances',
       allowAllOutbound: true,
     });
 
-    // Allow traffic from ALB to EC2 instances on port 80
-    ec2SecurityGroup.addIngressRule(
-      albSecurityGroup,
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic from ALB'
-    );
-
-    // Create security group for RDS
     const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSecurityGroup', {
       vpc,
       description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
 
-    // Allow MySQL/Aurora traffic from EC2 instances
+    // Configure security group rules
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic'
+    );
+
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS traffic'
+    );
+
+    ec2SecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(80),
+      'Allow traffic from ALB'
+    );
+
     rdsSecurityGroup.addIngressRule(
       ec2SecurityGroup,
       ec2.Port.tcp(3306),
       'Allow MySQL traffic from EC2 instances'
     );
 
-    // Create IAM role for EC2 instances following principle of least privilege
+    // Add tags to security groups
+    cdk.Tags.of(albSecurityGroup).add('Environment', 'Production');
+    cdk.Tags.of(ec2SecurityGroup).add('Environment', 'Production');
+    cdk.Tags.of(rdsSecurityGroup).add('Environment', 'Production');
+
+    // Create IAM role for EC2 instances with least privilege
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description:
-        'IAM role for EC2 instances with minimal required permissions',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'CloudWatchAgentServerPolicy'
@@ -125,33 +116,15 @@ export class TapStack extends cdk.Stack {
               actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
               resources: [`arn:aws:s3:::production-app-data-${uniqueSuffix}/*`],
             }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:ListBucket'],
-              resources: [`arn:aws:s3:::production-app-data-${uniqueSuffix}`],
-            }),
-          ],
-        }),
-        CloudWatchLogsPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
-              ],
-              resources: [
-                `arn:aws:logs:${region}:${this.account}:log-group:/aws/ec2/*`,
-              ],
-            }),
           ],
         }),
       },
     });
 
-    // User data script for EC2 instances
+    // Add tags to IAM role
+    cdk.Tags.of(ec2Role).add('Environment', 'Production');
+
+    // Create user data script for EC2 instances
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
@@ -160,51 +133,18 @@ export class TapStack extends cdk.Stack {
       'systemctl enable httpd',
       'echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html',
       'echo "<p>Region: ' + region + '</p>" >> /var/www/html/index.html',
-      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
-      // Install CloudWatch agent
-      'wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm',
-      'rpm -U ./amazon-cloudwatch-agent.rpm',
-      // Configure CloudWatch agent
-      'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      '{',
-      '  "metrics": {',
-      '    "namespace": "CWAgent",',
-      '    "metrics_collected": {',
-      '      "cpu": {',
-      '        "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],',
-      '        "metrics_collection_interval": 60,',
-      '        "totalcpu": false',
-      '      },',
-      '      "disk": {',
-      '        "measurement": ["used_percent"],',
-      '        "metrics_collection_interval": 60,',
-      '        "resources": ["*"]',
-      '      },',
-      '      "diskio": {',
-      '        "measurement": ["io_time"],',
-      '        "metrics_collection_interval": 60,',
-      '        "resources": ["*"]',
-      '      },',
-      '      "mem": {',
-      '        "measurement": ["mem_used_percent"],',
-      '        "metrics_collection_interval": 60',
-      '      }',
-      '    }',
-      '  }',
-      '}',
-      'EOF',
-      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html'
     );
 
-    // Create Launch Template for Auto Scaling Group
+    // Create launch template with minimal configuration
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MEDIUM
       ),
       machineImage: ec2.MachineImage.genericLinux({
-        'us-east-1': 'ami-0c02fb55956c7d316', // Amazon Linux 2 AMI ID for us-east-1
-        'us-west-2': 'ami-011e15a70256b7f26', // Amazon Linux 2 AMI ID for us-west-2
+        'us-east-1': 'ami-0c02fb55956c7d316',
+        'us-west-2': 'ami-011e15a70256b7f26',
       }),
       userData,
       securityGroup: ec2SecurityGroup,
@@ -214,12 +154,15 @@ export class TapStack extends cdk.Stack {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(20, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: false, // Disabled to avoid KMS key issues during testing
+            encrypted: false, // Disabled to avoid KMS issues
           }),
         },
       ],
-      requireImdsv2: true, // Security best practice
+      requireImdsv2: true,
     });
+
+    // Add tags to launch template
+    cdk.Tags.of(launchTemplate).add('Environment', 'Production');
 
     // Create Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
@@ -245,6 +188,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Add tags to Auto Scaling Group
+    cdk.Tags.of(autoScalingGroup).add('Environment', 'Production');
+
     // Create Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(
       this,
@@ -256,11 +202,14 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PUBLIC,
         },
-        deletionProtection: false, // Disabled for testing - can be enabled for production
+        deletionProtection: false,
       }
     );
 
-    // Create target group for Auto Scaling Group
+    // Add tags to ALB
+    cdk.Tags.of(alb).add('Environment', 'Production');
+
+    // Create target group
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
       vpc,
       port: 80,
@@ -279,7 +228,10 @@ export class TapStack extends cdk.Stack {
       targetGroupName: `tg-${uniqueSuffix}`,
     });
 
-    // Create HTTP listener (forwards traffic directly to target group)
+    // Add tags to target group
+    cdk.Tags.of(targetGroup).add('Environment', 'Production');
+
+    // Create HTTP listener
     alb.addListener('HTTPListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -295,95 +247,90 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Create RDS parameter group for MySQL 8.0
+    // Add tags to subnet group
+    cdk.Tags.of(dbSubnetGroup).add('Environment', 'Production');
+
+    // Create RDS parameter group
     const parameterGroup = new rds.ParameterGroup(
       this,
       'DatabaseParameterGroup',
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_35,
+          version: rds.MysqlEngineVersion.VER_8_0_37,
         }),
-        description: 'Parameter group for MySQL 8.0 database',
+        description: 'Parameter group for MySQL 8.0.37',
         parameters: {
-          innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}',
-          max_connections: '1000',
+          slow_query_log: '1',
+          long_query_time: '2',
         },
       }
     );
 
-    // Create RDS database instance with Multi-AZ
+    // Add tags to parameter group
+    cdk.Tags.of(parameterGroup).add('Environment', 'Production');
+
+    // Create RDS database instance
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_37, // Use version available in both us-east-1 and us-west-2
+        version: rds.MysqlEngineVersion.VER_8_0_37,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
-        ec2.InstanceSize.MEDIUM
+        ec2.InstanceSize.MICRO
       ),
       vpc,
-      securityGroups: [rdsSecurityGroup],
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
       subnetGroup: dbSubnetGroup,
       parameterGroup,
-      multiAz: true, // Enable Multi-AZ for high availability
-      allocatedStorage: 100,
-      maxAllocatedStorage: 1000, // Enable storage autoscaling
+      securityGroups: [rdsSecurityGroup],
+      multiAz: true,
+      allocatedStorage: 20,
       storageType: rds.StorageType.GP3,
-      storageEncrypted: false, // Disabled to avoid KMS key issues during testing
+      storageEncrypted: false, // Disabled to avoid KMS issues
       backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: true, // Allow deletion of automated backups
-      deletionProtection: false, // Allow deletion for testing
-      databaseName: 'productiondb',
-      credentials: rds.Credentials.fromGeneratedSecret('dbadmin', {
-        excludeCharacters: '"@/\\\'',
-      }),
-      monitoringInterval: cdk.Duration.seconds(60),
+      deleteAutomatedBackups: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deletionProtection: false,
+      credentials: rds.Credentials.fromGeneratedSecret('admin'),
+      monitoringInterval: cdk.Duration.minutes(1),
       enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      cloudwatchLogsExports: ['error', 'general'], // MySQL 8.0.37 doesn't support 'slow-query' log type
-      autoMinorVersionUpgrade: false, // Control updates in production
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for testing
+      cloudwatchLogsExports: ['error', 'general'],
+      autoMinorVersionUpgrade: false,
     });
 
-    // Create S3 bucket with versioning and encryption
+    // Add tags to database
+    cdk.Tags.of(database).add('Environment', 'Production');
+
+    // Create S3 bucket with minimal configuration
     const s3Bucket = new s3.Bucket(this, 'ProductionDataBucket', {
-      bucketName: `production-app-data-${uniqueSuffix}`, // Use stable suffix for S3 bucket
+      bucketName: `production-app-data-${uniqueSuffix}`,
       versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
+      encryption: s3.BucketEncryption.S3_MANAGED, // Use S3-managed encryption (no KMS)
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      lifecycleRules: [
-        {
-          id: 'DeleteIncompleteMultipartUploads',
-          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
-        },
-        {
-          id: 'TransitionToIA',
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-            {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
-            },
-          ],
-        },
-      ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for testing
-      autoDeleteObjects: true, // Automatically delete objects when bucket is deleted
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
-    // Create CloudWatch Log Group for application logs
-    new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: `/aws/ec2/application-${uniqueSuffix}`, // Use unique suffix to avoid conflicts
+    // Add tags to S3 bucket
+    cdk.Tags.of(s3Bucket).add('Environment', 'Production');
+
+    // Create CloudWatch Log Group
+    const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
+      logGroupName: `/aws/ec2/application-${uniqueSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for testing
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create CloudWatch alarm for high CPU utilization
-    new cloudwatch.Alarm(this, 'HighCPUAlarm', {
-      alarmName: `HighCPUUtilization-${uniqueSuffix}`, // Use unique suffix to avoid conflicts
+    // Add tags to log group
+    cdk.Tags.of(logGroup).add('Environment', 'Production');
+
+    // Create CloudWatch alarm for CPU utilization
+    const cpuAlarm = new cloudwatch.Alarm(this, 'HighCPUAlarm', {
+      alarmName: `HighCPUUtilization-${uniqueSuffix}`,
       alarmDescription: 'Alarm when CPU utilization exceeds 70%',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
@@ -399,6 +346,9 @@ export class TapStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
+    // Add tags to alarm
+    cdk.Tags.of(cpuAlarm).add('Environment', 'Production');
 
     // Create scaling policies
     autoScalingGroup.scaleOnMetric('ScaleUp', {
@@ -417,7 +367,6 @@ export class TapStack extends cdk.Stack {
         { lower: 85, change: +3 },
       ],
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
-      cooldown: cdk.Duration.minutes(5),
     });
 
     autoScalingGroup.scaleOnMetric('ScaleDown', {
@@ -435,41 +384,32 @@ export class TapStack extends cdk.Stack {
         { upper: 20, change: -2 },
       ],
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
-      cooldown: cdk.Duration.minutes(10),
     });
 
-    // Apply Environment: Production tag to all resources
-    cdk.Tags.of(this).add('Environment', 'Production');
-
-    // Output important information
+    // Outputs
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',
-      exportName: `${this.stackName}-VPC-ID`,
     });
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS name',
-      exportName: `${this.stackName}-ALB-DNS`,
+      description: 'Load Balancer DNS Name',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
-      description: 'RDS database endpoint',
-      exportName: `${this.stackName}-DB-Endpoint`,
+      description: 'Database Endpoint',
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
-      description: 'S3 bucket name',
-      exportName: `${this.stackName}-S3-Bucket`,
+      description: 'S3 Bucket Name',
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
-      description: 'Auto Scaling Group name',
-      exportName: `${this.stackName}-ASG-Name`,
+      description: 'Auto Scaling Group Name',
     });
   }
 }
