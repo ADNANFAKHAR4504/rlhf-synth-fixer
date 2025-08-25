@@ -1,36 +1,35 @@
 
-I want to use terraform to build a secure AWS environment for a web app. The setup should be production-grade, multi-region ready, and follow least-privilege and encryption-by-default.
+I need to set up a secure AWS environment for our web app using terraform. We're aiming for production-grade stuff here - multi-region ready and following least-privilege + encryption everywhere (you know how security audits go...).
 
-**Requirements:**
+Here's what I'm thinking:
 
-* **VPC**: I want it to span 2 AZs with at least 2 public + 2 private subnets.
-* **Compute**: EC2 app instances should only live in private subnets; access should only be allowed via a bastion in public subnets.
+The VPC should span 2 AZs with at least 2 public and 2 private subnets. Pretty standard setup.
 
-* **Networking/Security**:
+For compute - EC2 app instances need to stay in private subnets only. Access should go through a bastion host in the public subnets (I know, bastions are a bit old school but security team insists).
 
-  * Security groups that deny all inbound except from specific corporate CIDRs (we'll make this a variable).
-  * NAT for private subnets.
-* **IAM**: roles with least privilege for all services (especially Lambda - that's where things usually go wrong).
-* **S3**: versioning + SSE-KMS enforced, block public access, require TLS.
-* **Lambda**: triggered on S3 object uploads, uses env vars (from SSM/Secrets Manager), with strict memory/timeout, logging, and DLQ.
-* **TLS**: ACM certificates for HTTPS.
-* **Monitoring**: CloudWatch alarms on unauthorized API calls, EC2 spikes, and Lambda errors/throttles. CloudTrail enabled and encrypted.
-* **Tagging**: every resource tagged (project, env, owner, cost center, compliance).
-* **Encryption**: all data at rest (EBS, S3, RDS if used, CW logs) with KMS CMKs.
+Security-wise:
+- Security groups that deny everything inbound except from our corporate CIDRs (we'll parameterize this)
+- NAT gateways for the private subnets to get out
 
-**Expectations:**
+IAM roles need to be locked down tight - especially for Lambda since that's usually where we mess up permissions.
 
-* Well written code that covers (VPC, bastion, EC2 app, S3, Lambda, KMS, alarms, ACM).
-* Let's not use Modular terraform just yet, just a separation of `provider.tf` and `main.tf` would work.
+S3 bucket with versioning enabled, SSE-KMS, public access blocked, and TLS required. Standard security stuff.
 
-* Multi-region via provider aliases.
+Lambda function that triggers on S3 uploads, pulls config from SSM/Secrets Manager, has reasonable memory/timeout limits, proper logging, and a DLQ for failed executions.
 
-* Variables for `project_name`, `environment`, `regions`, `corporate_cidrs`, `lambda_timeout/memory`, tags.
+ACM certificates for HTTPS termination.
 
-* Outputs: VPC IDs, subnet IDs, bastion public DNS, private instance IDs, S3 bucket ARN, Lambda ARN, alarm ARNs, ACM certs.
-* Plan/apply/destroy works cleanly with no high-severity tfsec/checkov findings.
+Monitoring: CloudWatch alarms for unauthorized API calls, EC2 CPU spikes, Lambda errors and throttles. CloudTrail should be on and encrypted too.
 
+Everything needs proper tagging - project, environment, owner, cost center, compliance tags. Finance gets cranky without cost center tags.
 
+Encryption at rest for everything: EBS volumes, S3, CloudWatch logs, RDS if we add it later. Use KMS CMKs, not AWS managed keys.
 
+What I want to end up with:
+- Clean code covering VPC, bastion, EC2 instances, S3, Lambda, KMS, alarms, and ACM
+- Keep it simple for now - just split into `provider.tf` and `tap_stack.tf`, no fancy modules yet
+- Multi-region support using provider aliases
+- Variables for project_name, environment, regions, corporate_cidrs, lambda timeout/memory settings, and tags
+- Outputs for VPC IDs, subnet IDs, bastion public DNS, private instance IDs, S3 bucket ARN, Lambda ARN, alarm ARNs, and ACM cert ARNs
 
-
+Oh and it should pass tfsec/checkov without any high-severity findings when we run plan/apply/destroy.
