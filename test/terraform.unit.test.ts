@@ -65,7 +65,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('common_tags include required fields', () => {
       expect(stackContent).toMatch(/Environment\s*=\s*local\.environment/);
-      expect(stackContent).toMatch(/Project\s*=\s*local\.project_name/);
+      expect(stackContent).toMatch(/Project\s*=\s*local\.unique_project_name/);
       expect(stackContent).toMatch(/ManagedBy\s*=\s*"Terraform"/);
       expect(stackContent).toMatch(/Owner\s*=\s*"DevOps Team"/);
     });

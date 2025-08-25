@@ -7,6 +7,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "deployment_id" {
+  description = "Unique identifier for this deployment to avoid naming conflicts"
+  type        = string
+  default     = "v1"
+}
+
 # Data sources for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
@@ -35,9 +41,12 @@ data "aws_caller_identity" "current" {}
 locals {
   project_name = "iac-aws-nova-model-breaking"
   environment  = "production"
+  
+  # Create unique names with deployment ID to avoid conflicts
+  unique_project_name = "${local.project_name}-${var.deployment_id}"
 
   common_tags = {
-    Project     = local.project_name
+    Project     = local.unique_project_name
     Environment = local.environment
     ManagedBy   = "Terraform"
     Owner       = "DevOps Team"
@@ -49,7 +58,7 @@ locals {
 
 # KMS Key for encryption
 resource "aws_kms_key" "main" {
-  description             = "KMS key for ${local.project_name} encryption"
+  description             = "KMS key for ${local.unique_project_name} encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -79,12 +88,12 @@ resource "aws_kms_key" "main" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-kms-key"
+    Name = "${local.unique_project_name}-kms-key"
   })
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${lower(replace(local.project_name, "-", "_"))}_key"
+  name          = "alias/${lower(replace(local.unique_project_name, "-", "_"))}_key"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -95,7 +104,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-vpc"
+    Name = "${local.unique_project_name}-vpc"
   })
 }
 
@@ -104,7 +113,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-igw"
+    Name = "${local.unique_project_name}-igw"
   })
 }
 
@@ -118,7 +127,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-public-subnet-${count.index + 1}"
+    Name = "${local.unique_project_name}-public-subnet-${count.index + 1}"
     Type = "Public"
   })
 }
@@ -132,7 +141,7 @@ resource "aws_subnet" "private" {
   availability_zone = local.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-private-subnet-${count.index + 1}"
+    Name = "${local.unique_project_name}-private-subnet-${count.index + 1}"
     Type = "Private"
   })
 }
@@ -146,7 +155,7 @@ resource "aws_subnet" "database" {
   availability_zone = local.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-database-subnet-${count.index + 1}"
+    Name = "${local.unique_project_name}-database-subnet-${count.index + 1}"
     Type = "Database"
   })
 }
@@ -159,7 +168,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-nat-eip-${count.index + 1}"
+    Name = "${local.unique_project_name}-nat-eip-${count.index + 1}"
   })
 }
 
@@ -171,7 +180,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-nat-gateway-${count.index + 1}"
+    Name = "${local.unique_project_name}-nat-gateway-${count.index + 1}"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -187,7 +196,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-public-rt"
+    Name = "${local.unique_project_name}-public-rt"
   })
 }
 
@@ -203,7 +212,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-private-rt-${count.index + 1}"
+    Name = "${local.unique_project_name}-private-rt-${count.index + 1}"
   })
 }
 
@@ -212,7 +221,7 @@ resource "aws_route_table" "database" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-database-rt"
+    Name = "${local.unique_project_name}-database-rt"
   })
 }
 
@@ -242,7 +251,7 @@ resource "aws_route_table_association" "database" {
 
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  name_prefix = "${local.project_name}-alb-"
+  name_prefix = "${local.unique_project_name}-alb-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -269,7 +278,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-alb-sg"
+    Name = "${local.unique_project_name}-alb-sg"
   })
 
   lifecycle {
@@ -279,7 +288,7 @@ resource "aws_security_group" "alb" {
 
 # Security Group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name_prefix = "${local.project_name}-ec2-"
+  name_prefix = "${local.unique_project_name}-ec2-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -306,7 +315,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-ec2-sg"
+    Name = "${local.unique_project_name}-ec2-sg"
   })
 
   lifecycle {
@@ -316,7 +325,7 @@ resource "aws_security_group" "ec2" {
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name_prefix = "${local.project_name}-rds-"
+  name_prefix = "${local.unique_project_name}-rds-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -328,7 +337,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-rds-sg"
+    Name = "${local.unique_project_name}-rds-sg"
   })
 
   lifecycle {
@@ -338,10 +347,10 @@ resource "aws_security_group" "rds" {
 
 # S3 Bucket for application data
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${lower(local.project_name)}-app-data-${random_string.bucket_suffix.result}"
+  bucket = "${lower(local.unique_project_name)}-app-data-${random_string.bucket_suffix.result}"
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-app-data"
+    Name = "${local.unique_project_name}-app-data"
   })
 }
 
@@ -383,7 +392,7 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.project_name}-ec2-role"
+  name = "${local.unique_project_name}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -403,7 +412,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy for S3 access
 resource "aws_iam_policy" "s3_access" {
-  name        = "${local.project_name}-s3-access"
+  name        = "${local.unique_project_name}-s3-access"
   description = "Policy for EC2 instances to access S3 bucket"
 
   policy = jsonencode({
@@ -444,7 +453,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.project_name}-ec2-profile"
+  name = "${local.unique_project_name}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
@@ -452,7 +461,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${substr(local.project_name, 0, 32)}-alb"
+  name               = "${substr(local.unique_project_name, 0, 32)}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -461,13 +470,13 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-alb"
+    Name = "${local.unique_project_name}-alb"
   })
 }
 
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${substr(local.project_name, 0, 32)}-tg"
+  name     = "${substr(local.unique_project_name, 0, 32)}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -484,9 +493,9 @@ resource "aws_lb_target_group" "main" {
     unhealthy_threshold = 3
   }
 
-  tags = merge(local.common_tags, {
-    Name = "${local.project_name}-target-group"
-  })
+        tags = merge(local.common_tags, {
+        Name = "${local.unique_project_name}-target-group"
+      })
 }
 
 # ALB Listener
@@ -505,7 +514,7 @@ resource "aws_lb_listener" "main" {
 
 # Launch Template
 resource "aws_launch_template" "main" {
-  name_prefix   = "${local.project_name}-lt-"
+  name_prefix   = "${local.unique_project_name}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
 
@@ -545,7 +554,7 @@ resource "aws_launch_template" "main" {
     systemctl enable httpd
 
     # Create test page
-    echo "<h1>Hello from ${local.project_name}</h1>" > /var/www/html/index.html
+    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
     echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
 
@@ -561,7 +570,7 @@ resource "aws_launch_template" "main" {
             "collect_list": [
               {
                 "file_path": "/var/log/httpd/access_log",
-                "log_group_name": "/aws/ec2/${local.project_name}/access",
+                "log_group_name": "/aws/ec2/${local.unique_project_name}/access",
                 "log_stream_name": "{instance_id}"
               }
             ]
@@ -580,12 +589,12 @@ resource "aws_launch_template" "main" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "${local.project_name}-instance"
+      Name = "${local.unique_project_name}-instance"
     })
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-launch-template"
+    Name = "${local.unique_project_name}-launch-template"
   })
 
   lifecycle {
@@ -595,7 +604,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.project_name}-asg"
+  name                      = "${local.unique_project_name}-asg"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -612,7 +621,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${local.project_name}-asg-instance"
+    value               = "${local.unique_project_name}-asg-instance"
     propagate_at_launch = true
   }
 
@@ -632,17 +641,17 @@ resource "aws_autoscaling_group" "main" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.project_name}-db-subnet-group"
+  name       = "${local.unique_project_name}-db-subnet-group"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-db-subnet-group"
+    Name = "${local.unique_project_name}-db-subnet-group"
   })
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${local.project_name}-database"
+  identifier = "${local.unique_project_name}-database"
 
   allocated_storage     = 20
   max_allocated_storage = 100
@@ -671,18 +680,18 @@ resource "aws_db_instance" "main" {
   deletion_protection = false
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-database"
+    Name = "${local.unique_project_name}-database"
   })
 }
 
 # CloudWatch Log Group for application logs
 resource "aws_cloudwatch_log_group" "app_logs" {
-  name              = "/aws/ec2/${local.project_name}"
+  name              = "/aws/ec2/${local.unique_project_name}"
   kms_key_id        = aws_kms_key.main.arn
   retention_in_days = 30
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_name}-application-log-group"
+    Name = "${local.unique_project_name}-application-log-group"
   })
 }
 
