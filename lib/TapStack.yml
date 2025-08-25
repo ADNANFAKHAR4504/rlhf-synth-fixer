@@ -68,7 +68,7 @@ Resources:
   MainKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: "alias/main-key-pr1922"
+      AliasName: "alias/main-key-pr2233"
       TargetKeyId: !Ref MainKMSKey
 
   # VPC and Network Configuration
@@ -216,13 +216,12 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action:
-              - s3:PutObject
+            Action: s3:PutObject
             Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}/*"
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tap-cloudtrail-pr1922-${Environment}"
+                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tap-cloudtrail-pr2233-${Environment}"
               StringLike:
                 s3:x-amz-server-side-encryption: "aws:kms"
 
@@ -241,12 +240,12 @@ Resources:
       KMSKeyId: !GetAtt MainKMSKey.Arn
       Tags:
         - Key: Name
-          Value: !Sub "tap-cloudtrail-pr1922-${Environment}"
+          Value: !Sub "tap-cloudtrail-pr2233-${Environment}"
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/cloudtrail/tap-cloudtrail-pr1922-${Environment}"
+      LogGroupName: !Sub "/aws/cloudtrail/tap-cloudtrail-pr2233-${Environment}"
       RetentionInDays: 30
 
   CloudTrailRole:
