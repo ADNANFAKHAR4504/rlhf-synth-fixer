@@ -102,6 +102,8 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
+    npm run tf:deploy-custom
+    npm run tf:deploy-custom-2 # destroy the db instances
     npm run tf:deploy
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."

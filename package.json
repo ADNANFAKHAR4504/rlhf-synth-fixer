@@ -46,6 +46,8 @@
     "tf": "terraform",
     "tf:init": "terraform -chdir=lib init -reconfigure -lock=false -upgrade $TF_INIT_OPTS",
     "tf:plan": "cd lib && terraform plan -lock=false -out=tfplan",
+    "tf:deploy-custom": "cd lib && terraform apply -auto-approve -lock=true -lock-timeout=300s -target=aws_db_instance.db_use1 -target=aws_db_instance.db_apse2 -parallelism=1",
+    "tf:deploy-custom-2": "cd lib && terraform destroy -auto-approve -target=aws_db_instance.db_use1 -target=aws_db_instance.db_apse2 -parallelism=1",
     "tf:deploy": "cd lib && terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan",
     "tf:destroy": "cd lib && terraform destroy -auto-approve",
     "tf:fmt": "cd lib && terraform fmt -check -recursive",
