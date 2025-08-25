@@ -1,18 +1,5 @@
 name: TapStack
 runtime:
   name: go
-description: Secure S3 Bucket Infrastructure with Enterprise Security
+description: Pulumi infrastructure for TAP
 main: ./lib
-config:
-  aws:region:
-    description: AWS Region for deployment
-    default: us-west-2
-  tapstack:allowedAccountIds:
-    description: Comma-separated list of AWS account IDs allowed cross-account access
-    default: "123456789012,987654321098"
-  tapstack:kmsKeyRotation:
-    description: Enable automatic KMS key rotation
-    default: true
-  tapstack:mfaDelete:
-    description: Enable MFA delete protection
-    default: false
