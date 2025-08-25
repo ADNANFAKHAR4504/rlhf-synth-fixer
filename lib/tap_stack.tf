@@ -1742,8 +1742,8 @@ resource "aws_db_instance" "main_use1" {
   
   multi_az               = local.is_production
   auto_minor_version_upgrade = true
-  deletion_protection    = local.is_production
-  skip_final_snapshot    = !local.is_production
+  deletion_protection    = false
+  skip_final_snapshot    = false
   final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-use1" : null
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
@@ -1788,8 +1788,8 @@ resource "aws_db_instance" "main_apse2" {
   
   multi_az               = local.is_production
   auto_minor_version_upgrade = true
-  deletion_protection    = local.is_production
-  skip_final_snapshot    = !local.is_production
+  deletion_protection    = false
+  skip_final_snapshot    = false
   final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-apse2" : null
   
   enabled_cloudwatch_logs_exports = ["postgresql"]
