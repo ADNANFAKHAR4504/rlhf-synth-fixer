@@ -660,7 +660,15 @@ Resources:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: !Sub "TapStack ${EnvironmentName} PostgreSQL parameters (TLS enforced)"
-      Family: !Sub "postgres${RdsEngineVersion}"
+      Family:
+        Fn::Sub:
+          - 'postgres${Major}'
+          - Major:
+              Fn::Select:
+                - 0
+                - Fn::Split:
+                    - '.'
+                    - !Ref RdsEngineVersion
       Parameters:
         rds.force_ssl: '1'
       Tags:
@@ -1119,7 +1127,7 @@ Resources:
         ZipFile: |
           import boto3, os, json, botocore
           s3 = boto3.client('s3')
-          REQUIRED = {'Environment': os.getenv('REQUIRED_TAG_ENV'), 'CostCenter': os.getenv('REQUIRED_TAG_CC')}
+          REQUIRED = {'Environment': os.getenv('REQUIRED_TAG_ENV'), ' Steward': os.getenv('REQUIRED_TAG_CC')}
           KMS_KEY_ID = os.getenv('KMS_KEY_ID')
 
           def ensure_bucket(bucket):
