@@ -286,6 +286,36 @@ private static String getS3BucketName(InfrastructureConfig config, String servic
 - Cannot contain consecutive hyphens
 - Cannot be formatted as an IP address
 
+## 12. CloudTrail KMS ARN Issues
+
+### Failure: Invalid KMS Key ID for CloudTrail
+**Issue**: CloudTrail expects a KMS key ARN but was provided with a KMS key ID.
+```java
+// FAILED - Using key ID instead of ARN
+var cloudTrail = new Trail("cloudtrail-main", TrailArgs.builder()
+    .kmsKeyId(cloudTrailKey.keyId())  // Returns key ID like "95f48135-b5b9-4ad7-b170-0fb1a5498f06"
+    .build());
+```
+**Error**: `"kms_key_id" is an invalid ARN: arn: invalid prefix.`
+
+**Solution**: Use KMS key ARN instead of key ID:
+```java
+// SUCCESS - Using key ARN
+var cloudTrail = new Trail("cloudtrail-main", TrailArgs.builder()
+    .kmsKeyId(cloudTrailKey.arn())  // Returns ARN like "arn:aws:kms:us-east-1:123456789012:key/95f48135-b5b9-4ad7-b170-0fb1a5498f06"
+    .build());
+```
+
+**Key Differences**:
+- **Key ID**: `95f48135-b5b9-4ad7-b170-0fb1a5498f06` (UUID format)
+- **Key ARN**: `arn:aws:kms:us-east-1:123456789012:key/95f48135-b5b9-4ad7-b170-0fb1a5498f06` (Full ARN format)
+
+**AWS Service Requirements**:
+- **CloudTrail**: Requires KMS key ARN for encryption
+- **S3 Bucket Encryption**: Can use either key ID or ARN
+- **RDS Encryption**: Can use either key ID or ARN
+- **Lambda Environment Variables**: Can use either key ID or ARN
+
 ## Key Lessons Learned
 
 1. **API Compatibility**: Always verify Pulumi Java SDK method availability before implementation

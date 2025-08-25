@@ -288,7 +288,7 @@ public final class Main {
             .includeGlobalServiceEvents(true)
             .isMultiRegionTrail(true)
             .enableLogging(true)
-            .kmsKeyId(cloudTrailKey.keyId())
+            .kmsKeyId(cloudTrailKey.arn())
             .tags(getStandardTags(config, "compliance", "cloudtrail"))
             .build());
         
