@@ -379,8 +379,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(htmlContent).toBeDefined();
       
       if (htmlContent) {
-        // Verify the HTML contains the API endpoint reference
-        expect(htmlContent).toContain("${aws_api_gateway_stage.main.invoke_url}/hello");
+        // Verify the HTML contains the actual deployed API endpoint URL
+        expect(htmlContent).toContain(apiEndpoint);
         
         // Test the actual API call that the frontend would make
         const apiResponse = await fetch(apiEndpoint);
