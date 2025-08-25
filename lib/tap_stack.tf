@@ -503,13 +503,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 120
+    interval            = 180
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 30
-    unhealthy_threshold = 3
+    timeout             = 60
+    unhealthy_threshold = 5
   }
 
         tags = merge(local.common_tags, {
@@ -569,13 +569,14 @@ resource "aws_launch_template" "main" {
 
     # Start and enable Apache
     yum install -y httpd
-    systemctl start httpd
     systemctl enable httpd
+    systemctl start httpd
 
     # Create test page
     echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
     echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+    echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
 
     # Create health check endpoint
     echo "OK" > /var/www/html/health
@@ -583,10 +584,18 @@ resource "aws_launch_template" "main" {
     
     # Ensure Apache is running and healthy
     systemctl status httpd || systemctl start httpd
-    sleep 5
+    sleep 10
     
-    # Test health endpoint
-    curl -f http://localhost/health || echo "Health check failed, but continuing..."
+    # Test health endpoint multiple times
+    for i in {1..5}; do
+      if curl -f http://localhost/health; then
+        echo "Health check passed on attempt $i"
+        break
+      else
+        echo "Health check failed on attempt $i, retrying..."
+        sleep 5
+      fi
+    done
 
     # Configure CloudWatch agent
     cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWCONFIG'
@@ -635,7 +644,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 900
+  health_check_grace_period = 1200
 
   min_size         = 2
   max_size         = 6
