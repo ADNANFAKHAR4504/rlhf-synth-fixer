@@ -8,7 +8,7 @@ import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
 /**
- * Unit tests for the Main CDK application.
+ * Unit tests for RegionalStack.
  */
 public class MainTest {
 
@@ -16,7 +16,7 @@ public class MainTest {
     public void testStackCreation() {
         App app = new App();
         RegionalStack stack = new RegionalStack(app, "TestStack",
-                StackProps.builder().build());
+                StackProps.builder().build(), "test");
         assertThat(stack).isNotNull();
     }
 
@@ -24,7 +24,7 @@ public class MainTest {
     public void testStackSynthesis() {
         App app = new App();
         RegionalStack stack = new RegionalStack(app, "TestStack",
-                StackProps.builder().build());
+                StackProps.builder().build(), "test");
         Template template = Template.fromStack(stack);
         assertThat(template).isNotNull();
     }
@@ -33,9 +33,9 @@ public class MainTest {
     public void testMultipleStacks() {
         App app = new App();
         RegionalStack east = new RegionalStack(app, "TestStackEast",
-                StackProps.builder().build());
+                StackProps.builder().build(), "east");
         RegionalStack west = new RegionalStack(app, "TestStackWest",
-                StackProps.builder().build());
+                StackProps.builder().build(), "west");
         assertThat(east).isNotNull();
         assertThat(west).isNotNull();
     }

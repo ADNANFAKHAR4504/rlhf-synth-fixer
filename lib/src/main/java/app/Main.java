@@ -1,7 +1,6 @@
 package app;
 
 import java.util.List;
-
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
@@ -41,75 +40,61 @@ import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.constructs.Construct;
 
 /**
- * RegionalStack represents a single-region deployment of the Nova Model Breaking project.
+ * RegionalStack: one deployment per AWS region.
  */
 class RegionalStack extends Stack {
-    public RegionalStack(final Construct scope, final String id, final StackProps props) {
+    public RegionalStack(final Construct scope, final String id, final StackProps props, final String environmentSuffix) {
         super(scope, id, props);
 
-        // Resolve environment suffix from context or default
-        String environmentSuffix = (String) this.getNode().tryGetContext("environmentSuffix");
-        if (environmentSuffix == null) {
-            environmentSuffix = "dev";
-        }
-
         // VPC
-        Vpc vpc = Vpc.Builder.create(this, "NovaVpc-" + environmentSuffix)
+        Vpc vpc = Vpc.Builder.create(this, "Vpc-" + environmentSuffix)
                 .maxAzs(2)
                 .subnetConfiguration(List.of(
-                        SubnetConfiguration.builder()
-                                .name("public")
-                                .subnetType(SubnetType.PUBLIC)
-                                .cidrMask(24)
-                                .build(),
-                        SubnetConfiguration.builder()
-                                .name("private")
-                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
-                                .cidrMask(24)
-                                .build()))
+                        SubnetConfiguration.builder().name("public").subnetType(SubnetType.PUBLIC).cidrMask(24).build(),
+                        SubnetConfiguration.builder().name("private").subnetType(SubnetType.PRIVATE_WITH_EGRESS).cidrMask(24).build()
+                ))
                 .build();
 
-        // S3 Log Bucket
-        Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
+        // Logs bucket
+        Bucket logBucket = Bucket.Builder.create(this, "Logs-" + environmentSuffix)
                 .versioned(true)
                 .lifecycleRules(List.of(
-                        LifecycleRule.builder()
-                                .expiration(Duration.days(365))
-                                .build()))
+                        LifecycleRule.builder().expiration(Duration.days(365)).build()
+                ))
                 .build();
 
-        // IAM Role
-        Role ec2Role = Role.Builder.create(this, "NovaEc2Role-" + environmentSuffix)
+        // IAM role
+        Role ec2Role = Role.Builder.create(this, "Ec2Role-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
                 .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
                 .build();
 
-        // Security Group
-        SecurityGroup appSg = SecurityGroup.Builder.create(this, "NovaAppSg-" + environmentSuffix)
+        // SG
+        SecurityGroup appSg = SecurityGroup.Builder.create(this, "AppSg-" + environmentSuffix)
                 .vpc(vpc)
                 .allowAllOutbound(true)
                 .build();
-        appSg.addIngressRule(appSg, Port.tcp(80), "Allow HTTP");
+        appSg.addIngressRule(appSg, Port.tcp(80));
 
-        // Auto Scaling Group
-        AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "NovaAsg-" + environmentSuffix)
+        // ASG
+        AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "Asg-" + environmentSuffix)
                 .vpc(vpc)
                 .instanceType(InstanceType.of(InstanceClass.BURSTABLE2, InstanceSize.MICRO))
                 .machineImage(MachineImage.latestAmazonLinux2())
                 .minCapacity(2)
                 .maxCapacity(4)
                 .role(ec2Role)
-                .healthChecks(HealthChecks.ec2())   // ✅ modern API
+                .healthChecks(HealthChecks.ec2())
                 .build();
 
-        // Load Balancer
-        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "NovaAlb-" + environmentSuffix)
+        // ALB
+        ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "Alb-" + environmentSuffix)
                 .vpc(vpc)
                 .internetFacing(true)
                 .securityGroup(appSg)
                 .build();
 
-        ApplicationTargetGroup tg = ApplicationTargetGroup.Builder.create(this, "NovaAlbTg-" + environmentSuffix)
+        ApplicationTargetGroup tg = ApplicationTargetGroup.Builder.create(this, "AlbTg-" + environmentSuffix)
                 .vpc(vpc)
                 .protocol(ApplicationProtocol.HTTP)
                 .port(80)
@@ -125,11 +110,9 @@ class RegionalStack extends Stack {
         asg.attachToApplicationTargetGroup(tg);
 
         // RDS
-        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "NovaRds-" + environmentSuffix)
+        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds-" + environmentSuffix)
                 .engine(DatabaseInstanceEngine.postgres(
-                        PostgresInstanceEngineProps.builder()
-                                .version(PostgresEngineVersion.VER_13)
-                                .build()))
+                        PostgresInstanceEngineProps.builder().version(PostgresEngineVersion.VER_13).build()))
                 .vpc(vpc)
                 .multiAz(true)
                 .storageEncrypted(true)
@@ -140,7 +123,7 @@ class RegionalStack extends Stack {
                 .build();
 
         // Alarm
-        Alarm cpuAlarm = Alarm.Builder.create(this, "NovaAsgCpuAlarm-" + environmentSuffix)
+        Alarm cpuAlarm = Alarm.Builder.create(this, "CpuAlarm-" + environmentSuffix)
                 .metric(Metric.Builder.create()
                         .namespace("AWS/EC2")
                         .metricName("CPUUtilization")
@@ -153,35 +136,16 @@ class RegionalStack extends Stack {
                 .build();
 
         // Outputs
-        CfnOutput.Builder.create(this, "VpcId")
-                .value(vpc.getVpcId())
-                .exportName("NovaVpcId-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "AlbDns")
-                .value(alb.getLoadBalancerDnsName())
-                .exportName("NovaAlbDns-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "RdsEndpoint")
-                .value(rds.getDbInstanceEndpointAddress())
-                .exportName("NovaRdsEndpoint-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "LogBucketName")
-                .value(logBucket.getBucketName())
-                .exportName("NovaLogsBucket-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "CpuAlarmName")
-                .value(cpuAlarm.getAlarmName())
-                .exportName("NovaCpuAlarm-" + environmentSuffix)
-                .build();
+        CfnOutput.Builder.create(this, "VpcId").value(vpc.getVpcId()).build();
+        CfnOutput.Builder.create(this, "AlbDns").value(alb.getLoadBalancerDnsName()).build();
+        CfnOutput.Builder.create(this, "RdsEndpoint").value(rds.getDbInstanceEndpointAddress()).build();
+        CfnOutput.Builder.create(this, "LogBucketName").value(logBucket.getBucketName()).build();
+        CfnOutput.Builder.create(this, "CpuAlarmName").value(cpuAlarm.getAlarmName()).build();
     }
 }
 
 /**
- * Main entry point for the AWS CDK Java application.
+ * Main entry point.
  */
 public final class Main {
     private Main() {}
@@ -190,30 +154,26 @@ public final class Main {
         App app = new App();
 
         String account = System.getenv("CDK_DEFAULT_ACCOUNT");
-        if (account == null) {
-            throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
-        }
+        if (account == null) throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
 
-        String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
-        if (environmentSuffix == null) {
-            environmentSuffix = "dev";
-        }
+        String envSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+        if (envSuffix == null) envSuffix = "dev";
 
-        new RegionalStack(app, "NovaStack-" + environmentSuffix + "-use1",
-                StackProps.builder()
-                        .env(Environment.builder()
-                                .account(account)
-                                .region("us-east-1")
-                                .build())
-                        .build());
+        // NovaStack (new name)
+        new RegionalStack(app, "NovaStack-" + envSuffix + "-use1",
+                StackProps.builder().env(Environment.builder().account(account).region("us-east-1").build()).build(),
+                envSuffix);
+        new RegionalStack(app, "NovaStack-" + envSuffix + "-usw2",
+                StackProps.builder().env(Environment.builder().account(account).region("us-west-2").build()).build(),
+                envSuffix);
 
-        new RegionalStack(app, "NovaStack-" + environmentSuffix + "-usw2",
-                StackProps.builder()
-                        .env(Environment.builder()
-                                .account(account)
-                                .region("us-west-2")
-                                .build())
-                        .build());
+        // TapStack (backward compatibility for pipeline)
+        new RegionalStack(app, "TapStack-" + envSuffix + "-use1",
+                StackProps.builder().env(Environment.builder().account(account).region("us-east-1").build()).build(),
+                envSuffix);
+        new RegionalStack(app, "TapStack-" + envSuffix + "-usw2",
+                StackProps.builder().env(Environment.builder().account(account).region("us-west-2").build()).build(),
+                envSuffix);
 
         app.synth();
     }
