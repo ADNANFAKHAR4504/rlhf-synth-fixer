@@ -68,17 +68,6 @@ resource "aws_s3_bucket_ownership_controls" "logs" {
 }
 
 # =========== KMS ===========
-resource "aws_kms_key" "logs" {
-  description             = "CMK for ${var.project_name} log encryption"
-  enable_key_rotation     = true
-  deletion_window_in_days = 30
-  tags                    = local.tags
-}
-
-resource "aws_kms_alias" "logs" {
-  name          = "alias/${var.project_name}-logs"
-  target_key_id = aws_kms_key.logs.key_id
-}
 
 # =========== CloudWatch Log Group ===========
 resource "aws_cloudwatch_log_group" "trail" {
@@ -136,6 +125,7 @@ resource "aws_iam_role_policy" "trail_cw" {
 }
 
 # =========== S3 bucket policy for CloudTrail + Config ===========
+# Use your existing caller identity (keep only one in the whole file)
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "kms_policy" {
@@ -176,6 +166,12 @@ resource "aws_kms_key" "logs" {
   policy                  = data.aws_iam_policy_document.kms_policy.json
   tags                    = local.tags
 }
+
+resource "aws_kms_alias" "logs" {
+  name          = "alias/${var.project_name}-logs"
+  target_key_id = aws_kms_key.logs.key_id
+}
+
 
 
 data "aws_iam_policy_document" "logs_bucket" {
