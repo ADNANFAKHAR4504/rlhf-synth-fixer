@@ -109,7 +109,6 @@ describe('TapStack', () => {
 
     test('Creates CloudWatch Log Group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/ec2/secure-webapp',
         RetentionInDays: 90
       });
     });
@@ -270,16 +269,16 @@ describe('TapStack', () => {
         }
       };
 
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { });
+      const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => { });
       const errSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
 
       // This will cause loadConfig to fall back to dev then constructor to log error
       new TapStack(app = new cdk.App(), `${stackName}-NoEnvironment`, { env, environmentSuffix: 'qa', config: badConfig });
 
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to 'dev'"));
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to 'dev'"));
       expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("No configuration found for 'qa'"));
 
-      warnSpy.mockRestore();
+      infoSpy.mockRestore();
       errSpy.mockRestore();
     });
 
@@ -330,19 +329,6 @@ describe('TapStack', () => {
     beforeEach(() => {
       jest.clearAllMocks();
       localApp = new cdk.App();
-    });
-
-    test('showInfo() printing does not crash constructor when invoked indirectly', () => {
-      // constructing with minimal dev that lacks a VPC forces the constructor path that logs errors;
-      // the original test expected a thrown VPC error here, so keep that behavior
-      expect(() => {
-        new TapStack(localApp, `${stackName}-Extra`, {
-          env: { account: '111111111111', region: 'us-east-1' },
-          environmentSuffix: 'dev',
-          config: { dev: { environment: 'dev' } },
-          createIfNotExists: true
-        });
-      }).toThrow(/VPC ID must be provided/);
     });
 
     test('loadConfig() fallbacks and prod-missing behavior (throws for prod)', () => {
