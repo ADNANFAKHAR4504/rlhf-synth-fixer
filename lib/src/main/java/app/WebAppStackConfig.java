@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 /**
- * Configuration class for WebAppStack to improve testability.
+ * Configuration class for WebAppStack to improve testability. 
  */
 public final class WebAppStackConfig {
     
