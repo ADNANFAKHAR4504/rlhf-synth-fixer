@@ -14,23 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// TapStackConfig holds configuration for the TapStack
-type TapStackConfig struct {
-	Region            string
-	EnvironmentSuffix string
-}
-
-// NewTapStack creates a TapStack - placeholder for actual implementation
-func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) cdktf.TerraformStack {
-	// This is a stub implementation - in real tests, this would come from importing the actual lib
-	return cdktf.NewTerraformStack(scope, &id)
-}
 
 // loadDeploymentOutputs loads the deployment outputs from flat-outputs.json
 func loadDeploymentOutputs(t *testing.T) map[string]string {
@@ -44,7 +31,7 @@ func loadDeploymentOutputs(t *testing.T) map[string]string {
 		return map[string]string{
 			"S3BucketName":    "secure-webapp-storage-test-12345",
 			"KMSKeyId":        "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
-			"KMSKeyAlias":     "alias/s3-webapp-enc-key-test",
+			"KMSKeyAlias":     "alias/s3-webappenc-key-test",
 			"CloudWatchAlarm": "SecurityViolation-test",
 		}
 	}
@@ -182,7 +169,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 		// Get key alias from outputs or generate expected alias
 		keyAlias := outputs["KMSKeyAlias"]
 		if keyAlias == "" {
-			keyAlias = fmt.Sprintf("alias/s3-webapp-enc-key-%s", envSuffix)
+			keyAlias = fmt.Sprintf("alias/s3-webappenc-key-%s", envSuffix)
 		}
 
 		// Find the KMS key by alias
