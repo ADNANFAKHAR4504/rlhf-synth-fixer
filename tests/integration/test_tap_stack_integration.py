@@ -167,19 +167,17 @@ class TestTapStackIntegration(unittest.TestCase):
         alb_dns = self.outputs.get("LoadBalancerDNS")
         self.assertIsNotNone(alb_dns, "LoadBalancer DNS not found in outputs")
         
-        # Extract ALB name from DNS (format: name-randomstring.region.elb.amazonaws.com)
-        alb_name = alb_dns.split('.')[0]
-        
         try:
-            # Get ALB details using ELBv2 client
-            response = self.elbv2_client.describe_load_balancers(
-                Names=[alb_name]
-            )
+            # Find ALB by DNS name instead of parsing the name (which can be >32 chars)
+            response = self.elbv2_client.describe_load_balancers()
             
-            load_balancers = response['LoadBalancers']
-            self.assertEqual(len(load_balancers), 1, "ALB not found")
+            alb = None
+            for lb in response['LoadBalancers']:
+                if lb['DNSName'] == alb_dns:
+                    alb = lb
+                    break
             
-            alb = load_balancers[0]
+            self.assertIsNotNone(alb, f"ALB with DNS {alb_dns} not found")
             self.assertEqual(alb['Type'], 'application', "Not an Application Load Balancer")
             self.assertEqual(alb['Scheme'], 'internet-facing', "ALB is not internet-facing")
             self.assertEqual(alb['State']['Code'], 'active', "ALB is not active")
@@ -210,10 +208,24 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertIsNotNone(web_acl_id, "WebACL ID not found in outputs")
         
         try:
-            # Get WAF Web ACL details
+            # List WAF Web ACLs to find our Web ACL by ID
+            response = self.wafv2_client.list_web_acls(
+                Scope='REGIONAL'
+            )
+            
+            web_acl_summary = None
+            for acl in response['WebACLs']:
+                if acl['Id'] == web_acl_id:
+                    web_acl_summary = acl
+                    break
+            
+            self.assertIsNotNone(web_acl_summary, f"Web ACL with ID {web_acl_id} not found")
+            
+            # Now get the full Web ACL details using both name and ID
             response = self.wafv2_client.get_web_acl(
                 Scope='REGIONAL',
-                Id=web_acl_id
+                Id=web_acl_id,
+                Name=web_acl_summary['Name']
             )
             
             web_acl = response['WebACL']
