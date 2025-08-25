@@ -1,12 +1,15 @@
 package app;
 
-import app.InfrastructureConfig;
-import app.VpcStack;
-import app.KmsStack;
-import app.IamStack;
-import app.SecurityStack;
 import com.pulumi.Pulumi;
 import com.pulumi.Context;
+import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.kms.Key;
+import com.pulumi.aws.kms.KeyArgs;
+import com.pulumi.aws.kms.Alias;
+import com.pulumi.aws.kms.AliasArgs;
+import com.pulumi.aws.iam.*;
+import com.pulumi.resources.CustomResourceOptions;
+import java.util.Map;
 
 public final class Main {
     
@@ -31,18 +34,283 @@ public final class Main {
         var config = new InfrastructureConfig(ctx);
         
         // 1. KMS Keys (must be created first for encryption)
-        var kmsStack = new KmsStack("kms", config);
+        var s3Key = new Key("kms-s3", KeyArgs.builder()
+            .description("KMS key for S3 bucket encryption")
+            .keyUsage("ENCRYPT_DECRYPT")
+            .customerMasterKeySpec("SYMMETRIC_DEFAULT")
+            .enableKeyRotation(true)
+            .tags(getStandardTags(config, "security", "kms"))
+            .build());
+            
+        new Alias("kms-alias-s3", AliasArgs.builder()
+            .name("alias/" + getResourceName(config, "s3", "encryption"))
+            .targetKeyId(s3Key.keyId())
+            .build());
+        
+        var rdsKey = new Key("kms-rds", KeyArgs.builder()
+            .description("KMS key for RDS encryption")
+            .keyUsage("ENCRYPT_DECRYPT")
+            .customerMasterKeySpec("SYMMETRIC_DEFAULT")
+            .enableKeyRotation(true)
+            .tags(getStandardTags(config, "security", "kms"))
+            .build());
+            
+        new Alias("kms-alias-rds", AliasArgs.builder()
+            .name("alias/" + getResourceName(config, "rds", "encryption"))
+            .targetKeyId(rdsKey.keyId())
+            .build());
+        
+        var lambdaKey = new Key("kms-lambda", KeyArgs.builder()
+            .description("KMS key for Lambda environment variable encryption")
+            .keyUsage("ENCRYPT_DECRYPT")
+            .customerMasterKeySpec("SYMMETRIC_DEFAULT")
+            .enableKeyRotation(true)
+            .tags(getStandardTags(config, "security", "kms"))
+            .build());
+            
+        new Alias("kms-alias-lambda", AliasArgs.builder()
+            .name("alias/" + getResourceName(config, "lambda", "encryption"))
+            .targetKeyId(lambdaKey.keyId())
+            .build());
         
         // 2. IAM Roles and Policies
-        var iamStack = new IamStack("iam", config);
+        var lambdaExecutionRole = new Role("role-lambda-execution", RoleArgs.builder()
+            .assumeRolePolicy("""
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            }
+                        }
+                    ]
+                }
+                """)
+            .tags(getStandardTags(config, "security", "iam"))
+            .build());
+        
+        new RolePolicyAttachment("rpa-lambda-basic", RolePolicyAttachmentArgs.builder()
+            .role(lambdaExecutionRole.name())
+            .policyArn("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")
+            .build());
+            
+        new RolePolicyAttachment("rpa-lambda-vpc", RolePolicyAttachmentArgs.builder()
+            .role(lambdaExecutionRole.name())
+            .policyArn("arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole")
+            .build());
+        
+        var configServiceRole = new Role("role-config-service", RoleArgs.builder()
+            .assumeRolePolicy("""
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Action": "sts:AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            }
+                        }
+                    ]
+                }
+                """)
+            .tags(getStandardTags(config, "security", "iam"))
+            .build());
+        
+        new RolePolicyAttachment("rpa-config-service", RolePolicyAttachmentArgs.builder()
+            .role(configServiceRole.name())
+            .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")
+            .build());
         
         // 3. VPC and Networking
-        var vpcStack = new VpcStack("vpc", config);
+        var vpc = new Vpc("vpc-main", VpcArgs.builder()
+            .cidrBlock("10.0.0.0/16")
+            .enableDnsHostnames(true)
+            .enableDnsSupport(true)
+            .tags(getStandardTags(config, "networking", "vpc"))
+            .build());
+        
+        var igw = new InternetGateway("igw-main", InternetGatewayArgs.builder()
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "networking", "igw"))
+            .build());
+        
+        var publicSubnetA = new Subnet("subnet-public-a", SubnetArgs.builder()
+            .vpcId(vpc.id())
+            .cidrBlock("10.0.1.0/24")
+            .availabilityZone("us-east-1a")
+            .mapPublicIpOnLaunch(true)
+            .tags(getStandardTags(config, "networking", "public-subnet"))
+            .build());
+            
+        var publicSubnetB = new Subnet("subnet-public-b", SubnetArgs.builder()
+            .vpcId(vpc.id())
+            .cidrBlock("10.0.2.0/24")
+            .availabilityZone("us-east-1b")
+            .mapPublicIpOnLaunch(true)
+            .tags(getStandardTags(config, "networking", "public-subnet"))
+            .build());
+        
+        var eipA = new Eip("eip-nat-a", EipArgs.builder()
+            .domain("vpc")
+            .tags(getStandardTags(config, "networking", "eip"))
+            .build());
+            
+        var eipB = new Eip("eip-nat-b", EipArgs.builder()
+            .domain("vpc")
+            .tags(getStandardTags(config, "networking", "eip"))
+            .build());
+        
+        var natGatewayA = new NatGateway("nat-a", NatGatewayArgs.builder()
+            .allocationId(eipA.id())
+            .subnetId(publicSubnetA.id())
+            .tags(getStandardTags(config, "networking", "nat"))
+            .build());
+            
+        var natGatewayB = new NatGateway("nat-b", NatGatewayArgs.builder()
+            .allocationId(eipB.id())
+            .subnetId(publicSubnetB.id())
+            .tags(getStandardTags(config, "networking", "nat"))
+            .build());
+        
+        var privateSubnetA = new Subnet("subnet-private-a", SubnetArgs.builder()
+            .vpcId(vpc.id())
+            .cidrBlock("10.0.10.0/24")
+            .availabilityZone("us-east-1a")
+            .tags(getStandardTags(config, "networking", "private-subnet"))
+            .build());
+            
+        var privateSubnetB = new Subnet("subnet-private-b", SubnetArgs.builder()
+            .vpcId(vpc.id())
+            .cidrBlock("10.0.11.0/24")
+            .availabilityZone("us-east-1b")
+            .tags(getStandardTags(config, "networking", "private-subnet"))
+            .build());
+        
+        var publicRouteTable = new RouteTable("rt-public", RouteTableArgs.builder()
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "networking", "route-table"))
+            .build());
+            
+        var privateRouteTableA = new RouteTable("rt-private-a", RouteTableArgs.builder()
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "networking", "route-table"))
+            .build());
+            
+        var privateRouteTableB = new RouteTable("rt-private-b", RouteTableArgs.builder()
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "networking", "route-table"))
+            .build());
+        
+        new Route("route-public-igw", RouteArgs.builder()
+            .routeTableId(publicRouteTable.id())
+            .destinationCidrBlock("0.0.0.0/0")
+            .gatewayId(igw.id())
+            .build());
+            
+        new Route("route-private-a-nat", RouteArgs.builder()
+            .routeTableId(privateRouteTableA.id())
+            .destinationCidrBlock("0.0.0.0/0")
+            .natGatewayId(natGatewayA.id())
+            .build());
+            
+        new Route("route-private-b-nat", RouteArgs.builder()
+            .routeTableId(privateRouteTableB.id())
+            .destinationCidrBlock("0.0.0.0/0")
+            .natGatewayId(natGatewayB.id())
+            .build());
+        
+        new RouteTableAssociation("rta-public-a", RouteTableAssociationArgs.builder()
+            .subnetId(publicSubnetA.id())
+            .routeTableId(publicRouteTable.id())
+            .build());
+            
+        new RouteTableAssociation("rta-public-b", RouteTableAssociationArgs.builder()
+            .subnetId(publicSubnetB.id())
+            .routeTableId(publicRouteTable.id())
+            .build());
+            
+        new RouteTableAssociation("rta-private-a", RouteTableAssociationArgs.builder()
+            .subnetId(privateSubnetA.id())
+            .routeTableId(privateRouteTableA.id())
+            .build());
+            
+        new RouteTableAssociation("rta-private-b", RouteTableAssociationArgs.builder()
+            .subnetId(privateSubnetB.id())
+            .routeTableId(privateRouteTableB.id())
+            .build());
         
         // 4. Security Groups
-        var securityStack = new SecurityStack("security", config, vpcStack);
+        var lambdaSecurityGroup = new SecurityGroup("sg-lambda", SecurityGroupArgs.builder()
+            .name(getResourceName(config, "sg", "lambda"))
+            .description("Security group for Lambda functions")
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "security", "sg"))
+            .build());
         
-        // Note: Additional stacks (S3, CloudTrail, Config, RDS, Lambda) 
+        var rdsSecurityGroup = new SecurityGroup("sg-rds", SecurityGroupArgs.builder()
+            .name(getResourceName(config, "sg", "rds"))
+            .description("Security group for RDS database")
+            .vpcId(vpc.id())
+            .tags(getStandardTags(config, "security", "sg"))
+            .build());
+        
+        // Note: Additional infrastructure (S3, CloudTrail, Config, RDS, Lambda) 
         // would be implemented here when needed
+    }
+    
+    /**
+     * Helper class for infrastructure configuration
+     */
+    private static class InfrastructureConfig {
+        private final Context ctx;
+        private final String environment;
+        private final String companyName;
+        private final String region;
+        
+        public InfrastructureConfig(Context ctx) {
+            this.ctx = ctx;
+            this.environment = ctx.config().require("environment");
+            this.companyName = ctx.config().require("companyName");
+            this.region = "us-east-1"; // Fixed for financial services compliance
+        }
+        
+        public String getEnvironment() { return environment; }
+        public String getCompanyName() { return companyName; }
+        public String getRegion() { return region; }
+        public Context getContext() { return ctx; }
+    }
+    
+    /**
+     * Helper method to get standard tags
+     */
+    private static Map<String, String> getStandardTags(InfrastructureConfig config, String service) {
+        var tags = new java.util.HashMap<>(Map.of(
+            "Environment", config.getEnvironment(),
+            "Company", config.getCompanyName(),
+            "ManagedBy", "Pulumi",
+            "Compliance", "FinancialServices"
+        ));
+        tags.put("Service", service);
+        return tags;
+    }
+    
+    /**
+     * Helper method to get standard tags with component
+     */
+    private static Map<String, String> getStandardTags(InfrastructureConfig config, String service, String component) {
+        var tags = new java.util.HashMap<>(getStandardTags(config, service));
+        tags.put("Component", component);
+        return tags;
+    }
+    
+    /**
+     * Helper method to generate resource names
+     */
+    private static String getResourceName(InfrastructureConfig config, String service, String resource) {
+        return String.format("%s-%s-%s-%s", config.getCompanyName(), config.getEnvironment(), service, resource);
     }
 }
