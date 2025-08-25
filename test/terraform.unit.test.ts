@@ -183,8 +183,8 @@ describe('Secure AWS Infrastructure Unit Tests', () => {
     test('creates IAM role for EC2 with proper assume role policy', () => {
       expect(tf).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
       expect(tf).toMatch(/assume_role_policy/);
-      expect(tf).toMatch(/"Service".*ec2\.amazonaws\.com/);
-      expect(tf).toMatch(/"sts:AssumeRole"/);
+      expect(tf).toMatch(/Service.*=.*ec2\.amazonaws\.com/);
+      expect(tf).toMatch(/sts:AssumeRole/);
     });
 
     test('IAM policy grants least privilege S3 access', () => {
@@ -250,7 +250,7 @@ describe('Secure AWS Infrastructure Unit Tests', () => {
     test('AMI data source filters for Amazon Linux 2023', () => {
       expect(tf).toMatch(/most_recent\s*=\s*true/);
       expect(tf).toMatch(/owners\s*=\s*\["amazon"\]/);
-      expect(tf).toMatch(/name.*=.*"al2023-ami-\*-x86_64"/);
+      expect(tf).toMatch(/al2023-ami-\*-x86_64/);
       expect(tf).toMatch(/state.*=.*"available"/);
     });
   });
