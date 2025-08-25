@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
-    "Network Infrastructure Design", 
+    "Network Infrastructure Design",
     "Access Control",
     "General Infrastructure Tooling QA",
     "IaC Optimization"
@@ -28,5 +28,11 @@
     "Network ACLs",
     "VPC Endpoints",
     "EC2 Instance Connect Endpoint"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
