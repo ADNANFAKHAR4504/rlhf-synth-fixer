@@ -622,12 +622,6 @@ output "db_instance_resource_id" {
   description = "Resource ID of the database instance"
   value       = aws_db_instance.main.resource_id
 }
-
-output "db_instance_arn" {
-  description = "ARN of the database instance"
-  value       = aws_db_instance.main.arn
-}
-
 output "db_instance_username" {
   description = "Master username for the database instance"
   value       = aws_db_instance.main.username
@@ -752,56 +746,7 @@ output "db_instance_backup_retention_period" {
   description = "Backup retention period"
   value       = aws_db_instance.main.backup_retention_period
 }
-
-output "db_instance_multi_az" {
-  description = "Whether the instance is multi-AZ"
-  value       = aws_db_instance.main.multi_az
-}
-
-output "db_instance_publicly_accessible" {
-  description = "Whether the instance is publicly accessible"
-  value       = aws_db_instance.main.publicly_accessible
-}
-
 output "db_instance_storage_type" {
   description = "Storage type"
   value       = aws_db_instance.main.storage_type
 }
-
-output "db_instance_arn" {
-  description = "ARN of the database instance"
-  value       = aws_db_instance.main.arn
-}
-
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
-  }
-}
-
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
-
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
