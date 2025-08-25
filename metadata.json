@@ -2,6 +2,8 @@
   "platform": "pulumi",
   "language": "java",
   "po_id": "trainr317",
+  "team": "6",
+  "startedAt": "2025-08-25T00:00:00.000Z",
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
