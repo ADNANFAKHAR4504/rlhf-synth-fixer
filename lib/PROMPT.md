@@ -3,6 +3,7 @@ Project brief: Terraform secure AWS baseline (single file)
 Context
 We need a repeatable Terraform configuration that stands up a secure AWS baseline for a small web workload. Keep it simple, readable, and practical for day-to-day infrastructure work. The provider/backends are handled elsewhere.
 
+
 What to build (in one file named `tap_stack.tf`)
 
 - VPC with two public subnets (ALB/NAT) and two private subnets (EC2/RDS), routed appropriately. Include an S3 VPC endpoint.
