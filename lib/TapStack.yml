@@ -247,32 +247,6 @@ Resources:
                   - !GetAtt CloudTrailLogsBucket.Arn
                   - !Sub "${CloudTrailLogsBucket.Arn}/*"
 
-  # VPC Flow Log Service Role
-  VPCFlowLogRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "VPCFlowLogRole-${EnvironmentSuffix}"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: "sts:AssumeRole"
-      Policies:
-        - PolicyName: "FlowLogsDeliveryRolePolicy"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                  - "s3:GetBucketAcl"
-                  - "s3:ListBucket"
-                Resource:
-                  - !GetAtt VpcFlowLogsBucket.Arn
-                  - !Sub "${VpcFlowLogsBucket.Arn}/*"
-
   # CloudTrail
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -348,7 +322,6 @@ Resources:
     Type: AWS::EC2::FlowLog
     DependsOn:
       - VpcFlowLogsBucketPolicy
-      - VPCFlowLogRole
     Properties:
       ResourceId: !Ref SecureVPC
       ResourceType: "VPC"
@@ -356,7 +329,6 @@ Resources:
       LogDestination: !GetAtt VpcFlowLogsBucket.Arn
       LogDestinationType: s3
       LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
-      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
           Value: !Sub "VPCFlowLog-${EnvironmentSuffix}"

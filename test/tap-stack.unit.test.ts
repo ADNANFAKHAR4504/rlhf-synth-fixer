@@ -157,15 +157,6 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(trustPolicy.Statement[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
     });
 
-    test('should have VPC Flow Log service role', () => {
-      const role = template.Resources.VPCFlowLogRole;
-      expect(role).toBeDefined();
-      expect(role.Type).toBe('AWS::IAM::Role');
-
-      const trustPolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(trustPolicy.Statement[0].Principal.Service).toBe('delivery.logs.amazonaws.com');
-    });
-
     test('cross-account role should have least-privilege policies', () => {
       const role = template.Resources.CrossAccountRole;
       expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/ReadOnlyAccess');
@@ -304,7 +295,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
   describe('Security Best Practices Validation', () => {
     test('all IAM roles should have specific trust policies', () => {
-      const roles = ['CrossAccountRole', 'CloudTrailRole', 'VPCFlowLogRole'];
+      const roles = ['CrossAccountRole', 'CloudTrailRole'];
       roles.forEach(roleName => {
         const role = template.Resources[roleName];
         expect(role.Properties.AssumeRolePolicyDocument.Statement).toHaveLength(1);
