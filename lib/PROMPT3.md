@@ -1,4 +1,4 @@
-I am getting below errors in my code please check and fix them.
+our last fix worked, but build still failed with a new errors:
 
 ```
 '"@cdktf/provider-aws"' has no exported member named 'AwsProvider'. Did you mean 'provider'?ts(2724)
