@@ -22,6 +22,7 @@ import (
 )
 
 // loadDeploymentOutputs loads the deployment outputs from flat-outputs.json
+// loadDeploymentOutputs loads the deployment outputs from flat-outputs.json
 func loadDeploymentOutputs(t *testing.T) map[string]string {
 	t.Helper()
 
@@ -32,11 +33,30 @@ func loadDeploymentOutputs(t *testing.T) map[string]string {
 	}
 
 	// First try to parse as nested structure (CDKTF format)
-	var nestedOutputs map[string]map[string]string
+	var nestedOutputs map[string]map[string]interface{}
 	if err := json.Unmarshal(data, &nestedOutputs); err == nil {
-		// Find the first stack and return its outputs
-		for _, stackOutputs := range nestedOutputs {
-			return stackOutputs
+		// Find the first stack and return its outputs, converting interface{} to string
+		for stackName, stackOutputs := range nestedOutputs {
+			t.Logf("Loading outputs from stack: %s", stackName)
+			result := make(map[string]string)
+			for key, value := range stackOutputs {
+				// Convert interface{} to string
+				switch v := value.(type) {
+				case string:
+					result[key] = v
+				case float64:
+					result[key] = fmt.Sprintf("%.0f", v)
+				case int:
+					result[key] = fmt.Sprintf("%d", v)
+				case bool:
+					result[key] = fmt.Sprintf("%t", v)
+				default:
+					// For complex types like arrays, convert to JSON string
+					jsonBytes, _ := json.Marshal(v)
+					result[key] = string(jsonBytes)
+				}
+			}
+			return result
 		}
 	}
 
