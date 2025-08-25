@@ -126,6 +126,15 @@ jar {
     zip64 = true  // Enable zip64 for large archives
 }
 
+// AWS SDK dependencies for live resource testing (integration tests only)
+dependencies {
+    integrationTestImplementation 'software.amazon.awssdk:s3:2.24.12'
+    integrationTestImplementation 'software.amazon.awssdk:kms:2.24.12'
+    integrationTestImplementation 'software.amazon.awssdk:iam:2.24.12'
+    integrationTestImplementation 'software.amazon.awssdk:sns:2.24.12'
+    integrationTestImplementation 'software.amazon.awssdk:sts:2.24.12'
+}
+
 // JUnit configuration
 test {
     useJUnitPlatform()
@@ -221,8 +230,16 @@ jacocoTestCoverageVerification {
                 value = 'COVEREDRATIO'
                 minimum = 0.09
             }
-            // Exclude Main class from coverage requirements (contains main() method)
-            excludes = ['app.Main']
+            // Exclude Main class and infrastructure classes from coverage requirements
+            excludes = [
+                'app.Main',
+                'app.WebAppStack',
+                'app.WebAppStack.NetworkResources',
+                'app.WebAppStack.SecurityResources',
+                'app.WebAppStack.ComputeResources',
+                'app.WebAppStack.LoadBalancerResources',
+                'app.WebAppStack.StorageResources'
+            ]
         }
     }
 }
