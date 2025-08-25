@@ -40,11 +40,14 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
   };
 
   beforeAll(async () => {
+    console.log('Loading terraform outputs...');
+    
     // Try to load outputs from deployment
     const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf8');
       outputs = JSON.parse(outputsContent);
+      console.log('Loaded outputs from file:', Object.keys(outputs || {}));
     } else {
       // Try to get outputs from terraform directly
       try {
@@ -57,16 +60,26 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
           execAsync('terraform -chdir=lib output -json'),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ]);
-        if (stdout && stdout.trim()) {
-          outputs = JSON.parse(stdout);
+        
+        console.log('Terraform output stdout:', stdout);
+        
+        if (stdout && stdout.trim() && stdout.trim() !== '{}' && stdout.trim() !== '') {
+          try {
+            outputs = JSON.parse(stdout);
+            console.log('Parsed terraform outputs:', Object.keys(outputs || {}));
+          } catch (parseError) {
+            console.warn('Failed to parse terraform outputs:', parseError);
+            outputs = null;
+          }
         }
       } catch (error) {
-        console.warn('Could not load terraform outputs. Deployment may not be complete.');
+        console.warn('Could not load terraform outputs:', (error as Error).message || error);
+        outputs = null;
       }
     }
 
     // If no outputs are available, provide mock data for CI/CD pipeline testing
-    if (!outputs || Object.keys(outputs).length === 0) {
+    if (!outputs || Object.keys(outputs || {}).length === 0) {
       console.log('No terraform outputs found. Using mock data for integration tests.');
       outputs = {
         us_east_1: {
@@ -101,7 +114,10 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
           regions_deployed: ['us-east-1', 'eu-central-1', 'ap-southeast-2']
         }
       };
+      console.log('Mock data loaded successfully');
     }
+    
+    console.log('Final outputs keys:', Object.keys(outputs || {}));
   }, 10000); // 10 second timeout
 
   describe('Infrastructure Deployment Validation', () => {
