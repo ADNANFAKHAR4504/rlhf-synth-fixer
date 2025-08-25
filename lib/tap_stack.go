@@ -620,11 +620,11 @@ echo "Web server setup complete" > /var/log/setup.log
 
 		// Create CloudFront Origin Access Control
 		oac, err := cloudfront.NewOriginAccessControl(ctx, fmt.Sprintf("s3-oac-%s", environmentSuffix), &cloudfront.OriginAccessControlArgs{
-			Name:                         pulumi.Sprintf("s3-oac-%s", environmentSuffix),
-			Description:                  pulumi.String("OAC for S3 bucket access"),
+			Name:                          pulumi.Sprintf("s3-oac-%s", environmentSuffix),
+			Description:                   pulumi.String("OAC for S3 bucket access"),
 			OriginAccessControlOriginType: pulumi.String("s3"),
-			SigningBehavior:              pulumi.String("always"),
-			SigningProtocol:              pulumi.String("sigv4"),
+			SigningBehavior:               pulumi.String("always"),
+			SigningProtocol:               pulumi.String("sigv4"),
 		})
 		if err != nil {
 			return err
@@ -647,13 +647,13 @@ echo "Web server setup complete" > /var/log/setup.log
 			Comment:           pulumi.String("CloudFront distribution for S3 bucket"),
 			DefaultRootObject: pulumi.String("index.html"),
 			DefaultCacheBehavior: &cloudfront.DistributionDefaultCacheBehaviorArgs{
-				AllowedMethods:  pulumi.StringArray{pulumi.String("DELETE"), pulumi.String("GET"), pulumi.String("HEAD"), pulumi.String("OPTIONS"), pulumi.String("PATCH"), pulumi.String("POST"), pulumi.String("PUT")},
-				CachedMethods:   pulumi.StringArray{pulumi.String("GET"), pulumi.String("HEAD")},
-				TargetOriginId:  pulumi.String("S3-secure-web-app"),
+				AllowedMethods:       pulumi.StringArray{pulumi.String("DELETE"), pulumi.String("GET"), pulumi.String("HEAD"), pulumi.String("OPTIONS"), pulumi.String("PATCH"), pulumi.String("POST"), pulumi.String("PUT")},
+				CachedMethods:        pulumi.StringArray{pulumi.String("GET"), pulumi.String("HEAD")},
+				TargetOriginId:       pulumi.String("S3-secure-web-app"),
 				ViewerProtocolPolicy: pulumi.String("redirect-to-https"),
-				MinTtl:          pulumi.Int(0),
-				DefaultTtl:      pulumi.Int(3600),
-				MaxTtl:          pulumi.Int(86400),
+				MinTtl:               pulumi.Int(0),
+				DefaultTtl:           pulumi.Int(3600),
+				MaxTtl:               pulumi.Int(86400),
 				ForwardedValues: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs{
 					QueryString: pulumi.Bool(false),
 					Cookies: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs{
@@ -749,8 +749,6 @@ echo "Web server setup complete" > /var/log/setup.log
 		if err != nil {
 			return err
 		}
-
-
 
 		// Outputs
 		ctx.Export("vpcId", vpc.ID())
