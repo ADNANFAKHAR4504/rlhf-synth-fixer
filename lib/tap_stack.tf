@@ -92,6 +92,7 @@ data "aws_ami" "amazon_linux_secondary" {
 resource "random_password" "rds_master_password" {
   length  = 16
   special = true
+  override_special = "!#$%&()*+-=:?^_"
 }
 
 # Random string for RDS master username
