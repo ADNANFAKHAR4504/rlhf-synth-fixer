@@ -13,7 +13,10 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
+import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
 import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
+import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
+import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
 import software.amazon.awscdk.services.ec2.IMachineImage;
 import software.amazon.awscdk.services.ec2.Instance;
 import software.amazon.awscdk.services.ec2.InstanceClass;
@@ -124,15 +127,19 @@ class VpcInfrastructureStack extends Stack {
     // Create IAM role for EC2 instance with Session Manager support
     Role ec2Role = Role.Builder.create(this, "Ec2Role")
         .roleName("tap-" + environmentSuffix + "-ec2-role")
-        .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+        .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
         .managedPolicies(Arrays.asList(
             ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
         .build();
 
     // Get the latest Amazon Linux 2 AMI
     IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux(
-        AmazonLinuxGeneration.AMAZON_LINUX_2,
-        AmazonLinuxCpuType.X86_64);
+        AmazonLinuxImageProps.builder()
+            .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
+            .edition(AmazonLinuxEdition.STANDARD)
+            .virtualization(AmazonLinuxVirt.HVM)
+            .cpuType(AmazonLinuxCpuType.X86_64)
+            .build());
 
     // Create EC2 instance in the first public subnet
     this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
