@@ -8,6 +8,11 @@ import software.amazon.awscdk.assertions.Template;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Integration-style tests for the FaultTolerantStack.
+ * These tests validate cross-resource wiring, compliance, and high availability features.
+ * HostedZone lookups are avoided since Main.java uses static HostedZoneAttributes.
+ */
 public class MainIntegrationTest {
 
     private Template synthesizeTemplate(String id) {
@@ -18,23 +23,14 @@ public class MainIntegrationTest {
                                 .account("123456789012")
                                 .region("us-east-1")
                                 .build())
-                        .build()) {
-            @Override
-            protected software.amazon.awscdk.services.route53.IHostedZone createHostedZoneMock(String env) {
-                return software.amazon.awscdk.services.route53.HostedZone.fromHostedZoneAttributes(this, id + "-FakeZone",
-                        software.amazon.awscdk.services.route53.HostedZoneAttributes.builder()
-                                .hostedZoneId("Z123456FAKE")
-                                .zoneName("example.com")
-                                .build());
-            }
-        };
+                        .build());
         return Template.fromStack(stack);
     }
 
     @Test
     public void testVpcHasPrivateAndPublicSubnets() {
         Template template = synthesizeTemplate("IntegrationVpc");
-        template.resourceCountIs("AWS::EC2::Subnet", 4);
+        template.resourceCountIs("AWS::EC2::Subnet", 4); // 2 public + 2 private
     }
 
     @Test
@@ -107,7 +103,6 @@ public class MainIntegrationTest {
     public void testRoute53DnsPointsToAlb() {
         Template template = synthesizeTemplate("IntegrationDns");
 
-        // ✅ No Hamcrest, just assert A record exists
         template.hasResourceProperties("AWS::Route53::RecordSet", Map.of(
                 "Type", "A"
         ));

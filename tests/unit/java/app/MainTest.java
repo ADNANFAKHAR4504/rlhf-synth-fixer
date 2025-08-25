@@ -1,17 +1,18 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.assertions.Template;
-import software.amazon.awscdk.services.route53.HostedZone;
-import software.amazon.awscdk.services.route53.IHostedZone;
-import software.amazon.awscdk.services.route53.HostedZoneAttributes; // ✅ added
 
 import java.util.Map;
 
+/**
+ * Unit tests for the FaultTolerantStack in Main.java.
+ * These tests use CDK assertions to validate synthesized CloudFormation templates.
+ * HostedZone lookups are avoided since Main.java uses static HostedZoneAttributes.
+ */
 public class MainTest {
 
     private Main.FaultTolerantStack createTestStack(App app, String id) {
@@ -21,16 +22,7 @@ public class MainTest {
                                 .account("123456789012")
                                 .region("us-east-1")
                                 .build())
-                        .build()) {
-            @Override
-            protected IHostedZone createHostedZoneMock(String env) {
-                return HostedZone.fromHostedZoneAttributes(this, id + "-FakeZone",
-                        HostedZoneAttributes.builder()  // ✅ corrected usage
-                                .hostedZoneId("Z123456FAKE")
-                                .zoneName("example.com")
-                                .build());
-            }
-        };
+                        .build());
     }
 
     @Test

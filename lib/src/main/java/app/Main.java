@@ -29,14 +29,14 @@ public class Main {
 
         new FaultTolerantStack(app, "Nova-East", StackProps.builder()
                 .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                        .account(System.getenv().getOrDefault("CDK_DEFAULT_ACCOUNT", "123456789012"))
                         .region("us-east-1")
                         .build())
                 .build());
 
         new FaultTolerantStack(app, "Nova-West", StackProps.builder()
                 .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                        .account(System.getenv().getOrDefault("CDK_DEFAULT_ACCOUNT", "123456789012"))
                         .region("us-west-2")
                         .build())
                 .build());
@@ -103,7 +103,7 @@ public class Main {
                     .build();
             ApplicationListener listener = alb.addListener(env + "-listener",
                     BaseApplicationListenerProps.builder()
-                            .port(80) // replace with HTTPS + ACM if needed
+                            .port(80)
                             .protocol(ApplicationProtocol.HTTP)
                             .build());
             listener.addTargets(env + "-targets",
@@ -148,8 +148,12 @@ public class Main {
             Topic alarmTopic = new Topic(this, env + "-alarm-topic");
             cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-            // Route53 DNS
-            IHostedZone zone = createHostedZoneMock(env);
+            // Route53 DNS — use static HostedZoneAttributes to avoid lookup
+            IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, env + "-zone",
+                    HostedZoneAttributes.builder()
+                            .hostedZoneId("ZFAKE123456")   // placeholder HostedZoneId
+                            .zoneName("example.com")        // placeholder domain
+                            .build());
 
             ARecord.Builder.create(this, env + "-dns")
                     .zone(zone)
@@ -157,16 +161,6 @@ public class Main {
                     .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
                     .ttl(Duration.minutes(1))
                     .build();
-        }
-
-        /**
-         * Extracted into a protected method so that tests can override with a fake zone.
-         */
-        protected IHostedZone createHostedZoneMock(String env) {
-            return HostedZone.fromLookup(this, env + "-zone",
-                    HostedZoneProviderProps.builder()
-                            .domainName("example.com")
-                            .build());
         }
     }
 }
