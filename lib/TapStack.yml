@@ -21,7 +21,6 @@ Parameters:
 
 Conditions:
   ShouldCreateKeyPair: !Equals [!Ref CreateKeyPair, 'true']
-  UseExistingKeyPair: !Equals [!Ref CreateKeyPair, 'false']
 
 Resources:
   # Generate random password for RDS
@@ -418,15 +417,12 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub 'AcmeWeb-${Environment}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         KeyName: !If
           - ShouldCreateKeyPair
           - !Ref AcmeWebKeyPair
-          - !If
-            - UseExistingKeyPair
-            - !Ref ExistingKeyPairName
-            - !Ref 'AWS::NoValue'
+          - !Ref ExistingKeyPairName
         IamInstanceProfile:
           Arn: !GetAtt AcmeWebEC2InstanceProfile.Arn
         SecurityGroupIds:

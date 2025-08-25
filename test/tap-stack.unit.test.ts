@@ -54,7 +54,6 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
   describe('Conditions', () => {
     test('should have correct conditions defined', () => {
       expect(templateContent).toContain('ShouldCreateKeyPair:');
-      expect(templateContent).toContain('UseExistingKeyPair:');
     });
   });
 
@@ -273,7 +272,6 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
 
     test('should have proper key pair conditions', () => {
       expect(templateContent).toContain('ShouldCreateKeyPair: !Equals [!Ref CreateKeyPair');
-      expect(templateContent).toContain('UseExistingKeyPair: !Equals [!Ref CreateKeyPair');
     });
   });
 
