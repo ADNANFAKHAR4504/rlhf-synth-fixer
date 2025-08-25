@@ -25,5 +25,5 @@ variable "project_name" {
 variable "enable_guardduty" {
   description = "Enable GuardDuty detector (set to false if already exists)"
   type        = bool
-  default     = false
+  default     = true
 }
