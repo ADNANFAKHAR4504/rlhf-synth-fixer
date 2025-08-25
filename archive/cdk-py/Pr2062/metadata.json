@@ -9,7 +9,7 @@
   "subtask": "CI/CD Pipeline Infrastructure",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Network Configuration",
     "Resource Scaling",
@@ -20,7 +20,7 @@
   "training_quality": 8,
   "aws_services": [
     "ECS",
-    "Fargate", 
+    "Fargate",
     "VPC",
     "ALB",
     "CloudWatch",
@@ -30,5 +30,11 @@
     "Application Auto Scaling",
     "SNS",
     "CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
