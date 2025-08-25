@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
@@ -20,6 +21,12 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 		environmentSuffix = "synthtrainr308"
 	}
 
+	// Get current AWS account ID
+	current, err := aws.GetCallerIdentity(ctx, nil, nil)
+	if err != nil {
+		return err
+	}
+
 	// Common tags for HIPAA compliance
 	commonTags := pulumi.StringMap{
 		"Project":     pulumi.String("HealthApp"),
@@ -32,18 +39,18 @@ func CreateInfrastructure(ctx *pulumi.Context) error {
 	kmsKey, err := kms.NewKey(ctx, "healthapp-kms-key", &kms.KeyArgs{
 		Description: pulumi.String("KMS key for HealthApp HIPAA compliance"),
 		KeyUsage:    pulumi.String("ENCRYPT_DECRYPT"),
-		Policy: pulumi.String(`{
+		Policy: pulumi.Sprintf(`{
 			"Version": "2012-10-17",
 			"Statement": [
 				{
 					"Sid": "Enable IAM User Permissions",
 					"Effect": "Allow",
-					"Principal": {"AWS": "arn:aws:iam::*:root"},
+					"Principal": {"AWS": "arn:aws:iam::%s:root"},
 					"Action": "kms:*",
 					"Resource": "*"
 				}
 			]
-		}`),
+		}`, current.AccountId),
 		Tags: commonTags,
 	})
 	if err != nil {
