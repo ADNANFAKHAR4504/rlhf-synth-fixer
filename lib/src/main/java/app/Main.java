@@ -88,7 +88,8 @@ public class Main {
             IMachineImage ami = MachineImage.latestAmazonLinux2();
             AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, env + "-asg")
                     .vpc(vpc)
-                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE2, InstanceSize.MICRO))
+                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
+                            InstanceClass.BURSTABLE2, InstanceSize.MICRO))
                     .machineImage(ami)
                     .minCapacity(2)
                     .maxCapacity(6)
@@ -115,12 +116,13 @@ public class Main {
             // RDS Multi-AZ
             DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
                     .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                            .version(PostgresEngineVersion.VER_13_7)
+                            .version(PostgresEngineVersion.VER_15_4) // ✅ updated to supported version
                             .build()))
                     .vpc(vpc)
                     .allocatedStorage(20)
                     .multiAz(true)
-                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
+                    .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
+                            InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
                     .storageEncrypted(true)
                     .credentials(Credentials.fromGeneratedSecret("dbadmin"))
                     .removalPolicy(RemovalPolicy.DESTROY)
@@ -148,7 +150,7 @@ public class Main {
             Topic alarmTopic = new Topic(this, env + "-alarm-topic");
             cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-            // Route53 DNS — use static HostedZoneAttributes to avoid lookup
+            // Route53 DNS — static HostedZoneAttributes (no lookup)
             IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, env + "-zone",
                     HostedZoneAttributes.builder()
                             .hostedZoneId("ZFAKE123456")   // placeholder HostedZoneId
