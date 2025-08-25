@@ -462,8 +462,13 @@ func TestLambdaFilename(t *testing.T) {
 		t.Fatal("Lambda function not found")
 	}
 
-	if filename, ok := lambdaFunction["filename"]; !ok || filename != "./lib/lambda.zip" {
-		t.Errorf("expected filename './lib/lambda.zip', got: %v", filename)
+	if code, ok := lambdaFunction["code"]; !ok || code == nil {
+		t.Error("Lambda function should have inline code")
+	} else {
+		codeStr := code.(string)
+		if !strings.Contains(codeStr, "VPC Logging") {
+			t.Error("Lambda function code should contain VPC Logging functionality")
+		}
 	}
 
 	if handler, ok := lambdaFunction["handler"]; !ok || handler != "index.handler" {

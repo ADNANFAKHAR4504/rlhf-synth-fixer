@@ -165,16 +165,41 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		PolicyArn: lambdaPolicy.Arn(),
 	})
 
-	// Lambda Function with logging enabled
+	// Lambda Function for VPC logging (test version)
 	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("prod-security-function"), &lambdafunction.LambdaFunctionConfig{
 		FunctionName: jsii.String("prod-security-function"),
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Filename:     jsii.String("./lib/lambda.zip"),
-		KmsKeyArn:    kmsKey.Arn(),
-		Timeout:      jsii.Number(30),
-		MemorySize:   jsii.Number(256),
+		Code: jsii.String(`
+import json
+import os
+from datetime import datetime
+
+def handler(event, context):
+    """
+    VPC Logging test function
+    """
+    bucket_name = os.environ.get('BUCKET_NAME')
+    environment = os.environ.get('ENVIRONMENT')
+    
+    log_message = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'bucket_name': bucket_name,
+        'environment': environment,
+        'message': 'VPC logging test function executed successfully'
+    }
+    
+    print(json.dumps(log_message))
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps(log_message)
+    }
+`),
+		KmsKeyArn:  kmsKey.Arn(),
+		Timeout:    jsii.Number(30),
+		MemorySize: jsii.Number(256),
 		Environment: &lambdafunction.LambdaFunctionEnvironment{
 			Variables: &map[string]*string{
 				"BUCKET_NAME": s3Bucket.Bucket(),
@@ -423,12 +448,12 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		},
 	})
 
-	// CloudWatch Log Group for Lambda
-	lambdaLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("lambda-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:            jsii.String(fmt.Sprintf("/aws/lambda/%s-security-function", envPrefix)),
+	// CloudWatch Log Group for VPC Logging Lambda
+	lambdaLogGroup := cloudwatchloggroup.NewCloudwatchLogGroup(stack, jsii.String("vpc-logging-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:            jsii.String(fmt.Sprintf("/aws/lambda/%s-vpc-logging-function", envPrefix)),
 		RetentionInDays: jsii.Number(14),
 		Tags: &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("%s-lambda-log-group", envPrefix)),
+			"Name": jsii.String(fmt.Sprintf("%s-vpc-logging-log-group", envPrefix)),
 		},
 	})
 
@@ -452,10 +477,10 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		},
 	})
 
-	// Custom IAM Policy for Lambda with least privilege
-	lambdaPolicy := iampolicy.NewIamPolicy(stack, jsii.String("lambda-policy"), &iampolicy.IamPolicyConfig{
-		Name:        jsii.String(fmt.Sprintf("%s-lambda-policy", envPrefix)),
-		Description: jsii.String("Least privilege policy for Lambda function"),
+	// Custom IAM Policy for VPC Logging Lambda with least privilege
+	lambdaPolicy := iampolicy.NewIamPolicy(stack, jsii.String("vpc-logging-policy"), &iampolicy.IamPolicyConfig{
+		Name:        jsii.String(fmt.Sprintf("%s-vpc-logging-policy", envPrefix)),
+		Description: jsii.String("Least privilege policy for VPC logging Lambda function"),
 		Policy: jsii.String(fmt.Sprintf(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -465,7 +490,25 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 						"logs:CreateLogStream",
 						"logs:PutLogEvents"
 					],
-					"Resource": "arn:aws:logs:%s:*:log-group:/aws/lambda/%s-security-function:*"
+					"Resource": "arn:aws:logs:%s:*:log-group:/aws/lambda/%s-vpc-logging-function:*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"ec2:DescribeVpcs",
+						"ec2:DescribeFlowLogs",
+						"logs:DescribeLogGroups",
+						"logs:DescribeLogStreams"
+					],
+					"Resource": "*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:PutObject",
+						"s3:GetObject"
+					],
+					"Resource": "arn:aws:s3:::%s/*"
 				},
 				{
 					"Effect": "Allow",
@@ -479,7 +522,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 					"Resource": "%s"
 				}
 			]
-		}`, props.AwsRegion, envPrefix, *kmsKey.Arn())),
+		}`, props.AwsRegion, envPrefix, *s3Bucket.Bucket(), *kmsKey.Arn())),
 	})
 
 	// Attach policy to role
@@ -488,21 +531,79 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		PolicyArn: lambdaPolicy.Arn(),
 	})
 
-	// Lambda Function with logging enabled
-	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("security-function"), &lambdafunction.LambdaFunctionConfig{
-		FunctionName: jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
+	// Lambda Function for VPC logging
+	lambdaFunction := lambdafunction.NewLambdaFunction(stack, jsii.String("vpc-logging-function"), &lambdafunction.LambdaFunctionConfig{
+		FunctionName: jsii.String(fmt.Sprintf("%s-vpc-logging-function", envPrefix)),
 		Role:         lambdaRole.Arn(),
 		Handler:      jsii.String("index.handler"),
 		Runtime:      jsii.String("python3.9"),
-		Filename:     jsii.String("./lib/lambda.zip"),
-		KmsKeyArn:    kmsKey.Arn(),
-		Timeout:      jsii.Number(30),
-		MemorySize:   jsii.Number(256),
+		Code: jsii.String(`
+import json
+import boto3
+import os
+from datetime import datetime
+
+def handler(event, context):
+    """
+    VPC Logging Lambda function for monitoring VPC Flow Logs
+    """
+    vpc_id = os.environ.get('VPC_ID')
+    log_bucket = os.environ.get('LOG_BUCKET')
+    environment = os.environ.get('ENVIRONMENT')
+    
+    try:
+        # Initialize AWS clients
+        ec2 = boto3.client('ec2')
+        
+        # Check VPC Flow Logs status
+        flow_logs = ec2.describe_flow_logs(
+            Filters=[
+                {'Name': 'resource-id', 'Values': [vpc_id]}
+            ]
+        )
+        
+        log_message = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'vpc_id': vpc_id,
+            'environment': environment,
+            'flow_logs_count': len(flow_logs['FlowLogs']),
+            'flow_logs_status': [fl['FlowLogStatus'] for fl in flow_logs['FlowLogs']],
+            'message': 'VPC logging monitoring completed'
+        }
+        
+        print(json.dumps(log_message))
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps(log_message)
+        }
+        
+    except Exception as e:
+        error_message = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'vpc_id': vpc_id,
+            'environment': environment,
+            'error': str(e),
+            'message': 'VPC logging monitoring failed'
+        }
+        
+        print(json.dumps(error_message))
+        
+        return {
+            'statusCode': 500,
+            'body': json.dumps(error_message)
+        }
+`),
+		KmsKeyArn:  kmsKey.Arn(),
+		Timeout:    jsii.Number(30),
+		MemorySize: jsii.Number(256),
 		Environment: &lambdafunction.LambdaFunctionEnvironment{
 			Variables: &map[string]*string{
-				"BUCKET_NAME": s3Bucket.Bucket(),
+				"VPC_ID":      vpcResource.Id(),
+				"LOG_BUCKET":  s3Bucket.Bucket(),
 				"KMS_KEY_ID":  kmsKey.KeyId(),
 				"ENVIRONMENT": jsii.String(environmentSuffix),
+				"LOG_GROUP":   lambdaLogGroup.Name(),
 			},
 		},
 		VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
@@ -511,7 +612,7 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 		},
 		DependsOn: &[]cdktf.ITerraformDependable{lambdaLogGroup},
 		Tags: &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
+			"Name": jsii.String(fmt.Sprintf("%s-vpc-logging-function", envPrefix)),
 		},
 	})
 

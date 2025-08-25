@@ -4,7 +4,7 @@ You are tasked with configuring security as code for a company's AWS infrastruct
 
 ## Requirements
 
-1. **Logging**: Enable logging for all AWS Lambda functions to maintain operational visibility
+1. **Logging**: Enable logging for all VPC to maintain operational visibility
 2. **S3 Encryption**: All S3 buckets used must have server-side encryption enabled to protect stored data
 3. **KMS Management**: Manage encryption keys using AWS KMS to control access and use of encrypted resources
 4. **IAM Least Privilege**: IAM roles should have policies defined that adhere strictly to the principle of least privilege, minimizing the potential for unauthorized access
