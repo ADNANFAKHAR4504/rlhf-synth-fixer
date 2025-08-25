@@ -1315,6 +1315,22 @@ resource "aws_db_instance" "primary" {
   })
 }
 
+resource "aws_kms_key" "rds_secondary" {
+  provider                = aws.us_west_2
+  description             = "KMS key for RDS encryption in secondary region"
+  deletion_window_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-rds-kms-secondary"
+  })
+}
+
+resource "aws_kms_alias" "rds_secondary" {
+  provider      = aws.us_west_2
+  name          = "alias/${var.project_name}-rds-secondary"
+  target_key_id = aws_kms_key.rds_secondary.key_id
+}
+
 # RDS read replica in secondary region
 resource "aws_db_instance" "secondary" {
   provider = aws.us_west_2
@@ -1322,7 +1338,8 @@ resource "aws_db_instance" "secondary" {
   identifier                = "${var.project_name}-postgres-replica"
   replicate_source_db       = aws_db_instance.primary.arn
   instance_class            = "db.t3.micro"
-  storage_encrypted = true 
+  storage_encrypted         = true
+  kms_key_id                = aws_kms_key.rds_secondary.arn
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
   
