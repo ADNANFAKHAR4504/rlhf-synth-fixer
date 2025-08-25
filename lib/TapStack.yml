@@ -267,32 +267,6 @@ Resources:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # VPC Flow Logs Role
-  VPCFlowLogRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "VPCFlowLogRole-${EnvironmentSuffix}"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: "sts:AssumeRole"
-      Policies:
-        - PolicyName: "flowlogsDeliveryRolePolicy"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetBucketLocation"
-                  - "s3:PutObject"
-                  - "s3:GetBucketAcl"
-                Resource:
-                  - !GetAtt VpcFlowLogsBucket.Arn
-                  - !Sub "${VpcFlowLogsBucket.Arn}/*"
-
   # VPC Flow Logs
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
@@ -303,7 +277,6 @@ Resources:
       LogDestination: !GetAtt VpcFlowLogsBucket.Arn
       LogDestinationType: s3
       LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}"
-      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
           Value: !Sub "VPCFlowLog-${EnvironmentSuffix}"
