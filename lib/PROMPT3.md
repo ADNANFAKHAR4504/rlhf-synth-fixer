@@ -1,1 +1,1 @@
-In the Turn 2 response till have not provided the full response, may be in this response start from where you left off so that would be able to provide the full response. So Continue from where  left off in the tunr 2 response so that  would be able to complete it in this reponse. and finally provide tap_stack.tf file.
+Again model response failed with incomplete response. Which led to varioous resource creation failures. Generate the full repsonse.
