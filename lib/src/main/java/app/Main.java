@@ -67,18 +67,20 @@ class RegionalStack extends Stack {
                 .build());
 
         // ✅ RDS instance
-        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds-" + envSuffix)
-                .vpc(vpc)
+        DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds-" + region)
                 .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_13_7)
-                        .build()))
-                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
-                        InstanceClass.BURSTABLE2, InstanceSize.SMALL))
+                    .version(PostgresEngineVersion.VER_14_7)   // ✅ replace 13.7 with a supported version
+                    .build()))
+                .instanceType(ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
+                .vpc(vpc)
                 .multiAz(true)
+                .credentials(Credentials.fromGeneratedSecret("postgres"))
                 .allocatedStorage(20)
                 .storageEncrypted(true)
+                .deletionProtection(false)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+
 
         // ✅ CPU Alarm
         Alarm cpuAlarm = Alarm.Builder.create(this, "CpuAlarm-" + envSuffix)
