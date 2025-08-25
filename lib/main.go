@@ -3,11 +3,11 @@ package main
 import (
 	"strconv"
 	"time"
-	
+
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	
+
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/accessanalyzeranalyzer"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dynamodbtable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
@@ -67,8 +67,8 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 	// Create unique bucket name using timestamp
 	bucketSuffix := strconv.FormatInt(time.Now().Unix(), 16)
 	bucketName := "secureapp-bucket-" + bucketSuffix
-	
-	// Create S3 bucket with security configurations  
+
+	// Create S3 bucket with security configurations
 	secureAppBucket := s3bucket.NewS3Bucket(stack, jsii.String("SecureAppBucket"), &s3bucket.S3BucketConfig{
 		Bucket: jsii.String(bucketName),
 		Tags: &map[string]*string{
