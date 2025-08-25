@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292006",
+  "team": "1",
+  "startedAt": "2025-08-24T02:18:55.417Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Performance Optimization",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "Route 53",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}
