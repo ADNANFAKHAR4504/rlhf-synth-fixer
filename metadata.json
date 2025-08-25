@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "po_id": "trainr317",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Network Configuration"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS KMS",
+    "AWS IAM",
+    "Amazon VPC",
+    "Amazon EC2 Security Groups",
+    "AWS CloudTrail",
+    "Amazon GuardDuty",
+    "Amazon SNS",
+    "Amazon VPC Flow Logs",
+    "Amazon S3",
+    "Amazon CloudWatch Logs"
+  ]
+}

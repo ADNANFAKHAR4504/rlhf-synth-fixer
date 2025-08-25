@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  tapstack:primaryRegion: us-east-1
+  tapstack:secondaryRegion: eu-west-1
+  tapstack:tertiaryRegion: ap-southeast-2
