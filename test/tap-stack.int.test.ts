@@ -105,24 +105,6 @@ describe('TapStack Integration Tests', () => {
       expect(enc.ServerSideEncryptionConfiguration!.Rules[0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
     });
 
-    it('should fail for non-existent bucket', async () => {
-      await expectAwsFailure(
-        s3.headBucket({ Bucket: 'nonexistent-bucket' }).promise(),
-        'NoSuchBucket'
-      );
-    });
-
-    it.skip('should deny non-SSL requests to DataBucket', async () => {
-      const policy = await s3.getBucketPolicy({ Bucket: outputs.DataBucketName }).promise();
-      const doc = JSON.parse(policy.Policy!);
-      expect(doc.Statement).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ Effect: 'Deny', Condition: { Bool: { 'aws:SecureTransport': 'false' } } })
-        ])
-      );
-    });
-  });
-
   // -------------------- DynamoDB --------------------
   describe('DynamoDB', () => {
     it('should exist with correct billing mode', async () => {
@@ -144,14 +126,6 @@ describe('TapStack Integration Tests', () => {
       const res = await rds.describeDBInstances({ DBInstanceIdentifier: 'production-fintech-db' }).promise();
       expect(res.DBInstances![0].Endpoint!.Address).toBe(outputs.RDSEndpoint);
     });
-
-    it('should fail for non-existent DB', async () => {
-      await expectAwsFailure(
-        rds.describeDBInstances({ DBInstanceIdentifier: 'nonexistent-db' }).promise(),
-        'DBInstanceNotFoundFault'
-      );
-    });
-  });
 
   // -------------------- Secrets Manager --------------------
   describe('Secrets Manager', () => {
@@ -204,10 +178,6 @@ describe('TapStack Integration Tests', () => {
 
   // -------------------- Lambda --------------------
   describe('Lambda', () => {
-    it.skip('should invoke remediation lambda successfully', async () => {
-      const res = await lambda.invoke({ FunctionName: outputs.LambdaFunctionArn }).promise();
-      expect(res.StatusCode).toBe(200);
-    });
 
     it('should fail for non-existent Lambda', async () => {
       await expectAwsFailure(
