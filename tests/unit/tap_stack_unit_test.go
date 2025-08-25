@@ -526,17 +526,23 @@ func TestResourceNamingConsistency(t *testing.T) {
 	tfPath := synthStack(t, "us-east-1")
 	tfConfig := parseTerraformJSON(t, tfPath)
 
+	// Get environment suffix from env var or use default
+	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if envSuffix == "" {
+		envSuffix = "prod"
+	}
+
 	resources := []struct {
 		resourceType   string
 		resourceName   string
 		nameField      string
 		expectedPrefix string
 	}{
-		{"aws_kms_key", "prod-security-kms-key", "tags", "prod-security-kms-key"},
-		{"aws_s3_bucket", "prod-security-logs-bucket", "tags", "prod-security-logs-bucket"},
-		{"aws_lambda_function", "prod-security-function", "function_name", "prod-security-function"},
-		{"aws_iam_role", "prod-lambda-execution-role", "name", "prod-lambda-execution-role"},
-		{"aws_iam_policy", "prod-lambda-policy", "name", "prod-lambda-policy"},
+		{"aws_kms_key", "prod-security-kms-key", "tags", envSuffix + "-security-kms-ke"},
+		{"aws_s3_bucket", "prod-security-logs-bucket", "tags", envSuffix + "-security-logs-bucket"},
+		{"aws_lambda_function", "prod-security-function", "function_name", envSuffix + "-security-function"},
+		{"aws_iam_role", "prod-lambda-execution-role", "name", envSuffix + "-lambda-execution-role"},
+		{"aws_iam_policy", "prod-lambda-policy", "name", envSuffix + "-lambda-policy"},
 	}
 
 	for _, resource := range resources {
