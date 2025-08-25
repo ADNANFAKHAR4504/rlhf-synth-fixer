@@ -42,7 +42,10 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies ALB is accessible and healthy")
     def test_alb_is_accessible(self):
         """Test that the Application Load Balancer is accessible"""
-        alb_dns = self.outputs.get('LoadBalancerDns')
+        # Try multiple possible output keys for ALB DNS
+        alb_dns = (self.outputs.get('LoadBalancerDns') or 
+                  self.outputs.get('LoadBalancerDnspr2062') or
+                  next((v for k, v in self.outputs.items() if 'loadbalancerdns' in k.lower()), None))
         self.assertIsNotNone(alb_dns, "LoadBalancer DNS not found in outputs")
         
         # Test HTTP access with retries (ALB might take time to be ready)
@@ -61,7 +64,10 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies ECS cluster exists and is active")
     def test_ecs_cluster_exists(self):
         """Test that the ECS cluster exists and is active"""
-        cluster_name = self.outputs.get('ClusterName')
+        # Try multiple possible output keys for cluster name
+        cluster_name = (self.outputs.get('ClusterName') or 
+                       self.outputs.get('ClusterNamepr2062') or
+                       next((v for k, v in self.outputs.items() if 'clustername' in k.lower()), None))
         self.assertIsNotNone(cluster_name, "Cluster name not found in outputs")
         
         response = self.ecs_client.describe_clusters(clusters=[cluster_name])
@@ -75,7 +81,10 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies ECS service is running with tasks")
     def test_ecs_service_is_running(self):
         """Test that the ECS service is running with desired count"""
-        cluster_name = self.outputs.get('ClusterName')
+        # Try multiple possible output keys for cluster name
+        cluster_name = (self.outputs.get('ClusterName') or 
+                       self.outputs.get('ClusterNamepr2062') or
+                       next((v for k, v in self.outputs.items() if 'clustername' in k.lower()), None))
         self.assertIsNotNone(cluster_name)
         
         # List services in the cluster
@@ -98,7 +107,11 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies VPC exists with correct configuration")
     def test_vpc_exists(self):
         """Test that the VPC exists with correct configuration"""
-        vpc_id = self.outputs.get('webapp-vpc-id') or self.outputs.get('VPCId')
+        # Try multiple possible output keys for VPC ID
+        vpc_id = (self.outputs.get('webapp-vpc-id') or 
+                 self.outputs.get('VPCId') or
+                 self.outputs.get('webappvpcidpr2062') or
+                 next((v for k, v in self.outputs.items() if 'vpc' in k.lower() and 'id' in k.lower()), None))
         self.assertIsNotNone(vpc_id, "VPC ID not found in outputs")
         
         response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -115,8 +128,17 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies SSM parameters exist")
     def test_parameter_store_values_exist(self):
         """Test that SSM parameters exist"""
-        # Use a dynamic suffix from outputs or environment
+        # Extract environment suffix from output keys
         suffix = self.outputs.get('EnvironmentSuffix', '').lower()
+        if not suffix:
+            # Try to extract suffix from LoadBalancerDns key
+            for key in self.outputs.keys():
+                if key.startswith('LoadBalancerDns') and len(key) > len('LoadBalancerDns'):
+                    suffix = key[len('LoadBalancerDns'):].lower()
+                    break
+                elif key.startswith('ClusterName') and len(key) > len('ClusterName'):
+                    suffix = key[len('ClusterName'):].lower()
+                    break
         if not suffix:
             self.skipTest("Environment suffix not found in outputs")
         
@@ -160,7 +182,10 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies auto-scaling is configured")
     def test_auto_scaling_configured(self):
         """Test that auto-scaling is configured for the ECS service"""
-        cluster_name = self.outputs.get('ClusterName')
+        # Try multiple possible output keys for cluster name
+        cluster_name = (self.outputs.get('ClusterName') or 
+                       self.outputs.get('ClusterNamepr2062') or
+                       next((v for k, v in self.outputs.items() if 'clustername' in k.lower()), None))
         if not cluster_name:
             self.skipTest("Cluster name not found in outputs")
         
