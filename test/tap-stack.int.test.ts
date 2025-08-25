@@ -33,6 +33,14 @@ describe('TapStack Integration Tests', () => {
     console.log('Synthesized structure:', JSON.stringify(synthesized, null, 2));
   };
 
+  // Helper to safely check encryption configuration
+  const getEncryptionConfig = (config: any) => {
+    if (!config?.rule?.[0]?.apply_server_side_encryption_by_default?.[0]) {
+      return null;
+    }
+    return config.rule[0].apply_server_side_encryption_by_default[0];
+  };
+
   describe('Default Configuration', () => {
     beforeEach(() => {
       const app = Testing.app();
@@ -190,11 +198,9 @@ describe('TapStack Integration Tests', () => {
 
         if (encryptionConfigs.length > 0) {
           encryptionConfigs.forEach(config => {
-            if (config.rule && config.rule[0] && config.rule[0].apply_server_side_encryption_by_default) {
-              const encryptionDefault = config.rule[0].apply_server_side_encryption_by_default[0];
-              if (encryptionDefault.sse_algorithm) {
-                expect(encryptionDefault.sse_algorithm).toBe('aws:kms');
-              }
+            const encryptionDefault = getEncryptionConfig(config);
+            if (encryptionDefault?.sse_algorithm) {
+              expect(encryptionDefault.sse_algorithm).toBe('aws:kms');
             }
           });
         }
@@ -382,11 +388,9 @@ describe('TapStack Integration Tests', () => {
 
       if (encryptionConfigs.length > 0 && kmsKeys.length > 0) {
         encryptionConfigs.forEach(config => {
-          if (config.rule && config.rule[0] && config.rule[0].apply_server_side_encryption_by_default) {
-            const encryptionDefault = config.rule[0].apply_server_side_encryption_by_default[0];
-            if (encryptionDefault.kms_master_key_id) {
-              expect(encryptionDefault.kms_master_key_id).toBeDefined();
-            }
+          const encryptionDefault = getEncryptionConfig(config);
+          if (encryptionDefault?.kms_master_key_id) {
+            expect(encryptionDefault.kms_master_key_id).toBeDefined();
           }
         });
       }
@@ -497,8 +501,22 @@ describe('TapStack Integration Tests', () => {
       const resources = synthesized.resource || {};
 
       Object.keys(resources).forEach(resourceType => {
-        expect(resourceType).toMatch(/^[a-z_]+$/); // Valid Terraform resource type format
+        // Updated regex to allow AWS resource types (which contain underscores and can have uppercase letters in provider names)
+        expect(resourceType).toMatch(/^[a-z][a-z0-9_]*$/); // Valid Terraform resource type format
         expect(typeof resources[resourceType]).toBe('object');
+      });
+    });
+
+    it('should have valid resource names within each resource type', () => {
+      const resources = synthesized.resource || {};
+
+      Object.keys(resources).forEach(resourceType => {
+        const resourceInstances = resources[resourceType];
+        Object.keys(resourceInstances).forEach(resourceName => {
+          // Resource names should be valid Terraform identifiers
+          expect(resourceName).toMatch(/^[a-zA-Z_][a-zA-Z0-9_-]*$/);
+          expect(typeof resourceInstances[resourceName]).toBe('object');
+        });
       });
     });
   });
