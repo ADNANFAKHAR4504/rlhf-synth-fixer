@@ -1,7 +1,6 @@
 package app;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
@@ -10,7 +9,7 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
-import software.amazon.awscdk.services.autoscaling.HealthCheck;
+import software.amazon.awscdk.services.autoscaling.HealthChecks;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
@@ -70,7 +69,7 @@ class RegionalStack extends Stack {
                                 .build()))
                 .build();
 
-        // S3 Log Bucket (simplified lifecycle)
+        // S3 Log Bucket
         Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
                 .versioned(true)
                 .lifecycleRules(List.of(
@@ -100,7 +99,7 @@ class RegionalStack extends Stack {
                 .minCapacity(2)
                 .maxCapacity(4)
                 .role(ec2Role)
-                .healthCheck(HealthCheck.ec2())
+                .healthChecks(HealthChecks.ec2())   // ✅ modern API
                 .build();
 
         // Load Balancer
