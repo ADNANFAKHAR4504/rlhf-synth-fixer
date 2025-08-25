@@ -141,4 +141,6 @@ require (
 require (
 	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+  github.com/pulumi/pulumi-aws/sdk/v6 v6.22.2
+	github.com/pulumi/pulumi/sdk/v3 v3.105.0
 )
