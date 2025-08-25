@@ -1,4 +1,4 @@
-name: trainr347-webapp-deployment
+name: TapStack
 runtime: java
 description: Web Application Deployment with Auto Scaling and Load Balancer
 config:
