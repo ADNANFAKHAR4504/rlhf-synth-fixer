@@ -336,7 +336,13 @@ export class TapStack extends cdk.Stack {
               }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
-                actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                actions: [
+                  'kms:Decrypt',
+                  'kms:Encrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
                 resources: ['*'], // KMS permissions need to be broad for cross-region
               }),
             ],
@@ -347,6 +353,29 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(replicationRole).add('Environment', commonTags.Environment);
       cdk.Tags.of(replicationRole).add('Project', commonTags.Project);
       cdk.Tags.of(replicationRole).add('Owner', commonTags.Owner);
+
+      // Grant the replication role permissions on the source bucket via bucket policy
+      bucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AllowReplicationRoleListAndGetReplicationConfig',
+          principals: [new iam.ArnPrincipal(replicationRole.roleArn)],
+          actions: ['s3:ListBucket', 's3:GetReplicationConfiguration'],
+          resources: [bucket.bucketArn],
+        })
+      );
+
+      bucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AllowReplicationRoleReadSourceObjects',
+          principals: [new iam.ArnPrincipal(replicationRole.roleArn)],
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [bucket.arnForObjects('*')],
+        })
+      );
 
       // Configure replication on the primary bucket using CFN
       const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
@@ -359,6 +388,11 @@ export class TapStack extends cdk.Stack {
             priority: 1,
             filter: {
               prefix: '',
+            },
+            sourceSelectionCriteria: {
+              sseKmsEncryptedObjects: {
+                status: 'Enabled',
+              },
             },
             destination: {
               bucket: `arn:aws:s3:::tap-replica-bucket-${props?.environmentSuffix || 'dev'}-uswest1`,
