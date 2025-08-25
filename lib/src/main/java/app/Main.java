@@ -8,6 +8,10 @@ import com.pulumi.aws.kms.KeyArgs;
 import com.pulumi.aws.kms.Alias;
 import com.pulumi.aws.kms.AliasArgs;
 import com.pulumi.aws.iam.*;
+import com.pulumi.aws.s3.Bucket;
+import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.cloudtrail.Trail;
+import com.pulumi.aws.cloudtrail.TrailArgs;
 import com.pulumi.resources.CustomResourceOptions;
 import java.util.Map;
 
@@ -73,6 +77,19 @@ public final class Main {
             .targetKeyId(lambdaKey.keyId())
             .build());
         
+        var cloudTrailKey = new Key("kms-cloudtrail", KeyArgs.builder()
+            .description("KMS key for CloudTrail log encryption")
+            .keyUsage("ENCRYPT_DECRYPT")
+            .customerMasterKeySpec("SYMMETRIC_DEFAULT")
+            .enableKeyRotation(true)
+            .tags(getStandardTags(config, "security", "kms"))
+            .build());
+            
+        new Alias("kms-alias-cloudtrail", AliasArgs.builder()
+            .name("alias/" + getResourceName(config, "cloudtrail", "encryption"))
+            .targetKeyId(cloudTrailKey.keyId())
+            .build());
+        
         // 2. IAM Roles and Policies
         var lambdaExecutionRole = new Role("role-lambda-execution", RoleArgs.builder()
             .assumeRolePolicy("""
@@ -122,7 +139,7 @@ public final class Main {
         
         new RolePolicyAttachment("rpa-config-service", RolePolicyAttachmentArgs.builder()
             .role(configServiceRole.name())
-            .policyArn("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole")
+            .policyArn("arn:aws:iam::aws:policy/service-role/ConfigRole")
             .build());
         
         // 3. VPC and Networking
@@ -258,7 +275,51 @@ public final class Main {
             .tags(getStandardTags(config, "security", "sg"))
             .build());
         
-        // Note: Additional infrastructure (S3, CloudTrail, Config, RDS, Lambda) 
+        // 5. S3 Buckets for CloudTrail logs
+        var cloudTrailBucket = new Bucket("bucket-cloudtrail-logs", BucketArgs.builder()
+            .bucket(getResourceName(config, "cloudtrail", "logs"))
+            .tags(getStandardTags(config, "storage", "s3"))
+            .build());
+        
+        // 6. CloudTrail for audit trails and governance
+        var cloudTrail = new Trail("cloudtrail-main", TrailArgs.builder()
+            .name(getResourceName(config, "cloudtrail", "main"))
+            .s3BucketName(cloudTrailBucket.bucket())
+            .includeGlobalServiceEvents(true)
+            .isMultiRegionTrail(true)
+            .enableLogging(true)
+            .kmsKeyId(cloudTrailKey.keyId())
+            .tags(getStandardTags(config, "compliance", "cloudtrail"))
+            .build());
+        
+        // Export all outputs for testing and monitoring
+        ctx.export("vpcId", vpc.id());
+        ctx.export("vpcCidrBlock", vpc.cidrBlock());
+        ctx.export("publicSubnetIdA", publicSubnetA.id());
+        ctx.export("publicSubnetIdB", publicSubnetB.id());
+        ctx.export("privateSubnetIdA", privateSubnetA.id());
+        ctx.export("privateSubnetIdB", privateSubnetB.id());
+        ctx.export("lambdaSecurityGroupId", lambdaSecurityGroup.id());
+        ctx.export("rdsSecurityGroupId", rdsSecurityGroup.id());
+        ctx.export("lambdaExecutionRoleArn", lambdaExecutionRole.arn());
+        ctx.export("configServiceRoleArn", configServiceRole.arn());
+        ctx.export("s3KmsKeyId", s3Key.keyId());
+        ctx.export("rdsKmsKeyId", rdsKey.keyId());
+        ctx.export("lambdaKmsKeyId", lambdaKey.keyId());
+        ctx.export("cloudTrailKmsKeyId", cloudTrailKey.keyId());
+        ctx.export("cloudTrailBucketName", cloudTrailBucket.bucket());
+        ctx.export("cloudTrailName", cloudTrail.name());
+        ctx.export("cloudTrailArn", cloudTrail.arn());
+        ctx.export("internetGatewayId", igw.id());
+        ctx.export("natGatewayIdA", natGatewayA.id());
+        ctx.export("natGatewayIdB", natGatewayB.id());
+        ctx.export("elasticIpIdA", eipA.id());
+        ctx.export("elasticIpIdB", eipB.id());
+        ctx.export("publicRouteTableId", publicRouteTable.id());
+        ctx.export("privateRouteTableIdA", privateRouteTableA.id());
+        ctx.export("privateRouteTableIdB", privateRouteTableB.id());
+        
+        // Note: AWS Config and additional infrastructure (RDS, Lambda) 
         // would be implemented here when needed
     }
     
