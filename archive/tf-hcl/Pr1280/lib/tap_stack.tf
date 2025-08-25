@@ -462,7 +462,7 @@ resource "aws_iam_role" "instance_role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = { Service = "ec2.amazonaws.com" }
         Action    = "sts:AssumeRole"
       }
@@ -503,9 +503,9 @@ resource "aws_iam_role_policy" "ssm_parameter_access" {
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/app/${local.name_prefix}/*"
       },
       {
-        Sid    = "KmsDecryptForParameters"
-        Effect = "Allow"
-        Action = ["kms:Decrypt"]
+        Sid      = "KmsDecryptForParameters"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
         Resource = data.aws_kms_key.ssm.arn
       }
     ]
@@ -717,7 +717,7 @@ resource "aws_db_instance" "app" {
   storage_encrypted     = true
 
   engine         = "postgres"
-  engine_version = "15.14"  # <- use numeric minor; console shows as 15.14.R1
+  engine_version = "15.14" # <- use numeric minor; console shows as 15.14.R1
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -731,7 +731,7 @@ resource "aws_db_instance" "app" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  auto_minor_version_upgrade = true   # will move to 15.14.Rx patch automatically
+  auto_minor_version_upgrade = true # will move to 15.14.Rx patch automatically
   deletion_protection        = false
   skip_final_snapshot        = true
   final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"

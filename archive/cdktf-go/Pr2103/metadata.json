@@ -1,0 +1,38 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "Security Configuration as Code",
+  "po_id": "trainr964",
+  "team": "synth",
+  "startedAt": "2025-08-23T00:00:00Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Infrastructure Design",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Network ACLs",
+    "VPC Endpoints",
+    "EC2 Instance Connect Endpoint"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

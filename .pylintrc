@@ -27,7 +27,7 @@ max-line-length=120
 expected-line-ending-format=LF
 
 # Indentation preference
-indent-string='    '  # 4 spaces (Python standard)
+indent-string='    '  # 4 spaces
 indent-after-paren=4  # 4 spaces
 
 [BASIC]
