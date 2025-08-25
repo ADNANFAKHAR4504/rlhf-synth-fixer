@@ -44,8 +44,7 @@ import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
 import com.pulumi.aws.s3.BucketPolicy;
 import com.pulumi.aws.s3.BucketPolicyArgs;
-import com.pulumi.aws.s3.BucketServerSideEncryptionConfiguration;
-import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationArgs;
+import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationArgs;
 import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleArgs;
 import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs;
 import com.pulumi.aws.sns.Topic;
@@ -125,25 +124,21 @@ public final class Main {
             BucketArgs.builder()
                 .bucket(cloudtrailBucketName)
                 .forceDestroy(true)
+                .serverSideEncryptionConfiguration(
+                    BucketServerSideEncryptionConfigurationArgs.builder()
+                        .rule(BucketServerSideEncryptionConfigurationRuleArgs.builder()
+                            .applyServerSideEncryptionByDefault(
+                                BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
+                                    .sseAlgorithm("aws:kms")
+                                    .kmsMasterKeyId(kmsKey.arn())
+                                    .build())
+                            .bucketKeyEnabled(true)
+                            .build())
+                        .build())
                 .tags(Map.of(
                     "Purpose", "CloudTrail-Logs",
                     "Environment", "production"
                 ))
-                .build(), providerOptions);
-
-        // Configure S3 bucket encryption for CloudTrail
-        new BucketServerSideEncryptionConfiguration(
-            "cloudtrail-bucket-encryption-" + RANDOM_SUFFIX,
-            BucketServerSideEncryptionConfigurationArgs.builder()
-                .bucket(cloudtrailBucket.id())
-                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                    .applyServerSideEncryptionByDefault(
-                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                            .sseAlgorithm("aws:kms")
-                            .kmsMasterKeyId(kmsKey.arn())
-                            .build())
-                    .bucketKeyEnabled(true)
-                    .build())
                 .build(), providerOptions);
 
         // Create S3 bucket policy for CloudTrail
@@ -161,24 +156,21 @@ public final class Main {
         var appBucket = new Bucket("financial-app-data-" + RANDOM_SUFFIX,
             BucketArgs.builder()
                 .forceDestroy(true)
+                .serverSideEncryptionConfiguration(
+                    BucketServerSideEncryptionConfigurationArgs.builder()
+                        .rule(BucketServerSideEncryptionConfigurationRuleArgs.builder()
+                            .applyServerSideEncryptionByDefault(
+                                BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
+                                    .sseAlgorithm("aws:kms")
+                                    .kmsMasterKeyId(kmsKey.arn())
+                                    .build())
+                            .bucketKeyEnabled(true)
+                            .build())
+                        .build())
                 .tags(Map.of(
                     "Purpose", "Application-Data",
                     "Environment", "production"
                 ))
-                .build(), providerOptions);
-
-        new BucketServerSideEncryptionConfiguration(
-            "app-bucket-encryption-" + RANDOM_SUFFIX,
-            BucketServerSideEncryptionConfigurationArgs.builder()
-                .bucket(appBucket.id())
-                .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                    .applyServerSideEncryptionByDefault(
-                        BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                            .sseAlgorithm("aws:kms")
-                            .kmsMasterKeyId(kmsKey.arn())
-                            .build())
-                    .bucketKeyEnabled(true)
-                    .build())
                 .build(), providerOptions);
 
         return appBucket;
