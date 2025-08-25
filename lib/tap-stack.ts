@@ -14,6 +14,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as fs from 'fs';
+import * as path from 'path';
 
 export interface TapStackArgs {
   tags: Record<string, string>;
@@ -125,17 +126,32 @@ export class TapStack extends pulumi.ComponentResource {
       privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
       publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
       cloudTrailBucketName: this.cloudTrailBucket.bucket,
+      cloudTrailBucketArn: this.cloudTrailBucket.arn,
       parameterStorePrefix: this.parameterStorePrefix,
+      logGroupName: this.logGroup.name,
+      logGroupArn: this.logGroup.arn,
+      alarmTopicArn: this.alarmTopic.arn,
+      dashboardArn: this.dashboard.dashboardArn,
       vpcFlowLogsId: this.vpcFlowLogs.id,
+      cloudTrailRoleArn: this.cloudTrailRole.arn,
+      deploymentRoleArn: this.deploymentRole.arn,
+      vpcFlowLogsRoleArn: this.vpcFlowLogsRole.arn,
       environment: this.environment,
       regions: this.regions,
+      awsRegion: aws.getRegion().then(r => r.name),
+      accountId: aws.getCallerIdentity().then(c => c.accountId),
+      deploymentComplete: true,
+      stackName: 'TapStack',
+      timestamp: new Date().toISOString(),
+      tags: this.defaultTags,
+      testEnvironment: this.environment === 'integration-test' || this.environment.includes('test'),
     });
   }
 
   /**
    * Generate outputs to JSON file for integration tests
    */
-  private generateOutputsFile(outputsFile: string = 'stack-outputs.json') {
+  private generateOutputsFile(outputsFile: string = 'cfn-outputs/flat-outputs.json') {
     pulumi.all([
       this.vpc.id,
       this.internetGateway.id,
@@ -205,6 +221,11 @@ export class TapStack extends pulumi.ComponentResource {
       };
 
       try {
+        const outputDir = path.dirname(outputsFile);
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
         fs.writeFileSync(outputsFile, JSON.stringify(outputs, null, 2), 'utf8');
         if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
           console.log(`Stack outputs written to ${outputsFile}`);
@@ -383,10 +404,14 @@ export class TapStack extends pulumi.ComponentResource {
       forceDestroy: true,
       tags: this.defaultTags,
     }, { parent: this });
-
+  
+    // Fixed CloudTrail bucket policy with proper account ID
     new aws.s3.BucketPolicy(`${this.environment}-cloudtrail-bucket-policy`, {
       bucket: cloudTrailBucket.id,
-      policy: pulumi.all([cloudTrailBucket.arn]).apply(([bucketArn]) =>
+      policy: pulumi.all([
+        cloudTrailBucket.arn,
+        aws.getCallerIdentity().then(c => c.accountId)
+      ]).apply(([bucketArn, accountId]) =>
         JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -402,7 +427,7 @@ export class TapStack extends pulumi.ComponentResource {
               Effect: 'Allow',
               Principal: { Service: 'cloudtrail.amazonaws.com' },
               Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
+              Resource: `${bucketArn}/AWSLogs/${accountId}/*`,
               Condition: {
                 StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
               },
@@ -411,12 +436,12 @@ export class TapStack extends pulumi.ComponentResource {
         })
       ),
     }, { parent: this });
-
+  
     new aws.s3.BucketVersioning(`${this.environment}-cloudtrail-versioning`, {
       bucket: cloudTrailBucket.id,
       versioningConfiguration: { status: 'Enabled' },
     }, { parent: this });
-
+  
     new aws.s3.BucketServerSideEncryptionConfiguration(`${this.environment}-cloudtrail-encryption`, {
       bucket: cloudTrailBucket.id,
       rules: [{
@@ -425,7 +450,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }],
     }, { parent: this });
-
+  
     new aws.s3.BucketPublicAccessBlock(`${this.environment}-cloudtrail-public-access-block`, {
       bucket: cloudTrailBucket.id,
       blockPublicAcls: true,
@@ -433,9 +458,10 @@ export class TapStack extends pulumi.ComponentResource {
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     }, { parent: this });
-
+  
     return { cloudTrailBucket };
   }
+  
 
   private createParameterStore(): pulumi.Output<string> {
     const prefix = `/${this.environment}`;
@@ -461,12 +487,9 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createMonitoringInfrastructure() {
-    // Environment-specific retention periods for testing coverage
-    const retentionDays = this.environment === 'prod' ? 90 : 30;
-
     const logGroup = new aws.cloudwatch.LogGroup(`${this.environment}-logs`, {
       name: `/aws/infrastructure/${this.environment}`,
-      retentionInDays: retentionDays,
+      retentionInDays: this.environment === 'prod' ? 90 : 30,
       tags: this.defaultTags,
     }, { parent: this });
 
@@ -566,12 +589,9 @@ export class TapStack extends pulumi.ComponentResource {
       policyArn: vpcFlowLogsPolicy.arn,
     }, { parent: this });
 
-    // Environment-specific retention for flow logs
-    const flowLogsRetention = this.environment === 'prod' ? 30 : 14;
-
     const flowLogsGroup = new aws.cloudwatch.LogGroup(`${this.environment}-vpc-flow-logs`, {
       name: '/aws/vpc/flowlogs',
-      retentionInDays: flowLogsRetention,
+      retentionInDays: this.environment === 'prod' ? 30 : 14,
       tags: this.defaultTags,
     }, { parent: this });
 
