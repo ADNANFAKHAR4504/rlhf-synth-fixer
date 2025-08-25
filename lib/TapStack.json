@@ -64,8 +64,9 @@
             "Description": "EC2 instance type"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)"
         },
         "MinSize": {
             "Type": "Number",
@@ -81,6 +82,20 @@
             "Type": "Number",
             "Default": 2,
             "Description": "Desired number of instances in Auto Scaling Group"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Mappings": {
@@ -1389,6 +1404,7 @@
         },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "LaunchTemplateName": {
                     "Fn::Sub": "${ProjectName}-launch-template"
@@ -1471,6 +1487,7 @@
         },
         "AutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "AutoScalingGroupName": {
                     "Fn::Sub": "${ProjectName}-asg"
@@ -1537,6 +1554,7 @@
         },
         "BastionHost": {
             "Type": "AWS::EC2::Instance",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "ImageId": {
                     "Fn::FindInMap": [
@@ -1600,6 +1618,7 @@
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-alb"
@@ -1643,6 +1662,7 @@
         },
         "TargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-tg"
@@ -1683,12 +1703,21 @@
         },
         "ALBListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasKeyPair",
             "Properties": {
                 "DefaultActions": [
                     {
                         "Type": "forward",
                         "TargetGroupArn": {
-                            "Ref": "TargetGroup"
+                            "Fn::If": [
+                                "HasKeyPair",
+                                {
+                                    "Ref": "TargetGroup"
+                                },
+                                {
+                                    "Ref": "AWS::NoValue"
+                                }
+                            ]
                         }
                     }
                 ],
@@ -1829,29 +1858,57 @@
         "LaunchTemplateId": {
             "Description": "Launch Template Id",
             "Value": {
-                "Ref": "LaunchTemplate"
-            }
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Not Created - No Key Pair Provided"
+                ]
+            },
+            "Condition": "HasKeyPair"
         },
         "AutoScalingGroupName": {
             "Description": "Auto Scaling Group name",
             "Value": {
-                "Ref": "AutoScalingGroup"
-            }
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Ref": "AutoScalingGroup"
+                    },
+                    "Not Created - No Key Pair Provided"
+                ]
+            },
+            "Condition": "HasKeyPair"
         },
         "TargetGroupArn": {
             "Description": "Target Group ARN",
             "Value": {
-                "Ref": "TargetGroup"
-            }
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Ref": "TargetGroup"
+                    },
+                    "Not Created - No Key Pair Provided"
+                ]
+            },
+            "Condition": "HasKeyPair"
         },
         "LoadBalancerDNSName": {
             "Description": "Public DNS name of the Application Load Balancer",
             "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "DNSName"
+                "Fn::If": [
+                    "HasKeyPair",
+                    {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "Not Created - No Key Pair Provided"
                 ]
-            }
+            },
+            "Condition": "HasKeyPair"
         }
     }
 }

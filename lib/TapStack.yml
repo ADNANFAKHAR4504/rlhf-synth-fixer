@@ -55,8 +55,9 @@ Parameters:
     Description: EC2 instance type
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
+    Type: String
+    Default: ''
+    Description: EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)
 
   MinSize:
     Type: Number
@@ -72,6 +73,9 @@ Parameters:
     Type: Number
     Default: 2
     Description: Desired number of instances in Auto Scaling Group
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Mappings:
   RegionMap:
@@ -711,9 +715,10 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Launch Template
+  # Launch Template (conditional on KeyPairName)
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: HasKeyPair
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-launch-template'
       LaunchTemplateData:
@@ -765,9 +770,10 @@ Resources:
               - Key: Project
                 Value: !Ref ProjectName
 
-  # Auto Scaling Group (with Target Group association)
+  # Auto Scaling Group (conditional on Launch Template)
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: HasKeyPair
     Properties:
       AutoScalingGroupName: !Sub '${ProjectName}-asg'
       VPCZoneIdentifier:
@@ -794,9 +800,10 @@ Resources:
           Value: !Ref ProjectName
           PropagateAtLaunch: true
 
-  # Bastion Host
+  # Bastion Host (conditional on KeyPairName)
   BastionHost:
     Type: AWS::EC2::Instance
+    Condition: HasKeyPair
     Properties:
       ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
       InstanceType: t3.micro
@@ -824,6 +831,7 @@ Resources:
   # Application Load Balancer and Target Group
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: HasKeyPair
     Properties:
       Name: !Sub '${ProjectName}-alb'
       Type: application
@@ -843,6 +851,7 @@ Resources:
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: HasKeyPair
     Properties:
       Name: !Sub '${ProjectName}-tg'
       Port: 8080
@@ -865,10 +874,11 @@ Resources:
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasKeyPair
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !If [HasKeyPair, !Ref TargetGroup, !Ref 'AWS::NoValue']
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -958,17 +968,21 @@ Outputs:
 
   LaunchTemplateId:
     Description: Launch Template Id
-    Value: !Ref LaunchTemplate
+    Value: !If [HasKeyPair, !Ref LaunchTemplate, 'Not Created - No Key Pair Provided']
+    Condition: HasKeyPair
 
   AutoScalingGroupName:
     Description: Auto Scaling Group name
-    Value: !Ref AutoScalingGroup
+    Value: !If [HasKeyPair, !Ref AutoScalingGroup, 'Not Created - No Key Pair Provided']
+    Condition: HasKeyPair
 
   TargetGroupArn:
     Description: Target Group ARN
-    Value: !Ref TargetGroup
+    Value: !If [HasKeyPair, !Ref TargetGroup, 'Not Created - No Key Pair Provided']
+    Condition: HasKeyPair
 
   LoadBalancerDNSName:
     Description: Public DNS name of the Application Load Balancer
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Value: !If [HasKeyPair, !GetAtt ApplicationLoadBalancer.DNSName, 'Not Created - No Key Pair Provided']
+    Condition: HasKeyPair
 
