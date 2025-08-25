@@ -121,7 +121,7 @@ resource "aws_iam_role" "trail_cw" {
   tags               = local.tags
 }
 
-# Split policy: scoped actions to log group; global actions to "*"
+
 data "aws_iam_policy_document" "trail_cw_policy" {
   statement {
     effect = "Allow"
@@ -351,7 +351,6 @@ resource "aws_iam_role_policy" "config_inline" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # Minimal AWS Config permissions to create/start the recorder and manage delivery
       {
         Effect = "Allow",
         Action = [
