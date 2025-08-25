@@ -26,9 +26,6 @@ func main() {
 		// Get configuration
 		cfg := config.New(ctx, "TapStack")
 		allowedAccountIds := cfg.Get("allowedAccountIds")
-		if allowedAccountIds == "" {
-			allowedAccountIds = "123456789012,987654321098"
-		}
 		kmsKeyRotation := cfg.GetBool("kmsKeyRotation")
 		if kmsKeyRotation == false {
 			kmsKeyRotation = true // Default to true for security
@@ -44,6 +41,11 @@ func main() {
 		current, err := aws.GetCallerIdentity(ctx, nil, nil)
 		if err != nil {
 			return err
+		}
+
+		// Set default allowed account IDs to current account if not specified
+		if allowedAccountIds == "" {
+			allowedAccountIds = current.AccountId
 		}
 
 		// Create KMS key for S3 encryption with FIPS 140-3 Level 3 compliance
