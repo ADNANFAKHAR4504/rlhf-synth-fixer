@@ -1,5 +1,14 @@
 import * as AWS from 'aws-sdk';
-import { CloudFormation, KMS, S3, IAM, CloudTrail, ConfigService } from 'aws-sdk';
+import { 
+  CloudFormation, 
+  KMS, 
+  S3, 
+  IAM, 
+  CloudTrail, 
+  ConfigService,
+  AWSError
+} from 'aws-sdk';
+import { Output } from 'aws-sdk/clients/cloudformation';
 
 describe('TapStack Integration Tests', () => {
   const stackName = `tap-stack-${process.env.ENVIRONMENT_SUFFIX || 'test'}`;
@@ -13,8 +22,8 @@ describe('TapStack Integration Tests', () => {
   const cloudtrail = new AWS.CloudTrail({ region });
   const configService = new AWS.ConfigService({ region });
 
-  // Store stack outputs
-  let stackOutputs: { [key: string]: string } = {};
+  // Store stack outputs with proper type
+  let stackOutputs: Record<string, string> = {};
 
   beforeAll(async () => {
     // Get stack outputs
@@ -26,21 +35,26 @@ describe('TapStack Integration Tests', () => {
       throw new Error(`Stack ${stackName} not found`);
     }
 
-    // Convert stack outputs to key-value pairs
-    stackOutputs = (Stacks[0].Outputs || []).reduce((acc, output) => ({
+    // Convert stack outputs to key-value pairs with null checks
+    stackOutputs = (Stacks[0].Outputs || []).reduce((acc, output: Output) => ({
       ...acc,
-      [output.OutputKey as string]: output.OutputValue
-    }), {});
+      [output.OutputKey || '']: output.OutputValue || ''
+    }), {} as Record<string, string>);
   }, 30000);
 
   describe('KMS Key Configuration', () => {
-    let keyMetadata: KMS.KeyMetadata;
+    let keyMetadata: AWS.KMS.KeyMetadata;
 
     beforeAll(async () => {
-      const { KeyMetadata } = await kms.describeKey({
+      const response = await kms.describeKey({
         KeyId: stackOutputs.SecurityKMSKeyId
       }).promise();
-      keyMetadata = KeyMetadata;
+      
+      if (!response.KeyMetadata) {
+        throw new Error('KMS key metadata not found');
+      }
+      
+      keyMetadata = response.KeyMetadata;
     });
 
     test('KMS key should exist and be enabled', () => {
@@ -90,7 +104,12 @@ describe('TapStack Integration Tests', () => {
 
   describe('IAM Role Configuration', () => {
     test('VPC Flow Log role should have correct permissions', async () => {
-      const roleName = stackOutputs.VPCFlowLogRoleArn.split('/').pop();
+      const roleArn = stackOutputs.VPCFlowLogRoleArn;
+      const roleName = roleArn?.split('/').pop();
+
+      if (!roleName) {
+        throw new Error('Role name not found in ARN');
+      }
       
       const { Role } = await iam.getRole({
         RoleName: roleName
@@ -101,7 +120,12 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Trusted service role should have correct configuration', async () => {
-      const roleName = stackOutputs.TrustedServiceRoleArn.split('/').pop();
+      const roleArn = stackOutputs.TrustedServiceRoleArn;
+      const roleName = roleArn?.split('/').pop();
+
+      if (!roleName) {
+        throw new Error('Role name not found in ARN');
+      }
       
       const { Role } = await iam.getRole({
         RoleName: roleName
@@ -115,9 +139,22 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudTrail Configuration', () => {
     test('CloudTrail should be enabled with correct settings', async () => {
-      const { trail } = await cloudtrail.getTrail({
-        Name: stackOutputs.CloudTrailArn.split('/').pop()
+      const trailArn = stackOutputs.CloudTrailArn;
+      const trailName = trailArn?.split('/').pop();
+
+      if (!trailName) {
+        throw new Error('Trail name not found in ARN');
+      }
+
+      const response = await cloudtrail.getTrail({
+        Name: trailName
       }).promise();
+
+      if (!response.Trail) {
+        throw new Error('CloudTrail configuration not found');
+      }
+
+      const trail = response.Trail;
       
       expect(trail).toBeDefined();
       expect(trail.IsMultiRegionTrail).toBe(true);
@@ -137,7 +174,11 @@ describe('TapStack Integration Tests', () => {
         'cloudtrail-enabled'
       ];
       
-      const ruleNames = ConfigRules?.map(rule => rule.ConfigRuleName);
+      if (!ConfigRules) {
+        throw new Error('No Config Rules found');
+      }
+      
+      const ruleNames = ConfigRules.map(rule => rule.ConfigRuleName);
       
       requiredRules.forEach(ruleName => {
         expect(ruleNames).toContain(ruleName);
@@ -145,12 +186,21 @@ describe('TapStack Integration Tests', () => {
       
       // Check rules are compliant
       for (const rule of requiredRules) {
-        const { ComplianceByConfigRules } = await configService.describeComplianceByConfigRule({
+        const response = await configService.describeComplianceByConfigRule({
           ConfigRuleNames: [rule]
         }).promise();
+
+        if (!response.ComplianceByConfigRules || response.ComplianceByConfigRules.length === 0) {
+          throw new Error(`No compliance information found for rule: ${rule}`);
+        }
+
+        const compliance = response.ComplianceByConfigRules[0].Compliance;
         
-        expect(ComplianceByConfigRules?.[0].Compliance.ComplianceType)
-          .toBe('COMPLIANT');
+        if (!compliance) {
+          throw new Error(`No compliance type found for rule: ${rule}`);
+        }
+
+        expect(compliance.ComplianceType).toBe('COMPLIANT');
       }
     });
   });
