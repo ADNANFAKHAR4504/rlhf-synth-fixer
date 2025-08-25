@@ -780,10 +780,6 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 						Type:   jsii.String("AWS::S3::Object"),
 						Values: &[]*string{jsii.String("arn:aws:s3:::*/*")},
 					},
-					{
-						Type:   jsii.String("AWS::S3::Bucket"),
-						Values: &[]*string{jsii.String("arn:aws:s3:::*")},
-					},
 				},
 			},
 		},
