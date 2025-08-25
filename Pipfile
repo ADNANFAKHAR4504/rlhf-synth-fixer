@@ -11,13 +11,13 @@ cdktf-cdktf-provider-aws = "21.3.0"
 pulumi_random = "*"
 pulumi = "==3.109.0" 
 pulumi-aws = ">=6.0.0,<7.0.0"
-cfn-lint = "*"
-pytest = "*"
 pytest-cov = "*"
+cfn-lint = "*"
 
 [dev-packages]
 boto3 = "*"
 moto = "*"
+pytest-testdox = "*"
 pytest-env = "*"
 pylint = "*"
 pytest = "*"
@@ -25,7 +25,6 @@ requests = "*"
 pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
-pytest-testdox = "*"
 
 [requires]
 python_version = "3.12.11"
