@@ -145,7 +145,7 @@ public class AuditingComponent extends ComponentResource {
     private Output<String> createCloudTrailRole(String name) {
         Role cloudTrailRole = new Role("cloudtrail-logs-role-" + name,
                 RoleArgs.builder()
-                        .name("CloudTrail-LogsRole")
+                        .name("CloudTrail-LogsRole-" + name)
                         .assumeRolePolicy("""
                             {
                                 "Version": "2012-10-17",
@@ -164,7 +164,7 @@ public class AuditingComponent extends ComponentResource {
 
         Policy cloudTrailPolicy = new Policy("cloudtrail-logs-policy-" + name,
                 PolicyArgs.builder()
-                        .name("CloudTrail-LogsPolicy")
+                        .name("CloudTrail-LogsPolicy-" + name)
                         .policy(cloudTrailLogGroup.arn().applyValue(logGroupArn -> Either.ofLeft(String.format("""
                             {
                                 "Version": "2012-10-17",
