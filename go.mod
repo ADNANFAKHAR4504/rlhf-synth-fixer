@@ -15,8 +15,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.30.1
 	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
+	github.com/aws/aws-sdk-go-v2/service/securityhub v1.62.2
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
 	github.com/pulumi/pulumi/sdk/v3 v3.191.0
