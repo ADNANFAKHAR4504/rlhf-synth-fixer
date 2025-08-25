@@ -145,7 +145,7 @@ func TestDeployedInfrastructure(t *testing.T) {
 		} else {
 			rule := encryption.ServerSideEncryptionConfiguration.Rules[0]
 			if rule.ApplyServerSideEncryptionByDefault == nil ||
-				*rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm != "AES256" {
+				string(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm) != "AES256" {
 				t.Error("Expected AES256 encryption")
 			}
 		}
