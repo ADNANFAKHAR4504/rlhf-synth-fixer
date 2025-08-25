@@ -40,5 +40,11 @@
   ],
   "expected_output": "A Pulumi Go implementation that creates secure healthcare infrastructure with S3 buckets encrypted using KMS, credentials stored in Secrets Manager, deployed in us-west-2 region with proper tagging.",
   "research": "https://www.pulumi.com/docs/get-started/aws/ | https://aws.amazon.com/compliance/hipaa-compliance/",
-  "platform_enforcement": "pulumi+go"
+  "platform_enforcement": "pulumi+go",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
 }
