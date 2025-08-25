@@ -332,6 +332,7 @@ Outputs:
     Value: !Ref ConfigurationParameter
     Export:
       Name: !Sub '${AWS::StackName}-ParameterStoreName'
+```
 
 ## Deployment Instructions
 

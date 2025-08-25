@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292047",
+  "team": "3",
+  "startedAt": "2025-08-19T15:17:48.612Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nikhilturing",
+  "dockerS3Location": ""
+}

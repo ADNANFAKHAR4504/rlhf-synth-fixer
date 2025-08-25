@@ -1,4 +1,4 @@
-Absolutely! Here’s your original expert-level AWS CDK task rewritten in your requested format, tailored for an AWS Lambda + API Gateway + S3 stack, using CDK (TypeScript), and following the same structure:
+Absolutely! Heres your original expert-level AWS CDK task rewritten in your requested format, tailored for an AWS Lambda + API Gateway + S3 stack, using CDK (TypeScript), and following the same structure:
 
 ---
 
@@ -18,22 +18,22 @@ Provision a highly secure, production-ready, and operationally excellent AWS ser
 
 1. The stack must deploy in the `us-east-1` region and all resource names must be prefixed with `prod-`, following parameterized naming conventions suitable for multi-environment deployments.
 2. Provision at least:
-    - One AWS Lambda function
-    - An API Gateway (REST or HTTP)
-    - An S3 bucket
+- One AWS Lambda function
+- An API Gateway (REST or HTTP)
+- An S3 bucket
 3. Secure the environment by:
-    - Applying least-privilege IAM policies to Lambda and API Gateway, defined in code.
-    - Enforcing S3 encryption at rest (SSE-S3 or SSE-KMS) and HTTPS-only access.
-    - Restricting Lambda invocation to API Gateway only.
-    - Enabling WAF integration for API Gateway.
-    - Enabling logging for all core resources (API Gateway access logs, Lambda execution logs, S3 access logs).
-    - Enabling API Gateway authentication (API Key or Cognito).
-    - Tagging all resources with environment, owner, cost, and compliance metadata.
+- Applying least-privilege IAM policies to Lambda and API Gateway, defined in code.
+- Enforcing S3 encryption at rest (SSE-S3 or SSE-KMS) and HTTPS-only access.
+- Restricting Lambda invocation to API Gateway only.
+- Enabling WAF integration for API Gateway.
+- Enabling logging for all core resources (API Gateway access logs, Lambda execution logs, S3 access logs).
+- Enabling API Gateway authentication (API Key or Cognito).
+- Tagging all resources with environment, owner, cost, and compliance metadata.
 4. Operational excellence:
-    - Enable CloudWatch metrics, alarms, and tracing (AWS X-Ray) for Lambda.
-    - Set up API Gateway usage plans and throttling.
-    - Enable versioning and lifecycle policies for S3.
-    - Provide unit and integration test scaffolding for the stack constructs.
+- Enable CloudWatch metrics, alarms, and tracing (AWS X-Ray) for Lambda.
+- Set up API Gateway usage plans and throttling.
+- Enable versioning and lifecycle policies for S3.
+- Provide unit and integration test scaffolding for the stack constructs.
 5. Deployment must support multiple environments (dev, staging, prod) via context variables or stack parameters, and be safe for updates and deletion.
 
 ## Environment
@@ -54,10 +54,10 @@ Provision a highly secure, production-ready, and operationally excellent AWS ser
 ## Expected Output
 
 - Complete **AWS CDK code in TypeScript** for the stack, including all necessary imports and constructs.
-    - Create the entire solution as a single stack.
-    - The stack must extend the `Construct` class rather than `Stack` or `Stage`.
-    - Omit code to initialize AWS Providers, App, or environment context.
-    - Output only the code for this stack, do not include main entrypoint code or bootstrap code.
+- Create the entire solution as a single stack.
+- The stack must extend the `Construct` class rather than `Stack` or `Stage`.
+- Omit code to initialize AWS Providers, App, or environment context.
+- Output only the code for this stack, do not include main entrypoint code or bootstrap code.
 - Code should be self-contained and runnable via `cdk deploy`.
 - Include **inline comments** explaining key sections.
 - Output only the code (no extra commentary).

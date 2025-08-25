@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Basic networking setup with VPC, public/private subnets, and internet acces
 
@@ -165,3 +166,4 @@ Outputs:
     Value: !Ref PublicRouteTable
     Export:
       Name: !Sub "${AWS::StackName}-PublicRouteTableId"
+```

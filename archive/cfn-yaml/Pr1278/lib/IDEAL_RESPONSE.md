@@ -1,15 +1,16 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure and compliant AWS production environment with EC2, S3, RDS, Elasticsearch, Lambda, IAM, CloudWatch, and Parameter Store'
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Secure and compliant AWS production environment with EC2, S3, RDS, Elasticsearch, Lambda, IAM, CloudWatch, and Parameter Store"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'Network Configuration'
+          default: "Network Configuration"
         Parameters:
           - VpcCidr
           - PublicSubnetCidr
@@ -18,65 +19,120 @@ Metadata:
           - AllowedSSHCidr
           - AllowedHTTPCidr
       - Label:
-          default: 'Instance Configuration'
+          default: "Instance Configuration"
         Parameters:
           - EC2InstanceType
           - RDSInstanceClass
+      - Label:
+          default: "Database Configuration"
+        Parameters:
+          - DBMasterUsername
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
 
   VpcCidr:
     Type: String
-    Default: '10.0.0.0/16'
-    Description: 'CIDR block for VPC'
+    Default: "10.0.0.0/16"
+    Description: "CIDR block for VPC"
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-  
+
   PublicSubnetCidr:
     Type: String
-    Default: '10.0.1.0/24'
-    Description: 'CIDR block for public subnet'
-  
+    Default: "10.0.1.0/24"
+    Description: "CIDR block for public subnet"
+
   PrivateSubnetCidr1:
     Type: String
-    Default: '10.0.2.0/24'
-    Description: 'CIDR block for first private subnet'
-  
+    Default: "10.0.2.0/24"
+    Description: "CIDR block for first private subnet"
+
   PrivateSubnetCidr2:
     Type: String
-    Default: '10.0.3.0/24'
-    Description: 'CIDR block for second private subnet'
-  
+    Default: "10.0.3.0/24"
+    Description: "CIDR block for second private subnet"
+
   AllowedSSHCidr:
     Type: String
-    Default: '203.0.113.0/24'
-    Description: 'CIDR block allowed for SSH access'
+    Default: "203.0.113.0/24"
+    Description: "CIDR block allowed for SSH access"
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-  
+
   AllowedHTTPCidr:
     Type: String
-    Default: '0.0.0.0/0'
-    Description: 'CIDR block allowed for HTTP access'
+    Default: "0.0.0.0/0"
+    Description: "CIDR block allowed for HTTP access"
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-  
+
   EC2InstanceType:
     Type: String
-    Default: 't3.medium'
-    AllowedValues: ['t3.micro', 't3.small', 't3.medium', 't3.large']
-    Description: 'EC2 instance type'
-  
+    Default: "t3.medium"
+    AllowedValues: ["t3.micro", "t3.small", "t3.medium", "t3.large"]
+    Description: "EC2 instance type"
+
   RDSInstanceClass:
     Type: String
-    Default: 'db.t3.micro'
-    AllowedValues: ['db.t3.micro', 'db.t3.small', 'db.t3.medium']
-    Description: 'RDS instance class'
+    Default: "db.t3.micro"
+    AllowedValues: ["db.t3.micro", "db.t3.small", "db.t3.medium"]
+    Description: "RDS instance class"
+
+  DBMasterUsername:
+    Type: String
+    Default: "admin"
+    Description: "Database master username"
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+    ConstraintDescription: "Must begin with a letter and contain only alphanumeric characters"
+    MinLength: 1
+    MaxLength: 63
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
+  # Secrets Manager for RDS password
+  RDSMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "TapStack${EnvironmentSuffix}-rds-master-password"
+      Description: "Master password for RDS database"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub "TapStack${EnvironmentSuffix}-rds-secret"
+        - Key: Environment
+          Value: Production
+
+  # Secrets Manager for OpenSearch password
+  OpenSearchMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub "TapStack${EnvironmentSuffix}-opensearch-master-password"
+      Description: "Master password for OpenSearch domain"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "osadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub "TapStack${EnvironmentSuffix}-opensearch-secret"
+        - Key: Environment
+          Value: Production
+
   # VPC and Networking
   VPC:
     Type: AWS::EC2::VPC
@@ -88,7 +144,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-vpc'
+          Value: !Sub "TapStack${EnvironmentSuffix}-vpc"
         - Key: Environment
           Value: Production
 
@@ -99,7 +155,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-igw'
+          Value: !Sub "TapStack${EnvironmentSuffix}-igw"
         - Key: Environment
           Value: Production
 
@@ -117,12 +173,12 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref PublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-public-subnet'
+          Value: !Sub "TapStack${EnvironmentSuffix}-public-subnet"
         - Key: Environment
           Value: Production
 
@@ -132,11 +188,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref PrivateSubnetCidr1
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-private-subnet-1'
+          Value: !Sub "TapStack${EnvironmentSuffix}-private-subnet-1"
         - Key: Environment
           Value: Production
 
@@ -146,11 +202,11 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Ref PrivateSubnetCidr2
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-private-subnet-2'
+          Value: !Sub "TapStack${EnvironmentSuffix}-private-subnet-2"
         - Key: Environment
           Value: Production
 
@@ -163,7 +219,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-nat-eip'
+          Value: !Sub "TapStack${EnvironmentSuffix}-nat-eip"
         - Key: Environment
           Value: Production
 
@@ -176,7 +232,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-nat-gateway'
+          Value: !Sub "TapStack${EnvironmentSuffix}-nat-gateway"
         - Key: Environment
           Value: Production
 
@@ -188,7 +244,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-public-rt'
+          Value: !Sub "TapStack${EnvironmentSuffix}-public-rt"
         - Key: Environment
           Value: Production
 
@@ -218,7 +274,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-private-rt'
+          Value: !Sub "TapStack${EnvironmentSuffix}-private-rt"
         - Key: Environment
           Value: Production
 
@@ -253,32 +309,32 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'TapStack${EnvironmentSuffix}-web-sg'
-      GroupDescription: 'Security group for web servers'
+      GroupName: !Sub "TapStack${EnvironmentSuffix}-web-sg"
+      GroupDescription: "Security group for web servers"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedSSHCidr
-          Description: 'SSH access from allowed CIDR'
+          Description: "SSH access from allowed CIDR"
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: !Ref AllowedHTTPCidr
-          Description: 'HTTP access from allowed CIDR'
+          Description: "HTTP access from allowed CIDR"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: !Ref AllowedHTTPCidr
-          Description: 'HTTPS access from allowed CIDR'
+          Description: "HTTPS access from allowed CIDR"
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-          Description: 'All outbound traffic'
+          Description: "All outbound traffic"
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-web-sg'
+          Value: !Sub "TapStack${EnvironmentSuffix}-web-sg"
         - Key: Environment
           Value: Production
 
@@ -287,18 +343,18 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'TapStack${EnvironmentSuffix}-db-sg'
-      GroupDescription: 'Security group for RDS database'
+      GroupName: !Sub "TapStack${EnvironmentSuffix}-db-sg"
+      GroupDescription: "Security group for RDS database"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'MySQL access from web servers'
+          Description: "MySQL access from web servers"
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-db-sg'
+          Value: !Sub "TapStack${EnvironmentSuffix}-db-sg"
         - Key: Environment
           Value: Production
 
@@ -307,45 +363,20 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      GroupName: !Sub 'TapStack${EnvironmentSuffix}-es-sg'
-      GroupDescription: 'Security group for Elasticsearch'
+      GroupName: !Sub "TapStack${EnvironmentSuffix}-es-sg"
+      GroupDescription: "Security group for Elasticsearch"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'HTTPS access from web servers'
+          Description: "HTTPS access from web servers"
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-es-sg'
+          Value: !Sub "TapStack${EnvironmentSuffix}-es-sg"
         - Key: Environment
           Value: Production
-
-  # Parameter Store for Database Credentials
-  DBMasterUsername:
-    Type: AWS::SSM::Parameter
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: !Sub '/TapStack${EnvironmentSuffix}/db/master-username'
-      Type: String
-      Value: 'admin'
-      Description: 'Database master username'
-      Tags:
-        Environment: Production
-
-  DBMasterPassword:
-    Type: AWS::SSM::Parameter
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: !Sub '/TapStack${EnvironmentSuffix}/db/master-password'
-      Type: SecureString
-      Value: 'TempPassword123!'
-      Description: 'Database master password'
-      Tags:
-        Environment: Production
 
   # IAM Roles and Policies
   EC2Role:
@@ -353,9 +384,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'TapStack${EnvironmentSuffix}-ec2-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -365,21 +395,15 @@ Resources:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
-        - PolicyName: ParameterStoreAccess
+        - PolicyName: S3Access
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                  - ssm:GetParametersByPath
-                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/TapStack${EnvironmentSuffix}/*'
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
       Tags:
         - Key: Environment
           Value: Production
@@ -389,7 +413,6 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      InstanceProfileName: !Sub 'TapStack${EnvironmentSuffix}-ec2-profile'
       Roles:
         - !Ref EC2Role
 
@@ -398,9 +421,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      RoleName: !Sub 'TapStack${EnvironmentSuffix}-lambda-role'
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -411,13 +433,13 @@ Resources:
       Policies:
         - PolicyName: S3Access
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
       Tags:
         - Key: Environment
           Value: Production
@@ -428,7 +450,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'tapstack${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Sub "tapstack${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -442,14 +464,9 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-secure-bucket'
+          Value: !Sub "TapStack${EnvironmentSuffix}-secure-bucket"
         - Key: Environment
           Value: Production
-
-  # Latest Amazon Linux 2 AMI lookup
-  LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
   # EC2 Instance
   EC2Instance:
@@ -465,7 +482,7 @@ Resources:
       IamInstanceProfile: !Ref EC2InstanceProfile
       Monitoring: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -494,7 +511,7 @@ Resources:
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-web-server'
+          Value: !Sub "TapStack${EnvironmentSuffix}-web-server"
         - Key: Environment
           Value: Production
 
@@ -504,14 +521,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBSubnetGroupName: !Sub 'tapstack${EnvironmentSuffix}-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      DBSubnetGroupName: !Sub "tapstack${EnvironmentSuffix}-db-subnet-group"
+      DBSubnetGroupDescription: "Subnet group for RDS database"
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-db-subnet-group'
+          Value: !Sub "TapStack${EnvironmentSuffix}-db-subnet-group"
         - Key: Environment
           Value: Production
 
@@ -521,10 +538,10 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'tapstack${EnvironmentSuffix}-database'
+      DBInstanceIdentifier: !Sub "tapstack${EnvironmentSuffix}-database"
       DBInstanceClass: !Ref RDSInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: "8.0.42"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -533,14 +550,16 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref RDSMasterSecret
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-database'
+          Value: !Sub "TapStack${EnvironmentSuffix}-database"
         - Key: Environment
           Value: Production
 
@@ -550,8 +569,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DomainName: !Sub 'tapstack${EnvironmentSuffix}-os-domain'
-      EngineVersion: 'OpenSearch_2.3'
+      DomainName: !Sub "tapstack${EnvironmentSuffix}-os-domain"
+      EngineVersion: "OpenSearch_2.3"
       ClusterConfig:
         InstanceType: t3.small.search
         InstanceCount: 2
@@ -565,31 +584,30 @@ Resources:
           - !Ref ElasticsearchSecurityGroup
         SubnetIds:
           - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
       EncryptionAtRestOptions:
         Enabled: true
       NodeToNodeEncryptionOptions:
         Enabled: true
       DomainEndpointOptions:
         EnforceHTTPS: true
-        TLSSecurityPolicy: 'Policy-Min-TLS-1-2-2019-07'
+        TLSSecurityPolicy: "Policy-Min-TLS-1-2-2019-07"
       AdvancedSecurityOptions:
         Enabled: true
         InternalUserDatabaseEnabled: true
         MasterUserOptions:
-          MasterUserName: 'osadmin'
-          MasterUserPassword: 'OSPassword123!'
+          MasterUserName: "osadmin"
+          MasterUserPassword: !Sub "{{resolve:secretsmanager:${OpenSearchMasterSecret}:SecretString:password}}"
       AccessPolicies:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'es:*'
-            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/tapstack${EnvironmentSuffix}-os-domain/*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "es:*"
+            Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/tapstack${EnvironmentSuffix}-os-domain/*"
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-opensearch'
+          Value: !Sub "TapStack${EnvironmentSuffix}-opensearch"
         - Key: Environment
           Value: Production
 
@@ -599,16 +617,15 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      FunctionName: !Sub 'TapStack${EnvironmentSuffix}-lambda-function'
+      FunctionName: !Sub "TapStack${EnvironmentSuffix}-lambda-function"
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      ReservedConcurrencyLimit: 10
       Code:
         ZipFile: |
           import json
           import boto3
-          
+
           def lambda_handler(event, context):
               print(f"Event: {json.dumps(event)}")
               
@@ -622,10 +639,10 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: Production
-          PROJECT_NAME: !Sub 'TapStack${EnvironmentSuffix}'
+          PROJECT_NAME: !Sub "TapStack${EnvironmentSuffix}"
       Tags:
         - Key: Name
-          Value: !Sub 'TapStack${EnvironmentSuffix}-lambda'
+          Value: !Sub "TapStack${EnvironmentSuffix}-lambda"
         - Key: Environment
           Value: Production
 
@@ -635,7 +652,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/ec2/TapStack${EnvironmentSuffix}'
+      LogGroupName: !Sub "/aws/ec2/TapStack${EnvironmentSuffix}"
       RetentionInDays: 30
       Tags:
         - Key: Environment
@@ -646,7 +663,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/TapStack${EnvironmentSuffix}-lambda-function'
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
       RetentionInDays: 30
       Tags:
         - Key: Environment
@@ -658,8 +675,8 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      AlarmName: !Sub 'TapStack${EnvironmentSuffix}-high-cpu'
-      AlarmDescription: 'Alarm when server CPU exceeds 80%'
+      AlarmName: !Sub "TapStack${EnvironmentSuffix}-high-cpu"
+      AlarmDescription: "Alarm when server CPU exceeds 80%"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -676,55 +693,56 @@ Resources:
 
 Outputs:
   StackName:
-    Description: 'Name of this CloudFormation stack'
+    Description: "Name of this CloudFormation stack"
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub "${AWS::StackName}-StackName"
 
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
 
   VPCId:
-    Description: 'VPC ID'
+    Description: "VPC ID"
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub "${AWS::StackName}-VPCId"
 
   EC2InstanceId:
-    Description: 'EC2 Instance ID'
+    Description: "EC2 Instance ID"
     Value: !Ref EC2Instance
     Export:
-      Name: !Sub '${AWS::StackName}-EC2InstanceId'
+      Name: !Sub "${AWS::StackName}-EC2InstanceId"
 
   EC2PublicIP:
-    Description: 'EC2 Instance Public IP'
+    Description: "EC2 Instance Public IP"
     Value: !GetAtt EC2Instance.PublicIp
     Export:
-      Name: !Sub '${AWS::StackName}-EC2PublicIP'
+      Name: !Sub "${AWS::StackName}-EC2PublicIP"
 
   S3BucketName:
-    Description: 'S3 Bucket Name'
+    Description: "S3 Bucket Name"
     Value: !Ref S3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3BucketName'
+      Name: !Sub "${AWS::StackName}-S3BucketName"
 
   RDSEndpoint:
-    Description: 'RDS Endpoint'
+    Description: "RDS Endpoint"
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+      Name: !Sub "${AWS::StackName}-RDSEndpoint"
 
   OpenSearchDomainEndpoint:
-    Description: 'OpenSearch Domain Endpoint'
-    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Description: "OpenSearch Domain Endpoint"
+    Value: !Sub "https://${OpenSearchDomain.DomainEndpoint}"
     Export:
-      Name: !Sub '${AWS::StackName}-OpenSearchDomainEndpoint'
+      Name: !Sub "${AWS::StackName}-OpenSearchDomainEndpoint"
 
   LambdaFunctionArn:
-    Description: 'Lambda Function ARN'
+    Description: "Lambda Function ARN"
     Value: !GetAtt LambdaFunction.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+```

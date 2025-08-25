@@ -1,4 +1,11 @@
 
+# CDK Python Stack - Secure Infrastructure
+
+This CDK Python stack creates a secure infrastructure with VPC, EC2, CloudTrail, and proper security configurations.
+
+## tap_stack.py
+
+```python
 from aws_cdk import (
     Stack,
     aws_ec2 as ec2,
@@ -118,3 +125,4 @@ class TuringOneStack(Stack):
         Tags.of(lb_sg).add("Component", "LoadBalancer")
         Tags.of(trail).add("Component", "CloudTrail")
         Tags.of(vpc).add("Component", "Networking")
+```

@@ -1,13 +1,13 @@
-# Web App Infra – CloudFormation Requirements (Shreyas, Aug 2025)
+# Web App Infra CloudFormation Requirements (Shreyas, Aug 2025)
 
 ```yaml
-This is the working brief for building out a CloudFormation template to spin up a secure web app stack in AWS.  
-I’m writing this for myself and anyone else who needs to understand **what** we’re doing and **why**.
+This is the working brief for building out a CloudFormation template to spin up a secure web app stack in AWS. 
+Im writing this for myself and anyone else who needs to understand **what** were doing and **why**.
 
 ---
 
 ## Region & Scope
-- We’re locking this whole thing to **us-east-1**. No point trying to make it work multi-region right now – we don’t need it and it’ll just complicate everything.
+- Were locking this whole thing to **us-east-1**. No point trying to make it work multi-region right now we dont need it and itll just complicate everything.
 - Infrastructure will be a **VPC with public and private subnets** across at least 2 AZs.
 - Public layer: ALB. Private layer: EC2 instances (via Auto Scaling).
 - Database layer: RDS, encrypted at rest with KMS.
@@ -15,22 +15,22 @@ I’m writing this for myself and anyone else who needs to understand **what** w
 ---
 
 ## Must-haves
-1. **S3 Access Logging via CloudTrail**  
-   I want *all* S3 bucket access and relevant API calls in CloudTrail so we can prove compliance later.
-2. **Least Privilege IAM**  
-   No `*:*` nonsense. Roles and policies scoped to exactly what they need.
-3. **Tagging**  
-   Every EC2 instance should carry `Environment: Production` automatically.
-4. **RDS encryption**  
-   At rest using AWS KMS (AWS managed key is fine unless we decide on a CMK later).
-5. **ALB for traffic**  
-   Health checks in place, spread across AZs.
+1. **S3 Access Logging via CloudTrail** 
+I want *all* S3 bucket access and relevant API calls in CloudTrail so we can prove compliance later.
+2. **Least Privilege IAM** 
+No `*:*` nonsense. Roles and policies scoped to exactly what they need.
+3. **Tagging** 
+Every EC2 instance should carry `Environment: Production` automatically.
+4. **RDS encryption** 
+At rest using AWS KMS (AWS managed key is fine unless we decide on a CMK later).
+5. **ALB for traffic** 
+Health checks in place, spread across AZs.
 
 ---
 
 ## Security Expectations
-- Security Groups locked down to only what’s needed (ALB <-> EC2, EC2 <-> RDS).
-- No secrets baked into the template – if user data needs them, we’ll use SSM Parameter Store or Secrets Manager.
+- Security Groups locked down to only whats needed (ALB <-> EC2, EC2 <-> RDS).
+- No secrets baked into the template if user data needs them, well use SSM Parameter Store or Secrets Manager.
 - Default deny where possible.
 
 ---

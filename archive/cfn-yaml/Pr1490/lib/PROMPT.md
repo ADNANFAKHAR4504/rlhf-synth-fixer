@@ -10,7 +10,7 @@ One AWS account (no cross-account resources).
 
 IPv4 VPC with both public and private subnets across at least two AZs.
 
-No external dependencies beyond what’s declared as Parameters.
+No external dependencies beyond whats declared as Parameters.
 
 Deliverable
 
@@ -211,7 +211,7 @@ Output & formatting rules
 
 Output only valid CloudFormation YAML for secure_infrastructure.yaml.
 
-No prose, no placeholders like “TBD”; include Descriptions on Parameters, Resources, and Outputs.
+No prose, no placeholders like TBD; include Descriptions on Parameters, Resources, and Outputs.
 
 Use intrinsic functions where appropriate; avoid deprecated properties.
 

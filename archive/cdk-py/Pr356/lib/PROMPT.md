@@ -1,6 +1,6 @@
 # CDK Comprehensive Infrastructure Platform (Python)
 
-## 🎯 Objective
+## Objective
 
 Create a comprehensive, secure AWS infrastructure platform using **CDK with Python** that includes:
 
@@ -13,7 +13,7 @@ Create a comprehensive, secure AWS infrastructure platform using **CDK with Pyth
 - **IAM** roles following least privilege principles
 - **VPC Flow Logs** for network monitoring
 
-## ✅ Requirements
+## Requirements
 
 1. **Network Infrastructure**
    - VPC with CIDR 10.0.0.0/16 across 2 availability zones  
@@ -70,7 +70,7 @@ Create a comprehensive, secure AWS infrastructure platform using **CDK with Pyth
    - Proper resource tagging
    - CloudFormation outputs for key resources
 
-## 📦 Folder Structure
+## Folder Structure
 ```
 .
 ├── tap.py                   # CDK app entrypoint
@@ -84,7 +84,7 @@ Create a comprehensive, secure AWS infrastructure platform using **CDK with Pyth
 └── cdk.json                # CDK configuration
 ```
 
-## 🧪 Test Expectations
+## Test Expectations
 
 The infrastructure should pass comprehensive testing covering:
 - VPC and subnet creation across AZs
