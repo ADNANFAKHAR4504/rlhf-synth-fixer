@@ -10,7 +10,7 @@ variable "aws_region" {
 variable "deployment_id" {
   description = "Unique identifier for this deployment to avoid naming conflicts"
   type        = string
-  default     = "v1"
+  default     = "v2"
 }
 
 # Data sources for availability zones
@@ -570,7 +570,7 @@ resource "aws_launch_template" "main" {
             "collect_list": [
               {
                 "file_path": "/var/log/httpd/access_log",
-                "log_group_name": "/aws/ec2/${local.unique_project_name}/access",
+                "log_group_name": "/aws/ec2/${local.unique_project_name}/acc",
                 "log_stream_name": "{instance_id}"
               }
             ]
@@ -641,11 +641,11 @@ resource "aws_autoscaling_group" "main" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.unique_project_name}-db-subnet-group"
+        name       = "${local.unique_project_name}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.unique_project_name}-db-subnet-group"
+            Name = "${local.unique_project_name}-db-subnet"
   })
 }
 
@@ -696,7 +696,7 @@ resource "aws_cloudwatch_log_group" "app_logs" {
 
 # CloudWatch Log Group for access logs
 resource "aws_cloudwatch_log_group" "access_logs" {
-  name              = "/aws/ec2/${local.unique_project_name}/access"
+  name              = "/aws/ec2/${local.unique_project_name}/acc"
   retention_in_days = 30
 
   tags = merge(local.common_tags, {
