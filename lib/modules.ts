@@ -207,11 +207,13 @@ export class S3Module extends Construct {
 
     // Create CloudFront distribution
     this.distribution = new CloudfrontDistribution(this, 'distribution', {
-      origin: [{
-        domainName: this.bucket.bucketDomainName,
-        originId: 's3-origin',
-        originAccessControlId: oac.id,
-      }],
+      origin: [
+        {
+          domainName: this.bucket.bucketDomainName,
+          originId: 's3-origin',
+          originAccessControlId: oac.id,
+        },
+      ],
       enabled: true,
       defaultRootObject: 'index.html',
       defaultCacheBehavior: {
@@ -264,17 +266,21 @@ export class S3Module extends Construct {
           {
             sid: 'AllowCloudFrontServicePrincipal',
             effect: 'Allow',
-            principals: [{
-              type: 'Service',
-              identifiers: ['cloudfront.amazonaws.com'],
-            }],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['cloudfront.amazonaws.com'],
+              },
+            ],
             actions: ['s3:GetObject'],
             resources: [`${this.bucket.arn}/*`],
-            condition: [{
-              test: 'StringEquals',
-              variable: 'AWS:SourceArn',
-              values: [this.distribution.arn],
-            }],
+            condition: [
+              {
+                test: 'StringEquals',
+                variable: 'AWS:SourceArn',
+                values: [this.distribution.arn],
+              },
+            ],
           },
         ],
       }
