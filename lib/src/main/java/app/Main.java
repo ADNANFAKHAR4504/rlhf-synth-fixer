@@ -65,6 +65,7 @@ public class Main {
                             .expiration(Duration.days(365))
                             .build()))
                     .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                    .removalPolicy(RemovalPolicy.DESTROY)
                     .build();
 
             // IAM Role
@@ -102,21 +103,23 @@ public class Main {
                     .vpc(vpc)
                     .internetFacing(true)
                     .build();
+
             ApplicationListener listener = alb.addListener(env + "-listener",
                     BaseApplicationListenerProps.builder()
                             .port(80)
                             .protocol(ApplicationProtocol.HTTP)
                             .build());
+
             listener.addTargets(env + "-targets",
                     AddApplicationTargetsProps.builder()
                             .port(80)
                             .targets(List.of(asg))
                             .build());
 
-            // RDS Multi-AZ
+            // RDS Multi-AZ with supported Postgres version
             DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
                     .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                            .version(PostgresEngineVersion.VER_15_4) // ✅ updated to supported version
+                            .version(PostgresEngineVersion.VER_15_4) // ✅ supported version
                             .build()))
                     .vpc(vpc)
                     .allocatedStorage(20)
@@ -150,7 +153,7 @@ public class Main {
             Topic alarmTopic = new Topic(this, env + "-alarm-topic");
             cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-            // Route53 DNS — static HostedZoneAttributes (no lookup)
+            // Route53 DNS — static HostedZone attributes
             IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, env + "-zone",
                     HostedZoneAttributes.builder()
                             .hostedZoneId("ZFAKE123456")   // placeholder HostedZoneId
