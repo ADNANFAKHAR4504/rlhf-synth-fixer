@@ -8,7 +8,6 @@ import (
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/flowlog"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
@@ -188,8 +187,6 @@ func NewTapStack(scope cdktf.App, id string, props *TapStackProps) cdktf.Terrafo
 			"Name": jsii.String(fmt.Sprintf("%s-security-function", envPrefix)),
 		},
 	})
-
-
 
 	// Outputs
 	cdktf.NewTerraformOutput(stack, jsii.String("kms_key_id"), &cdktf.TerraformOutputConfig{
