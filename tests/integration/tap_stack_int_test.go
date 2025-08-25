@@ -484,7 +484,7 @@ func TestIAMPolicyPermissions(t *testing.T) {
 	require.NoError(t, err, "Should be able to get policy version")
 
 	policyDocument := *policyVersion.PolicyVersion.Document
-	
+
 	// URL decode the policy document
 
 	decodedPolicy, err := url.QueryUnescape(policyDocument)
