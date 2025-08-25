@@ -1,21 +1,15 @@
+You're absolutely right! The template was cut off. Let me provide the complete CloudFormation template with the missing sections:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready multi-region AWS infrastructure stack for company migration initiative. Supports us-east-1 and us-west-2 with high availability, security, and compliance features.'
 
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
-
 Parameters:
-  EnvironmentSuffix:
+  Environment:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Deployment environment'
 
   CompanyIPRange:
     Type: String
@@ -51,7 +45,7 @@ Parameters:
 
   DomainName:
     Type: String
-    Default: 'failoverdemo.com'
+    Default: 'example.com'
     Description: 'Domain name for Route 53 hosted zone'
 
 Mappings:
@@ -84,8 +78,8 @@ Mappings:
       CIDR: '10.0.200.0/24'
 
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentSuffix, 'production']
-  CreateMultiAZ: !Equals [!Ref EnvironmentSuffix, 'production']
+  IsProduction: !Equals [!Ref Environment, 'production']
+  CreateMultiAZ: !Equals [!Ref Environment, 'production']
 
 Resources:
   # ============================================================================
@@ -116,18 +110,18 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-kms-key-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-kms-key'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
           Value: 'CloudEngineer'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref Environment
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-key-${EnvironmentSuffix}'
+      AliasName: !Sub 'alias/${AWS::StackName}-key'
       TargetKeyId: !Ref KMSKey
 
   # ============================================================================
@@ -141,13 +135,13 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-vpc-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-vpc'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
           Value: 'CloudEngineer'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref Environment
 
   # Internet Gateway
   InternetGateway:
@@ -155,7 +149,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-igw-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-igw'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -177,7 +171,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-public-subnet-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -194,7 +188,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-public-subnet-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -211,7 +205,7 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-private-subnet-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -227,7 +221,7 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-private-subnet-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -244,7 +238,7 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-db-subnet-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -260,7 +254,7 @@ Resources:
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-db-subnet-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -276,7 +270,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-eip-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-nat-eip-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -289,7 +283,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-eip-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-nat-eip-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -302,7 +296,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-gateway-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-nat-gateway-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -315,7 +309,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-gateway-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-nat-gateway-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -328,7 +322,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-public-routes-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-public-routes'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -360,7 +354,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-routes-1-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-private-routes-1'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -385,7 +379,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-private-routes-2-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-private-routes-2'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -410,7 +404,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-alb-sg-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-alb-sg'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -430,7 +424,7 @@ Resources:
           Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-alb-sg-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-alb-sg'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -439,7 +433,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-web-sg-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-web-sg'
       GroupDescription: 'Security group for web servers'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -464,7 +458,7 @@ Resources:
           Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-web-sg-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-web-sg'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -473,7 +467,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-db-sg-${EnvironmentSuffix}'
+      GroupName: !Sub '${AWS::StackName}-db-sg'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -484,7 +478,7 @@ Resources:
           Description: 'MySQL access from web servers'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-sg-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-db-sg'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -496,7 +490,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-ec2-role-${EnvironmentSuffix}'
+      RoleName: !Sub '${AWS::StackName}-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -516,11 +510,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                Resource: !Sub '${S3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}'
+                Resource: !Ref S3Bucket
       Tags:
         - Key: Project
           Value: 'Migration'
@@ -530,9 +524,28 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-ec2-profile-${EnvironmentSuffix}'
+      InstanceProfileName: !Sub '${AWS::StackName}-ec2-profile'
       Roles:
         - !Ref EC2Role
+
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-rds-monitoring-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Project
+          Value: 'Migration'
+        - Key: Creator
+          Value: 'CloudEngineer'
 
   # ============================================================================
   # S3 Bucket
@@ -540,7 +553,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -556,42 +569,13 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-bucket-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-bucket'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
           Value: 'CloudEngineer'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # S3 Bucket Policy for CloudTrail
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}'
-            Condition:
-              StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-${EnvironmentSuffix}-cloudtrail'
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/cloudtrail-logs/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-server-side-encryption': 'aws:kms'
-                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt KMSKey.Arn
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-${EnvironmentSuffix}-cloudtrail'
+          Value: !Ref Environment
 
   # ============================================================================
   # RDS Database
@@ -599,14 +583,14 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref DatabaseSubnet1
         - !Ref DatabaseSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-subnet-group-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-db-subnet-group'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -615,7 +599,7 @@ Resources:
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
-      DBParameterGroupName: !Sub '${AWS::StackName}-db-params-${EnvironmentSuffix}'
+      DBParameterGroupName: !Sub '${AWS::StackName}-db-params'
       Description: 'Parameter group for MySQL database'
       Family: mysql8.0
       Parameters:
@@ -623,7 +607,7 @@ Resources:
         max_connections: '1000'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-db-params-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-db-params'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -633,7 +617,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql-${EnvironmentSuffix}'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql'
       DBInstanceClass: db.t3.medium
       Engine: mysql
       EngineVersion: '8.0.35'
@@ -651,18 +635,20 @@ Resources:
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: !If [CreateMultiAZ, true, false]
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       EnablePerformanceInsights: true
       PerformanceInsightsKMSKeyId: !Ref KMSKey
       DeletionProtection: !If [IsProduction, true, false]
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-mysql-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-mysql'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
           Value: 'CloudEngineer'
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref Environment
 
   # ============================================================================
   # Application Load Balancer
@@ -670,7 +656,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-alb-${EnvironmentSuffix}'
+      Name: !Sub '${AWS::StackName}-alb'
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -681,7 +667,7 @@ Resources:
         - !Ref LoadBalancerSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-alb-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-alb'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -690,7 +676,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-tg-${EnvironmentSuffix}'
+      Name: !Sub '${AWS::StackName}-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -704,7 +690,7 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-tg-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-tg'
         - Key: Project
           Value: 'Migration'
         - Key: Creator
@@ -726,7 +712,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-lt-${EnvironmentSuffix}'
+      LaunchTemplateName: !Sub '${AWS::StackName}-lt'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
@@ -743,24 +729,72 @@ Resources:
             yum install -y httpd mysql
             systemctl start httpd
             systemctl enable httpd
-            echo "<h1>Hello from ${AWS::Region} - ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
+            echo "<h1>Hello from ${AWS::Region}</h1>" > /var/www/html/index.html
             echo "OK" > /var/www/html/health
+
+            # Install CloudWatch agent
+            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            rpm -U ./amazon-cloudwatch-agent.rpm
+
+            # Configure CloudWatch agent
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+            {
+              "metrics": {
+                "namespace": "AWS/EC2/Custom",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                    "metrics_collection_interval": 60
+                  },
+                  "disk": {
+                    "measurement": ["used_percent"],
+                    "metrics_collection_interval": 60,
+                    "resources": ["*"]
+                  },
+                  "mem": {
+                    "measurement": ["mem_used_percent"],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "${WebServerLogGroup}",
+                        "log_stream_name": "{instance_id}/httpd/access.log"
+                      },
+                      {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "${WebServerLogGroup}",
+                        "log_stream_name": "{instance_id}/httpd/error.log"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
         TagSpecifications:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${AWS::StackName}-web-server-${EnvironmentSuffix}'
+                Value: !Sub '${AWS::StackName}-web-server'
               - Key: Project
                 Value: 'Migration'
               - Key: Creator
                 Value: 'CloudEngineer'
               - Key: Environment
-                Value: !Ref EnvironmentSuffix
+                Value: !Ref Environment
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${AWS::StackName}-asg-${EnvironmentSuffix}'
+      AutoScalingGroupName: !Sub '${AWS::StackName}-asg'
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -776,7 +810,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-asg-${EnvironmentSuffix}'
+          Value: !Sub '${AWS::StackName}-asg'
           PropagateAtLaunch: false
         - Key: Project
           Value: 'Migration'
@@ -785,7 +819,7 @@ Resources:
           Value: 'CloudEngineer'
           PropagateAtLaunch: true
         - Key: Environment
-          Value: !Ref EnvironmentSuffix
+          Value: !Ref Environment
           PropagateAtLaunch: true
 
   # Auto Scaling Policies
@@ -804,179 +838,5 @@ Resources:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
       Cooldown: 300
-      ScalingAdjustment: -1
-      PolicyType: SimpleScaling
-
-  # ============================================================================
-  # CloudWatch Monitoring and Logging
-  # ============================================================================
-  WebServerLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/ec2/${AWS::StackName}/webserver-${EnvironmentSuffix}'
-      RetentionInDays: 14
-      KmsKeyId: !Ref KMSKey
-
-  # CloudWatch Alarms
-  HighCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${AWS::StackName}-high-cpu-${EnvironmentSuffix}'
-      AlarmDescription: 'Alarm when CPU exceeds 80%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleUpPolicy
-
-  LowCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${AWS::StackName}-low-cpu-${EnvironmentSuffix}'
-      AlarmDescription: 'Alarm when CPU is below 10%'
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 10
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: AutoScalingGroupName
-          Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleDownPolicy
-
-  # ============================================================================
-  # CloudTrail for Auditing
-  # ============================================================================
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: S3BucketPolicy
-    Properties:
-      TrailName: !Sub 'TapStack-${EnvironmentSuffix}-cloudtrail'
-      S3BucketName: !Ref S3Bucket
-      S3KeyPrefix: 'cloudtrail-logs/'
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref KMSKey
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-cloudtrail-${EnvironmentSuffix}'
-        - Key: Project
-          Value: 'Migration'
-        - Key: Creator
-          Value: 'CloudEngineer'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # ============================================================================
-  # Route 53 DNS Configuration
-  # ============================================================================
-  HostedZone:
-    Type: AWS::Route53::HostedZone
-    Properties:
-      Name: !Ref DomainName
-      HostedZoneConfig:
-        Comment: !Sub 'Hosted zone for ${DomainName} - ${EnvironmentSuffix}'
-      HostedZoneTags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-hosted-zone-${EnvironmentSuffix}'
-        - Key: Project
-          Value: 'Migration'
-        - Key: Creator
-          Value: 'CloudEngineer'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  DNSRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZone
-      Name: !Sub 'www.${DomainName}'
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
-        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-
-Outputs:
-  VPCId:
-    Description: 'ID of the VPC'
-    Value: !Ref VPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPC-${EnvironmentSuffix}'
-
-  PublicSubnet1Id:
-    Description: 'ID of the first public subnet'
-    Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1-${EnvironmentSuffix}'
-
-  PublicSubnet2Id:
-    Description: 'ID of the second public subnet'
-    Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2-${EnvironmentSuffix}'
-
-  PrivateSubnet1Id:
-    Description: 'ID of the first private subnet'
-    Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1-${EnvironmentSuffix}'
-
-  PrivateSubnet2Id:
-    Description: 'ID of the second private subnet'
-    Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2-${EnvironmentSuffix}'
-
-  LoadBalancerDNS:
-    Description: 'DNS name of the Application Load Balancer'
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerDNS-${EnvironmentSuffix}'
-
-  DatabaseEndpoint:
-    Description: 'RDS MySQL database endpoint'
-    Value: !GetAtt RDSInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-DatabaseEndpoint-${EnvironmentSuffix}'
-
-  S3BucketName:
-    Description: 'Name of the S3 bucket'
-    Value: !Ref S3Bucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-${EnvironmentSuffix}'
-
-  KMSKeyId:
-    Description: 'ID of the KMS key'
-    Value: !Ref KMSKey
-    Export:
-      Name: !Sub '${AWS::StackName}-KMSKey-${EnvironmentSuffix}'
-
-  WebsiteURL:
-    Description: 'Website URL'
-    Value: !Sub 'http://www.${DomainName}'
-    Export:
-      Name: !Sub '${AWS::StackName}-WebsiteURL-${EnvironmentSuffix}'
-
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${AWS::StackName}-StackName'
-
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Sc
+```
