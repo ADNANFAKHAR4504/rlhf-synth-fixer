@@ -1,6 +1,3 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Secure FinTech Infrastructure'
-
 Parameters:
   EnvironmentName:
     Type: String
@@ -34,6 +31,14 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database master username'
 
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+    Description: 'Database master password (must be 8-41 alphanumeric characters)'
+
   FlowLogRetentionDays:
     Type: Number
     Default: 90
@@ -49,11 +54,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub 'tap-db-password-${EnvironmentName}'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludeCharacters: '"''\/@'
+      SecretString: !Sub '{"username": "${DBUsername}", "password": "${DBPassword}"}'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -620,6 +621,7 @@ Resources:
   # RDS Instance
   TapDatabase:
     Type: AWS::RDS::DBInstance
+    DependsOn: TapDBPasswordSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
