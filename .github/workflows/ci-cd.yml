@@ -255,7 +255,7 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata]
+    needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
 
@@ -269,6 +269,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+
+      - name: Download Deployment Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-outputs
+          path: .
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
