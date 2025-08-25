@@ -32,5 +32,11 @@
     "RDS",
     "ElasticLoadBalancingV2",
     "Events"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
 }
