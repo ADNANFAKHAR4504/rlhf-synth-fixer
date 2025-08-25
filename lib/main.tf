@@ -92,10 +92,14 @@ resource "aws_cloudwatch_log_group" "trail" {
 data "aws_iam_policy_document" "trail_cw_assume" {
   statement {
     effect = "Allow"
-    principals { type = "Service" identifiers = ["cloudtrail.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
     actions = ["sts:AssumeRole"]
   }
 }
+
 
 resource "aws_iam_role" "trail_cw" {
   name               = "${local.name_prefix}-trail-cw-role"
@@ -124,6 +128,7 @@ data "aws_iam_policy_document" "trail_cw_policy" {
   }
 }
 
+
 resource "aws_iam_role_policy" "trail_cw" {
   name   = "${local.name_prefix}-trail-cw"
   role   = aws_iam_role.trail_cw.id
@@ -135,39 +140,62 @@ data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "logs_bucket" {
   statement {
-    sid     = "AWSCloudTrailWrite"
-    effect  = "Allow"
-    principals { type = "Service" identifiers = ["cloudtrail.amazonaws.com"] }
+    sid    = "AWSCloudTrailWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
     actions  = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.logs.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
-    conditions = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+    resources = [
+      "${aws_s3_bucket.logs.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
   }
 
   statement {
-    sid     = "AWSCloudTrailGetAcl"
-    effect  = "Allow"
-    principals { type = "Service" identifiers = ["cloudtrail.amazonaws.com"] }
+    sid    = "AWSCloudTrailGetAcl"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
     actions   = ["s3:GetBucketAcl"]
     resources = [aws_s3_bucket.logs.arn]
   }
 
   statement {
-    sid     = "AWSConfigWrite"
-    effect  = "Allow"
-    principals { type = "Service" identifiers = ["config.amazonaws.com"] }
-    actions   = ["s3:PutObject"]
+    sid    = "AWSConfigWrite"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+    actions  = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.logs.arn}/aws-config/*"]
-    conditions = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
   }
 
   statement {
-    sid     = "AWSConfigGetAcl"
-    effect  = "Allow"
-    principals { type = "Service" identifiers = ["config.amazonaws.com"] }
+    sid    = "AWSConfigGetAcl"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
     actions   = ["s3:GetBucketAcl", "s3:ListBucket"]
     resources = [aws_s3_bucket.logs.arn]
   }
 }
+
 
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
@@ -192,10 +220,14 @@ resource "aws_cloudtrail" "main" {
 data "aws_iam_policy_document" "config_assume" {
   statement {
     effect = "Allow"
-    principals { type = "Service" identifiers = ["config.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
     actions = ["sts:AssumeRole"]
   }
 }
+
 
 resource "aws_iam_role" "config" {
   name               = "${local.name_prefix}-config-role"
