@@ -222,9 +222,9 @@ class TapStack(cdk.Stack):
             handler="index.handler",
             code=lambda_.Code.from_inline(
                 """
-                def handler(event, context):
-                    print("Auto recovery triggered")
-                """
+        def handler(event, context):
+            print("Auto recovery triggered")
+        """
             ),
         )
 
@@ -240,63 +240,63 @@ class TapStack(cdk.Stack):
         cdk.CfnOutput(self, "ALB DNS", value=alb.load_balancer_dns_name)
         cdk.CfnOutput(self, "Primary Bucket", value=primary_bucket.bucket_name)
         cdk.CfnOutput(self, "Backup Bucket", value=backup_bucket.bucket_name)
-        
+
         # VPC Outputs
         cdk.CfnOutput(self, "VPC ID", value=vpc.vpc_id)
         cdk.CfnOutput(self, "VPC CIDR", value=vpc.vpc_cidr_block)
-        
+
         # Subnet Outputs
         cdk.CfnOutput(
-            self, 
-            "Public Subnet IDs", 
+            self,
+            "Public Subnet IDs",
             value=",".join([subnet.subnet_id for subnet in vpc.public_subnets])
         )
         cdk.CfnOutput(
-            self, 
-            "Private Subnet IDs", 
+            self,
+            "Private Subnet IDs",
             value=",".join([subnet.subnet_id for subnet in vpc.private_subnets])
         )
         cdk.CfnOutput(
-            self, 
-            "Isolated Subnet IDs", 
+            self,
+            "Isolated Subnet IDs",
             value=",".join([subnet.subnet_id for subnet in vpc.isolated_subnets])
         )
-        
+
         # Security Group Outputs
         cdk.CfnOutput(self, "ALB Security Group ID", value=alb_sg.security_group_id)
         cdk.CfnOutput(self, "EC2 Security Group ID", value=ec2_sg.security_group_id)
         cdk.CfnOutput(self, "DB Security Group ID", value=db_sg.security_group_id)
-        
+
         # ALB Outputs
         cdk.CfnOutput(self, "ALB ARN", value=alb.load_balancer_arn)
         cdk.CfnOutput(self, "ALB Hosted Zone ID", value=alb.load_balancer_canonical_hosted_zone_id)
-        
+
         # Auto Scaling Group Outputs
         cdk.CfnOutput(self, "Auto Scaling Group Name", value=asg.auto_scaling_group_name)
         cdk.CfnOutput(self, "Auto Scaling Group ARN", value=asg.auto_scaling_group_arn)
         cdk.CfnOutput(self, "Launch Template ID", value=launch_template.launch_template_id)
-        
+
         # RDS Outputs
         cdk.CfnOutput(self, "RDS Cluster Identifier", value=db_cluster.cluster_identifier)
         cdk.CfnOutput(self, "RDS Cluster Endpoint", value=db_cluster.cluster_endpoint.hostname)
         cdk.CfnOutput(self, "RDS Cluster Reader Endpoint", value=db_cluster.cluster_read_endpoint.hostname)
         cdk.CfnOutput(self, "RDS Cluster ARN", value=db_cluster.cluster_arn)
         cdk.CfnOutput(self, "RDS Secret ARN", value=db_cluster.secret.secret_arn)
-        
+
         # S3 Bucket Additional Outputs
         cdk.CfnOutput(self, "Primary Bucket ARN", value=primary_bucket.bucket_arn)
         cdk.CfnOutput(self, "Primary Bucket Domain Name", value=primary_bucket.bucket_domain_name)
         cdk.CfnOutput(self, "Backup Bucket ARN", value=backup_bucket.bucket_arn)
         cdk.CfnOutput(self, "Backup Bucket Domain Name", value=backup_bucket.bucket_domain_name)
-        
+
         # Lambda Outputs
         cdk.CfnOutput(self, "Lambda Function Name", value=lambda_function.function_name)
         cdk.CfnOutput(self, "Lambda Function ARN", value=lambda_function.function_arn)
         cdk.CfnOutput(self, "Lambda Function Role ARN", value=lambda_function.role.role_arn)
-        
+
         # KMS Outputs
         cdk.CfnOutput(self, "KMS Key ID", value=kms_key.key_id)
         cdk.CfnOutput(self, "KMS Key ARN", value=kms_key.key_arn)
-        
+
         # Environment Output
         cdk.CfnOutput(self, "Environment Suffix", value=environment_suffix)
