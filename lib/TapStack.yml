@@ -27,7 +27,7 @@ Parameters:
 
   TrustedAccountId:
     Type: String
-    Default: "123456789012"
+    Default: "718240086340"
     Description: "AWS Account ID that will be trusted for cross-account access"
     AllowedPattern: "^[0-9]{12}$"
     ConstraintDescription: "Must be a 12-digit AWS Account ID"
@@ -218,14 +218,6 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3EncryptionKey
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: "AWS::S3::Object"
-              Values:
-                - !Sub "${CloudTrailLogsBucket}/*"
-                - !Sub "${VpcFlowLogsBucket}/*"
 
   # VPC
   SecureVPC:
