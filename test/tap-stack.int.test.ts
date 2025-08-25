@@ -109,13 +109,15 @@ describe('TapStack CloudFormation Outputs Live Integration', () => {
   test('ConfigRoleArn exists in IAM', async () => {
     const roleName = outputs.ConfigRoleArn.split('/').pop();
     const resp = await iam.send(new GetRoleCommand({ RoleName: roleName }));
-    expect(resp.Role.Arn).toBe(outputs.ConfigRoleArn);
+    expect(resp.Role).toBeDefined();
+    expect(resp.Role?.Arn).toBe(outputs.ConfigRoleArn);
   });
 
   test('EC2InstanceProfileArn exists in IAM', async () => {
     const profileName = outputs.EC2InstanceProfileArn.split('/').pop();
     const resp = await iam.send(new GetInstanceProfileCommand({ InstanceProfileName: profileName }));
-    expect(resp.InstanceProfile.Arn).toBe(outputs.EC2InstanceProfileArn);
+    expect(resp.InstanceProfile).toBeDefined();
+    expect(resp.InstanceProfile?.Arn).toBe(outputs.EC2InstanceProfileArn);
   });
 
   test('SecurityAlertsTopicArn exists in SNS', async () => {
