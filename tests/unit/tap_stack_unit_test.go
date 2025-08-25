@@ -75,10 +75,14 @@ func TestSuite(t *testing.T) {
 							}
 						}
 					}
-					if isSshOpen { break }
+					if isSshOpen {
+						break
+					}
 				}
 			}
-			if isSshOpen { break }
+			if isSshOpen {
+				break
+			}
 		}
 		assert.False(t, isSshOpen, "Found a security group with SSH open to 0.0.0.0/0")
 	})
@@ -86,7 +90,7 @@ func TestSuite(t *testing.T) {
 	t.Run("EC2IAMPolicyShouldUseLeastPrivilege", func(t *testing.T) {
 		iamPolicy := resourceMap["aws_iam_policy"].(map[string]interface{})["ec2Policy"]
 		config := iamPolicy.(map[string]interface{})
-		
+
 		// --- FIX: The synthesized policy contains Terraform tokens (e.g., ${...}),
 		// so it's not valid JSON. We must test it with string contains checks instead of parsing. ---
 		policyString := config["policy"].(string)

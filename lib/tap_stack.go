@@ -8,7 +8,8 @@ import (
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 
 	// Import AWS Provider and specific resources
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamaccountpasswordpolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iampolicy"
@@ -19,6 +20,7 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lb"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lbtargetgroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
@@ -26,8 +28,6 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 )
 
 func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
@@ -43,12 +43,12 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// --- IAM Security Policies (MFA Enforcement) ---
 	iamaccountpasswordpolicy.NewIamAccountPasswordPolicy(stack, jsii.String("mfaPolicy"), &iamaccountpasswordpolicy.IamAccountPasswordPolicyConfig{
-		HardExpiry:             jsii.Bool(false),
-		MinimumPasswordLength:  jsii.Number(14),
-		PasswordReusePrevention: jsii.Number(24),
+		HardExpiry:                 jsii.Bool(false),
+		MinimumPasswordLength:      jsii.Number(14),
+		PasswordReusePrevention:    jsii.Number(24),
 		RequireLowercaseCharacters: jsii.Bool(true),
-		RequireNumbers:         jsii.Bool(true),
-		RequireSymbols:         jsii.Bool(true),
+		RequireNumbers:             jsii.Bool(true),
+		RequireSymbols:             jsii.Bool(true),
 		RequireUppercaseCharacters: jsii.Bool(true),
 	})
 
@@ -75,7 +75,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		AvailabilityZone:    jsii.String("us-east-1b"),
 		MapPublicIpOnLaunch: jsii.Bool(true),
 	})
-	
+
 	// Private Subnets for Application Instances
 	privateSubnetA := subnet.NewSubnet(stack, jsii.String("privateSubnetA"), &subnet.SubnetConfig{
 		VpcId:            secureVpc.Id(),
@@ -138,7 +138,6 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		RouteTableId: privateRouteTable.Id(),
 	})
 
-
 	// --- S3 Bucket for Centralized Logging (Encrypted) ---
 	logBucket := s3bucket.NewS3Bucket(stack, jsii.String("logBucket"), &s3bucket.S3BucketConfig{
 		Bucket: jsii.String(fmt.Sprintf("secure-logs-%s", *uniqueSuffix)),
@@ -200,11 +199,11 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// --- Application Load Balancer ---
 	lb.NewLb(stack, jsii.String("appLb"), &lb.LbConfig{
-		Name:           jsii.String(fmt.Sprintf("Alb-App-Prod-%s", *uniqueSuffix)),
-		Internal:       jsii.Bool(false),
+		Name:             jsii.String(fmt.Sprintf("Alb-App-Prod-%s", *uniqueSuffix)),
+		Internal:         jsii.Bool(false),
 		LoadBalancerType: jsii.String("application"),
-		SecurityGroups: &[]*string{lbSg.Id()},
-		Subnets:        &[]*string{publicSubnetA.Id(), publicSubnetB.Id()},
+		SecurityGroups:   &[]*string{lbSg.Id()},
+		Subnets:          &[]*string{publicSubnetA.Id(), publicSubnetB.Id()},
 	})
 
 	lbtargetgroup.NewLbTargetGroup(stack, jsii.String("targetGroup"), &lbtargetgroup.LbTargetGroupConfig{
