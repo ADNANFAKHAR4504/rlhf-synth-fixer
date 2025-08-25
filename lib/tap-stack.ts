@@ -67,7 +67,7 @@ export class TapStack extends TerraformStack {
       privateSubnetCidrs: ['10.0.10.0/24', '10.0.20.0/24'],
     });
 
-    // Create S3 Module for static website hosting
+    // Create S3 Module for static website hosting with CloudFront
     const s3Module = new S3Module(this, `s3-${environmentSuffix}`, {
       bucketName: `my-static-website-${environmentSuffix}-${Date.now()}`, // Adding timestamp to ensure uniqueness
     });
@@ -125,14 +125,25 @@ export class TapStack extends TerraformStack {
         'The name of the S3 bucket created for static website hosting',
     });
 
-    new TerraformOutput(this, 's3-bucket-website-endpoint', {
-      value: s3Module.bucket.websiteEndpoint,
-      description: 'The website endpoint of the S3 bucket',
-    });
-
     new TerraformOutput(this, 's3-bucket-arn', {
       value: s3Module.bucket.arn,
       description: 'The ARN of the S3 bucket',
+    });
+
+    // CloudFront Distribution Outputs
+    new TerraformOutput(this, 'cloudfront-distribution-id', {
+      value: s3Module.distribution.id,
+      description: 'The ID of the CloudFront distribution',
+    });
+
+    new TerraformOutput(this, 'cloudfront-distribution-domain-name', {
+      value: s3Module.distribution.domainName,
+      description: 'The domain name of the CloudFront distribution',
+    });
+
+    new TerraformOutput(this, 'cloudfront-distribution-arn', {
+      value: s3Module.distribution.arn,
+      description: 'The ARN of the CloudFront distribution',
     });
 
     // IAM Module Outputs

@@ -22,6 +22,8 @@ import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { DataAwsAmiIds } from '@cdktf/provider-aws/lib/data-aws-ami-ids';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
+import { CloudfrontOriginAccessControl } from '@cdktf/provider-aws/lib/cloudfront-origin-access-control';
 import { Fn } from 'cdktf';
 
 export interface VpcModuleProps {
@@ -160,11 +162,12 @@ export interface S3ModuleProps {
 
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
+  public readonly distribution: CloudfrontDistribution;
 
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
 
-    // Create S3 bucket
+    // Create S3 bucket (keep it private)
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: props.bucketName,
       tags: {
@@ -173,7 +176,7 @@ export class S3Module extends Construct {
       },
     });
 
-    // Configure bucket for static website hosting
+    // Configure bucket for static website hosting (optional for CloudFront setup)
     new S3BucketWebsiteConfiguration(this, 'website-config', {
       bucket: this.bucket.id,
       indexDocument: {
@@ -184,32 +187,94 @@ export class S3Module extends Construct {
       },
     });
 
-    // Configure public access block (allow public read for static website)
+    // Keep bucket private but allow CloudFront access
     new S3BucketPublicAccessBlock(this, 'public-access-block', {
       bucket: this.bucket.id,
-      blockPublicAcls: false,
-      blockPublicPolicy: false,
-      ignorePublicAcls: false,
-      restrictPublicBuckets: false,
+      blockPublicAcls: true,
+      blockPublicPolicy: false, // Allow CloudFront policy
+      ignorePublicAcls: true,
+      restrictPublicBuckets: false, // Allow CloudFront access
     });
 
-    // Create bucket policy for public read access
+    // Create Origin Access Control
+    const oac = new CloudfrontOriginAccessControl(this, 'oac', {
+      name: `${props.bucketName}-oac`,
+      description: 'OAC for S3 bucket',
+      originAccessControlOriginType: 's3',
+      signingBehavior: 'always',
+      signingProtocol: 'sigv4',
+    });
+
+    // Create CloudFront distribution
+    this.distribution = new CloudfrontDistribution(this, 'distribution', {
+      origin: [{
+        domainName: this.bucket.bucketDomainName,
+        originId: 's3-origin',
+        originAccessControlId: oac.id,
+      }],
+      enabled: true,
+      defaultRootObject: 'index.html',
+      defaultCacheBehavior: {
+        targetOriginId: 's3-origin',
+        viewerProtocolPolicy: 'redirect-to-https',
+        allowedMethods: ['GET', 'HEAD'],
+        cachedMethods: ['GET', 'HEAD'],
+        compress: true,
+        forwardedValues: {
+          queryString: false,
+          cookies: {
+            forward: 'none',
+          },
+        },
+      },
+      customErrorResponse: [
+        {
+          errorCode: 403,
+          responseCode: 200,
+          responsePagePath: '/index.html',
+          errorCachingMinTtl: 300,
+        },
+        {
+          errorCode: 404,
+          responseCode: 200,
+          responsePagePath: '/index.html',
+          errorCachingMinTtl: 300,
+        },
+      ],
+      restrictions: {
+        geoRestriction: {
+          restrictionType: 'none',
+        },
+      },
+      viewerCertificate: {
+        cloudfrontDefaultCertificate: true,
+      },
+      tags: {
+        Name: `${props.bucketName}-distribution`,
+        Purpose: 'static-website-cdn',
+      },
+    });
+
+    // Create bucket policy for CloudFront OAC
     const bucketPolicyDocument = new DataAwsIamPolicyDocument(
       this,
       'bucket-policy-document',
       {
         statement: [
           {
-            sid: 'PublicReadGetObject',
+            sid: 'AllowCloudFrontServicePrincipal',
             effect: 'Allow',
-            principals: [
-              {
-                type: '*',
-                identifiers: ['*'],
-              },
-            ],
+            principals: [{
+              type: 'Service',
+              identifiers: ['cloudfront.amazonaws.com'],
+            }],
             actions: ['s3:GetObject'],
             resources: [`${this.bucket.arn}/*`],
+            condition: [{
+              test: 'StringEquals',
+              variable: 'AWS:SourceArn',
+              values: [this.distribution.arn],
+            }],
           },
         ],
       }
