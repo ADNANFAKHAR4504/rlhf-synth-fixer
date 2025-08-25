@@ -3,6 +3,10 @@
   "problem_id": "Security_Configuration_as_Code_CloudFormation_YAML_ak9m3b82l7ph",
   "platform": "pulumi",
   "language": "go",
+  "po_id": "trainr310",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-08-25T10:35:03+00:00",
   "difficulty": "hard",
   "subtask": "Security and Compliance Implementation",
   "original_platform": "CloudFormation",
@@ -22,7 +26,10 @@
     "Include detailed tagging for all resources to assist in cost tracking and management"
   ],
   "cloud_provider": "aws",
-  "regions": ["us-east-1", "us-west-2"],
+  "regions": [
+    "us-east-1",
+    "us-west-2"
+  ],
   "subject_labels": [
     "Security Configuration",
     "Access Control",
