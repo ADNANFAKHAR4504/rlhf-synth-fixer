@@ -9,11 +9,13 @@ import com.pulumi.aws.secretsmanager.SecretVersionArgs;
 import com.pulumi.core.Output;
 import com.pulumi.resources.CustomResource;
 import com.pulumi.resources.ResourceArgs;
+import com.pulumi.resources.CustomResourceOptions;
 import app.config.EnvironmentConfig;
 import app.utils.ResourceNaming;
 import app.utils.TaggingPolicy;
 
 import java.util.Map;
+import java.util.HashMap;
 
 public class SecretsManagerMigration extends CustomResource {
     private final EnvironmentConfig envConfig;
@@ -39,26 +41,25 @@ public class SecretsManagerMigration extends CustomResource {
             .description("Database credentials for " + envConfig.getEnvironment())
             .kmsKeyId(kmsKey.id())
             .tags(TaggingPolicy.getResourceTags(envConfig.getEnvironment(), "Secret", "Type", "Database"))
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
         // Create secret version with placeholder values
         // In real implementation, you would fetch these from your existing secret store
-        Map<String, String> secretValue = Map.of(
-            "username", "admin",
-            "password", "placeholder-" + ResourceNaming.generateRandomString(16),
-            "host", envConfig.getEnvironment() + "-db.internal",
-            "port", "5432",
-            "database", "app_" + envConfig.getEnvironment()
-        );
+        Map<String, String> secretValue = new HashMap<>();
+        secretValue.put("username", "admin");
+        secretValue.put("password", "placeholder-" + ResourceNaming.generateRandomString(16));
+        secretValue.put("host", envConfig.getEnvironment() + "-db.internal");
+        secretValue.put("port", "5432");
+        secretValue.put("database", "app_" + envConfig.getEnvironment());
         
         String secretJson = convertMapToJson(secretValue);
         
         new SecretVersion(secretName + "-version", SecretVersionArgs.builder()
             .secretId(dbSecret.id())
             .secretString(secretJson)
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
@@ -67,11 +68,13 @@ public class SecretsManagerMigration extends CustomResource {
     
     private String convertMapToJson(Map<String, String> map) {
         StringBuilder json = new StringBuilder("{");
-        map.forEach((key, value) -> 
-            json.append("\"").append(key).append("\":\"").append(value).append("\",")
-        );
-        if (json.length() > 1) {
-            json.setLength(json.length() - 1); // Remove last comma
+        boolean first = true;
+        for (Map.Entry<String, String> entry : map.entrySet()) {
+            if (!first) {
+                json.append(",");
+            }
+            json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue()).append("\"");
+            first = false;
         }
         json.append("}");
         return json.toString();

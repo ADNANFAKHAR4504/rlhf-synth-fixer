@@ -3,6 +3,7 @@ package app.config;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 public class EnvironmentConfig {
     private final String environment;
@@ -33,29 +34,34 @@ public class EnvironmentConfig {
     }
     
     public Map<String, String> getVpcConfig() {
-        return switch (environment) {
-            case "development" -> Map.of(
-                "cidrBlock", "10.0.0.0/16",
-                "enableDnsHostnames", "true",
-                "enableDnsSupport", "true"
-            );
-            case "testing" -> Map.of(
-                "cidrBlock", "10.1.0.0/16",
-                "enableDnsHostnames", "true",
-                "enableDnsSupport", "true"
-            );
-            case "staging" -> Map.of(
-                "cidrBlock", "10.2.0.0/16",
-                "enableDnsHostnames", "true",
-                "enableDnsSupport", "true"
-            );
-            case "production" -> Map.of(
-                "cidrBlock", "10.3.0.0/16",
-                "enableDnsHostnames", "true",
-                "enableDnsSupport", "true"
-            );
-            default -> throw new IllegalStateException("Unexpected environment: " + environment);
-        };
+        Map<String, String> config = new HashMap<>();
+        
+        switch (environment) {
+            case "development":
+                config.put("cidrBlock", "10.0.0.0/16");
+                config.put("enableDnsHostnames", "true");
+                config.put("enableDnsSupport", "true");
+                break;
+            case "testing":
+                config.put("cidrBlock", "10.1.0.0/16");
+                config.put("enableDnsHostnames", "true");
+                config.put("enableDnsSupport", "true");
+                break;
+            case "staging":
+                config.put("cidrBlock", "10.2.0.0/16");
+                config.put("enableDnsHostnames", "true");
+                config.put("enableDnsSupport", "true");
+                break;
+            case "production":
+                config.put("cidrBlock", "10.3.0.0/16");
+                config.put("enableDnsHostnames", "true");
+                config.put("enableDnsSupport", "true");
+                break;
+            default:
+                throw new IllegalStateException("Unexpected environment: " + environment);
+        }
+        
+        return config;
     }
     
     public int getKmsKeyRotationDays() {

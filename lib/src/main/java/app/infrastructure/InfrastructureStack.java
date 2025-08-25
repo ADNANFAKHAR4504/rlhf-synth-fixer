@@ -10,6 +10,7 @@ import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.kms.Key;
 import com.pulumi.aws.kms.KeyArgs;
 import com.pulumi.core.Output;
+import com.pulumi.resources.CustomResourceOptions;
 import app.config.EnvironmentConfig;
 import app.utils.ResourceNaming;
 import app.utils.TaggingPolicy;
@@ -40,7 +41,7 @@ public class InfrastructureStack {
             .enableDnsHostnames(Boolean.parseBoolean(vpcConfig.get("enableDnsHostnames")))
             .enableDnsSupport(Boolean.parseBoolean(vpcConfig.get("enableDnsSupport")))
             .tags(TaggingPolicy.getResourceTags(envConfig.getEnvironment(), "VPC"))
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
     }
@@ -55,7 +56,7 @@ public class InfrastructureStack {
             .description("Security group for web tier - " + envConfig.getEnvironment())
             .vpcId(vpc.id())
             .tags(TaggingPolicy.getResourceTags(envConfig.getEnvironment(), "SecurityGroup", "Tier", "Web"))
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
@@ -67,7 +68,7 @@ public class InfrastructureStack {
             .protocol("tcp")
             .cidrBlocks(List.of("0.0.0.0/0"))
             .securityGroupId(webSg.id())
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
@@ -78,7 +79,7 @@ public class InfrastructureStack {
             .protocol("tcp")
             .cidrBlocks(List.of("0.0.0.0/0"))
             .securityGroupId(webSg.id())
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
@@ -90,7 +91,7 @@ public class InfrastructureStack {
             .protocol("tcp")
             .cidrBlocks(List.of("0.0.0.0/0"))
             .securityGroupId(webSg.id())
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
         
@@ -124,7 +125,7 @@ public class InfrastructureStack {
             .policy(keyPolicy)
             .enableKeyRotation(true)
             .tags(TaggingPolicy.getResourceTags(envConfig.getEnvironment(), "KMSKey"))
-            .build(), com.pulumi.resources.CustomResourceOptions.builder()
+            .build(), CustomResourceOptions.builder()
                 .provider(awsProvider)
                 .build());
     }

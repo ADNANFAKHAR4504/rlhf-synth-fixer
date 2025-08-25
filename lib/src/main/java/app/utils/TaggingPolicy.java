@@ -1,35 +1,33 @@
 package app.utils;
 
-import com.pulumi.aws.DefaultTagsArgs;
+import com.pulumi.aws.ProviderArgs;
 import java.util.Map;
+import java.util.HashMap;
 
 public class TaggingPolicy {
     private static final String PROJECT_NAME = "CloudMigration";
     
-    public static DefaultTagsArgs getDefaultTags(String environment) {
-        return DefaultTagsArgs.builder()
-            .tags(Map.of(
-                "Project", PROJECT_NAME,
-                "Environment", environment,
-                "ManagedBy", "Pulumi",
-                "CreatedDate", java.time.LocalDate.now().toString()
-            ))
-            .build();
+    public static Map<String, String> getDefaultTags(String environment) {
+        Map<String, String> tags = new HashMap<>();
+        tags.put("Project", PROJECT_NAME);
+        tags.put("Environment", environment);
+        tags.put("ManagedBy", "Pulumi");
+        tags.put("CreatedDate", java.time.LocalDate.now().toString());
+        return tags;
     }
     
     public static Map<String, String> getResourceTags(String environment, String resourceType) {
-        return Map.of(
-            "Project", PROJECT_NAME,
-            "Environment", environment,
-            "ResourceType", resourceType,
-            "ManagedBy", "Pulumi"
-        );
+        Map<String, String> tags = new HashMap<>();
+        tags.put("Project", PROJECT_NAME);
+        tags.put("Environment", environment);
+        tags.put("ResourceType", resourceType);
+        tags.put("ManagedBy", "Pulumi");
+        return tags;
     }
     
     public static Map<String, String> getResourceTags(String environment, String resourceType, String customTag, String customValue) {
-        var baseTags = getResourceTags(environment, resourceType);
-        var extendedTags = new java.util.HashMap<>(baseTags);
-        extendedTags.put(customTag, customValue);
-        return extendedTags;
+        Map<String, String> baseTags = getResourceTags(environment, resourceType);
+        baseTags.put(customTag, customValue);
+        return baseTags;
     }
 }

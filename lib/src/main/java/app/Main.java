@@ -54,7 +54,7 @@ public class Main {
             ctx.export("kmsKeyId", kmsKey.id());
             ctx.export("environment", Output.of(environment));
             ctx.export("migrationStatus", secretsMigration.apply(status -> 
-                Map.of("secretsMigration", status)));
+                Output.of(Map.of("secretsMigration", status))));
         });
     }
 }
