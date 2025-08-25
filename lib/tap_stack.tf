@@ -10,7 +10,19 @@ variable "aws_region" {
 variable "deployment_id" {
   description = "Unique identifier for this deployment to avoid naming conflicts"
   type        = string
-  default     = "v2"
+  default     = null
+}
+
+# Random string for unique deployment ID
+resource "random_string" "deployment_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+locals {
+  # Use provided deployment_id or generate random one
+  deployment_id = var.deployment_id != null ? var.deployment_id : random_string.deployment_suffix.result
 }
 
 # Data sources for availability zones
@@ -43,7 +55,7 @@ locals {
   environment  = "production"
   
   # Create unique names with deployment ID to avoid conflicts
-  unique_project_name = "${local.project_name}-${var.deployment_id}"
+  unique_project_name = "${local.project_name}-${local.deployment_id}"
 
   common_tags = {
     Project     = local.unique_project_name
@@ -93,7 +105,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${lower(replace(local.unique_project_name, "-", "_"))}_key"
+  name          = "alias/${lower(replace(local.unique_project_name, "-", "_"))}_${random_string.unique_suffix.result}_key"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -360,6 +372,13 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
+# Random string for additional uniqueness
+resource "random_string" "unique_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
 # S3 Bucket encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
@@ -461,7 +480,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${local.unique_project_name}-alb"
+  name               = "${local.unique_project_name}-${random_string.unique_suffix.result}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -476,7 +495,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${local.unique_project_name}-tg"
+  name     = "${local.unique_project_name}-${random_string.unique_suffix.result}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
