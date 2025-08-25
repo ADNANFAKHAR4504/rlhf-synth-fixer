@@ -145,7 +145,7 @@ resource "aws_kms_key" "main_use1" {
 }
 
 resource "aws_kms_alias" "main_use1" {
-  name          = "alias/${var.project}-${local.env}-use1"
+  name          = "alias/${var.project}-${local.env}-use1-9846"
   target_key_id = aws_kms_key.main_use1.key_id
   provider      = aws.use1
 }
@@ -1587,7 +1587,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_policy_apse2" {
 
 # Secrets Manager for Database Credentials
 resource "aws_secretsmanager_secret" "db_credentials_use1" {
-  name                    = "${var.project}-${local.env}-db-credentials-use1"
+  name                    = "${var.project}-${local.env}-db-credentials-use1-9846"
   description             = "Database credentials for ${var.project} in us-east-1"
   kms_key_id              = aws_kms_key.main_use1.arn
   recovery_window_in_days = local.is_production ? 30 : 0
@@ -2928,7 +2928,7 @@ resource "aws_cloudtrail" "main_use1" {
     Region = "us-east-1"
   })
   
-  depends_on = [aws_s3_bucket_policy.cloudtrail_use1]
+  depends_on = [aws_s3_bucket_policy.cloudtrail_use1, aws_kms_key_policy.main_use1]
 }
 
 
@@ -3028,8 +3028,9 @@ resource "aws_iam_role_policy_attachment" "config_role_apse2" {
 }
 
 # AWS Config Delivery Channels
+# Disabled due to existing Config recorder in account
 resource "aws_config_delivery_channel" "main_use1" {
-  count          = local.enable_config_recorders ? 1 : 0
+  count          = 0  # Disabled due to existing Config recorder limit
   name           = "${var.project}-${local.env}-config-delivery-use1"
   s3_bucket_name = aws_s3_bucket.main_use1.bucket
   provider       = aws.use1
@@ -3048,8 +3049,9 @@ resource "aws_config_delivery_channel" "main_apse2" {
 # AWS Config Configuration Recorders
 # Note: Only one Config recorder can be active per AWS account per region
 # This is why we only enable it in us-east-1 and disable in ap-southeast-2
+# Disabled due to existing Config recorder in account
 resource "aws_config_configuration_recorder" "main_use1" {
-  count    = local.enable_config_recorders ? 1 : 0
+  count    = 0  # Disabled due to existing Config recorder limit
   name     = "${var.project}-${local.env}-config-recorder-use1"
   role_arn = aws_iam_role.config_role_use1.arn
   provider = aws.use1
@@ -3074,7 +3076,9 @@ resource "aws_config_configuration_recorder" "main_apse2" {
 }
 
 # AWS Config Rules (Security-focused)
+# Disabled due to existing Config recorder in account
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled_use1" {
+  count    = 0  # Disabled due to existing Config recorder limit
   name     = "s3-bucket-server-side-encryption-enabled"
   provider = aws.use1
   
@@ -3101,8 +3105,9 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled_apse
 }
 
 # Enable AWS Config Recorders
+# Disabled due to existing Config recorder in account
 resource "aws_config_configuration_recorder_status" "main_use1" {
-  count      = local.enable_config_recorders ? 1 : 0
+  count      = 0  # Disabled due to existing Config recorder limit
   name       = aws_config_configuration_recorder.main_use1[0].name
   is_enabled = true
   provider   = aws.use1
