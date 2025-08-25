@@ -17,7 +17,6 @@ import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.MachineImage;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
-import software.amazon.awscdk.services.ec2.Subnet;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -37,7 +36,6 @@ import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
 import software.amazon.awscdk.services.rds.StorageType;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.LifecycleRule;
-import software.amazon.awscdk.services.s3.StorageClass;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Metric;
@@ -66,18 +64,12 @@ class RegionalStack extends Stack {
                                 .build()))
                 .build();
 
-        // S3 Bucket
+        // S3 Log Bucket (simplified to avoid LifecycleTransition issue)
         Bucket logBucket = Bucket.Builder.create(this, "NovaLogs-" + environmentSuffix)
                 .versioned(true)
                 .lifecycleRules(List.of(
                         LifecycleRule.builder()
                                 .expiration(Duration.days(365))
-                                .transitions(List.of(
-                                        software.amazon.awscdk.services.s3.LifecycleTransition.builder()
-                                                .storageClass(StorageClass.GLACIER)
-                                                .transitionAfter(Duration.days(90))
-                                                .build()
-                                ))
                                 .build()))
                 .build();
 
@@ -159,13 +151,6 @@ class RegionalStack extends Stack {
         CfnOutput.Builder.create(this, "VpcId")
                 .value(vpc.getVpcId())
                 .exportName("NovaVpcId-" + environmentSuffix)
-                .build();
-
-        CfnOutput.Builder.create(this, "SubnetIds")
-                .value(vpc.getPublicSubnets().stream()
-                        .map(s -> s.getSubnetId())
-                        .collect(Collectors.joining(",")))
-                .exportName("NovaVpcSubnetIds-" + environmentSuffix)
                 .build();
 
         CfnOutput.Builder.create(this, "AlbDns")
