@@ -33,7 +33,7 @@ class DatabaseStack(NestedStack):
         
         # Create database credentials in Secrets Manager
         self.db_secret = secretsmanager.Secret(
-            self, "prod-db-secret",
+            self, "prod-db-secret-primary-1",
             description="Database credentials for production web application",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"username": "admin"}',
@@ -45,7 +45,7 @@ class DatabaseStack(NestedStack):
         
         # Create subnet group
         subnet_group = rds.SubnetGroup(
-            self, "prod-db-subnet-group",
+            self, "prod-db-subnet-group-primary-1",
             description="Subnet group for production database",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
@@ -55,7 +55,7 @@ class DatabaseStack(NestedStack):
         
         # Create parameter group for optimization
         parameter_group = rds.ParameterGroup(
-            self, "prod-db-params",
+            self, "prod-db-params-primary-1",
             engine=rds.DatabaseInstanceEngine.mysql(
                 version=rds.MysqlEngineVersion.VER_8_0_39
             ),
@@ -68,7 +68,7 @@ class DatabaseStack(NestedStack):
         
         # Create RDS instance
         self.database = rds.DatabaseInstance(
-            self, "prod-database",
+            self, "prod-database-primary-1",
             engine=rds.DatabaseInstanceEngine.mysql(
                 version=rds.MysqlEngineVersion.VER_8_0_39
             ),
@@ -88,8 +88,7 @@ class DatabaseStack(NestedStack):
             backup_retention=Duration.days(7),
             deletion_protection=False,  # Allow deletion for testing
             delete_automated_backups=False,
-            enable_performance_insights=True,
-            performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
+            enable_performance_insights=False,  # Performance Insights not supported for t3.micro
             monitoring_interval=Duration.seconds(60),
             auto_minor_version_upgrade=True,
             removal_policy=RemovalPolicy.DESTROY,  # Allow deletion for testing
