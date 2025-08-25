@@ -1,59 +1,60 @@
 package app;
 
-import com.pulumi.Context;
 import com.pulumi.Pulumi;
-import com.pulumi.aws.s3.Bucket;
-import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.core.Output;
+import com.pulumi.aws.Provider;
+import com.pulumi.aws.ProviderArgs;
+import app.config.EnvironmentConfig;
+import app.infrastructure.InfrastructureStack;
+import app.migration.MigrationManager;
+import app.utils.TaggingPolicy;
 
 import java.util.Map;
 
-/**
- * Main class for Java Pulumi infrastructure as code.
- * 
- * This class demonstrates how to create AWS infrastructure using Pulumi's Java SDK.
- * It creates a simple S3 bucket as an example.
- *
- * @version 1.0
- * @since 1.0
- */
-public final class Main {
-    
-    /**
-     * Private constructor to prevent instantiation of utility class.
-     */
-    private Main() {
-        // Utility class should not be instantiated
-    }
-    
-    /**
-     * Main entry point for the Pulumi program.
-     * 
-     * This method defines the infrastructure resources to be created.
-     * Pulumi will execute this code to determine what resources to create,
-     * update, or delete based on the current state.
-     * 
-     * @param args Command line arguments (not used in this example)
-     */
+public class Main {
     public static void main(String[] args) {
-        Pulumi.run(Main::defineInfrastructure);
-    }
-
-    /**
-     * Defines the infrastructure resources to be created.
-     * 
-     * This method is separated from main() to make it easier to test
-     * and to follow best practices for Pulumi Java programs.
-     * 
-     * @param ctx The Pulumi context for exporting outputs
-     */
-    static void defineInfrastructure(Context ctx) {
-        Bucket bucket = new Bucket("java-app-bucket", BucketArgs.builder()
-                .tags(Map.of(
-                        "Environment", "development",
-                        "Project", "pulumi-java-template",
-                        "ManagedBy", "pulumi"))
+        Pulumi.run(ctx -> {
+            // Get environment configuration
+            String environment = ctx.config().get("environment").orElse("development");
+            String region = ctx.config().get("region").orElse("us-east-1");
+            
+            // Validate environment
+            EnvironmentConfig envConfig = new EnvironmentConfig(environment);
+            
+            // Create AWS provider with environment-specific configuration
+            Provider awsProvider = new Provider("aws-provider", ProviderArgs.builder()
+                .region(region)
+                .defaultTags(TaggingPolicy.getDefaultTags(environment))
                 .build());
-
-        ctx.export("bucketName", bucket.id());
+            
+            // Initialize infrastructure stack
+            InfrastructureStack infraStack = new InfrastructureStack(
+                "cloud-migration-" + environment,
+                envConfig,
+                awsProvider
+            );
+            
+            // Deploy core infrastructure
+            var vpc = infraStack.createVpc();
+            var securityGroups = infraStack.createSecurityGroups(vpc);
+            var kmsKey = infraStack.createKmsKey();
+            
+            // Initialize migration manager for custom migration tasks
+            MigrationManager migrationManager = new MigrationManager(
+                "migration-manager-" + environment,
+                envConfig,
+                awsProvider
+            );
+            
+            // Execute custom migrations
+            var secretsMigration = migrationManager.migrateSecrets(kmsKey);
+            
+            // Export important outputs
+            ctx.export("vpcId", vpc.id());
+            ctx.export("kmsKeyId", kmsKey.id());
+            ctx.export("environment", Output.of(environment));
+            ctx.export("migrationStatus", secretsMigration.apply(status -> 
+                Map.of("secretsMigration", status)));
+        });
     }
 }
