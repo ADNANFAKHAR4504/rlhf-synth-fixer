@@ -454,7 +454,7 @@ class TapStack(Stack):
 ```python
 #!/usr/bin/env python3
 """
-CDK application entry point for the TAP (Test Automation Platform) infrastructure.
+CDK application entry point for the TAP (Secure Web Application Platform) infrastructure.
 """
 import os
 
@@ -528,13 +528,6 @@ app.synth()
 ### Security Groups
 - **ALB Security Group**: Allows HTTP (80) and HTTPS (443) from internet
 - **EC2 Security Group**: Allows HTTP (80) only from ALB security group
-
-## Testing Coverage
-
-The solution includes comprehensive testing:
-- **Unit Tests**: 100% code coverage with 37 passing tests
-- **Integration Tests**: 14 out of 16 tests passing, validating real AWS resources
-- All critical infrastructure components are tested and validated
 
 ## Deployment
 
