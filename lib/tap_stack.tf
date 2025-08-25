@@ -35,7 +35,7 @@ variable "team" {
 variable "project" {
   description = "Project name"
   type        = string
-  default     = "iac-aws-nova-model-breaking"
+  default     = "iac-aws-9846"
 }
 
 variable "bastion_allowed_cidrs" {
