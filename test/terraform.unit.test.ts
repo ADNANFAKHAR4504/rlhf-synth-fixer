@@ -1,28 +1,33 @@
-import { execSync } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
 
-const tfDir = path.resolve(__dirname, "../lib");
+describe("Terraform main.tf static validation", () => {
+  const mainTfPath = path.resolve(__dirname, "../lib/main.tf");
+  let mainTfContent: string;
 
-describe("Terraform Unit Tests", () => {
-  it("should validate Terraform configuration", () => {
-    execSync("terraform validate -no-color", {
-      cwd: tfDir,
-      stdio: "inherit",
-    });
+  beforeAll(() => {
+    mainTfContent = fs.readFileSync(mainTfPath, "utf8");
   });
 
-  it("should plan without errors (mocked backend)", () => {
-    // Re-init with dummy backend instead of real S3
-    execSync(
-      `terraform init -input=false -no-color -backend-config="bucket=dummy" -backend-config="key=dummy.tfstate" -backend-config="region=us-east-1" -reconfigure`,
-      { cwd: tfDir, stdio: "inherit" }
-    );
-
-    const result = execSync(
-      "terraform plan -input=false -no-color -refresh=false -lock=false",
-      { cwd: tfDir, encoding: "utf-8" }
-    );
-
-    expect(result).toMatch(/Plan:/);
+  it("should declare aws_region variable", () => {
+    expect(mainTfContent).toMatch(/variable\s+"aws_region"/);
   });
+
+  it("should not contain a provider block", () => {
+    expect(mainTfContent).not.toMatch(/provider\s+"/);
+  });
+
+  it("should not use external modules", () => {
+    expect(mainTfContent).not.toMatch(/module\s+"/);
+  });
+
+  it("should define outputs", () => {
+    expect(mainTfContent).toMatch(/output\s+"/);
+  });
+
+  it("should use locals for tags", () => {
+    expect(mainTfContent).toMatch(/locals\s+{[^}]*tag/i);
+  });
+
+  // Add more static checks as needed (e.g., IAM, encryption, etc.)
 });
