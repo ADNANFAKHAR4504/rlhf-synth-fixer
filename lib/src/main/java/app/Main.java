@@ -166,7 +166,7 @@ final class TapStack extends Stack {
         return Vpc.Builder.create(this, "SecureVPC")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
                 .maxAzs(2)
-                .natGateways(2)
+                .natGateways(1)
                 .subnetConfiguration(List.of(
                         SubnetConfiguration.builder()
                                 .name("PublicSubnet")
