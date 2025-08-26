@@ -4,6 +4,8 @@ go 1.23.0
 
 toolchain go1.23.2
 
+replace github.com/TuringGpt/iac-test-automations/lib => ./
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.38.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.2
