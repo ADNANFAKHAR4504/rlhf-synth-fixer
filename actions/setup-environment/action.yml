@@ -126,6 +126,6 @@ runs:
           tsconfig.json
           cdk.json
           metadata.json
-          lib/lambda/
+          lambda/
 
 
