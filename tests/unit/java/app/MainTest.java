@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Map;
 
 import com.pulumi.Context;
 
@@ -88,5 +89,215 @@ public class MainTest {
         assertThrows(Exception.class, () -> {
             Main.defineInfrastructure(null);
         });
+    }
+
+    /**
+     * Test helper methods to improve code coverage.
+     */
+    @Test
+    void testHelperMethods() {
+        // Test that the helper methods exist using reflection
+        try {
+            // Get all declared methods to find helper methods
+            Method[] methods = Main.class.getDeclaredMethods();
+            boolean foundGetStandardTags = false;
+            boolean foundGetResourceName = false;
+            boolean foundGetS3BucketName = false;
+            
+            for (Method method : methods) {
+                String methodName = method.getName();
+                if (methodName.equals("getStandardTags")) {
+                    foundGetStandardTags = true;
+                } else if (methodName.equals("getResourceName")) {
+                    foundGetResourceName = true;
+                } else if (methodName.equals("getS3BucketName")) {
+                    foundGetS3BucketName = true;
+                }
+            }
+            
+            // Verify helper methods exist
+            assertTrue(foundGetStandardTags, "getStandardTags method should exist");
+            assertTrue(foundGetResourceName, "getResourceName method should exist");
+            assertTrue(foundGetS3BucketName, "getS3BucketName method should exist");
+            
+        } catch (Exception e) {
+            fail("Should be able to inspect Main class methods: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Test InfrastructureConfig inner class.
+     */
+    @Test
+    void testInfrastructureConfigClass() {
+        // Test that the InfrastructureConfig inner class exists
+        Class<?>[] innerClasses = Main.class.getDeclaredClasses();
+        boolean foundInfrastructureConfig = false;
+        
+        for (Class<?> innerClass : innerClasses) {
+            if (innerClass.getSimpleName().equals("InfrastructureConfig")) {
+                foundInfrastructureConfig = true;
+                break;
+            }
+        }
+        
+        assertTrue(foundInfrastructureConfig, "InfrastructureConfig inner class should exist");
+    }
+
+    /**
+     * Test that Main class can be loaded and instantiated through reflection.
+     */
+    @Test
+    void testMainClassLoading() {
+        // Test that the Main class can be loaded and accessed
+        assertDoesNotThrow(() -> {
+            // Try to access the class
+            Class<?> mainClass = Class.forName("app.Main");
+            assertNotNull(mainClass);
+            
+            // Test that it's the same class
+            assertEquals(Main.class, mainClass);
+            
+            // Test that it has the expected methods
+            assertTrue(mainClass.getDeclaredMethods().length > 0);
+        });
+    }
+
+    /**
+     * Test that Main class has the expected structure and methods.
+     */
+    @Test
+    void testMainClassMethods() {
+        // Test various aspects of the Main class structure
+        assertDoesNotThrow(() -> {
+            // Test class modifiers
+            int modifiers = Main.class.getModifiers();
+            assertTrue(Modifier.isPublic(modifiers));
+            assertTrue(Modifier.isFinal(modifiers));
+            
+            // Test that it has methods
+            Method[] methods = Main.class.getDeclaredMethods();
+            assertTrue(methods.length > 0, "Main class should have methods");
+            
+            // Test that it has a main method
+            boolean hasMainMethod = false;
+            for (Method method : methods) {
+                if (method.getName().equals("main")) {
+                    hasMainMethod = true;
+                    break;
+                }
+            }
+            assertTrue(hasMainMethod, "Main class should have a main method");
+        });
+    }
+
+    /**
+     * Test the public test methods to improve code coverage.
+     */
+    @Test
+    void testPublicMethods() {
+        // Test the public test methods that actually execute code
+        String resourceName = Main.getTestResourceName("production", "YourCompany", "s3", "bucket");
+        assertNotNull(resourceName);
+        assertTrue(resourceName.contains("YourCompany"));
+        assertTrue(resourceName.contains("production"));
+        assertTrue(resourceName.contains("s3"));
+        assertTrue(resourceName.contains("bucket"));
+        
+        String bucketName = Main.getTestS3BucketName("production", "YourCompany", "s3", "bucket");
+        assertNotNull(bucketName);
+        assertTrue(bucketName.contains("YourCompany"));
+        assertTrue(bucketName.contains("production"));
+        assertTrue(bucketName.contains("s3"));
+        assertTrue(bucketName.contains("bucket"));
+        assertTrue(bucketName.matches(".*-\\d{5}$")); // Should end with 5 digits
+    }
+
+    /**
+     * Test multiple calls to ensure consistent behavior.
+     */
+    @Test
+    void testMethodConsistency() {
+        // Test that the same inputs produce consistent outputs for resource names
+        String resource1 = Main.getTestResourceName("dev", "TestCompany", "lambda", "function");
+        String resource2 = Main.getTestResourceName("dev", "TestCompany", "lambda", "function");
+        assertEquals(resource1, resource2, "Resource names should be consistent for same inputs");
+        
+        // Test that S3 bucket names are different due to random suffix
+        String bucket1 = Main.getTestS3BucketName("dev", "TestCompany", "s3", "bucket");
+        String bucket2 = Main.getTestS3BucketName("dev", "TestCompany", "s3", "bucket");
+        assertNotEquals(bucket1, bucket2, "S3 bucket names should be different due to random suffix");
+    }
+
+    /**
+     * Test the standard tags methods to improve code coverage.
+     */
+    @Test
+    void testStandardTagsMethods() {
+        // Test the standard tags method
+        Map<String, String> tags = Main.getTestStandardTags("production", "YourCompany", "s3");
+        assertNotNull(tags);
+        assertEquals("production", tags.get("Environment"));
+        assertEquals("YourCompany", tags.get("Company"));
+        assertEquals("Pulumi", tags.get("ManagedBy"));
+        assertEquals("FinancialServices", tags.get("Compliance"));
+        assertEquals("s3", tags.get("Service"));
+        assertEquals(5, tags.size());
+        
+        // Test the standard tags with component method
+        Map<String, String> tagsWithComponent = Main.getTestStandardTagsWithComponent("dev", "TestCompany", "lambda", "function");
+        assertNotNull(tagsWithComponent);
+        assertEquals("dev", tagsWithComponent.get("Environment"));
+        assertEquals("TestCompany", tagsWithComponent.get("Company"));
+        assertEquals("Pulumi", tagsWithComponent.get("ManagedBy"));
+        assertEquals("FinancialServices", tagsWithComponent.get("Compliance"));
+        assertEquals("lambda", tagsWithComponent.get("Service"));
+        assertEquals("function", tagsWithComponent.get("Component"));
+        assertEquals(6, tagsWithComponent.size());
+    }
+
+    /**
+     * Test edge cases and different inputs.
+     */
+    @Test
+    void testEdgeCases() {
+        // Test with empty strings
+        String emptyResource = Main.getTestResourceName("", "", "", "");
+        assertNotNull(emptyResource);
+        assertEquals("---", emptyResource);
+        
+        // Test with special characters
+        String specialResource = Main.getTestResourceName("prod-env", "Company-Name", "service-name", "resource-type");
+        assertNotNull(specialResource);
+        assertTrue(specialResource.contains("prod-env"));
+        assertTrue(specialResource.contains("Company-Name"));
+        assertTrue(specialResource.contains("service-name"));
+        assertTrue(specialResource.contains("resource-type"));
+        
+        // Test tags with special characters
+        Map<String, String> specialTags = Main.getTestStandardTags("prod-env", "Company-Name", "service-name");
+        assertNotNull(specialTags);
+        assertEquals("prod-env", specialTags.get("Environment"));
+        assertEquals("Company-Name", specialTags.get("Company"));
+        assertEquals("service-name", specialTags.get("Service"));
+    }
+
+    /**
+     * Test the validation method to improve code coverage.
+     */
+    @Test
+    void testValidationMethod() {
+        // Test valid inputs
+        assertTrue(Main.validateInfrastructureConfig("production", "YourCompany"));
+        assertTrue(Main.validateInfrastructureConfig("dev", "TestCompany"));
+        
+        // Test invalid inputs
+        assertFalse(Main.validateInfrastructureConfig("", "YourCompany"));
+        assertFalse(Main.validateInfrastructureConfig("production", ""));
+        assertFalse(Main.validateInfrastructureConfig("   ", "YourCompany"));
+        assertFalse(Main.validateInfrastructureConfig("production", "   "));
+        assertFalse(Main.validateInfrastructureConfig(null, "YourCompany"));
+        assertFalse(Main.validateInfrastructureConfig("production", null));
+        assertFalse(Main.validateInfrastructureConfig(null, null));
     }
 }
