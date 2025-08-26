@@ -49,12 +49,6 @@ data "aws_ami" "amazon_linux2" {
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
 
-# Key pair for SSH access (optional, for debugging)
-resource "aws_key_pair" "main" {
-  key_name   = "${local.unique_project_name}-key"
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD3F6tyPEFEzV0LX3X8BsXdMsQz1x2cEikKDEY0aIj41qgxMCP/iteneqXSIFZBp5vizPvaoIR3Um9xK7PGoW8giupGn+EPuxIA4cDM4vzOqOkiMpnzJrKrnS2O4thkRnc4Xyq/OV/ujq5pNta6cG85q9tT1zcoyuEO1exV6/7fcxM9deWIZGJSQUXg0ewONxrkajSjVqoJ85JeEj6cd4oA84sOtWDc08MYNCUI6a+EwvJfvcwqhV7ElWvPLpfPRwXOFcyU1/AtBZdh3cff68ELqVt2uEG+L/lmsAeDkMVXZbjM0QHfO2u2x9RkdRMC1H0IhB3lveeRHXlghr3uDHZGgiuB6XxRyBFS9QeWopGxXvEFqyT/eWcsKscwIDAQAB"
-}
-
 # Local values for common tags and configurations
 locals {
   project_name = "iac-aws-nova"
@@ -325,14 +319,6 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description = "SSH from anywhere (for debugging)"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -561,7 +547,6 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.unique_project_name}-lt-"
   image_id      = data.aws_ami.amazon_linux2.id
   instance_type = "t3.micro"
-  key_name      = aws_key_pair.main.key_name
 
   network_interfaces {
     associate_public_ip_address = true
