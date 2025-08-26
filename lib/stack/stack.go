@@ -49,9 +49,13 @@ func CreateTapStack(ctx *pulumi.Context) error {
 	}
 
 	usEast1Provider, err := aws.NewProvider(ctx, "us-east-1", &aws.ProviderArgs{Region: pulumi.String("us-east-1")})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	euWest1Provider, err := aws.NewProvider(ctx, "eu-west-1", &aws.ProviderArgs{Region: pulumi.String("eu-west-1")})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	// DynamoDB Global Table in primary region
 	dynamoTable, err := dynamodb.NewTable(ctx, "global-table", &dynamodb.TableArgs{
@@ -69,17 +73,29 @@ func CreateTapStack(ctx *pulumi.Context) error {
 		StreamViewType: pulumi.String("NEW_AND_OLD_IMAGES"),
 		Tags:           tags,
 	}, pulumi.Provider(usEast1Provider))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	usEast1Infra, err := createRegionalInfra(ctx, "us-east-1", usEast1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	euWest1Infra, err := createRegionalInfra(ctx, "eu-west-1", euWest1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if err := createS3Replication(ctx, usEast1Provider, euWest1Provider, usEast1Infra.DataBucketName, euWest1Infra.DataBucketName, projectName, environment, tags, current.AccountId); err != nil { return err }
+	if err := createS3Replication(ctx, usEast1Provider, euWest1Provider, usEast1Infra.DataBucketName, euWest1Infra.DataBucketName, projectName, environment, tags, current.AccountId); err != nil {
+		return err
+	}
 	cfDomain, err := createCloudFront(ctx, usEast1Provider, usEast1Infra.DataBucketName, projectName, environment, tags)
-	if err != nil { return err }
-	if err := createMonitoring(ctx, usEast1Provider, euWest1Provider, projectName, environment, notificationEmail, tags, current.AccountId); err != nil { return err }
+	if err != nil {
+		return err
+	}
+	if err := createMonitoring(ctx, usEast1Provider, euWest1Provider, projectName, environment, notificationEmail, tags, current.AccountId); err != nil {
+		return err
+	}
 
 	ctx.Export("usEast1AlbDnsName", usEast1Infra.AlbDnsName)
 	ctx.Export("euWest1AlbDnsName", euWest1Infra.AlbDnsName)

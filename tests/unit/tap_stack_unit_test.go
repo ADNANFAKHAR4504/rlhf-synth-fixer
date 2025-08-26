@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	stackpkg "github.com/TuringGpt/iac-test-automations/lib/stack"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	resource "github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -184,19 +184,19 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	listeners := find("aws:lb/listener:Listener")
 	require.GreaterOrEqual(t, len(listeners), 2)
 	for _, l := range listeners {
-        // port may be number or string depending on provider; normalize
-        switch v := l.Inputs["port"].(type) {
-        case string:
-            require.Equal(t, "443", v)
-        case float64:
-            require.Equal(t, float64(443), v)
-        case int:
-            require.Equal(t, 443, v)
-        default:
-            t.Fatalf("unexpected port type %T", v)
-        }
-        require.Equal(t, "HTTPS", l.Inputs["protocol"])
-    }
+		// port may be number or string depending on provider; normalize
+		switch v := l.Inputs["port"].(type) {
+		case string:
+			require.Equal(t, "443", v)
+		case float64:
+			require.Equal(t, float64(443), v)
+		case int:
+			require.Equal(t, 443, v)
+		default:
+			t.Fatalf("unexpected port type %T", v)
+		}
+		require.Equal(t, "HTTPS", l.Inputs["protocol"])
+	}
 
 	// AutoScaling Groups (token may vary across provider versions; match by prefix)
 	asgs := findPrefix("aws:autoscaling/")
@@ -237,17 +237,17 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	ddbTables := find("aws:dynamodb/table:Table")
 	require.Equal(t, 1, len(ddbTables), "expect a single global table defined in primary region")
 	if len(ddbTables) == 1 {
-        // "replicas" should include two entries
-        switch replicas := ddbTables[0].Inputs["replicas"].(type) {
-        case []interface{}:
-            require.Len(t, replicas, 2)
-        case []resource.PropertyValue:
-            require.Len(t, replicas, 2)
-        default:
-            t.Fatalf("unexpected replicas type %T", replicas)
-        }
-        assertHasTags(t, ddbTables[0])
-    }
+		// "replicas" should include two entries
+		switch replicas := ddbTables[0].Inputs["replicas"].(type) {
+		case []interface{}:
+			require.Len(t, replicas, 2)
+		case []resource.PropertyValue:
+			require.Len(t, replicas, 2)
+		default:
+			t.Fatalf("unexpected replicas type %T", replicas)
+		}
+		assertHasTags(t, ddbTables[0])
+	}
 
 	// CloudFront distribution
 	cf := find("aws:cloudfront/distribution:Distribution")
