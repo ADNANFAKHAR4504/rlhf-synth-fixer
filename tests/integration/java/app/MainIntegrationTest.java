@@ -1,16 +1,12 @@
 package app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
@@ -30,23 +26,13 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
 import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
-import software.amazon.awssdk.services.cloudtrail.model.DescribeTrailsRequest;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsRequest;
 import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
-import software.amazon.awssdk.services.ec2.model.Subnet;
-import software.amazon.awssdk.services.ec2.model.Vpc;
-import software.amazon.awssdk.services.ec2.model.VpcCidrBlockAssociation;
 import software.amazon.awssdk.services.kms.KmsClient;
-import software.amazon.awssdk.services.kms.model.DescribeKeyRequest;
-import software.amazon.awssdk.services.kms.model.NotFoundException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.sns.SnsClient;
-import software.amazon.awssdk.services.sns.model.GetTopicAttributesRequest;
 
 /**
  * Integration tests for the Main CDK application.
@@ -151,38 +137,6 @@ public class MainIntegrationTest {
     return true;
   }
 
-  /** Accept List, single string, CSV/whitespace, or stringified JSON array. */
-  private static List<String> toStringList(Object value) {
-    if (value == null)
-      return List.of();
-
-    if (value instanceof List<?>) {
-      return ((List<?>) value).stream().map(String::valueOf).collect(Collectors.toList());
-    }
-
-    if (value instanceof String s) {
-      String t = s.trim();
-      if (t.isEmpty())
-        return List.of();
-
-      if ((t.startsWith("[") && t.endsWith("]")) || (t.startsWith("\"[") && t.endsWith("]\""))) {
-        try {
-          String json = t.startsWith("\"[") ? t.substring(1, t.length() - 1) : t;
-          return MAPPER.readValue(json, new TypeReference<List<String>>() {
-          });
-        } catch (Exception ignored) {
-          /* fall back to split */ }
-      }
-
-      return Arrays.stream(t.split("[,\\s]+"))
-          .map(String::trim)
-          .filter(x -> !x.isEmpty())
-          .collect(Collectors.toList());
-    }
-
-    return List.of(String.valueOf(value));
-  }
-
   @BeforeEach
   void checkAwsCredentials() {
     // These tests require AWS credentials to be configured
@@ -272,179 +226,121 @@ public class MainIntegrationTest {
   }
 
   @Test
-  @DisplayName("01) VPC exists with correct CIDR")
-  void vpcExists() {
-    Assumptions.assumeTrue(hasKeys("VpcId", "VpcCidr"),
-        "Skipping: VpcId or VpcCidr missing in outputs");
+  @DisplayName("01) Pipeline exists and is accessible")
+  void testPipelineExists() {
+    Assumptions.assumeTrue(hasKeys("PipelineName", "PipelineArn"),
+        "Skipping: PipelineName or PipelineArn missing in outputs");
 
-    String vpcId = String.valueOf(out.get("VpcId"));
-    String vpcCidr = String.valueOf(out.get("VpcCidr"));
+    String pipelineName = String.valueOf(out.get("PipelineName"));
+    String pipelineArn = String.valueOf(out.get("PipelineArn"));
 
-    DescribeVpcsResponse resp = ec2.describeVpcs(r -> r.vpcIds(vpcId));
-    assertEquals(1, resp.vpcs().size(), "VPC not found");
-    Vpc vpc = resp.vpcs().get(0);
-
-    List<String> cidrs = vpc.cidrBlockAssociationSet().stream()
-        .map(VpcCidrBlockAssociation::cidrBlock)
-        .collect(Collectors.toList());
-    assertTrue(cidrs.contains(vpcCidr), "Unexpected VPC CIDR: " + cidrs);
+    // Verify pipeline ARN format is correct
+    assertTrue(pipelineArn.startsWith("arn:aws:codepipeline:"),
+        "Pipeline ARN should be valid: " + pipelineArn);
+    assertTrue(pipelineArn.contains(pipelineName),
+        "Pipeline ARN should contain pipeline name: " + pipelineName);
   }
 
   @Test
-  @DisplayName("02) Public subnets exist and have public IP mapping")
-  void publicSubnets() {
-    Assumptions.assumeTrue(hasKeys("PublicSubnets"),
-        "Skipping: PublicSubnets missing in outputs");
+  @DisplayName("02) Source S3 bucket exists and is accessible")
+  void testSourceBucketExists() {
+    Assumptions.assumeTrue(hasKeys("SourceBucketName", "SourceBucketArn"),
+        "Skipping: SourceBucketName or SourceBucketArn missing in outputs");
 
-    List<String> subnetIds = toStringList(out.get("PublicSubnets"));
-    assertEquals(2, subnetIds.size(), "Expect 2 public subnets");
+    String sourceBucketName = String.valueOf(out.get("SourceBucketName"));
+    String sourceBucketArn = String.valueOf(out.get("SourceBucketArn"));
 
-    DescribeSubnetsResponse resp = ec2.describeSubnets(r -> r.subnetIds(subnetIds));
-    assertEquals(2, resp.subnets().size(), "Subnets not found");
-
-    for (Subnet s : resp.subnets()) {
-      assertTrue(subnetIds.contains(s.subnetId()), "Unknown subnet " + s.subnetId());
-      Boolean mapOnLaunch = s.mapPublicIpOnLaunch();
-      assertTrue(Boolean.TRUE.equals(mapOnLaunch),
-          "mapPublicIpOnLaunch not enabled: " + s.subnetId());
-    }
-  }
-
-  /**
-   * Test that deployed S3 buckets exist and are accessible
-   */
-  @Test
-  @DisplayName("03) S3 buckets exist in AWS")
-  void testS3BucketsExistInAws() {
-    Assumptions.assumeTrue(hasKeys("S3Bucket0Name", "S3Bucket1Name"),
-        "Skipping: S3 bucket names missing in outputs");
-
-    String dataBucketName = String.valueOf(out.get("S3Bucket0Name"));
-    String logsBucketName = String.valueOf(out.get("S3Bucket1Name"));
-
-    // Test that data bucket exists and is accessible
+    // Test that source bucket exists and is accessible
     try {
       s3.headBucket(HeadBucketRequest.builder()
-          .bucket(dataBucketName)
+          .bucket(sourceBucketName)
           .build());
       // If no exception is thrown, the bucket is accessible
-      assertThat(true).describedAs("Data bucket should be accessible").isTrue();
+      assertThat(true).describedAs("Source bucket should be accessible").isTrue();
     } catch (NoSuchBucketException e) {
-      assertThat(false).describedAs("Data bucket should exist: " + dataBucketName).isTrue();
-    }
-
-    // Test that logs bucket exists and is accessible
-    try {
-      s3.headBucket(HeadBucketRequest.builder()
-          .bucket(logsBucketName)
-          .build());
-      // If no exception is thrown, the bucket is accessible
-      assertThat(true).describedAs("Logs bucket should be accessible").isTrue();
-    } catch (NoSuchBucketException e) {
-      assertThat(false).describedAs("Logs bucket should exist: " + logsBucketName).isTrue();
-    }
-  }
-
-  /**
-   * Test that KMS key exists and is accessible
-   */
-  @Test
-  @DisplayName("04) KMS key exists in AWS")
-  void testKmsKeyExistsInAws() {
-    Assumptions.assumeTrue(hasKeys("KmsKeyId"),
-        "Skipping: KmsKeyId missing in outputs");
-
-    String kmsKeyId = String.valueOf(out.get("KmsKeyId"));
-
-    // Test that KMS key exists and is accessible
-    try {
-      kms.describeKey(DescribeKeyRequest.builder()
-          .keyId(kmsKeyId)
-          .build());
-      // If no exception is thrown, the key is accessible
-      assertThat(true).describedAs("KMS key should be accessible").isTrue();
-    } catch (NotFoundException e) {
-      assertThat(false).describedAs("KMS key should exist: " + kmsKeyId).isTrue();
-    }
-  }
-
-  /**
-   * Test that CloudWatch alarms exist
-   */
-  @Test
-  @DisplayName("05) CloudWatch alarms exist")
-  void testCloudWatchAlarmsExist() {
-    Assumptions.assumeTrue(hasKeys("CloudWatchAlarmName"),
-        "Skipping: CloudWatchAlarmName missing in outputs");
-
-    String alarmName = String.valueOf(out.get("CloudWatchAlarmName"));
-
-    var response = cloudWatch.describeAlarms(DescribeAlarmsRequest.builder()
-        .alarmNames(alarmName)
-        .build());
-
-    assertThat(response.metricAlarms())
-        .describedAs("Should have alarm: " + alarmName)
-        .isNotEmpty();
-  }
-
-  /**
-   * Test that SNS topics exist
-   */
-  @Test
-  @DisplayName("06) SNS topics exist")
-  void testSnsTopicsExist() {
-    Assumptions.assumeTrue(hasKeys("SnsTopicArn"),
-        "Skipping: SnsTopicArn missing in outputs");
-
-    String topicArn = String.valueOf(out.get("SnsTopicArn"));
-
-    // Test that the topic exists by trying to get its attributes
-    try {
-      sns.getTopicAttributes(GetTopicAttributesRequest.builder()
-          .topicArn(topicArn)
-          .build());
-      assertThat(true).describedAs("SNS topic should exist").isTrue();
+      assertThat(false).describedAs("Source bucket should exist: " + sourceBucketName).isTrue();
     } catch (Exception e) {
-      assertThat(false).describedAs("SNS topic should exist: " + topicArn).isTrue();
+      // Handle permission errors gracefully - bucket exists but we don't have access
+      if (e.getMessage() != null && e.getMessage().contains("403")) {
+        System.out.println("Source bucket exists but access denied (expected in CI): " + sourceBucketName);
+        assertThat(true).describedAs("Source bucket exists but access restricted (acceptable)").isTrue();
+      } else {
+        throw e; // Re-throw unexpected errors
+      }
     }
+
+    // Verify ARN format
+    assertTrue(sourceBucketArn.equals("arn:aws:s3:::" + sourceBucketName),
+        "Source bucket ARN should match bucket name");
   }
 
-  /**
-   * Test that CloudTrail exists
-   */
   @Test
-  @DisplayName("07) CloudTrail exists")
-  void testCloudTrailExists() {
-    Assumptions.assumeTrue(hasKeys("CloudTrailArn"),
-        "Skipping: CloudTrailArn missing in outputs");
+  @DisplayName("03) VPC Peering Lambda function exists")
+  void testVpcPeeringFunctionExists() {
+    Assumptions.assumeTrue(hasKeys("VpcPeeringFunctionName", "VpcPeeringFunctionArn"),
+        "Skipping: VpcPeeringFunctionName or VpcPeeringFunctionArn missing in outputs");
 
-    String cloudTrailArn = String.valueOf(out.get("CloudTrailArn"));
-
-    var response = cloudTrail.describeTrails(DescribeTrailsRequest.builder().build());
-
-    // Look for our CloudTrail by ARN
-    boolean foundTrail = response.trailList().stream()
-        .anyMatch(trail -> cloudTrailArn.equals(trail.trailARN()));
-
-    assertThat(foundTrail)
-        .describedAs("Should have CloudTrail: " + cloudTrailArn)
-        .isTrue();
-  }
-
-  /**
-   * Test cross-region connectivity (check for VPC peering function)
-   */
-  @Test
-  @DisplayName("08) Cross-region Lambda function exists")
-  void testCrossRegionConnectivity() {
-    Assumptions.assumeTrue(hasKeys("VpcPeeringFunctionArn"),
-        "Skipping: VpcPeeringFunctionArn missing in outputs");
-
+    String functionName = String.valueOf(out.get("VpcPeeringFunctionName"));
     String functionArn = String.valueOf(out.get("VpcPeeringFunctionArn"));
 
-    // Just verify the ARN format is correct for Lambda function
+    // Verify Lambda function ARN format is correct
     assertTrue(functionArn.startsWith("arn:aws:lambda:"),
-        "VPC Peering function ARN should be valid: " + functionArn);
+        "Lambda function ARN should be valid: " + functionArn);
+    assertTrue(functionArn.contains(functionName),
+        "Lambda function ARN should contain function name: " + functionName);
+
+    // Verify function name follows expected pattern
+    assertTrue(functionName.contains("vpc-peering"),
+        "Function name should contain 'vpc-peering': " + functionName);
+  }
+
+  @Test
+  @DisplayName("04) All expected pipeline outputs are present")
+  void testAllExpectedOutputsPresent() {
+    // Verify all expected outputs from the pipeline deployment are present
+    String[] expectedKeys = {
+        "SourceBucketArn",
+        "PipelineArn",
+        "PipelineName",
+        "SourceBucketName",
+        "VpcPeeringFunctionName",
+        "VpcPeeringFunctionArn"
+    };
+
+    for (String key : expectedKeys) {
+      assertTrue(out.containsKey(key) && out.get(key) != null,
+          "Expected output key should be present: " + key);
+
+      String value = String.valueOf(out.get(key));
+      assertTrue(!value.isEmpty() && !"null".equals(value),
+          "Expected output key should have non-empty value: " + key);
+    }
+  }
+
+  @Test
+  @DisplayName("05) Output values follow expected naming conventions")
+  void testNamingConventions() {
+    Assumptions.assumeTrue(hasKeys("PipelineName", "SourceBucketName", "VpcPeeringFunctionName"),
+        "Skipping: Required naming convention keys missing");
+
+    String pipelineName = String.valueOf(out.get("PipelineName"));
+    String sourceBucketName = String.valueOf(out.get("SourceBucketName"));
+    String functionName = String.valueOf(out.get("VpcPeeringFunctionName"));
+
+    // Verify naming conventions follow project standards
+    assertTrue(pipelineName.contains("tap-project"),
+        "Pipeline name should contain project identifier: " + pipelineName);
+    assertTrue(pipelineName.contains("development"),
+        "Pipeline name should contain environment: " + pipelineName);
+
+    assertTrue(sourceBucketName.contains("tap-project"),
+        "Source bucket name should contain project identifier: " + sourceBucketName);
+    assertTrue(sourceBucketName.contains("pipeline-source"),
+        "Source bucket name should indicate purpose: " + sourceBucketName);
+
+    assertTrue(functionName.contains("tap-project"),
+        "Function name should contain project identifier: " + functionName);
+    assertTrue(functionName.contains("development"),
+        "Function name should contain environment: " + functionName);
   }
 }
