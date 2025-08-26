@@ -1,20 +1,21 @@
 // test/tap-stack.unit.test.mjs
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack.mjs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { IAMRolesConstruct } from '../lib/constructs/iam-roles.mjs';
+import { SecurityGroupConstruct } from '../lib/constructs/security-group.mjs';
+import { TapStack } from '../lib/tap-stack';
 
 // default environment suffix used by most tests
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack', () => {
-  // shared test variables (recreated / overridden in inner suites as needed)
   let app;
   let stack;
   let template;
   let stackName;
   let env;
 
-  // base config in env-keyed form (dev/prod shape)
   const baseConfig = {
     dev: {
       existingVpcId: 'vpc-03d43d0faacf0130c',
@@ -28,22 +29,20 @@ describe('TapStack', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     env = { account: '111111111111', region: 'us-east-1' };
-    // base stack name — tests append a suffix to keep names unique when necessary
     stackName = `TapStack${environmentSuffix}`;
+
+    // keep a default "happy path" stack for tests that only read the synthesized template
+    app = new cdk.App();
+    stack = new TapStack(app, `${stackName}-Happy`, { env, environmentSuffix, config: baseConfig });
+    template = Template.fromStack(stack);
   });
 
   //
   // -------------------------
-  // Resource creation tests: standard stack with provided dev config
+  // EC2 tests
   // -------------------------
   //
-  describe('Resource creation tests', () => {
-    beforeEach(() => {
-      app = new cdk.App();
-      stack = new TapStack(app, `${stackName}-Happy`, { env, environmentSuffix, config: baseConfig });
-      template = Template.fromStack(stack);
-    });
-
+  describe('EC2 tests', () => {
     test('Creates EC2 instances with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
         InstanceType: 't2.micro'
@@ -57,7 +56,14 @@ describe('TapStack', () => {
         expect(instance.Properties.InstanceType).toBe('t2.micro');
       });
     });
+  }); // end EC2 tests
 
+  //
+  // -------------------------
+  // Security Group tests
+  // -------------------------
+  //
+  describe('Security Group tests', () => {
     test('Security group has correct ingress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
@@ -85,6 +91,33 @@ describe('TapStack', () => {
       expect(Object.keys(sgResources)).toHaveLength(1);
     });
 
+    // NEW: test for unsupported region that triggers the error at line 84 in security-group.mjs
+    test('Throws on unsupported region for S3 prefix list', () => {
+      // use a fresh app/stack to avoid modifying the global app after synth
+      const localApp = new cdk.App();
+      const localStack = new cdk.Stack(localApp, `${stackName}-SGUnsupportedRegion`, {
+        env: { account: '111111111111', region: 'moon-1' } // region not in s3PrefixListIds
+      });
+
+      // create a minimal VPC to pass into the construct (construct creates SecurityGroup before region check)
+      const vpc = new ec2.Vpc(localStack, 'TestVpc', { maxAzs: 1 });
+
+      expect(() => {
+        new SecurityGroupConstruct(localStack, 'TestSecurityGroup', {
+          vpc,
+          sshCidrBlock: '10.0.0.0/8',
+          trustedOutboundCidrs: ['10.0.0.0/8']
+        });
+      }).toThrow(/Unsupported region for S3 prefix list: moon-1/);
+    });
+  }); // end Security Group tests
+
+  //
+  // -------------------------
+  // IAM tests
+  // -------------------------
+  //
+  describe('IAM tests', () => {
     test('Creates IAM role with trust policy for EC2', () => {
       const roles = template.findResources('AWS::IAM::Role');
       const ec2Roles = Object.values(roles).filter(r => {
@@ -106,19 +139,98 @@ describe('TapStack', () => {
       });
     });
 
+    test('IAM role policy contains CloudWatch Logs ARN for imported log group (uses logGroup.logGroupName)', () => {
+      // Use a fresh app/stack to avoid modifying the global app after synth
+      const localApp = new cdk.App();
+      const s = new cdk.Stack(localApp, `${stackName}-IAMTestStack`, { env });
+
+      // Instantiate construct with a "fromLogGroupName"-style object (no logGroupArn property)
+      new IAMRolesConstruct(s, 'TestIAMRoles', {
+        s3BucketName: 'test-bucket',
+        logGroup: { logGroupName: 'imported-log-group' }
+      });
+
+      const localTemplate = Template.fromStack(s);
+      const roles = localTemplate.findResources('AWS::IAM::Role');
+      const roleResource = Object.values(roles)[0];
+
+      // roleResource.Properties.Policies may be undefined; default to empty array
+      const policies = roleResource.Properties?.Policies || [];
+
+      let found = false;
+      for (const policy of policies) {
+        const stmts = policy.PolicyDocument?.Statement || [];
+        for (const stmt of stmts) {
+          const resources = Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource];
+          for (const r of resources) {
+            const asString = JSON.stringify(r);
+            if (asString.includes('log-group') && asString.includes('imported-log-group') && asString.includes(':*')) {
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) break;
+      }
+
+      // If inline Policies were not used by CDK, also check separate AWS::IAM::Policy resources
+      if (!found) {
+        const iamPolicies = localTemplate.findResources('AWS::IAM::Policy') || {};
+        for (const p of Object.values(iamPolicies)) {
+          const stmts = p.Properties?.PolicyDocument?.Statement || [];
+          for (const stmt of stmts) {
+            const resources = Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource];
+            for (const r of resources) {
+              const asString = JSON.stringify(r);
+              if (asString.includes('log-group') && asString.includes('imported-log-group') && asString.includes(':*')) {
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+          if (found) break;
+        }
+      }
+
+      expect(found).toBe(true);
+    });
+  }); // end IAM tests
+
+  //
+  // -------------------------
+  // CloudWatch Logs tests
+  // -------------------------
+  //
+  describe('CloudWatch Logs tests', () => {
     test('Creates CloudWatch Log Group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         RetentionInDays: 90
       });
     });
+  }); // end CloudWatch Logs tests
 
+  //
+  // -------------------------
+  // Tagging tests
+  // -------------------------
+  //
+  describe('Tagging tests', () => {
     test('All resources have Environment tag', () => {
       const resources = template.findResources('*');
       Object.values(resources).forEach(r => {
         expect(r.Properties?.Tags).toEqual(expect.arrayContaining([{ Key: 'Environment', Value: 'Production' }]));
       });
     });
+  }); // end Tagging tests
 
+  //
+  // -------------------------
+  // Stack Outputs tests
+  // -------------------------
+  //
+  describe('Stack Outputs tests', () => {
     test('Outputs include EC2, SecurityGroup and LogGroup', () => {
       const outputs = template.findOutputs('*');
       ['Instance1Id', 'Instance1PrivateIP', 'SecurityGroupId', 'LogGroupName'].forEach(name => {
@@ -126,7 +238,7 @@ describe('TapStack', () => {
         expect(outputKey).toBeDefined();
       });
     });
-  }); // end Happy path
+  }); // end Stack Outputs tests
 
   //
   // -------------------------
@@ -135,34 +247,25 @@ describe('TapStack', () => {
   //
   describe('S3 tests', () => {
     test('Uses an S3 bucket if existingS3Bucket is defined', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-        }
-      };
-      stack = new TapStack(app, `${stackName}-ExistingBucket`, { env, environmentSuffix, config });
-      template = Template.fromStack(stack);
+      // use a fresh App/Stack to avoid modifying the global app after synth
+      const localApp = new cdk.App();
+      const config = { dev: { ...baseConfig.dev } };
+      const localStack = new TapStack(localApp, `${stackName}-ExistingBucket`, { env, environmentSuffix, config });
+      const localTemplate = Template.fromStack(localStack);
 
       // Expect no new bucket resources
-      template.resourceCountIs('AWS::S3::Bucket', 0);
+      localTemplate.resourceCountIs('AWS::S3::Bucket', 0);
 
       // Verify outputs or references use the expected bucket name
-      expect(stack.bucket.bucketName).toEqual(config.dev.existingS3Bucket);
+      expect(localStack.bucket.bucketName).toEqual(config.dev.existingS3Bucket);
     });
 
     test('Throws if existingS3Bucket missing', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-          existingS3Bucket: undefined
-        }
-      };
-      expect(() => new TapStack(app, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
+      const localApp = new cdk.App();
+      const config = { dev: { ...baseConfig.dev, existingS3Bucket: undefined } };
+      expect(() => new TapStack(localApp, `${stackName}-RequireBucket`, { env, environmentSuffix, config }))
         .toThrow(/S3 bucket must be provided/);
     });
-
   }); // end S3 tests
 
   //
@@ -172,39 +275,30 @@ describe('TapStack', () => {
   //
   describe('VPC tests', () => {
     test('Uses a VPC if existingVpcId is defined', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-        }
-      };
-      stack = new TapStack(app, `${stackName}-ExistingVpc`, { env, environmentSuffix, config });
-      template = Template.fromStack(stack);
+      // fresh app/stack per test
+      const localApp = new cdk.App();
+      const config = { dev: { ...baseConfig.dev } };
+      const localStack = new TapStack(localApp, `${stackName}-ExistingVpc`, { env, environmentSuffix, config });
+      const localTemplate = Template.fromStack(localStack);
 
       // Expect no new vpc resources
-      template.resourceCountIs('AWS::EC2::VPC', 0);
+      localTemplate.resourceCountIs('AWS::EC2::VPC', 0);
 
       // Verify outputs or references use the expected bucket name
-      expect(stack.vpc.vpcId).toBeDefined();
+      expect(localStack.vpc.vpcId).toBeDefined();
     });
 
     test('Throws if existingVpcId undefined', () => {
-      app = new cdk.App();
-      const config = {
-        dev: {
-          ...baseConfig.dev,
-          existingVpcId: undefined
-        }
-      };
-      expect(() => new TapStack(app, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
+      const localApp = new cdk.App();
+      const config = { dev: { ...baseConfig.dev, existingVpcId: undefined } };
+      expect(() => new TapStack(localApp, `${stackName}-RequireVpc`, { env, environmentSuffix, config }))
         .toThrow(/VPC ID must be provided/);
     });
-
   }); // end VPC tests
 
   //
   // -------------------------
-  // Invalid configuration: environmentSuffix behavior & context loading
+  // Configuration tests
   // -------------------------
   //
   describe('Configuration tests', () => {
@@ -240,8 +334,9 @@ describe('TapStack', () => {
       const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => { });
       const errSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
 
+      const localApp = new cdk.App();
       // This will cause loadConfig to fall back to dev then constructor to log error
-      new TapStack(app = new cdk.App(), `${stackName}-NoEnvironment`, { env, environmentSuffix: 'qa', config: badConfig });
+      new TapStack(localApp, `${stackName}-NoEnvironment`, { env, environmentSuffix: 'qa', config: badConfig });
 
       expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to 'dev'"));
       expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("No configuration found for 'qa'"));
@@ -284,7 +379,7 @@ describe('TapStack', () => {
       expect(() => new TapStack(localApp, `${stackName}-MissingEnv`, { env: {}, environmentSuffix: 'qa', config: {} }))
         .toThrow(/No configuration found for environment: 'qa'/);
     });
-  }); // end Invalid configuration
+  }); // end Configuration tests
 
   //
   // -------------------------

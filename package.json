@@ -17,6 +17,7 @@
     "preinstall": "npm run check-versions",
     "build": "tsc",
     "start": "ts-node cli/create-task.ts",
+    "create-ideal-response": "ts-node cli/create-ideal-response.ts",
     "lint": "eslint .",
     "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}' 'cli/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",

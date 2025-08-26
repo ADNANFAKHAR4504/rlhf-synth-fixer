@@ -5,5 +5,28 @@
   "turn_type": "single",
   "po_id": "291553",
   "team": "4",
-  "startedAt": "2025-08-21T07:41:11.830Z"
+  "startedAt": "2025-08-21T07:41:11.830Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Security Group",
+    "S3 Bucket",
+    "IAM Role",
+    "CloudWatch Log Group",
+    "IAM Role Policy Attachment"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rafey-turing",
+  "dockerS3Location": ""
 }

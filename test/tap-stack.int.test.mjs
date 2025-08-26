@@ -44,9 +44,9 @@ describe('TapStack Integration Tests', () => {
     } else {
       // If no outputs file, create mock outputs for testing
       outputs = {
-        SecurityGroupId: 'sg-mock123456789abcdef',
+        SecurityGroupId: 'sg-1234567890abcdef',
         LogGroupName: `/aws/ec2/tapstack-${environmentSuffix}`,
-        VpcId: 'vpc-mock123456789abcdef',
+        VpcId: 'vpc-1234567890abcdef',
         LogsBucketName: `test-logs-bucket20250819215334277900000001`,
       };
     }
