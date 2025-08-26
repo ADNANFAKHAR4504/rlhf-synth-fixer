@@ -238,31 +238,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  CloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref LogsBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt LogsBucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${EnvironmentSuffix}-cloudtrail'
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${LogsBucket.Arn}/cloudtrail-logs/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${EnvironmentSuffix}-cloudtrail'
 
   # ============================================================================
   # IAM Roles and Policies
@@ -488,34 +463,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # ============================================================================
-  # CloudTrail for Logging
-  # ============================================================================
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail'
-      S3BucketName: !Ref LogsBucket
-      S3KeyPrefix: 'cloudtrail-logs'
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values: 
-                - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
-      Tags:
-        - Key: Owner
-          Value: !Ref OwnerName
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
 
   # ============================================================================
   # SNS Topic for Notifications
@@ -575,6 +522,7 @@ Resources:
           import json
           import boto3
           import logging
+          import os
 
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
