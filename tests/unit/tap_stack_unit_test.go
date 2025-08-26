@@ -71,7 +71,7 @@ func loadCloudFormationJSON(t *testing.T, path string) map[string]interface{} {
 }
 
 func TestStackSynthesis(t *testing.T) {
-	jsonPath := synthStack(t, "TapStack")
+	jsonPath := synthStack(t, "TestStack")
 
 	if _, err := os.Stat(jsonPath); err != nil {
 		t.Errorf("Stack synthesis failed: cloudformation json not found at %s", jsonPath)
@@ -79,7 +79,7 @@ func TestStackSynthesis(t *testing.T) {
 }
 
 func TestVPCConfiguration(t *testing.T) {
-	jsonPath := synthStack(t, "TapStack")
+	jsonPath := synthStack(t, "TestStack")
 	cfConfig := loadCloudFormationJSON(t, jsonPath)
 
 	resources, ok := cfConfig["Resources"].(map[string]interface{})
@@ -111,5 +111,163 @@ func TestVPCConfiguration(t *testing.T) {
 
 	if enableDns := properties["EnableDnsHostnames"]; enableDns != true {
 		t.Errorf("expected enable_dns_hostnames to be true, got %v", enableDns)
+	}
+}
+
+func TestSubnetsConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var subnets []map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::Subnet" {
+			subnets = append(subnets, res)
+		}
+	}
+
+	if len(subnets) != 4 {
+		t.Errorf("expected 4 subnets, got %d", len(subnets))
+	}
+}
+
+func TestSecurityGroupConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var ec2Sg map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::SecurityGroup" {
+			properties, _ := res["Properties"].(map[string]interface{})
+			if properties["GroupDescription"] == "Security group for EC2 web server" {
+				ec2Sg = res
+				break
+			}
+		}
+	}
+
+	if ec2Sg == nil {
+		t.Fatal("EC2 security group not found")
+	}
+
+	properties, _ := ec2Sg["Properties"].(map[string]interface{})
+	ingress, _ := properties["SecurityGroupIngress"].([]interface{})
+	if len(ingress) != 3 {
+		t.Errorf("expected 3 ingress rules, got %d", len(ingress))
+	}
+}
+
+func TestS3BucketConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var buckets []map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::S3::Bucket" {
+			buckets = append(buckets, res)
+		}
+	}
+
+	if len(buckets) != 2 {
+		t.Errorf("expected 2 S3 buckets, got %d", len(buckets))
+	}
+}
+
+func TestIAMConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var role map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::IAM::Role" {
+			properties, _ := res["Properties"].(map[string]interface{})
+			if properties["RoleName"] == "cf-ec2-role" {
+				role = res
+				break
+			}
+		}
+	}
+
+	if role == nil {
+		t.Fatal("IAM role not found")
+	}
+}
+
+func TestEC2InstanceConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var instance map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::Instance" {
+			instance = res
+			break
+		}
+	}
+
+	if instance == nil {
+		t.Fatal("EC2 instance not found")
+	}
+
+	properties, _ := instance["Properties"].(map[string]interface{})
+	if instanceType := properties["InstanceType"]; instanceType != "t2.micro" {
+		t.Errorf("expected instance type t2.micro, got %v", instanceType)
+	}
+}
+
+func TestRDSInstanceConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var rds map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::RDS::DBInstance" {
+			rds = res
+			break
+		}
+	}
+
+	if rds == nil {
+		t.Fatal("RDS instance not found")
+	}
+
+	properties, _ := rds["Properties"].(map[string]interface{})
+	if dbClass := properties["DBInstanceClass"]; dbClass != "db.t3.small" {
+		t.Errorf("expected DB instance class db.t3.small, got %v", dbClass)
+	}
+}
+
+func TestCloudWatchAlarmConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources, _ := cfConfig["Resources"].(map[string]interface{})
+	var alarm map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::CloudWatch::Alarm" {
+			alarm = res
+			break
+		}
+	}
+
+	if alarm == nil {
+		t.Fatal("CloudWatch alarm not found")
+	}
+
+	properties, _ := alarm["Properties"].(map[string]interface{})
+	if threshold := properties["Threshold"]; threshold != float64(75) {
+		t.Errorf("expected threshold 75, got %v", threshold)
 	}
 }

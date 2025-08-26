@@ -1,3 +1,3 @@
-The provided model response fails on the deployment step with the below error:
+Hey, it looks like the deployment is failing. I'm seeing an error with the RDS instance class.
 
-❌ TapStackpr2292 failed: ToolkitError: The stack named TapStackpr2292 failed creation, it may need to be manually deleted from the AWS console: ROLLBACK_COMPLETE: Resource handler returned message: "Invalid DB Instance class: db.db.t3.micro (Service: Rds, Status Code: 400, Request ID: 0b8df0cf-7e34-4355-9bb8-751fab12c03c) (SDK Attempt Count: 1)" (RequestToken: 2ccc50b4-fa3a-5cd1-b521-cea644d2b597, HandlerErrorCode: InvalidRequest)
+The error message is: `Invalid DB Instance class: db.db.t3.micro`. It seems like `db.db.t3.micro` is not a valid instance type for RDS. We'll need to correct this to get the stack to deploy.
