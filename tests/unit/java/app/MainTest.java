@@ -304,7 +304,27 @@ public class MainTest {
 
     @Test
     void testRdsDeletionProtection() {
+        // For test environment, deletion protection should be false (non-production)
         template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
+            "DeletionProtection", false
+        ));
+    }
+
+    @Test
+    void testRdsDeletionProtectionEnvironmentLogic() {
+        // Test that our environment logic works correctly
+        // Current test uses "test" environment, so deletion protection should be false
+        App prodApp = new App();
+        NovaModelStack prodStack = new NovaModelStack(prodApp, "TestProdStack", StackProps.builder()
+            .env(Environment.builder()
+                .account("123456789012")
+                .region("us-east-1")
+                .build())
+            .build(), "prod");
+        Template prodTemplate = Template.fromStack(prodStack);
+        
+        // For production environment, deletion protection should be true
+        prodTemplate.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
             "DeletionProtection", true
         ));
     }

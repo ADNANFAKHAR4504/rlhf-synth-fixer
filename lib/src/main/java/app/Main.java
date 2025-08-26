@@ -338,7 +338,7 @@ class NovaModelStack extends Stack {
             .storageEncryptionKey(cmk)
             .multiAz(true)
             .backupRetention(software.amazon.awscdk.Duration.days(30))
-            .deletionProtection(true)
+            .deletionProtection(isProductionEnvironment())
             .build();
     }
 
@@ -492,7 +492,7 @@ class NovaModelStack extends Stack {
         // Create delivery channel (this can work with existing recorder)
         CfnDeliveryChannel.Builder.create(this, formatResourceName("ConfigDeliveryChannel"))
             .s3BucketName(dataBucket.getBucketName())
-            .s3KeyPrefix("aws-config/")
+            .s3KeyPrefix("aws-config")
             .build();
 
         // Skip creating configuration recorder - use existing one in account
@@ -524,6 +524,15 @@ class NovaModelStack extends Stack {
      */
     private String formatResourceName(String resourceType) {
         return PROJECT_NAME + "-" + resourceType + "-" + environmentSuffix;
+    }
+
+    /**
+     * Determines if the current environment is production
+     * Only enable deletion protection for production environments
+     */
+    private boolean isProductionEnvironment() {
+        return "prod".equalsIgnoreCase(environmentSuffix) || 
+               "production".equalsIgnoreCase(environmentSuffix);
     }
 }
 
