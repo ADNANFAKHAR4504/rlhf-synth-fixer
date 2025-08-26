@@ -51,8 +51,23 @@ Resources:
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+            Action:
+              - 'kms:Create*'
+              - 'kms:Describe*'
+              - 'kms:Enable*'
+              - 'kms:List*'
+              - 'kms:Put*'
+              - 'kms:Update*'
+              - 'kms:Revoke*'
+              - 'kms:Disable*'
+              - 'kms:Get*'
+              - 'kms:Delete*'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Decrypt'
+              - 'kms:Encrypt'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
           - Sid: Allow RDS Service
             Effect: Allow
             Principal:
@@ -60,7 +75,7 @@ Resources:
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
-            Resource: '*'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
@@ -310,8 +325,12 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-security-response*'
+              - Effect: Allow
+                Action:
                   - sns:Publish
-                Resource: '*'
+                Resource: !Ref SecurityAlertsTopic
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
