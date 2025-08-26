@@ -1,4 +1,4 @@
-module github.com/example/tap/lib
+module github.com/TuringGpt/iac-test-automations/lib
 
 go 1.23.0
 
