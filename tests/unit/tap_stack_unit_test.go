@@ -4,8 +4,6 @@
 package main
 
 import (
-	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -13,13 +11,6 @@ import (
 )
 
 func TestCreateVPC(t *testing.T) {
-	// Run formatter if it exists
-	if _, err := os.Stat("../lib/format.sh"); err == nil {
-		t.Log("Running Go formatter...")
-		cmd := exec.Command("bash", "../lib/format.sh")
-		cmd.Run()
-	}
-	
 	// Test common tags structure
 	commonTags := pulumi.StringMap{
 		"Environment": pulumi.String("production"),
