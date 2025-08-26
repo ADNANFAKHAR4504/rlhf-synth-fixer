@@ -1,6 +1,9 @@
 package constructs
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatchactions"
@@ -44,13 +47,16 @@ func NewComputeConstruct(scope constructs.Construct, id string, props *ComputeCo
 	// Get private subnets for Lambda VPC configuration
 	privateSubnets := props.VPC.PrivateSubnets()
 
+	// Dynamically resolve Lambda code source
+	lambdaCode := resolveLambdaCode()
+
 	// Enhanced Lambda function with ARM64 and Python 3.12
 	lambdaFunction := awslambda.NewFunction(construct, jsii.String("ProcessorFunction"), &awslambda.FunctionProps{
 		FunctionName:                 jsii.String("proj-lambda-" + props.Environment),
 		Runtime:                      awslambda.Runtime_PYTHON_3_12(),
 		Architecture:                 awslambda.Architecture_ARM_64(),
 		Handler:                      jsii.String("handler.lambda_handler"),
-		Code:                         awslambda.Code_FromAsset(jsii.String("lambda"), nil),
+		Code:                         lambdaCode,
 		Role:                         props.LambdaRole,
 		LogGroup:                     logGroup,
 		Timeout:                      awscdk.Duration_Minutes(jsii.Number(5)),
@@ -71,11 +77,10 @@ func NewComputeConstruct(scope constructs.Construct, id string, props *ComputeCo
 		RetryAttempts:          jsii.Number(2),
 	})
 
-	// Configure S3 trigger
+	// Configure S3 trigger - trigger on all object creation events
 	props.S3Bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
 		awss3notifications.NewLambdaDestination(lambdaFunction),
-		nil,
 	)
 
 	// Create comprehensive CloudWatch alarms
@@ -186,4 +191,150 @@ func createDynamoDBAlarms(construct constructs.Construct, table awsdynamodb.ITab
 		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
 	})
 	writeThrottleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(topic))
+}
+
+// resolveLambdaCode dynamically finds the Lambda source code or falls back to inline code
+func resolveLambdaCode() awslambda.Code {
+	// Possible Lambda code paths to check
+	possiblePaths := []string{
+		"lambda",        // Standard path from project root
+		"lib/lambda",    // Alternative path
+		"../lambda",     // Relative from lib directory
+		"../lib/lambda", // Alternative relative path
+		"./lambda",      // Current directory
+	}
+
+	// Try to find a valid Lambda directory
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			// Check if handler.py exists in this directory
+			handlerPath := filepath.Join(path, "handler.py")
+			if _, err := os.Stat(handlerPath); err == nil {
+				return awslambda.Code_FromAsset(jsii.String(path), nil)
+			}
+		}
+	}
+
+	// Fallback to inline Lambda code if no valid path found
+	return awslambda.Code_FromInline(jsii.String(getInlineLambdaCode()))
+}
+
+// getInlineLambdaCode returns the Lambda function code as an inline string
+func getInlineLambdaCode() string {
+	return `import json
+import boto3
+import logging
+import os
+from datetime import datetime
+from urllib.parse import unquote_plus
+from typing import Dict, Any
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Initialize AWS clients
+dynamodb = boto3.resource('dynamodb')
+s3_client = boto3.client('s3')
+
+# Get environment variables
+TABLE_NAME = os.environ['DYNAMODB_TABLE_NAME']
+BUCKET_NAME = os.environ['S3_BUCKET_NAME']
+ENVIRONMENT = os.environ['ENVIRONMENT']
+
+def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """
+    Enhanced Lambda function to process S3 object creation events.
+    
+    This function is triggered when objects are created in the S3 bucket.
+    It extracts metadata from the S3 event and stores it in DynamoDB.
+    
+    Args:
+        event: S3 event notification
+        context: Lambda context object
+        
+    Returns:
+        Dict containing status and processed records count
+    """
+    
+    logger.info(f"Processing S3 event: {json.dumps(event)}")
+    
+    try:
+        # Get DynamoDB table
+        table = dynamodb.Table(TABLE_NAME)
+        
+        processed_records = 0
+        
+        # Process each record in the event
+        for record in event.get('Records', []):
+            if record.get('eventSource') == 'aws:s3':
+                # Extract S3 object information
+                bucket_name = record['s3']['bucket']['name']
+                object_key = unquote_plus(record['s3']['object']['key'])
+                object_size = record['s3']['object']['size']
+                event_name = record['eventName']
+                event_time = record['eventTime']
+                
+                logger.info(f"Processing S3 object: s3://{bucket_name}/{object_key}")
+                
+                # Get additional object metadata
+                try:
+                    response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
+                    last_modified = response.get('LastModified', '').isoformat() if response.get('LastModified') else ''
+                    content_type = response.get('ContentType', 'unknown')
+                    etag = response.get('ETag', '').strip('"')
+                except Exception as e:
+                    logger.warning(f"Could not get object metadata: {e}")
+                    last_modified = ''
+                    content_type = 'unknown'
+                    etag = ''
+                
+                # Create DynamoDB item
+                item = {
+                    'pk': f"s3#{bucket_name}#{object_key}",
+                    'sk': f"event#{event_time}#{processed_records}",
+                    'object_key': object_key,
+                    'bucket_name': bucket_name,
+                    'object_size': object_size,
+                    'event_name': event_name,
+                    'event_time': event_time,
+                    'last_modified': last_modified,
+                    'content_type': content_type,
+                    'etag': etag,
+                    'environment': ENVIRONMENT,
+                    'processed_at': datetime.utcnow().isoformat(),
+                    'lambda_request_id': context.aws_request_id,
+                    'lambda_function_name': context.function_name
+                }
+                
+                # Store in DynamoDB
+                table.put_item(Item=item)
+                processed_records += 1
+                
+                logger.info(f"Successfully processed record {processed_records}: {object_key}")
+        
+        result = {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': f'Successfully processed {processed_records} S3 events',
+                'processed_records': processed_records,
+                'environment': ENVIRONMENT
+            })
+        }
+        
+        logger.info(f"Lambda execution completed: {result}")
+        return result
+        
+    except Exception as e:
+        error_message = f"Error processing S3 event: {str(e)}"
+        logger.error(error_message)
+        
+        # Return error response
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': error_message,
+                'environment': ENVIRONMENT
+            })
+        }`
 }
