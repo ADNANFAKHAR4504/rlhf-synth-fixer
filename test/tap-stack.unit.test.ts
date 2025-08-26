@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
-import { S3Stack } from '../lib/s3-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { IAMStack } from '../lib/iam-stack';
+import { S3Stack } from '../lib/s3-stack';
+import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -137,20 +137,19 @@ describe('TapStack', () => {
       });
     });
 
-    test('attaches correct managed policy to replication role', () => {
+    test('creates replication role with inline policies', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.arrayWith([
-          Match.objectLike({
-            'Fn::Join': Match.arrayWith([
-              '',
-              Match.arrayWith([
-                Match.stringLikeRegexp(
-                  '.*service-role/AWSS3ReplicationServiceRolePolicy.*'
-                ),
-              ]),
-            ]),
-          }),
-        ]),
+        RoleName: 's3-replication-role-us-east-1-test',
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 's3.amazonaws.com',
+              },
+            }),
+          ]),
+        },
       });
     });
 

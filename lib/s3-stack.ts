@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export interface S3StackProps extends cdk.StackProps {
@@ -49,18 +49,9 @@ export class S3Stack extends cdk.Stack {
     const replicationRole = new iam.Role(this, 'ReplicationRole', {
       roleName: `s3-replication-role-${props.region}-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSS3ReplicationServiceRolePolicy'
-        ),
-      ],
     });
 
-    // Apply Environment:Production tag to IAM role
-    cdk.Tags.of(replicationRole).add('Environment', 'Production');
-    cdk.Tags.of(replicationRole).add('Project', 'trainr302');
-
-    // Add inline policy for specific replication permissions
+    // Add custom replication policy instead of using non-existent managed policy
     replicationRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -68,10 +59,19 @@ export class S3Stack extends cdk.Stack {
           's3:GetObjectVersionForReplication',
           's3:GetObjectVersionAcl',
           's3:GetObjectVersionTagging',
+          's3:ReplicateObject',
+          's3:ReplicateDelete',
+          's3:ReplicateTags',
+          's3:GetBucketVersioning',
+          's3:GetBucketLocation',
         ],
-        resources: [`${this.bucket.bucketArn}/*`],
+        resources: [`${this.bucket.bucketArn}/*`, this.bucket.bucketArn],
       })
     );
+
+    // Apply Environment:Production tag to IAM role
+    cdk.Tags.of(replicationRole).add('Environment', 'Production');
+    cdk.Tags.of(replicationRole).add('Project', 'trainr302');
 
     // Note: Cross-region replication will be configured manually after deployment
     // due to the complexity of CDK cross-stack references across regions.
@@ -93,13 +93,13 @@ export class S3Stack extends cdk.Stack {
         );
       });
 
-      // Add bucket-level permissions
+      // Add bucket-level permissions for destination buckets
       const bucketArns = props.replicationBuckets.map(b => b.bucketArn);
       replicationRole.addToPolicy(
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: ['s3:GetBucketVersioning'],
-          resources: [this.bucket.bucketArn, ...bucketArns],
+          actions: ['s3:GetBucketVersioning', 's3:GetBucketLocation'],
+          resources: bucketArns,
         })
       );
     }
