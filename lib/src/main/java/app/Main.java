@@ -262,6 +262,9 @@ class TapStack extends Stack {
                 .serviceNetworkIdentifier(vpcLatticeServiceNetwork.getRef())
                 .vpcIdentifier(vpc.getVpcId())
                 .build();
+        
+        // Add dependency to ensure VPC Association is created after VPC Attachment
+        serviceNetworkVpcAssociation.getNode().addDependency(vpcAttachment);
 
         // Create VPC Lattice Target Group for EC2 instance
         software.amazon.awscdk.services.vpclattice.CfnTargetGroup vpcLatticeTargetGroup = software.amazon.awscdk.services.vpclattice.CfnTargetGroup.Builder.create(this, "VPCLatticeTargetGroup")
@@ -318,6 +321,9 @@ class TapStack extends Stack {
                 .serviceNetworkIdentifier(vpcLatticeServiceNetwork.getRef())
                 .serviceIdentifier(vpcLatticeService.getRef())
                 .build();
+        
+        // Add dependency to ensure Service Association is created after VPC Association
+        serviceNetworkServiceAssociation.getNode().addDependency(serviceNetworkVpcAssociation);
 
         // Create IAM policy for VPC Lattice service-to-service authentication
         PolicyDocument vpcLatticePolicyDocument = PolicyDocument.Builder.create()
