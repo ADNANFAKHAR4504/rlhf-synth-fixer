@@ -523,6 +523,20 @@ def handler(event, context):
 
     // CloudFront Distribution (Primary region only)
     if (props?.isPrimary) {
+      // Dedicated logs bucket for CloudFront (ACL-compatible)
+      const cfLogsBucket = new s3.Bucket(this, 'TapCfLogsBucket', {
+        encryption: s3.BucketEncryption.S3_MANAGED, // CloudFront access logs do not use KMS
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        objectOwnership: s3.ObjectOwnership.OBJECT_WRITER, // allow ACLs for log delivery
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+      });
+
+      cdk.Tags.of(cfLogsBucket).add('Environment', commonTags.Environment);
+      cdk.Tags.of(cfLogsBucket).add('Project', commonTags.Project);
+      cdk.Tags.of(cfLogsBucket).add('Owner', commonTags.Owner);
+
       const distribution = new cloudfront.Distribution(
         this,
         'TapCloudFrontDistribution',
@@ -537,10 +551,40 @@ def handler(event, context):
           },
           priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
           enableLogging: true,
-          logBucket: bucket,
+          logBucket: cfLogsBucket,
           logFilePrefix: 'cloudfront-logs/',
           comment: `TAP CloudFront Distribution - ${props?.environmentSuffix || 'dev'}`,
         }
+      );
+
+      // Least-privilege policy for CloudFront log delivery
+      cfLogsBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AWSCloudFrontLogDeliveryAclCheck',
+          effect: iam.Effect.ALLOW,
+          principals: [new iam.ServicePrincipal('delivery.logs.cloudfront.amazonaws.com')],
+          actions: ['s3:GetBucketAcl'],
+          resources: [cfLogsBucket.bucketArn],
+        })
+      );
+
+      cfLogsBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AWSCloudFrontLogDeliveryWrite',
+          effect: iam.Effect.ALLOW,
+          principals: [new iam.ServicePrincipal('delivery.logs.cloudfront.amazonaws.com')],
+          actions: ['s3:PutObject'],
+          resources: [cfLogsBucket.arnForObjects('cloudfront-logs/*')],
+          conditions: {
+            StringEquals: {
+              's3:x-amz-acl': 'bucket-owner-full-control',
+              'aws:SourceAccount': this.account,
+            },
+            StringLike: {
+              'aws:SourceArn': distribution.distributionArn,
+            },
+          },
+        })
       );
 
       cdk.Tags.of(distribution).add('Environment', commonTags.Environment);
