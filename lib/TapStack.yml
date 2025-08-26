@@ -895,7 +895,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${ProjectName}-web-acl'
+      Name: !Sub '${ProjectName}-waf'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}

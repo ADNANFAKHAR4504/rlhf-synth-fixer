@@ -1746,7 +1746,7 @@
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${ProjectName}-web-acl"
+                    "Fn::Sub": "${ProjectName}-waf"
                 },
                 "Scope": "REGIONAL",
                 "DefaultAction": {
