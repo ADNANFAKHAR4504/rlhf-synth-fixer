@@ -26,11 +26,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         __file__), '..', '..', 'cfn-outputs', 'flat-outputs.json')
         
         if os.path.exists(outputs_file):
-        try:
-            with open(outputs_file, 'r', encoding='utf-8') as f:
-            cls.outputs = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-        cls.outputs = {}
+            try:
+                with open(outputs_file, 'r', encoding='utf-8') as f:
+                cls.outputs = json.load(f)
+            except (json.JSONDecodeError, FileNotFoundError):
+                cls.outputs = {}
         
         # Configure Pulumi to use S3 backend (not Pulumi Cloud)
         cls.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
