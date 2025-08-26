@@ -72,9 +72,49 @@ jobs:
 
       - name: Create Jump Box with Full AWS Permissions
         run: |
-          echo "🧹 Checking for existing jump box resources..."
+          echo "🔍 Debugging network configuration..."
           
-          # Check for existing running instances for this environment
+          # Get default VPC and debug network configuration
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
+          echo "🔍 Default VPC ID: $VPC_ID"
+          
+          # List all Internet Gateways for this VPC
+          echo "🌐 Internet Gateways in VPC $VPC_ID:"
+          aws ec2 describe-internet-gateways \
+            --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
+            --query 'InternetGateways[*].[InternetGatewayId,State,Attachments[0].State]' \
+            --output table
+          
+          # List all subnets with their routing info
+          echo "🗺️  All subnets in VPC $VPC_ID:"
+          aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query 'Subnets[*].[SubnetId,AvailabilityZone,MapPublicIpOnLaunch,CidrBlock]' \
+            --output table
+          
+          # Find route tables and their routes
+          echo "🛣️  Route tables for VPC $VPC_ID:"
+          ROUTE_TABLES=$(aws ec2 describe-route-tables \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query 'RouteTables[*].RouteTableId' \
+            --output text)
+          
+          for rt_id in $ROUTE_TABLES; do
+            echo "Route table $rt_id:"
+            aws ec2 describe-route-tables \
+              --route-table-ids $rt_id \
+              --query 'RouteTables[0].Routes[*].[DestinationCidrBlock,GatewayId,State]' \
+              --output table
+            echo "Associated subnets:"
+            aws ec2 describe-route-tables \
+              --route-table-ids $rt_id \
+              --query 'RouteTables[0].Associations[*].[SubnetId,Main]' \
+              --output table
+            echo "---"
+          done
+          
+          # Check what subnet the existing instance is in
+          echo "🧹 Checking for existing jump box resources..."
           EXISTING_INSTANCE=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=JumpBox-${{ env.ENVIRONMENT_SUFFIX }}" \
                      "Name=instance-state-name,Values=running,pending" \
@@ -83,10 +123,53 @@ jobs:
           
           if [ "$EXISTING_INSTANCE" != "None" ] && [ "$EXISTING_INSTANCE" != "null" ] && [ -n "$EXISTING_INSTANCE" ]; then
             echo "♻️  Found existing running jump box: $EXISTING_INSTANCE"
+            
+            # Get existing instance details
             EXISTING_IP=$(aws ec2 describe-instances \
               --instance-ids $EXISTING_INSTANCE \
               --query 'Reservations[0].Instances[0].PublicIpAddress' \
               --output text)
+            
+            EXISTING_SUBNET=$(aws ec2 describe-instances \
+              --instance-ids $EXISTING_INSTANCE \
+              --query 'Reservations[0].Instances[0].SubnetId' \
+              --output text)
+            
+            echo "🔍 Existing instance is in subnet: $EXISTING_SUBNET"
+            
+            # Check if existing subnet has IGW route
+            EXISTING_RT=$(aws ec2 describe-route-tables \
+              --filters "Name=association.subnet-id,Values=$EXISTING_SUBNET" \
+              --query 'RouteTables[0].RouteTableId' \
+              --output text)
+            
+            if [ "$EXISTING_RT" = "None" ] || [ -z "$EXISTING_RT" ]; then
+              # Check main route table
+              EXISTING_RT=$(aws ec2 describe-route-tables \
+                --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.main,Values=true" \
+                --query 'RouteTables[0].RouteTableId' \
+                --output text)
+              echo "🔍 Using main route table: $EXISTING_RT"
+            else
+              echo "🔍 Subnet-specific route table: $EXISTING_RT"
+            fi
+            
+            # Check for IGW route in the route table
+            IGW_ROUTE_EXISTS=$(aws ec2 describe-route-tables \
+              --route-table-ids $EXISTING_RT \
+              --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0' && starts_with(GatewayId, 'igw-')] | length(@)" \
+              --output text)
+            
+            if [ "$IGW_ROUTE_EXISTS" -gt 0 ]; then
+              echo "✅ Existing instance subnet has IGW route - connectivity should work"
+            else
+              echo "❌ Existing instance subnet has NO IGW route - this explains the timeout!"
+              echo "🔍 Routes in route table $EXISTING_RT:"
+              aws ec2 describe-route-tables \
+                --route-table-ids $EXISTING_RT \
+                --query 'RouteTables[0].Routes[*].[DestinationCidrBlock,GatewayId,State]' \
+                --output table
+            fi
             
             # Get existing security group ID
             EXISTING_SG=$(aws ec2 describe-instances \
