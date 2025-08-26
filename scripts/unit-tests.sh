@@ -21,15 +21,10 @@ if [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
 fi
 
 # Run unit tests based on platform and language
-if [ "$LANGUAGE" = "java" ]  && [ "$PLATFORM" = "pulumi" ]; then
-  echo "✅ Pulumi Java project detected, running JUnit tests..."
+if [ "$LANGUAGE" = "java" ]  && { [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "cdk" ]; }; then
+  echo "✅ Java project detected, running JUnit tests..."
   chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
-
-elif [ "$LANGUAGE" = "java" ] && [ "$PLATFORM" = "cdk" ]; then
-  echo "✅ CDK Java project detected, running JUnit tests..."
-  chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
+  ./gradlew test jacocoTestReport --build-cache --no-daemon
 
   echo "📊 Checking for generated coverage reports..."
   if [ -d "build/reports/jacoco" ]; then
