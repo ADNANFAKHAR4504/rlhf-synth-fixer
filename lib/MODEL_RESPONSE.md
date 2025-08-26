@@ -739,4 +739,4 @@ This implementation provides:
 8. **Cloudfront**: Cloudfront for HTTPS communications
 9. **CloudWatch Monitoring**: Alarms for CPU utilization and Lambda errors
 10. **Resource Tagging**: Comprehensive tagging for all resources
-11. **Multi-region Support**: Ready for deployment in multiple regions
+11. **Multi-AZ Support**: Ready for deployment in multiple AZs

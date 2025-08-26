@@ -63,10 +63,9 @@ Please create Pulumi Go code that implements the following components:
 - Use consistent naming conventions
 - Include environment, project, and owner tags
 
-### Multi-Region Deployment
+### Multi-AZ Deployment
 
-- Deploy infrastructure across us-east-1 and us-west-2 regions
-- Ensure cross-region replication for critical data
+- Deploy infrastructure across multi AZ in us-east-1 regions
 
 ## Implementation Notes
 
