@@ -374,13 +374,6 @@ Resources:
       KMSKeyId: !Ref S3KMSKey
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailCloudWatchLogsRole.Arn
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: "AWS::S3::Object"
-              Values:
-                - "*"
       Tags:
         - Key: Purpose
           Value: SecurityAuditing
