@@ -460,8 +460,8 @@ public class Main extends App {
           .exportName(String.format("%s-%s-%s-private-subnets", projectName, environment, region))
           .build());
 
-      // S3 Bucket Outputs
-      new CfnOutput(this, "S3DataBucketName", CfnOutputProps.builder()
+      // S3 Bucket Outputs (legacy naming for test compatibility)
+      new CfnOutput(this, "S3Bucket0Name", CfnOutputProps.builder()
           .value(s3Bucket.getBucketName())
           .description("S3 Data Bucket Name")
           .exportName(String.format("%s-%s-%s-data-bucket", projectName, environment, region))
@@ -473,7 +473,7 @@ public class Main extends App {
           .exportName(String.format("%s-%s-%s-data-bucket-arn", projectName, environment, region))
           .build());
 
-      new CfnOutput(this, "S3LogsBucketName", CfnOutputProps.builder()
+      new CfnOutput(this, "S3Bucket1Name", CfnOutputProps.builder()
           .value(logsBucket.getBucketName())
           .description("S3 Logs Bucket Name")
           .exportName(String.format("%s-%s-%s-logs-bucket", projectName, environment, region))
