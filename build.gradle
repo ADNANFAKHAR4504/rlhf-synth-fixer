@@ -75,11 +75,6 @@ application {
     mainClass = 'app.Main'
 }
 
-// Configure run task to include proper environment
-run {
-    environment 'PATH', "/Users/django/.nvm/versions/node/v22.17.0/bin:${System.env.PATH}"
-}
-
 // Override run task to handle path issues
 tasks.named('run') {
     standardInput = System.in
