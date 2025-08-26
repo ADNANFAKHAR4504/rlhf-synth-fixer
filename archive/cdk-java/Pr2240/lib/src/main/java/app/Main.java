@@ -82,8 +82,8 @@ public class Main {
             createTapStack(app, region, environment, costCenter, projectName);
         }
         
-        // Create StackSet for cross-region deployment
-        createStackSetStack(app, environment, costCenter, projectName);
+        // Create cross-region networking stack for VPC peering
+        createCrossRegionNetworkingStack(app, environment, costCenter, projectName);
         
         app.synth();
     }
@@ -147,33 +147,20 @@ public class Main {
             environment, costCenter, projectName, region);
     }
     
-    private static void createStackSetStack(App app, String environment, String costCenter, String projectName) {
-        Stack stackSetStack = new Stack(app, "TapStackSetStack", StackProps.builder()
-            .env(Environment.builder()
-                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-east-2") // Primary region
-                .build())
-            .build());
-        
-        applyStandardTags(stackSetStack, environment, costCenter, projectName);
-        
-        // Create StackSet for cross-region deployment
-        CfnStackSet stackSet = CfnStackSet.Builder.create(stackSetStack, "CrossRegionStackSet")
-            .stackSetName(String.format("%s-stackset-%s", projectName, environment))
-            .capabilities(Arrays.asList("CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"))
-            .permissionModel("SELF_MANAGED")
-            .operationPreferences(CfnStackSet.OperationPreferencesProperty.builder()
-                .regionConcurrencyType("PARALLEL")
-                .maxConcurrentPercentage(100)
-                .failureTolerancePercentage(10)
-                .build())
-            .build();
+    // NEW: Cross-region networking stack for VPC peering
+    private static void createCrossRegionNetworkingStack(App app, String environment, String costCenter, String projectName) {
+        CrossRegionNetworkingStack networkingStack = new CrossRegionNetworkingStack(app, "CrossRegionNetworkingStack", 
+            StackProps.builder()
+                .env(Environment.builder()
+                    .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                    .region("us-east-2") // Primary region for networking
+                    .build())
+                .build(), 
+            environment, costCenter, projectName);
     }
     
     private static void applyStandardTags(Construct construct, String environment, String costCenter, String projectName) {
         Tags.of(construct).add("Environment", environment);
-        Tags.of(construct).add("CostCenter", costCenter);
-        Tags.of(construct).add("Project", projectName);
         Tags.of(construct).add("CostCenter", costCenter);
         Tags.of(construct).add("Project", projectName);
         Tags.of(construct).add("ManagedBy", "CDK");
@@ -187,6 +174,54 @@ public class Main {
             
             new TapStack(this, "TapStack", StackProps.builder().build(), 
                 environment, costCenter, projectName, region);
+        }
+    }
+    
+    // NEW: Cross-region networking stack
+    public static class CrossRegionNetworkingStack extends Stack {
+        
+        public CrossRegionNetworkingStack(final Construct scope, final String id, final StackProps props, 
+                                        String environment, String costCenter, String projectName) {
+            super(scope, id, props);
+            
+            // Apply standard tags
+            applyStandardTags(this, environment, costCenter, projectName);
+            
+            // Create VPC peering connections between regions
+            // This stack will run after all individual region stacks are deployed
+            createCrossRegionVpcPeering(environment, projectName);
+        }
+        
+        private void createCrossRegionVpcPeering(String environment, String projectName) {
+            // Create VPC peering connections between all regions
+            for (int i = 0; i < REGIONS.size(); i++) {
+                for (int j = i + 1; j < REGIONS.size(); j++) {
+                    String region1 = REGIONS.get(i);
+                    String region2 = REGIONS.get(j);
+                    
+                    // Create peering connection from region1 to region2
+                    CfnVPCPeeringConnection.Builder.create(this, 
+                            String.format("Peering%sTo%s", region1.replace("-", ""), region2.replace("-", "")))
+                        .vpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region1)))
+                        .peerRegion(region2)
+                        .peerVpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region2)))
+                        .tags(Arrays.asList(
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Name")
+                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region1, region2))
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Environment")
+                                .value(environment)
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Project")
+                                .value(projectName)
+                                .build()
+                        ))
+                        .build();
+                }
+            }
         }
     }
     
@@ -217,9 +252,6 @@ public class Main {
             
             // Create CloudWatch monitoring
             createCloudWatchMonitoring(buckets, projectName, environment, region);
-            
-            // Create VPC peering connections using CloudFormation imports
-            createVpcPeeringWithImports(vpc, region, environment, projectName);
             
             // Create CloudTrail for auditing
             createCloudTrail(kmsKey, projectName, environment, region);
@@ -290,7 +322,6 @@ public class Main {
                 .bucketName(String.format("%s-%s-%s-logs-%s", projectName, environment, region, 
                     System.currentTimeMillis() / 1000))
                 .encryption(BucketEncryption.KMS)
-                .encryptionKey(kmsKey)
                 .encryptionKey(kmsKey)
                 .versioned(true)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -397,40 +428,6 @@ public class Main {
                     .evaluationPeriods(1)
                     .treatMissingData(TreatMissingData.NOT_BREACHING)
                     .build();
-            }
-        }
-        
-        // NEW: VPC Peering with CloudFormation imports to resolve circular dependency
-        private void createVpcPeeringWithImports(Vpc vpc, String region, String environment, String projectName) {
-            // Create VPC peering connections to other regions using CloudFormation imports
-            for (String peerRegion : REGIONS) {
-                if (!peerRegion.equals(region)) {
-                    // Create the VPC peering connection
-                    CfnVPCPeeringConnection peeringConnection = CfnVPCPeeringConnection.Builder.create(this, 
-                            String.format("PeeringTo%s", peerRegion.replace("-", "")))
-                        .vpcId(vpc.getVpcId())
-                        .peerRegion(peerRegion)
-                        // Use Fn.importValue to reference the exported VPC ID from the other region
-                        .peerVpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, peerRegion)))
-                        .tags(Arrays.asList(
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Name")
-                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region, peerRegion))
-                                .build(),
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Environment")
-                                .value(environment)
-                                .build(),
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Project")
-                                .value(projectName)
-                                .build()
-                        ))
-                        .build();
-                    
-                    // Add dependency on the VPC to ensure it's created first
-                    peeringConnection.addDependsOn(vpc.getNode().getDefaultChild());
-                }
             }
         }
         
