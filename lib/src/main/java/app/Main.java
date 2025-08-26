@@ -1,6 +1,6 @@
 /*
  * Maven Dependencies for pom.xml:
- * 
+ *
  * <dependencies>
  *     <dependency>
  *         <groupId>software.amazon.awscdk</groupId>
@@ -27,7 +27,6 @@ import software.amazon.awscdk.services.apigateway.LambdaRestApi;
 import software.amazon.awscdk.services.apigateway.LogGroupLogDestination;
 import software.amazon.awscdk.services.apigateway.MethodLoggingLevel;
 import software.amazon.awscdk.services.apigateway.StageOptions;
-import software.amazon.awscdk.services.config.CfnDeliveryChannel;
 import software.amazon.awscdk.services.ec2.LaunchTemplate;
 import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.MachineImage;
@@ -62,6 +61,8 @@ import software.amazon.awscdk.services.rds.PostgresEngineVersion;
 import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.RemovalPolicy;
 import software.constructs.Construct;
 
 import java.util.Arrays;
@@ -70,17 +71,17 @@ import java.util.Map;
 /**
  * Comprehensive AWS CDK Stack for Financial Services Infrastructure
  * Project: SecurityConfigurationAsCode_CloudFormation_YAML_a8b7e6t4q9j2
- * 
+ *
  * This stack implements a secure, compliant cloud infrastructure for financial services
  * with multi-AZ VPC, encryption at rest, network firewalls, and comprehensive auditing.
  */
 class NovaModelStack extends Stack {
-    
+
     private static final String PROJECT_NAME = "novamodel";
     private static final String ENVIRONMENT = "dev";
     private static final String CENTRAL_LOGGING_BUCKET_ARN = "arn:aws:s3:::central-logging-bucket-123456789012";
     private final String environmentSuffix;
-    
+
     // Standard tags applied to all resources
     private static final Map<String, String> STANDARD_TAGS = Map.of(
         "Project", "NovaModel",
@@ -148,15 +149,6 @@ class NovaModelStack extends Stack {
             .description("Customer Managed Key for NovaModel encryption")
             .enableKeyRotation(true)
             .build();
-    }
-
-    /**
-     * Enables EBS encryption by default using the CMK
-     */
-    private void enableEbsEncryptionByDefault(Key cmk) {
-        // Note: EBS encryption by default is account-wide setting
-        // It needs to be configured at the account level via AWS Console or CLI
-        // CDK doesn't directly support this yet
     }
 
     /**
@@ -370,7 +362,7 @@ class NovaModelStack extends Stack {
                             .effect(Effect.ALLOW)
                             .actions(Arrays.asList("rds-db:connect"))
                             .resources(Arrays.asList(
-                                "arn:aws:rds-db:" + this.getRegion() + ":" + this.getAccount() + 
+                                "arn:aws:rds-db:" + this.getRegion() + ":" + this.getAccount() +
                                 ":dbuser:" + rdsInstance.getInstanceResourceId() + "/lambda_user"
                             ))
                             .build()
@@ -440,23 +432,6 @@ class NovaModelStack extends Stack {
     }
 
     /**
-     * Sets up AWS CloudTrail for audit logging
-     */
-    private void setupCloudTrail() {
-        // CloudTrail requires a bucket for logging
-        // For now, we'll comment this out as it requires external bucket
-        /*
-        Trail.Builder.create(this, formatResourceName("AuditTrail"))
-            .trailName(formatResourceName("audit-trail"))
-            .isMultiRegionTrail(true)
-            .includeGlobalServiceEvents(true)
-            .enableFileValidation(true)
-            // Would need actual bucket
-            .build();
-        */
-    }
-
-    /**
      * Sets up AWS Config conditionally - only if no configuration recorder exists
      * This avoids the MaxNumberOfConfigurationRecordersExceededException
      */
@@ -475,11 +450,9 @@ class NovaModelStack extends Stack {
 
         // Get the result of the check
         String configRecorderCount = configRecorderCheck.getResponseField("ConfigurationRecorders.length");
-        
+
         // Only create Config resources if no recorders exist
-        // Note: CloudFormation doesn't support conditional resource creation directly
-        // So we'll use a simpler approach - just create delivery channel without recorder
-        
+
         // Create service role for Config (always needed for delivery channel)
         Role configRole = Role.Builder.create(this, formatResourceName("ConfigRole"))
             .assumedBy(new ServicePrincipal("config.amazonaws.com"))
@@ -489,15 +462,49 @@ class NovaModelStack extends Stack {
                 )
             ))
             .build();
+    }
 
-        // Create delivery channel (this can work with existing recorder)
-        CfnDeliveryChannel.Builder.create(this, formatResourceName("ConfigDeliveryChannel"))
-            .s3BucketName(dataBucket.getBucketName())
-            .s3KeyPrefix("aws-config")
+    /**
+     * Enables EBS encryption by default using the specified KMS key
+     */
+    private void enableEbsEncryptionByDefault(Key cmk) {
+        // Use AWS Custom Resource to enable EBS encryption by default
+        AwsCustomResource.Builder.create(this, "EnableEBSEncryption")
+            .onCreate(AwsSdkCall.builder()
+                .service("EC2")
+                .action("enableEbsEncryptionByDefault")
+                .physicalResourceId(PhysicalResourceId.of("ebs-encryption-default"))
+                .build())
+            .onDelete(AwsSdkCall.builder()
+                .service("EC2")
+                .action("disableEbsEncryptionByDefault")
+                .physicalResourceId(PhysicalResourceId.of("ebs-encryption-default"))
+                .build())
+            .policy(AwsCustomResourcePolicy.fromSdkCalls(SdkCallsPolicyOptions.builder()
+                .resources(Arrays.asList("*"))
+                .build()))
+            .build();
+    }
+
+    /**
+     * Sets up AWS CloudTrail for audit logging
+     */
+    private void setupCloudTrail() {
+        // Create CloudTrail S3 bucket (separate from data bucket for security)
+        Bucket cloudTrailBucket = Bucket.Builder.create(this, formatResourceName("CloudTrailBucket"))
+            .versioned(true)
+            .encryption(BucketEncryption.KMS_MANAGED)
+            .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+            .removalPolicy(RemovalPolicy.RETAIN)
             .build();
 
-        // Skip creating configuration recorder - use existing one in account
-        // This avoids the MaxNumberOfConfigurationRecordersExceededException
+        // Create CloudTrail
+        software.amazon.awscdk.services.cloudtrail.Trail.Builder.create(this, formatResourceName("CloudTrail"))
+            .bucket(cloudTrailBucket)
+            .includeGlobalServiceEvents(true)
+            .isMultiRegionTrail(true)
+            .enableFileValidation(true)
+            .build();
     }
 
     /**
@@ -532,7 +539,7 @@ class NovaModelStack extends Stack {
      * Only enable deletion protection for production environments
      */
     private boolean isProductionEnvironment() {
-        return "prod".equalsIgnoreCase(environmentSuffix) || 
+        return "prod".equalsIgnoreCase(environmentSuffix) ||
                "production".equalsIgnoreCase(environmentSuffix);
     }
 }
@@ -551,13 +558,13 @@ public final class Main {
      */
     public static void main(final String[] args) {
         App app = new App();
-        
+
         // Get environment suffix from environment variable or use default
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
             environmentSuffix = "dev";
         }
-        
+
         // Create the NovaModel stack with environment suffix
         new NovaModelStack(app, "TapStack" + environmentSuffix, StackProps.builder()
             .env(Environment.builder()

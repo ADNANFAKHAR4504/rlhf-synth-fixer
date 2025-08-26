@@ -206,7 +206,7 @@ public class MainTest {
     // S3 Tests (23-30)
     @Test
     void testS3BucketCreated() {
-        template.resourceCountIs("AWS::S3::Bucket", 1);
+        template.resourceCountIs("AWS::S3::Bucket", 2);
     }
 
     @Test
