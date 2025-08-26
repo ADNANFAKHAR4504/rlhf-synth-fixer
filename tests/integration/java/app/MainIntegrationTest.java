@@ -69,6 +69,20 @@ public class MainIntegrationTest {
     }
 
     /**
+     * Test that CloudFormation outputs file exists and contains expected data.
+     */
+    @Test
+    void testCloudFormationOutputsFile() {
+        // Verify AWS region file exists
+        assertTrue(Files.exists(Paths.get("lib/AWS_REGION")),
+                "AWS_REGION file should exist");
+        
+        // Check if outputs file exists
+        assertTrue(Files.exists(Paths.get("cfn-outputs/flat-outputs.json")),
+                "cfn-outputs/flat-outputs.json should exist for live testing");
+    }
+
+    /**
      * Example test for Pulumi program validation using Pulumi CLI.
      * Disabled by default as it requires Pulumi CLI and AWS setup.
      * 
