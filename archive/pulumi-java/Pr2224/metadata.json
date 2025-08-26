@@ -12,12 +12,12 @@
   "updatedAt": "2025-08-25T15:57:00.000Z",
   "subtask": "financial-application-infrastructure",
   "subject_labels": [
-    "aws", 
-    "security", 
-    "networking", 
-    "encryption", 
-    "monitoring", 
-    "compliance", 
+    "aws",
+    "security",
+    "networking",
+    "encryption",
+    "monitoring",
+    "compliance",
     "iam",
     "vpc",
     "kms",
@@ -29,15 +29,19 @@
   ],
   "training_quality": 8,
   "architecture_pattern": "multi-tier-security-first",
-  "security_frameworks": ["AWS Well-Architected", "NIST", "SOC2"],
+  "security_frameworks": [
+    "AWS Well-Architected",
+    "NIST",
+    "SOC2"
+  ],
   "aws_services": [
-    "VPC", 
-    "EC2", 
-    "S3", 
-    "KMS", 
-    "CloudTrail", 
-    "IAM", 
-    "CloudWatch", 
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "IAM",
+    "CloudWatch",
     "SNS",
     "EIP",
     "NAT Gateway",
@@ -68,5 +72,11 @@
   "high_availability": false,
   "multi_az": false,
   "estimated_monthly_cost_usd": 150,
-  "resource_count": 25
+  "resource_count": 25,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
