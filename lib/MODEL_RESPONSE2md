@@ -130,7 +130,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = 2
 
-  domain     = "vpc"
+  domain = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -323,8 +323,8 @@ resource "aws_db_instance" "main" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   # Monitoring and logging
   monitoring_interval = 60
@@ -454,7 +454,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
