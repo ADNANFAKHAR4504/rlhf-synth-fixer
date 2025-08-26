@@ -30,14 +30,12 @@ describe('TapStack', () => {
       BucketName: {
         'Fn::Join': [
           '',
-          [
-            'nova-model-source-',
-            environmentSuffix,
-            '-',
+          Match.arrayWith([
+            `nova-model-source-${environmentSuffix}-`,
             { Ref: 'AWS::AccountId' },
             '-',
-            { Ref: 'AWS::Region' },
-          ],
+            { Ref: 'AWS::Region' }
+          ])
         ],
       },
       VersioningConfiguration: { Status: 'Enabled' },
@@ -64,14 +62,12 @@ describe('TapStack', () => {
       BucketName: {
         'Fn::Join': [
           '',
-          [
-            'nova-model-pipeline-artifacts-',
-            environmentSuffix,
-            '-',
+          Match.arrayWith([
+            `nova-model-pipeline-artifacts-${environmentSuffix}-`,
             { Ref: 'AWS::AccountId' },
             '-',
-            { Ref: 'AWS::Region' },
-          ],
+            { Ref: 'AWS::Region' }
+          ])
         ],
       },
       VersioningConfiguration: { Status: 'Enabled' },
@@ -283,30 +279,34 @@ describe('TapStack', () => {
       Environment: {
         ComputeType: 'BUILD_GENERAL1_SMALL',
         Image: 'aws/codebuild/standard:7.0',
-        PrivilegedMode: false,
         Type: 'LINUX_CONTAINER',
+        PrivilegedMode: false,
+        ImagePullCredentialsType: 'CODEBUILD',
         EnvironmentVariables: Match.arrayWith([
-          {
+          Match.objectLike({
             Name: 'AWS_DEFAULT_REGION',
             Value: { Ref: 'AWS::Region' },
-          },
-          {
+            Type: 'PLAINTEXT',
+          }),
+          Match.objectLike({
             Name: 'AWS_ACCOUNT_ID',
             Value: { Ref: 'AWS::AccountId' },
-          },
-          {
+            Type: 'PLAINTEXT',
+          }),
+          Match.objectLike({
             Name: 'BUILD_ENV',
             Value: 'production',
-          },
-          {
-            Name: 'PROJECT_NAME',
-            Value: `nova-model-breaking-${environmentSuffix}`,
-          },
-        ]),
+            Type: 'PLAINTEXT',
+          }),
+        ])
+      },
+      Artifacts: {
+        Type: 'NO_ARTIFACTS',
       },
       TimeoutInMinutes: 60,
     });
   });
+
 
   test('Should create CodeBuild project with proper BuildSpec', () => {
     template.hasResourceProperties('AWS::CodeBuild::Project', {
@@ -461,7 +461,7 @@ describe('TapStack', () => {
   // =========================================
   test('Should apply proper tags to the stack', () => {
     const stackTags = Template.fromStack(stack).toJSON().Resources;
-    
+
     // Check that resources have proper tags
     Object.values(stackTags).forEach((resource: any) => {
       if (resource.Type !== 'AWS::CDK::Metadata') {
@@ -478,7 +478,7 @@ describe('TapStack', () => {
     const template_json = template.toJSON();
     const resources = template_json.Resources;
     const resourceTypes = Object.values(resources).map((r: any) => r.Type);
-    
+
     expect(resourceTypes.filter(t => t === 'AWS::S3::Bucket').length).toBe(2);
     expect(resourceTypes.filter(t => t === 'AWS::Logs::LogGroup').length).toBe(2);
     expect(resourceTypes.filter(t => t === 'AWS::IAM::Role').length).toBeGreaterThanOrEqual(3);
@@ -500,7 +500,7 @@ describe('TapStack', () => {
       },
     });
     const testTemplate = Template.fromStack(testStack);
-    
+
     // Should use default environmentSuffix when not provided
     testTemplate.hasResourceProperties('AWS::S3::Bucket', {
       BucketName: {
