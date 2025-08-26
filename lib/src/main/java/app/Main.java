@@ -27,7 +27,6 @@ import software.amazon.awscdk.services.apigateway.LambdaRestApi;
 import software.amazon.awscdk.services.apigateway.LogGroupLogDestination;
 import software.amazon.awscdk.services.apigateway.MethodLoggingLevel;
 import software.amazon.awscdk.services.apigateway.StageOptions;
-import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
 import software.amazon.awscdk.services.ec2.LaunchTemplate;
 import software.amazon.awscdk.services.ec2.InstanceType;
