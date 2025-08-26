@@ -16,8 +16,6 @@ import java.io.InputStreamReader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pulumi.Context;
-import app.config.EnvironmentConfig;
-import app.utils.ResourceNaming;
 
 /**
  * Integration tests for the Main Pulumi program.
@@ -187,17 +185,17 @@ public class MainIntegrationTest {
     @Test
     void testEnvironmentConfigIntegration() {
         // Test all valid environments
-        assertDoesNotThrow(() -> new EnvironmentConfig("development"));
-        assertDoesNotThrow(() -> new EnvironmentConfig("testing"));
-        assertDoesNotThrow(() -> new EnvironmentConfig("staging"));
-        assertDoesNotThrow(() -> new EnvironmentConfig("production"));
+        assertDoesNotThrow(() -> new Main.EnvironmentConfig("development"));
+        assertDoesNotThrow(() -> new Main.EnvironmentConfig("testing"));
+        assertDoesNotThrow(() -> new Main.EnvironmentConfig("staging"));
+        assertDoesNotThrow(() -> new Main.EnvironmentConfig("production"));
         
         // Verify environment-specific VPC configurations
-        EnvironmentConfig devConfig = new EnvironmentConfig("development");
+        Main.EnvironmentConfig devConfig = new Main.EnvironmentConfig("development");
         Map<String, String> devVpc = devConfig.getVpcConfig();
         assertEquals("10.0.0.0/16", devVpc.get("cidrBlock"));
         
-        EnvironmentConfig prodConfig = new EnvironmentConfig("production");
+        Main.EnvironmentConfig prodConfig = new Main.EnvironmentConfig("production");
         Map<String, String> prodVpc = prodConfig.getVpcConfig();
         assertEquals("10.3.0.0/16", prodVpc.get("cidrBlock"));
         assertEquals(90, prodConfig.getKmsKeyRotationDays());
@@ -214,9 +212,9 @@ public class MainIntegrationTest {
         }
         
         // Generate multiple resource names and verify uniqueness
-        String name1 = ResourceNaming.generateResourceName(env, "vpc", "main");
-        String name2 = ResourceNaming.generateResourceName(env, "vpc", "main");
-        String name3 = ResourceNaming.generateResourceName(env, "s3", "bucket");
+        String name1 = Main.ResourceNaming.generateResourceName(env, "vpc", "main");
+        String name2 = Main.ResourceNaming.generateResourceName(env, "vpc", "main");
+        String name3 = Main.ResourceNaming.generateResourceName(env, "s3", "bucket");
         
         assertNotNull(name1);
         assertNotNull(name2);
@@ -275,13 +273,13 @@ public class MainIntegrationTest {
     @Test
     void testInfrastructureClassesAvailable() {
         assertDoesNotThrow(() -> {
-            // Test that all classes can be loaded
-            Class.forName("app.config.EnvironmentConfig");
-            Class.forName("app.utils.ResourceNaming");
-            Class.forName("app.utils.TaggingPolicy");
-            Class.forName("app.infrastructure.InfrastructureStack");
-            Class.forName("app.migration.MigrationManager");
-            Class.forName("app.migration.custom.SecretsManagerMigration");
+            // Test that all nested classes can be loaded
+            Class.forName("app.Main$EnvironmentConfig");
+            Class.forName("app.Main$ResourceNaming");
+            Class.forName("app.Main$TaggingPolicy");
+            Class.forName("app.Main$InfrastructureStack");
+            Class.forName("app.Main$MigrationManager");
+            Class.forName("app.Main$SecretsManagerMigration");
         }, "All infrastructure classes should be available");
     }
 
@@ -294,9 +292,9 @@ public class MainIntegrationTest {
         
         // Test that resource naming is consistent in format
         for (int i = 0; i < 10; i++) {
-            String vpcName = ResourceNaming.generateResourceName(environment, "vpc", "main");
-            String sgName = ResourceNaming.generateResourceName(environment, "sg", "web");
-            String kmsName = ResourceNaming.generateResourceName(environment, "kms", "key");
+            String vpcName = Main.ResourceNaming.generateResourceName(environment, "vpc", "main");
+            String sgName = Main.ResourceNaming.generateResourceName(environment, "sg", "web");
+            String kmsName = Main.ResourceNaming.generateResourceName(environment, "kms", "key");
             
             // Verify format consistency
             assertTrue(vpcName.startsWith("cm-int-vpc-main-"));
