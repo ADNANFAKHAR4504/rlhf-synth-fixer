@@ -162,7 +162,7 @@ public class WebAppStack extends ComponentResource {
       InstanceArgs
         .builder()
         .instanceType(config.getInstanceType())
-        .ami("ami-091efd91d8c1db442") // Amazon Linux 2 AMI (update for target region)
+        .ami("ami-098db043beb8cbda7") // Amazon Linux 2 AMI (update for target region)
         .subnetId(network.publicSubnet1.id())
         .vpcSecurityGroupIds(
           webSecurityGroup.id().applyValue(id -> List.of(id))
