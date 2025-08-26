@@ -185,7 +185,7 @@ describe('Security-Focused CloudFormation Template', () => {
 
     test('should have the expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(10); // After removing AWS Config and CloudTrail resources
+      expect(resourceCount).toBe(10); // We have exactly 10 core infrastructure resources after removing AWS Config and CloudTrail
     });
 
     test('should have the expected number of parameters', () => {
