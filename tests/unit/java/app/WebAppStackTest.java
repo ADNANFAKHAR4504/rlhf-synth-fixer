@@ -86,16 +86,23 @@ public class WebAppStackTest {
         // Test X-Ray configuration
         WebAppStackProps props = WebAppStackProps.builder()
                 .environmentSuffix("xray-test")
+                .stackProps(StackProps.builder()
+                        .env(Environment.builder()
+                                .account("123456789012")
+                                .region("us-east-1")
+                                .build())
+                        .build())
                 .build();
 
         WebAppStack stack = new WebAppStack(app, "TestXRayStack", props);
         Template template = Template.fromStack(stack);
         
-        // Check for X-Ray sampling rule with CloudFormation property names
+        // Check for X-Ray sampling rule with CloudFormation property names and region in name
+        // Using partial matching since the rule name now includes the region
         template.hasResourceProperties("AWS::XRay::SamplingRule", 
                 Map.of("SamplingRule", Match.objectLike(
                         new java.util.HashMap<String, Object>() {{
-                            put("RuleName", "WebAppSamplingRulexray-test");
+                            put("RuleName", Match.stringLikeRegexp("WebAppSamplingRule-.*xray-test"));
                             put("Priority", 9000);
                             put("FixedRate", 0.1);
                             put("ReservoirSize", 1);
@@ -108,6 +115,15 @@ public class WebAppStackTest {
                             put("ResourceARN", "*");
                         }}
                 )));
+        
+        // Verify that the name contains the region (us-east-1)
+        template.hasResource("AWS::XRay::SamplingRule", Match.objectLike(Map.of(
+                "Properties", Match.objectLike(Map.of(
+                        "SamplingRule", Match.objectLike(Map.of(
+                                "RuleName", "WebAppSamplingRule-us-east-1-xray-test"
+                        ))
+                ))
+        )));
     }
 
     @Test

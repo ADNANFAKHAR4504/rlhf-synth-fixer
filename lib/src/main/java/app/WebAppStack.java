@@ -333,9 +333,20 @@ public class WebAppStack extends Stack {
     }
 
     private CfnSamplingRule configureXRayTracing() {
-        // Configure X-Ray sampling rule with proper properties structure
+        // Include region in the name to ensure uniqueness across regions
+        // Get the actual deployment region, not the stack's region
+        String region = Stack.of(this).getRegion();
+        
+        // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
+        if (this.getNode().getPath().contains("TapStackSecondary")) {
+            region = "us-west-2"; // Hardcode region for secondary stack
+        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
+            region = "us-east-1"; // Hardcode region for primary stack
+        }
+        
+        // Configure X-Ray sampling rule with proper properties structure and region-specific name
         CfnSamplingRule.SamplingRuleProperty samplingRule = CfnSamplingRule.SamplingRuleProperty.builder()
-                .ruleName("WebAppSamplingRule" + environmentSuffix)
+                .ruleName("WebAppSamplingRule-" + region + "-" + environmentSuffix)
                 .priority(9000)
                 .fixedRate(0.1)
                 .reservoirSize(1)
