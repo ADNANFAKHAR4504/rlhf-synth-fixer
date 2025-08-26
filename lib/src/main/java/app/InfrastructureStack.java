@@ -169,6 +169,10 @@ public class InfrastructureStack extends Stack {
                 .internetFacing(true)
                 .securityGroup(albSecurityGroup)
                 .ipAddressType(IpAddressType.IPV4) // Modern dual-stack support ready
+                .vpcSubnets(SubnetSelection.builder()
+                        .subnetType(SubnetType.PUBLIC)
+                        .onePerAz(true) // Ensure one subnet per AZ
+                        .build())
                 .build();
 
         // Create target group with health checks and modern routing algorithm
