@@ -38,7 +38,7 @@ configurations.all {
 dependencies {
     // Fixed Pulumi core dependencies - using stable versions that work together
 
-    implementation 'com.pulumi:pulumi:0.11.0'
+    implementation 'com.pulumi:pulumi:1.16.1'
     implementation 'com.pulumi:aws:7.5.0'
     implementation 'com.pulumi:tls:5.2.0'
 
