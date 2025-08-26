@@ -332,9 +332,9 @@ public final class Main {
             .tags(getStandardTags(config, "security", "sg"))
             .build());
         
-        // 5. S3 Buckets for CloudTrail logs
-        var cloudTrailBucket = new Bucket("cloudtrail-bucket-" + System.currentTimeMillis(), BucketArgs.builder()
-            .bucket("yourcompany-production-cloudtrail-logs-" + System.currentTimeMillis())
+                // 5. S3 Buckets for CloudTrail logs
+        var cloudTrailBucket = new Bucket("aws-s3-cloudtrail-logs-bucket", BucketArgs.builder()
+            .bucket("yourcompany-production-cloudtrail-logs-1756207450059")
             .forceDestroy(true)
             .tags(getStandardTags(config, "storage", "s3"))
             .build());
@@ -371,7 +371,7 @@ public final class Main {
                     .build())
             .build());
 
-        var cloudTrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + System.currentTimeMillis(), BucketPolicyArgs.builder()
+        var cloudTrailBucketPolicy = new BucketPolicy("aws-s3-cloudtrail-logs-bucket-policy", BucketPolicyArgs.builder()
             .bucket(cloudTrailBucket.bucket())
             .policy(cloudTrailPolicy.applyValue(policy -> policy.json()))
             .build());
