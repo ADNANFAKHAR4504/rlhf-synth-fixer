@@ -469,7 +469,7 @@ Resources:
       ResourceId: !Ref SecureVPC
       TrafficType: ALL
       LogDestinationType: s3
-      LogDestination: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/"
+      LogDestination: !GetAtt VPCFlowLogsBucket.Arn
       LogFormat: "${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
       MaxAggregationInterval: 60
       Tags:
