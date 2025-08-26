@@ -9,4 +9,3 @@ Implement AWS CloudTrail to log all the API call activities being made among the
 Also Use elastic cache for the better performance of the database.
 10.Ensure all the resources are tagged with 'Environment: Production'.
 11.Generate outputs for all resources.             
-This is not a continutation ask but extra requirement.
