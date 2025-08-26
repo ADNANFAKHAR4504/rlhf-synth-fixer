@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr959",
+  "team": "synth",
+  "startedAt": "2025-08-22T16:32:15+00:00",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon API Gateway",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
