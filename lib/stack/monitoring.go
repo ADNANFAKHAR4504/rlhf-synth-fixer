@@ -1,6 +1,8 @@
 package stack
 
 import (
+	"strings"
+
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
@@ -16,6 +18,11 @@ func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulu
 	_, err = sns.NewTopicSubscription(ctx, "email-alert", &sns.TopicSubscriptionArgs{Topic: snsTopic.Arn, Protocol: pulumi.String("email"), Endpoint: pulumi.String(notificationEmail)}, pulumi.Provider(usEast1Provider))
 	if err != nil {
 		return err
+	}
+
+	// In PR environments, skip CloudTrail to avoid account-level trail limits and reduce blast radius.
+	if strings.HasPrefix(environment, "pr") {
+		return nil
 	}
 
 	cloudtrailBucket, err := s3.NewBucketV2(ctx, "cloudtrail-bucket", &s3.BucketV2Args{Tags: tags}, pulumi.Provider(usEast1Provider))

@@ -57,7 +57,7 @@ func CreateTapStack(ctx *pulumi.Context) error {
 		return err
 	}
 
-	// DynamoDB Global Table in primary region
+	// DynamoDB Global Table in primary region. Do NOT include the primary region in Replicas.
 	dynamoTable, err := dynamodb.NewTable(ctx, "global-table", &dynamodb.TableArgs{
 		Name:        pulumi.Sprintf("%s-%s-global", projectName, environment),
 		BillingMode: pulumi.String("PAY_PER_REQUEST"),
@@ -66,7 +66,6 @@ func CreateTapStack(ctx *pulumi.Context) error {
 		},
 		HashKey: pulumi.String("id"),
 		Replicas: dynamodb.TableReplicaTypeArray{
-			&dynamodb.TableReplicaTypeArgs{RegionName: pulumi.String("us-east-1")},
 			&dynamodb.TableReplicaTypeArgs{RegionName: pulumi.String("eu-west-1")},
 		},
 		StreamEnabled:  pulumi.Bool(true),

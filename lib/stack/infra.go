@@ -3,6 +3,7 @@ package stack
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/acm"
@@ -111,6 +112,7 @@ func createRegionalInfra(ctx *pulumi.Context, region string, provider pulumi.Pro
 	albSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("alb-sg-%s", region), &ec2.SecurityGroupArgs{
 		VpcId: vpc.ID(),
 		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{Protocol: pulumi.String("tcp"), FromPort: pulumi.Int(80), ToPort: pulumi.Int(80), CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}},
 			&ec2.SecurityGroupIngressArgs{Protocol: pulumi.String("tcp"), FromPort: pulumi.Int(443), ToPort: pulumi.Int(443), CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}},
 		},
 		Egress: ec2.SecurityGroupEgressArray{&ec2.SecurityGroupEgressArgs{Protocol: pulumi.String("-1"), FromPort: pulumi.Int(0), ToPort: pulumi.Int(0), CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}}},
@@ -188,19 +190,26 @@ systemctl restart httpd`),
 		return nil, err
 	}
 
-	cert, err := acm.NewCertificate(ctx, fmt.Sprintf("alb-cert-%s", region), &acm.CertificateArgs{DomainName: pulumi.Sprintf("%s.%s.example.com", projectName, region), ValidationMethod: pulumi.String("DNS"), Tags: tags}, pulumi.Provider(provider))
-	if err != nil {
-		return nil, err
-	}
-
 	targetGroup, err := lb.NewTargetGroup(ctx, fmt.Sprintf("tg-%s", region), &lb.TargetGroupArgs{Port: pulumi.Int(80), Protocol: pulumi.String("HTTP"), VpcId: vpc.ID(), HealthCheck: &lb.TargetGroupHealthCheckArgs{Path: pulumi.String("/healthz"), HealthyThreshold: pulumi.Int(2), UnhealthyThreshold: pulumi.Int(2)}, Tags: tags}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = lb.NewListener(ctx, fmt.Sprintf("alb-listener-%s", region), &lb.ListenerArgs{LoadBalancerArn: alb.Arn, Port: pulumi.Int(443), Protocol: pulumi.String("HTTPS"), SslPolicy: pulumi.String("ELBSecurityPolicy-TLS-1-2-2017-01"), CertificateArn: cert.Arn, DefaultActions: lb.ListenerDefaultActionArray{&lb.ListenerDefaultActionArgs{Type: pulumi.String("forward"), TargetGroupArn: targetGroup.Arn}}}, pulumi.Provider(provider))
-	if err != nil {
-		return nil, err
+	if strings.HasPrefix(environment, "pr") {
+		// PR environments: use HTTP listener to avoid ACM dependency/timeouts.
+		_, err = lb.NewListener(ctx, fmt.Sprintf("alb-listener-%s", region), &lb.ListenerArgs{LoadBalancerArn: alb.Arn, Port: pulumi.Int(80), Protocol: pulumi.String("HTTP"), DefaultActions: lb.ListenerDefaultActionArray{&lb.ListenerDefaultActionArgs{Type: pulumi.String("forward"), TargetGroupArn: targetGroup.Arn}}}, pulumi.Provider(provider))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		cert, err := acm.NewCertificate(ctx, fmt.Sprintf("alb-cert-%s", region), &acm.CertificateArgs{DomainName: pulumi.Sprintf("%s.%s.example.com", projectName, region), ValidationMethod: pulumi.String("DNS"), Tags: tags}, pulumi.Provider(provider))
+		if err != nil {
+			return nil, err
+		}
+		_, err = lb.NewListener(ctx, fmt.Sprintf("alb-listener-%s", region), &lb.ListenerArgs{LoadBalancerArn: alb.Arn, Port: pulumi.Int(443), Protocol: pulumi.String("HTTPS"), SslPolicy: pulumi.String("ELBSecurityPolicy-TLS-1-2-2017-01"), CertificateArn: cert.Arn, DefaultActions: lb.ListenerDefaultActionArray{&lb.ListenerDefaultActionArgs{Type: pulumi.String("forward"), TargetGroupArn: targetGroup.Arn}}}, pulumi.Provider(provider))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	asg, err := autoscaling.NewGroup(ctx, fmt.Sprintf("asg-%s", region), &autoscaling.GroupArgs{

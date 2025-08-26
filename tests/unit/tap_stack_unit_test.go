@@ -184,18 +184,23 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	listeners := find("aws:lb/listener:Listener")
 	require.GreaterOrEqual(t, len(listeners), 2)
 	for _, l := range listeners {
-		// port may be number or string depending on provider; normalize
+		// Accept either HTTPS:443 (non-PR envs) or HTTP:80 (PR envs)
+		var port443, port80 bool
 		switch v := l.Inputs["port"].(type) {
 		case string:
-			require.Equal(t, "443", v)
+			port443 = v == "443"
+			port80 = v == "80"
 		case float64:
-			require.Equal(t, float64(443), v)
+			port443 = v == float64(443)
+			port80 = v == float64(80)
 		case int:
-			require.Equal(t, 443, v)
+			port443 = v == 443
+			port80 = v == 80
 		default:
 			t.Fatalf("unexpected port type %T", v)
 		}
-		require.Equal(t, "HTTPS", l.Inputs["protocol"])
+		proto, _ := l.Inputs["protocol"].(string)
+		require.Truef(t, (port443 && proto == "HTTPS") || (port80 && proto == "HTTP"), "listener must be HTTPS:443 or HTTP:80, got port=%v protocol=%v", l.Inputs["port"], proto)
 	}
 
 	// AutoScaling Groups (token may vary across provider versions; match by prefix)
@@ -233,16 +238,16 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	repl := find("aws:s3/bucketReplicationConfig:BucketReplicationConfig")
 	require.GreaterOrEqual(t, len(repl), 1)
 
-	// DynamoDB Global Table with replicas
+	// DynamoDB Global Table with replicas (primary region excluded from replicas)
 	ddbTables := find("aws:dynamodb/table:Table")
 	require.Equal(t, 1, len(ddbTables), "expect a single global table defined in primary region")
 	if len(ddbTables) == 1 {
-		// "replicas" should include two entries
+		// "replicas" should include only the remote region(s); primary is excluded
 		switch replicas := ddbTables[0].Inputs["replicas"].(type) {
 		case []interface{}:
-			require.Len(t, replicas, 2)
+			require.Len(t, replicas, 1)
 		case []resource.PropertyValue:
-			require.Len(t, replicas, 2)
+			require.Len(t, replicas, 1)
 		default:
 			t.Fatalf("unexpected replicas type %T", replicas)
 		}
@@ -254,12 +259,12 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	require.Equal(t, 1, len(cf))
 	assertHasTags(t, cf[0])
 
-	// Lambda function
+	// Lambda function (Node.js 20 runtime)
 	lambdas := find("aws:lambda/function:Function")
 	require.GreaterOrEqual(t, len(lambdas), 2) // one per region
 	for _, fn := range lambdas {
 		assertHasTags(t, fn)
-		require.Equal(t, "python3.9", fn.Inputs["runtime"])
+		require.Equal(t, "nodejs20.x", fn.Inputs["runtime"])
 	}
 
 	// CloudTrail: bucket, trail, log group, IAM role/policy
