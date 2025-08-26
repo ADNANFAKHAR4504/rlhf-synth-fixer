@@ -36,6 +36,7 @@ import software.amazon.awssdk.services.config.ConfigClient;
 import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+import software.amazon.awssdk.services.sts.StsClient;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -77,6 +78,13 @@ public class MainIntegrationTest {
 
     @BeforeAll
     void setUp() {
+        // Check if AWS credentials are available
+        if (!hasAwsCredentials()) {
+            System.out.println("⚠️ AWS credentials not available, skipping integration tests");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "AWS credentials not available");
+            return;
+        }
+        
         // Initialize AWS SDK clients
         cloudFormationClient = CloudFormationClient.builder().region(AWS_REGION).build();
         s3Client = S3Client.builder().region(AWS_REGION).build();
@@ -852,6 +860,21 @@ public class MainIntegrationTest {
     }
 
     // Helper methods
+    private boolean hasAwsCredentials() {
+        try {
+            // Try to get AWS credentials using the default credential provider chain
+            StsClient stsClient = StsClient.builder()
+                .region(AWS_REGION)
+                .build();
+            stsClient.getCallerIdentity();
+            stsClient.close();
+            return true;
+        } catch (Exception e) {
+            System.out.println("AWS credentials check failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
     private String getKmsKeyFromBucket() {
         String bucketName = stackOutputs.get("S3BucketName");
         
