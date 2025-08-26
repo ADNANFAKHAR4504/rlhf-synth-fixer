@@ -37,10 +37,10 @@ func buildAppStack(tb testing.TB) *testSetup {
 // getTemplate returns the CloudFormation template for the stack
 func getTemplate(tb testing.TB, setup *testSetup) assertions.Template {
 	tb.Helper()
-	
+
 	// Synthesize the app to generate CloudFormation templates
 	setup.app.Synth(nil)
-	
+
 	return assertions.Template_FromStack(setup.stack.Stack, nil)
 }
 

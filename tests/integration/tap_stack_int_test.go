@@ -26,10 +26,10 @@ import (
 )
 
 type DeploymentOutputs struct {
-	VpcId                string `json:"VpcId,omitempty"`
-	BastionInstanceId    string `json:"BastionInstanceId,omitempty"`
-	BastionPublicIp      string `json:"BastionPublicIp,omitempty"`
-	ArtifactsBucketName  string `json:"ArtifactsBucketName,omitempty"`
+	VpcId               string `json:"VpcId,omitempty"`
+	BastionInstanceId   string `json:"BastionInstanceId,omitempty"`
+	BastionPublicIp     string `json:"BastionPublicIp,omitempty"`
+	ArtifactsBucketName string `json:"ArtifactsBucketName,omitempty"`
 }
 
 func loadDeploymentOutputs(t *testing.T) *DeploymentOutputs {
@@ -141,7 +141,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		vpc := vpcResp.Vpcs[0]
 		assert.Equal(t, "10.0.0.0/16", *vpc.CidrBlock, "VPC should have correct CIDR block")
-		
+
 		// Verify Environment tag
 		envTag := findTag(vpc.Tags, "Environment")
 		assert.Equal(t, "Production", envTag, "VPC should be tagged with Environment=Production")
@@ -156,7 +156,7 @@ func TestTapStackIntegration(t *testing.T) {
 			},
 		})
 		require.NoError(t, err, "Failed to describe subnets")
-		
+
 		// Should have 4 subnets total (2 public, 2 private across 2 AZs)
 		assert.Len(t, subnetResp.Subnets, 4, "Should have 4 subnets (2 public + 2 private)")
 
@@ -166,7 +166,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		for _, subnet := range subnetResp.Subnets {
 			azSet[*subnet.AvailabilityZone] = true
-			
+
 			// Check if subnet is public (has route to internet gateway)
 			routeResp, err := ec2Client.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
 				Filters: []ec2types.Filter{
@@ -217,18 +217,18 @@ func TestTapStackIntegration(t *testing.T) {
 		require.Len(t, instanceResp.Reservations[0].Instances, 1, "Should find bastion instance")
 
 		instance := instanceResp.Reservations[0].Instances[0]
-		
+
 		// Verify instance is in public subnet
 		assert.NotNil(t, instance.PublicIpAddress, "Bastion should have public IP")
 		assert.Equal(t, outputs.BastionPublicIp, *instance.PublicIpAddress, "Public IP should match output")
-		
+
 		// Verify instance type
 		assert.Equal(t, ec2types.InstanceTypeT3Micro, instance.InstanceType, "Bastion should be t3.micro")
-		
+
 		// Verify Environment tag
 		envTag := findInstanceTag(instance.Tags, "Environment")
 		assert.Equal(t, "Production", envTag, "Bastion should be tagged with Environment=Production")
-		
+
 		roleTag := findInstanceTag(instance.Tags, "Role")
 		assert.Equal(t, "Bastion", roleTag, "Bastion should be tagged with Role=Bastion")
 
@@ -293,7 +293,7 @@ func TestTapStackIntegration(t *testing.T) {
 		})
 		require.NoError(t, err, "Should be able to get bucket encryption")
 		require.Len(t, encryptionResp.ServerSideEncryptionConfiguration.Rules, 1, "Should have one encryption rule")
-		
+
 		rule := encryptionResp.ServerSideEncryptionConfiguration.Rules[0]
 		assert.Equal(t, s3types.ServerSideEncryptionAes256, rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm, "Should use AES256 encryption")
 	})

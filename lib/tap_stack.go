@@ -133,11 +133,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	})
 
 	bastion := awsec2.NewInstance(stack, jsii.String("BastionHost"), &awsec2.InstanceProps{
-		Vpc:          vpc,
-		InstanceType: awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
-		MachineImage: ami,
+		Vpc:           vpc,
+		InstanceType:  awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
+		MachineImage:  ami,
 		SecurityGroup: bastionSg,
-		VpcSubnets:   &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PUBLIC},
+		VpcSubnets:    &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PUBLIC},
 		// Optional: replace with a real key pair name if you plan to use SSH keys
 		// KeyName: jsii.String("your-keypair-name"),
 		AssociatePublicIpAddress: jsii.Bool(true),
