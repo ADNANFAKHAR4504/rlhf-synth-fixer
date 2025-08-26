@@ -12,4 +12,4 @@ This document details the failures in the original Model response
 
 4. Model used Deprecated parameter on the EIP module and referencing old and deprecated version of the PostgreSQL Database Engine
 
-5. Incompatible instance class. The RDS DB instance model provided was not supoorted. Cluster instance properties were also missing from the module provided
+5. Incompatible instance class. The RDS DB instance model provided was not supoorted. Cluster instance properties were also missing from the module provided.

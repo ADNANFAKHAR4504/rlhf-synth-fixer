@@ -1,4 +1,5 @@
 ``````python
+
 from typing import Optional
 
 import pulumi
@@ -10,17 +11,6 @@ import json
 import os
 
 class TapStackArgs:
-    """
-    TapStackArgs defines the input arguments for the TapStack Pulumi component.
-
-    Args:
-        environment (str): The deployment environment (e.g., 'Production', 'Development').
-        project (str): The project name.
-        owner (str): The owner/team responsible for this infrastructure.
-        region (str): The AWS region to deploy resources (e.g., 'us-east-1', 'us-west-2').
-        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment.
-        tags (Optional[dict]): Optional default tags to apply to resources.
-    """
 
     def __init__(self, 
                  environment: str,
@@ -514,7 +504,7 @@ if __name__ == "tap_stack":
         environment=config.require("environment"),
         project=config.require("project"),
         owner=config.require("owner"),
-        region=aws_config.get("region") or "us-east-1",  # Default to us-east-1 if not specified
+        region=aws_config.get("region") or "us-west-2",
         tags={
             "ManagedBy": "Pulumi",
             "Environment": config.require("environment"),
