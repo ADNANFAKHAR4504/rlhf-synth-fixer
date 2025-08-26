@@ -1,0 +1,50 @@
+{
+  "task_id": "trainr314",
+  "problem_id": "MultiEnvironmentConsistencyReplication_CDK_TypeScript",
+  "po_id": "trainr308",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-08-25T04:57:03+00:00",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication",
+    "Network Infrastructure Design",
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "IaC Optimization"
+  ],
+  "subtask": "Network Infrastructure Design",
+  "platform": "cdk",
+  "language": "typescript",
+  "difficulty": "expert",
+  "category": "Multi-Environment Consistency & Replication",
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudFormation"
+  ],
+  "constraints": [
+    "Use AWS as the cloud provider",
+    "Ensure that the VPC in both environments is created with CIDR block 10.0.0.0/16",
+    "Both environments should have a public and a private subnet in different availability zones",
+    "Deploy a NAT Gateway in the public subnet for internet access in the private subnet",
+    "Use CDK cross-stack references for managing dependencies between regions",
+    "Ensure IAM roles are created with minimum privilege principle in mind for resource access",
+    "Replication must occur between US-East-1 and US-West-2 regions"
+  ],
+  "description": "You are tasked with setting up multi-environment consistency and replication using AWS CDK with TypeScript for an application deployed on AWS. The application needs to run in two separate environments that mirror each other, one in the US-East-1 region and another in the US-West-2 region. Each environment should have a VPC with a CIDR block of 10.0.0.0/16, containing both public and private subnets spread across different availability zones. Implement a NAT Gateway in the public subnet for private subnet access to the internet. Use CDK's cross-stack references for managing dependencies. Follow the principle of least privilege when defining IAM roles. Expected output: Write CDK TypeScript code that adheres to the specified requirements. The solution should be able to successfully create and manage the described AWS infrastructure environments, ensuring the replication of resources as defined.",
+  "environment": "Create and manage infrastructure to support consistent application environments across multiple AWS regions using AWS CDK with TypeScript.",
+  "expected_output": "A complete CDK TypeScript application with multi-region support that provisions identical infrastructure in US-East-1 and US-West-2 regions.",
+  "references": [
+    "https://docs.aws.amazon.com/cdk/v2/guide/home.html",
+    "https://docs.aws.amazon.com/cdk/api/v2/docs/aws-construct-library.html",
+    "https://docs.aws.amazon.com/cdk/v2/guide/stack_how_to_create_multiple_stacks.html"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}

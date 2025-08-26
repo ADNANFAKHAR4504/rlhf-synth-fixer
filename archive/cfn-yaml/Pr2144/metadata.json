@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292000",
+  "team": "3",
+  "startedAt": "2025-08-24T17:28:36.400Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "Route53",
+    "SecretsManager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": ""
+}

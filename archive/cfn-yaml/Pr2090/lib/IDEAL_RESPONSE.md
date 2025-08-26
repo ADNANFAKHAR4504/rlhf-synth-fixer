@@ -1,0 +1,538 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Account CI/CD Pipeline for Web App Deployment'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'my-cicd-project'
+    Description: 'Name of the project for resource naming and tagging'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name for resource naming and tagging'
+
+  CodeStarConnectionArn:
+    Type: String
+    Description: 'ARN of the CodeStar Connection for GitHub integration'
+    Default: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/your-connection-id'
+    ConstraintDescription: 'Must be a valid CodeStar Connection ARN'
+
+  GitHubRepositoryOwner:
+    Type: String
+    Default: 'your-github-username'
+    Description: 'GitHub repository owner (username or organization)'
+    AllowedPattern: '^[a-zA-Z0-9-_.]+$'
+    ConstraintDescription: 'Must be a valid GitHub username or organization name'
+
+  GitHubRepositoryName:
+    Type: String
+    Default: 'your-repository-name'
+    Description: 'GitHub repository name'
+    AllowedPattern: '^[a-zA-Z0-9-_.]+$'
+    ConstraintDescription: 'Must be a valid GitHub repository name'
+
+  GitHubBranchName:
+    Type: String
+    Default: 'main'
+    Description: 'GitHub branch name to track'
+    AllowedPattern: '^[a-zA-Z0-9-_./]+$'
+    ConstraintDescription: 'Must be a valid Git branch name'
+
+  ApprovalNotificationEmail:
+    Type: String
+    Default: 'admin@example.com'
+    Description: 'Email address for manual approval notifications'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address'
+
+  KeyPairName:
+    Type: String
+    Default: ''
+    Description: 'EC2 Key Pair for SSH access (leave empty to disable SSH)'
+
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
+Resources:
+  # =====================================================
+  # S3 BUCKET FOR PIPELINE ARTIFACTS
+  # =====================================================
+  PipelineArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # =====================================================
+  # CODEPIPELINE SERVICE ROLE
+  # =====================================================
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PipelineExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 permissions for artifacts - Fixed ARN format
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
+                  - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}'
+              # CodeBuild permissions
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: '*'
+              # CloudFormation permissions
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:ValidateTemplate
+                Resource: '*'
+              # CloudFormation permissions for deployment
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource: '*'
+              # SNS for manual approval
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ManualApprovalTopic
+              # CodeStar Connections permissions
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: !Ref CodeStarConnectionArn
+
+  # =====================================================
+  # CODEBUILD ROLES AND PROJECTS
+  # =====================================================
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-Build'
+      Description: 'Build stage for web application'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - aws --version
+                - echo Build started on `date`
+            build:
+              commands:
+                - echo Build phase started on `date`
+                - # Add your build commands here
+                - npm install
+                - npm run build
+            post_build:
+              commands:
+                - echo Build completed on `date`
+          artifacts:
+            files:
+              - '**/*'
+
+  TestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-Test'
+      Description: 'Test stage for web application'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_MEDIUM
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Test phase started on `date`
+            build:
+              commands:
+                - echo Running tests...
+                - npm test
+                - npm run test:integration
+            post_build:
+              commands:
+                - echo Tests completed on `date`
+
+  # =====================================================
+  # SNS TOPIC FOR MANUAL APPROVAL
+  # =====================================================
+  ManualApprovalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: 'Pipeline Manual Approval Required'
+
+  ManualApprovalSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref ManualApprovalTopic
+      Endpoint: !Ref ApprovalNotificationEmail
+
+  # =====================================================
+  # PIPELINE NOTIFICATIONS
+  # =====================================================
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: 'Pipeline Notifications'
+
+  # =====================================================
+  # EVENTBRIDGE RULE FOR PIPELINE STATE CHANGES
+  # =====================================================
+  PipelineEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-pipeline-events'
+      Description: 'Capture pipeline state changes'
+      EventPattern:
+        source:
+          - aws.codepipeline
+        detail-type:
+          - CodePipeline Pipeline Execution State Change
+          - CodePipeline Stage Execution State Change
+        detail:
+          pipeline:
+            - !Ref CodePipeline
+          state:
+            - FAILED
+            - SUCCEEDED
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: PipelineNotificationTarget
+
+  # =====================================================
+  # THE MAIN CODEPIPELINE
+  # =====================================================
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${AWS::StackName}-Pipeline'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref PipelineArtifactsBucket
+      Stages:
+        # SOURCE STAGE
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Sub '${GitHubRepositoryOwner}/${GitHubRepositoryName}'
+                BranchName: !Ref GitHubBranchName
+                DetectChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        # BUILD STAGE
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref BuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+
+        # TEST STAGE
+        - Name: Test
+          Actions:
+            - Name: TestAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: BuildOutput
+              OutputArtifacts:
+                - Name: TestOutput
+
+        # MANUAL APPROVAL
+        - Name: Approval
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref ManualApprovalTopic
+                CustomData: !Sub 'Please review and approve deployment for ${ProjectName} ${Environment} environment'
+
+        # DEPLOY TO S3
+        - Name: Deploy
+          Actions:
+            - Name: DeployAction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                BucketName: !Ref PipelineArtifactsBucket
+                Extract: true
+                ObjectKey: !Sub 'deployments/${ProjectName}-${Environment}'
+              InputArtifacts:
+                - Name: TestOutput
+
+  # =====================================================
+  # SAMPLE EC2 INSTANCE FOR DEMONSTRATION
+  # =====================================================
+  SampleVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+
+  SampleSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SampleVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Subnet'
+
+  SampleInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SampleVPC
+      InternetGatewayId: !Ref SampleInternetGateway
+
+  SampleRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SampleVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RouteTable'
+
+  SampleRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref SampleRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SampleInternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SampleSubnet
+      RouteTableId: !Ref SampleRouteTable
+
+  SampleSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for sample EC2 instance
+      VpcId: !Ref SampleVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - !If
+          - HasKeyPair
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp: 0.0.0.0/0
+          - !Ref AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecurityGroup'
+
+  SampleEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: t3.micro
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref AWS::NoValue]
+      SubnetId: !Ref SampleSubnet
+      SecurityGroupIds:
+        - !Ref SampleSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<h1>Hello from ${AWS::StackName}</h1>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Instance'
+
+Outputs:
+  PipelineName:
+    Description: 'Name of the created CodePipeline'
+    Value: !Ref CodePipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineName'
+
+  PipelineUrl:
+    Description: 'URL of the CodePipeline in AWS Console'
+    Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view'
+
+  ArtifactsBucket:
+    Description: 'S3 bucket for pipeline artifacts'
+    Value: !Ref PipelineArtifactsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucket'
+
+  CodeStarConnectionArn:
+    Description: 'ARN of the CodeStar Connection to GitHub'
+    Value: !Ref CodeStarConnectionArn
+    Export:
+      Name: !Sub '${AWS::StackName}-GitHubConnection'
+
+  ManualApprovalTopicArn:
+    Description: 'SNS Topic ARN for manual approval notifications'
+    Value: !Ref ManualApprovalTopic
+
+  PipelineNotificationTopicArn:
+    Description: 'SNS Topic ARN for pipeline notifications'
+    Value: !Ref PipelineNotificationTopic
+
+  SampleInstanceId:
+    Description: 'ID of the sample EC2 instance'
+    Value: !Ref SampleEC2Instance
+
+  SampleInstancePublicIP:
+    Description: 'Public IP of the sample EC2 instance'
+    Value: !GetAtt SampleEC2Instance.PublicIp
+    Condition: HasKeyPair
+
+  VPCId:
+    Description: 'ID of the created VPC'
+    Value: !Ref SampleVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+```
