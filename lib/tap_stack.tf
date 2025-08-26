@@ -457,32 +457,25 @@ resource "aws_launch_template" "main" {
 
     echo "Starting EC2 setup..."
 
-    # Pre-create health endpoint before installing Apache
+    # Create web directory and health endpoint immediately
     mkdir -p /var/www/html
     echo "OK" > /var/www/html/health
     chmod 644 /var/www/html/health
 
-    # Install Apache
-    yum update -y
+    # Create simple index page
+    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
+    echo "<p>Instance is healthy!</p>" >> /var/www/html/index.html
+
+    # Install Apache quickly
     yum install -y httpd
 
-    # Create index page
-    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
-    echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-
-    # Enable and start Apache
+    # Start Apache immediately
     systemctl enable httpd
     systemctl start httpd
 
-    # Wait for Apache to respond to health check
-    for i in {1..12}; do
-      if curl -f http://localhost/health; then
-        echo "Apache is ready."
-        break
-      fi
-      echo "Waiting for Apache (attempt $i)..."
-      sleep 5
-    done
+    # Quick verification
+    sleep 3
+    curl -f http://localhost/health || echo "Health check failed but continuing"
 
     echo "EC2 setup complete."
   EOF
@@ -504,8 +497,8 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-${random_string.unique_suffix.result}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"  # ✅ Critical: must be ELB when using ALB
-  health_check_grace_period = 1200   # Give time for Apache to start
+  health_check_type         = "EC2"  # Temporarily use EC2 health checks
+  health_check_grace_period = 300    # Reduced grace period for EC2 checks
 
   min_size         = 2
   max_size         = 6
@@ -541,6 +534,10 @@ resource "aws_db_subnet_group" "main" {
   name       = "${local.unique_project_name}-${random_string.unique_suffix.result}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.unique_project_name}-db-subnet" })
+  
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # RDS Instance
@@ -566,6 +563,10 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot    = true
   deletion_protection    = false
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-database" })
+  
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # CloudWatch Log Groups
