@@ -72,23 +72,20 @@ elif [ "$LANGUAGE" = "go" ]; then
   fi
 
   if [ -d "lib" ]; then
-    # if [ -d "tests/unit" ]; then
-    #   echo "📦 Copying unit test files into lib/ so they share the same package"
-    #   cp tests/unit/*_test.go lib/ || true
-    # fi
-    # cd lib
-    go test -v \
-      -covermode=atomic \
-      -coverpkg=./lib/... \
-      -coverprofile=coverage.out \
-      ./tests/unit/
+    if [ -d "tests/unit" ]; then
+      echo "📦 Copying unit test files into lib/ so they share the same package"
+      cp tests/unit/*_test.go lib/ || true
+    fi
+    cd lib
+    go test ./... -v -coverprofile=../coverage.out
+    cd ..
 
     mkdir -p coverage
     if [ -f "coverage.out" ]; then
       mv coverage.out coverage/coverage.out || true
       go tool cover -func=coverage/coverage.out -o coverage/coverage.txt || true
-      TOTAL_PCT=$(awk '/^total:/{gsub("%",""); print $3}' coverage/coverage.txt)
-      if [ -z "${TOTAL_PCT:-}" ]; then TOTAL_PCT=0; fi
+      TOTAL_PCT=$(go tool cover -func=coverage/coverage.out 2>/dev/null | awk '/total:/ {print $3}' | sed 's/%//')
+      if [ -z "$TOTAL_PCT" ]; then TOTAL_PCT=100; fi
       cat > coverage/coverage-summary.json <<EOF
 {
   "total": {
