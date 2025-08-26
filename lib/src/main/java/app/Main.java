@@ -409,7 +409,7 @@ class SecureInfrastructureStack extends Stack {
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0_35)
                         .build()))
-                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.T3_MICRO)
+                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of("t3", "micro"))
                 .vpc(vpc)
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PRIVATE_ISOLATED)
