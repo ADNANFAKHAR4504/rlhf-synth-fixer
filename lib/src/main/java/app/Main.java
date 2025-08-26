@@ -169,7 +169,7 @@ class TapStackDev extends Stack {
         // Create RDS PostgreSQL Multi-AZ Instance
         DatabaseInstance database = DatabaseInstance.Builder.create(this, "PostgreSQLDatabase")
                 .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_15_4)
+                        .version(PostgresEngineVersion.VER_15_12)
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
                 .vpc(vpc)

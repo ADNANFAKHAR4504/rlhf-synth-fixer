@@ -178,7 +178,7 @@ public class TapStackDev extends Stack {
         DatabaseInstance database = DatabaseInstance.Builder.create(this, "PostgreSQLDatabase" + environmentSuffix)
                 .instanceIdentifier("tap-db-" + environmentSuffix)
                 .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_15_4)
+                        .version(PostgresEngineVersion.VER_15_12)
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
                         InstanceClass.BURSTABLE3, 
