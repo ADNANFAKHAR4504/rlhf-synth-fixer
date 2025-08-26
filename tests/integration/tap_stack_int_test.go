@@ -23,7 +23,7 @@ import (
 func loadDeploymentOutputs(t *testing.T) map[string]string {
 	t.Helper()
 
-	outputsPath := "../../cfn-outputs/flat-outputs.json"
+	outputsPath := "../cfn-outputs/flat-outputs.json"
 	data, err := os.ReadFile(outputsPath)
 	if err != nil {
 		// If outputs file doesn't exist, create mock outputs for testing
@@ -31,7 +31,7 @@ func loadDeploymentOutputs(t *testing.T) map[string]string {
 		return map[string]string{
 			"S3BucketName":    "secure-webapp-storage-test-12345",
 			"KMSKeyId":        "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
-			"KMSKeyAlias":     "alias/s3-web-app-enc-key-test",
+			"KMSKeyAlias":     "alias/s3-web-apps-enc-key-pr2202",
 			"CloudWatchAlarm": "SecurityViolation-test",
 		}
 	}
@@ -169,7 +169,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 		// Get key alias from outputs or generate expected alias
 		keyAlias := outputs["KMSKeyAlias"]
 		if keyAlias == "" {
-			keyAlias = fmt.Sprintf("alias/s3-web-app-enc-key-%s", envSuffix)
+			keyAlias = fmt.Sprintf("alias/s3-web-apps-enc-key-%s", envSuffix)
 		}
 
 		// Find the KMS key by alias
