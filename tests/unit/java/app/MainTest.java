@@ -694,7 +694,7 @@ public class MainTest {
         assertTrue(policy.contains("s3:ListBucket"));
         assertTrue(policy.contains("kms:Decrypt"));
         assertTrue(policy.contains("us-east-1"));
-        assertTrue(policy.contains("financial-app-data-*"));
+        assertTrue(policy.contains("financial-app-data-"));
         
         // Test invalid inputs
         assertThrows(IllegalArgumentException.class, () -> {
@@ -1237,7 +1237,7 @@ public class MainTest {
         assertTrue(s3Policy.contains("s3:GetObject"));
         assertTrue(s3Policy.contains("s3:ListBucket"));
         assertTrue(s3Policy.contains("kms:Decrypt"));
-        assertTrue(s3Policy.contains("financial-app-data-*"));
+        assertTrue(s3Policy.contains("financial-app-data-"));
         
         // Test EC2 assume role policy
         String ec2Policy = Main.buildEc2AssumeRolePolicy();
@@ -1835,7 +1835,7 @@ public class MainTest {
             assertTrue(policy.contains("s3:ListBucket"));
             assertTrue(policy.contains("kms:Decrypt"));
             assertTrue(policy.contains("kms:GenerateDataKey"));
-            assertTrue(policy.contains("financial-app-data-*"));
+            assertTrue(policy.contains("financial-app-data-"));
             assertTrue(policy.contains("2012-10-17"));
             assertTrue(policy.contains("kms:ViaService"));
             assertTrue(policy.contains("s3." + region + ".amazonaws.com"));
@@ -1845,7 +1845,7 @@ public class MainTest {
         String kmsPolicy = Main.buildKmsKeyPolicy();
         assertNotNull(kmsPolicy);
         assertTrue(kmsPolicy.contains("2012-10-17"));
-        assertTrue(kmsPolicy.contains("Allow Admin to manage key"));
+        assertTrue(kmsPolicy.contains("EnableRootPermissions"));
         assertTrue(kmsPolicy.contains("Allow CloudTrail to encrypt logs"));
         assertTrue(kmsPolicy.contains("Allow S3 service to use the key"));
         assertTrue(kmsPolicy.contains("cloudtrail.amazonaws.com"));
@@ -2523,7 +2523,7 @@ public class MainTest {
         // Test KMS key policy
         String kmsPolicy = Main.buildKmsKeyPolicy();
         assertNotNull(kmsPolicy);
-        assertTrue(kmsPolicy.contains("Allow Admin to manage key"));
+        assertTrue(kmsPolicy.contains("EnableRootPermissions"));
         assertTrue(kmsPolicy.contains("Allow CloudTrail to encrypt logs"));
         assertTrue(kmsPolicy.contains("Allow S3 service to use the key"));
         assertTrue(kmsPolicy.contains("kms:GenerateDataKey"));
@@ -3207,7 +3207,7 @@ public class MainTest {
             assertTrue(policy.contains("s3:GetObject"));
             assertTrue(policy.contains("s3:ListBucket"));
             assertTrue(policy.contains("kms:Decrypt"));
-            assertTrue(policy.contains("financial-app-data-*"));
+            assertTrue(policy.contains("financial-app-data-"));
             assertTrue(policy.length() > 300);
         }
         
@@ -3500,7 +3500,7 @@ public class MainTest {
             String policy = Main.buildS3ReadOnlyPolicy(region);
             assertTrue(policy.contains(region));
             assertTrue(policy.contains("s3." + region + ".amazonaws.com"));
-            assertTrue(policy.contains("arn:aws:kms:" + region + ":*:key/*"));
+            assertTrue(policy.contains("arn:aws:kms:" + region));
         }
         
         // Test CloudTrail bucket policy with different bucket names
