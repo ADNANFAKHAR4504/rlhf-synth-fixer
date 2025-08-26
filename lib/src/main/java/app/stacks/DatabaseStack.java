@@ -131,6 +131,7 @@ public final class DatabaseStack extends Stack {
             return rdsKmsKey; 
         }
 
+        @SuppressWarnings("checkstyle:HiddenField")
         public static final class Builder {
             private StackProps stackPropsValue;
             private IVpc vpcValue;

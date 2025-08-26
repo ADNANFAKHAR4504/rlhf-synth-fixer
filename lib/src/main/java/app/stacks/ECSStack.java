@@ -21,6 +21,7 @@ import software.amazon.awscdk.services.ecs.Protocol;
 import software.amazon.awscdk.services.ecs.Secret;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.kms.IKey;
+import software.amazon.awscdk.services.logs.ILogGroup;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
@@ -47,10 +48,7 @@ public final class ECSStack extends Stack {
                 .containerInsights(true)
                 .build();
 
-        LogGroup logGroup = LogGroup.Builder.create(this, "ECSLogGroup")
-                .logGroupName("/aws/ecs/secure-webapp-" + environmentSuffix)
-                .retention(RetentionDays.ONE_MONTH)
-                .build();
+        ILogGroup logGroup = ecsProps.getLogGroup();
 
         FargateTaskDefinition taskDefinition = FargateTaskDefinition.Builder.create(this, "WebAppTaskDef")
                 .memoryLimitMiB(512)
@@ -113,11 +111,13 @@ public final class ECSStack extends Stack {
         private final Role ecsTaskRole;
         private final Role ecsExecutionRole;
         private final ISecret databaseSecret;
+        private final ILogGroup logGroup;
 
         private ECSStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
                              final ISecurityGroup ecsSecurityGroupValue, 
                              final IKey kmsKeyValue, final Role ecsTaskRoleValue, 
-                             final Role ecsExecutionRoleValue, final ISecret databaseSecretValue) {
+                             final Role ecsExecutionRoleValue, final ISecret databaseSecretValue,
+                             final ILogGroup logGroupValue) {
             this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.ecsSecurityGroup = ecsSecurityGroupValue;
@@ -125,6 +125,7 @@ public final class ECSStack extends Stack {
             this.ecsTaskRole = ecsTaskRoleValue;
             this.ecsExecutionRole = ecsExecutionRoleValue;
             this.databaseSecret = databaseSecretValue;
+            this.logGroup = logGroupValue;
         }
 
         public static Builder builder() {
@@ -159,6 +160,11 @@ public final class ECSStack extends Stack {
             return databaseSecret; 
         }
 
+        public ILogGroup getLogGroup() {
+            return logGroup; 
+        }
+
+        @SuppressWarnings("checkstyle:HiddenField")
         public static final class Builder {
             private StackProps stackPropsValue;
             private IVpc vpcValue;
@@ -167,6 +173,7 @@ public final class ECSStack extends Stack {
             private Role ecsTaskRoleValue;
             private Role ecsExecutionRoleValue;
             private ISecret databaseSecretValue;
+            private ILogGroup logGroupValue;
 
             public Builder stackProps(final StackProps stackPropsParam) { 
                 this.stackPropsValue = stackPropsParam; 
@@ -203,9 +210,14 @@ public final class ECSStack extends Stack {
                 return this; 
             }
 
+            public Builder logGroup(final ILogGroup logGroupParam) {
+                this.logGroupValue = logGroupParam;
+                return this;
+            }
+
             public ECSStackProps build() {
                 return new ECSStackProps(stackPropsValue, vpcValue, ecsSecurityGroupValue, kmsKeyValue, 
-                                       ecsTaskRoleValue, ecsExecutionRoleValue, databaseSecretValue);
+                                       ecsTaskRoleValue, ecsExecutionRoleValue, databaseSecretValue, logGroupValue);
             }
         }
     }

@@ -40,6 +40,7 @@ final class TapStackProps {
         return new Builder();
     }
 
+    @SuppressWarnings("checkstyle:HiddenField")
     public static final class Builder {
         private String envSuffixValue;
         private StackProps stackPropsValue;
@@ -144,6 +145,7 @@ final class TapStack extends Stack {
                         .ecsTaskRole(securityStack.getEcsTaskRole())
                         .ecsExecutionRole(securityStack.getEcsExecutionRole())
                         .databaseSecret(databaseStack.getDatabaseSecret())
+                        .logGroup(securityStack.getEcsLogGroup())
                         .build()
         );
 

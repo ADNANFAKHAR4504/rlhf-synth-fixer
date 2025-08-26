@@ -10,6 +10,9 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.logs.ILogGroup;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -19,9 +22,20 @@ public final class SecurityStack extends Stack {
     private final IKey rdsKmsKey;
     private final Role ecsTaskRole;
     private final Role ecsExecutionRole;
+    private final ILogGroup ecsLogGroup;
 
     public SecurityStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        if (environmentSuffix == null || environmentSuffix.isEmpty()) {
+            environmentSuffix = "dev";
+        }
+
+        // Centralized ECS Log Group (prevents cross-stack references from SecurityStack to ECSStack)
+        this.ecsLogGroup = LogGroup.Builder.create(this, "ECSLogGroup")
+                .logGroupName("/aws/ecs/secure-webapp-" + environmentSuffix)
+                .retention(RetentionDays.ONE_MONTH)
+                .build();
 
         // Create customer-managed KMS key for general encryption
         this.kmsKey = Key.Builder.create(this, "GeneralKMSKey")
@@ -81,5 +95,9 @@ public final class SecurityStack extends Stack {
 
     public Role getEcsExecutionRole() {
         return ecsExecutionRole;
+    }
+
+    public ILogGroup getEcsLogGroup() {
+        return ecsLogGroup;
     }
 }
