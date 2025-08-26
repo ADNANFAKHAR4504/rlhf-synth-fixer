@@ -35,6 +35,7 @@ import java.util.Map;
  * WebApp Infrastructure Stack for AWS Resource Migration
  * Supports migration from us-east-1 to us-west-2 with data integrity and security
  */
+
 public class WebAppStack extends ComponentResource {
 
   private final WebAppStackConfig config;
@@ -45,22 +46,34 @@ public class WebAppStack extends ComponentResource {
   private final Instance webInstance;
   private final Bucket dataBucket;
   private final Table dataTable;
+  // Expose networking resources for testing
+  public final InternetGateway internetGateway;
+  public final RouteTable routeTable;
+  public final RouteTableAssociation routeTableAssociation1;
+  public final RouteTableAssociation routeTableAssociation2;
 
   public WebAppStack(String name, ComponentResourceOptions options) {
     super("webapp:infrastructure:WebAppStack", name, options);
     this.config = new WebAppStackConfig();
 
     // Create VPC and networking resources
-    var network = createNetworkResources();
-    this.vpc = network.vpc;
-    this.publicSubnet1 = network.publicSubnet1;
-    this.publicSubnet2 = network.publicSubnet2;
+
+    // Create VPC and networking resources and assign to fields
+    var networkResources = createNetworkResources();
+    this.vpc = networkResources.vpc;
+    this.publicSubnet1 = networkResources.publicSubnet1;
+    this.publicSubnet2 = networkResources.publicSubnet2;
+    // Assign networking resources to fields for test visibility
+    this.internetGateway = networkResources.internetGateway;
+    this.routeTable = networkResources.routeTable;
+    this.routeTableAssociation1 = networkResources.routeTableAssociation1;
+    this.routeTableAssociation2 = networkResources.routeTableAssociation2;
 
     // Create security group for EC2 instance in the new VPC
-    this.webSecurityGroup = createSecurityGroup(network);
+    this.webSecurityGroup = createSecurityGroup(networkResources);
 
     // Create EC2 instance in the new VPC/subnet
-    this.webInstance = createEC2Instance(network);
+    this.webInstance = createEC2Instance(networkResources);
 
     // Create S3 bucket with security and versioning
     this.dataBucket = createS3Bucket();
@@ -186,20 +199,33 @@ public class WebAppStack extends ComponentResource {
   }
 
   // Helper class to hold network resources
+
   private static class NetworkResources {
 
     public final Vpc vpc;
     public final Subnet publicSubnet1;
     public final Subnet publicSubnet2;
+    public final InternetGateway internetGateway;
+    public final RouteTable routeTable;
+    public final RouteTableAssociation routeTableAssociation1;
+    public final RouteTableAssociation routeTableAssociation2;
 
     public NetworkResources(
       Vpc vpc,
       Subnet publicSubnet1,
-      Subnet publicSubnet2
+      Subnet publicSubnet2,
+      InternetGateway internetGateway,
+      RouteTable routeTable,
+      RouteTableAssociation routeTableAssociation1,
+      RouteTableAssociation routeTableAssociation2
     ) {
       this.vpc = vpc;
       this.publicSubnet1 = publicSubnet1;
       this.publicSubnet2 = publicSubnet2;
+      this.internetGateway = internetGateway;
+      this.routeTable = routeTable;
+      this.routeTableAssociation1 = routeTableAssociation1;
+      this.routeTableAssociation2 = routeTableAssociation2;
     }
   }
 
@@ -310,7 +336,7 @@ public class WebAppStack extends ComponentResource {
         .build()
     );
 
-    new RouteTableAssociation(
+    var assoc1 = new RouteTableAssociation(
       config.getResourceName("webapp-public-rt-assoc-1"),
       RouteTableAssociationArgs
         .builder()
@@ -319,7 +345,7 @@ public class WebAppStack extends ComponentResource {
         .build()
     );
 
-    new RouteTableAssociation(
+    var assoc2 = new RouteTableAssociation(
       config.getResourceName("webapp-public-rt-assoc-2"),
       RouteTableAssociationArgs
         .builder()
@@ -328,7 +354,15 @@ public class WebAppStack extends ComponentResource {
         .build()
     );
 
-    return new NetworkResources(vpc, publicSubnet1, publicSubnet2);
+    return new NetworkResources(
+      vpc,
+      publicSubnet1,
+      publicSubnet2,
+      igw,
+      publicRouteTable,
+      assoc1,
+      assoc2
+    );
   }
 
   /**
