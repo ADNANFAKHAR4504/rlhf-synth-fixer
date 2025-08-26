@@ -639,18 +639,17 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: VPCEndpointAccessOnly
+          - Sid: EC2RoleAccess
             Effect: Allow
-            Principal: '*'
+            Principal:
+              AWS: !GetAtt EC2Role.Arn
             Action:
               - s3:GetObject
+              - s3:PutObject
               - s3:ListBucket
             Resource:
-              - !Sub '${ApplicationBucket}/*'
+              - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
               - !Sub 'arn:aws:s3:::${ApplicationBucket}'
-            Condition:
-              StringEquals:
-                aws:sourceVpc: !Ref VPC
 
   # IAM Roles and Instance Profile
   EC2Role:
@@ -969,24 +968,29 @@ Outputs:
 
   KMSKeyArn:
     Description: ARN of the KMS Key
-    Value: !Ref KMSKey
+    Value: !GetAtt KMSKey.Arn
 
   LaunchTemplateId:
     Description: Launch Template Id
-    Value: !If [HasKeyPair, !Ref LaunchTemplate, 'Not Created - No Key Pair Provided']
+    Value: !Ref LaunchTemplate
     Condition: HasKeyPair
 
   AutoScalingGroupName:
     Description: Auto Scaling Group name
-    Value: !If [HasKeyPair, !Ref AutoScalingGroup, 'Not Created - No Key Pair Provided']
+    Value: !Ref AutoScalingGroup
     Condition: HasKeyPair
 
   TargetGroupArn:
     Description: Target Group ARN
-    Value: !If [HasKeyPair, !Ref TargetGroup, 'Not Created - No Key Pair Provided']
+    Value: !Ref TargetGroup
     Condition: HasKeyPair
 
   LoadBalancerDNSName:
     Description: Public DNS name of the Application Load Balancer
-    Value: !If [HasKeyPair, !GetAtt ApplicationLoadBalancer.DNSName, 'Not Created - No Key Pair Provided']
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Condition: HasKeyPair
+
+  BastionHostPublicIP:
+    Description: Public IP address of the Bastion Host
+    Value: !GetAtt BastionHost.PublicIp
     Condition: HasKeyPair

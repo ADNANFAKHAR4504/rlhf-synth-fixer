@@ -1250,28 +1250,29 @@
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "VPCEndpointAccessOnly",
+                            "Sid": "EC2RoleAccess",
                             "Effect": "Allow",
-                            "Principal": "*",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "EC2Role",
+                                        "Arn"
+                                    ]
+                                }
+                            },
                             "Action": [
                                 "s3:GetObject",
+                                "s3:PutObject",
                                 "s3:ListBucket"
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${ApplicationBucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
                                 },
                                 {
                                     "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}"
                                 }
-                            ],
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:sourceVpc": {
-                                        "Ref": "VPC"
-                                    }
-                                }
-                            }
+                            ]
                         }
                     ]
                 }
@@ -1853,60 +1854,49 @@
         "KMSKeyArn": {
             "Description": "ARN of the KMS Key",
             "Value": {
-                "Ref": "KMSKey"
+                "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                ]
             }
         },
         "LaunchTemplateId": {
             "Description": "Launch Template Id",
             "Value": {
-                "Fn::If": [
-                    "HasKeyPair",
-                    {
-                        "Ref": "LaunchTemplate"
-                    },
-                    "Not Created - No Key Pair Provided"
-                ]
+                "Ref": "LaunchTemplate"
             },
             "Condition": "HasKeyPair"
         },
         "AutoScalingGroupName": {
             "Description": "Auto Scaling Group name",
             "Value": {
-                "Fn::If": [
-                    "HasKeyPair",
-                    {
-                        "Ref": "AutoScalingGroup"
-                    },
-                    "Not Created - No Key Pair Provided"
-                ]
+                "Ref": "AutoScalingGroup"
             },
             "Condition": "HasKeyPair"
         },
         "TargetGroupArn": {
             "Description": "Target Group ARN",
             "Value": {
-                "Fn::If": [
-                    "HasKeyPair",
-                    {
-                        "Ref": "TargetGroup"
-                    },
-                    "Not Created - No Key Pair Provided"
-                ]
+                "Ref": "TargetGroup"
             },
             "Condition": "HasKeyPair"
         },
         "LoadBalancerDNSName": {
             "Description": "Public DNS name of the Application Load Balancer",
             "Value": {
-                "Fn::If": [
-                    "HasKeyPair",
-                    {
-                        "Fn::GetAtt": [
-                            "ApplicationLoadBalancer",
-                            "DNSName"
-                        ]
-                    },
-                    "Not Created - No Key Pair Provided"
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Condition": "HasKeyPair"
+        },
+        "BastionHostPublicIP": {
+            "Description": "Public IP address of the Bastion Host",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BastionHost",
+                    "PublicIp"
                 ]
             },
             "Condition": "HasKeyPair"
