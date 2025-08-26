@@ -491,6 +491,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-bastion'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -514,6 +515,7 @@ Resources:
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-web'
       GroupDescription: Security group for web tier
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -547,6 +549,7 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-app'
       GroupDescription: Security group for application tier
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -575,6 +578,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-database'
       GroupDescription: Security group for database tier
       VpcId: !Ref VPC
       SecurityGroupIngress:

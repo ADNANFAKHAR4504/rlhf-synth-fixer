@@ -964,6 +964,9 @@
         "BastionSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-bastion"
+                },
                 "GroupDescription": "Security group for bastion host",
                 "VpcId": {
                     "Ref": "VPC"
@@ -1009,6 +1012,9 @@
         "WebSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-web"
+                },
                 "GroupDescription": "Security group for web tier",
                 "VpcId": {
                     "Ref": "VPC"
@@ -1070,6 +1076,9 @@
         "AppSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-app"
+                },
                 "GroupDescription": "Security group for application tier",
                 "VpcId": {
                     "Ref": "VPC"
@@ -1126,6 +1135,9 @@
         "DatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-database"
+                },
                 "GroupDescription": "Security group for database tier",
                 "VpcId": {
                     "Ref": "VPC"
