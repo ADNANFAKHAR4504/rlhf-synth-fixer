@@ -1,4 +1,3 @@
-
 from typing import Optional
 
 import pulumi
@@ -18,11 +17,11 @@ class TapStackArgs:
                  region: str,
                  environment_suffix: Optional[str] = None, 
                  tags: Optional[dict] = None):
-        self.environment = "prod"
-        self.project = "cloudsetup"
-        self.owner = "mgt"
-        self.region = "us-west-2"
-        self.environment_suffix = environment_suffix or 'prod'
+        self.environment = environment
+        self.project = project
+        self.owner = owner
+        self.region = region
+        self.environment_suffix = environment_suffix or environment
         self.tags = tags or {}
 
 
@@ -157,14 +156,14 @@ class NetworkingStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self))
 
         # Associate subnets with route tables
-        for subnet in self.public_subnets:
-            aws.ec2.RouteTableAssociation(f"{args.environment}-{args.project}-{args.owner}-public-rta-{subnet._name}",
+        for i, subnet in enumerate(self.public_subnets):
+            aws.ec2.RouteTableAssociation(f"{args.environment}-{args.project}-{args.owner}-public-rta-{i}",
                 subnet_id=subnet.id,
                 route_table_id=self.public_route_table.id,
                 opts=ResourceOptions(parent=self))
 
-        for subnet in self.private_subnets:
-            aws.ec2.RouteTableAssociation(f"{args.environment}-{args.project}-{args.owner}-private-rta-{subnet._name}",
+        for i, subnet in enumerate(self.private_subnets):
+            aws.ec2.RouteTableAssociation(f"{args.environment}-{args.project}-{args.owner}-private-rta-{i}",
                 subnet_id=subnet.id,
                 route_table_id=self.private_route_table.id,
                 opts=ResourceOptions(parent=self))
@@ -300,7 +299,10 @@ systemctl start nginx
 systemctl enable nginx
 """
 
-        # Create EC2 instances
+        self.instance_profile = aws.iam.InstanceProfile(f"{args.environment}-{args.project}-{args.owner}-instance-profile",
+            role=ec2_role_name,
+            opts=ResourceOptions(parent=self))
+
         self.instances = []
         for i, subnet in enumerate(public_subnets):
             instance = aws.ec2.Instance(f"{args.environment}-{args.project}-{args.owner}-web-{i}",
@@ -308,7 +310,7 @@ systemctl enable nginx
                 ami=ami.id,
                 subnet_id=subnet.id,
                 vpc_security_group_ids=[web_sg_id],
-                iam_instance_profile=aws.iam.InstanceProfile(f"{args.environment}-{args.project}-{args.owner}-instance-profile-{i}", role=ec2_role_name, opts=ResourceOptions(parent=self)),
+                iam_instance_profile=self.instance_profile.name,
                 user_data=user_data,
                 tags={
                     "Name": f"{args.environment}-{args.project}-{args.owner}-web-{i}",
@@ -348,6 +350,13 @@ systemctl enable nginx
                 matcher="200"
             ),
             opts=ResourceOptions(parent=self))
+
+        for i, instance in enumerate(self.instances):
+            aws.lb.TargetGroupAttachment(f"{args.environment}-{args.project}-{args.owner}-tg-attachment-{i}",
+                target_group_arn=self.target_group.arn,
+                target_id=instance.id,
+                port=80,
+                opts=ResourceOptions(parent=self))
 
         self.listener = aws.lb.Listener(f"{args.environment}-{args.project}-{args.owner}-listener",
             load_balancer_arn=self.alb.arn,
@@ -405,15 +414,24 @@ class DatabaseStack(pulumi.ComponentResource):
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
             opts=ResourceOptions(parent=self))
 
-        # Create simple database password
         self.db_password = aws.secretsmanager.Secret(f"{args.environment}-{args.project}-dp",
             name=f"{args.environment}-{args.project}-dp")
 
-        # Create RDS Instance
+        import random
+        import string
+        password_value = json.dumps({
+            "password": "".join(random.choices(string.ascii_letters + string.digits, k=16))
+        })
+
+        self.db_password_version = aws.secretsmanager.SecretVersion(f"{args.environment}-{args.project}-{args.owner}-db-password-version",
+            secret_id=self.db_password.id,
+            secret_string=password_value,
+            opts=ResourceOptions(parent=self))
+
         self.db_instance = aws.rds.Instance(
             f"{args.environment}-{args.project}-{args.owner}-db",
             engine="postgres",
-            engine_version="15.13",
+            engine_version="15.8",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp2",
@@ -494,21 +512,30 @@ class TapStack(pulumi.ComponentResource):
         })
 
 
+# Keep the original condition since filename is tap_stack.py
 if __name__ == "tap_stack":
     config = pulumi.Config()
     aws_config = pulumi.Config("aws")
     
+    # Get config values with fallbacks to handle missing config
+    environment = config.get("environment") or "dev"
+    project = config.get("project") or "tap-infra"  
+    owner = config.get("owner") or "devops"
+    region = aws_config.get("region") or "us-west-2"
+    
+    print(f"Using config - Environment: {environment}, Project: {project}, Owner: {owner}, Region: {region}")
+    
     # Create the stack args
     stack_args = TapStackArgs(
-        environment=config.require("environment"),
-        project=config.require("project"),
-        owner=config.require("owner"),
-        region=aws_config.get("region") or "us-west-2",
+        environment=environment,
+        project=project,
+        owner=owner,
+        region=region,
         tags={
             "ManagedBy": "Pulumi",
-            "Environment": config.require("environment"),
-            "Project": config.require("project"),
-            "Owner": config.require("owner")
+            "Environment": environment,
+            "Project": project,
+            "Owner": owner
         }
     )
     
