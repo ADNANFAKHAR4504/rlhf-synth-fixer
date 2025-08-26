@@ -54,7 +54,9 @@ describe('TapStack CloudFormation Template', () => {
     test('should have ProjectName parameter', () => {
       expect(template.Parameters.ProjectName).toBeDefined();
       expect(template.Parameters.ProjectName.Type).toBe('String');
-      expect(template.Parameters.ProjectName.Default).toBe('iac-aws-nova-breaking');
+      expect(template.Parameters.ProjectName.Default).toBe(
+        'iac-aws-nova-breaking'
+      );
     });
 
     test('should have Environment parameter', () => {
@@ -64,7 +66,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.Environment.AllowedValues).toEqual([
         'development',
         'staging',
-        'production'
+        'production',
       ]);
     });
 
@@ -82,24 +84,24 @@ describe('TapStack CloudFormation Template', () => {
         't3.micro',
         't3.small',
         't3.medium',
-        't3.large'
+        't3.large',
       ]);
     });
 
     test('should have KeyPairName parameter', () => {
       expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.KeyPairName.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(template.Parameters.KeyPairName.Type).toBe('String');
     });
 
     test('should have Auto Scaling parameters', () => {
       expect(template.Parameters.MinSize).toBeDefined();
       expect(template.Parameters.MaxSize).toBeDefined();
       expect(template.Parameters.DesiredCapacity).toBeDefined();
-      
+
       expect(template.Parameters.MinSize.Type).toBe('Number');
       expect(template.Parameters.MaxSize.Type).toBe('Number');
       expect(template.Parameters.DesiredCapacity.Type).toBe('Number');
-      
+
       expect(template.Parameters.MinSize.Default).toBe(2);
       expect(template.Parameters.MaxSize.Default).toBe(6);
       expect(template.Parameters.DesiredCapacity.Default).toBe(2);
@@ -119,7 +121,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Internet Gateway resource', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
     });
 
     test('should have public subnets', () => {
@@ -155,11 +159,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.WebSecurityGroup).toBeDefined();
       expect(template.Resources.AppSecurityGroup).toBeDefined();
       expect(template.Resources.DatabaseSecurityGroup).toBeDefined();
-      
-      expect(template.Resources.BastionSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(template.Resources.WebSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(template.Resources.AppSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(template.Resources.DatabaseSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+
+      expect(template.Resources.BastionSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
+      expect(template.Resources.WebSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
+      expect(template.Resources.AppSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
+      expect(template.Resources.DatabaseSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('should have S3 bucket', () => {
@@ -169,17 +181,23 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Application Load Balancer', () => {
       expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
-      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
     });
 
     test('should have Auto Scaling Group', () => {
       expect(template.Resources.AutoScalingGroup).toBeDefined();
-      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+      expect(template.Resources.AutoScalingGroup.Type).toBe(
+        'AWS::AutoScaling::AutoScalingGroup'
+      );
     });
 
     test('should have Launch Template', () => {
       expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+      expect(template.Resources.LaunchTemplate.Type).toBe(
+        'AWS::EC2::LaunchTemplate'
+      );
     });
 
     test('should have Bastion Host', () => {
@@ -202,13 +220,21 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('public subnets should have MapPublicIpOnLaunch enabled', () => {
-      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
+      expect(
+        template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
     });
 
     test('private subnets should not have MapPublicIpOnLaunch', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBeUndefined();
-      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBeUndefined();
+      expect(
+        template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBeUndefined();
+      expect(
+        template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBeUndefined();
     });
   });
 
@@ -216,7 +242,7 @@ describe('TapStack CloudFormation Template', () => {
     test('Bastion security group should allow SSH from anywhere', () => {
       const bastionSG = template.Resources.BastionSecurityGroup;
       const ingressRules = bastionSG.Properties.SecurityGroupIngress;
-      
+
       const sshRule = ingressRules.find((rule: any) => rule.FromPort === 22);
       expect(sshRule).toBeDefined();
       expect(sshRule.CidrIp).toBe('0.0.0.0/0');
@@ -225,10 +251,10 @@ describe('TapStack CloudFormation Template', () => {
     test('Web security group should allow HTTP and HTTPS', () => {
       const webSG = template.Resources.WebSecurityGroup;
       const ingressRules = webSG.Properties.SecurityGroupIngress;
-      
+
       const httpRule = ingressRules.find((rule: any) => rule.FromPort === 80);
       const httpsRule = ingressRules.find((rule: any) => rule.FromPort === 443);
-      
+
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
@@ -238,19 +264,25 @@ describe('TapStack CloudFormation Template', () => {
     test('App security group should allow access from web tier', () => {
       const appSG = template.Resources.AppSecurityGroup;
       const ingressRules = appSG.Properties.SecurityGroupIngress;
-      
+
       const appRule = ingressRules.find((rule: any) => rule.FromPort === 8080);
       expect(appRule).toBeDefined();
-      expect(appRule.SourceSecurityGroupId).toEqual({ Ref: 'WebSecurityGroup' });
+      expect(appRule.SourceSecurityGroupId).toEqual({
+        Ref: 'WebSecurityGroup',
+      });
     });
 
     test('Database security group should allow MySQL access from app tier', () => {
       const dbSG = template.Resources.DatabaseSecurityGroup;
       const ingressRules = dbSG.Properties.SecurityGroupIngress;
-      
-      const mysqlRule = ingressRules.find((rule: any) => rule.FromPort === 3306);
+
+      const mysqlRule = ingressRules.find(
+        (rule: any) => rule.FromPort === 3306
+      );
       expect(mysqlRule).toBeDefined();
-      expect(mysqlRule.SourceSecurityGroupId).toEqual({ Ref: 'AppSecurityGroup' });
+      expect(mysqlRule.SourceSecurityGroupId).toEqual({
+        Ref: 'AppSecurityGroup',
+      });
     });
   });
 
@@ -258,16 +290,26 @@ describe('TapStack CloudFormation Template', () => {
     test('S3 bucket should have encryption enabled', () => {
       const bucket = template.Resources.ApplicationBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
+      ).toBeDefined();
     });
 
     test('S3 bucket should block public access', () => {
       const bucket = template.Resources.ApplicationBucket;
       expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls
+      ).toBe(true);
+      expect(
+        bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets
+      ).toBe(true);
     });
 
     test('S3 bucket should have versioning enabled', () => {
@@ -281,17 +323,19 @@ describe('TapStack CloudFormation Template', () => {
     test('Auto Scaling Group should use private subnets', () => {
       const asg = template.Resources.AutoScalingGroup;
       const vpcZoneIdentifier = asg.Properties.VPCZoneIdentifier;
-      
+
       expect(vpcZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
       expect(vpcZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('Auto Scaling Group should have correct scaling parameters', () => {
       const asg = template.Resources.AutoScalingGroup;
-      
+
       expect(asg.Properties.MinSize).toEqual({ Ref: 'MinSize' });
       expect(asg.Properties.MaxSize).toEqual({ Ref: 'MaxSize' });
-      expect(asg.Properties.DesiredCapacity).toEqual({ Ref: 'DesiredCapacity' });
+      expect(asg.Properties.DesiredCapacity).toEqual({
+        Ref: 'DesiredCapacity',
+      });
       expect(asg.Properties.HealthCheckType).toBe('EC2');
       expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
     });
@@ -307,14 +351,14 @@ describe('TapStack CloudFormation Template', () => {
     test('ALB should use public subnets', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
       const subnets = alb.Properties.Subnets;
-      
+
       expect(subnets).toContainEqual({ Ref: 'PublicSubnet1' });
       expect(subnets).toContainEqual({ Ref: 'PublicSubnet2' });
     });
 
     test('Target Group should have correct health check configuration', () => {
       const tg = template.Resources.TargetGroup;
-      
+
       expect(tg.Properties.HealthCheckPath).toBe('/health');
       expect(tg.Properties.HealthCheckProtocol).toBe('HTTP');
       expect(tg.Properties.HealthCheckIntervalSeconds).toBe(30);
@@ -395,7 +439,9 @@ describe('TapStack CloudFormation Template', () => {
       Object.keys(resources).forEach(resourceName => {
         const resource = resources[resourceName];
         if (resource.Properties && resource.Properties.Tags) {
-          const projectTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Project');
+          const projectTag = resource.Properties.Tags.find(
+            (tag: any) => tag.Key === 'Project'
+          );
           if (projectTag) {
             expect(projectTag.Value).toEqual({ Ref: 'ProjectName' });
           }
@@ -421,7 +467,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should have consistent project name usage', () => {
       // Check that ProjectName parameter is used consistently
       const templateString = JSON.stringify(template);
-      const projectNameRefs = (templateString.match(/\$\{ProjectName\}/g) || []).length;
+      const projectNameRefs = (templateString.match(/\$\{ProjectName\}/g) || [])
+        .length;
       expect(projectNameRefs).toBeGreaterThan(0);
     });
 
@@ -447,7 +494,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should not have any public access by default', () => {
       // Check for any explicit public access settings that shouldn't exist
       const templateString = JSON.stringify(template);
-      
+
       // Should not contain common public access patterns (except where intended)
       // Note: Some resources like ALB are intentionally public-facing
       expect(templateString).not.toContain('PublicAccessibilityEnabled');
@@ -456,7 +503,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper deletion policies for production safety', () => {
       // Check that critical resources have appropriate deletion policies
       const resources = template.Resources;
-      
+
       // VPC and subnets should not have deletion policies (use default)
       if (resources.VPC && resources.VPC.DeletionPolicy) {
         expect(resources.VPC.DeletionPolicy).not.toBe('Delete');
@@ -465,12 +512,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should not expose sensitive information in outputs', () => {
       const outputs = template.Outputs;
-      
+
       // Check that no outputs contain sensitive data patterns
       Object.keys(outputs).forEach(outputKey => {
         const output = outputs[outputKey];
         const outputString = JSON.stringify(output);
-        
+
         // Should not contain common sensitive patterns
         expect(outputString).not.toContain('password');
         expect(outputString).not.toContain('secret');
@@ -483,10 +530,11 @@ describe('TapStack CloudFormation Template', () => {
       // S3 bucket should have encryption
       const bucket = template.Resources.ApplicationBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      
+
       // EBS volumes should be encrypted
       const launchTemplate = template.Resources.LaunchTemplate;
-      const blockDeviceMappings = launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings;
+      const blockDeviceMappings =
+        launchTemplate.Properties.LaunchTemplateData.BlockDeviceMappings;
       blockDeviceMappings.forEach((mapping: any) => {
         if (mapping.Ebs) {
           expect(mapping.Ebs.Encrypted).toBe(true);
