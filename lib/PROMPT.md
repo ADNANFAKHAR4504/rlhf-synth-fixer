@@ -1,52 +1,8 @@
-# IaC – AWS Nova Model Breaking  
+We want to design a fault-tolerant AWS infrastructure for a web application under the project name “IaC – AWS Nova Model Breaking.”  
+The system should be deployed across two AWS regions (us-east-1 and us-west-2) to provide high availability and disaster recovery.  
 
-We need to design and deliver a **fault-tolerant AWS infrastructure** using **CloudFormation** for a critical web application. The deployment should be **production-ready** and built under the project name *“IaC – AWS Nova Model Breaking.”*  
+The stack needs a VPC with public and private subnets, Auto Scaling Groups with an ALB, and an RDS database in Multi-AZ mode.  
+Logs should be stored in S3 with versioning and lifecycle policies. Security must follow least privilege IAM roles and encryption at rest and in transit.  
 
-The infrastructure must run across **two AWS regions (us-east-1 and us-west-2)** to ensure both **high availability** and **disaster recovery**. The design should strictly follow AWS best practices around security, scalability, and compliance.  
-
----
-
-## Scope & Requirements  
-
-### 1. Multi-Region Setup  
-- Resources must be distributed across **us-east-1** and **us-west-2**.  
-- Implement **Route 53 failover routing** with health checks so that traffic automatically shifts to the healthy region in case of issues.  
-
-### 2. Application Layer  
-- Application servers must run in **Auto Scaling Groups** placed behind an **Elastic Load Balancer (ELB)**.  
-- Deploy servers inside a **dedicated VPC**, with:  
-  - **Public subnets** for the load balancers  
-  - **Private subnets** for the application and database tiers  
-
-### 3. Database Layer  
-- Use **Amazon RDS** with **Multi-AZ** enabled to provide resilience and redundancy.  
-- Databases must be encrypted at rest using **KMS** and enforce **TLS/SSL** for in-transit encryption.  
-
-### 4. Storage & Logging  
-- Centralize logs in an **S3 bucket** with:  
-  - **Versioning enabled**  
-  - **Lifecycle policies** to transition or expire logs securely over time  
-
-### 5. Security Controls  
-- Apply **IAM roles and policies** that follow the **least-privilege principle**.  
-- Encrypt all sensitive data with **KMS**.  
-- Ensure that all traffic is served securely over **SSL/TLS**.  
-
-### 6. Monitoring & Alerts  
-- Configure **CloudWatch alarms** for:  
-  - Application health and scaling events  
-  - RDS performance  
-- Alarms should automatically notify the operations team if thresholds are breached.  
-
----
-
-## Deliverable  
-
-- A **CloudFormation YAML template** that provisions the complete infrastructure above.  
-- The template must:  
-  - Deploy cleanly without errors  
-  - Provide **high availability** and **failover between regions**  
-  - Comply with **security best practices** (IAM least privilege, encryption, subnet isolation)  
-  - Include **CloudWatch monitoring and alarms**  
-
-The end result should be a **robust, production-ready system** that can handle regional outages gracefully and automatically scale to meet workload demands.  
+Monitoring is required with CloudWatch alarms and notifications. Route 53 should manage DNS and handle failover between regions.  
+The output should be a CloudFormation template that creates these resources following AWS best practices.
