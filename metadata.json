@@ -10,6 +10,7 @@
   "startedAt": "2025-08-25T10:35:03+00:00",
   "difficulty": "hard",
   "subtask": "Security and Compliance Implementation",
+  "author": "ashish-a-turing",
   "original_platform": "CloudFormation",
   "original_language": "YAML",
   "description": "Develop a secure AWS infrastructure for a web application with comprehensive security features including IAM roles, encrypted S3, VPC with bastion host, Lambda processing, CloudWatch monitoring, TLS certificates, and detailed tagging.",
