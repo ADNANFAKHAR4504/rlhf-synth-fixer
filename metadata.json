@@ -1,14 +1,11 @@
 {
-  "task_id": "trainr327",
-  "problem_id": "Security-Configuration-as-Code_CloudFormation_YAML_3fz7a1glwh0v",
-  "difficulty": "expert",
   "platform": "pulumi",
   "language": "go",
+  "complexity": "expert",
+  "po_id": "trainr327",
   "team": "security",
   "startedAt": "2024-01-15T10:00:00Z",
-  "author": "harshita-turing",
-  "po_id": "trainr327",
-  "complexity": "expert",
+  "subtask": "Security Configuration as Code",
   "subject_labels": [
     "Security Configuration as Code",
     "S3 Security Implementation",
@@ -16,32 +13,11 @@
     "Access Control",
     "Compliance and Governance"
   ],
-  "subtask": "Security Configuration as Code",
-  "problem": "Create a Pulumi program using Go to deploy an S3 bucket with strict security configurations in the us-west-2 region. The required configurations include: 1. The bucket must be named according to the pattern 'secure-data-<unique-id>'. 2. Use an AWS KMS key for server-side encryption of the bucket. 3. Only allow access to the bucket via HTTPS. 4. Implement a bucket policy that denies unencrypted uploads. 5. Use versioning to maintain multiple versions of an object. 6. Logging must be enabled to track requests to the bucket. 7. Ensure all bucket artifacts are protected against accidental deletion. 8. Allow cross-account access to specific AWS accounts defined in the configuration.",
-  "environment": "Deploy to AWS us-west-2 region using Pulumi with Go. The bucket should strictly adhere to organizational compliance policies for encryption and access control. Use appropriate naming conventions and architectural best practices.",
-  "constraint_count": 8,
-  "constraints": [
-    "The bucket must be named according to the pattern 'secure-data-<unique-id>'",
-    "Use an AWS KMS key for server-side encryption of the bucket",
-    "Only allow access to the bucket via HTTPS",
-    "Implement a bucket policy that denies unencrypted uploads",
-    "Use versioning to maintain multiple versions of an object",
-    "Logging must be enabled to track requests to the bucket",
-    "Ensure all bucket artifacts are protected against accidental deletion",
-    "Allow cross-account access to specific AWS accounts defined in the configuration"
-  ],
-  "enforced_platform": "pulumi+go",
   "training_quality": 9,
   "aws_services": [
-    "AWS::S3::Bucket",
-    "AWS::S3::BucketPolicy",
-    "AWS::S3::BucketVersioning",
-    "AWS::S3::BucketLogging",
-    "AWS::S3::BucketEncryption",
-    "AWS::S3::BucketPublicAccessBlock",
-    "AWS::S3::BucketLifecycleConfiguration",
-    "AWS::S3::BucketServerSideEncryptionConfiguration",
-    "AWS::KMS::Key",
-    "AWS::KMS::Alias"
-  ]
+    "S3",
+    "KMS",
+    "IAM"
+  ],
+  "author": "shreyaspturing"
 }
