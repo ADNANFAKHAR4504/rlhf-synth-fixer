@@ -1,21 +1,19 @@
-I need help setting up a robust multi-region web application deployment using AWS CDK in Java. We're planning to deploy a high-traffic e-commerce website that needs to handle seasonal spikes and maintain high availability during regional outages.
+Hey, I'm working on this e-commerce site that's been growing pretty fast and we're hitting some scaling issues. Black Friday completely crashed our servers last year, so I really need to get this infrastructure sorted out before the next holiday season.
 
-Here are the specific requirements:
+We're using Java for everything else in our stack, so I'd love to use CDK Java for the infrastructure too. The main thing is we need this to be rock solid - customers get really angry when they can't checkout during a sale.
 
-1. **Multi-region setup**: Deploy the application in us-east-1 (primary) and us-west-2 (secondary) regions. The application should automatically failover to the secondary region if there are issues with the primary.
+So here's what I'm thinking:
 
-2. **Auto Scaling**: Set up Auto Scaling groups that can handle traffic increases during peak shopping periods. We typically see 3-5x traffic spikes during sales events.
+We definitely need multi-region deployment. I was looking at us-east-1 as primary since that's where most of our traffic comes from, and maybe us-west-2 as backup? Last time AWS had that big outage in Virginia we were completely down for 6 hours. Can't have that happen again.
 
-3. **Load Balancing**: Use Application Load Balancers to distribute traffic evenly across instances in each region. Make sure the load balancers can handle both HTTP and HTTPS traffic with proper SSL termination.
+For the auto scaling, during normal days we might have like 1000 users, but during flash sales or Black Friday we've seen it jump to 5000+ concurrent users. The current setup just dies. I'm thinking maybe start with t3.medium instances since they're cost effective, but we might need to scale up to something beefier like c5.large when things get crazy.
 
-4. **DNS and Failover**: Configure Route 53 with health checks and automatic failover between regions. I want to use the new Route 53 Application Recovery Controller for better coordination during outages.
+Load balancing is obviously crucial. Need both HTTP and HTTPS working properly - we've had SSL cert issues before that took the site down. 
 
-5. **Global Traffic Management**: Implement AWS Global Accelerator to improve performance for users worldwide and provide static IP addresses that won't change during failovers.
+Oh and Route 53 for DNS failover would be great. I heard there's some new Application Recovery Controller thing that might help coordinate failovers better? Not sure if that's worth the complexity though.
 
-Additional requirements:
-- Use t3.medium instances as the baseline with scaling up to c5.large during high traffic
-- Enable detailed monitoring and CloudWatch integration
-- Implement security best practices including VPC with proper subnet configuration
-- Use the latest AWS CDK Java patterns and constructs
+One more thing - I saw that Global Accelerator can help with performance for international customers. We're getting more traffic from Europe and Asia, so that might be worth it.
 
-Please provide the complete CDK Java infrastructure code that I can deploy directly. I prefer having separate files for different components to keep things organized.
+Security wise, just want to make sure we follow best practices. VPC setup, proper subnets, all that good stuff. Don't want to end up on the news for a data breach.
+
+Can you help me build this out? I'd prefer to keep the code organized with separate files for different pieces - makes it easier for my team to understand and maintain. Thanks!
