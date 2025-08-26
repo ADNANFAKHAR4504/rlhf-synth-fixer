@@ -182,7 +182,7 @@ public class MainIntegrationTest {
         String igwId = String.valueOf(out.get("internetGatewayId"));
         assertNotNull(igwId, "internetGatewayId missing");
 
-        // (Attachment check available if you want to re-enable)
+        // (Attachment check available if you want to re-enable) 
     }
 
     @Test
