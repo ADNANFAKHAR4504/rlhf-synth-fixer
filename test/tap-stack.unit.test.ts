@@ -110,7 +110,7 @@ describe('TapStack CloudFormation Template', () => {
     test('TaskAttachmentsBucket should have correct properties', () => {
       const bucket = template.Resources.TaskAttachmentsBucket.Properties;
       expect(bucket.BucketName).toEqual({
-        'Fn::Sub': 'task-attachments-${EnvironmentSuffix}-${AWS::AccountId}'
+        'Fn::Sub': 'task-attachments-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       });
     });
 
