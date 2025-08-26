@@ -639,7 +639,7 @@ Resources:
               - !Ref ApplicationBucket
             Condition:
               StringEquals:
-                aws:sourceVpc: !Ref VPC
+                aws:sourceVpc: !Ref S3VPCEndpoint
 
   # VPC Endpoint for S3 (Gateway)
   S3VPCEndpoint:
@@ -672,16 +672,13 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-                - Effect: Allow
-                  Action:
-                  - s3:ListBucket
-                  Resource:
-                  - !Sub 'arn:aws:s3:::${ApplicationBucket}'
-                - Effect: Allow
-                  Action:
+              - Effect: Allow
+                Action:
                   - s3:GetObject
-                  Resource:
-                  - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${ApplicationBucket}/*'
+                  - !Ref ApplicationBucket
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'

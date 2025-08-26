@@ -1,5 +1,5 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09", 
+    "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure Three-Tier Web Application Infrastructure - TapStack",
     "Parameters": {
         "ProjectName": {
@@ -1248,7 +1248,7 @@
                             "Condition": {
                                 "StringEquals": {
                                     "aws:sourceVpc": {
-                                        "Ref": "VPC"
+                                        "Ref": "S3VPCEndpoint"
                                     }
                                 }
                             }
@@ -1308,22 +1308,15 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
+                                        "s3:GetObject",
                                         "s3:ListBucket"
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": [
+                                            "Fn::Sub": "${ApplicationBucket}/*"
+                                        },
                                         {
-                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
+                                            "Ref": "ApplicationBucket"
                                         }
                                     ]
                                 }
