@@ -288,7 +288,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-2"
+                    "Fn::Sub": "/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-3"
                 },
                 "RetentionInDays": 30
             }

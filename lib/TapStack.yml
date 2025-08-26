@@ -210,7 +210,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-2'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-3'
       RetentionInDays: 30
 
   # IAM Role for VPC Flow Logs
