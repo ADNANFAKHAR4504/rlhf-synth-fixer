@@ -30,7 +30,7 @@ type CdkOutputs struct {
 
 func readCdkOutputs(t *testing.T) CdkOutputs {
 	t.Helper()
-	p := filepath.Join("..", "..", "cfn-outputs", "all-outputs.json")
+	p := filepath.Join("..", "cfn-outputs", "all-outputs.json")
 	if _, err := os.Stat(p); err != nil {
 		t.Fatalf("outputs file not found at %s", p)
 	}
