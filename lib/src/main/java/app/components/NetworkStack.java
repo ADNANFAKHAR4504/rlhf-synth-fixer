@@ -17,7 +17,6 @@ import com.pulumi.aws.ec2.inputs.RouteTableRouteArgs;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
 import com.pulumi.aws.outputs.GetAvailabilityZonesResult;
 import com.pulumi.core.Output;
-import com.pulumi.deployment.InvokeOptions;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
@@ -40,10 +39,7 @@ public class NetworkStack extends ComponentResource {
         Output<GetAvailabilityZonesResult> availabilityZones = AwsFunctions.getAvailabilityZones(
                 GetAvailabilityZonesArgs.builder()
                         .state("available")
-                        .build(),
-                InvokeOptions.builder().provider(Objects.requireNonNull(options.getProvider().orElse(null)))
-                        .build()
-        );
+                        .build());
 
         // Create VPC
         var vpc = new Vpc(name + "web-hosting-vpc", VpcArgs.builder()
