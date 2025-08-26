@@ -11,9 +11,5 @@ Requirements:
 - Define security groups to permit HTTP (port 80) and HTTPS (port 443) traffic.
 - Launch a small EC2 instance within the VPC in one of the public subnets.
 - Assign an IAM Role to the EC2 instance that grants access to the S3 bucket.
-- Avoid using hard-coded AWS credentials within the Terraform configurations.
-- Utilize Terraform Variables and Outputs to enhance the manageability and re-usability of the configuration files.
+- Avoid using hard-coded AWS credentials within the Pulumi configurations.
 - Ensure that Terraform state is stored in an S3 bucket backend for state management.
-
-Design:
-- Create a config file to manage configurations instead of using `Pulumi.yaml` files

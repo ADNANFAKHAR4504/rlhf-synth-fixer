@@ -54,14 +54,16 @@ public final class Main {
      */
     static void defineInfrastructure(Context ctx) {
 
+        AppConfig config = new AppConfig(ctx);
+
         var primaryProvider = new Provider("primary-provider",
                 ProviderArgs.builder()
-                        .region(AppConfig.getPrimaryRegion())
+                        .region(config.getPrimaryRegion())
                         .build());
 
         var secondaryProvider = new Provider("secondary-provider",
                 ProviderArgs.builder()
-                        .region(AppConfig.getSecondaryRegion())
+                        .region(config.getSecondaryRegion())
                         .build());
 
         Map<String, Provider> providers = Map.of(
@@ -76,21 +78,21 @@ public final class Main {
                     .build();
 
             // Deploy Network Stack
-            var networkStack = new NetworkStack(region + "-network", options);
+            var networkStack = new NetworkStack(region + "-network", config, options);
 
             // Deploy Security Stack
             var securityStack = new SecurityStack(region + "-security",
-                    networkStack.vpcId, options);
+                    networkStack.vpcId, config, options);
 
             // Deploy Storage Stack
-            var storageStack = new StorageStack(region + "-storage", options);
+            var storageStack = new StorageStack(region + "-storage", config, options);
 
             // Deploy Compute Stack
             var computeStack = new ComputeStack(region + "-compute",
                     networkStack.publicSubnetPrimaryId,
                     securityStack.webSecurityGroupId,
                     storageStack.instanceProfileName,
-                    options);
+                    config, options);
 
             // Export outputs
             ctx.export(region + "-vpcId", networkStack.vpcId);

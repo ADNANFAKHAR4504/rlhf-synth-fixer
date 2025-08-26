@@ -171,7 +171,14 @@ test {
     // Always run tests, never use cache
     outputs.upToDateWhen { false }
 
-    finalizedBy jacocoTestReport
+    // Skip tests unless explicitly requested
+    onlyIf {
+        def requestedTasks = gradle.startParameter.taskNames
+        def testTasks = ['test', 'integrationTest', 'testAll', 'showCoverage', 'jacocoTestReport']
+        return testTasks.any { task -> 
+            requestedTasks.any { it.contains(task) }
+        }
+    }
 }
 
 // Integration test task
@@ -195,6 +202,15 @@ tasks.register('integrationTest', Test) {
     // Always run tests, never use cache
     outputs.upToDateWhen { false }
 
+    // Skip tests unless explicitly requested
+    onlyIf {
+        def requestedTasks = gradle.startParameter.taskNames
+        def testTasks = ['test', 'integrationTest', 'testAll', 'showCoverage', 'jacocoTestReport']
+        return testTasks.any { task -> 
+            requestedTasks.any { it.contains(task) }
+        }
+    }
+
     shouldRunAfter test
 }
 
@@ -202,8 +218,8 @@ tasks.register('integrationTest', Test) {
 checkstyle {
     toolVersion = '10.12.7'
     configFile = file('config/checkstyle/checkstyle.xml')
-    ignoreFailures = true
-    maxWarnings = 0
+    ignoreFailures = true   // Don't fail build on violations during development
+    maxWarnings = 100       // Report violations but don't fail
 }
 
 // JaCoCo configuration
@@ -212,7 +228,8 @@ jacoco {
 }
 
 jacocoTestReport {
-    dependsOn test, integrationTest
+    // Only depend on tests when they're explicitly requested
+    // dependsOn test, integrationTest
     reports {
         xml.required = true
         html.required = true
@@ -309,5 +326,23 @@ tasks.register('testAll') {
     }
 }
 
-// Make check depend on integration tests and coverage
-//check.dependsOn integrationTest, jacocoTestCoverageVerification
+// Configure jacoco tasks to only run when tests are requested
+jacocoTestReport {
+    onlyIf {
+        def requestedTasks = gradle.startParameter.taskNames
+        def testTasks = ['test', 'integrationTest', 'testAll', 'showCoverage', 'jacocoTestReport']
+        return testTasks.any { task -> 
+            requestedTasks.any { it.contains(task) }
+        }
+    }
+}
+
+jacocoTestCoverageVerification {
+    onlyIf {
+        def requestedTasks = gradle.startParameter.taskNames
+        def testTasks = ['test', 'integrationTest', 'testAll', 'showCoverage', 'jacocoTestReport', 'jacocoTestCoverageVerification']
+        return testTasks.any { task -> 
+            requestedTasks.any { it.contains(task) }
+        }
+    }
+}

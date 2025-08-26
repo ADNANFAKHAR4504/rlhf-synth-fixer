@@ -2,9 +2,22 @@ package app.components;
 
 import app.config.AppConfig;
 import app.utils.TagUtils;
-import com.pulumi.aws.iam.*;
+import com.pulumi.aws.iam.InstanceProfile;
+import com.pulumi.aws.iam.InstanceProfileArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
+import com.pulumi.aws.iam.Role;
+import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.RolePolicyAttachment;
 import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
-import com.pulumi.aws.s3.*;
+import com.pulumi.aws.s3.Bucket;
+import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.s3.BucketPublicAccessBlock;
+import com.pulumi.aws.s3.BucketPublicAccessBlockArgs;
+import com.pulumi.aws.s3.BucketWebsiteConfiguration;
+import com.pulumi.aws.s3.BucketWebsiteConfigurationArgs;
+import com.pulumi.aws.s3.BucketWebsiteConfigurationV2;
+import com.pulumi.aws.s3.BucketWebsiteConfigurationV2Args;
 import com.pulumi.aws.s3.inputs.BucketWebsiteConfigurationErrorDocumentArgs;
 import com.pulumi.aws.s3.inputs.BucketWebsiteConfigurationIndexDocumentArgs;
 import com.pulumi.core.Either;
@@ -19,14 +32,14 @@ public class StorageStack extends ComponentResource {
     public final Output<String> iamRoleArn;
     public final Output<String> instanceProfileName;
 
-    public StorageStack(String name, ComponentResourceOptions options) {
+    public StorageStack(String name, AppConfig config, ComponentResourceOptions options) {
         super("custom:infrastructure:StorageStack", name, options);
 
         // Create S3 Bucket for static website hosting
         var bucket = new Bucket("web-hosting-bucket",
                 BucketArgs.builder()
-                        .bucket(AppConfig.getS3BucketNamePrefix() + "-" + System.currentTimeMillis())
-                        .tags(TagUtils.getTagsWithName("Web-Hosting-Bucket"))
+                        .bucket(config.getS3BucketNamePrefix() + "-" + System.currentTimeMillis())
+                        .tags(TagUtils.getTagsWithName("Web-Hosting-Bucket", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -39,10 +52,10 @@ public class StorageStack extends ComponentResource {
                 BucketWebsiteConfigurationArgs.builder()
                         .bucket(bucket.id())
                         .indexDocument(BucketWebsiteConfigurationIndexDocumentArgs.builder()
-                                .suffix(AppConfig.getS3WebsiteIndexDocument())
+                                .suffix(config.getS3WebsiteIndexDocument())
                                 .build())
                         .errorDocument(BucketWebsiteConfigurationErrorDocumentArgs.builder()
-                                .key(AppConfig.getS3WebsiteErrorDocument())
+                                .key(config.getS3WebsiteErrorDocument())
                                 .build())
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
@@ -80,7 +93,7 @@ public class StorageStack extends ComponentResource {
                 RoleArgs.builder()
                         .name("ec2-s3-access-role")
                         .assumeRolePolicy(assumeRolePolicy)
-                        .tags(TagUtils.getTagsWithName("EC2-S3-Access-Role"))
+                        .tags(TagUtils.getTagsWithName("EC2-S3-Access-Role", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());

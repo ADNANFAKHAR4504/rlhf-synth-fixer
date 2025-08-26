@@ -1,5 +1,6 @@
 package app.components;
 
+import app.config.AppConfig;
 import app.utils.TagUtils;
 import com.pulumi.aws.ec2.SecurityGroup;
 import com.pulumi.aws.ec2.SecurityGroupArgs;
@@ -15,7 +16,7 @@ import java.util.List;
 public class SecurityStack extends ComponentResource {
     public final Output<String> webSecurityGroupId;
 
-    public SecurityStack(String name, Output<String> vpcId, ComponentResourceOptions options) {
+    public SecurityStack(String name, Output<String> vpcId, AppConfig config, ComponentResourceOptions options) {
         super("custom:infrastructure:SecurityStack", name, options);
 
         // Create Security Group for Web Servers
@@ -53,7 +54,7 @@ public class SecurityStack extends ComponentResource {
                                 .protocol("-1")
                                 .cidrBlocks("0.0.0.0/0")
                                 .build())
-                        .tags(TagUtils.getTagsWithName("Web-Security-Group"))
+                        .tags(TagUtils.getTagsWithName("Web-Security-Group", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());

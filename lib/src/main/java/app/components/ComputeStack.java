@@ -23,6 +23,7 @@ public class ComputeStack extends ComponentResource {
                         Output<String> subnetId,
                         Output<String> securityGroupId,
                         Output<String> instanceProfileName,
+                        AppConfig config,
                         ComponentResourceOptions options) {
         super("custom:infrastructure:ComputeStack", name, options);
 
@@ -32,7 +33,7 @@ public class ComputeStack extends ComponentResource {
                 .owners("amazon")
                 .filters(GetAmiFilterArgs.builder()
                         .name("name")
-                        .values(AppConfig.getEc2AmiName())
+                        .values(config.getEc2AmiName())
                         .build())
                 .build());
 
@@ -46,19 +47,19 @@ public class ComputeStack extends ComponentResource {
                 echo "<h1>Welcome to Web Hosting Environment</h1>" > /var/www/html/index.html
                 echo "<p>Environment: %s</p>" >> /var/www/html/index.html
                 echo "<p>Instance deployed via Pulumi</p>" >> /var/www/html/index.html
-                """.formatted(AppConfig.getDefaultEnvironment());
+                """.formatted(config.getDefaultEnvironment());
 
         // Create EC2 Instance
         var instance = new Instance("web-server",
                 InstanceArgs.builder()
-                        .instanceType(AppConfig.getEc2InstanceType())
+                        .instanceType(config.getEc2InstanceType())
                         .ami(ami.applyValue(GetAmiResult::id))
                         .subnetId(subnetId)
                         .vpcSecurityGroupIds(securityGroupId.applyValue(List::of))
                         .iamInstanceProfile(instanceProfileName)
                         .userData(userData)
                         .associatePublicIpAddress(true)
-                        .tags(TagUtils.getTagsWithName("Web-Server"))
+                        .tags(TagUtils.getTagsWithName("Web-Server", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());

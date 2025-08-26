@@ -1,100 +1,71 @@
 package app.config;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
+import com.pulumi.Config;
+import com.pulumi.Context;
 
-/**
- * Application configuration class for the Pulumi Java infrastructure application.
- *
- * This class provides static access to configuration properties loaded from
- * the application.properties file located in the resources' directory.
- *
- * <p>Usage example:
- * <pre>
- * String appName = AppConfig.getApplicationName();
- * String primaryRegion = AppConfig.getPrimaryRegion();
- * </pre>
- *
- * @author Pulumi Java Template
- * @version 1.0
- * @since 1.0
- */
 public class AppConfig {
-    private static final Properties properties = new Properties();
 
-    static {
-        try (InputStream input = AppConfig.class.getClassLoader()
-                .getResourceAsStream("application.properties")) {
-            if (input != null) {
-                properties.load(input);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load configuration", e);
-        }
+    private final Config config;
+
+    public AppConfig(Context ctx) {
+        this.config = ctx.config();
     }
 
-    public static String getPrimaryRegion() {
-        return properties.getProperty("aws.primary.region");
+    public String getS3WebsiteErrorDocument() {
+        return config.require("primaryRegion");
     }
 
-    public static String getSecondaryRegion() {
-        return properties.getProperty("aws.secondary.region");
+    public String  getDefaultEnvironment() {
+        return config.require("Development");
     }
 
-    public static String getVpcCidrBlock() {
-        return properties.getProperty("vpc.cidr.block");
+    // AWS Regions
+    public String getPrimaryRegion() {
+        return config.require("primaryRegion");
     }
 
-    public static String getPublicSubnetPrimaryCidr() {
-        return properties.getProperty("subnet.public.primary.cidr");
+    public String getSecondaryRegion() {
+        return config.require("secondaryRegion");
     }
 
-    public static String getPublicSubnetSecondaryCidr() {
-        return properties.getProperty("subnet.public.secondary.cidr");
+    // Network
+    public String getVpcCidrBlock() {
+        return config.require("vpcCidrBlock");
     }
 
-    public static String getPrivateSubnetPrimaryCidr() {
-        return properties.getProperty("subnet.private.primary.cidr");
+    public String getPublicSubnetPrimaryCidr() {
+        return config.require("publicSubnetPrimaryCidr");
     }
 
-    public static String getPrivateSubnetSecondaryCidr() {
-        return properties.getProperty("subnet.private.secondary.cidr");
+    public String getPublicSubnetSecondaryCidr() {
+        return config.require("publicSubnetSecondaryCidr");
     }
 
-    public static String getEc2InstanceType() {
-        return properties.getProperty("ec2.instance.type");
+    public String getEc2AmiName() {
+        return config.require("amiName");
     }
 
-    public static String getEc2AmiName() {
-        return properties.getProperty("ec2.ami.name");
+    public String getEc2InstanceType() {
+        return config.require("instanceType");
     }
 
-    public static String getEc2AmiOwner() {
-        return properties.getProperty("ec2.ami.owner");
+    public String getPrivateSubnetPrimaryCidr() {
+        return config.require("privateSubnetPrimaryCidr");
     }
 
-    public static String getS3BucketNamePrefix() {
-        return properties.getProperty("s3.bucket.name.prefix");
+    public String getPrivateSubnetSecondaryCidr() {
+        return config.require("privateSubnetSecondaryCidr");
     }
 
-    public static String getS3WebsiteIndexDocument() {
-        return properties.getProperty("s3.website.index.document");
+    public String getS3BucketNamePrefix() {
+        return config.require("websiteIndexDocument");
     }
 
-    public static String getS3WebsiteErrorDocument() {
-        return properties.getProperty("s3.website.error.document");
+    public String getS3WebsiteIndexDocument() {
+        return config.require("bucketNamePrefix");
     }
 
-    public static String getDefaultEnvironment() {
-        return properties.getProperty("default.environment");
-    }
-
-    public static String getProjectName() {
-        return properties.getProperty("project.name");
-    }
-
-    public static String getStateBucketName() {
-        return properties.getProperty("state.bucket.name");
+    public String getProjectName() {
+        return config.require("projectName");
     }
 }

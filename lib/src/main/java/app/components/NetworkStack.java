@@ -3,7 +3,16 @@ package app.components;
 import app.config.AppConfig;
 import app.utils.TagUtils;
 import com.pulumi.aws.AwsFunctions;
-import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.InternetGateway;
+import com.pulumi.aws.ec2.InternetGatewayArgs;
+import com.pulumi.aws.ec2.RouteTable;
+import com.pulumi.aws.ec2.RouteTableArgs;
+import com.pulumi.aws.ec2.RouteTableAssociation;
+import com.pulumi.aws.ec2.RouteTableAssociationArgs;
+import com.pulumi.aws.ec2.Subnet;
+import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.ec2.Vpc;
+import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.ec2.inputs.RouteTableRouteArgs;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
 import com.pulumi.aws.outputs.GetAvailabilityZonesResult;
@@ -21,7 +30,7 @@ public class NetworkStack extends ComponentResource {
     public final Output<String> internetGatewayId;
     public final Output<String> publicRouteTableId;
 
-    public NetworkStack(String name, ComponentResourceOptions options) {
+    public NetworkStack(String name, AppConfig config, ComponentResourceOptions options) {
         super("custom:infrastructure:NetworkStack", name, options);
 
         // Get availability zones
@@ -31,10 +40,10 @@ public class NetworkStack extends ComponentResource {
 
         // Create VPC
         var vpc = new Vpc("web-hosting-vpc", VpcArgs.builder()
-                .cidrBlock(AppConfig.getVpcCidrBlock())
+                .cidrBlock(config.getVpcCidrBlock())
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
-                .tags(TagUtils.getTagsWithName("WebHosting-VPC"))
+                .tags(TagUtils.getTagsWithName("WebHosting-VPC", config))
                 .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -45,7 +54,7 @@ public class NetworkStack extends ComponentResource {
         var internetGateway = new InternetGateway("web-hosting-igw",
                 InternetGatewayArgs.builder()
                         .vpcId(vpc.id())
-                        .tags(TagUtils.getTagsWithName("WebHosting-IGW"))
+                        .tags(TagUtils.getTagsWithName("WebHosting-IGW", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -56,10 +65,10 @@ public class NetworkStack extends ComponentResource {
         var publicSubnetPrimary = new Subnet("public-subnet-primary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
-                        .cidrBlock(AppConfig.getPublicSubnetPrimaryCidr())
+                        .cidrBlock(config.getPublicSubnetPrimaryCidr())
                         .availabilityZone(availabilityZones.applyValue(azs -> azs.names().get(0)))
                         .mapPublicIpOnLaunch(true)
-                        .tags(TagUtils.getTagsWithName("Public-Subnet-Primary"))
+                        .tags(TagUtils.getTagsWithName("Public-Subnet-Primary", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -67,10 +76,10 @@ public class NetworkStack extends ComponentResource {
         var publicSubnetSecondary = new Subnet("public-subnet-secondary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
-                        .cidrBlock(AppConfig.getPublicSubnetSecondaryCidr())
+                        .cidrBlock(config.getPublicSubnetSecondaryCidr())
                         .availabilityZone(availabilityZones.applyValue(azs -> azs.names().get(1)))
                         .mapPublicIpOnLaunch(true)
-                        .tags(TagUtils.getTagsWithName("Public-Subnet-Secondary"))
+                        .tags(TagUtils.getTagsWithName("Public-Subnet-Secondary", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -82,9 +91,9 @@ public class NetworkStack extends ComponentResource {
         var privateSubnetPrimary = new Subnet("private-subnet-primary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
-                        .cidrBlock(AppConfig.getPrivateSubnetPrimaryCidr())
+                        .cidrBlock(config.getPrivateSubnetPrimaryCidr())
                         .availabilityZone(availabilityZones.applyValue(azs -> azs.names().get(0)))
-                        .tags(TagUtils.getTagsWithName("Private-Subnet-Primary"))
+                        .tags(TagUtils.getTagsWithName("Private-Subnet-Primary", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -92,9 +101,9 @@ public class NetworkStack extends ComponentResource {
         var privateSubnetSecondary = new Subnet("private-subnet-secondary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
-                        .cidrBlock(AppConfig.getPrivateSubnetSecondaryCidr())
+                        .cidrBlock(config.getPrivateSubnetSecondaryCidr())
                         .availabilityZone(availabilityZones.applyValue(azs -> azs.names().get(1)))
-                        .tags(TagUtils.getTagsWithName("Private-Subnet-Secondary"))
+                        .tags(TagUtils.getTagsWithName("Private-Subnet-Secondary", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
@@ -110,7 +119,7 @@ public class NetworkStack extends ComponentResource {
                                 .cidrBlock("0.0.0.0/0")
                                 .gatewayId(internetGateway.id())
                                 .build())
-                        .tags(TagUtils.getTagsWithName("Public-Route-Table"))
+                        .tags(TagUtils.getTagsWithName("Public-Route-Table", config))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());

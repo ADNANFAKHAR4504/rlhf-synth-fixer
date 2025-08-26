@@ -3,17 +3,21 @@ import app.config.AppConfig;
 
 import java.util.Map;
 
-public class TagUtils {
-    public static Map<String, String> getDefaultTags() {
+public final class TagUtils {
+    
+    private TagUtils() {
+        // Utility class should not be instantiated
+    }
+    public static Map<String, String> getDefaultTags(AppConfig config) {
         return Map.of(
-                "Environment", AppConfig.getDefaultEnvironment(),
-                "Project", AppConfig.getProjectName(),
+                "Environment", config.getDefaultEnvironment(),
+                "Project", config.getProjectName(),
                 "ManagedBy", "Pulumi"
         );
     }
 
-    public static Map<String, String> getTagsWithName(String name) {
-        var tags = new java.util.HashMap<>(getDefaultTags());
+    public static Map<String, String> getTagsWithName(String name, AppConfig config) {
+        var tags = new java.util.HashMap<>(getDefaultTags(config));
         tags.put("Name", name);
         return tags;
     }
