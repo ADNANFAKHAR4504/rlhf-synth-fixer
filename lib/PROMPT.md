@@ -17,7 +17,7 @@ Explicitly blocks ALL outbound connections by removing the default allow-all rul
 
 Use proper CDK resource naming & tagging conventions with a 'corp' prefix for all resources.
 
-Include necessary metadata and descriptions for all resources to document their security purposes.
+Include necessary metadata & descriptions for all resources to document their security purposes.
 
 Ensure the synthesized CloudFormation template validates against AWS specifications and passes all syntax checks.
 
