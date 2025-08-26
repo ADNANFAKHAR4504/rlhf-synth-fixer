@@ -14,6 +14,7 @@ import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
 import com.pulumi.aws.s3.BucketPolicy;
 import com.pulumi.aws.s3.BucketPolicyArgs;
+
 import com.pulumi.aws.cloudtrail.Trail;
 import com.pulumi.aws.cloudtrail.TrailArgs;
 import com.pulumi.aws.iam.IamFunctions;
@@ -334,6 +335,8 @@ public final class Main {
             .bucket(getS3BucketName(config, "cloudtrail", "logs"))
             .forceDestroy(true)
             .tags(getStandardTags(config, "storage", "s3"))
+            .build(), CustomResourceOptions.builder()
+            .deleteBeforeReplace(true)
             .build());
         
         // 5.1. S3 Bucket Policy for CloudTrail logs using IAM policy document
