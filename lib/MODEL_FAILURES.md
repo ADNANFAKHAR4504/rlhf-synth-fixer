@@ -1,24 +1,33 @@
-The model response in MODEL_RESPONSE.md contained a completely incorrect CloudFormation YAML template for a CI/CD pipeline instead of the requested Pulumi Java program. The main failures were:
+# MODEL_FAILURES.md
 
-1. **Wrong Technology Stack**: The model provided CloudFormation YAML instead of Pulumi Java code, despite the prompt clearly requesting a Java program using the Pulumi AWS SDK.
+## Summary
 
-2. **Wrong Use Case**: The response implemented a complex CI/CD pipeline with CodePipeline, CodeBuild, S3 buckets, IAM roles, and StackSets - completely unrelated to the simple network infrastructure requirement.
+The model produced a **Pulumi Java** program that creates a VPC, two public subnets in different AZs, an Internet Gateway, a public route table with a default route, and associations—**broadly matching the requested network**. However, it **falls short of the ideal** by not pinning the AWS region via a provider, exporting only a minimal set of outputs, and omitting some structure and tags that aid downstream integration and observability.
 
-3. **Missing Core Requirements**: None of the actual requirements were implemented:
-   - No VPC with 10.0.0.0/16 CIDR block
-   - No public subnets in different AZs
-   - No Internet Gateway
-   - No route table configuration
-   - No Pulumi-specific outputs
+## What the model got right
 
-4. **Incorrect Region Focus**: While the template references us-east-1 in some places, it was designed as a multi-region deployment solution rather than the simple single-region network requested.
+- **VPC (10.0.0.0/16)** with DNS support/hostnames.  
+- **Two public subnets** in different AZs (`us-east-1a`, `us-east-1b`) with `mapPublicIpOnLaunch(true)`.  
+- **Internet Gateway**, **public route table**, **0.0.0.0/0 route**, and **associations**.  
 
-5. **Overly Complex Solution**: The response was a 435-line enterprise-grade CI/CD template when the requirement was for a minimal network setup that could be accomplished in under 100 lines of Pulumi Java code.
+## Gaps vs. the ideal response
 
-The correct solution required:
-- A simple Pulumi.run() structure with Java syntax
-- Basic EC2 resources (VPC, Subnets, IGW, Route Table, Route Table Associations)
-- Proper use of Pulumi Output types and context exports
-- Region-pinned AWS provider configuration
+1. **Region pinning via provider is missing (stability & portability)**
+   - *Issue*: The model relies on ambient `aws:region` config and does not construct a region-pinned `aws.Provider`, which can lead to inconsistencies when stacks or components expect explicit providers.  
+   - *Ideal*: Creates and uses a dedicated `Provider("aws-us-east-1", region="us-east-1")` and passes it via `CustomResourceOptions`.
 
-The model completely misunderstood the prompt and provided an unrelated infrastructure template that would not satisfy any of the stated requirements.
+2. **Outputs are too minimal for downstream tests and tooling**
+   - *Issue*: The model exports only a handful of values (VPC ID, two subnet IDs, IGW, route table).  
+   - *Ideal*: Exports **region**, **VPC CIDR**, **default route ID**, **subnet ID list**, **subnet CIDRs**, **AZ list**, **route table association IDs**, **name→ID map**, and **VPC tags**—useful for integration tests and automation pipelines.
+
+3. **Tags and naming conventions are incomplete**
+   - *Issue*: The model applies basic names but misses environment and descriptive tags.  
+   - *Ideal*: Tags should consistently include keys like `Name`, `Environment`, `Project`, and other identifiers to support cost allocation and governance.
+
+4. **Lacks structural alignment with ideal implementation**
+   - *Issue*: The resources are declared inline without helper methods or structured composition.  
+   - *Ideal*: The ideal solution structures subnets, associations, and outputs in a clearer, modular form that is easier to extend and test.
+
+## Conclusion
+
+While the model-generated code is functionally correct for a **basic public network setup**, it is **not production-grade**. The missing provider scoping, incomplete outputs, and lack of tagging/structure prevent it from meeting the standard required for maintainability and automated validation.
