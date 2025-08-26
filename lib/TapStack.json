@@ -1717,8 +1717,8 @@
             "Properties": {
                 "DefaultActions": [
                     {
-                        "type": "forward",
-                        "targetgrouparn": {
+                        "Type": "forward",
+                        "TargetGroupArn": {
                             "Ref": "TargetGroup"
                         }
                     }

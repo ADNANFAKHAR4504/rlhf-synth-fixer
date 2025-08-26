@@ -881,8 +881,8 @@ Resources:
     Condition: HasKeyPair
     Properties:
       DefaultActions:
-        - type: forward
-          targetgrouparn: !Ref TargetGroup
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
