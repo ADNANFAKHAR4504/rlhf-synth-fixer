@@ -1,0 +1,82 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "runtime_version": "17",
+  "pulumi_version": "0.11.0",
+  "aws_provider_version": "6.52.0",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291988",
+  "team": "5",
+  "startedAt": "2025-08-23T05:01:54.568Z",
+  "updatedAt": "2025-08-25T15:57:00.000Z",
+  "subtask": "financial-application-infrastructure",
+  "subject_labels": [
+    "aws",
+    "security",
+    "networking",
+    "encryption",
+    "monitoring",
+    "compliance",
+    "iam",
+    "vpc",
+    "kms",
+    "cloudtrail",
+    "cloudwatch",
+    "sns",
+    "ec2",
+    "s3"
+  ],
+  "training_quality": 8,
+  "architecture_pattern": "multi-tier-security-first",
+  "security_frameworks": [
+    "AWS Well-Architected",
+    "NIST",
+    "SOC2"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "infrastructure_features": [
+    "encryption-at-rest",
+    "network-isolation",
+    "monitoring-alarms",
+    "audit-logging",
+    "iam-roles",
+    "vpc-nat-gateway",
+    "security-groups",
+    "kms-encryption"
+  ],
+  "compliance_requirements": [
+    "data-encryption",
+    "audit-trails",
+    "network-segmentation",
+    "access-controls",
+    "monitoring-alerting"
+  ],
+  "deployment_region": "us-east-1",
+  "environment": "production",
+  "cost_optimization": true,
+  "high_availability": false,
+  "multi_az": false,
+  "estimated_monthly_cost_usd": 150,
+  "resource_count": 25,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,42 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291972",
+  "team": "2",
+  "startedAt": "2025-08-21T19:56:34.396Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "VPC",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "Lambda",
+    "SNS",
+    "Config",
+    "SecurityHub",
+    "SSM",
+    "SecretsManager",
+    "RDS",
+    "ElasticLoadBalancingV2",
+    "Events"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
+}
