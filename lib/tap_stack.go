@@ -1,4 +1,4 @@
-package tapstack
+package main
 
 import (
 	"archive/zip"
