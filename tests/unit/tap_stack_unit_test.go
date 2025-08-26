@@ -131,7 +131,7 @@ func TestRDSInstanceResources(t *testing.T) {
 		"Engine":                    "mysql",
 		"MultiAZ":                   true,
 		"DeletionProtection":        true,
-		"EnablePerformanceInsights": true,
+		"EnablePerformanceInsights": false,
 		"DBInstanceIdentifier":      "cf-rds-mysql-dev",
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{"Key": "Project", "Value": "CDKSetup"},

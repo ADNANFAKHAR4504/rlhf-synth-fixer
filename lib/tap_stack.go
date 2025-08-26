@@ -193,7 +193,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		DeletionProtection:        jsii.Bool(true),
 		InstanceIdentifier:        jsii.String("cf-rds-mysql-" + environmentSuffix),
 		MonitoringInterval:        awscdk.Duration_Seconds(jsii.Number(60)),
-		EnablePerformanceInsights: jsii.Bool(true),
+		EnablePerformanceInsights: jsii.Bool(false),
 	})
 	for key, value := range commonTags {
 		awscdk.Tags_Of(rdsInstance).Add(jsii.String(key), value, nil)
