@@ -16,8 +16,6 @@ import com.pulumi.aws.s3.BucketPublicAccessBlock;
 import com.pulumi.aws.s3.BucketPublicAccessBlockArgs;
 import com.pulumi.aws.s3.BucketWebsiteConfiguration;
 import com.pulumi.aws.s3.BucketWebsiteConfigurationArgs;
-import com.pulumi.aws.s3.BucketWebsiteConfigurationV2;
-import com.pulumi.aws.s3.BucketWebsiteConfigurationV2Args;
 import com.pulumi.aws.s3.inputs.BucketWebsiteConfigurationErrorDocumentArgs;
 import com.pulumi.aws.s3.inputs.BucketWebsiteConfigurationIndexDocumentArgs;
 import com.pulumi.core.Either;
@@ -91,7 +89,7 @@ public class StorageStack extends ComponentResource {
 
         var iamRole = new Role(name + "ec2-s3-access-role",
                 RoleArgs.builder()
-                        .name("ec2-s3-access-role")
+                        .name(name + "ec2-s3-access-role")
                         .assumeRolePolicy(assumeRolePolicy)
                         .tags(TagUtils.getTagsWithName("EC2-S3-Access-Role", config))
                         .build(), CustomResourceOptions.builder()
