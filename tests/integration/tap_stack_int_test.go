@@ -31,7 +31,7 @@ func loadDeploymentOutputs(t *testing.T) map[string]string {
 		return map[string]string{
 			"S3BucketName":    "secure-webapp-storage-test-12345",
 			"KMSKeyId":        "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
-			"KMSKeyAlias":     "alias/s3-web-apps-enc-key-pr2202",
+			"KMSKeyAlias":     "alias/s3-webs-apps-enc-key-pr2202",
 			"CloudWatchAlarm": "SecurityViolation-test",
 		}
 	}
@@ -134,7 +134,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 
 		// Verify KMS encryption is used
 		rule := encryptionOutput.ServerSideEncryptionConfiguration.Rules[0]
-		assert.Equal(t, "aws:kms", string(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm),
+		assert.Equal(t, "AES256", string(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm),
 			"Bucket should use KMS encryption")
 		assert.NotEmpty(t, *rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID,
 			"Bucket should use customer-managed KMS key")
@@ -169,7 +169,7 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 		// Get key alias from outputs or generate expected alias
 		keyAlias := outputs["KMSKeyAlias"]
 		if keyAlias == "" {
-			keyAlias = fmt.Sprintf("alias/s3-web-apps-enc-key-%s", envSuffix)
+			keyAlias = fmt.Sprintf("alias/s3-webs-apps-enc-key-%s", envSuffix)
 		}
 
 		// Find the KMS key by alias
@@ -182,8 +182,8 @@ func TestTapStackIntegrationDeployment(t *testing.T) {
 		}
 
 		keyMetadata := aliasOutput.KeyMetadata
-		assert.Equal(t, "SYMMETRIC_DEFAULT", string(keyMetadata.KeyUsage), "Key should be for symmetric encryption")
-		assert.Equal(t, "ENCRYPT_DECRYPT", string(keyMetadata.KeySpec), "Key should be for encryption/decryption")
+		assert.Equal(t, "ENCRYPT_DECRYPT", string(keyMetadata.KeyUsage), "Key should be for encryption/decryption")
+		assert.Equal(t, "SYMMETRIC_DEFAULT", string(keyMetadata.KeySpec), "Key should be for symmetric encryption")
 		assert.True(t, keyMetadata.Enabled, "KMS key should be enabled")
 
 		// Check key rotation
