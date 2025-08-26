@@ -1,7 +1,8 @@
-Follwing code block giving build error -
+Getting the build error when trying to build the cdk stack.
+
+Code Block
 
 ```typescript
-  // Build Stage
         {
           stageName: 'Build',
           actions: [
@@ -17,12 +18,14 @@ Follwing code block giving build error -
               },
             }),
           ],
-        },
+        }
+```
+
 
 Error:
  error TS2339: Property 'variable' does not exist on type 'typeof CodeBuildAction'.
 
                value: codepipeline_actions.CodeBuildAction.variable('CODEBUILD_BUILD_NUMBER'),
-```
 
-Fix it and provide me error free code
+
+Check the error carefully and fix it so that build will run without any error.
