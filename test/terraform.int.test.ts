@@ -17,15 +17,15 @@ const sts = new STSClient({ region: 'us-east-1' });
 const TEST_CONFIG = {
   applicationName: 'webapp',
   environment: 'production',
-  regions: ['us-east-1', 'us-west-2'],
+  regions: ['us-east-1', 'us-west-2'] as const,
   vpcCidrs: {
     'us-east-1': '10.0.0.0/16',
     'us-west-2': '10.1.0.0/16',
-  },
+  } as const,
   subnetCidrs: {
     'us-east-1': '10.0.1.0/24',
     'us-west-2': '10.1.1.0/24',
-  },
+  } as const,
 };
 
 describe('Terraform Infrastructure Integration Tests', () => {
@@ -59,7 +59,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const vpc = vpcs.Vpcs![0];
 
         // Validate VPC configuration
-        expect(vpc.CidrBlock).toBe(TEST_CONFIG.vpcCidrs[region]);
+        expect(vpc.CidrBlock).toBe(TEST_CONFIG.vpcCidrs[region as keyof typeof TEST_CONFIG.vpcCidrs]);
         expect(vpc.State).toBe('available');
         // Note: EnableDnsHostnames and EnableDnsSupport are not returned by the API
         // but are set in the Terraform configuration
@@ -99,7 +99,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const subnet = subnets.Subnets![0];
 
         // Validate subnet configuration
-        expect(subnet.CidrBlock).toBe(TEST_CONFIG.subnetCidrs[region]);
+        expect(subnet.CidrBlock).toBe(TEST_CONFIG.subnetCidrs[region as keyof typeof TEST_CONFIG.subnetCidrs]);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.State).toBe('available');
 
