@@ -79,11 +79,36 @@ jobs:
           echo "🔍 Default VPC ID: $VPC_ID"
           
           # List all Internet Gateways for this VPC
-          echo "🌐 Internet Gateways in VPC $VPC_ID:"
+          echo "🌐 Internet Gateways attached to VPC $VPC_ID:"
           aws ec2 describe-internet-gateways \
             --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
             --query 'InternetGateways[*].[InternetGatewayId,State,Attachments[0].State]' \
             --output table
+          
+          # List all available (unattached) Internet Gateways
+          echo "🌐 Available (unattached) Internet Gateways:"
+          aws ec2 describe-internet-gateways \
+            --filters "Name=attachment.state,Values=detached" \
+            --query 'InternetGateways[*].[InternetGatewayId,State]' \
+            --output table
+          
+          # Check if the referenced IGW exists at all
+          echo "🔍 Checking if IGW igw-01f3dc688f3cbea14 exists..."
+          IGW_EXISTS=$(aws ec2 describe-internet-gateways \
+            --internet-gateway-ids igw-01f3dc688f3cbea14 \
+            --query 'InternetGateways | length(@)' \
+            --output text 2>/dev/null || echo "0")
+          
+          if [ "$IGW_EXISTS" -gt 0 ]; then
+            echo "✅ IGW igw-01f3dc688f3cbea14 exists"
+            IGW_STATE=$(aws ec2 describe-internet-gateways \
+              --internet-gateway-ids igw-01f3dc688f3cbea14 \
+              --query 'InternetGateways[0].Attachments[0].State' \
+              --output text 2>/dev/null || echo "detached")
+            echo "🔍 IGW state: $IGW_STATE"
+          else
+            echo "❌ IGW igw-01f3dc688f3cbea14 does not exist - was deleted!"
+          fi
           
           # List all subnets with their routing info
           echo "🗺️  All subnets in VPC $VPC_ID:"
@@ -161,7 +186,39 @@ jobs:
               --output text)
             
             if [ "$IGW_ROUTE_EXISTS" -gt 0 ]; then
-              echo "✅ Existing instance subnet has IGW route - connectivity should work"
+              # Check if the IGW route is in blackhole state
+              BLACKHOLE_ROUTES=$(aws ec2 describe-route-tables \
+                --route-table-ids $EXISTING_RT \
+                --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0' && starts_with(GatewayId, 'igw-') && State=='blackhole'] | length(@)" \
+                --output text)
+              
+              if [ "$BLACKHOLE_ROUTES" -gt 0 ]; then
+                echo "❌ IGW route exists but is in BLACKHOLE state - IGW is detached!"
+                IGW_ID=$(aws ec2 describe-route-tables \
+                  --route-table-ids $EXISTING_RT \
+                  --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0' && starts_with(GatewayId, 'igw-')].GatewayId" \
+                  --output text)
+                echo "🔧 Attempting to reattach Internet Gateway $IGW_ID to VPC $VPC_ID"
+                
+                # Try to attach the IGW to the VPC
+                aws ec2 attach-internet-gateway \
+                  --internet-gateway-id $IGW_ID \
+                  --vpc-id $VPC_ID \
+                  && echo "✅ Successfully reattached Internet Gateway!" \
+                  || echo "❌ Failed to reattach Internet Gateway"
+                
+                # Wait a moment for the change to propagate
+                sleep 10
+                
+                # Check if route is now active
+                ROUTE_STATE=$(aws ec2 describe-route-tables \
+                  --route-table-ids $EXISTING_RT \
+                  --query "RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0' && starts_with(GatewayId, 'igw-')].State" \
+                  --output text)
+                echo "🔍 IGW route state after reattachment: $ROUTE_STATE"
+              else
+                echo "✅ Existing instance subnet has active IGW route - connectivity should work"
+              fi
             else
               echo "❌ Existing instance subnet has NO IGW route - this explains the timeout!"
               echo "🔍 Routes in route table $EXISTING_RT:"
@@ -269,11 +326,36 @@ jobs:
           echo "🔍 Default VPC ID: $VPC_ID"
           
           # List all Internet Gateways for this VPC
-          echo "🌐 Internet Gateways in VPC $VPC_ID:"
+          echo "🌐 Internet Gateways attached to VPC $VPC_ID:"
           aws ec2 describe-internet-gateways \
             --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
             --query 'InternetGateways[*].[InternetGatewayId,State,Attachments[0].State]' \
             --output table
+          
+          # List all available (unattached) Internet Gateways
+          echo "🌐 Available (unattached) Internet Gateways:"
+          aws ec2 describe-internet-gateways \
+            --filters "Name=attachment.state,Values=detached" \
+            --query 'InternetGateways[*].[InternetGatewayId,State]' \
+            --output table
+          
+          # Check if the referenced IGW exists at all
+          echo "🔍 Checking if IGW igw-01f3dc688f3cbea14 exists..."
+          IGW_EXISTS=$(aws ec2 describe-internet-gateways \
+            --internet-gateway-ids igw-01f3dc688f3cbea14 \
+            --query 'InternetGateways | length(@)' \
+            --output text 2>/dev/null || echo "0")
+          
+          if [ "$IGW_EXISTS" -gt 0 ]; then
+            echo "✅ IGW igw-01f3dc688f3cbea14 exists"
+            IGW_STATE=$(aws ec2 describe-internet-gateways \
+              --internet-gateway-ids igw-01f3dc688f3cbea14 \
+              --query 'InternetGateways[0].Attachments[0].State' \
+              --output text 2>/dev/null || echo "detached")
+            echo "🔍 IGW state: $IGW_STATE"
+          else
+            echo "❌ IGW igw-01f3dc688f3cbea14 does not exist - was deleted!"
+          fi
           
           # List all subnets with their routing info
           echo "🗺️  All subnets in VPC $VPC_ID:"
