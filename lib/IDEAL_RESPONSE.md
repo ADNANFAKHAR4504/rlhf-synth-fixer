@@ -436,7 +436,7 @@ func createNetworkACLs(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pulumi.S
 func createVPCFlowLogs(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pulumi.StringMap) error {
 	// Create CloudWatch Log Group
 	logGroup, err := cloudwatch.NewLogGroup(ctx, "secure-vpc-flow-logs", &cloudwatch.LogGroupArgs{
-		Name:            pulumi.String("/aws/vpc/flowlogs"),
+		Name:            pulumi.String("/aws/vpc/secure-vpc-flowlogs"),
 		RetentionInDays: pulumi.Int(14),
 		Tags: tags,
 	})
