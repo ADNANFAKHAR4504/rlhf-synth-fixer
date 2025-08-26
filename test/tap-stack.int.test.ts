@@ -54,7 +54,7 @@ describe('TapStack Integration Tests', () => {
 
   beforeAll(async () => {
     // Load template
-    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent) as Template;
 
