@@ -1,3 +1,6 @@
+The errors are related to the S3 bucket configuration API changes in the newer version of the Pulumi AWS provider. Here's the corrected and properly `gofmt` formatted code:
+
+```go
 package main
 
 import (
@@ -466,3 +469,29 @@ func main() {
 		return nil
 	})
 }
+```
+
+## Key Changes Made to Fix the Errors:
+
+### 1. **S3 Bucket Creation**
+- Changed from `s3.NewBucket` to `s3.NewBucketV2`
+- Updated the corresponding args struct
+
+### 2. **S3 Bucket Versioning**
+- Changed from `s3.NewBucketVersioning` to `s3.NewBucketVersioningV2`
+- Updated field names and struct types
+
+### 3. **S3 Server-Side Encryption**
+- Changed from `s3.NewBucketServerSideEncryptionConfiguration` to `s3.NewBucketServerSideEncryptionConfigurationV2`
+- Updated all related struct types and field names
+
+### 4. **Struct Field Updates**
+All S3-related structs now use the V2 versions with correct field names and types.
+
+## Additional Notes:
+
+1. **API Version**: The code now uses the V2 API for S3 resources which is the current standard in Pulumi AWS provider v6.x
+2. **Backward Compatibility**: The V2 resources provide better functionality and are the recommended approach
+3. **Field Names**: All field names have been updated to match the V2 API structure
+
+This should resolve all the compilation errors you were encountering. The code maintains all the HIPAA compliance features while using the correct API calls for the current version of the Pulumi AWS provider.
