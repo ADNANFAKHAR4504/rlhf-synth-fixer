@@ -67,7 +67,7 @@ public class Route53Stack extends Stack {
 
         // Create hosted zone
         HostedZone hostedZone = HostedZone.Builder.create(this, "WebAppHostedZone" + environmentSuffix)
-                .zoneName("webapp-" + environmentSuffix + ".example.com")
+                .zoneName("myapp-" + environmentSuffix + ".example.org")
                 .comment("Hosted zone for multi-region web application")
                 .build();
 

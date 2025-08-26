@@ -86,7 +86,7 @@ public class Route53StackTest {
         
         // Check for hosted zone
         template.hasResourceProperties("AWS::Route53::HostedZone", 
-                Map.of("Name", Match.stringLikeRegexp("webapp-test\\.example\\.com")));
+                Map.of("Name", Match.stringLikeRegexp("myapp-test\\.example\\.org")));
         
         // Check for health checks
         template.hasResourceProperties("AWS::Route53::HealthCheck", Match.anyValue());
