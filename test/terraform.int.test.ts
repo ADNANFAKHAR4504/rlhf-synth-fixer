@@ -10,6 +10,12 @@ const isNonEmptyString = (val: any): boolean =>
 const isValidArn = (val: any): boolean =>
   typeof val === "string" && /^arn:aws:[a-z\-]+:[\w\-]*:\d{12}:[\w\-\/.:]+$/.test(val);
 
+const isValidS3Arn = (val: any): boolean =>
+  typeof val === "string" && /^arn:aws:s3:::[a-z0-9\-\.]+$/.test(val);
+
+const isValidWafWebAclArn = (val: any): boolean =>
+  typeof val === "string" && /^arn:aws:wafv2:(us-east-1|[a-z0-9\-]+):\d{12}:(global|regional)\/webacl\/[a-zA-Z0-9\-]+\/[a-f0-9\-]+$/.test(val);
+
 const isValidVpcId = (val: any): boolean =>
   isNonEmptyString(val) && /^vpc-[a-z0-9]+$/.test(val);
 
@@ -125,7 +131,7 @@ describe("Comprehensive AWS Terraform Integration Tests (from flat outputs)", ()
   });
 
   it("s3_bucket_arn, s3_bucket_name, s3_bucket_domain_name should be valid", () => {
-    expect(isValidArn(outputs.s3_bucket_arn)).toBe(true);
+    expect(isValidS3Arn(outputs.s3_bucket_arn)).toBe(true);
     expect(isValidBucketName(outputs.s3_bucket_name)).toBe(true);
     expect(outputs.s3_bucket_domain_name).toMatch(/\.amazonaws\.com$/);
   });
@@ -139,7 +145,7 @@ describe("Comprehensive AWS Terraform Integration Tests (from flat outputs)", ()
 
   it("waf_web_acl_id and waf_web_acl_arn should be valid", () => {
     expect(isNonEmptyString(outputs.waf_web_acl_id)).toBe(true);
-    expect(isValidArn(outputs.waf_web_acl_arn)).toBe(true);
+    expect(isValidWafWebAclArn(outputs.waf_web_acl_arn)).toBe(true);
   });
 
   it("cloudtrail_name, cloudtrail_arn, cloudtrail_s3_bucket_name should be valid", () => {
