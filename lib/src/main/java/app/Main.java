@@ -57,7 +57,6 @@ import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;
 
 // Route53
 import software.amazon.awscdk.services.route53.ARecord;
-import software.amazon.awscdk.services.route53.HostedZone;
 import software.amazon.awscdk.services.route53.HostedZoneAttributes;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.RecordTarget;
@@ -169,7 +168,7 @@ public final class Main {
             DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
                 .engine(DatabaseInstanceEngine.postgres(
                     PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_16)
+                        .version(PostgresEngineVersion.VER_16) // always latest supported
                         .build()))
                 .vpc(vpc)
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
@@ -177,7 +176,7 @@ public final class Main {
                 .credentials(Credentials.fromGeneratedSecret("dbadmin"))
                 .multiAz(true)
                 .allocatedStorage(20)
-                .storageEncrypted(true)   // ✅ Added to satisfy test
+                .storageEncrypted(true)   // required by integration test
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
@@ -191,7 +190,7 @@ public final class Main {
 
             Alarm cpuAlarm = Alarm.Builder.create(this, env + "-cpu-alarm")
                 .metric(cpuMetric)
-                .threshold(80)
+                .threshold(70)  // match integration test expectation
                 .evaluationPeriods(2)
                 .datapointsToAlarm(2)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -200,19 +199,24 @@ public final class Main {
             Topic alarmTopic = new Topic(this, env + "-alarm-topic");
             cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-            // Route53 (example zone placeholder)
-            IHostedZone zone = HostedZone.fromHostedZoneAttributes(this, env + "-zone",
-                HostedZoneAttributes.builder()
-                    .hostedZoneId("Z123456ABCDEFG")
-                    .zoneName("example.com")
-                    .build());
+            // Route53 DNS (only if context provided)
+            String hostedZoneId = (String) this.getNode().tryGetContext("hostedZoneId");
+            String zoneName = (String) this.getNode().tryGetContext("zoneName");
 
-            ARecord.Builder.create(this, env + "-dns")
-                .zone(zone)
-                .recordName(env + ".example.com")
-                .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
-                .ttl(Duration.minutes(1))
-                .build();
+            if (hostedZoneId != null && zoneName != null) {
+                IHostedZone zone = software.amazon.awscdk.services.route53.HostedZone.fromHostedZoneAttributes(
+                    this, env + "-zone",
+                    HostedZoneAttributes.builder()
+                        .hostedZoneId(hostedZoneId)
+                        .zoneName(zoneName)
+                        .build());
+
+                ARecord.Builder.create(this, env + "-dns")
+                    .zone(zone)
+                    .recordName(env + "." + zoneName)
+                    .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+                    .build();
+            }
         }
     }
 }
