@@ -9,8 +9,7 @@ import com.pulumi.aws.kms.Alias;
 import com.pulumi.aws.kms.AliasArgs;
 import com.pulumi.aws.kms.KeyPolicy;
 import com.pulumi.aws.kms.KeyPolicyArgs;
-import com.pulumi.aws.s3.BucketObject;
-import com.pulumi.aws.s3.BucketObjectArgs;
+
 
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.s3.Bucket;
