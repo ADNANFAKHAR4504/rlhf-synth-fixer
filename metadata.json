@@ -5,5 +5,9 @@
   "turn_type": "single",
   "po_id": "310052",
   "team": "6",
-  "startedAt": "2025-08-26T09:23:20.383Z"
+  "startedAt": "2025-08-26T09:23:20.383Z",
+  "subtask": "multi-region-web-infrastructure",
+  "subject_labels": ["vpc", "alb", "autoscaling", "cloudwatch", "security-groups", "multi-region", "web-application"],
+  "training_quality": "high",
+  "aws_services": ["EC2", "VPC", "ELB", "AutoScaling", "CloudWatch"]
 }
