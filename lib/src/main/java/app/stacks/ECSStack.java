@@ -33,7 +33,7 @@ public final class ECSStack extends Stack {
     private final ICluster cluster;
     private final FargateService service;
 
-    ECSStack(final Construct scope, final String id, final ECSStackProps ecsProps) {
+    public ECSStack(final Construct scope, final String id, final ECSStackProps ecsProps) {
         super(scope, id, ecsProps.getStackProps());
         
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
