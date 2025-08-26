@@ -1,38 +1,45 @@
-resource "aws_cloudwatch_log_group" "cloudtrail" {
+# CloudWatch Log Group for failed login attempts (without KMS for now)
+resource "aws_cloudwatch_log_group" "security_logs" {
   name              = var.log_group_name
   retention_in_days = var.retention_in_days
-  kms_key_id        = var.kms_key_id
 
-  tags = merge(
-    var.common_tags,
-    {
-      Name = var.log_group_name
-    }
-  )
+  tags = {
+    Name    = "SecConfig-Security-Logs"
+    Project = "SecurityConfiguration"
+  }
 }
 
-resource "aws_cloudwatch_log_metric_filter" "security_events" {
-  name           = var.metric_filter_name
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-  pattern        = var.metric_pattern
+# CloudWatch Log Metric Filter for failed logins
+resource "aws_cloudwatch_log_metric_filter" "failed_logins" {
+  name           = "SecConfig-Failed-Console-Logins"
+  log_group_name = aws_cloudwatch_log_group.security_logs.name
+
+  # Use JSON matching instead of dot notation
+  pattern = "{ ($.eventName = \"ConsoleLogin\") && ($.responseElements.ConsoleLogin = \"Failure\") }"
 
   metric_transformation {
-    name      = var.metric_name
-    namespace = var.metric_namespace
+    name      = "ConsoleLoginFailures"
+    namespace = "SecConfig/Security"
     value     = "1"
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "security_alarm" {
-  alarm_name          = var.alarm_name
-  comparison_operator = var.comparison_operator
-  evaluation_periods  = var.evaluation_periods
-  metric_name         = var.metric_name
-  namespace           = var.metric_namespace
-  period              = var.period
-  statistic           = var.statistic
-  threshold           = var.threshold
-  alarm_description   = var.alarm_description
-  actions_enabled     = true
-  alarm_actions       = var.alarm_actions
+
+# CloudWatch Alarm for failed login attempts
+resource "aws_cloudwatch_metric_alarm" "failed_logins" {
+  alarm_name          = "SecConfig-Failed-Logins"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "ConsoleLoginFailures"
+  namespace           = "SecConfig/Security"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors failed console login attempts"
+  alarm_actions       = [var.sns_topic]
+
+  tags = {
+    Name    = "SecConfig-Failed-Logins-Alarm"
+    Project = "SecurityConfiguration"
+  }
 }

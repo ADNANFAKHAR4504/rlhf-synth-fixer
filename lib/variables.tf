@@ -27,3 +27,33 @@ variable "enable_guardduty" {
   type        = bool
   default     = false
 }
+
+variable "project" {
+  description = "Name of the project"
+  type        = string
+  default     = "security_config_pr2219"
+}
+
+variable "environment" {
+  description = "Name of the project"
+  type        = string
+  default     = "dev"
+}
+
+variable "public_subnet_cidrs" {
+  description = "List of CIDR blocks for public subnets"
+  type        = list(string)
+  default     = [
+    "10.0.1.0/24", # Public subnet in AZ1
+    "10.0.2.0/24"  # Public subnet in AZ2
+  ]
+}
+
+variable "private_subnet_cidrs" {
+  description = "List of CIDR blocks for private subnets"
+  type        = list(string)
+  default     = [
+    "10.0.3.0/24", # Private subnet in AZ1
+    "10.0.4.0/24"  # Private subnet in AZ2
+  ]
+}
