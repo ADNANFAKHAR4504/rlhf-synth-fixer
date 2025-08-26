@@ -284,7 +284,24 @@ systemctl restart httpd`),
 	if err != nil {
 		return nil, err
 	}
-	_, err = lambda.NewFunction(ctx, fmt.Sprintf("log-shipper-%s", region), &lambda.FunctionArgs{Runtime: pulumi.String("python3.9"), Code: pulumi.NewFileArchive("lambda.zip"), Handler: pulumi.String("index.handler"), Role: lambdaRole.Arn, Environment: &lambda.FunctionEnvironmentArgs{Variables: pulumi.StringMap{"LOG_GROUP": logGroup.Name}}, Tags: tags}, pulumi.Provider(provider))
+	_, err = lambda.NewFunction(ctx, fmt.Sprintf("log-shipper-%s", region), &lambda.FunctionArgs{
+		Runtime: pulumi.String(lambda.RuntimeNodeJS20dX),
+		// Inline Lambda code using an AssetArchive to avoid external zip artifacts.
+		Code: pulumi.NewAssetArchive(map[string]pulumi.Asset{
+			"index.mjs": pulumi.NewStringAsset(`export const handler = async (event) => {
+			  console.log('Event:', JSON.stringify(event));
+			  return { statusCode: 200, body: JSON.stringify({ message: 'Lambda OK' }) };
+			};`),
+		}),
+		Handler: pulumi.String("index.handler"),
+		Role:    lambdaRole.Arn,
+		Environment: &lambda.FunctionEnvironmentArgs{
+			Variables: pulumi.StringMap{
+				"LOG_GROUP": logGroup.Name,
+			},
+		},
+		Tags: tags,
+	}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
 	}
