@@ -6,9 +6,13 @@ import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
 
-import java.util.*;
-// Import Stack from java.util explicitly resolved through full qualification where needed
+import java.util.List;
+import java.util.Map;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Random;
 import java.util.stream.Collectors;
+// Import Stack from java.util explicitly resolved through full qualification where needed
 
 /**
  * Complete infrastructure stack implementation using AWS CDK for Java
@@ -17,7 +21,7 @@ import java.util.stream.Collectors;
 public class TapStack extends software.amazon.awscdk.Stack {
     
     // Environment configuration
-    private static class EnvironmentConfig {
+    private static final class EnvironmentConfig {
         public final String environment;
         public final String region;
         public final String accountId;
@@ -31,10 +35,10 @@ public class TapStack extends software.amazon.awscdk.Stack {
         public final String rolePrefix;
         public final Map<String, String> commonTags;
         
-        public EnvironmentConfig(String environment, String region, String accountId, String suffix,
-                                String randomSuffix, String vpcCidr, List<String> publicSubnetCidrs,
-                                List<String> privateSubnetCidrs, String loggingBucket, String replicationBucket,
-                                String rolePrefix, Map<String, String> commonTags) {
+        public EnvironmentConfig(final String environment, final String region, final String accountId, final String suffix,
+                                final String randomSuffix, final String vpcCidr, final List<String> publicSubnetCidrs,
+                                final List<String> privateSubnetCidrs, final String loggingBucket, final String replicationBucket,
+                                final String rolePrefix, final Map<String, String> commonTags) {
             this.environment = environment;
             this.region = region;
             this.accountId = accountId;
@@ -51,15 +55,15 @@ public class TapStack extends software.amazon.awscdk.Stack {
     }
     
     // VPC Component class
-    private static class VPCComponent {
+    private static final class VPCComponent {
         public final Vpc vpc;
         public final List<Subnet> publicSubnets;
         public final List<Subnet> privateSubnets;
         public final CfnInternetGateway internetGateway;
         public final List<CfnNatGateway> natGateways;
         
-        public VPCComponent(Vpc vpc, List<Subnet> publicSubnets, List<Subnet> privateSubnets,
-                          CfnInternetGateway internetGateway, List<CfnNatGateway> natGateways) {
+        public VPCComponent(final Vpc vpc, final List<Subnet> publicSubnets, final List<Subnet> privateSubnets,
+                          final CfnInternetGateway internetGateway, final List<CfnNatGateway> natGateways) {
             this.vpc = vpc;
             this.publicSubnets = publicSubnets;
             this.privateSubnets = privateSubnets;
@@ -69,22 +73,22 @@ public class TapStack extends software.amazon.awscdk.Stack {
     }
     
     // IAM Component class
-    private static class IAMComponent {
+    private static final class IAMComponent {
         public final Role ec2Role;
         public final Role lambdaRole;
         
-        public IAMComponent(Role ec2Role, Role lambdaRole) {
+        public IAMComponent(final Role ec2Role, final Role lambdaRole) {
             this.ec2Role = ec2Role;
             this.lambdaRole = lambdaRole;
         }
     }
     
     // S3 Component class
-    private static class S3Component {
+    private static final class S3Component {
         public final Bucket loggingBucket;
         public final Bucket replicationBucket;
         
-        public S3Component(Bucket loggingBucket, Bucket replicationBucket) {
+        public S3Component(final Bucket loggingBucket, final Bucket replicationBucket) {
             this.loggingBucket = loggingBucket;
             this.replicationBucket = replicationBucket;
         }
@@ -132,7 +136,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
     /**
      * Get configuration for specified environment
      */
-    private EnvironmentConfig getConfig(String env) {
+    private EnvironmentConfig getConfig(final String env) {
         Map<String, EnvironmentConfig> configs = new HashMap<>();
         
         configs.put("dev", getDevConfig());
@@ -151,19 +155,19 @@ public class TapStack extends software.amazon.awscdk.Stack {
      * Development environment configuration
      */
     private EnvironmentConfig getDevConfig() {
-        String environment = "dev";
-        String suffix = getEnvironmentSuffix(environment);
-        String randomSuffix = generateRandomSuffix();
-        String accountId = getAccountId(environment);
+        final String environmentName = "dev";
+        final String suffix = getEnvironmentSuffix(environmentName);
+        final String randomSuffix = generateRandomSuffix();
+        final String accountId = getAccountId(environmentName);
         
-        Map<String, String> commonTags = new HashMap<>();
-        commonTags.put("Environment", environment);
+        final Map<String, String> commonTags = new HashMap<>();
+        commonTags.put("Environment", environmentName);
         commonTags.put("Project", "infrastructure");
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
         return new EnvironmentConfig(
-            environment,
+            environmentName,
             "us-east-1",
             accountId,
             suffix,
@@ -182,19 +186,19 @@ public class TapStack extends software.amazon.awscdk.Stack {
      * Staging environment configuration
      */
     private EnvironmentConfig getStagingConfig() {
-        String environment = "staging";
-        String suffix = getEnvironmentSuffix(environment);
-        String randomSuffix = generateRandomSuffix();
-        String accountId = getAccountId(environment);
+        final String environmentName = "staging";
+        final String suffix = getEnvironmentSuffix(environmentName);
+        final String randomSuffix = generateRandomSuffix();
+        final String accountId = getAccountId(environmentName);
         
-        Map<String, String> commonTags = new HashMap<>();
-        commonTags.put("Environment", environment);
+        final Map<String, String> commonTags = new HashMap<>();
+        commonTags.put("Environment", environmentName);
         commonTags.put("Project", "infrastructure");
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
         return new EnvironmentConfig(
-            environment,
+            environmentName,
             "us-east-2",
             accountId,
             suffix,
@@ -213,19 +217,19 @@ public class TapStack extends software.amazon.awscdk.Stack {
      * Production environment configuration
      */
     private EnvironmentConfig getProdConfig() {
-        String environment = "prod";
-        String suffix = getEnvironmentSuffix(environment);
-        String randomSuffix = generateRandomSuffix();
-        String accountId = getAccountId(environment);
+        final String environmentName = "prod";
+        final String suffix = getEnvironmentSuffix(environmentName);
+        final String randomSuffix = generateRandomSuffix();
+        final String accountId = getAccountId(environmentName);
         
-        Map<String, String> commonTags = new HashMap<>();
-        commonTags.put("Environment", environment);
+        final Map<String, String> commonTags = new HashMap<>();
+        commonTags.put("Environment", environmentName);
         commonTags.put("Project", "infrastructure");
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
         return new EnvironmentConfig(
-            environment,
+            environmentName,
             "us-west-1",
             accountId,
             suffix,
@@ -304,7 +308,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
     private IAMComponent buildIAMComponent() {
         // Create EC2 role
         Role ec2Role = Role.Builder.create(this, "EC2Role")
-            .roleName(config.rolePrefix + "-ec2-role")
+            .roleName(config.environment + "-" + config.rolePrefix + "-ec2-role")
             .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
             .managedPolicies(Arrays.asList(
                 ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
@@ -319,7 +323,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
         
         // Create Lambda role
         Role lambdaRole = Role.Builder.create(this, "LambdaRole")
-            .roleName(config.rolePrefix + "-lambda-role")
+            .roleName(config.environment + "-" + config.rolePrefix + "-lambda-role")
             .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
             .managedPolicies(Arrays.asList(
                 ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")
@@ -345,14 +349,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
                     .resources(Arrays.asList(
                         String.format("arn:aws:s3:::%s/*", config.loggingBucket),
                         String.format("arn:aws:s3:::%s/*", config.replicationBucket)
-                    ))
-                    .build(),
-                PolicyStatement.Builder.create()
-                    .effect(Effect.ALLOW)
-                    .actions(Arrays.asList("s3:ListBucket"))
-                    .resources(Arrays.asList(
-                        String.format("arn:aws:s3:::%s", config.loggingBucket),
-                        String.format("arn:aws:s3:::%s", config.replicationBucket)
                     ))
                     .build()
             ))
@@ -382,7 +378,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
             .lifecycleRules(Arrays.asList(
                 LifecycleRule.builder()
-                    .id("transition-to-glacier")
                     .enabled(true)
                     .transitions(Arrays.asList(
                         Transition.builder()
@@ -411,7 +406,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
             .lifecycleRules(Arrays.asList(
                 LifecycleRule.builder()
-                    .id("transition-to-glacier")
                     .enabled(true)
                     .transitions(Arrays.asList(
                         Transition.builder()
@@ -432,73 +426,126 @@ public class TapStack extends software.amazon.awscdk.Stack {
         Tags.of(replicationBucket).add("Project", config.commonTags.get("Project"));
         Tags.of(replicationBucket).add("ManagedBy", config.commonTags.get("ManagedBy"));
         
-        // Set up cross-region replication if needed
+        // Add S3 bucket policies for SSL enforcement
+        addS3BucketPolicies(loggingBucket, replicationBucket);
+        
+        // Set up cross-region replication if needed (moved to separate method to avoid dependency cycle)
         if (!config.environment.equals("dev")) {
-            // Create replication role
-            Role replicationRole = Role.Builder.create(this, "S3ReplicationRole")
-                .roleName(config.rolePrefix + "-s3-replication-role")
-                .assumedBy(new ServicePrincipal("s3.amazonaws.com"))
-                .inlinePolicies(Map.of(
-                    "ReplicationPolicy", PolicyDocument.Builder.create()
-                        .statements(Arrays.asList(
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(Arrays.asList(
-                                    "s3:GetReplicationConfiguration",
-                                    "s3:ListBucket"
-                                ))
-                                .resources(Arrays.asList(loggingBucket.getBucketArn()))
-                                .build(),
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(Arrays.asList(
-                                    "s3:GetObjectVersionForReplication",
-                                    "s3:GetObjectVersionAcl"
-                                ))
-                                .resources(Arrays.asList(loggingBucket.getBucketArn() + "/*"))
-                                .build(),
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(Arrays.asList(
-                                    "s3:ReplicateObject",
-                                    "s3:ReplicateDelete"
-                                ))
-                                .resources(Arrays.asList(replicationBucket.getBucketArn() + "/*"))
-                                .build()
-                        ))
-                        .build()
-                ))
-                .build();
-            
-            // Configure replication
-            CfnBucket cfnLoggingBucket = (CfnBucket) loggingBucket.getNode().getDefaultChild();
-            cfnLoggingBucket.setReplicationConfiguration(
-                CfnBucket.ReplicationConfigurationProperty.builder()
-                    .role(replicationRole.getRoleArn())
-                    .rules(Arrays.asList(
-                        CfnBucket.ReplicationRuleProperty.builder()
-                            .id("replicate-all")
-                            .status("Enabled")
-                            .priority(1)
-                            .deleteMarkerReplication(
-                                CfnBucket.DeleteMarkerReplicationProperty.builder()
-                                    .status("Enabled")
-                                    .build()
-                            )
-                            .filter(CfnBucket.ReplicationRuleFilterProperty.builder().build())
-                            .destination(
-                                CfnBucket.ReplicationDestinationProperty.builder()
-                                    .bucket(replicationBucket.getBucketArn())
-                                    .storageClass("STANDARD_IA")
-                                    .build()
-                            )
-                            .build()
-                    ))
-                    .build()
-            );
+            setupS3Replication(loggingBucket, replicationBucket);
         }
         
         return new S3Component(loggingBucket, replicationBucket);
+    }
+    
+    /**
+     * Add SSL enforcement policies to S3 buckets
+     */
+    private void addS3BucketPolicies(final Bucket loggingBucket, final Bucket replicationBucket) {
+        // SSL enforcement policy for logging bucket
+        
+        loggingBucket.addToResourcePolicy(
+            PolicyStatement.Builder.create()
+                .effect(Effect.DENY)
+                .principals(Arrays.asList(new AnyPrincipal()))
+                .actions(Arrays.asList("s3:*"))
+                .resources(Arrays.asList(
+                    loggingBucket.getBucketArn(),
+                    loggingBucket.getBucketArn() + "/*"
+                ))
+                .conditions(Map.of(
+                    "Bool", Map.of("aws:SecureTransport", "false")
+                ))
+                .build()
+        );
+        
+        // SSL enforcement policy for replication bucket
+        
+        replicationBucket.addToResourcePolicy(
+            PolicyStatement.Builder.create()
+                .effect(Effect.DENY)
+                .principals(Arrays.asList(new AnyPrincipal()))
+                .actions(Arrays.asList("s3:*"))
+                .resources(Arrays.asList(
+                    replicationBucket.getBucketArn(),
+                    replicationBucket.getBucketArn() + "/*"
+                ))
+                .conditions(Map.of(
+                    "Bool", Map.of("aws:SecureTransport", "false")
+                ))
+                .build()
+        );
+    }
+    
+    /**
+     * Setup S3 replication without dependency cycle
+     */
+    private void setupS3Replication(final Bucket loggingBucket, final Bucket replicationBucket) {
+        // Create replication role independently
+        Role replicationRole = Role.Builder.create(this, "S3ReplicationRole")
+            .roleName(config.environment + "-" + config.rolePrefix + "-s3-replication-role")
+            .assumedBy(new ServicePrincipal("s3.amazonaws.com"))
+            .build();
+        
+        // Add replication policies to the role
+        PolicyDocument replicationPolicy = PolicyDocument.Builder.create()
+            .statements(Arrays.asList(
+                PolicyStatement.Builder.create()
+                    .effect(Effect.ALLOW)
+                    .actions(Arrays.asList(
+                        "s3:GetReplicationConfiguration",
+                        "s3:ListBucket"
+                    ))
+                    .resources(Arrays.asList("arn:aws:s3:::" + config.loggingBucket))
+                    .build(),
+                PolicyStatement.Builder.create()
+                    .effect(Effect.ALLOW)
+                    .actions(Arrays.asList(
+                        "s3:GetObjectVersionForReplication",
+                        "s3:GetObjectVersionAcl"
+                    ))
+                    .resources(Arrays.asList("arn:aws:s3:::" + config.loggingBucket + "/*"))
+                    .build(),
+                PolicyStatement.Builder.create()
+                    .effect(Effect.ALLOW)
+                    .actions(Arrays.asList(
+                        "s3:ReplicateObject",
+                        "s3:ReplicateDelete"
+                    ))
+                    .resources(Arrays.asList("arn:aws:s3:::" + config.replicationBucket + "/*"))
+                    .build()
+            ))
+            .build();
+        
+        new Policy(this, "S3ReplicationPolicy", PolicyProps.builder()
+            .document(replicationPolicy)
+            .roles(Arrays.asList(replicationRole))
+            .build());
+        
+        // Configure replication on the bucket
+        CfnBucket cfnLoggingBucket = (CfnBucket) loggingBucket.getNode().getDefaultChild();
+        cfnLoggingBucket.setReplicationConfiguration(
+            CfnBucket.ReplicationConfigurationProperty.builder()
+                .role(replicationRole.getRoleArn())
+                .rules(Arrays.asList(
+                    CfnBucket.ReplicationRuleProperty.builder()
+                        .status("Enabled")
+                        .priority(1)
+                        .deleteMarkerReplication(
+                            CfnBucket.DeleteMarkerReplicationProperty.builder()
+                                .status("Enabled")
+                                .build()
+                        )
+                        .filter(CfnBucket.ReplicationRuleFilterProperty.builder().build())
+                        .destination(
+                            CfnBucket.ReplicationDestinationProperty.builder()
+                                .bucket("arn:aws:s3:::" + config.replicationBucket)
+                                .storageClass("STANDARD_IA")
+                                .build()
+                        )
+                        .build()
+                ))
+                .build()
+        );
     }
     
     /**
@@ -552,22 +599,22 @@ public class TapStack extends software.amazon.awscdk.Stack {
      * Helper methods
      */
     private String generateRandomSuffix() {
-        Random random = new Random();
+        final Random random = new Random();
         return String.format("%06x", random.nextInt(0xffffff));
     }
     
-    private String getEnvironmentSuffix(String environment) {
+    private String getEnvironmentSuffix(final String environmentName) {
         String suffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (suffix == null || suffix.isEmpty()) {
-            suffix = environment;
+            suffix = environmentName;
         }
         return suffix;
     }
     
-    private String getAccountId(String environment) {
-        String accountId = System.getenv("AWS_ACCOUNT_ID");
+    private String getAccountId(final String environmentName) {
+        final String accountId = System.getenv("AWS_ACCOUNT_ID");
         if (accountId == null || accountId.isEmpty()) {
-            switch (environment) {
+            switch (environmentName) {
                 case "dev":
                     return "123456789012";
                 case "staging":
@@ -584,15 +631,15 @@ public class TapStack extends software.amazon.awscdk.Stack {
     /**
      * Main method for testing
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         App app = new App();
         
-        String environment = (String) app.getNode().tryGetContext("environment");
-        if (environment == null) {
-            environment = "dev";
+        String environmentName = (String) app.getNode().tryGetContext("environment");
+        if (environmentName == null) {
+            environmentName = "dev";
         }
         
-        new TapStack(app, "TapStack-" + environment, StackProps.builder()
+        new TapStack(app, "TapStack-" + environmentName, StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                 .region(System.getenv("CDK_DEFAULT_REGION"))

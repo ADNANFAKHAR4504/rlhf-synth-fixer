@@ -2,11 +2,6 @@ package app;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.StackProps;
-import software.constructs.Construct;
-
-import java.util.Optional;
 
 
 
@@ -52,8 +47,8 @@ public final class Main {
         }
 
         // Create the main TAP stack using the TapStack class
-        new TapStack(app, "TapStack-" + environment, StackProps.builder()
-                .env(Environment.builder()
+        new TapStack(app, "TapStack-" + environment, software.amazon.awscdk.StackProps.builder()
+                .env(software.amazon.awscdk.Environment.builder()
                         .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                         .region(System.getenv("CDK_DEFAULT_REGION"))
                         .build())
