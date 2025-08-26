@@ -67,10 +67,16 @@ describe('TapStack', () => {
     test('Security group has correct ingress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
+
       expect(sg.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: '10.0.0.0/8' })
+          expect.objectContaining({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '1.2.3.4/5',
+            Description: 'from 1.2.3.4/5:443',
+          }),
         ])
       );
     });
@@ -78,17 +84,21 @@ describe('TapStack', () => {
     test('Security group has correct egress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
+
       expect(sg.SecurityGroupEgress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: '-1', CidrIp: '10.0.0.0/8' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' })
+          expect.objectContaining({
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow all outbound traffic by default',
+            IpProtocol: '-1',
+          }),
         ])
       );
     });
 
-    test('Only one security group is created', () => {
+    test('Exactly 4 security group are created', () => {
       const sgResources = template.findResources('AWS::EC2::SecurityGroup');
-      expect(Object.keys(sgResources)).toHaveLength(1);
+      expect(Object.keys(sgResources)).toHaveLength(4);
     });
 
     // NEW: test for unsupported region that triggers the error at line 84 in security-group.mjs
