@@ -581,6 +581,7 @@ Resources:
       StorageType: 'gp2'
       StorageEncrypted: true
       KmsKeyId: !Ref TAPKMSKey
+      MultiAZ: true
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
@@ -695,18 +696,13 @@ Outputs:
           "Label": {
             "default": "Environment Configuration"
           },
-          "Parameters": [
-            "EnvironmentSuffix"
-          ]
+          "Parameters": ["EnvironmentSuffix"]
         },
         {
           "Label": {
             "default": "Security Configuration"
           },
-          "Parameters": [
-            "AllowedSSHCIDR",
-            "DBUsername"
-          ]
+          "Parameters": ["AllowedSSHCIDR", "DBUsername"]
         }
       ]
     }
@@ -850,10 +846,7 @@ Outputs:
     "LoadBalancerDNS": {
       "Description": "Application Load Balancer DNS Name",
       "Value": {
-        "Fn::GetAtt": [
-          "ApplicationLoadBalancer",
-          "DNSName"
-        ]
+        "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]
       },
       "Export": {
         "Name": {
@@ -901,36 +894,42 @@ Outputs:
 ## Key Security Features Implemented
 
 ### 1. **Encryption**
+
 - Customer-managed KMS key for all encryption
 - S3 buckets encrypted with AES256
 - RDS instances encrypted at rest
 - CloudWatch Logs encrypted with KMS
 
 ### 2. **Network Security**
+
 - VPC with public and private subnets across multiple AZs
 - Security groups with least privilege access
 - SSH access restricted to specified CIDR range
 - Private subnets for RDS and EC2 instances
 
 ### 3. **Access Control**
+
 - IAM roles with minimal required permissions
 - EC2 instances use instance profiles
 - Secrets Manager for database credentials
 - KMS key policies for service access
 
 ### 4. **Monitoring and Logging**
+
 - CloudWatch alarms for CPU and memory monitoring
 - CloudWatch Log Groups for all services
 - SNS topic for alarm notifications
 - Log retention set to 30 days
 
 ### 5. **Auto-Scaling and High Availability**
+
 - Auto Scaling Group with desired capacity
 - Application Load Balancer for distribution
 - Multi-AZ deployment for RDS
 - Health checks and monitoring
 
 ### 6. **Compliance**
+
 - AutoTerminate tags for resource lifecycle management
 - Backup retention for RDS instances
 - Enhanced monitoring for RDS

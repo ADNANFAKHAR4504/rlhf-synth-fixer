@@ -6,8 +6,32 @@
   "po_id": "291627",
   "team": "4",
   "startedAt": "2025-08-21T18:03:06.106Z",
-  "subtask": "hard_yaml",
-  "subject_labels": ["security", "compliance", "networking", "compute", "storage", "monitoring"],
-  "training_quality": "high",
-  "aws_services": ["VPC", "EC2", "RDS", "S3", "ALB", "AutoScaling", "KMS", "SecretsManager", "CloudWatch", "SNS", "IAM", "Logs"]
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA",
+    "Resource Policy Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ELB",
+    "AutoScaling",
+    "KMS",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CloudWatchLogs",
+    "Route53",
+    "CertificateManager",
+    "Config",
+    "Lambda",
+    "EventBridge"
+  ]
 }

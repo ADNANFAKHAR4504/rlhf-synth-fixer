@@ -521,6 +521,7 @@ Resources:
       StorageType: 'gp2'
       StorageEncrypted: true
       KmsKeyId: !Ref TAPKMSKey
+      MultiAZ: true
       MasterUsername: !Sub '{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:

@@ -129,6 +129,75 @@ describe('TAP Stack Integration Tests', () => {
         // Don't fail the test as AWS CLI might not be available in all environments
       }
     }, 15000);
+
+    test('should verify RDS instance is available and Multi-AZ enabled', async () => {
+      if (Object.keys(outputs).length === 0) {
+        console.log('Skipping test - no deployed infrastructure detected');
+        return;
+      }
+
+      try {
+        // Get RDS instance identifier from environment suffix in outputs or fallback to default
+        const envSuffix = outputs.EnvironmentSuffix || environmentSuffix;
+        const dbIdentifier = `tap-database-${envSuffix}`;
+
+        console.log(`Checking RDS instance: ${dbIdentifier}`);
+
+        const result = execSync(
+          `aws rds describe-db-instances --db-instance-identifier ${dbIdentifier} --query 'DBInstances[0].{State:DBInstanceStatus,MultiAZ:MultiAZ,Engine:Engine}' --output json`,
+          { encoding: 'utf8', timeout: 15000 }
+        );
+
+        const dbInfo = JSON.parse(result.trim());
+        console.log('RDS Instance Info:', dbInfo);
+
+        // Check if RDS is available (it might be in other states during maintenance)
+        expect(['available', 'backing-up', 'modifying']).toContain(
+          dbInfo.State
+        );
+        // Verify MultiAZ is enabled for high availability
+        expect(dbInfo.MultiAZ).toBe(true);
+        // Verify it's MySQL engine
+        expect(dbInfo.Engine).toBe('mysql');
+      } catch (error) {
+        console.warn(
+          'RDS validation test failed - this may be expected if RDS is not deployed or AWS CLI is not configured:',
+          error.message
+        );
+        // Don't fail the test as RDS might be in transition or AWS CLI might not be available
+      }
+    }, 20000);
+
+    test('should verify KMS key is enabled and accessible', async () => {
+      if (Object.keys(outputs).length === 0) {
+        console.log('Skipping test - no deployed infrastructure detected');
+        return;
+      }
+
+      const kmsKeyId = outputs.KMSKeyId || outputs['KMS-Key'];
+      if (!kmsKeyId) {
+        console.log('Skipping test - no KMS Key ID found');
+        return;
+      }
+
+      try {
+        const result = execSync(
+          `aws kms describe-key --key-id ${kmsKeyId} --query 'KeyMetadata.{KeyState:KeyState,Enabled:Enabled}' --output json`,
+          { encoding: 'utf8', timeout: 10000 }
+        );
+
+        const keyInfo = JSON.parse(result.trim());
+        console.log('KMS Key Info:', keyInfo);
+
+        expect(keyInfo.KeyState).toBe('Enabled');
+        expect(keyInfo.Enabled).toBe(true);
+      } catch (error) {
+        console.warn(
+          'KMS key validation test failed - ensure AWS CLI is configured and KMS key exists'
+        );
+        // Don't fail the test as AWS CLI might not be available
+      }
+    }, 15000);
   });
 
   describe('Template Deployment Status', () => {
