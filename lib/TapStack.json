@@ -1081,7 +1081,7 @@
                 "EnableCloudwatchLogsExports": [
                     "error",
                     "general",
-                    "slow-query"
+                    "slowquery"
                 ],
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
