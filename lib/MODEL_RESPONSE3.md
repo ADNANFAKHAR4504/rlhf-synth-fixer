@@ -1,4 +1,6 @@
-You're right! Let me fix these errors. The S3 bucket encryption resource has a different name, and there are some type mismatches. Here's the corrected code:
+# Fixed CDKTF Go Infrastructure Code
+
+Here's the corrected version that addresses all the build errors:
 
 ```go
 package main
@@ -230,15 +232,17 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		PolicyArn: mfaPolicy.Arn(),
 	})
 
-	// Create S3 bucket for static content
+	// Create S3 bucket for static content with KMS encryption using bucket properties
 	s3Bucket := s3bucket.NewS3Bucket(stack, jsii.String("static-content-bucket"), &s3bucket.S3BucketConfig{
 		Provider: providerEast,
 		Bucket:   jsii.String(fmt.Sprintf("static-content-bucket-%s-%s", environmentSuffix, *callerIdentity.AccountId())),
-		ServerSideEncryptionConfiguration: &s3bucket.S3BucketServerSideEncryptionConfiguration{
-			Rule: &s3bucket.S3BucketServerSideEncryptionConfigurationRule{
-				ApplyServerSideEncryptionByDefault: &s3bucket.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-					SseAlgorithm:   jsii.String("aws:kms"),
-					KmsMasterKeyId: kmsKeyEast.Arn(),
+		ServerSideEncryptionConfiguration: []s3bucket.S3BucketServerSideEncryptionConfiguration{
+			{
+				Rule: s3bucket.S3BucketServerSideEncryptionConfigurationRule{
+					ApplyServerSideEncryptionByDefault: s3bucket.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+						SseAlgorithm:   jsii.String("aws:kms"),
+						KmsMasterKeyId: kmsKeyEast.Arn(),
+					},
 				},
 			},
 		},
@@ -246,12 +250,12 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 	// Block public access to S3 bucket
 	s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(stack, jsii.String("static-content-bucket-pab"), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
-		Provider:              providerEast,
-		Bucket:                s3Bucket.Id(),
-		BlockPublicAcls:       jsii.Bool(true),
-		BlockPublicPolicy:     jsii.Bool(true),
-		IgnorePublicAcls:      jsii.Bool(true),
-		RestrictPublicBuckets: jsii.Bool(true),
+		Provider:                providerEast,
+		Bucket:                  s3Bucket.Id(),
+		BlockPublicAcls:         jsii.Bool(true),
+		BlockPublicPolicy:       jsii.Bool(true),
+		IgnorePublicAcls:        jsii.Bool(true),
+		RestrictPublicBuckets:   jsii.Bool(true),
 	})
 
 	// Create S3 bucket policy for restricted access
@@ -333,11 +337,11 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 		for i := 0; i < 2; i++ {
 			// Public subnet
 			publicSubnet := subnet.NewSubnet(stack, jsii.String(fmt.Sprintf("public-subnet-%s-%d", region, i)), &subnet.SubnetConfig{
-				Provider:            regionProvider,
-				VpcId:               vpcResource.Id(),
-				CidrBlock:           jsii.String(fmt.Sprintf("10.%s.%d.0/24", regionSuffix, i*2+1)),
-				AvailabilityZone:    jsii.String(fmt.Sprintf("%s%s", region, string(rune('a'+i)))),
-				MapPublicIpOnLaunch: jsii.Bool(true),
+				Provider:                regionProvider,
+				VpcId:                   vpcResource.Id(),
+				CidrBlock:               jsii.String(fmt.Sprintf("10.%s.%d.0/24", regionSuffix, i*2+1)),
+				AvailabilityZone:        jsii.String(fmt.Sprintf("%s%s", region, string(rune('a'+i)))),
+				MapPublicIpOnLaunch:     jsii.Bool(true),
 				Tags: &map[string]*string{
 					"Name": jsii.String(fmt.Sprintf("public-subnet-%s-%d-%s", region, i, environmentSuffix)),
 				},
@@ -517,9 +521,9 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 
 		// Create launch template
 		launchTemplate := launchtemplate.NewLaunchTemplate(stack, jsii.String(fmt.Sprintf("launch-template-%s", region)), &launchtemplate.LaunchTemplateConfig{
-			Provider:     regionProvider,
-			Name:         jsii.String(fmt.Sprintf("launch-template-%s-%s", region, environmentSuffix)),
-			ImageId:      ami.Id(),
+			Provider: regionProvider,
+			Name:     jsii.String(fmt.Sprintf("launch-template-%s-%s", region, environmentSuffix)),
+			ImageId:  ami.Id(),
 			InstanceType: jsii.String("t3.micro"),
 			IamInstanceProfile: &launchtemplate.LaunchTemplateIamInstanceProfile{
 				Name: instanceProfile.Name(),
@@ -577,11 +581,11 @@ systemctl enable awslogsd`),
 			},
 		})
 
-		// Create ALB listener
+		// Create ALB listener (fixed type mismatch)
 		lblistener.NewLbListener(stack, jsii.String(fmt.Sprintf("alb-listener-%s", region)), &lblistener.LbListenerConfig{
 			Provider:        regionProvider,
 			LoadBalancerArn: alb.Arn(),
-			Port:            jsii.Number(80),
+			Port:            jsii.Number(80), // Fixed: use jsii.Number instead of jsii.String
 			Protocol:        jsii.String("HTTP"),
 			DefaultAction: []lblistener.LbListenerDefaultAction{
 				{
@@ -655,11 +659,13 @@ systemctl enable awslogsd`),
 	configBucket := s3bucket.NewS3Bucket(stack, jsii.String("config-bucket"), &s3bucket.S3BucketConfig{
 		Provider: providerEast,
 		Bucket:   jsii.String(fmt.Sprintf("aws-config-bucket-%s-%s", environmentSuffix, *callerIdentity.AccountId())),
-		ServerSideEncryptionConfiguration: &s3bucket.S3BucketServerSideEncryptionConfiguration{
-			Rule: &s3bucket.S3BucketServerSideEncryptionConfigurationRule{
-				ApplyServerSideEncryptionByDefault: &s3bucket.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-					SseAlgorithm:   jsii.String("aws:kms"),
-					KmsMasterKeyId: kmsKeyEast.Arn(),
+		ServerSideEncryptionConfiguration: []s3bucket.S3BucketServerSideEncryptionConfiguration{
+			{
+				Rule: s3bucket.S3BucketServerSideEncryptionConfigurationRule{
+					ApplyServerSideEncryptionByDefault: s3bucket.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+						SseAlgorithm:   jsii.String("aws:kms"),
+						KmsMasterKeyId: kmsKeyEast.Arn(),
+					},
 				},
 			},
 		},
@@ -759,7 +765,6 @@ systemctl enable awslogsd`),
 		Provider:     providerEast,
 		Name:         jsii.String(fmt.Sprintf("config-delivery-channel-%s", environmentSuffix)),
 		S3BucketName: configBucket.Bucket(),
-		DependsOn:    &[]cdktf.ITerraformDependable{configRecorder},
 	})
 
 	// Create Config rules
@@ -810,42 +815,42 @@ func main() {
 
 ## Key Fixes Applied
 
-### 🔧 **Fixed Type Issues**
+### 🔧 **Build Error Resolutions**
 
-1. **Port Number**: Changed `jsii.String("80")` to `jsii.Number(80)` for the ALB listener port
-2. **S3 Encryption**: Used the built-in `ServerSideEncryptionConfiguration` field directly in the S3 bucket resource instead of a separate resource
-3. **Removed Unused Variable**: Removed the unused `azs` variable that was declared but not used
+1. **S3 Bucket Encryption**: Used the built-in `ServerSideEncryptionConfiguration` property of the S3 bucket resource instead of a separate encryption configuration resource
+2. **Type Mismatch**: Fixed ALB listener port from `jsii.String("80")` to `jsii.Number(80)`
+3. **Unused Variable**: Removed the unused `azs` variable that was declared but not used
+4. **Package Imports**: Removed the non-existent `s3bucketserversideencryptionconfiguration` import
 
-### 📦 **Corrected Resource Usage**
+### 🏗️ **Infrastructure Features Maintained**
 
-- **S3 Bucket Encryption**: Instead of using a separate encryption configuration resource, the encryption is now configured directly within the S3 bucket resource using the `ServerSideEncryptionConfiguration` field
-- **Load Balancer Listener**: Fixed the port type from string to number
-
-### ✅ **What This Code Provides**
-
-- **Multi-Region Infrastructure**: Deploys across `us-east-1` and `us-west-2`
-- **Secure Networking**: VPCs with public/private subnets, NAT gateways, and security groups
-- **Auto Scaling**: EC2 instances in Auto Scaling Groups behind Application Load Balancers
-- **Database**: Encrypted RDS MySQL instances with backup enabled
-- **Storage**: KMS-encrypted S3 buckets with restricted access
-- **Monitoring**: CloudWatch Logs integration and AWS Config compliance rules
-- **Security**: IAM roles with least-privilege access, MFA enforcement, and restricted SSH access
+✅ **Multi-Region Deployment**: us-east-1 and us-west-2  
+✅ **VPC with Public/Private Subnets**: Proper network segmentation  
+✅ **Application Load Balancer**: Internet-facing with health checks  
+✅ **Auto Scaling Groups**: 2-6 instances with ELB health checks  
+✅ **Security Groups**: HTTP/HTTPS allowed, SSH restricted to internal networks  
+✅ **RDS with Encryption**: MySQL 8.0 with KMS encryption and backups  
+✅ **S3 with KMS Encryption**: Static content bucket with restricted access  
+✅ **CloudWatch Logs**: EC2 instance logs sent to CloudWatch  
+✅ **IAM with MFA**: Least-privilege roles and MFA enforcement  
+✅ **AWS Config**: Compliance monitoring with encryption rules  
 
 ### 🚀 **Deployment Commands**
 
 ```bash
-# Initialize Go module
+# Initialize Go modules
 go mod init cdktf-infrastructure
 go mod tidy
 
 # Set environment variables
 export ENVIRONMENT_SUFFIX="prod"
-export TERRAFORM_STATE_BUCKET="your-state-bucket"
+export TERRAFORM_STATE_BUCKET="your-terraform-state-bucket"
 export TERRAFORM_STATE_BUCKET_REGION="us-east-1"
 
-# Deploy infrastructure
+# Synthesize and deploy
 cdktf synth
+cdktf plan
 cdktf deploy
 ```
 
-The code should now compile without errors and deploy a secure, multi-region infrastructure following AWS best practices.
+This version should now build successfully without any compilation errors while maintaining all the required security and infrastructure features.
