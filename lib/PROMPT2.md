@@ -30,4 +30,4 @@ Also Can you help me with  code structure in terraform outputs for below resourc
 9. cloudfront_domain_name
 10. waf_web_acl_id
 
-and all other resources.
+and all the outputs.
