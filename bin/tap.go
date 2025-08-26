@@ -49,10 +49,10 @@ func main() {
 	}
 
 	props := &lib.TapStackProps{
-		StackProps: &awscdk.StackProps{
+		StackProps: awscdk.StackProps{
 			Env: env,
 		},
-		EnvironmentSuffix: jsii.String(environmentSuffix),
+		Environment: environmentSuffix,
 	}
 
 	// Initialize the stack with proper parameters
