@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -80,14 +81,14 @@ func TestStackDeployment(t *testing.T) {
 
 	stack := result.Stacks[0]
 
-	expectedStatuses := []string{
-		string(cloudformation.StackStatusCreateComplete),
-		string(cloudformation.StackStatusUpdateComplete),
+	expectedStatuses := []types.StackStatus{
+		types.StackStatusCreateComplete,
+		types.StackStatusUpdateComplete,
 	}
 
 	statusOK := false
 	for _, status := range expectedStatuses {
-		if string(stack.StackStatus) == status {
+		if stack.StackStatus == status {
 			statusOK = true
 			break
 		}
