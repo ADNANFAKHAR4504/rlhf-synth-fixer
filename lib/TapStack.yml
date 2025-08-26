@@ -305,14 +305,14 @@ Resources:
         - Key: Compliance
           Value: 'HIPAA-PCI-DSS'
 
-  # KMSKeyAlias:
-  #   Type: AWS::KMS::Alias
-  #   Condition: CreateKMSAlias
-  #   DeletionPolicy: Retain
-  #   UpdateReplacePolicy: Retain
-  #   Properties:
-  #     AliasName: !Sub 'alias/${Environment}-secure-app-key'
-  #     TargetKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKey]
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: CreateKMSKey
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AliasName: !Sub 'alias/${Environment}-${EnvironmentSuffix}-secure-app-key-${AWS::StackName}'
+      TargetKeyId: !Ref KMSKey
 
   # VPC and Network Infrastructure
   VPC:
