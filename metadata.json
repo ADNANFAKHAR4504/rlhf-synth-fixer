@@ -12,7 +12,7 @@
   "subtask": "Security and Compliance Implementation",
   "original_platform": "CloudFormation",
   "original_language": "YAML",
-  "description": "Develop a secure AWS infrastructure for a web application with comprehensive security features including IAM roles, encrypted S3, VPC with bastion host, Lambda processing, CloudWatch monitoring, TLS certificates, and detailed tagging.",
+  "description": "Develop a secure AWS infrastructure for a web application with comprehensive security features including IAM roles, encrypted S3, VPC with bastion host, Lambda processing, CloudWatch monitoring, and detailed tagging.",
   "constraints": [
     "All infrastructure must be defined in Pulumi Go",
     "Use IAM roles and policies to enforce least privilege access",
@@ -22,14 +22,12 @@
     "All Lambda functions must use environment variables to pass sensitive data securely",
     "Enable versioning for all S3 buckets used",
     "Set up CloudWatch alarms for any unauthorized access attempts or resource usage spikes",
-    "Ensure all communications are over HTTPS using ACM for TLS certificates",
     "Apply security groups that deny all inbound traffic except from specific IP ranges",
     "Include detailed tagging for all resources to assist in cost tracking and management"
   ],
   "cloud_provider": "aws",
   "regions": [
-    "us-east-1",
-    "us-west-2"
+    "us-east-1"
   ],
   "subject_labels": [
     "Security Configuration",
@@ -49,7 +47,6 @@
     "IAM",
     "KMS",
     "CloudWatch",
-    "ACM",
     "EIP",
     "NAT Gateway",
     "Internet Gateway",
