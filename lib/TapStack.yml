@@ -65,6 +65,7 @@ Resources:
   TaskAttachmentsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'task-attachments-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -146,6 +147,9 @@ Resources:
   # Lambda Function for CRUD Operations
   TaskManagementFunction:
     Type: AWS::Lambda::Function
+    DependsOn: 
+      - TaskAttachmentsBucket
+      - LambdaExecutionRole
     Properties:
       FunctionName: !Sub 'TaskManagement-${EnvironmentSuffix}'
       Runtime: nodejs20.x
