@@ -31,14 +31,14 @@ var (
 
 func init() {
 	ctx = context.Background()
-	
+
 	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
 		fmt.Printf("Failed to load AWS config: %v\n", err)
 		return
 	}
-	
+
 	awsConfig = cfg
 	ec2Client = ec2.NewFromConfig(cfg)
 	iamClient = iam.NewFromConfig(cfg)
