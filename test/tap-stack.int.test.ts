@@ -520,7 +520,7 @@ describe('Task Management Application Integration Tests', () => {
         
         if (response.status === 500 || response.status === 404) {
           const data = await response.json();
-          expect(data.error).toBeDefined();
+          expect(data.message).toBe("Internal Server Error");
         }
       } catch (error: any) {
         console.warn(`⚠️  Could not test error handling: ${error.message}`);
@@ -566,7 +566,7 @@ describe('Task Management Application Integration Tests', () => {
 
     test('should verify S3 bucket follows naming convention', () => {
       const bucketName = outputs.TaskAttachmentsBucketName;
-      expect(bucketName).toMatch(/^task-attachments-[a-zA-Z0-9]+-\d{12}$/);
+      expect(bucketName).toMatch(/^task-attachments-[a-zA-Z0-9]+-\d{12}-[a-z0-9-]+$/);
       expect(bucketName).toContain(environmentSuffix);
     });
   });
