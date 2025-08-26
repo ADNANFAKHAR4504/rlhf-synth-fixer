@@ -27,19 +27,15 @@ elif [ "$LANGUAGE" = "go" ]; then
             rm -f terraform.tfstate
         fi
 
-        if [ ! -d ".gen/providers" ]; then
-            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/providers)"
+        if [ ! -d ".gen/aws" ]; then
+            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/aws)"
             npx --yes cdktf get
         else
-            echo ".gen/providers exists, skipping cdktf get"
+            echo ".gen/aws exists, skipping cdktf get"
         fi
     fi
 
-    echo "Running go mod tidy to populate go.sum and fetch deps"
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*}
-    go mod tidy
+    # Module dependencies are prepared during build; skipping go mod tidy here
 
     UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
@@ -49,6 +45,10 @@ elif [ "$LANGUAGE" = "go" ]; then
     fi
 
     PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    if [ "$PLATFORM" = "cdk" ]; then
+      PKGS=$(go list ./lib/... ./tests/... 2>/dev/null || true)
+    fi
+    
     if [ -n "$PKGS" ]; then
         echo "$PKGS" | xargs -r go vet
     else
