@@ -9,7 +9,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Network Configuration", 
+    "Network Configuration",
     "Resource Scaling",
     "Security Configuration",
     "Performance Optimization"
@@ -23,5 +23,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "VPC Endpoints"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
