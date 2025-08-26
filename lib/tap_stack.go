@@ -2,29 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dataawsami"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dataawsavailabilityzones"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dbinstance"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dbparametergroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dbsubnetgroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/instance"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/provider"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/route"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/routetable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/routetableassociation"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucket"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketpublicaccessblock"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketserversideencryptionconfiguration"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketversioning"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/securitygroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/securitygrouprule"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/subnet"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/vpc"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	"os"
 )
 
 type TapStackProps struct {
@@ -38,6 +20,7 @@ type TapStackProps struct {
 	InstanceType      string
 }
 
+// Self-contained TapStack using raw Terraform resources to minimize dependencies
 func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
 
@@ -56,236 +39,223 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		Encrypt: jsii.Bool(true),
 	})
 
-	// Add S3 state locking using escape hatch
-	stack.AddOverride(jsii.String("terraform.backend.s3.use_lockfile"), jsii.Bool(true))
-
-	// Configure AWS Provider
-	provider.NewAwsProvider(stack, jsii.String("aws"), &provider.AwsProviderConfig{
-		Region: jsii.String(props.AwsRegion),
-		DefaultTags: []provider.AwsProviderDefaultTags{
+	// AWS Provider using raw Terraform resource
+	cdktf.NewTerraformProvider(stack, jsii.String("aws"), &map[string]interface{}{
+		"region": props.AwsRegion,
+		"default_tags": []map[string]interface{}{
 			{
-				Tags: &map[string]*string{
-					"Environment": jsii.String(props.EnvironmentSuffix),
-					"Repository":  jsii.String(props.RepositoryName),
-					"Author":      jsii.String(props.CommitAuthor),
-					"Project":     jsii.String("webapp-foundation"),
-					"ManagedBy":   jsii.String("CDKTF"),
+				"tags": map[string]string{
+					"Environment": props.EnvironmentSuffix,
+					"Repository":  props.RepositoryName,
+					"Author":      props.CommitAuthor,
+					"Project":     "webapp-foundation",
+					"ManagedBy":   "CDKTF",
 				},
 			},
 		},
 	})
 
-	// Define common tags
-	commonTags := &map[string]*string{
-		"Environment": jsii.String(props.EnvironmentSuffix),
-		"Project":     jsii.String("webapp-foundation"),
-		"ManagedBy":   jsii.String("CDKTF"),
-		"Owner":       jsii.String("DevOps"),
+	// Common tags
+	commonTags := map[string]string{
+		"Environment": props.EnvironmentSuffix,
+		"Project":     "webapp-foundation",
+		"ManagedBy":   "CDKTF",
+		"Owner":       "DevOps",
 	}
 
-	// Get availability zones
-	azs := dataawsavailabilityzones.NewDataAwsAvailabilityZones(stack, jsii.String("available"), &dataawsavailabilityzones.DataAwsAvailabilityZonesConfig{
-		State: jsii.String("available"),
+	// Data source for availability zones
+	azDataSource := cdktf.NewTerraformDataSource(stack, jsii.String("available_azs"), jsii.String("aws_availability_zones"), &map[string]interface{}{
+		"state": "available",
 	})
 
-	// Use Fn.element to access availability zones
-	az1 := cdktf.Fn_Tostring(cdktf.Fn_Element(azs.Names(), jsii.Number(0)))
-	az2 := cdktf.Fn_Tostring(cdktf.Fn_Element(azs.Names(), jsii.Number(1)))
-
-	// Create VPC
-	vpcResource := vpc.NewVpc(stack, jsii.String("main-vpc"), &vpc.VpcConfig{
-		CidrBlock:          jsii.String("10.0.0.0/16"),
-		EnableDnsHostnames: jsii.Bool(true),
-		EnableDnsSupport:   jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-vpc", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-			"Project":     jsii.String("webapp-foundation"),
+	// VPC using raw Terraform resource
+	vpcResource := cdktf.NewTerraformResource(stack, jsii.String("main_vpc"), jsii.String("aws_vpc"), &map[string]interface{}{
+		"cidr_block":           "10.0.0.0/16",
+		"enable_dns_hostnames": true,
+		"enable_dns_support":   true,
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-vpc", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+			"Project":     "webapp-foundation",
 		},
 	})
 
-	// Create Internet Gateway
-	igw := internetgateway.NewInternetGateway(stack, jsii.String("main-igw"), &internetgateway.InternetGatewayConfig{
-		VpcId: vpcResource.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-igw", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// Internet Gateway
+	igwResource := cdktf.NewTerraformResource(stack, jsii.String("main_igw"), jsii.String("aws_internet_gateway"), &map[string]interface{}{
+		"vpc_id": vpcResource.GetString(jsii.String("id")),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-igw", envPrefix),
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Create public subnet for EC2
-	publicSubnet := subnet.NewSubnet(stack, jsii.String("public-subnet"), &subnet.SubnetConfig{
-		VpcId:                   vpcResource.Id(),
-		CidrBlock:               jsii.String("10.0.1.0/24"),
-		AvailabilityZone:        &az1,
-		MapPublicIpOnLaunch:     jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-public-subnet", envPrefix)),
-			"Type":        jsii.String("Public"),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// Public Subnet
+	publicSubnet := cdktf.NewTerraformResource(stack, jsii.String("public_subnet"), jsii.String("aws_subnet"), &map[string]interface{}{
+		"vpc_id":                   vpcResource.GetString(jsii.String("id")),
+		"cidr_block":               "10.0.1.0/24",
+		"availability_zone":        cdktf.Fn_Element(azDataSource.Get(jsii.String("names")), jsii.Number(0)),
+		"map_public_ip_on_launch":  true,
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-public-subnet", envPrefix),
+			"Type":        "Public",
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Create private subnet for RDS (first AZ)
-	privateSubnet1 := subnet.NewSubnet(stack, jsii.String("private-subnet-1"), &subnet.SubnetConfig{
-		VpcId:            vpcResource.Id(),
-		CidrBlock:        jsii.String("10.0.2.0/24"),
-		AvailabilityZone: &az1,
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-1", envPrefix)),
-			"Type":        jsii.String("Private"),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// Private Subnet 1
+	privateSubnet1 := cdktf.NewTerraformResource(stack, jsii.String("private_subnet_1"), jsii.String("aws_subnet"), &map[string]interface{}{
+		"vpc_id":            vpcResource.GetString(jsii.String("id")),
+		"cidr_block":        "10.0.2.0/24",
+		"availability_zone": cdktf.Fn_Element(azDataSource.Get(jsii.String("names")), jsii.Number(0)),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-private-subnet-1", envPrefix),
+			"Type":        "Private",
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Create private subnet for RDS (second AZ) - required for DB subnet group
-	privateSubnet2 := subnet.NewSubnet(stack, jsii.String("private-subnet-2"), &subnet.SubnetConfig{
-		VpcId:            vpcResource.Id(),
-		CidrBlock:        jsii.String("10.0.3.0/24"),
-		AvailabilityZone: &az2,
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-private-subnet-2", envPrefix)),
-			"Type":        jsii.String("Private"),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// Private Subnet 2
+	privateSubnet2 := cdktf.NewTerraformResource(stack, jsii.String("private_subnet_2"), jsii.String("aws_subnet"), &map[string]interface{}{
+		"vpc_id":            vpcResource.GetString(jsii.String("id")),
+		"cidr_block":        "10.0.3.0/24",
+		"availability_zone": cdktf.Fn_Element(azDataSource.Get(jsii.String("names")), jsii.Number(1)),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-private-subnet-2", envPrefix),
+			"Type":        "Private",
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Create route table for public subnet
-	publicRouteTable := routetable.NewRouteTable(stack, jsii.String("public-rt"), &routetable.RouteTableConfig{
-		VpcId: vpcResource.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-public-rt", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// Route Table for Public Subnet
+	publicRouteTable := cdktf.NewTerraformResource(stack, jsii.String("public_route_table"), jsii.String("aws_route_table"), &map[string]interface{}{
+		"vpc_id": vpcResource.GetString(jsii.String("id")),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-public-rt", envPrefix),
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Create route to internet gateway
-	route.NewRoute(stack, jsii.String("public-route"), &route.RouteConfig{
-		RouteTableId:         publicRouteTable.Id(),
-		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
-		GatewayId:            igw.Id(),
+	// Route to Internet Gateway
+	cdktf.NewTerraformResource(stack, jsii.String("public_route"), jsii.String("aws_route"), &map[string]interface{}{
+		"route_table_id":         publicRouteTable.GetString(jsii.String("id")),
+		"destination_cidr_block": "0.0.0.0/0",
+		"gateway_id":             igwResource.GetString(jsii.String("id")),
 	})
 
-	// Associate public subnet with route table
-	routetableassociation.NewRouteTableAssociation(stack, jsii.String("public-rt-association"), &routetableassociation.RouteTableAssociationConfig{
-		SubnetId:     publicSubnet.Id(),
-		RouteTableId: publicRouteTable.Id(),
+	// Route Table Association
+	cdktf.NewTerraformResource(stack, jsii.String("public_rt_association"), jsii.String("aws_route_table_association"), &map[string]interface{}{
+		"subnet_id":      publicSubnet.GetString(jsii.String("id")),
+		"route_table_id": publicRouteTable.GetString(jsii.String("id")),
 	})
 
-	// Create security group for EC2 instance
-	ec2SecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("ec2-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("%s-ec2-sg", envPrefix)),
-		Description: jsii.String("Security group for EC2 instance - allows SSH from office IP"),
-		VpcId:       vpcResource.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-ec2-sg", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-		},
-	})
-
-	// Add SSH ingress rule
-	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("ec2-ssh-ingress"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:              jsii.String("ingress"),
-		FromPort:          jsii.Number(22),
-		ToPort:            jsii.Number(22),
-		Protocol:          jsii.String("tcp"),
-		CidrBlocks:        jsii.Strings(props.OfficeIP),
-		SecurityGroupId:   ec2SecurityGroup.Id(),
-		Description:       jsii.String("SSH access from office IP"),
-	})
-
-	// Add outbound rule for EC2
-	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("ec2-egress"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:            jsii.String("egress"),
-		FromPort:        jsii.Number(0),
-		ToPort:          jsii.Number(65535),
-		Protocol:        jsii.String("tcp"),
-		CidrBlocks:      jsii.Strings("0.0.0.0/0"),
-		SecurityGroupId: ec2SecurityGroup.Id(),
-		Description:     jsii.String("All outbound traffic"),
-	})
-
-	// Create security group for RDS
-	rdsSecurityGroup := securitygroup.NewSecurityGroup(stack, jsii.String("rds-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("%s-rds-sg", envPrefix)),
-		Description: jsii.String("Security group for RDS MySQL database"),
-		VpcId:       vpcResource.Id(),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-rds-sg", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-		},
-	})
-
-	// Add MySQL ingress rule from EC2 security group
-	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("rds-mysql-ingress"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:                     jsii.String("ingress"),
-		FromPort:                 jsii.Number(3306),
-		ToPort:                   jsii.Number(3306),
-		Protocol:                 jsii.String("tcp"),
-		SourceSecurityGroupId:    ec2SecurityGroup.Id(),
-		SecurityGroupId:          rdsSecurityGroup.Id(),
-		Description:              jsii.String("MySQL access from EC2 instances"),
-	})
-
-	// Get latest Amazon Linux 2 AMI
-	amazonLinuxAmi := dataawsami.NewDataAwsAmi(stack, jsii.String("amazon-linux"), &dataawsami.DataAwsAmiConfig{
-		MostRecent: jsii.Bool(true),
-		Owners:     jsii.Strings("amazon"),
-		Filter: []dataawsami.DataAwsAmiFilter{
+	// Security Group for EC2
+	ec2SecurityGroup := cdktf.NewTerraformResource(stack, jsii.String("ec2_security_group"), jsii.String("aws_security_group"), &map[string]interface{}{
+		"name":        fmt.Sprintf("%s-ec2-sg", envPrefix),
+		"description": "Security group for EC2 instance - allows SSH from office IP",
+		"vpc_id":      vpcResource.GetString(jsii.String("id")),
+		"ingress": []map[string]interface{}{
 			{
-				Name:   jsii.String("name"),
-				Values: jsii.Strings("amzn2-ami-hvm-*-x86_64-gp2"),
+				"from_port":   22,
+				"to_port":     22,
+				"protocol":    "tcp",
+				"cidr_blocks": []string{props.OfficeIP},
+				"description": "SSH access from office IP",
+			},
+		},
+		"egress": []map[string]interface{}{
+			{
+				"from_port":   0,
+				"to_port":     65535,
+				"protocol":    "tcp",
+				"cidr_blocks": []string{"0.0.0.0/0"},
+				"description": "All outbound traffic",
+			},
+		},
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-ec2-sg", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+		},
+	})
+
+	// Security Group for RDS
+	rdsSecurityGroup := cdktf.NewTerraformResource(stack, jsii.String("rds_security_group"), jsii.String("aws_security_group"), &map[string]interface{}{
+		"name":        fmt.Sprintf("%s-rds-sg", envPrefix),
+		"description": "Security group for RDS MySQL database",
+		"vpc_id":      vpcResource.GetString(jsii.String("id")),
+		"ingress": []map[string]interface{}{
+			{
+				"from_port":       3306,
+				"to_port":         3306,
+				"protocol":        "tcp",
+				"security_groups": []string{ec2SecurityGroup.GetString(jsii.String("id"))},
+				"description":     "MySQL access from EC2 instances",
+			},
+		},
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-rds-sg", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+		},
+	})
+
+	// Data source for latest Amazon Linux 2 AMI
+	amiDataSource := cdktf.NewTerraformDataSource(stack, jsii.String("amazon_linux_ami"), jsii.String("aws_ami"), &map[string]interface{}{
+		"most_recent": true,
+		"owners":      []string{"amazon"},
+		"filter": []map[string]interface{}{
+			{
+				"name":   "name",
+				"values": []string{"amzn2-ami-hvm-*-x86_64-gp2"},
 			},
 			{
-				Name:   jsii.String("state"),
-				Values: jsii.Strings("available"),
+				"name":   "state",
+				"values": []string{"available"},
 			},
 		},
 	})
 
-	// Create EC2 instance
-	ec2Instance := instance.NewInstance(stack, jsii.String("web-server"), &instance.InstanceConfig{
-		Ami:                    amazonLinuxAmi.Id(),
-		InstanceType:           jsii.String(props.InstanceType),
-		SubnetId:               publicSubnet.Id(),
-		VpcSecurityGroupIds:    jsii.Strings(*ec2SecurityGroup.Id()),
-		AssociatePublicIpAddress: jsii.Bool(true),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-web-server", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-			"Role":        jsii.String("WebServer"),
-		},
-		UserData: jsii.String(`#!/bin/bash
+	// EC2 Instance
+	ec2Instance := cdktf.NewTerraformResource(stack, jsii.String("web_server"), jsii.String("aws_instance"), &map[string]interface{}{
+		"ami":                         amiDataSource.GetString(jsii.String("id")),
+		"instance_type":               props.InstanceType,
+		"subnet_id":                   publicSubnet.GetString(jsii.String("id")),
+		"vpc_security_group_ids":      []string{ec2SecurityGroup.GetString(jsii.String("id"))},
+		"associate_public_ip_address": true,
+		"user_data": fmt.Sprintf(`#!/bin/bash
 yum update -y
 yum install -y mysql
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Web Application Server</h1>" > /var/www/html/index.html
-echo "<p>Environment: ` + props.EnvironmentSuffix + `</p>" >> /var/www/html/index.html`),
-	})
-
-	// Create DB subnet group
-	dbSubnetGroup := dbsubnetgroup.NewDbSubnetGroup(stack, jsii.String("db-subnet-group"), &dbsubnetgroup.DbSubnetGroupConfig{
-		Name:       jsii.String(fmt.Sprintf("%s-db-subnet-group", envPrefix)),
-		SubnetIds:  jsii.Strings(*privateSubnet1.Id(), *privateSubnet2.Id()),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-db-subnet-group", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuffix),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-web-server", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+			"Role":        "WebServer",
 		},
 	})
 
-	// Create DB parameter group for MySQL
-	dbParameterGroup := dbparametergroup.NewDbParameterGroup(stack, jsii.String("db-params"), &dbparametergroup.DbParameterGroupConfig{
-		Name:   jsii.String(fmt.Sprintf("%s-mysql-params", envPrefix)),
-		Family: jsii.String("mysql8.0"),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-mysql-params", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
+	// DB Subnet Group
+	dbSubnetGroup := cdktf.NewTerraformResource(stack, jsii.String("db_subnet_group"), jsii.String("aws_db_subnet_group"), &map[string]interface{}{
+		"name":       fmt.Sprintf("%s-db-subnet-group", envPrefix),
+		"subnet_ids": []string{privateSubnet1.GetString(jsii.String("id")), privateSubnet2.GetString(jsii.String("id"))},
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-db-subnet-group", envPrefix),
+			"Environment": props.EnvironmentSuffix,
 		},
 	})
 
-	// Generate secure random password for database
+	// DB Parameter Group
+	dbParameterGroup := cdktf.NewTerraformResource(stack, jsii.String("db_parameter_group"), jsii.String("aws_db_parameter_group"), &map[string]interface{}{
+		"name":   fmt.Sprintf("%s-mysql-params", envPrefix),
+		"family": "mysql8.0",
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-mysql-params", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+		},
+	})
+
+	// Get database credentials from environment or use defaults
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
 		dbPassword = "ChangeMe123!" // Default password - should be changed via environment variable
@@ -296,118 +266,130 @@ echo "<p>Environment: ` + props.EnvironmentSuffix + `</p>" >> /var/www/html/inde
 		dbUsername = "admin"
 	}
 
-	// Create RDS MySQL instance
-	rdsInstance := dbinstance.NewDbInstance(stack, jsii.String("mysql-db"), &dbinstance.DbInstanceConfig{
-		Identifier:     jsii.String(fmt.Sprintf("%s-mysql-db", envPrefix)),
-		AllocatedStorage: jsii.Number(20),
-		StorageType:    jsii.String("gp2"),
-		Engine:         jsii.String("mysql"),
-		EngineVersion:  jsii.String("8.0"),
-		InstanceClass:  jsii.String("db.t3.micro"),
-		DbName:         jsii.String("webapp"),
-		Username:       jsii.String(dbUsername),
-		Password:       jsii.String(dbPassword),
-		VpcSecurityGroupIds: jsii.Strings(*rdsSecurityGroup.Id()),
-		DbSubnetGroupName:   dbSubnetGroup.Name(),
-		ParameterGroupName:  dbParameterGroup.Name(),
-		BackupRetentionPeriod: jsii.Number(7),
-		BackupWindow:          jsii.String("03:00-04:00"),
-		MaintenanceWindow:     jsii.String("Mon:04:00-Mon:05:00"),
-		StorageEncrypted:      jsii.Bool(true),
-		DeletionProtection:    jsii.Bool(false), // Set to true for production
-		SkipFinalSnapshot:     jsii.Bool(true),  // Set to false for production
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-mysql-db", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-			"Engine":      jsii.String("MySQL"),
+	// RDS MySQL Instance
+	rdsInstance := cdktf.NewTerraformResource(stack, jsii.String("mysql_database"), jsii.String("aws_db_instance"), &map[string]interface{}{
+		"identifier":                fmt.Sprintf("%s-mysql-db", envPrefix),
+		"allocated_storage":         20,
+		"storage_type":              "gp2",
+		"engine":                    "mysql",
+		"engine_version":            "8.0",
+		"instance_class":            "db.t3.micro",
+		"db_name":                   "webapp",
+		"username":                  dbUsername,
+		"password":                  dbPassword,
+		"vpc_security_group_ids":    []string{rdsSecurityGroup.GetString(jsii.String("id"))},
+		"db_subnet_group_name":      dbSubnetGroup.GetString(jsii.String("name")),
+		"parameter_group_name":      dbParameterGroup.GetString(jsii.String("name")),
+		"backup_retention_period":   7,
+		"backup_window":             "03:00-04:00",
+		"maintenance_window":        "Mon:04:00-Mon:05:00",
+		"storage_encrypted":         true,
+		"deletion_protection":       false, // Set to true for production
+		"skip_final_snapshot":       true,  // Set to false for production
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-mysql-db", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+			"Engine":      "MySQL",
 		},
 	})
 
-	// Create S3 bucket for state storage with versioning
-	stateBucket := s3bucket.NewS3Bucket(stack, jsii.String("terraform-state"), &s3bucket.S3BucketConfig{
-		Bucket: jsii.String(fmt.Sprintf("%s-terraform-state-%s", envPrefix, props.EnvironmentSuffix)),
-		Tags: &map[string]*string{
-			"Name":        jsii.String(fmt.Sprintf("%s-terraform-state", envPrefix)),
-			"Environment": jsii.String(props.EnvironmentSuffix),
-			"Purpose":     jsii.String("TerraformState"),
+	// S3 Bucket for Terraform State
+	stateBucket := cdktf.NewTerraformResource(stack, jsii.String("terraform_state_bucket"), jsii.String("aws_s3_bucket"), &map[string]interface{}{
+		"bucket": fmt.Sprintf("%s-terraform-state-%s", envPrefix, props.EnvironmentSuffix),
+		"tags": map[string]string{
+			"Name":        fmt.Sprintf("%s-terraform-state", envPrefix),
+			"Environment": props.EnvironmentSuffix,
+			"Purpose":     "TerraformState",
 		},
 	})
 
-	// Enable versioning on the state bucket
-	s3bucketversioning.NewS3BucketVersioning(stack, jsii.String("terraform-state-versioning"), &s3bucketversioning.S3BucketVersioningConfig{
-		Bucket: stateBucket.Id(),
-		VersioningConfiguration: &s3bucketversioning.S3BucketVersioningVersioningConfiguration{
-			Status: jsii.String("Enabled"),
-		},
-	})
-
-	// Enable server-side encryption
-	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfiguration(stack, jsii.String("terraform-state-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationConfig{
-		Bucket: stateBucket.Id(),
-		Rule: []s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRule{
+	// S3 Bucket Versioning
+	cdktf.NewTerraformResource(stack, jsii.String("terraform_state_versioning"), jsii.String("aws_s3_bucket_versioning"), &map[string]interface{}{
+		"bucket": stateBucket.GetString(jsii.String("id")),
+		"versioning_configuration": []map[string]interface{}{
 			{
-				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-					SseAlgorithm: jsii.String("AES256"),
+				"status": "Enabled",
+			},
+		},
+	})
+
+	// S3 Bucket Server Side Encryption
+	cdktf.NewTerraformResource(stack, jsii.String("terraform_state_encryption"), jsii.String("aws_s3_bucket_server_side_encryption_configuration"), &map[string]interface{}{
+		"bucket": stateBucket.GetString(jsii.String("id")),
+		"rule": []map[string]interface{}{
+			{
+				"apply_server_side_encryption_by_default": []map[string]interface{}{
+					{
+						"sse_algorithm": "AES256",
+					},
 				},
 			},
 		},
 	})
 
-	// Block public access to the state bucket
-	s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(stack, jsii.String("terraform-state-pab"), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
-		Bucket:                stateBucket.Id(),
-		BlockPublicAcls:       jsii.Bool(true),
-		BlockPublicPolicy:     jsii.Bool(true),
-		IgnorePublicAcls:      jsii.Bool(true),
-		RestrictPublicBuckets: jsii.Bool(true),
+	// S3 Bucket Public Access Block
+	cdktf.NewTerraformResource(stack, jsii.String("terraform_state_pab"), jsii.String("aws_s3_bucket_public_access_block"), &map[string]interface{}{
+		"bucket":                   stateBucket.GetString(jsii.String("id")),
+		"block_public_acls":        true,
+		"block_public_policy":      true,
+		"ignore_public_acls":       true,
+		"restrict_public_buckets":  true,
 	})
 
 	// Outputs
 	cdktf.NewTerraformOutput(stack, jsii.String("vpc_id"), &cdktf.TerraformOutputConfig{
-		Value:       vpcResource.Id(),
+		Value:       vpcResource.GetString(jsii.String("id")),
 		Description: jsii.String("ID of the VPC"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("ec2_instance_id"), &cdktf.TerraformOutputConfig{
-		Value:       ec2Instance.Id(),
+		Value:       ec2Instance.GetString(jsii.String("id")),
 		Description: jsii.String("ID of the EC2 instance"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("ec2_public_ip"), &cdktf.TerraformOutputConfig{
-		Value:       ec2Instance.PublicIp(),
+		Value:       ec2Instance.GetString(jsii.String("public_ip")),
 		Description: jsii.String("Public IP address of the EC2 instance"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("ec2_public_dns"), &cdktf.TerraformOutputConfig{
-		Value:       ec2Instance.PublicDns(),
+		Value:       ec2Instance.GetString(jsii.String("public_dns")),
 		Description: jsii.String("Public DNS name of the EC2 instance"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("rds_endpoint"), &cdktf.TerraformOutputConfig{
-		Value:       rdsInstance.Endpoint(),
+		Value:       rdsInstance.GetString(jsii.String("endpoint")),
 		Description: jsii.String("RDS instance endpoint"),
 		Sensitive:   jsii.Bool(false),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("rds_port"), &cdktf.TerraformOutputConfig{
-		Value:       rdsInstance.Port(),
+		Value:       rdsInstance.GetString(jsii.String("port")),
 		Description: jsii.String("RDS instance port"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("s3_state_bucket"), &cdktf.TerraformOutputConfig{
-		Value:       stateBucket.Id(),
+		Value:       stateBucket.GetString(jsii.String("id")),
 		Description: jsii.String("S3 bucket for Terraform state"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("database_name"), &cdktf.TerraformOutputConfig{
-		Value:       rdsInstance.DbName(),
+		Value:       rdsInstance.GetString(jsii.String("db_name")),
 		Description: jsii.String("Database name"),
 	})
 
 	cdktf.NewTerraformOutput(stack, jsii.String("ssh_command"), &cdktf.TerraformOutputConfig{
-		Value:       cdktf.Fn_Format(jsii.String("ssh -i your-key.pem ec2-user@%s"), jsii.Slice{ec2Instance.PublicIp()}),
+		Value:       cdktf.Fn_Format(jsii.String("ssh -i your-key.pem ec2-user@%s"), jsii.Slice{ec2Instance.GetString(jsii.String("public_ip"))}),
 		Description: jsii.String("SSH command to connect to the EC2 instance"),
 	})
+
+	// Additional outputs for comprehensive information
+	for key, value := range commonTags {
+		cdktf.NewTerraformOutput(stack, jsii.String(fmt.Sprintf("tag_%s", key)), &cdktf.TerraformOutputConfig{
+			Value:       jsii.String(value),
+			Description: jsii.String(fmt.Sprintf("Tag value for %s", key)),
+		})
+	}
 
 	return stack
 }
