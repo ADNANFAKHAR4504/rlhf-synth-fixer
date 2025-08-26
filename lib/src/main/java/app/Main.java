@@ -105,26 +105,20 @@ final class TapStack extends Stack {
         NetworkStack networkStack = new NetworkStack(
                 this,
                 "NetworkStack",
-                StackProps.builder()
-                        .env(this.getStackEnv())
-                        .build()
+                StackProps.builder().build()
         );
 
         SecurityStack securityStack = new SecurityStack(
                 this,
                 "SecurityStack",
-                StackProps.builder()
-                        .env(this.getStackEnv())
-                        .build()
+                StackProps.builder().build()
         );
 
         DatabaseStack databaseStack = new DatabaseStack(
                 this,
                 "DatabaseStack",
                 DatabaseStack.DatabaseStackProps.builder()
-                        .stackProps(StackProps.builder()
-                                .env(this.getStackEnv())
-                                .build())
+                        .stackProps(StackProps.builder().build())
                         .vpc(networkStack.getVpc())
                         .rdsSecurityGroup(networkStack.getRdsSecurityGroup())
 
@@ -135,9 +129,7 @@ final class TapStack extends Stack {
                 this,
                 "ECSStack",
                 ECSStack.ECSStackProps.builder()
-                        .stackProps(StackProps.builder()
-                                .env(this.getStackEnv())
-                                .build())
+                        .stackProps(StackProps.builder().build())
                         .vpc(networkStack.getVpc())
                         .ecsSecurityGroup(networkStack.getEcsSecurityGroup())
 
