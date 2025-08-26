@@ -9,6 +9,9 @@ import com.pulumi.aws.kms.Alias;
 import com.pulumi.aws.kms.AliasArgs;
 import com.pulumi.aws.kms.KeyPolicy;
 import com.pulumi.aws.kms.KeyPolicyArgs;
+import com.pulumi.aws.s3.BucketObject;
+import com.pulumi.aws.s3.BucketObjectArgs;
+
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
@@ -338,6 +341,8 @@ public final class Main {
             .build(), CustomResourceOptions.builder()
             .deleteBeforeReplace(true)
             .build());
+
+
         
         // 5.1. S3 Bucket Policy for CloudTrail logs using IAM policy document
         var cloudTrailPolicy = IamFunctions.getPolicyDocument(GetPolicyDocumentArgs.builder()
