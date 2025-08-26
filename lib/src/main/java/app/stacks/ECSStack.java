@@ -22,8 +22,7 @@ import software.amazon.awscdk.services.ecs.Secret;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.logs.ILogGroup;
-import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.logs.ILogGroup;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
 import software.constructs.Construct;
 
@@ -113,6 +112,7 @@ public final class ECSStack extends Stack {
         private final ISecret databaseSecret;
         private final ILogGroup logGroup;
 
+        @SuppressWarnings("checkstyle:ParameterNumber")
         private ECSStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
                              final ISecurityGroup ecsSecurityGroupValue, 
                              final IKey kmsKeyValue, final Role ecsTaskRoleValue, 

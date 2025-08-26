@@ -60,12 +60,7 @@ public final class SecurityStack extends Stack {
                 ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
         );
 
-        // Allow access to Secrets Manager values (DB creds, etc.)
-        ecsExecutionRole.addToPolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(List.of("secretsmanager:GetSecretValue"))
-                .resources(List.of("arn:aws:secretsmanager:*:*:secret:*"))
-                .build());
+        // Secrets Manager access can be granted where needed to avoid cross-stack refs
 
         // Create ECS task role (for application permissions)
         this.ecsTaskRole = Role.Builder.create(this, "ECSTaskRole")
