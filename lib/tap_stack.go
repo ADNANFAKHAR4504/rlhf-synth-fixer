@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/constructs-go/constructs/v10"
 	jsii "github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaydeployment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayintegration"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaymethod"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayresource"
@@ -744,6 +745,15 @@ func (l *LambdaResources) createAPIGateway(stack *TapStack) {
 			SourceArn:    l.APIGateway.ExecutionArn(),
 		})
 	}
+
+	// Deploy API Gateway - commented out as it needs to be deployed after methods
+	// The deployment will be done manually after methods and integrations are created
+	apigatewaydeployment.NewApiGatewayDeployment(stack.Stack, str("api-deployment"), &apigatewaydeployment.ApiGatewayDeploymentConfig{
+		RestApiId:   l.APIGateway.Id(),
+		StageName:   str("prod"),
+		Description: str("Production deployment"),
+	})
+
 }
 
 func convertSubnetIds(subnets []subnet.Subnet) *[]*string {
