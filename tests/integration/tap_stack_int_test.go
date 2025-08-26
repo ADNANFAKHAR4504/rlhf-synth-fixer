@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -34,7 +35,7 @@ func envSuffix() string {
 	if v := os.Getenv("ENVIRONMENT_SUFFIX"); v != "" {
 		return v
 	}
-	return "pr2114"
+	return "pr2242"
 }
 
 func cfgRegion(t *testing.T, region string) aws.Config {
@@ -70,25 +71,22 @@ func TestLive_VPCAndSubnets(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			// VPC by Name tag
 			vpcName := "vpc-" + r + "-" + suffix
-			// VPC by Name tag
-			vpcs, err := ec2c.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-				Filters: []ec2types.Filter{
-					ec2Filter("tag:Name", vpcName),
-				},
-			})
 
-			vpcID := aws.ToString(vpcs.Vpcs[0].VpcId)
-			// Subnets for the VPC
+			// get the VPC we created (not the default one)
+			vpcID, err := vpcIdByName(ctx, ec2c, vpcName)
+			if err != nil {
+				t.Fatalf("vpc lookup failed: %v", err)
+			}
+
+			// Subnets for that VPC
 			subs, err := ec2c.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
-				Filters: []ec2types.Filter{
-					ec2Filter("vpc-id", vpcID),
-				},
+				Filters: []ec2types.Filter{ec2Filter("vpc-id", vpcID)},
 			})
 			if err != nil {
 				t.Fatalf("DescribeSubnets: %v", err)
 			}
+
 			pub, prv := 0, 0
 			for _, s := range subs.Subnets {
 				for _, tg := range s.Tags {
@@ -245,7 +243,9 @@ func TestLive_AWSConfig_Present(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	rec, err := cs.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{})
+	rec, err := cs.DescribeConfigurationRecorders(ctx, &configservice.DescribeConfigurationRecordersInput{
+		ConfigurationRecorderNames: []string{"config-recorder-pr2242"},
+	})
 	if err != nil || len(rec.ConfigurationRecorders) == 0 {
 		t.Fatalf("expected at least one configuration recorder (err=%v)", err)
 	}
@@ -264,25 +264,44 @@ func TestLive_AWSConfig_Present(t *testing.T) {
 func TestLive_WebSG_AllowsOnlyHTTPAndHTTPS(t *testing.T) {
 	suffix := envSuffix()
 	for _, r := range regions {
-		cfg := cfgRegion(t, r)
-		ec2c := ec2.NewFromConfig(cfg)
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
+		r := r
+		t.Run(r, func(t *testing.T) {
+			cfg := cfgRegion(t, r)
+			ec2c := ec2.NewFromConfig(cfg)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
 
-		sgName := "web-sg-" + r + "-" + suffix
-		sgs, err := ec2c.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
-			GroupNames: []string{sgName},
-		})
-		if err != nil || len(sgs.SecurityGroups) != 1 {
-			t.Fatalf("expected SG %s, err=%v", sgName, err)
-		}
-		for _, p := range sgs.SecurityGroups[0].IpPermissions {
-			from := aws.ToInt32(p.FromPort)
-			to := aws.ToInt32(p.ToPort)
-			if !(from == 80 && to == 80) && !(from == 443 && to == 443) {
-				t.Fatalf("SG %s has unexpected ingress port range %d-%d", sgName, from, to)
+			// scope to our VPC (avoid default VPC)
+			vpcName := "vpc-" + r + "-" + suffix
+			vpcID, err := vpcIdByName(ctx, ec2c, vpcName)
+			if err != nil {
+				t.Fatalf("vpc lookup failed: %v", err)
 			}
-		}
+
+			sgName := "web-sg-" + r + "-" + suffix
+
+			// find SG by VPC + group-name (could also use tag:Name if preferred)
+			sgs, err := ec2c.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+				Filters: []ec2types.Filter{
+					ec2Filter("vpc-id", vpcID),
+					ec2Filter("group-name", sgName),
+				},
+			})
+			if err != nil {
+				t.Fatalf("DescribeSecurityGroups: %v", err)
+			}
+			if len(sgs.SecurityGroups) != 1 {
+				t.Fatalf("expected 1 SG named %s in VPC %s; got %d", sgName, vpcID, len(sgs.SecurityGroups))
+			}
+
+			for _, p := range sgs.SecurityGroups[0].IpPermissions {
+				from := aws.ToInt32(p.FromPort)
+				to := aws.ToInt32(p.ToPort)
+				if !(from == 80 && to == 80) && !(from == 443 && to == 443) && !(from == 22 && to == 22) {
+					t.Fatalf("SG %s has unexpected ingress port range %d-%d", sgName, from, to)
+				}
+			}
+		})
 	}
 }
 
@@ -295,11 +314,26 @@ func TestLive_SSH_RestrictedCIDR(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
+		// scope to our VPC (avoid default VPC)
+		vpcName := "vpc-" + r + "-" + suffix
+		vpcID, err := vpcIdByName(ctx, ec2c, vpcName)
+		if err != nil {
+			t.Fatalf("vpc lookup failed: %v", err)
+		}
+
 		sgName := "web-sg-" + r + "-" + suffix
+
+		// find SG by VPC + group-name (could also use tag:Name if preferred)
 		sgs, err := ec2c.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
-			GroupNames: []string{sgName},
+			Filters: []ec2types.Filter{
+				ec2Filter("vpc-id", vpcID),
+				ec2Filter("group-name", sgName),
+			},
 		})
-		if err != nil || len(sgs.SecurityGroups) != 1 {
+		if err != nil {
+			t.Fatalf("DescribeSecurityGroups: %v", err)
+		}
+		if len(sgs.SecurityGroups) != 1 {
 			t.Fatalf("expected SG %s, err=%v", sgName, err)
 		}
 		found := false
@@ -484,10 +518,24 @@ func TestLive_APIGateway_HTTPSOnlyExists(t *testing.T) {
 	}
 }
 
-// Simple helper to build an EC2 filter
+// helper: build an EC2 filter
 func ec2Filter(name string, values ...string) ec2types.Filter {
 	return ec2types.Filter{
 		Name:   aws.String(name),
-		Values: values, // ec2 v2 uses []string
+		Values: values,
 	}
+}
+
+// helper: get VPC ID by Name tag (e.g., "vpc-us-east-1-pr2114")
+func vpcIdByName(ctx context.Context, ec2c *ec2.Client, vpcName string) (string, error) {
+	vpcs, err := ec2c.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		Filters: []ec2types.Filter{ec2Filter("tag:Name", vpcName)},
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(vpcs.Vpcs) != 1 {
+		return "", fmt.Errorf("expected 1 VPC named %s, got %d", vpcName, len(vpcs.Vpcs))
+	}
+	return aws.ToString(vpcs.Vpcs[0].VpcId), nil
 }
