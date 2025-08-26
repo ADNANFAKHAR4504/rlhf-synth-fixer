@@ -10,7 +10,7 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// synthNestedTemplate builds the app/stack and returns the Template of the nested stack "WebInfra-dev"
+// synthNestedTemplate builds the app/stack and returns the Template of the nested stack "WebInfra-dev" 
 func synthNestedTemplate(t *testing.T) assertions.Template {
 	t.Helper()
 
