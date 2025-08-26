@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291534",
+  "team": "2",
+  "startedAt": "2025-08-18T09:01:29.802Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::S3::Bucket",
+    "AWS::Logs::LogGroup",
+    "AWS::IAM::Role",
+    "AWS::Lambda::Function",
+    "AWS::CodeBuild::Project",
+    "AWS::SNS::Topic",
+    "AWS::SNS::Subscription",
+    "AWS::CodePipeline::Pipeline",
+    "AWS::Events::Rule",
+    "AWS::SNS::TopicPolicy"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}
