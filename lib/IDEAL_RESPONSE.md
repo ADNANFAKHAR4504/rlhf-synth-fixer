@@ -20,7 +20,7 @@ The solution implements a robust multi-region architecture with:
 - **Security-first approach**: All resources use KMS encryption and follow least-privilege principles
 - **Network isolation**: Database in isolated subnets, applications in private subnets with NAT gateways
 - **S3 cross-region replication**: Automated replication with monitoring and SNS alerts
-- **CloudFront distribution**: Global content delivery from primary region only
+- **CloudFront distribution**: Global content delivery from primary region only with dedicated logs bucket
 - **Auto Scaling Groups**: High availability with encrypted EBS volumes instead of single EC2 instances
 - **Comprehensive tagging**: All resources tagged with Environment, Project, and Owner for governance
 - **Resource cleanup**: Applied RemovalPolicy.DESTROY for CI/CD compatibility
@@ -63,21 +63,25 @@ const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
 });
 
 // Secondary region stack (us-west-1)
-const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`, {
-  stackName: `TapStackSecondary${environmentSuffix}`,
-  environmentSuffix: environmentSuffix,
-  isPrimary: false,
-  primaryRegion: 'us-east-1',
-  primaryBucketArn: primaryStack.primaryBucketArn,
-  primaryDatabaseIdentifier: primaryStack.databaseInstanceIdentifier,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
-  },
-});
+const secondaryStack = new TapStack(
+  app,
+  `TapStackSecondary${environmentSuffix}`,
+  {
+    stackName: `TapStackSecondary${environmentSuffix}`,
+    environmentSuffix: environmentSuffix,
+    isPrimary: false,
+    primaryRegion: 'us-east-1',
+    primaryBucketArn: primaryStack.primaryBucketArn,
+    primaryDatabaseIdentifier: primaryStack.databaseInstanceIdentifier,
+    env: {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-west-1',
+    },
+  }
+);
 
-// Add cross-stack dependency
-secondaryStack.addDependency(primaryStack);
+// Add cross-stack dependency - Primary depends on Secondary to ensure replica bucket exists
+primaryStack.addDependency(secondaryStack);
 ```
 
 ### lib/tap-stack.ts
@@ -113,7 +117,7 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const commonTags = {
-      Environment: 'production',
+      Environment: props?.environmentSuffix || 'dev',
       Project: 'tap',
       Owner: 'devops-team',
     };
@@ -453,7 +457,9 @@ def handler(event, context):
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": ["**"],
+    "include": [
+      "**"
+    ],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -469,9 +475,80 @@ def handler(event, context):
   "context": {
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
+    "@aws-cdk/core:target-partitions": [
+      "aws",
+      "aws-cn"
+    ],
+    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
+    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-route53-patters:useCertificate": true,
+    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
+    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
+    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
+    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
+    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
+    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
+    "@aws-cdk/aws-redshift:columnId": true,
+    "@aws-cdk/aws-stepfunctions-tasks:enableEmrServicePolicyV2": true,
+    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
+    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
+    "@aws-cdk/aws-kms:aliasNameRef": true,
+    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
+    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
+    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
+    "@aws-cdk/aws-opensearchservice:enableOpensearchMultiAzWithStandby": true,
+    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true,
+    "@aws-cdk/aws-efs:mountTargetOrderInsensitiveLogicalId": true,
+    "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": true,
+    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
+    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": true,
+    "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
+    "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": true,
+    "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": true,
+    "@aws-cdk/aws-eks:nodegroupNameAttribute": true,
     "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": true,
-    "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true
+    "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": true,
+    "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": false,
+    "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false,
+    "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false,
+    "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
+    "@aws-cdk/aws-ecs:reduceEc2FargateCloudWatchPermissions": true,
+    "@aws-cdk/aws-dynamodb:resourcePolicyPerReplica": true,
+    "@aws-cdk/aws-ec2:ec2SumTImeoutEnabled": true,
+    "@aws-cdk/aws-appsync:appSyncGraphQLAPIScopeLambdaPermission": true,
+    "@aws-cdk/aws-rds:setCorrectValueForDatabaseInstanceReadReplicaInstanceResourceId": true,
+    "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": true,
+    "@aws-cdk/aws-lambda-nodejs:sdkV3ExcludeSmithyPackages": true,
+    "@aws-cdk/aws-stepfunctions-tasks:fixRunEcsTaskPolicy": true,
+    "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": true,
+    "@aws-cdk/aws-route53-targets:userPoolDomainNameMethodWithoutCustomResource": true,
+    "@aws-cdk/aws-elasticloadbalancingV2:albDualstackWithoutPublicIpv4SecurityGroupRulesDefault": true,
+    "@aws-cdk/aws-iam:oidcRejectUnauthorizedConnections": true,
+    "@aws-cdk/core:enableAdditionalMetadataCollection": true,
+    "@aws-cdk/aws-lambda:createNewPoliciesWithAddToRolePolicy": false,
+    "@aws-cdk/aws-s3:setUniqueReplicationRoleName": true,
+    "@aws-cdk/aws-events:requireEventBusPolicySid": true,
+    "@aws-cdk/core:aspectPrioritiesMutating": true,
+    "@aws-cdk/aws-dynamodb:retainTableReplica": true,
+    "@aws-cdk/aws-stepfunctions:useDistributedMapResultWriterV2": true,
+    "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": true,
+    "@aws-cdk/aws-ec2:requirePrivateSubnetsForEgressOnlyInternetGateway": true,
+    "@aws-cdk/aws-s3:publicAccessBlockedByDefault": true,
+    "@aws-cdk/aws-lambda:useCdkManagedLogGroup": true
   }
 }
 ```
@@ -480,10 +557,11 @@ def handler(event, context):
 
 ### Security & Compliance
 - **KMS encryption**: All data encrypted at rest with key rotation enabled
-- **S3 cross-region replication**: Automated replication with proper IAM roles
-- **Least-privilege IAM**: Specific permissions without wildcards
+- **S3 cross-region replication**: Automated replication with proper IAM roles and specific KMS key permissions
+- **Least-privilege IAM**: Specific resource ARNs instead of wildcards for S3 and CloudWatch Logs
 - **Network isolation**: Database in isolated subnets, applications in private subnets
-- **Comprehensive tagging**: Environment, Project, and Owner tags for governance
+- **Dynamic environment tagging**: Environment-aware tagging based on deployment context
+- **Restricted KMS permissions**: Specific key ARNs for cross-region replication instead of wildcards
 
 ### High Availability & Performance
 - **Multi-region deployment**: Primary and secondary regions for disaster recovery

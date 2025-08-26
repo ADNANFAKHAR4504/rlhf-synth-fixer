@@ -12,9 +12,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   isPrimary?: boolean;
@@ -31,7 +28,7 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const commonTags = {
-      Environment: 'production',
+      Environment: props?.environmentSuffix || 'dev',
       Project: 'tap',
       Owner: 'devops-team',
     };
@@ -146,7 +143,9 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject'],
-              resources: ['arn:aws:s3:::tap-bucket-*/*'],
+              resources: [
+                `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*/*`,
+              ],
             }),
           ],
         }),
@@ -343,7 +342,10 @@ export class TapStack extends cdk.Stack {
                   'kms:GenerateDataKey*',
                   'kms:DescribeKey',
                 ],
-                resources: ['*'], // KMS permissions need to be broad for cross-region
+                resources: [
+                  kmsKey.keyArn,
+                  `arn:aws:kms:us-west-1:${this.account}:alias/aws/s3`, // For cross-region replication
+                ],
               }),
             ],
           }),
@@ -426,7 +428,9 @@ export class TapStack extends cdk.Stack {
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
               ],
-              resources: ['arn:aws:logs:*:*:*'],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/*`,
+              ],
             }),
           ],
         }),
