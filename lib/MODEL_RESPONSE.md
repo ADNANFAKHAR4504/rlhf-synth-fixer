@@ -1,4 +1,6 @@
-``` yaml
+## Model Response
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure Three-Tier Web Application Infrastructure - IaC AWS Nova Model Breaking'
 
@@ -7,68 +9,68 @@ Parameters:
     Type: String
     Default: 'iac-aws-nova-breaking'
     Description: 'Project name for resource tagging'
-  
+
   Environment:
     Type: String
     Default: 'production'
     AllowedValues: ['development', 'staging', 'production']
     Description: 'Environment type'
-  
+
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
     Description: 'CIDR block for VPC'
-  
+
   PublicSubnet1Cidr:
     Type: String
     Default: '10.0.1.0/24'
     Description: 'CIDR block for public subnet in AZ1'
-  
+
   PublicSubnet2Cidr:
     Type: String
     Default: '10.0.2.0/24'
     Description: 'CIDR block for public subnet in AZ2'
-  
+
   PrivateSubnet1Cidr:
     Type: String
     Default: '10.0.10.0/24'
     Description: 'CIDR block for private subnet in AZ1'
-  
+
   PrivateSubnet2Cidr:
     Type: String
     Default: '10.0.20.0/24'
     Description: 'CIDR block for private subnet in AZ2'
-  
+
   DatabaseSubnet1Cidr:
     Type: String
     Default: '10.0.30.0/24'
     Description: 'CIDR block for database subnet in AZ1'
-  
+
   DatabaseSubnet2Cidr:
     Type: String
     Default: '10.0.40.0/24'
     Description: 'CIDR block for database subnet in AZ2'
-  
+
   InstanceType:
     Type: String
     Default: 't3.medium'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium', 't3.large']
     Description: 'EC2 instance type'
-  
+
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: 'EC2 Key Pair for SSH access'
-  
+
   MinSize:
     Type: Number
     Default: 2
     Description: 'Minimum number of instances in Auto Scaling Group'
-  
+
   MaxSize:
     Type: Number
     Default: 6
     Description: 'Maximum number of instances in Auto Scaling Group'
-  
+
   DesiredCapacity:
     Type: Number
     Default: 2
@@ -77,7 +79,7 @@ Parameters:
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0c2d3e23b7e8a4b8c  # Amazon Linux 2023
+      AMI: ami-0c2d3e23b7e8a4b8c # Amazon Linux 2023
 
 Resources:
   # KMS Key for encryption
