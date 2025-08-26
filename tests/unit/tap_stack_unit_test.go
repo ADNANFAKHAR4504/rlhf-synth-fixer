@@ -98,8 +98,8 @@ func TestSecurityGroupResources(t *testing.T) {
 		"GroupDescription": "Security group for RDS MySQL instance",
 		"SecurityGroupIngress": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{
-				"FromPort":              3306,
-				"ToPort":                3306,
+				"FromPort":              jsii.Number(3306),
+				"ToPort":                jsii.Number(3306),
 				"SourceSecurityGroupId": assertions.Match_AnyValue(),
 				"Description":           "Allow MySQL traffic from EC2 instances",
 				"IpProtocol":            "tcp",
