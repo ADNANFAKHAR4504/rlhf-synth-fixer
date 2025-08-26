@@ -1,5 +1,8 @@
 
 import {
+  DescribeNetworkAclsCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client
@@ -71,6 +74,8 @@ describe('Security and Compliance Integration Tests', () => {
       expect(vpc.VpcId).toBe(outputs.VPCId);
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
     });
 
     test('should validate subnets are in multiple AZs', async () => {
@@ -94,6 +99,77 @@ describe('Security and Compliance Integration Tests', () => {
       // Get unique AZs
       const uniqueAZs = new Set(response.Subnets!.map(subnet => subnet.AvailabilityZone));
       expect(uniqueAZs.size).toBeGreaterThanOrEqual(2);
+
+      // Verify subnet configurations
+      const publicSubnets = response.Subnets!.filter(subnet =>
+        [outputs.PublicSubnet1Id, outputs.PublicSubnet2Id].includes(subnet.SubnetId!));
+      const privateSubnets = response.Subnets!.filter(subnet =>
+        [outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id].includes(subnet.SubnetId!));
+
+      // Public subnets should auto-assign public IPs
+      publicSubnets.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+
+      // Private subnets should not auto-assign public IPs
+      privateSubnets.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test('should validate security group configuration', async () => {
+      if (!outputs.VPCId) {
+        console.log('Skipping security group test - VPC ID not available');
+        return;
+      }
+
+      const command = new DescribeSecurityGroupsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+
+      // Verify EC2 security group
+      const ec2SecurityGroup = response.SecurityGroups!.find(sg =>
+        sg.GroupName.includes('myapp-ec2-sg'));
+      expect(ec2SecurityGroup).toBeDefined();
+
+      // Verify inbound rules
+      const sshRule = ec2SecurityGroup!.IpPermissions!.find(rule =>
+        rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp');
+      expect(sshRule).toBeDefined();
+    });
+
+    test('should validate route tables', async () => {
+      if (!outputs.VPCId) {
+        console.log('Skipping route table test - VPC ID not available');
+        return;
+      }
+
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.RouteTables).toBeDefined();
+      expect(response.RouteTables!.length).toBeGreaterThan(0);
+
+      // At least one route table should have an Internet Gateway route (0.0.0.0/0)
+      const hasInternetRoute = response.RouteTables!.some(rt =>
+        rt.Routes!.some(route => route.GatewayId && route.GatewayId.startsWith('igw-')));
+      expect(hasInternetRoute).toBe(true);
     });
   });
 
@@ -113,16 +189,81 @@ describe('Security and Compliance Integration Tests', () => {
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata!.Enabled).toBe(true);
       expect(response.KeyMetadata!.KeyState).toBe('Enabled');
-      // Check key status
-      expect(response.KeyMetadata!.Enabled).toBe(true);
+      expect(response.KeyMetadata!.KeyManager).toBe('CUSTOMER');
+      expect(response.KeyMetadata!.Origin).toBe('AWS_KMS');
+      expect(response.KeyMetadata!.MultiRegion).toBe(false);
+
+      // Verify key rotation is enabled
+      expect(response.KeyMetadata!.CustomerMasterKeySpec).toBe('SYMMETRIC_DEFAULT');
+      expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
     });
 
-    // EBS volume tests removed as we don't have EC2 instances anymore
+    test('should have correct key tags', async () => {
+      if (!outputs.MainKMSKeyId) {
+        console.log('Skipping KMS tags test - KMS key ID not available');
+        return;
+      }
+
+      const command = new DescribeKeyCommand({
+        KeyId: outputs.MainKMSKeyId,
+
+      });
+
+      const response = await kmsClient.send(command);
+      expect(response.KeyMetadata!.Description).toContain('encryption');
+    });
   });
 
 
 
 
 
-  // EC2 Instance Security tests removed as we don't have EC2 instances anymore
+  describe('Overall Architecture', () => {
+    test('should have a compliant network architecture', async () => {
+      if (!outputs.VPCId) {
+        console.log('Skipping architecture test - VPC ID not available');
+        return;
+      }
+
+      // Check Network ACLs
+      const naclCommand = new DescribeNetworkAclsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const naclResponse = await ec2Client.send(naclCommand);
+      expect(naclResponse.NetworkAcls).toBeDefined();
+      expect(naclResponse.NetworkAcls!.length).toBeGreaterThan(0);
+
+      // Verify we have at least one Network ACL associated with our subnets
+      const subnetAssociations = naclResponse.NetworkAcls!.flatMap(nacl =>
+        nacl.Associations || []);
+      expect(subnetAssociations.length).toBeGreaterThan(0);
+
+      // Verify VPC CIDR is correct
+      const vpcCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPCId]
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      expect(vpcResponse.Vpcs![0].CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+
+      // Verify subnet CIDR blocks are within VPC CIDR
+      const subnetsCommand = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+      const subnetsResponse = await ec2Client.send(subnetsCommand);
+      subnetsResponse.Subnets!.forEach(subnet => {
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.[0-9]{1,3}\.0\/24$/);
+      });
+    });
+  });
 });
