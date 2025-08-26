@@ -234,15 +234,20 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups).toBeDefined();
 
+      // Exclude the default security group
+      const customSecurityGroups = response.SecurityGroups!.filter(
+        sg => sg.GroupName !== 'default'
+      );
+
       // Should have multiple security groups for different tiers
-      const sgNames = response.SecurityGroups!.map(sg => sg.GroupName);
+      const sgNames = customSecurityGroups.map(sg => sg.GroupName);
       expect(sgNames.some(name => name?.includes('bastion'))).toBe(true);
       expect(sgNames.some(name => name?.includes('web'))).toBe(true);
       expect(sgNames.some(name => name?.includes('app'))).toBe(true);
       expect(sgNames.some(name => name?.includes('database'))).toBe(true);
 
       // Check security group configurations
-      response.SecurityGroups!.forEach(sg => {
+      customSecurityGroups.forEach(sg => {
         expect(sg.VpcId).toBe(outputs.VPCId);
 
         // Check security group tags
