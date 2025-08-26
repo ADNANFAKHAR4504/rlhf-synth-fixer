@@ -4,9 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
-/**
- * Unit tests for WebAppStackConfig class.
- */
+/** Unit tests for WebAppStackConfig class. */
 class WebAppStackConfigTest {
 
   @Test
@@ -39,7 +37,7 @@ class WebAppStackConfigTest {
     WebAppStackConfig config = new WebAppStackConfig();
     String instanceType = config.getInstanceType();
     assertNotNull(instanceType);
-    assertEquals("t3.micro", instanceType); // Default value
+    assertEquals("t4g.micro", instanceType); // Default value
   }
 
   @Test
