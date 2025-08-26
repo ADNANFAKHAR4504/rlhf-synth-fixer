@@ -1,11 +1,10 @@
-# IDEAL_RESPONSE.md
+IDEAL_RESPONSE.md
+Project: IaC – AWS Nova Model Breaking
 
-## Project: IaC – AWS Nova Model Breaking
+The following code implements a multi-region fault-tolerant infrastructure using AWS CDK (Java).
+It provisions two stacks (us-east-1 and us-west-2) for high availability and disaster recovery.
 
-The following code implements a **multi-region fault-tolerant infrastructure** using **AWS CDK (Java)**.  
-It provisions two stacks (`us-east-1` and `us-west-2`) for high availability and disaster recovery.  
-
-All files are located in the `lib/` folder.
+All code resides in the lib/ folder.
 
 ---
 
@@ -16,12 +15,73 @@ package app;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.RemovalPolicy;
 
-/**
- * Main entry point for the AWS CDK Java application.
- * Provisions stacks across us-east-1 and us-west-2 for HA/DR.
- */
+import software.constructs.Construct;
+
+// EC2
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Vpc;
+
+// AutoScaling
+import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+
+// ELBv2
+import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetsProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
+
+// S3
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+
+// IAM
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+
+// RDS
+import software.amazon.awscdk.services.rds.Credentials;
+import software.amazon.awscdk.services.rds.DatabaseInstance;
+import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.PostgresEngineVersion;
+import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+
+// CloudWatch
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+
+// CloudWatch → SNS
+import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;
+
+// Route53
+import software.amazon.awscdk.services.route53.ARecord;
+import software.amazon.awscdk.services.route53.HostedZoneAttributes;
+import software.amazon.awscdk.services.route53.IHostedZone;
+import software.amazon.awscdk.services.route53.RecordTarget;
+
+// Route53 alias target for ALB
+import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
+
+// SNS
+import software.amazon.awscdk.services.sns.Topic;
+
+import java.util.List;
+
 public final class Main {
 
     private Main() {
@@ -31,37 +91,145 @@ public final class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        // Resolve AWS account from environment variables
-        String account = System.getenv("CDK_DEFAULT_ACCOUNT");
-        if (account == null) {
-            throw new RuntimeException("CDK_DEFAULT_ACCOUNT not set");
-        }
+        new FaultTolerantStack(app, "Nova-East", StackProps.builder()
+            .env(Environment.builder()
+                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                .region("us-east-1")
+                .build())
+            .build());
 
-        // Determine environment suffix (default: dev)
-        String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
-        if (environmentSuffix == null) {
-            environmentSuffix = "dev";
-        }
+        new FaultTolerantStack(app, "Nova-West", StackProps.builder()
+            .env(Environment.builder()
+                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                .region("us-west-2")
+                .build())
+            .build());
 
-        // Primary region: us-east-1
-        new RegionalStack(app, "NovaStack-" + environmentSuffix + "-use1",
-                StackProps.builder()
-                        .env(Environment.builder()
-                                .account(account)
-                                .region("us-east-1")
-                                .build())
-                        .build());
-
-        // Secondary region: us-west-2
-        new RegionalStack(app, "NovaStack-" + environmentSuffix + "-usw2",
-                StackProps.builder()
-                        .env(Environment.builder()
-                                .account(account)
-                                .region("us-west-2")
-                                .build())
-                        .build());
-
-        // Synthesize into CloudFormation templates
         app.synth();
+    }
+
+    public static class FaultTolerantStack extends Stack {
+        public FaultTolerantStack(final Construct scope, final String id, final StackProps props) {
+            super(scope, id, props);
+
+            String env = id.toLowerCase();
+
+            // VPC
+            Vpc vpc = Vpc.Builder.create(this, env + "-vpc")
+                .maxAzs(2)
+                .build();
+
+            // Logging bucket
+            Bucket logBucket = Bucket.Builder.create(this, env + "-logs")
+                .versioned(true)
+                .encryption(BucketEncryption.KMS_MANAGED)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .lifecycleRules(List.of(LifecycleRule.builder()
+                    .expiration(Duration.days(365))
+                    .build()))
+                .build();
+
+            // EC2 Role
+            Role ec2Role = Role.Builder.create(this, env + "-ec2-role")
+                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                .managedPolicies(List.of(
+                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
+                    ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy")))
+                .build();
+
+            // Security Group
+            SecurityGroup sg = SecurityGroup.Builder.create(this, env + "-sg")
+                .vpc(vpc)
+                .allowAllOutbound(true)
+                .build();
+            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "Allow HTTP");
+            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), "Allow HTTPS");
+
+            // AutoScaling Group
+            IMachineImage ami = MachineImage.latestAmazonLinux2();
+            AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, env + "-asg")
+                .vpc(vpc)
+                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
+                    InstanceClass.BURSTABLE2, InstanceSize.MICRO))
+                .machineImage(ami)
+                .securityGroup(sg)
+                .role(ec2Role)
+                .minCapacity(1)
+                .maxCapacity(2)
+                .build();
+
+            // ALB
+            ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, env + "-alb")
+                .vpc(vpc)
+                .internetFacing(true)
+                .build();
+
+            ApplicationListener listener = alb.addListener(env + "-listener",
+                BaseApplicationListenerProps.builder()
+                    .port(80)
+                    .protocol(ApplicationProtocol.HTTP)
+                    .build());
+
+            listener.addTargets(env + "-targets",
+                AddApplicationTargetsProps.builder()
+                    .port(80)
+                    .targets(List.of(asg))
+                    .build());
+
+            // RDS
+            DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
+                .engine(DatabaseInstanceEngine.postgres(
+                    PostgresInstanceEngineProps.builder()
+                        .version(PostgresEngineVersion.VER_16)
+                        .build()))
+                .vpc(vpc)
+                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
+                    InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
+                .credentials(Credentials.fromGeneratedSecret("dbadmin"))
+                .multiAz(true)
+                .allocatedStorage(20)
+                .storageEncrypted(true)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+
+            // Monitoring
+            Metric cpuMetric = Metric.Builder.create()
+                .namespace("AWS/EC2")
+                .metricName("CPUUtilization")
+                .statistic("Average")
+                .period(Duration.minutes(5))
+                .build();
+
+            Alarm cpuAlarm = Alarm.Builder.create(this, env + "-cpu-alarm")
+                .metric(cpuMetric)
+                .threshold(70) // aligns with unit tests
+                .evaluationPeriods(2)
+                .datapointsToAlarm(2)
+                .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                .build();
+
+            Topic alarmTopic = new Topic(this, env + "-alarm-topic");
+            cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
+
+            // Route53 DNS (optional)
+            String hostedZoneId = (String) this.getNode().tryGetContext("hostedZoneId");
+            String zoneName = (String) this.getNode().tryGetContext("zoneName");
+
+            if (hostedZoneId != null && zoneName != null) {
+                IHostedZone zone = software.amazon.awscdk.services.route53.HostedZone.fromHostedZoneAttributes(
+                    this, env + "-zone",
+                    HostedZoneAttributes.builder()
+                        .hostedZoneId(hostedZoneId)
+                        .zoneName(zoneName)
+                        .build());
+
+                ARecord.Builder.create(this, env + "-dns")
+                    .zone(zone)
+                    .recordName(env + "." + zoneName)
+                    .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+                    .build();
+            }
+        }
     }
 }
