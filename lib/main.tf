@@ -265,7 +265,6 @@ resource "aws_s3_bucket_versioning" "main" {
   }
 }
 
-# Fixed: Added missing name "main" for the resource
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
 
@@ -330,7 +329,8 @@ resource "aws_db_instance" "main" {
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
 
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  # Fixed: Changed "slow_query" to "slowquery" (MySQL CloudWatch log export names)
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Security
   deletion_protection = false # Set to true for production
