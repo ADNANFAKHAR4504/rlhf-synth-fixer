@@ -666,6 +666,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: S3Access
@@ -675,10 +676,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                  - s3:ListBucket
+                  - s3:PutObject
                 Resource:
                   - !Sub '${ApplicationBucket}/*'
-                  - !Ref ApplicationBucket
+              - Effect: Allow
+                Action:
+                  - s3:ListObject
+                Resource: 
+                  - !GetAtt ApplicationBucket.Arn
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'
