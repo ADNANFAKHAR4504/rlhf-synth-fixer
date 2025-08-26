@@ -18,7 +18,6 @@ import software.amazon.awscdk.services.backup.BackupPlan;
 import software.amazon.awscdk.services.backup.BackupResource;
 import software.amazon.awscdk.services.backup.BackupSelection;
 import software.amazon.awscdk.services.backup.BackupVault;
-import software.amazon.awscdk.services.backup.BackupRule;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
@@ -257,12 +256,12 @@ public class Main extends App {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
             
-            // Create backup plan with rules
+            // Create backup plan with rules using the correct CDK v2 approach
             BackupPlan backupPlan = BackupPlan.Builder.create(this, "BackupPlan")
                 .backupPlanName(String.format("%s-%s-%s-plan", projectName, environment, region))
                 .backupVault(backupVault)
                 .backupPlanRules(Arrays.asList(
-                    BackupRule.Builder.create()
+                    software.amazon.awscdk.services.backup.BackupPlanRule.Builder.create()
                         .ruleName("DailyBackupRule")
                         .backupVault(backupVault)
                         .scheduleExpression("cron(0 5 ? * * *)") // Daily at 5 AM UTC
