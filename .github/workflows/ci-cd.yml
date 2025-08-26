@@ -72,6 +72,55 @@ jobs:
 
       - name: Create Jump Box with Full AWS Permissions
         run: |
+          echo "🧹 Checking for existing jump box resources..."
+          
+          # Check for existing running instances for this environment
+          EXISTING_INSTANCE=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=JumpBox-${{ env.ENVIRONMENT_SUFFIX }}" \
+                     "Name=instance-state-name,Values=running,pending" \
+            --query 'Reservations[0].Instances[0].InstanceId' \
+            --output text)
+          
+          if [ "$EXISTING_INSTANCE" != "None" ] && [ "$EXISTING_INSTANCE" != "null" ] && [ -n "$EXISTING_INSTANCE" ]; then
+            echo "♻️  Found existing running jump box: $EXISTING_INSTANCE"
+            EXISTING_IP=$(aws ec2 describe-instances \
+              --instance-ids $EXISTING_INSTANCE \
+              --query 'Reservations[0].Instances[0].PublicIpAddress' \
+              --output text)
+            echo "📋 Reusing existing jump box:"
+            echo "   Instance ID: $EXISTING_INSTANCE"
+            echo "   Public IP: $EXISTING_IP"
+            echo "   ⚠️  Note: Using existing instance - password may be different"
+            
+            # Store existing jump box info in outputs
+            mkdir -p jump-box-outputs
+            echo "INSTANCE_ID=$EXISTING_INSTANCE" > jump-box-outputs/jump-box-info.env
+            echo "PUBLIC_IP=$EXISTING_IP" >> jump-box-outputs/jump-box-info.env
+            echo "PASSWORD=<existing-password>" >> jump-box-outputs/jump-box-info.env
+            echo "SECURITY_GROUP_ID=<existing-sg>" >> jump-box-outputs/jump-box-info.env
+            echo "REGION=us-east-1" >> jump-box-outputs/jump-box-info.env
+            
+            echo "✅ Reusing existing jump box, skipping creation"
+            exit 0
+          fi
+          
+          # Clean up any stopped/terminated instances for this environment
+          echo "🗑️  Cleaning up old stopped instances..."
+          OLD_INSTANCES=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=JumpBox-${{ env.ENVIRONMENT_SUFFIX }}" \
+                     "Name=instance-state-name,Values=stopped,terminated" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)
+          
+          if [ -n "$OLD_INSTANCES" ] && [ "$OLD_INSTANCES" != "None" ]; then
+            echo "Found old instances to clean up: $OLD_INSTANCES"
+            for instance_id in $OLD_INSTANCES; do
+              echo "Terminating old instance: $instance_id"
+              aws ec2 terminate-instances --instance-ids $instance_id || echo "Failed to terminate $instance_id"
+            done
+          fi
+          
+          echo "🆕 Creating new jump box..."
           # Generate a random password for the jump box
           JUMP_BOX_PASSWORD=$(openssl rand -base64 16)
           echo "Generated password for jump box user"
@@ -114,18 +163,35 @@ jobs:
           # Wait for IAM propagation
           sleep 30
 
-          # Get default VPC and subnet
+          # Get default VPC and public subnet with internet gateway
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
-          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[0].SubnetId' --output text)
+          # Find a public subnet (one that has a route to internet gateway)
+          SUBNET_ID=$(aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$VPC_ID" "Name=map-public-ip-on-launch,Values=true" \
+            --query 'Subnets[0].SubnetId' \
+            --output text)
+          
+          # If no public subnet found, fall back to first subnet
+          if [ "$SUBNET_ID" = "None" ] || [ -z "$SUBNET_ID" ]; then
+            SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[0].SubnetId' --output text)
+          fi
 
           # Create security group for jump box
-          SECURITY_GROUP_ID=$(aws ec2 create-security-group \
+          echo "Creating security group JumpBoxSG-${{ env.ENVIRONMENT_SUFFIX }}"
+          if aws ec2 create-security-group \
             --group-name "JumpBoxSG-${{ env.ENVIRONMENT_SUFFIX }}" \
-            --description "Security group for jump box with SSH access" \
-            --vpc-id $VPC_ID \
-            --query 'GroupId' \
-            --output text \
-            || aws ec2 describe-security-groups --filters "Name=group-name,Values=JumpBoxSG-${{ env.ENVIRONMENT_SUFFIX }}" --query 'SecurityGroups[0].GroupId' --output text)
+            --description "Security group for jump box with SSH and ICMP access" \
+            --vpc-id $VPC_ID >/dev/null 2>&1; then
+            echo "Created new security group"
+          else
+            echo "Security group already exists"
+          fi
+          
+          # Get security group ID
+          SECURITY_GROUP_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=JumpBoxSG-${{ env.ENVIRONMENT_SUFFIX }}" \
+            --query 'SecurityGroups[0].GroupId' \
+            --output text)
 
           # Allow SSH access (port 22)
           aws ec2 authorize-security-group-ingress \
@@ -134,6 +200,14 @@ jobs:
             --port 22 \
             --cidr 0.0.0.0/0 \
             || echo "SSH rule may already exist"
+
+          # Allow ICMP for ping (troubleshooting)
+          aws ec2 authorize-security-group-ingress \
+            --group-id $SECURITY_GROUP_ID \
+            --protocol icmp \
+            --port -1 \
+            --cidr 0.0.0.0/0 \
+            || echo "ICMP rule may already exist"
 
           # Get latest Amazon Linux 2 AMI ID
           AMI_ID=$(aws ec2 describe-images \
@@ -207,7 +281,7 @@ jobs:
           EOF
           )
 
-          # Launch EC2 instance
+          # Launch EC2 instance with public IP assignment
           INSTANCE_ID=$(aws ec2 run-instances \
             --image-id $AMI_ID \
             --count 1 \
@@ -215,6 +289,7 @@ jobs:
             --iam-instance-profile Name="JumpBoxProfile-${{ env.ENVIRONMENT_SUFFIX }}" \
             --security-group-ids $SECURITY_GROUP_ID \
             --subnet-id $SUBNET_ID \
+            --associate-public-ip-address \
             --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=JumpBox-${{ env.ENVIRONMENT_SUFFIX }}},{Key=Environment,Value=${{ env.ENVIRONMENT_SUFFIX }}},{Key=Purpose,Value=Jump Box with Full AWS Access}]" \
             --user-data "$USER_DATA" \
             --query 'Instances[0].InstanceId' \
@@ -259,7 +334,9 @@ jobs:
           echo "   - Docker, kubectl, Terraform"
           echo "   - Python 3, Git, and other utilities"
           echo ""
-          echo "Wait 2-3 minutes for the instance to fully initialize before connecting."
+          echo "Wait 3-5 minutes for the instance to fully initialize before connecting."
+          echo "If connection still fails, check that the security group allows traffic"
+          echo "and that the subnet has proper internet gateway routing."
           echo "======================================"
 
           # Store jump box info in outputs file
@@ -698,6 +775,68 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Cleanup Jump Box Resources
+        run: |
+          echo "🧹 Cleaning up jump box resources for environment: ${{ env.ENVIRONMENT_SUFFIX }}"
+          
+          # Terminate jump box instances
+          JUMP_BOX_INSTANCES=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=JumpBox-${{ env.ENVIRONMENT_SUFFIX }}" \
+                     "Name=instance-state-name,Values=running,pending,stopped" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text)
+          
+          if [ -n "$JUMP_BOX_INSTANCES" ] && [ "$JUMP_BOX_INSTANCES" != "None" ]; then
+            echo "Terminating jump box instances: $JUMP_BOX_INSTANCES"
+            for instance_id in $JUMP_BOX_INSTANCES; do
+              aws ec2 terminate-instances --instance-ids $instance_id || echo "Failed to terminate $instance_id"
+            done
+            
+            # Wait for instances to terminate before cleaning up security group
+            echo "Waiting for instances to terminate..."
+            for instance_id in $JUMP_BOX_INSTANCES; do
+              aws ec2 wait instance-terminated --instance-ids $instance_id || echo "Timeout waiting for $instance_id"
+            done
+          fi
+          
+          # Delete security group
+          SECURITY_GROUP_ID=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=JumpBoxSG-${{ env.ENVIRONMENT_SUFFIX }}" \
+            --query 'SecurityGroups[0].GroupId' \
+            --output text)
+          
+          if [ "$SECURITY_GROUP_ID" != "None" ] && [ -n "$SECURITY_GROUP_ID" ]; then
+            echo "Deleting security group: $SECURITY_GROUP_ID"
+            aws ec2 delete-security-group --group-id $SECURITY_GROUP_ID || echo "Failed to delete security group"
+          fi
+          
+          # Clean up IAM resources
+          echo "Cleaning up IAM resources..."
+          
+          # Remove role from instance profile
+          aws iam remove-role-from-instance-profile \
+            --instance-profile-name "JumpBoxProfile-${{ env.ENVIRONMENT_SUFFIX }}" \
+            --role-name "JumpBoxRole-${{ env.ENVIRONMENT_SUFFIX }}" \
+            || echo "Role may not be attached to instance profile"
+          
+          # Delete instance profile
+          aws iam delete-instance-profile \
+            --instance-profile-name "JumpBoxProfile-${{ env.ENVIRONMENT_SUFFIX }}" \
+            || echo "Instance profile may not exist"
+          
+          # Detach policy from role
+          aws iam detach-role-policy \
+            --role-name "JumpBoxRole-${{ env.ENVIRONMENT_SUFFIX }}" \
+            --policy-arn "arn:aws:iam::aws:policy/AdministratorAccess" \
+            || echo "Policy may not be attached"
+          
+          # Delete role
+          aws iam delete-role \
+            --role-name "JumpBoxRole-${{ env.ENVIRONMENT_SUFFIX }}" \
+            || echo "Role may not exist"
+          
+          echo "✅ Jump box cleanup completed"
 
       - name: Destroy Resources (cleanup any leftover resources)
         run: ./scripts/destroy.sh
