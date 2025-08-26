@@ -182,24 +182,24 @@ export class EC2InstancesConstruct extends Construct {
       '#!/bin/bash',
       'yum update -y',
       'yum install -y httpd amazon-cloudwatch-agent',
-      
+
       // Configure CloudWatch agent
       `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'`,
       JSON.stringify(cloudWatchConfig, null, 2),
       'EOF',
-      
+
       // Start and enable services
       'systemctl start httpd',
       'systemctl enable httpd',
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json',
-      
+
       // Create a simple index page
       'echo "<h1>Secure Web Application</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" > /var/www/html/index.html',
-      
+
       // Set proper permissions
       'chown -R apache:apache /var/www/html',
       'chmod -R 755 /var/www/html',
-      
+
       // Configure log rotation
       'cat > /etc/logrotate.d/webapp << EOF',
       '/var/log/httpd/*log {',
@@ -225,14 +225,15 @@ export class EC2InstancesConstruct extends Construct {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
         machineImage: amzn2Ami,
         vpc: vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         availabilityZone: az,
         securityGroup: securityGroup,
         userData: userData,
         role: instanceProfile.role,
-        
+
         // Enable detailed monitoring
         detailedMonitoring: true,
-        
+
         // Configure root volume with encryption
         blockDevices: [{
           deviceName: '/dev/xvda',
@@ -242,7 +243,7 @@ export class EC2InstancesConstruct extends Construct {
             deleteOnTermination: true
           })
         }],
-        
+
         // Require IMDSv2 for enhanced security
         requireImdsv2: true
       });
@@ -308,7 +309,7 @@ export class IAMRolesConstruct extends Construct {
     // S3 logging policy (write-only)
     const s3LoggingPolicy = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['s3:PutObject', 's3:PutObjectAcl'],
+      actions: ['s3:PutObject'],
       resources: [`arn:aws:s3:::${s3BucketName}/logs/*`],
     });
 
@@ -354,14 +355,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
 export class SecurityGroupConstruct extends Construct {
-  /** @type {ec2.SecurityGroup} */
   securityGroup;
 
-  /**
-   * @param {Construct} scope
-   * @param {string} id
-   * @param {{ vpc: ec2.IVpc, sshCidrBlock: string, trustedOutboundCidrs: string[] }} props
-   */
   constructor(scope, id, props) {
     super(scope, id);
 
@@ -399,6 +394,9 @@ export class SecurityGroupConstruct extends Construct {
       );
     });
 
+    // ------------------
+    // S3 outbound (prefix lists)
+    // ------------------
     const s3PrefixListIds = {
       "us-east-1": "pl-63a5400a",
       "us-east-2": "pl-7ba54012",
@@ -441,10 +439,47 @@ export class SecurityGroupConstruct extends Construct {
       'Allow HTTPS to S3',
     );
 
+    // ------------------
+    // CloudWatch outbound (Interface Endpoints)
+    // ------------------
+
+    // CloudWatch (metrics)
+    const cloudWatchEndpoint = vpc.addInterfaceEndpoint('CloudWatchEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING,
+      privateDnsEnabled: true,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
     this.securityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
+      cloudWatchEndpoint.connections.securityGroups[0],
       ec2.Port.tcp(443),
-      'Allow HTTPS to AWS services (SSM, CloudWatch)'
+      'Allow HTTPS to CloudWatch via VPC endpoint'
+    );
+
+    // CloudWatch Logs
+    const logsEndpoint = vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      privateDnsEnabled: true,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    this.securityGroup.addEgressRule(
+      logsEndpoint.connections.securityGroups[0],
+      ec2.Port.tcp(443),
+      'Allow HTTPS to CloudWatch Logs via VPC endpoint'
+    );
+
+    // CloudWatch Events (a.k.a. EventBridge)
+    const eventsEndpoint = vpc.addInterfaceEndpoint('CloudWatchEventsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.EVENTBRIDGE,
+      privateDnsEnabled: true,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
+    this.securityGroup.addEgressRule(
+      eventsEndpoint.connections.securityGroups[0],
+      ec2.Port.tcp(443),
+      'Allow HTTPS to CloudWatch Events via VPC endpoint'
     );
   }
 }
@@ -1356,10 +1391,16 @@ describe('TapStack', () => {
     test('Security group has correct ingress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
+
       expect(sg.SecurityGroupIngress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 22, ToPort: 22, CidrIp: '10.0.0.0/8' })
+          expect.objectContaining({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '1.2.3.4/5',
+            Description: 'from 1.2.3.4/5:443',
+          }),
         ])
       );
     });
@@ -1367,17 +1408,21 @@ describe('TapStack', () => {
     test('Security group has correct egress rules', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const sg = Object.values(securityGroups)[0].Properties;
+
       expect(sg.SecurityGroupEgress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: '-1', CidrIp: '10.0.0.0/8' }),
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' })
+          expect.objectContaining({
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow all outbound traffic by default',
+            IpProtocol: '-1',
+          }),
         ])
       );
     });
 
-    test('Only one security group is created', () => {
+    test('Exactly 4 security group are created', () => {
       const sgResources = template.findResources('AWS::EC2::SecurityGroup');
-      expect(Object.keys(sgResources)).toHaveLength(1);
+      expect(Object.keys(sgResources)).toHaveLength(4);
     });
 
     // NEW: test for unsupported region that triggers the error at line 84 in security-group.mjs
@@ -1733,7 +1778,7 @@ describe('TapStack', () => {
   "context": {
     "environments": {
       "dev": {
-        "existingVpcId": "vpc-03d43d0faacf0130c",
+        "existingVpcId": "vpc-019fdb1870e841ef1",
         "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "192.168.1.0/24",
         "trustedOutboundCidrs": [
@@ -1742,7 +1787,7 @@ describe('TapStack', () => {
         "environment": "Production"
       },
       "prod": {
-        "existingVpcId": "vpc-03d43d0faacf0130c",
+        "existingVpcId": "vpc-019fdb1870e841ef1",
         "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "10.0.0.0/8",
         "trustedOutboundCidrs": [

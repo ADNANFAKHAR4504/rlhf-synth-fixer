@@ -22,6 +22,7 @@
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "format-all": "npm run format && npm run lint",
     "watch": "tsc -w",
+    "cli:create-ideal-response": "ts-node cli/create-ideal-response.ts",
     "test": "jest --coverage",
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
     "test:unit-js": "jest --coverage --testPathPattern=\\.unit\\.test\\.mjs$",
