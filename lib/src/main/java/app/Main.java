@@ -319,7 +319,7 @@ public final class Main {
                     .build())
             .build());
 
-        new BucketPolicy("bucket-policy-cloudtrail-logs", BucketPolicyArgs.builder()
+        var cloudTrailBucketPolicy = new BucketPolicy("bucket-policy-cloudtrail-logs", BucketPolicyArgs.builder()
             .bucket(cloudTrailBucket.bucket())
             .policy(cloudTrailPolicy.applyValue(policy -> policy.json()))
             .build());
@@ -333,6 +333,8 @@ public final class Main {
             .enableLogging(true)
             .kmsKeyId(cloudTrailKey.arn())
             .tags(getStandardTags(config, "compliance", "cloudtrail"))
+            .build(), CustomResourceOptions.builder()
+            .dependsOn(cloudTrailBucketPolicy)
             .build());
         
         // Export all outputs for testing and monitoring
