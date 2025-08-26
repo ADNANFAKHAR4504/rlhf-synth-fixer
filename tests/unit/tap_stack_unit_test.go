@@ -87,9 +87,9 @@ func TestSecurityGroupResources(t *testing.T) {
 	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{
 		"GroupDescription": "Security group for EC2 web server",
 		"SecurityGroupIngress": assertions.Match_ArrayWith(&[]interface{}{
-			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 80, "ToPort": 80},
-			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 443, "ToPort": 443},
-			map[string]interface{}{"CidrIp": "10.0.0.0/32", "FromPort": 22, "ToPort": 22},
+			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 80, "ToPort": 80, "Description": "Allow HTTP traffic from anywhere", "IpProtocol": "tcp"},
+			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 443, "ToPort": 443, "Description": "Allow HTTPS traffic from anywhere", "IpProtocol": "tcp"},
+			map[string]interface{}{"CidrIp": "10.0.0.0/32", "FromPort": 22, "ToPort": 22, "Description": "Allow SSH from specified IP", "IpProtocol": "tcp"},
 		}),
 	})
 
@@ -101,6 +101,8 @@ func TestSecurityGroupResources(t *testing.T) {
 				"FromPort":              3306,
 				"ToPort":                3306,
 				"SourceSecurityGroupId": assertions.Match_AnyValue(),
+				"Description":           "Allow MySQL traffic from EC2 instances",
+				"IpProtocol":            "tcp",
 			},
 		}),
 	})
