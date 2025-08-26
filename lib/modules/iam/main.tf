@@ -18,6 +18,10 @@ resource "aws_iam_role" "ec2_role" {
   tags = {
     Name = "prod-ec2-role"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
@@ -83,6 +87,10 @@ resource "aws_iam_role" "config_role" {
   tags = {
     Name = "prod-config-role"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role_policy" "config_role_policy" {
@@ -127,6 +135,10 @@ resource "aws_iam_role" "flow_logs_role" {
   tags = {
     Name = "prod-flow-logs-role"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role_policy" "flow_logs_policy" {
@@ -170,6 +182,10 @@ resource "aws_iam_role" "rds_monitoring_role" {
 
   tags = {
     Name = "prod-rds-monitoring-role"
+  }
+
+  lifecycle {
+    ignore_changes = [name]
   }
 }
 

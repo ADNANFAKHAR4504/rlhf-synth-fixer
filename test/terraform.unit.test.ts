@@ -56,8 +56,12 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const mainConfigPath = path.join(libPath, 'tap_stack.tf');
       const content = fs.readFileSync(mainConfigPath, 'utf8');
 
-      expect(content).toMatch(/variable\s+"db_username"\s*\{[\s\S]*sensitive\s*=\s*true/);
-      expect(content).toMatch(/variable\s+"db_password"\s*\{[\s\S]*sensitive\s*=\s*true/);
+      expect(content).toMatch(
+        /variable\s+"db_username"\s*\{[\s\S]*sensitive\s*=\s*true/
+      );
+      expect(content).toMatch(
+        /variable\s+"db_password"\s*\{[\s\S]*sensitive\s*=\s*true/
+      );
     });
   });
 
@@ -205,14 +209,18 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
       expect(content).toContain('aws_s3_bucket');
       expect(content).toContain('aws_s3_bucket_versioning');
-      expect(content).toContain('aws_s3_bucket_server_side_encryption_configuration');
+      expect(content).toContain(
+        'aws_s3_bucket_server_side_encryption_configuration'
+      );
     });
 
     test('S3 buckets have versioning enabled', () => {
       const s3MainPath = path.join(modulesPath, 's3', 'main.tf');
       const content = fs.readFileSync(s3MainPath, 'utf8');
 
-      expect(content).toMatch(/versioning_configuration\s*\{[\s\S]*status\s*=\s*"Enabled"/);
+      expect(content).toMatch(
+        /versioning_configuration\s*\{[\s\S]*status\s*=\s*"Enabled"/
+      );
     });
 
     test('S3 buckets have encryption enabled', () => {
@@ -316,7 +324,9 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const mainConfigPath = path.join(libPath, 'tap_stack.tf');
       const content = fs.readFileSync(mainConfigPath, 'utf8');
 
-      expect(content).toMatch(/output\s+"rds_endpoints"\s*\{[\s\S]*sensitive\s*=\s*true/);
+      expect(content).toMatch(
+        /output\s+"rds_endpoints"\s*\{[\s\S]*sensitive\s*=\s*true/
+      );
     });
 
     test('Resources have proper lifecycle rules', () => {
@@ -354,7 +364,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const modules = ['iam', 'vpc', 'ec2', 'rds', 's3'];
 
       for (const moduleName of modules) {
-        const variablesPath = path.join(modulesPath, moduleName, 'variables.tf');
+        const variablesPath = path.join(
+          modulesPath,
+          moduleName,
+          'variables.tf'
+        );
         const content = fs.readFileSync(variablesPath, 'utf8');
 
         expect(content).toMatch(/variable\s+"project_name"/);
@@ -368,12 +382,20 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const modules = ['iam', 'vpc', 'ec2', 'rds', 's3'];
 
       for (const moduleName of modules) {
-        const variablesPath = path.join(modulesPath, moduleName, 'variables.tf');
+        const variablesPath = path.join(
+          modulesPath,
+          moduleName,
+          'variables.tf'
+        );
         const content = fs.readFileSync(variablesPath, 'utf8');
 
         // Check that project_name and environment have defaults
-        expect(content).toMatch(/variable\s+"project_name"\s*\{[\s\S]*default\s*=/);
-        expect(content).toMatch(/variable\s+"environment"\s*\{[\s\S]*default\s*=/);
+        expect(content).toMatch(
+          /variable\s+"project_name"\s*\{[\s\S]*default\s*=/
+        );
+        expect(content).toMatch(
+          /variable\s+"environment"\s*\{[\s\S]*default\s*=/
+        );
       }
     });
   });
@@ -387,7 +409,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
         path.join(modulesPath, 'vpc', 'main.tf'),
         path.join(modulesPath, 'ec2', 'main.tf'),
         path.join(modulesPath, 'rds', 'main.tf'),
-        path.join(modulesPath, 's3', 'main.tf')
+        path.join(modulesPath, 's3', 'main.tf'),
       ];
 
       for (const filePath of terraformFiles) {
@@ -407,7 +429,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
         path.join(modulesPath, 'vpc', 'main.tf'),
         path.join(modulesPath, 'ec2', 'main.tf'),
         path.join(modulesPath, 'rds', 'main.tf'),
-        path.join(modulesPath, 's3', 'main.tf')
+        path.join(modulesPath, 's3', 'main.tf'),
       ];
 
       for (const filePath of terraformFiles) {

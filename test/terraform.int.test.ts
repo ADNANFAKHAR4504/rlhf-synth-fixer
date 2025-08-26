@@ -1,10 +1,20 @@
 import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
 import { ConfigServiceClient } from '@aws-sdk/client-config-service';
-import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { GetBucketEncryptionCommand, GetBucketLocationCommand, GetBucketVersioningCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLocationCommand,
+  GetBucketVersioningCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { SNSClient } from '@aws-sdk/client-sns';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
@@ -26,7 +36,10 @@ const ssmClient = new SSMClient({ region });
 let outputs: any;
 
 // Helper function to validate S3 bucket location
-const validateS3BucketLocation = (locationConstraint: string | undefined, expectedRegion: string) => {
+const validateS3BucketLocation = (
+  locationConstraint: string | undefined,
+  expectedRegion: string
+) => {
   if (expectedRegion === 'us-east-1') {
     // S3 buckets in us-east-1 return undefined for LocationConstraint
     expect(locationConstraint).toBeUndefined();
@@ -51,12 +64,16 @@ describe('Secure Infrastructure Integration Tests', () => {
     // Load Terraform outputs from command
     try {
       const { execSync } = require('child_process');
-      const outputsJson = execSync('terraform -chdir=lib output -json', { encoding: 'utf8' });
+      const outputsJson = execSync('terraform -chdir=lib output -json', {
+        encoding: 'utf8',
+      });
       const terraformOutputs = JSON.parse(outputsJson);
       outputs = terraformOutputs;
     } catch (error) {
       console.error('Failed to load Terraform outputs:', error);
-      throw new Error('Failed to load Terraform outputs. Run terraform apply first.');
+      throw new Error(
+        'Failed to load Terraform outputs. Run terraform apply first.'
+      );
     }
   });
 
@@ -68,9 +85,11 @@ describe('Secure Infrastructure Integration Tests', () => {
         // Convert region name from us_east_1 to us-east-1 format
         const awsRegion = convertRegionName(region);
         const ec2ClientRegion = new EC2Client({ region: awsRegion });
-        const vpcResponse = await ec2ClientRegion.send(new DescribeVpcsCommand({
-          VpcIds: [vpcId as string]
-        }));
+        const vpcResponse = await ec2ClientRegion.send(
+          new DescribeVpcsCommand({
+            VpcIds: [vpcId as string],
+          })
+        );
 
         expect(vpcResponse.Vpcs).toHaveLength(1);
         const vpc = vpcResponse.Vpcs![0];
@@ -79,7 +98,10 @@ describe('Secure Infrastructure Integration Tests', () => {
         expect(vpc.State).toBe('available');
 
         // DNS settings might be undefined in some cases, so check if they exist
-        if ('EnableDnsHostnames' in vpc && vpc.EnableDnsHostnames !== undefined) {
+        if (
+          'EnableDnsHostnames' in vpc &&
+          vpc.EnableDnsHostnames !== undefined
+        ) {
           expect(vpc.EnableDnsHostnames).toBe(true);
         }
         if ('EnableDnsSupport' in vpc && vpc.EnableDnsSupport !== undefined) {
@@ -95,9 +117,11 @@ describe('Secure Infrastructure Integration Tests', () => {
         // Convert region name from us_east_1 to us-east-1 format
         const awsRegion = convertRegionName(region);
         const ec2ClientRegion = new EC2Client({ region: awsRegion });
-        const subnetResponse = await ec2ClientRegion.send(new DescribeSubnetsCommand({
-          SubnetIds: subnetIds as string[]
-        }));
+        const subnetResponse = await ec2ClientRegion.send(
+          new DescribeSubnetsCommand({
+            SubnetIds: subnetIds as string[],
+          })
+        );
 
         expect(subnetResponse.Subnets).toHaveLength(2);
 
@@ -114,16 +138,20 @@ describe('Secure Infrastructure Integration Tests', () => {
       const usEast1Endpoint = rdsEndpoints.us_east_1;
 
       // Get RDS instances to find security groups
-      const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const dbInstance = rdsResponse.DBInstances!.find(db =>
-        db.Endpoint?.Address === usEast1Endpoint.split(':')[0]
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({})
+      );
+      const dbInstance = rdsResponse.DBInstances!.find(
+        db => db.Endpoint?.Address === usEast1Endpoint.split(':')[0]
       );
 
       if (dbInstance && dbInstance.VpcSecurityGroups) {
         const sgId = dbInstance.VpcSecurityGroups[0].VpcSecurityGroupId;
-        const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
-          GroupIds: [sgId!]
-        }));
+        const sgResponse = await ec2Client.send(
+          new DescribeSecurityGroupsCommand({
+            GroupIds: [sgId!],
+          })
+        );
 
         expect(sgResponse.SecurityGroups).toHaveLength(1);
         const rdsSg = sgResponse.SecurityGroups![0];
@@ -141,10 +169,12 @@ describe('Secure Infrastructure Integration Tests', () => {
         // Convert region name from us_east_1 to us-east-1 format
         const awsRegion = convertRegionName(region);
         const rdsClientRegion = new RDSClient({ region: awsRegion });
-        const dbResponse = await rdsClientRegion.send(new DescribeDBInstancesCommand({}));
+        const dbResponse = await rdsClientRegion.send(
+          new DescribeDBInstancesCommand({})
+        );
 
-        const dbInstance = dbResponse.DBInstances!.find(db =>
-          db.Endpoint?.Address === (endpoint as string).split(':')[0]
+        const dbInstance = dbResponse.DBInstances!.find(
+          db => db.Endpoint?.Address === (endpoint as string).split(':')[0]
         );
 
         expect(dbInstance).toBeDefined();
@@ -164,10 +194,12 @@ describe('Secure Infrastructure Integration Tests', () => {
         // Convert region name from us_east_1 to us-east-1 format
         const awsRegion = convertRegionName(region);
         const ssmClientRegion = new SSMClient({ region: awsRegion });
-        const paramResponse = await ssmClientRegion.send(new GetParameterCommand({
-          Name: paramName as string,
-          WithDecryption: true
-        }));
+        const paramResponse = await ssmClientRegion.send(
+          new GetParameterCommand({
+            Name: paramName as string,
+            WithDecryption: true,
+          })
+        );
 
         expect(paramResponse.Parameter).toBeDefined();
         expect(paramResponse.Parameter!.Name).toBe(paramName);
@@ -189,9 +221,11 @@ describe('Secure Infrastructure Integration Tests', () => {
           s3ClientToUse = new S3Client({ region: 'us-west-2' });
         }
 
-        const locationResponse = await s3ClientToUse.send(new GetBucketLocationCommand({
-          Bucket: bucketName as string
-        }));
+        const locationResponse = await s3ClientToUse.send(
+          new GetBucketLocationCommand({
+            Bucket: bucketName as string,
+          })
+        );
 
         // Verify bucket exists by checking location response
         // us-east-1 buckets return undefined for LocationConstraint, which is expected
@@ -201,33 +235,46 @@ describe('Secure Infrastructure Integration Tests', () => {
         // For other regions, the bucket existence is verified by the successful API call
 
         // Check versioning is enabled
-        const versioningResponse = await s3ClientToUse.send(new GetBucketVersioningCommand({
-          Bucket: bucketName as string
-        }));
+        const versioningResponse = await s3ClientToUse.send(
+          new GetBucketVersioningCommand({
+            Bucket: bucketName as string,
+          })
+        );
 
         expect(versioningResponse.Status).toBe('Enabled');
 
         // Check encryption is enabled
-        const encryptionResponse = await s3ClientToUse.send(new GetBucketEncryptionCommand({
-          Bucket: bucketName as string
-        }));
+        const encryptionResponse = await s3ClientToUse.send(
+          new GetBucketEncryptionCommand({
+            Bucket: bucketName as string,
+          })
+        );
 
-        expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules).toHaveLength(1);
-        expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault).toBeDefined();
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration
+        ).toBeDefined();
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration!.Rules
+        ).toHaveLength(1);
+        expect(
+          encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
+            .ApplyServerSideEncryptionByDefault
+        ).toBeDefined();
       }
     });
 
     test('Application data buckets are properly configured', async () => {
       const appDataBuckets = [
         outputs.s3_buckets.value.app_data_us_east_1,
-        outputs.s3_buckets.value.app_data_us_west_2
+        outputs.s3_buckets.value.app_data_us_west_2,
       ];
 
       for (const bucketName of appDataBuckets) {
-        const locationResponse = await s3Client.send(new GetBucketLocationCommand({
-          Bucket: bucketName
-        }));
+        const locationResponse = await s3Client.send(
+          new GetBucketLocationCommand({
+            Bucket: bucketName,
+          })
+        );
 
         // us-east-1 buckets return undefined for LocationConstraint, which is expected
         if (bucketName.includes('us-east-1')) {
@@ -247,9 +294,11 @@ describe('Secure Infrastructure Integration Tests', () => {
         // Convert region name from us_east_1 to us-east-1 format
         const awsRegion = convertRegionName(region);
         const kmsClientRegion = new KMSClient({ region: awsRegion });
-        const keyResponse = await kmsClientRegion.send(new DescribeKeyCommand({
-          KeyId: keyId as string
-        }));
+        const keyResponse = await kmsClientRegion.send(
+          new DescribeKeyCommand({
+            KeyId: keyId as string,
+          })
+        );
 
         expect(keyResponse.KeyMetadata).toBeDefined();
         expect(keyResponse.KeyMetadata!.KeyId).toBe(keyId);
@@ -265,9 +314,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const iamRoles = outputs.iam_roles.value;
 
       for (const [roleType, roleArn] of Object.entries(iamRoles)) {
-        const roleResponse = await iamClient.send(new GetRoleCommand({
-          RoleName: (roleArn as string).split('/').pop()
-        }));
+        const roleResponse = await iamClient.send(
+          new GetRoleCommand({
+            RoleName: (roleArn as string).split('/').pop(),
+          })
+        );
 
         expect(roleResponse.Role).toBeDefined();
         expect(roleResponse.Role!.RoleName).toContain('prod-');
@@ -279,9 +330,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const rdsMonitoringRoleArn = outputs.iam_roles.value.rds_monitoring_role;
       const roleName = rdsMonitoringRoleArn.split('/').pop();
 
-      const roleResponse = await iamClient.send(new GetRoleCommand({
-        RoleName: roleName
-      }));
+      const roleResponse = await iamClient.send(
+        new GetRoleCommand({
+          RoleName: roleName,
+        })
+      );
 
       expect(roleResponse.Role).toBeDefined();
       expect(roleResponse.Role!.RoleName).toBe('prod-rds-monitoring-role');
@@ -341,9 +394,11 @@ describe('Secure Infrastructure Integration Tests', () => {
         const awsRegion = convertRegionName(region);
         const ec2ClientRegion = new EC2Client({ region: awsRegion });
 
-        const vpcResponse = await ec2ClientRegion.send(new DescribeVpcsCommand({
-          VpcIds: [vpcId as string]
-        }));
+        const vpcResponse = await ec2ClientRegion.send(
+          new DescribeVpcsCommand({
+            VpcIds: [vpcId as string],
+          })
+        );
 
         expect(vpcResponse.Vpcs).toHaveLength(1);
         expect(vpcResponse.Vpcs![0].State).toBe('available');

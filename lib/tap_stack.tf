@@ -57,11 +57,12 @@ resource "random_password" "db_password" {
 
 # Store the database password in SSM Parameter Store
 resource "aws_ssm_parameter" "db_password_us_east_1" {
-  provider = aws.us_east_1
-  name     = "/${var.project_name}/${var.environment}/database/password"
-  type     = "SecureString"
-  value    = var.db_password != null ? var.db_password : random_password.db_password[0].result
-  key_id   = aws_kms_key.main_us_east_1.arn
+  provider  = aws.us_east_1
+  name      = "/${var.project_name}/${var.environment}/database/password"
+  type      = "SecureString"
+  value     = var.db_password != null ? var.db_password : random_password.db_password[0].result
+  key_id    = aws_kms_key.main_us_east_1.arn
+  overwrite = true
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-db-password"
@@ -72,11 +73,12 @@ resource "aws_ssm_parameter" "db_password_us_east_1" {
 }
 
 resource "aws_ssm_parameter" "db_password_us_west_2" {
-  provider = aws.us_west_2
-  name     = "/${var.project_name}/${var.environment}/database/password"
-  type     = "SecureString"
-  value    = var.db_password != null ? var.db_password : random_password.db_password[0].result
-  key_id   = aws_kms_key.main_us_west_2.arn
+  provider  = aws.us_west_2
+  name      = "/${var.project_name}/${var.environment}/database/password"
+  type      = "SecureString"
+  value     = var.db_password != null ? var.db_password : random_password.db_password[0].result
+  key_id    = aws_kms_key.main_us_west_2.arn
+  overwrite = true
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-db-password"
@@ -133,6 +135,10 @@ resource "aws_kms_alias" "main_us_east_1" {
   provider      = aws.us_east_1
   name          = "alias/prod-main-key-us-east-1"
   target_key_id = aws_kms_key.main_us_east_1.key_id
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_kms_key" "main_us_west_2" {
@@ -148,6 +154,10 @@ resource "aws_kms_alias" "main_us_west_2" {
   provider      = aws.us_west_2
   name          = "alias/prod-main-key-us-west-2"
   target_key_id = aws_kms_key.main_us_west_2.key_id
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # IAM Module

@@ -5,6 +5,10 @@ resource "aws_db_subnet_group" "main" {
   tags = {
     Name = "prod-db-subnet-group-${var.region}"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_security_group" "rds" {
@@ -57,6 +61,10 @@ resource "aws_db_parameter_group" "main" {
 
   tags = {
     Name = "prod-db-params-${var.region}"
+  }
+
+  lifecycle {
+    ignore_changes = [name]
   }
 }
 
@@ -121,6 +129,10 @@ resource "aws_cloudwatch_log_group" "rds_error" {
   tags = {
     Name = "prod-rds-error-logs-${var.region}"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_cloudwatch_log_group" "rds_general" {
@@ -130,6 +142,10 @@ resource "aws_cloudwatch_log_group" "rds_general" {
   tags = {
     Name = "prod-rds-general-logs-${var.region}"
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_cloudwatch_log_group" "rds_slow_query" {
@@ -138,5 +154,9 @@ resource "aws_cloudwatch_log_group" "rds_slow_query" {
 
   tags = {
     Name = "prod-rds-slow-query-logs-${var.region}"
+  }
+
+  lifecycle {
+    ignore_changes = [name]
   }
 }
