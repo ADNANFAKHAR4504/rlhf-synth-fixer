@@ -287,8 +287,8 @@ systemctl restart httpd`),
 	_, err = lambda.NewFunction(ctx, fmt.Sprintf("log-shipper-%s", region), &lambda.FunctionArgs{
 		Runtime: pulumi.String(lambda.RuntimeNodeJS20dX),
 		// Inline Lambda code using an AssetArchive to avoid external zip artifacts.
-		Code: pulumi.NewAssetArchive(map[string]pulumi.Asset{
-			"index.mjs": pulumi.NewStringAsset(`export const handler = async (event) => {
+		Code: pulumi.NewAssetArchive(map[string]interface{}{
+			"index.js": pulumi.NewStringAsset(`exports.handler = async (event) => {
 			  console.log('Event:', JSON.stringify(event));
 			  return { statusCode: 200, body: JSON.stringify({ message: 'Lambda OK' }) };
 			};`),
