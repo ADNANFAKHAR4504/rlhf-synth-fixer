@@ -570,41 +570,46 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    # Do NOT exit on first error; we'll handle errors explicitly to avoid aborting too early.
-    exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
-    set -u
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+    set -euxo pipefail
 
-    echo "Starting EC2 setup..."
+    echo "Bootstrapping instance..."
 
-    # Ensure the document root exists
+    # Ensure doc root exists
     mkdir -p /var/www/html
 
-    # Put the health file in place BEFORE installing httpd so ALB can see 200 as soon as Apache starts
+    # Health check page (so ALB can pass quickly)
     echo "OK" > /var/www/html/health
-    chmod 644 /var/www/html/health
 
     # Simple index page
-    INSTANCE_ID_URL="http://169.254.169.254/latest/meta-data/instance-id"
-    INSTANCE_ID="$$(curl -s $${INSTANCE_ID_URL} || echo unknown)"
+    INSTANCE_ID=$$(curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "unknown")
     echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $${INSTANCE_ID}</p>" >> /var/www/html/index.html
     echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
 
-    # Install Apache robustly
-    retry() { n=0; until [ $n -ge 5 ]; do "$@" && break; n=$((n+1)); sleep 5; done; }
-    retry yum -y install httpd
+    # Update yum repos
+    yum clean all
+    yum makecache -y
 
-    # Enable and start Apache; don't fail hard if status is temporarily non-zero
-    systemctl enable httpd || true
-    systemctl start httpd || true
+    # Install Apache with retries
+    n=0
+    until [ $n -ge 5 ]
+    do
+      yum install -y httpd && break
+      n=$((n+1))
+      sleep 10
+    done
 
-    # Give Apache a moment to bind and serve files
-    sleep 5
+    systemctl enable httpd
+    systemctl start httpd
 
-    # Verify locally; do not crash on failure
-    curl -fsS http://localhost/health && echo "Local health OK" || echo "Local health check failed (continuing)"
+    # Double check
+    for i in {1..5}; do
+      curl -fs http://localhost/health && break
+      sleep 5
+    done
 
-    echo "EC2 setup complete"
+    echo "User data complete."
   EOF
   )
 
