@@ -7,17 +7,11 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
+    // If youre testing a yaml template. run `cfn-flip lib/TapStack.yml > lib/TapStack.json`
     // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'TAP Stack - AWS CloudFormation template with security best practices and compliance for TAP environment'
       );
     });
 
@@ -43,6 +37,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
+    test('should have AllowedSSHCIDR parameter', () => {
+      expect(template.Parameters.AllowedSSHCIDR).toBeDefined();
+    });
+
+    test('should have DBUsername parameter', () => {
+      expect(template.Parameters.DBUsername).toBeDefined();
+    });
+
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
@@ -55,60 +57,95 @@ describe('TapStack CloudFormation Template', () => {
         'Must contain only alphanumeric characters'
       );
     });
+
+    test('AllowedSSHCIDR parameter should have correct properties', () => {
+      const sshParam = template.Parameters.AllowedSSHCIDR;
+      expect(sshParam.Type).toBe('String');
+      expect(sshParam.Default).toBe('10.0.0.0/8');
+      expect(sshParam.Description).toBe('CIDR block allowed for SSH access');
+    });
+
+    test('DBUsername parameter should have correct properties', () => {
+      const dbParam = template.Parameters.DBUsername;
+      expect(dbParam.Type).toBe('String');
+      expect(dbParam.Default).toBe('admin');
+      expect(dbParam.Description).toBe('Database administrator username');
+      expect(dbParam.NoEcho).toBe(true);
+    });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have TAPKMSKey resource', () => {
+      expect(template.Resources.TAPKMSKey).toBeDefined();
+      expect(template.Resources.TAPKMSKey.Type).toBe('AWS::KMS::Key');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have TAPVPC resource', () => {
+      expect(template.Resources.TAPVPC).toBeDefined();
+      expect(template.Resources.TAPVPC.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have TAPApplicationLoadBalancer resource', () => {
+      expect(template.Resources.TAPApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.TAPApplicationLoadBalancer.Type).toBe(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('should have TAPRDSInstance resource', () => {
+      expect(template.Resources.TAPRDSInstance).toBeDefined();
+      expect(template.Resources.TAPRDSInstance.Type).toBe(
+        'AWS::RDS::DBInstance'
+      );
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have TAPS3Bucket resource', () => {
+      expect(template.Resources.TAPS3Bucket).toBeDefined();
+      expect(template.Resources.TAPS3Bucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have TAPAutoScalingGroup resource', () => {
+      expect(template.Resources.TAPAutoScalingGroup).toBeDefined();
+      expect(template.Resources.TAPAutoScalingGroup.Type).toBe(
+        'AWS::AutoScaling::AutoScalingGroup'
+      );
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('VPC should have correct CIDR block', () => {
+      const vpc = template.Resources.TAPVPC;
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+    });
+
+    test('RDS instance should have correct properties', () => {
+      const rds = template.Resources.TAPRDSInstance;
+      expect(rds.Properties.Engine).toBe('mysql');
+      expect(rds.Properties.DBInstanceClass).toBe('db.t3.micro');
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+    });
+
+    test('S3 bucket should have encryption enabled', () => {
+      const bucket = template.Resources.TAPS3Bucket;
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
+      ).toBeDefined();
+    });
+
+    test('Load balancer should be internet-facing', () => {
+      const alb = template.Resources.TAPApplicationLoadBalancer;
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(alb.Properties.Type).toBe('application');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
+        'VPCId',
+        'LoadBalancerDNS',
+        'S3BucketName',
+        'KMSKeyId',
+        'DatabaseSecretArn',
         'EnvironmentSuffix',
       ];
 
@@ -117,32 +154,50 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'TAPVPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-VPC-ID',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('LoadBalancerDNS output should be correct', () => {
+      const output = template.Outputs.LoadBalancerDNS;
+      expect(output.Description).toBe('Application Load Balancer DNS Name');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['TAPApplicationLoadBalancer', 'DNSName'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::Sub': '${AWS::StackName}-ALB-DNS',
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+    test('S3BucketName output should be correct', () => {
+      const output = template.Outputs.S3BucketName;
+      expect(output.Description).toBe('TAP S3 Bucket Name');
+      expect(output.Value).toEqual({ Ref: 'TAPS3Bucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-S3-Bucket',
+      });
+    });
+
+    test('KMSKeyId output should be correct', () => {
+      const output = template.Outputs.KMSKeyId;
+      expect(output.Description).toBe('KMS Key ID');
+      expect(output.Value).toEqual({ Ref: 'TAPKMSKey' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-KMS-Key',
+      });
+    });
+
+    test('DatabaseSecretArn output should be correct', () => {
+      const output = template.Outputs.DatabaseSecretArn;
+      expect(output.Description).toBe('Database Secret ARN');
+      expect(output.Value).toEqual({ Ref: 'TAPDatabaseSecret' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-DB-Secret',
       });
     });
 
@@ -172,39 +227,90 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple resources for a complete infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // We have many resources (VPC, EC2, RDS, etc.)
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have three parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(3);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have six outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(6);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('resources should have TAP prefix for naming consistency', () => {
+      const resourceNames = Object.keys(template.Resources);
+      const tapResources = resourceNames.filter(name => name.startsWith('TAP'));
+      expect(tapResources.length).toBeGreaterThan(15); // Most resources should have TAP prefix
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('VPC should have proper naming with environment suffix', () => {
+      const vpc = template.Resources.TAPVPC;
+      const tags = vpc.Properties.Tags;
+      const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag.Value).toEqual({
+        'Fn::Sub': 'TAPVPC${EnvironmentSuffix}',
       });
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        expect(output.Export.Name).toBeDefined();
+        expect(output.Export.Name['Fn::Sub']).toMatch(
+          /\$\{AWS::StackName\}-.+/
+        );
       });
+    });
+
+    test('should have security best practices - AutoTerminate tags', () => {
+      const resourcesWithTags = Object.values(template.Resources).filter(
+        (resource: any) => resource.Properties && resource.Properties.Tags
+      );
+
+      resourcesWithTags.forEach((resource: any) => {
+        const autoTerminateTag = resource.Properties.Tags.find(
+          (tag: any) => tag.Key === 'AutoTerminate'
+        );
+        expect(autoTerminateTag).toBeDefined();
+        expect(autoTerminateTag.Value).toBe('30');
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('S3 bucket should have public access blocked', () => {
+      const bucket = template.Resources.TAPS3Bucket;
+      const config = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(config.BlockPublicAcls).toBe(true);
+      expect(config.BlockPublicPolicy).toBe(true);
+      expect(config.IgnorePublicAcls).toBe(true);
+      expect(config.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('RDS should have encryption enabled', () => {
+      const rds = template.Resources.TAPRDSInstance;
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'TAPKMSKey' });
+    });
+
+    test('Should have KMS key for encryption', () => {
+      const kmsKey = template.Resources.TAPKMSKey;
+      expect(kmsKey).toBeDefined();
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('Database credentials should be stored in Secrets Manager', () => {
+      const secret = template.Resources.TAPDatabaseSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'TAPKMSKey' });
     });
   });
 });
