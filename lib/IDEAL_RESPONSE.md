@@ -1,3 +1,5 @@
+## Ideal Response
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Secure Three-Tier Web Application Infrastructure - TapStack
@@ -57,7 +59,8 @@ Parameters:
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
+    Default: ''
+    Description: EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)
 
   MinSize:
     Type: Number
@@ -73,6 +76,9 @@ Parameters:
     Type: Number
     Default: 2
     Description: Desired number of instances in Auto Scaling Group
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Mappings:
   RegionMap:
@@ -153,7 +159,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PublicSubnet1Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -168,7 +174,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PublicSubnet2Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -184,7 +190,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet1Cidr
       Tags:
         - Key: Name
@@ -198,7 +204,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2Cidr
       Tags:
         - Key: Name
@@ -213,7 +219,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref DatabaseSubnet1Cidr
       Tags:
         - Key: Name
@@ -227,7 +233,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref DatabaseSubnet2Cidr
       Tags:
         - Key: Name
@@ -488,6 +494,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-bastion'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -511,6 +518,7 @@ Resources:
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-web'
       GroupDescription: Security group for web tier
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -544,6 +552,7 @@ Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-app'
       GroupDescription: Security group for application tier
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -572,6 +581,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-database'
       GroupDescription: Security group for database tier
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -618,26 +628,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  ApplicationBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ApplicationBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: VPCEndpointAccessOnly
-            Effect: Allow
-            Principal: '*'
-            Action:
-              - s3:GetObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${ApplicationBucket}/*'
-              - !Ref ApplicationBucket
-            Condition:
-              StringEquals:
-                aws:sourceVpc: !Ref VPC
-
   # VPC Endpoint for S3 (Gateway)
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -648,6 +638,25 @@ Resources:
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
+
+  ApplicationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EC2RoleAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2Role.Arn
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
+              - !Sub 'arn:aws:s3:::${ApplicationBucket}'
 
   # IAM Roles and Instance Profile
   EC2Role:
@@ -663,6 +672,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: S3Access
@@ -672,10 +682,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
+              - Effect: Allow
+                Action:
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${ApplicationBucket}/*'
-                  - !Ref ApplicationBucket
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'
@@ -712,13 +726,14 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  # Launch Template
+  # Launch Template (conditional on KeyPairName)
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: HasKeyPair
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-launch-template'
       LaunchTemplateData:
-        ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -766,9 +781,10 @@ Resources:
               - Key: Project
                 Value: !Ref ProjectName
 
-  # Auto Scaling Group (with Target Group association)
+  # Auto Scaling Group (conditional on Launch Template)
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: HasKeyPair
     Properties:
       AutoScalingGroupName: !Sub '${ProjectName}-asg'
       VPCZoneIdentifier:
@@ -795,11 +811,12 @@ Resources:
           Value: !Ref ProjectName
           PropagateAtLaunch: true
 
-  # Bastion Host
+  # Bastion Host (conditional on KeyPairName)
   BastionHost:
     Type: AWS::EC2::Instance
+    Condition: HasKeyPair
     Properties:
-      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t3.micro
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet1
@@ -825,6 +842,7 @@ Resources:
   # Application Load Balancer and Target Group
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: HasKeyPair
     Properties:
       Name: !Sub '${ProjectName}-alb'
       Type: application
@@ -844,6 +862,7 @@ Resources:
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: HasKeyPair
     Properties:
       Name: !Sub '${ProjectName}-tg'
       Port: 8080
@@ -866,6 +885,7 @@ Resources:
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasKeyPair
     Properties:
       DefaultActions:
         - Type: forward
@@ -955,23 +975,30 @@ Outputs:
 
   KMSKeyArn:
     Description: ARN of the KMS Key
-    Value: !Ref KMSKey
+    Value: !GetAtt KMSKey.Arn
 
   LaunchTemplateId:
     Description: Launch Template Id
     Value: !Ref LaunchTemplate
+    Condition: HasKeyPair
 
   AutoScalingGroupName:
     Description: Auto Scaling Group name
     Value: !Ref AutoScalingGroup
+    Condition: HasKeyPair
 
   TargetGroupArn:
     Description: Target Group ARN
     Value: !Ref TargetGroup
+    Condition: HasKeyPair
 
   LoadBalancerDNSName:
     Description: Public DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Condition: HasKeyPair
 
-
+  BastionHostPublicIP:
+    Description: Public IP address of the Bastion Host
+    Value: !GetAtt BastionHost.PublicIp
+    Condition: HasKeyPair
 ```
