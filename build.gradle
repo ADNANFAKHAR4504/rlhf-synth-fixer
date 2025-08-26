@@ -1,4 +1,5 @@
 import groovy.xml.XmlParser;
+import java.util.HashMap;
 
 plugins {
     id 'java'
@@ -75,7 +76,14 @@ tasks.named('run') {
     standardInput = System.in
     workingDir = projectDir
     systemProperties = System.getProperties()
-    environment = System.getenv()
+    
+    // Set proper environment including Node.js path
+    Map<String, String> env = new HashMap<>(System.getenv())
+    env.put('PATH', "/Users/django/.nvm/versions/node/v22.17.0/bin:" + System.getenv('PATH'))
+    if (System.getenv('ENVIRONMENT_SUFFIX')) {
+        env.put('ENVIRONMENT_SUFFIX', System.getenv('ENVIRONMENT_SUFFIX'))
+    }
+    environment = env
 }
 
 // Configure source directories
@@ -220,7 +228,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.09
+                minimum = 0.90
             }
         }
         rule {
@@ -228,7 +236,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.09
+                minimum = 0.90
             }
             // Exclude Main class and infrastructure classes from coverage requirements
             excludes = [
