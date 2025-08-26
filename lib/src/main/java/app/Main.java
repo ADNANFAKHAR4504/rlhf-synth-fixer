@@ -1,4 +1,5 @@
 package app;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -296,7 +297,7 @@ class TapStack extends Stack {
     // Create parameter group
     ParameterGroup parameterGroup = ParameterGroup.Builder.create(this, getResourceName("rds-params"))
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-            .version(MysqlEngineVersion.VER_8_0_35)
+            .version(MysqlEngineVersion.VER_8_0)
             .build()))
         .description("Custom parameter group for MySQL")
         .build();
@@ -305,7 +306,7 @@ class TapStack extends Stack {
     DatabaseInstance.Builder.create(this, getResourceName("rds-instance"))
         .instanceIdentifier(getResourceName("mysql-db"))
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-            .version(MysqlEngineVersion.VER_8_0_35)
+            .version(MysqlEngineVersion.VER_8_0)
             .build()))
         .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
         .vpc(vpc)
