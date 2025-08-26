@@ -1,276 +1,490 @@
 package app;
 
-import java.util.Arrays;
-import java.util.Optional;
-
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
-import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
-import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
-import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
-import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
-import software.amazon.awscdk.services.ec2.IMachineImage;
-import software.amazon.awscdk.services.ec2.Instance;
-import software.amazon.awscdk.services.ec2.InstanceClass;
-import software.amazon.awscdk.services.ec2.InstanceSize;
-import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.pipelines.CodePipeline;
+import software.amazon.awscdk.pipelines.CodePipelineSource;
+import software.amazon.awscdk.pipelines.ShellStep;
+import software.amazon.awscdk.pipelines.StageDeployment;
+import software.amazon.awscdk.services.backup.BackupPlan;
+import software.amazon.awscdk.services.backup.BackupPlanRule;
+import software.amazon.awscdk.services.backup.BackupResource;
+import software.amazon.awscdk.services.backup.BackupSelection;
+import software.amazon.awscdk.services.backup.BackupVault;
+import software.amazon.awscdk.services.cloudformation.CfnStackSet;
+import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.MetricOptions;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
+import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
 import software.amazon.awscdk.services.ec2.IpAddresses;
-import software.amazon.awscdk.services.ec2.MachineImage;
-import software.amazon.awscdk.services.ec2.Peer;
-import software.amazon.awscdk.services.ec2.Port;
-import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
-import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
-import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.kms.KeySpec;
+import software.amazon.awscdk.services.kms.KeyUsage;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.BucketNotification;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.sns.Topic;
+import software.amazon.awscdk.services.sns.subscriptions.EmailSubscription;
 import software.constructs.Construct;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * TapStackProps holds configuration for the TapStack CDK stack.
- */
-final class TapStackProps {
-  private final String environmentSuffix;
-  private final StackProps stackProps;
-
-  private TapStackProps(final String envSuffix, final StackProps props) {
-    this.environmentSuffix = envSuffix;
-    this.stackProps = props != null ? props : StackProps.builder().build();
-  }
-
-  public String getEnvironmentSuffix() {
-    return environmentSuffix;
-  }
-
-  public StackProps getStackProps() {
-    return stackProps;
-  }
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public static class Builder {
-    private String environmentSuffix;
-    private StackProps stackProps;
-
-    public Builder environmentSuffix(final String suffix) {
-      this.environmentSuffix = suffix;
-      return this;
+public class Main {
+    
+    // Configuration constants
+    private static final List<String> REGIONS = Arrays.asList("us-east-2", "us-west-2", "eu-west-1");
+    private static final List<String> ENVIRONMENTS = Arrays.asList("development", "staging", "production");
+    private static final Map<String, String> CIDR_BLOCKS = new HashMap<String, String>() {{
+        put("us-east-2", "10.0.0.0/16");
+        put("us-west-2", "10.1.0.0/16");
+        put("eu-west-1", "10.2.0.0/16");
+    }};
+    
+    public static void main(final String[] args) {
+        App app = new App();
+        
+        // Get context values with defaults
+        String environment = app.getNode().tryGetContext("environment") != null ? 
+            (String) app.getNode().tryGetContext("environment") : "development";
+        String costCenter = app.getNode().tryGetContext("costCenter") != null ? 
+            (String) app.getNode().tryGetContext("costCenter") : "default";
+        String projectName = app.getNode().tryGetContext("projectName") != null ? 
+            (String) app.getNode().tryGetContext("projectName") : "tap-project";
+        
+        // Create pipeline stack for CI/CD
+        createPipelineStack(app, environment, costCenter, projectName);
+        
+        // Create main infrastructure stacks for each region
+        for (String region : REGIONS) {
+            createTapStack(app, region, environment, costCenter, projectName);
+        }
+        
+        // Create StackSet for cross-region deployment
+        createStackSetStack(app, environment, costCenter, projectName);
+        
+        app.synth();
     }
-
-    public Builder stackProps(final StackProps props) {
-      this.stackProps = props;
-      return this;
-    }
-
-    public TapStackProps build() {
-      return new TapStackProps(environmentSuffix, stackProps);
-    }
-  }
-}
-
-/**
- * VPC Infrastructure Stack
- * 
- * Creates a complete VPC infrastructure with public subnets, security groups,
- * and an EC2 instance with restricted SSH access.
- */
-class VpcInfrastructureStack extends Stack {
-  private final Vpc vpc;
-  private final Instance ec2Instance;
-  private final SecurityGroup sshSecurityGroup;
-
-  VpcInfrastructureStack(final Construct scope, final String id, final String environmentSuffix,
-      final StackProps props) {
-    super(scope, id, props);
-
-    // Create VPC with specified CIDR
-    this.vpc = Vpc.Builder.create(this, "MainVpc")
-        .vpcName("tap-" + environmentSuffix + "-vpc")
-        .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
-        .maxAzs(2) // Use 2 availability zones
-        .enableDnsSupport(true)
-        .enableDnsHostnames(true)
-        .subnetConfiguration(Arrays.asList(
-            SubnetConfiguration.builder()
-                .subnetType(SubnetType.PUBLIC)
-                .name("PublicSubnet")
-                .cidrMask(24)
-                .build()))
-        .natGateways(0) // No NAT gateways needed for public subnets only
-        .build();
-
-    // Create security group for SSH access
-    this.sshSecurityGroup = SecurityGroup.Builder.create(this, "SshSecurityGroup")
-        .securityGroupName("tap-" + environmentSuffix + "-ssh-sg")
-        .vpc(vpc)
-        .description("Security group for SSH access to EC2 instances")
-        .allowAllOutbound(true)
-        .build();
-
-    // Add SSH rule restricted to specific IP
-    sshSecurityGroup.addIngressRule(
-        Peer.ipv4("203.0.113.0/32"),
-        Port.tcp(22),
-        "SSH access from specific IP");
-
-    // Create IAM role for EC2 instance with Session Manager support
-    Role ec2Role = Role.Builder.create(this, "Ec2Role")
-        .roleName("tap-" + environmentSuffix + "-ec2-role")
-        .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
-        .managedPolicies(Arrays.asList(
-            ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
-        .build();
-
-    // Get the latest Amazon Linux 2 AMI
-    IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux(
-        AmazonLinuxImageProps.builder()
-            .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
-            .edition(AmazonLinuxEdition.STANDARD)
-            .virtualization(AmazonLinuxVirt.HVM)
-            .cpuType(AmazonLinuxCpuType.X86_64)
-            .build());
-
-    // Create EC2 instance in the first public subnet
-    this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
-        .instanceName("tap-" + environmentSuffix + "-ec2-instance")
-        .vpc(vpc)
-        .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO)) // Cost-optimized instance type
-        .machineImage(amazonLinuxAmi)
-        .securityGroup(sshSecurityGroup)
-        .vpcSubnets(SubnetSelection.builder()
-            .subnetType(SubnetType.PUBLIC)
-            .availabilityZones(Arrays.asList(vpc.getAvailabilityZones().get(0)))
-            .build())
-        .role(ec2Role)
-        .userData(UserData.forLinux())
-        .build();
-
-    // Add comprehensive tags to all resources
-    Tags.of(this).add("Environment", environmentSuffix);
-    Tags.of(this).add("Project", "VpcInfrastructure");
-    Tags.of(this).add("CreatedBy", "CDK");
-    Tags.of(this).add("Purpose", "BasicVpcSetup");
-
-    // Create outputs for integration testing
-    CfnOutput.Builder.create(this, "VpcId")
-        .value(vpc.getVpcId())
-        .description("VPC ID")
-        .exportName("VpcId-" + environmentSuffix)
-        .build();
-
-    CfnOutput.Builder.create(this, "InstanceId")
-        .value(ec2Instance.getInstanceId())
-        .description("EC2 Instance ID")
-        .exportName("InstanceId-" + environmentSuffix)
-        .build();
-
-    CfnOutput.Builder.create(this, "InstancePublicIp")
-        .value(ec2Instance.getInstancePublicIp())
-        .description("EC2 Instance Public IP")
-        .exportName("InstancePublicIp-" + environmentSuffix)
-        .build();
-
-    CfnOutput.Builder.create(this, "SecurityGroupId")
-        .value(sshSecurityGroup.getSecurityGroupId())
-        .description("SSH Security Group ID")
-        .exportName("SecurityGroupId-" + environmentSuffix)
-        .build();
-  }
-
-  public Vpc getVpc() {
-    return vpc;
-  }
-
-  public Instance getEc2Instance() {
-    return ec2Instance;
-  }
-
-  public SecurityGroup getSshSecurityGroup() {
-    return sshSecurityGroup;
-  }
-}
-
-/**
- * Main CDK stack that orchestrates the infrastructure components
- */
-class TapStack extends Stack {
-  private final String environmentSuffix;
-  private final VpcInfrastructureStack vpcStack;
-
-  TapStack(final Construct scope, final String id, final TapStackProps props) {
-    super(scope, id, props != null ? props.getStackProps() : null);
-
-    // Get environment suffix from props, context, or use 'dev' as default
-    this.environmentSuffix = Optional.ofNullable(props)
-        .map(TapStackProps::getEnvironmentSuffix)
-        .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
-            .map(Object::toString))
-        .orElse("dev");
-
-    // Create VPC infrastructure stack
-    this.vpcStack = new VpcInfrastructureStack(
-        this,
-        "VpcInfrastructure",
-        environmentSuffix,
-        StackProps.builder()
-            .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-            .description("VPC Infrastructure Stack for environment: " + environmentSuffix)
-            .build());
-  }
-
-  public String getEnvironmentSuffix() {
-    return environmentSuffix;
-  }
-
-  public VpcInfrastructureStack getVpcStack() {
-    return vpcStack;
-  }
-}
-
-/**
- * Main entry point for the CDK Java application
- */
-public final class Main {
-
-  private Main() {
-    // Utility class should not be instantiated
-  }
-
-  public static void main(final String[] args) {
-    App app = new App();
-
-    // Get environment suffix from environment variable, context, or default
-    String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
-    if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-      environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
-    }
-    if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-      environmentSuffix = "synthtrainr457";
-    }
-
-    // Create the main TAP stack
-    new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
-        .environmentSuffix(environmentSuffix)
-        .stackProps(StackProps.builder()
+    
+    private static void createPipelineStack(App app, String environment, String costCenter, String projectName) {
+        Stack pipelineStack = new Stack(app, "TapPipelineStack", StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-west-2") // Explicitly set to us-west-2 as requested
+                .region("us-east-2") // Primary region for pipeline
                 .build())
-            .build())
-        .build());
-
-    // Synthesize the CDK app
-    app.synth();
-  }
+            .build());
+        
+        // Apply tags
+        applyStandardTags(pipelineStack, environment, costCenter, projectName);
+        
+        // Create CodePipeline for multi-region deployment
+        CodePipeline pipeline = CodePipeline.Builder.create(pipelineStack, "Pipeline")
+            .pipelineName(String.format("%s-pipeline-%s", projectName, environment))
+            .synth(ShellStep.Builder.create("Synth")
+                .input(CodePipelineSource.gitHub("your-org/your-repo", "main"))
+                .commands(Arrays.asList(
+                    "npm install -g aws-cdk",
+                    "mvn compile",
+                    "cdk synth"
+                ))
+                .build())
+            .crossAccountKeys(true)
+            .build();
+        
+        // Add stages for each region
+        for (String region : REGIONS) {
+            TapStage stage = new TapStage(pipelineStack, String.format("Deploy-%s", region), 
+                StageProps.builder()
+                    .env(Environment.builder()
+                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                        .region(region)
+                        .build())
+                    .build(), 
+                environment, costCenter, projectName, region);
+            
+            StageDeployment stageDeployment = pipeline.addStage(stage);
+            
+            // Add post-deployment validation
+            stageDeployment.addPost(ShellStep.Builder.create(String.format("Validate-%s", region))
+                .commands(Arrays.asList(
+                    "aws cloudformation describe-stacks --region " + region,
+                    "echo 'Deployment validation completed for " + region + "'"
+                ))
+                .build());
+        }
+    }
+    
+    private static void createTapStack(App app, String region, String environment, String costCenter, String projectName) {
+        TapStack stack = new TapStack(app, String.format("TapStack-%s-%s", region, environment), 
+            StackProps.builder()
+                .env(Environment.builder()
+                    .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                    .region(region)
+                    .build())
+                .build(), 
+            environment, costCenter, projectName, region);
+    }
+    
+    private static void createStackSetStack(App app, String environment, String costCenter, String projectName) {
+        Stack stackSetStack = new Stack(app, "TapStackSetStack", StackProps.builder()
+            .env(Environment.builder()
+                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                .region("us-east-2") // Primary region
+                .build())
+            .build());
+        
+        applyStandardTags(stackSetStack, environment, costCenter, projectName);
+        
+        // Create StackSet for cross-region deployment
+        CfnStackSet stackSet = CfnStackSet.Builder.create(stackSetStack, "CrossRegionStackSet")
+            .stackSetName(String.format("%s-stackset-%s", projectName, environment))
+            .capabilities(Arrays.asList("CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"))
+            .permissionModel("SELF_MANAGED")
+            .operationPreferences(CfnStackSet.OperationPreferencesProperty.builder()
+                .regionConcurrencyType("PARALLEL")
+                .maxConcurrentPercentage(100)
+                .failureTolerancePercentage(10)
+                .build())
+            .build();
+    }
+    
+    private static void applyStandardTags(Construct construct, String environment, String costCenter, String projectName) {
+        Tags.of(construct).add("Environment", environment);
+        Tags.of(construct).add("CostCenter", costCenter);
+        Tags.of(construct).add("Project", projectName);
+        Tags.of(construct).add("ManagedBy", "CDK");
+    }
+    
+    // Stage class for pipeline deployment
+    public static class TapStage extends software.amazon.awscdk.Stage {
+        public TapStage(final Construct scope, final String id, final software.amazon.awscdk.StageProps props, 
+                       String environment, String costCenter, String projectName, String region) {
+            super(scope, id, props);
+            
+            new TapStack(this, "TapStack", StackProps.builder().build(), 
+                environment, costCenter, projectName, region);
+        }
+    }
+    
+    public static class StageProps {
+        private Environment env;
+        
+        public static Builder builder() {
+            return new Builder();
+        }
+        
+        public static class Builder {
+            private Environment env;
+            
+            public Builder env(Environment env) {
+                this.env = env;
+                return this;
+            }
+            
+            public StageProps build() {
+                StageProps props = new StageProps();
+                props.env = this.env;
+                return props;
+            }
+        }
+        
+        public Environment getEnv() {
+            return env;
+        }
+    }
+    
+    // Main infrastructure stack
+    public static class TapStack extends Stack {
+        
+        public TapStack(final Construct scope, final String id, final StackProps props, 
+                       String environment, String costCenter, String projectName, String region) {
+            super(scope, id, props);
+            
+            // Apply standard tags
+            applyStandardTags(this, environment, costCenter, projectName);
+            
+            // Create KMS key for encryption
+            Key kmsKey = createKmsKey(projectName, environment, region);
+            
+            // Create VPC with dynamic CIDR
+            Vpc vpc = createVpc(projectName, environment, region);
+            
+            // Create S3 buckets with encryption and versioning
+            List<Bucket> buckets = createS3Buckets(kmsKey, projectName, environment, region);
+            
+            // Create IAM roles and policies
+            createIamResources(projectName, environment);
+            
+            // Create backup resources
+            createBackupResources(kmsKey, projectName, environment, region);
+            
+            // Create CloudWatch monitoring
+            createCloudWatchMonitoring(buckets, projectName, environment, region);
+            
+            // Create VPC peering connections
+            createVpcPeering(vpc, region, environment, projectName);
+            
+            // Create CloudTrail for auditing
+            createCloudTrail(kmsKey, projectName, environment, region);
+            
+            // Output important resource information
+            createOutputs(vpc, kmsKey, buckets);
+        }
+        
+        private Key createKmsKey(String projectName, String environment, String region) {
+            return Key.Builder.create(this, "KmsKey")
+                .alias(String.format("alias/%s-%s-%s-key", projectName, environment, region))
+                .description(String.format("KMS key for %s in %s environment", projectName, environment))
+                .keyUsage(KeyUsage.ENCRYPT_DECRYPT)
+                .keySpec(KeySpec.SYMMETRIC_DEFAULT)
+                .removalPolicy(RemovalPolicy.DESTROY) // Use RETAIN for production
+                .build();
+        }
+        
+        private Vpc createVpc(String projectName, String environment, String region) {
+            String cidr = CIDR_BLOCKS.get(region);
+            
+            return Vpc.Builder.create(this, "Vpc")
+                .vpcName(String.format("%s-%s-%s-vpc", projectName, environment, region))
+                .ipAddresses(IpAddresses.cidr(cidr))
+                .maxAzs(3)
+                .subnetConfiguration(Arrays.asList(
+                    SubnetConfiguration.builder()
+                        .name("PublicSubnet")
+                        .subnetType(SubnetType.PUBLIC)
+                        .cidrMask(24)
+                        .build(),
+                    SubnetConfiguration.builder()
+                        .name("PrivateSubnet")
+                        .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                        .cidrMask(24)
+                        .build(),
+                    SubnetConfiguration.builder()
+                        .name("IsolatedSubnet")
+                        .subnetType(SubnetType.PRIVATE_ISOLATED)
+                        .cidrMask(24)
+                        .build()
+                ))
+                .enableDnsHostnames(true)
+                .enableDnsSupport(true)
+                .build();
+        }
+        
+        private List<Bucket> createS3Buckets(Key kmsKey, String projectName, String environment, String region) {
+            // Data bucket
+            Bucket dataBucket = Bucket.Builder.create(this, "DataBucket")
+                .bucketName(String.format("%s-%s-%s-data-%s", projectName, environment, region, 
+                    System.currentTimeMillis() / 1000)) // Ensure uniqueness
+                .encryption(BucketEncryption.KMS)
+                .encryptionKey(kmsKey)
+                .versioned(true)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .lifecycleRules(Arrays.asList(
+                    LifecycleRule.builder()
+                        .id("TransitionToIA")
+                        .enabled(true)
+                        .transitions(Arrays.asList(
+                            LifecycleRule.Transition.builder()
+                                .storageClass(software.amazon.awscdk.services.s3.StorageClass.INFREQUENT_ACCESS)
+                                .transitionAfter(Duration.days(30))
+                                .build(),
+                            LifecycleRule.Transition.builder()
+                                .storageClass(software.amazon.awscdk.services.s3.StorageClass.GLACIER)
+                                .transitionAfter(Duration.days(90))
+                                .build()
+                        ))
+                        .build()
+                ))
+                .removalPolicy(RemovalPolicy.DESTROY) // Use RETAIN for production
+                .build();
+            
+            // Logs bucket
+            Bucket logsBucket = Bucket.Builder.create(this, "LogsBucket")
+                .bucketName(String.format("%s-%s-%s-logs-%s", projectName, environment, region, 
+                    System.currentTimeMillis() / 1000))
+                .encryption(BucketEncryption.KMS)
+                .encryptionKey(kmsKey)
+                .versioned(true)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+            
+            return Arrays.asList(dataBucket, logsBucket);
+        }
+        
+        private void createIamResources(String projectName, String environment) {
+            // Create managed policy for backup operations
+            ManagedPolicy backupPolicy = ManagedPolicy.Builder.create(this, "BackupPolicy")
+                .managedPolicyName(String.format("%s-%s-backup-policy", projectName, environment))
+                .description("Policy for AWS Backup operations")
+                .document(PolicyDocument.Builder.create()
+                    .statements(Arrays.asList(
+                        PolicyStatement.Builder.create()
+                            .effect(Effect.ALLOW)
+                            .actions(Arrays.asList(
+                                "backup:*",
+                                "backup-storage:*"
+                            ))
+                            .resources(Arrays.asList("*"))
+                            .build()
+                    ))
+                    .build())
+                .build();
+            
+            // Create backup service role
+            Role backupRole = Role.Builder.create(this, "BackupRole")
+                .roleName(String.format("%s-%s-backup-role", projectName, environment))
+                .assumedBy(new ServicePrincipal("backup.amazonaws.com"))
+                .managedPolicies(Arrays.asList(backupPolicy))
+                .build();
+        }
+        
+        private void createBackupResources(Key kmsKey, String projectName, String environment, String region) {
+            // Create backup vault
+            BackupVault backupVault = BackupVault.Builder.create(this, "BackupVault")
+                .backupVaultName(String.format("%s-%s-%s-vault", projectName, environment, region))
+                .encryptionKey(kmsKey)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+            
+            // Create backup plan
+            BackupPlan backupPlan = BackupPlan.Builder.create(this, "BackupPlan")
+                .backupPlanName(String.format("%s-%s-%s-plan", projectName, environment, region))
+                .backupVault(backupVault)
+                .backupPlanRules(Arrays.asList(
+                    BackupPlanRule.Builder.create()
+                        .ruleName("DailyBackup")
+                        .scheduleExpression(software.amazon.awscdk.services.events.Schedule.cron(
+                            software.amazon.awscdk.services.events.CronOptions.builder()
+                                .hour("2")
+                                .minute("0")
+                                .build()))
+                        .deleteAfter(Duration.days(30))
+                        .moveToColdStorageAfter(Duration.days(7))
+                        .build()
+                ))
+                .build();
+            
+            // Create backup selection
+            BackupSelection.Builder.create(this, "BackupSelection")
+                .backupPlan(backupPlan)
+                .selectionName(String.format("%s-%s-selection", projectName, environment))
+                .resources(Arrays.asList(
+                    BackupResource.fromTag("Environment", environment),
+                    BackupResource.fromTag("Project", projectName)
+                ))
+                .build();
+        }
+        
+        private void createCloudWatchMonitoring(List<Bucket> buckets, String projectName, String environment, String region) {
+            // Create SNS topic for alerts
+            Topic alertTopic = Topic.Builder.create(this, "AlertTopic")
+                .topicName(String.format("%s-%s-%s-alerts", projectName, environment, region))
+                .build();
+            
+            // Add email subscription (configure email via context)
+            String alertEmail = (String) this.getNode().tryGetContext("alertEmail");
+            if (alertEmail != null) {
+                alertTopic.addSubscription(new EmailSubscription(alertEmail));
+            }
+            
+            // Create CloudWatch alarms for S3 buckets
+            for (int i = 0; i < buckets.size(); i++) {
+                Bucket bucket = buckets.get(i);
+                
+                Alarm.Builder.create(this, String.format("S3BucketSizeAlarm%d", i))
+                    .alarmName(String.format("%s-%s-bucket-size-alarm-%d", projectName, environment, i))
+                    .alarmDescription(String.format("Alarm for S3 bucket size: %s", bucket.getBucketName()))
+                    .metric(Metric.Builder.create()
+                        .namespace("AWS/S3")
+                        .metricName("BucketSizeBytes")
+                        .dimensionsMap(Map.of(
+                            "BucketName", bucket.getBucketName(),
+                            "StorageType", "StandardStorage"
+                        ))
+                        .statistic("Average")
+                        .period(Duration.hours(24))
+                        .build())
+                    .threshold(1000000000.0) // 1GB threshold
+                    .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                    .evaluationPeriods(1)
+                    .treatMissingData(TreatMissingData.NOT_BREACHING)
+                    .build();
+            }
+        }
+        
+        private void createVpcPeering(Vpc vpc, String region, String environment, String projectName) {
+            // Create VPC peering connections to other regions
+            for (String peerRegion : REGIONS) {
+                if (!peerRegion.equals(region)) {
+                    CfnVPCPeeringConnection.Builder.create(this, String.format("PeeringTo%s", peerRegion.replace("-", "")))
+                        .vpcId(vpc.getVpcId())
+                        .peerRegion(peerRegion)
+                        .peerVpcId(String.format("${%s-%s-%s-vpc-id}", projectName, environment, peerRegion))
+                        .tags(Arrays.asList(
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Name")
+                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region, peerRegion))
+                                .build()
+                        ))
+                        .build();
+                }
+            }
+        }
+        
+        private void createCloudTrail(Key kmsKey, String projectName, String environment, String region) {
+            // Create CloudTrail for auditing
+            Trail.Builder.create(this, "CloudTrail")
+                .trailName(String.format("%s-%s-%s-trail", projectName, environment, region))
+                .includeGlobalServiceEvents(true)
+                .isMultiRegionTrail(false) // Region-specific trail
+                .enableFileValidation(true)
+                .kmsKey(kmsKey)
+                .build();
+        }
+        
+        private void createOutputs(Vpc vpc, Key kmsKey, List<Bucket> buckets) {
+            CfnOutput.Builder.create(this, "VpcId")
+                .value(vpc.getVpcId())
+                .description("VPC ID")
+                .exportName(String.format("%s-vpc-id", this.getStackName()))
+                .build();
+            
+            CfnOutput.Builder.create(this, "KmsKeyId")
+                .value(kmsKey.getKeyId())
+                .description("KMS Key ID")
+                .exportName(String.format("%s-kms-key-id", this.getStackName()))
+                .build();
+            
+            for (int i = 0; i < buckets.size(); i++) {
+                CfnOutput.Builder.create(this, String.format("S3Bucket%dName", i))
+                    .value(buckets.get(i).getBucketName())
+                    .description(String.format("S3 Bucket %d Name", i))
+                    .exportName(String.format("%s-s3-bucket-%d-name", this.getStackName(), i))
+                    .build();
+            }
+        }
+    }
 }
