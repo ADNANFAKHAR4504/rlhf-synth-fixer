@@ -50,15 +50,6 @@ dependencies {
     implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
     implementation 'software.constructs:constructs:10.4.2'
 
-    // AWS CDK dependencies
-    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
-    implementation 'software.constructs:constructs:10.4.2'
-
-
-    // Additional utilities
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'com.google.guava:guava:33.0.0-jre'
-
 
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -83,13 +74,13 @@ tasks.named('run') {
     environment = System.getenv()
 }
 
-// Configure source directories
+// Configure source directories to match CDK Java template structure
 sourceSets {
     main.java {
-        srcDirs = ['src/main/java', 'lib/src/main/java']
+        srcDirs = ['lib/src/main/java']
     }
     test.java {
-        srcDirs = ['tests/unit/java', 'lib/src/test/java']
+        srcDirs = ['tests/unit/java']
     }
     integrationTest {
         java.srcDirs = ['tests/integration/java']
@@ -106,14 +97,6 @@ configurations {
 }
 
 // Integration test dependencies
-dependencies {
-    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
-    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.16.1'
-    integrationTestImplementation 'software.amazon.awssdk:ec2:2.21.29'
-    integrationTestImplementation 'software.amazon.awssdk:core:2.21.29'
-}
-
-// Integration test dependencies - consolidated from both versions
 dependencies {
     // AWS SDK BOM for consistent versions
     integrationTestImplementation platform('software.amazon.awssdk:bom:2.25.16')
