@@ -108,7 +108,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       );
       expect(rootStatement).toBeDefined();
       expect(Array.isArray(rootStatement.Action)).toBe(true);
-      expect(rootStatement.Action).toContain('kms:Create*');
+      expect(rootStatement.Action).toContain('kms:CreateKey');
       expect(rootStatement.Action).toContain('kms:Decrypt');
       expect(rootStatement.Action).toContain('kms:Encrypt');
     });

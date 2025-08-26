@@ -76,6 +76,7 @@ Resources:
               - 'kms:GenerateDataKeyWithoutPlaintext'
               - 'kms:Decrypt'
               - 'kms:Encrypt'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:*'
           - Sid: Allow RDS Service
             Effect: Allow
             Principal:
@@ -83,6 +84,7 @@ Resources:
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
