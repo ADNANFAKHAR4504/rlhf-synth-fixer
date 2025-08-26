@@ -102,12 +102,7 @@ public class Main {
         CodePipeline pipeline = CodePipeline.Builder.create(pipelineStack, "Pipeline")
             .pipelineName(String.format("%s-pipeline-%s", projectName, environment))
             .synth(ShellStep.Builder.create("Synth")
-                .input(CodePipelineSource.gitHub("your-org/your-repo", "main", 
-                    software.amazon.awscdk.pipelines.GitHubSourceOptions.builder()
-                        .authentication(software.amazon.awscdk.services.codepipeline.actions.GitHubSourceAction.GitHubSourceActionAuthentication.oauthToken(
-                            software.amazon.awscdk.SecretValue.unsafePlainText("dummy-token-for-demo")
-                        ))
-                        .build()))
+                .input(CodePipelineSource.gitHub("your-org/your-repo", "main"))
                 .commands(Arrays.asList(
                     "npm install -g aws-cdk",
                     "mvn compile",
