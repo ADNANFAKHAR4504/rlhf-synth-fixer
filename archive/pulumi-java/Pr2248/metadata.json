@@ -19,5 +19,11 @@
     "InternetGateway",
     "RouteTable",
     "Subnet"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
 }
