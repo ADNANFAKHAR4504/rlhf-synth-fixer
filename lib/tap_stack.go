@@ -425,7 +425,7 @@ func createDatabaseSecurityGroup(ctx *pulumi.Context, vpcId, webSGId pulumi.IDOu
 				Protocol:              pulumi.String("tcp"),
 				FromPort:              pulumi.Int(3306),
 				ToPort:                pulumi.Int(3306),
-				SourceSecurityGroupId: webSGId.ToStringOutput(),
+				SecurityGroups: pulumi.StringArray{webSGId.ToStringOutput()},
 			},
 		},
 		Egress: ec2.SecurityGroupEgressArray{
