@@ -1,41 +1,52 @@
-# Prompt.md
+# IaC – AWS Nova Model Breaking  
 
-Design and deliver a **fault-tolerant AWS infrastructure** using **CloudFormation** for a critical web application under the project name **“IaC – AWS Nova Model Breaking.”**  
+We need to design and deliver a **fault-tolerant AWS infrastructure** using **CloudFormation** for a critical web application. The deployment should be **production-ready** and built under the project name *“IaC – AWS Nova Model Breaking.”*  
 
-The environment must span **two AWS regions (us-east-1 and us-west-2)** to achieve **high availability** and **disaster recovery**. The system should follow AWS best practices for security, scalability, and compliance.  
+The infrastructure must run across **two AWS regions (us-east-1 and us-west-2)** to ensure both **high availability** and **disaster recovery**. The design should strictly follow AWS best practices around security, scalability, and compliance.  
 
-### Key Requirements
-1. **Multi-Region Architecture**  
-   - Distribute resources across **us-east-1** and **us-west-2** for automatic failover.  
-   - Implement **Route 53 DNS failover routing** with health checks to direct traffic to healthy regions.  
+---
 
-2. **Application Layer**  
-   - Deploy application servers in **Auto Scaling Groups** behind an **Elastic Load Balancer (ELB)**.  
-   - Application servers must run inside a **secure VPC** with **public subnets** (for load balancers) and **private subnets** (for app/database).  
+## Scope & Requirements  
 
-3. **Database Layer**  
-   - Use **Amazon RDS with Multi-AZ deployment** for resilience and redundancy.  
-   - Ensure encryption at rest with **AWS KMS** and enforce **TLS/SSL in transit**.  
+### 1. Multi-Region Setup  
+- Resources must be distributed across **us-east-1** and **us-west-2**.  
+- Implement **Route 53 failover routing** with health checks so that traffic automatically shifts to the healthy region in case of issues.  
 
-4. **Storage & Logging**  
-   - Centralize logs in an **S3 bucket** with:  
-     - **Versioning enabled**  
-     - **Lifecycle policies** to transition/expire logs securely  
+### 2. Application Layer  
+- Application servers must run in **Auto Scaling Groups** placed behind an **Elastic Load Balancer (ELB)**.  
+- Deploy servers inside a **dedicated VPC**, with:  
+  - **Public subnets** for the load balancers  
+  - **Private subnets** for the application and database tiers  
 
-5. **Security**  
-   - Enforce **IAM roles and policies** with **least-privilege access**.  
-   - All sensitive data must be encrypted with **KMS** and served over **SSL/TLS**.  
+### 3. Database Layer  
+- Use **Amazon RDS** with **Multi-AZ** enabled to provide resilience and redundancy.  
+- Databases must be encrypted at rest using **KMS** and enforce **TLS/SSL** for in-transit encryption.  
 
-6. **Monitoring & Alerts**  
-   - Use **CloudWatch alarms** to monitor system health, scaling events, and RDS performance.  
-   - Alarms should notify operators automatically when thresholds are breached.  
+### 4. Storage & Logging  
+- Centralize logs in an **S3 bucket** with:  
+  - **Versioning enabled**  
+  - **Lifecycle policies** to transition or expire logs securely over time  
 
-### Expected Output
-- A **CloudFormation YAML template** that provisions all resources according to the above requirements.  
-- The template must successfully deploy without errors and pass validation for:  
-  - **High availability**  
-  - **Disaster recovery readiness**  
-  - **Security compliance** (IAM least privilege, encryption, subnet isolation)  
-  - **Operational monitoring** (CloudWatch alarms)  
+### 5. Security Controls  
+- Apply **IAM roles and policies** that follow the **least-privilege principle**.  
+- Encrypt all sensitive data with **KMS**.  
+- Ensure that all traffic is served securely over **SSL/TLS**.  
 
-The final solution should be **production-ready**, robust against regional outages, and capable of handling **scaling workloads** automatically.
+### 6. Monitoring & Alerts  
+- Configure **CloudWatch alarms** for:  
+  - Application health and scaling events  
+  - RDS performance  
+- Alarms should automatically notify the operations team if thresholds are breached.  
+
+---
+
+## Deliverable  
+
+- A **CloudFormation YAML template** that provisions the complete infrastructure above.  
+- The template must:  
+  - Deploy cleanly without errors  
+  - Provide **high availability** and **failover between regions**  
+  - Comply with **security best practices** (IAM least privilege, encryption, subnet isolation)  
+  - Include **CloudWatch monitoring and alarms**  
+
+The end result should be a **robust, production-ready system** that can handle regional outages gracefully and automatically scale to meet workload demands.  
