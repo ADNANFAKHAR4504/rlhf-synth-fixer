@@ -2,18 +2,17 @@ package tests
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
-	"github.com/tidwall/gjson"
 )
 
 // TestSnapshot creates a snapshot of the synthesized CloudFormation template
-// and compares it against a stored snapshot. This is useful for detecting
-// unintended changes to the infrastructure.
+// and validates the presence and properties of key resources without external dependencies.
 func TestSnapshot(t *testing.T) {
 	// GIVEN
 	app := awscdk.NewApp(nil)
@@ -42,39 +41,77 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal template to JSON: %v", err)
 	}
-	jsonString := string(jsonBytes)
 
-	// Convert the JSON string to a gjson.Result for easier parsing
-	parsedTemplate := gjson.Parse(jsonString)
+	// Unmarshal the JSON into a map for inspection
+	var parsedTemplate map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &parsedTemplate); err != nil {
+		t.Fatalf("failed to unmarshal template JSON: %v", err)
+	}
+
+	resources, ok := parsedTemplate["Resources"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Template does not contain 'Resources' section")
+	}
+
+	// Helper function to find a resource by its logical ID prefix
+	findResource := func(prefix string) (map[string]interface{}, bool) {
+		for key, val := range resources {
+			if strings.HasPrefix(key, prefix) {
+				if resource, ok := val.(map[string]interface{}); ok {
+					return resource, true
+				}
+			}
+		}
+		return nil, false
+	}
 
 	// Check if the template has a VPC
-	if !parsedTemplate.Get("Resources.cfvpc*").Exists() {
+	if _, ok := findResource("cfvpc"); !ok {
 		t.Error("Snapshot does not contain a VPC")
 	}
 
 	// Check if the template has an S3 bucket
-	if !parsedTemplate.Get("Resources.cfassetsbucket*").Exists() {
+	if _, ok := findResource("cfassetsbucket"); !ok {
 		t.Error("Snapshot does not contain an S3 bucket")
 	}
 
 	// Check if the template has an RDS instance
-	if !parsedTemplate.Get("Resources.cfrdsmysql*").Exists() {
+	rdsResource, ok := findResource("cfrdsmysql")
+	if !ok {
 		t.Error("Snapshot does not contain an RDS instance")
 	}
 
 	// Check if the template has an EC2 instance
-	if !parsedTemplate.Get("Resources.cfwebserver*").Exists() {
+	if _, ok := findResource("cfwebserver"); !ok {
 		t.Error("Snapshot does not contain an EC2 instance")
 	}
 
 	// Check for unique naming in RDS instance and CloudWatch alarm
-	rdsIdentifier := parsedTemplate.Get("Resources.cfrdsmysql*").Get("Properties.DBInstanceIdentifier").String()
-	if rdsIdentifier != "cf-rds-mysql-dev" {
-		t.Errorf("Expected RDS identifier to be 'cf-rds-mysql-dev', but got %s", rdsIdentifier)
+	if props, ok := rdsResource["Properties"].(map[string]interface{}); ok {
+		if rdsIdentifier, ok := props["DBInstanceIdentifier"].(string); ok {
+			if rdsIdentifier != "cf-rds-mysql-dev" {
+				t.Errorf("Expected RDS identifier to be 'cf-rds-mysql-dev', but got %s", rdsIdentifier)
+			}
+		} else {
+			t.Error("RDS instance properties do not contain 'DBInstanceIdentifier'")
+		}
+	} else {
+		t.Error("RDS resource does not have 'Properties'")
 	}
 
-	alarmName := parsedTemplate.Get("Resources.cfrdscpu*").Get("Properties.AlarmName").String()
-	if alarmName != "cf-rds-high-cpu-dev" {
-		t.Errorf("Expected Alarm name to be 'cf-rds-high-cpu-dev', but got %s", alarmName)
+	alarmResource, ok := findResource("cfrdscpu")
+	if !ok {
+		t.Error("Snapshot does not contain a CloudWatch Alarm")
+	}
+	if props, ok := alarmResource["Properties"].(map[string]interface{}); ok {
+		if alarmName, ok := props["AlarmName"].(string); ok {
+			if alarmName != "cf-rds-high-cpu-dev" {
+				t.Errorf("Expected Alarm name to be 'cf-rds-high-cpu-dev', but got %s", alarmName)
+			}
+		} else {
+			t.Error("CloudWatch Alarm properties do not contain 'AlarmName'")
+		}
+	} else {
+		t.Error("CloudWatch Alarm resource does not have 'Properties'")
 	}
 }
