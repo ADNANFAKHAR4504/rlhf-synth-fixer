@@ -404,7 +404,6 @@ class NovaModelStack extends Stack {
     private LambdaRestApi createApiGateway(Function lambdaFunction) {
         // Create log group for API Gateway
         LogGroup apiLogGroup = LogGroup.Builder.create(this, formatResourceName("ApiGatewayLogGroup"))
-            .logGroupName("/aws/apigateway/" + formatResourceName("api"))
             .retention(RetentionDays.ONE_MONTH)
             .build();
 
