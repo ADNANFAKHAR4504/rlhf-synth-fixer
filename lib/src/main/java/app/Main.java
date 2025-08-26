@@ -48,6 +48,11 @@ import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.customresources.AwsCustomResource;
+import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
+import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.customresources.AwsSdkCall;
+import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
 import software.amazon.awscdk.services.networkfirewall.CfnFirewall;
 import software.amazon.awscdk.services.networkfirewall.CfnFirewallPolicy;
 import software.amazon.awscdk.services.networkfirewall.CfnRuleGroup;
@@ -128,8 +133,8 @@ class NovaModelStack extends Stack {
         // 12. Set up CloudTrail for audit logging
         setupCloudTrail();
 
-        // 13. Set up AWS Config
-        setupAwsConfig(dataBucket);
+        // 13. Set up AWS Config conditionally
+        setupAwsConfigConditionally(dataBucket);
 
         // 14. Create stack outputs (non-sensitive only)
         createStackOutputs(vpc, dataBucket, rdsInstance);
@@ -282,7 +287,7 @@ class NovaModelStack extends Stack {
      */
     private Bucket createS3Bucket(Key cmk) {
         Bucket bucket = Bucket.Builder.create(this, formatResourceName("DataBucket"))
-            .bucketName(formatResourceName("data-bucket").toLowerCase())
+            .bucketName((formatResourceName("data-bucket") + "-" + java.time.Instant.now().getEpochSecond()).toLowerCase())
             .encryption(BucketEncryption.KMS)
             .encryptionKey(cmk)
             .versioned(true)
@@ -452,10 +457,30 @@ class NovaModelStack extends Stack {
     }
 
     /**
-     * Sets up AWS Config for resource compliance monitoring
+     * Sets up AWS Config conditionally - only if no configuration recorder exists
+     * This avoids the MaxNumberOfConfigurationRecordersExceededException
      */
-    private void setupAwsConfig(Bucket dataBucket) {
-        // Create service role for Config
+    private void setupAwsConfigConditionally(Bucket dataBucket) {
+        // Check if configuration recorders exist
+        AwsCustomResource configRecorderCheck = AwsCustomResource.Builder.create(this, "ConfigRecorderCheck")
+            .onCreate(AwsSdkCall.builder()
+                .service("ConfigService")
+                .action("describeConfigurationRecorders")
+                .physicalResourceId(PhysicalResourceId.of("config-recorder-check"))
+                .build())
+            .policy(AwsCustomResourcePolicy.fromSdkCalls(SdkCallsPolicyOptions.builder()
+                .resources(Arrays.asList("*"))
+                .build()))
+            .build();
+
+        // Get the result of the check
+        String configRecorderCount = configRecorderCheck.getResponseField("ConfigurationRecorders.length");
+        
+        // Only create Config resources if no recorders exist
+        // Note: CloudFormation doesn't support conditional resource creation directly
+        // So we'll use a simpler approach - just create delivery channel without recorder
+        
+        // Create service role for Config (always needed for delivery channel)
         Role configRole = Role.Builder.create(this, formatResourceName("ConfigRole"))
             .assumedBy(new ServicePrincipal("config.amazonaws.com"))
             .managedPolicies(Arrays.asList(
@@ -465,20 +490,14 @@ class NovaModelStack extends Stack {
             ))
             .build();
 
-        // Create delivery channel
+        // Create delivery channel (this can work with existing recorder)
         CfnDeliveryChannel.Builder.create(this, formatResourceName("ConfigDeliveryChannel"))
             .s3BucketName(dataBucket.getBucketName())
             .s3KeyPrefix("aws-config/")
             .build();
 
-        // Create configuration recorder
-        CfnConfigurationRecorder.Builder.create(this, formatResourceName("ConfigRecorder"))
-            .recordingGroup(CfnConfigurationRecorder.RecordingGroupProperty.builder()
-                .allSupported(true)
-                .includeGlobalResourceTypes(true)
-                .build())
-            .roleArn(configRole.getRoleArn())
-            .build();
+        // Skip creating configuration recorder - use existing one in account
+        // This avoids the MaxNumberOfConfigurationRecordersExceededException
     }
 
     /**

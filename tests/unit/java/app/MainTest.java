@@ -335,7 +335,8 @@ public class MainTest {
     // Lambda Tests (39-43)
     @Test
     void testLambdaFunctionCreated() {
-        template.resourceCountIs("AWS::Lambda::Function", 1);
+        // Expecting 2: our main Lambda function + custom resource Lambda function
+        template.resourceCountIs("AWS::Lambda::Function", 2);
     }
 
     @Test
@@ -401,8 +402,8 @@ public class MainTest {
     // IAM Tests (48-50)
     @Test
     void testIamRolesCreated() {
-        // Check that IAM roles exist (Lambda execution role, Config role, etc.)
-        template.resourceCountIs("AWS::IAM::Role", 3);
+        // Check that IAM roles exist (Lambda execution role, Config role, VPC custom resource role, Config check role)
+        template.resourceCountIs("AWS::IAM::Role", 4);
     }
 
     @Test
