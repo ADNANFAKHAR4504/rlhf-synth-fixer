@@ -17,7 +17,7 @@ func TestVPCCreation(t *testing.T) {
 		assert.NotNil(t, vpc)
 		return nil
 	}, pulumi.WithMocks("project", "stack", &mocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
@@ -30,7 +30,7 @@ func TestSecurityGroupRestrictions(t *testing.T) {
 		assert.NotNil(t, sg)
 		return nil
 	}, pulumi.WithMocks("project", "stack", &mocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
@@ -43,7 +43,7 @@ func TestIAMRolesLeastPrivilege(t *testing.T) {
 		assert.NotNil(t, role)
 		return nil
 	}, pulumi.WithMocks("project", "stack", &mocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
@@ -56,7 +56,7 @@ func TestS3BucketEncryption(t *testing.T) {
 		assert.NotNil(t, bucket)
 		return nil
 	}, pulumi.WithMocks("project", "stack", &mocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
@@ -69,7 +69,7 @@ func TestSessionManagerEndpoints(t *testing.T) {
 		assert.Len(t, endpoints, 3)
 		return nil
 	}, pulumi.WithMocks("project", "stack", &mocks{}))
-	
+
 	assert.NoError(t, err)
 }
 

@@ -20,10 +20,15 @@ func main() {
 			environmentSuffix = "dev"
 		}
 
-		// Get current AWS region and availability zones
+		// Get current AWS caller identity and region
 		current, err := aws.GetCallerIdentity(ctx, nil, nil)
 		if err != nil {
 			return err
+		}
+
+		regionName := os.Getenv("AWS_REGION")
+		if regionName == "" {
+			regionName = "us-east-1"
 		}
 
 		azs, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
@@ -315,7 +320,7 @@ func main() {
 		// Create VPC endpoints for Session Manager (secure access without internet)
 		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ssm-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
 			VpcId:            vpc.ID(),
-			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ssm"),
+			ServiceName:      pulumi.String("com.amazonaws." + regionName + ".ssm"),
 			VpcEndpointType:  pulumi.String("Interface"),
 			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
 			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},
@@ -327,7 +332,7 @@ func main() {
 
 		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ssmmessages-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
 			VpcId:            vpc.ID(),
-			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ssmmessages"),
+			ServiceName:      pulumi.String("com.amazonaws." + regionName + ".ssmmessages"),
 			VpcEndpointType:  pulumi.String("Interface"),
 			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
 			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},
@@ -339,7 +344,7 @@ func main() {
 
 		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ec2messages-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
 			VpcId:            vpc.ID(),
-			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ec2messages"),
+			ServiceName:      pulumi.String("com.amazonaws." + regionName + ".ec2messages"),
 			VpcEndpointType:  pulumi.String("Interface"),
 			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
 			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},

@@ -12,21 +12,21 @@ import (
 func TestMainFunction(t *testing.T) {
 	os.Setenv("ENVIRONMENT_SUFFIX", "test")
 	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
-	
+
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		return createInfrastructure(ctx)
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
 func TestEnvironmentSuffixDefault(t *testing.T) {
 	os.Unsetenv("ENVIRONMENT_SUFFIX")
-	
+
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		return createInfrastructure(ctx)
 	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
-	
+
 	assert.NoError(t, err)
 }
 
@@ -53,7 +53,7 @@ type infraMocks struct{}
 
 func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
 	outputs := resource.PropertyMap{}
-	
+
 	switch args.TypeToken {
 	case "aws:ec2/vpc:Vpc":
 		outputs["id"] = resource.NewStringProperty("vpc-" + args.Name)
@@ -73,7 +73,7 @@ func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource
 		outputs["id"] = resource.NewStringProperty("bucket-" + args.Name)
 		outputs["arn"] = resource.NewStringProperty("arn:aws:s3:::bucket-" + args.Name)
 	}
-	
+
 	return args.Name + "_id", outputs, nil
 }
 
