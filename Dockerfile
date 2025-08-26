@@ -22,11 +22,31 @@ RUN apt-get update && apt-get install -y \
     bc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install AWS CLI
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+# Install AWS CLI (arch-aware)
+RUN arch=$(uname -m) && \
+    if [ "$arch" = "x86_64" ]; then \
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; \
+    elif [ "$arch" = "aarch64" ]; then \
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; \
+    else \
+      echo "Unsupported architecture: $arch" && exit 1; \
+    fi && \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -rf awscliv2.zip aws/
+
+# Install Terraform 1.12.2
+RUN curl -fsSL https://releases.hashicorp.com/terraform/1.12.2/terraform_1.12.2_linux_amd64.zip -o terraform.zip && \
+    unzip terraform.zip && \
+    mv terraform /usr/local/bin/ && \
+    chmod +x /usr/local/bin/terraform && \
+    rm terraform.zip
+
+# Install Pulumi 3.109.0
+RUN curl -fsSL https://get.pulumi.com/releases/sdk/pulumi-v3.109.0-linux-x64.tar.gz -o pulumi.tar.gz && \
+    tar -xzf pulumi.tar.gz && \
+    mv pulumi/* /usr/local/bin/ && \
+    rm -rf pulumi.tar.gz pulumi/
 
 # Install pyenv
 RUN curl https://pyenv.run | bash
@@ -85,7 +105,9 @@ WORKDIR /app
 # Copy application code
 COPY . .
 RUN chmod -R +x scripts
+
 # Run setup.sh to prepare the environment
 RUN ./scripts/setup.sh
+
 # Set entrypoint    
 ENTRYPOINT ["/dockerEntryPoint.sh"]
