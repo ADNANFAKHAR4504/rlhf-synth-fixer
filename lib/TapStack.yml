@@ -285,7 +285,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${TAPS3Bucket}/*'
+                Resource: !Sub '${TAPS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -337,16 +337,6 @@ Resources:
       Bucket: !Ref TAPS3Bucket
       PolicyDocument:
         Statement:
-          - Sid: DenyPublicAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${TAPS3Bucket}/*'
-              - !GetAtt TAPS3Bucket.Arn
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
@@ -540,7 +530,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'tap-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0.40'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
@@ -714,7 +704,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'TAPAutoTerminationFunction${EnvironmentSuffix}'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt TAPAutoTerminationRole.Arn
       Code:
