@@ -10,47 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aws/constructs-go/constructs/v10"
+	main "github.com/TuringGpt/iac-test-automations/lib"
 	jsii "github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
-
-// TapStackConfig holds configuration for the TapStack
-type TapStackConfig struct {
-	Region      string
-	Environment string
-	AppName     string
-}
-
-// TapStack represents the main infrastructure stack
-type TapStack struct {
-	Stack      cdktf.TerraformStack
-	Config     *TapStackConfig
-	Networking *NetworkingResources
-	Security   *SecurityResources
-	Lambda     *LambdaResources
-	Monitoring *MonitoringResources
-}
-
-// Stub types for test compilation
-type NetworkingResources struct{}
-type SecurityResources struct{}
-type LambdaResources struct{}
-type MonitoringResources struct{}
-
-// NewTapStack creates a new TapStack for testing
-func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) *TapStack {
-	tfStack := cdktf.NewTerraformStack(scope, &id)
-
-	return &TapStack{
-		Stack:      tfStack,
-		Config:     config,
-		Networking: &NetworkingResources{},
-		Security:   &SecurityResources{},
-		Lambda:     &LambdaResources{},
-		Monitoring: &MonitoringResources{},
-	}
-}
 
 // synthStack synthesizes the stack to a temp outdir and returns the tf json path
 func synthStack(t *testing.T, region string) string {
@@ -72,13 +35,13 @@ func synthStack(t *testing.T, region string) string {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 
-	config := &TapStackConfig{
+	config := &main.TapStackConfig{
 		Region:      region,
 		Environment: "test",
 		AppName:     "trainr963-test",
 	}
 
-	NewTapStack(app, "TapStackTest", config)
+	main.NewTapStack(app, "TapStackTest", config)
 	app.Synth()
 
 	tfPath := filepath.Join(outdir, "stacks", "TapStackTest", "cdk.tf.json")
