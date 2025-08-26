@@ -66,7 +66,7 @@ public class Main {
 
     new TapStack(app, "TapStack" + environmentSuffix, StackProps.builder()
         .env(Environment.builder()
-            .region("us-east-2")
+            .region("us-west-2")
             .build())
         .build());
 
