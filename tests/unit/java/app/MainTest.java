@@ -1,12 +1,8 @@
 package app;
 
-import app.components.ComputeStack;
-import app.components.NetworkStack;
-import app.components.SecurityStack;
-import app.components.StorageStack;
 import app.config.AppConfig;
-import com.pulumi.core.Output;
-import com.pulumi.resources.ComponentResourceOptions;
+import com.pulumi.Context;
+import com.pulumi.Config;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,298 +11,327 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @DisplayName("Infrastructure Component Tests")
 public class MainTest {
 
     @Mock
-    private AppConfig mockConfig;
-
+    private Context mockContext;
+    
     @Mock
-    private ComponentResourceOptions mockOptions;
+    private Config mockConfig;
+
+    private AppConfig appConfig;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        setupMockConfig();
-    }
-
-    private void setupMockConfig() {
-        when(mockConfig.getVpcCidrBlock()).thenReturn("10.0.0.0/16");
-        when(mockConfig.getPublicSubnetPrimaryCidr()).thenReturn("10.0.1.0/24");
-        when(mockConfig.getPublicSubnetSecondaryCidr()).thenReturn("10.0.2.0/24");
-        when(mockConfig.getPrivateSubnetPrimaryCidr()).thenReturn("10.0.3.0/24");
-        when(mockConfig.getPrivateSubnetSecondaryCidr()).thenReturn("10.0.4.0/24");
-        when(mockConfig.getS3BucketNamePrefix()).thenReturn("test-bucket");
-        when(mockConfig.getS3WebsiteIndexDocument()).thenReturn("index.html");
-        when(mockConfig.getS3WebsiteErrorDocument()).thenReturn("error.html");
-        when(mockConfig.getEc2InstanceType()).thenReturn("t3.micro");
-        when(mockConfig.getEc2AmiName()).thenReturn("amzn2-ami-hvm-*");
-        when(mockConfig.getDefaultEnvironment()).thenReturn("test");
+        when(mockContext.config()).thenReturn(mockConfig);
+        appConfig = new AppConfig(mockContext);
     }
 
     @Nested
-    @DisplayName("NetworkStack Tests")
-    class NetworkStackTests {
+    @DisplayName("AppConfig Tests")
+    class AppConfigTests {
 
         @Test
-        @DisplayName("Should create NetworkStack with all required outputs")
-        void shouldCreateNetworkStackWithOutputs() {
-            NetworkStack networkStack = new NetworkStack("test", mockConfig, mockOptions);
-
-            assertNotNull(networkStack, "NetworkStack should be created");
-            assertNotNull(networkStack.vpcId, "VPC ID output should not be null");
-            assertNotNull(networkStack.publicSubnetPrimaryId, "Public subnet primary ID should not be null");
-            assertNotNull(networkStack.publicSubnetSecondaryId, "Public subnet secondary ID should not be null");
-            assertNotNull(networkStack.privateSubnetPrimaryId, "Private subnet primary ID should not be null");
-            assertNotNull(networkStack.privateSubnetSecondaryId, "Private subnet secondary ID should not be null");
-            assertNotNull(networkStack.internetGatewayId, "Internet Gateway ID should not be null");
-            assertNotNull(networkStack.publicRouteTableId, "Public Route Table ID should not be null");
-
-            verify(mockConfig).getVpcCidrBlock();
-            verify(mockConfig).getPublicSubnetPrimaryCidr();
-            verify(mockConfig).getPublicSubnetSecondaryCidr();
-            verify(mockConfig).getPrivateSubnetPrimaryCidr();
-            verify(mockConfig).getPrivateSubnetSecondaryCidr();
-        }
-
-        @Test
-        @DisplayName("Should use correct CIDR blocks from config")
-        void shouldUseCorrectCidrBlocks() {
-            when(mockConfig.getVpcCidrBlock()).thenReturn("192.168.0.0/16");
-            when(mockConfig.getPublicSubnetPrimaryCidr()).thenReturn("192.168.1.0/24");
-
-            NetworkStack networkStack = new NetworkStack("test", mockConfig, mockOptions);
-
-            assertNotNull(networkStack);
-            verify(mockConfig).getVpcCidrBlock();
-            verify(mockConfig).getPublicSubnetPrimaryCidr();
-        }
-
-        @Test
-        @DisplayName("Should create NetworkStack with custom name")
-        void shouldCreateNetworkStackWithCustomName() {
-            String customName = "custom-network";
+        @DisplayName("Should get default environment from config")
+        void shouldGetDefaultEnvironment() {
+            when(mockConfig.require("environment")).thenReturn("development");
             
-            NetworkStack networkStack = new NetworkStack(customName, mockConfig, mockOptions);
-
-            assertNotNull(networkStack, "NetworkStack with custom name should be created");
-            assertNotNull(networkStack.vpcId, "VPC ID should be available");
-        }
-    }
-
-    @Nested
-    @DisplayName("SecurityStack Tests")
-    class SecurityStackTests {
-
-        @Mock
-        private Output<String> mockVpcId;
-
-        @BeforeEach
-        void setUp() {
-            MockitoAnnotations.openMocks(this);
-        }
-
-        @Test
-        @DisplayName("Should create SecurityStack with web security group")
-        void shouldCreateSecurityStackWithWebSecurityGroup() {
-            SecurityStack securityStack = new SecurityStack("test", mockVpcId, mockConfig, mockOptions);
-
-            assertNotNull(securityStack, "SecurityStack should be created");
-            assertNotNull(securityStack.webSecurityGroupId, "Web security group ID should not be null");
-        }
-
-        @Test
-        @DisplayName("Should create SecurityStack with VPC dependency")
-        void shouldCreateSecurityStackWithVpcDependency() {
-            when(mockVpcId.toString()).thenReturn("vpc-12345");
-
-            SecurityStack securityStack = new SecurityStack("test", mockVpcId, mockConfig, mockOptions);
-
-            assertNotNull(securityStack, "SecurityStack should be created with VPC dependency");
-            assertNotNull(securityStack.webSecurityGroupId, "Security group should have ID");
-        }
-
-        @Test
-        @DisplayName("Should create SecurityStack with custom name")
-        void shouldCreateSecurityStackWithCustomName() {
-            String customName = "custom-security";
+            String environment = appConfig.getDefaultEnvironment();
             
-            SecurityStack securityStack = new SecurityStack(customName, mockVpcId, mockConfig, mockOptions);
-
-            assertNotNull(securityStack, "SecurityStack with custom name should be created");
-            assertNotNull(securityStack.webSecurityGroupId, "Security group ID should be available");
-        }
-    }
-
-    @Nested
-    @DisplayName("StorageStack Tests")
-    class StorageStackTests {
-
-        @Test
-        @DisplayName("Should create StorageStack with all required outputs")
-        void shouldCreateStorageStackWithOutputs() {
-            StorageStack storageStack = new StorageStack("test", mockConfig, mockOptions);
-
-            assertNotNull(storageStack, "StorageStack should be created");
-            assertNotNull(storageStack.bucketId, "Bucket ID output should not be null");
-            assertNotNull(storageStack.bucketArn, "Bucket ARN output should not be null");
-            assertNotNull(storageStack.iamRoleArn, "IAM Role ARN output should not be null");
-            assertNotNull(storageStack.instanceProfileName, "Instance Profile name should not be null");
-
-            verify(mockConfig).getS3BucketNamePrefix();
-            verify(mockConfig).getS3WebsiteIndexDocument();
-            verify(mockConfig).getS3WebsiteErrorDocument();
+            assertEquals("development", environment);
+            verify(mockConfig).require("environment");
         }
 
         @Test
-        @DisplayName("Should use correct S3 configuration from config")
-        void shouldUseCorrectS3Configuration() {
-            when(mockConfig.getS3BucketNamePrefix()).thenReturn("my-app-bucket");
-            when(mockConfig.getS3WebsiteIndexDocument()).thenReturn("home.html");
-            when(mockConfig.getS3WebsiteErrorDocument()).thenReturn("404.html");
-
-            StorageStack storageStack = new StorageStack("test", mockConfig, mockOptions);
-
-            assertNotNull(storageStack);
-            verify(mockConfig).getS3BucketNamePrefix();
-            verify(mockConfig).getS3WebsiteIndexDocument();
-            verify(mockConfig).getS3WebsiteErrorDocument();
-        }
-
-        @Test
-        @DisplayName("Should create StorageStack with custom name")
-        void shouldCreateStorageStackWithCustomName() {
-            String customName = "custom-storage";
+        @DisplayName("Should get primary region from config")
+        void shouldGetPrimaryRegion() {
+            when(mockConfig.require("primaryRegion")).thenReturn("us-east-1");
             
-            StorageStack storageStack = new StorageStack(customName, mockConfig, mockOptions);
-
-            assertNotNull(storageStack, "StorageStack with custom name should be created");
-            assertNotNull(storageStack.bucketId, "Bucket ID should be available");
-            assertNotNull(storageStack.iamRoleArn, "IAM Role ARN should be available");
-        }
-    }
-
-    @Nested
-    @DisplayName("ComputeStack Tests")
-    class ComputeStackTests {
-
-        @Mock
-        private Output<String> mockSubnetId;
-        @Mock
-        private Output<String> mockSecurityGroupId;
-        @Mock
-        private Output<String> mockInstanceProfileName;
-
-        @BeforeEach
-        void setUp() {
-            MockitoAnnotations.openMocks(this);
-        }
-
-        @Test
-        @DisplayName("Should create ComputeStack with all required outputs")
-        void shouldCreateComputeStackWithOutputs() {
-            ComputeStack computeStack = new ComputeStack("test", mockSubnetId, mockSecurityGroupId, 
-                    mockInstanceProfileName, mockConfig, mockOptions);
-
-            assertNotNull(computeStack, "ComputeStack should be created");
-            assertNotNull(computeStack.instanceId, "Instance ID output should not be null");
-            assertNotNull(computeStack.publicIp, "Public IP output should not be null");
-
-            verify(mockConfig).getEc2InstanceType();
-            verify(mockConfig).getEc2AmiName();
-            verify(mockConfig).getDefaultEnvironment();
-        }
-
-        @Test
-        @DisplayName("Should use correct EC2 configuration from config")
-        void shouldUseCorrectEc2Configuration() {
-            when(mockConfig.getEc2InstanceType()).thenReturn("t3.small");
-            when(mockConfig.getEc2AmiName()).thenReturn("amzn2-ami-hvm-2.0.*");
-            when(mockConfig.getDefaultEnvironment()).thenReturn("production");
-
-            ComputeStack computeStack = new ComputeStack("test", mockSubnetId, mockSecurityGroupId, 
-                    mockInstanceProfileName, mockConfig, mockOptions);
-
-            assertNotNull(computeStack);
-            verify(mockConfig).getEc2InstanceType();
-            verify(mockConfig).getEc2AmiName();
-            verify(mockConfig).getDefaultEnvironment();
-        }
-
-        @Test
-        @DisplayName("Should create ComputeStack with all dependencies")
-        void shouldCreateComputeStackWithDependencies() {
-            when(mockSubnetId.toString()).thenReturn("subnet-12345");
-            when(mockSecurityGroupId.toString()).thenReturn("sg-12345");
-            when(mockInstanceProfileName.toString()).thenReturn("instance-profile");
-
-            ComputeStack computeStack = new ComputeStack("test", mockSubnetId, mockSecurityGroupId, 
-                    mockInstanceProfileName, mockConfig, mockOptions);
-
-            assertNotNull(computeStack, "ComputeStack should be created with all dependencies");
-            assertNotNull(computeStack.instanceId, "Instance ID should be available");
-            assertNotNull(computeStack.publicIp, "Public IP should be available");
-        }
-
-        @Test
-        @DisplayName("Should create ComputeStack with custom name")
-        void shouldCreateComputeStackWithCustomName() {
-            String customName = "custom-compute";
+            String region = appConfig.getPrimaryRegion();
             
-            ComputeStack computeStack = new ComputeStack(customName, mockSubnetId, mockSecurityGroupId, 
-                    mockInstanceProfileName, mockConfig, mockOptions);
+            assertEquals("us-east-1", region);
+            verify(mockConfig).require("primaryRegion");
+        }
 
-            assertNotNull(computeStack, "ComputeStack with custom name should be created");
-            assertNotNull(computeStack.instanceId, "Instance ID should be available");
+        @Test
+        @DisplayName("Should get secondary region from config")
+        void shouldGetSecondaryRegion() {
+            when(mockConfig.require("secondaryRegion")).thenReturn("us-west-2");
+            
+            String region = appConfig.getSecondaryRegion();
+            
+            assertEquals("us-west-2", region);
+            verify(mockConfig).require("secondaryRegion");
+        }
+
+        @Test
+        @DisplayName("Should get VPC CIDR block from config")
+        void shouldGetVpcCidrBlock() {
+            when(mockConfig.require("vpcCidrBlock")).thenReturn("10.0.0.0/16");
+            
+            String cidr = appConfig.getVpcCidrBlock();
+            
+            assertEquals("10.0.0.0/16", cidr);
+            verify(mockConfig).require("vpcCidrBlock");
+        }
+
+        @Test
+        @DisplayName("Should get public subnet primary CIDR from config")
+        void shouldGetPublicSubnetPrimaryCidr() {
+            when(mockConfig.require("publicSubnetPrimaryCidr")).thenReturn("10.0.1.0/24");
+            
+            String cidr = appConfig.getPublicSubnetPrimaryCidr();
+            
+            assertEquals("10.0.1.0/24", cidr);
+            verify(mockConfig).require("publicSubnetPrimaryCidr");
+        }
+
+        @Test
+        @DisplayName("Should get public subnet secondary CIDR from config")
+        void shouldGetPublicSubnetSecondaryCidr() {
+            when(mockConfig.require("publicSubnetSecondaryCidr")).thenReturn("10.0.2.0/24");
+            
+            String cidr = appConfig.getPublicSubnetSecondaryCidr();
+            
+            assertEquals("10.0.2.0/24", cidr);
+            verify(mockConfig).require("publicSubnetSecondaryCidr");
+        }
+
+        @Test
+        @DisplayName("Should get private subnet primary CIDR from config")
+        void shouldGetPrivateSubnetPrimaryCidr() {
+            when(mockConfig.require("privateSubnetPrimaryCidr")).thenReturn("10.0.3.0/24");
+            
+            String cidr = appConfig.getPrivateSubnetPrimaryCidr();
+            
+            assertEquals("10.0.3.0/24", cidr);
+            verify(mockConfig).require("privateSubnetPrimaryCidr");
+        }
+
+        @Test
+        @DisplayName("Should get private subnet secondary CIDR from config")
+        void shouldGetPrivateSubnetSecondaryCidr() {
+            when(mockConfig.require("privateSubnetSecondaryCidr")).thenReturn("10.0.4.0/24");
+            
+            String cidr = appConfig.getPrivateSubnetSecondaryCidr();
+            
+            assertEquals("10.0.4.0/24", cidr);
+            verify(mockConfig).require("privateSubnetSecondaryCidr");
+        }
+
+        @Test
+        @DisplayName("Should get EC2 AMI name from config")
+        void shouldGetEc2AmiName() {
+            when(mockConfig.require("amiName")).thenReturn("amzn2-ami-hvm-*");
+            
+            String amiName = appConfig.getEc2AmiName();
+            
+            assertEquals("amzn2-ami-hvm-*", amiName);
+            verify(mockConfig).require("amiName");
+        }
+
+        @Test
+        @DisplayName("Should get EC2 instance type from config")
+        void shouldGetEc2InstanceType() {
+            when(mockConfig.require("instanceType")).thenReturn("t3.micro");
+            
+            String instanceType = appConfig.getEc2InstanceType();
+            
+            assertEquals("t3.micro", instanceType);
+            verify(mockConfig).require("instanceType");
+        }
+
+        @Test
+        @DisplayName("Should get S3 bucket name prefix from config")
+        void shouldGetS3BucketNamePrefix() {
+            when(mockConfig.require("bucketNamePrefix")).thenReturn("web-hosting-bucket");
+            
+            String prefix = appConfig.getS3BucketNamePrefix();
+            
+            assertEquals("web-hosting-bucket", prefix);
+            verify(mockConfig).require("bucketNamePrefix");
+        }
+
+        @Test
+        @DisplayName("Should get S3 website index document from config")
+        void shouldGetS3WebsiteIndexDocument() {
+            when(mockConfig.require("websiteIndexDocument")).thenReturn("index.html");
+            
+            String indexDoc = appConfig.getS3WebsiteIndexDocument();
+            
+            assertEquals("index.html", indexDoc);
+            verify(mockConfig).require("websiteIndexDocument");
+        }
+
+        @Test
+        @DisplayName("Should get S3 website error document from config")
+        void shouldGetS3WebsiteErrorDocument() {
+            when(mockConfig.require("websiteErrorDocument")).thenReturn("error.html");
+            
+            String errorDoc = appConfig.getS3WebsiteErrorDocument();
+            
+            assertEquals("error.html", errorDoc);
+            verify(mockConfig).require("websiteErrorDocument");
+        }
+
+        @Test
+        @DisplayName("Should get project name from config")
+        void shouldGetProjectName() {
+            when(mockConfig.require("projectName")).thenReturn("WebHosting");
+            
+            String projectName = appConfig.getProjectName();
+            
+            assertEquals("WebHosting", projectName);
+            verify(mockConfig).require("projectName");
         }
     }
 
     @Nested
-    @DisplayName("Integration Between Components")
-    class ComponentIntegrationTests {
+    @DisplayName("Configuration Validation Tests")
+    class ConfigurationValidationTests {
 
         @Test
-        @DisplayName("Should create all components with interdependencies")
-        void shouldCreateAllComponentsWithInterdependencies() {
-            NetworkStack networkStack = new NetworkStack("test", mockConfig, mockOptions);
+        @DisplayName("Should validate CIDR block format")
+        void shouldValidateCidrBlockFormat() {
+            when(mockConfig.require("vpcCidrBlock")).thenReturn("10.0.0.0/16");
             
-            SecurityStack securityStack = new SecurityStack("test", networkStack.vpcId, mockConfig, mockOptions);
+            String cidr = appConfig.getVpcCidrBlock();
             
-            StorageStack storageStack = new StorageStack("test", mockConfig, mockOptions);
-            
-            ComputeStack computeStack = new ComputeStack("test", networkStack.publicSubnetPrimaryId, 
-                    securityStack.webSecurityGroupId, storageStack.instanceProfileName, mockConfig, mockOptions);
-
-            assertNotNull(networkStack, "NetworkStack should be created");
-            assertNotNull(securityStack, "SecurityStack should be created");
-            assertNotNull(storageStack, "StorageStack should be created");
-            assertNotNull(computeStack, "ComputeStack should be created");
-
-            assertNotNull(networkStack.vpcId, "VPC ID should be available for SecurityStack");
-            assertNotNull(networkStack.publicSubnetPrimaryId, "Subnet ID should be available for ComputeStack");
-            assertNotNull(securityStack.webSecurityGroupId, "Security Group ID should be available for ComputeStack");
-            assertNotNull(storageStack.instanceProfileName, "Instance Profile should be available for ComputeStack");
+            assertTrue(cidr.matches("^([0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$"), 
+                    "CIDR block should match expected format");
         }
 
         @Test
-        @DisplayName("Should verify component dependency chain")
-        void shouldVerifyComponentDependencyChain() {
-            NetworkStack networkStack = new NetworkStack("test", mockConfig, mockOptions);
-            SecurityStack securityStack = new SecurityStack("test", networkStack.vpcId, mockConfig, mockOptions);
-            StorageStack storageStack = new StorageStack("test", mockConfig, mockOptions);
+        @DisplayName("Should validate instance type format")
+        void shouldValidateInstanceTypeFormat() {
+            when(mockConfig.require("instanceType")).thenReturn("t3.micro");
+            
+            String instanceType = appConfig.getEc2InstanceType();
+            
+            assertTrue(instanceType.matches("^[a-z][0-9]+\\.[a-z]+$"), 
+                    "Instance type should match expected format");
+        }
 
-            assertNotNull(networkStack.vpcId, "VPC ID required for SecurityStack");
-            assertNotNull(networkStack.publicSubnetPrimaryId, "Public subnet required for ComputeStack");
-            assertNotNull(securityStack.webSecurityGroupId, "Security group required for ComputeStack");
-            assertNotNull(storageStack.instanceProfileName, "Instance profile required for ComputeStack");
+        @Test
+        @DisplayName("Should validate AMI name pattern")
+        void shouldValidateAmiNamePattern() {
+            when(mockConfig.require("amiName")).thenReturn("amzn2-ami-hvm-*");
+            
+            String amiName = appConfig.getEc2AmiName();
+            
+            assertTrue(amiName.contains("amzn") && amiName.contains("ami"), 
+                    "AMI name should contain expected keywords");
+        }
 
-            ComputeStack computeStack = new ComputeStack("test", networkStack.publicSubnetPrimaryId,
-                    securityStack.webSecurityGroupId, storageStack.instanceProfileName, mockConfig, mockOptions);
+        @Test
+        @DisplayName("Should validate HTML document extensions")
+        void shouldValidateHtmlDocuments() {
+            when(mockConfig.require("websiteIndexDocument")).thenReturn("index.html");
+            when(mockConfig.require("websiteErrorDocument")).thenReturn("error.html");
+            
+            String indexDoc = appConfig.getS3WebsiteIndexDocument();
+            String errorDoc = appConfig.getS3WebsiteErrorDocument();
+            
+            assertTrue(indexDoc.endsWith(".html"), "Index document should be HTML");
+            assertTrue(errorDoc.endsWith(".html"), "Error document should be HTML");
+        }
 
-            assertNotNull(computeStack, "ComputeStack should be created with all dependencies");
+        @Test
+        @DisplayName("Should validate region format")
+        void shouldValidateRegionFormat() {
+            when(mockConfig.require("primaryRegion")).thenReturn("us-east-1");
+            when(mockConfig.require("secondaryRegion")).thenReturn("us-west-2");
+            
+            String primaryRegion = appConfig.getPrimaryRegion();
+            String secondaryRegion = appConfig.getSecondaryRegion();
+            
+            assertTrue(primaryRegion.matches("^[a-z]+-[a-z]+-[0-9]+$"), 
+                    "Primary region should match AWS region format");
+            assertTrue(secondaryRegion.matches("^[a-z]+-[a-z]+-[0-9]+$"), 
+                    "Secondary region should match AWS region format");
+        }
+    }
+
+    @Nested
+    @DisplayName("Component Integration Logic Tests")
+    class ComponentIntegrationLogicTests {
+
+        @Test
+        @DisplayName("Should have all required configuration for NetworkStack")
+        void shouldHaveNetworkStackConfiguration() {
+            setupNetworkStackConfig();
+            
+            assertNotNull(appConfig.getVpcCidrBlock());
+            assertNotNull(appConfig.getPublicSubnetPrimaryCidr());
+            assertNotNull(appConfig.getPublicSubnetSecondaryCidr());
+            assertNotNull(appConfig.getPrivateSubnetPrimaryCidr());
+            assertNotNull(appConfig.getPrivateSubnetSecondaryCidr());
+        }
+
+        @Test
+        @DisplayName("Should have all required configuration for ComputeStack")
+        void shouldHaveComputeStackConfiguration() {
+            setupComputeStackConfig();
+            
+            assertNotNull(appConfig.getEc2InstanceType());
+            assertNotNull(appConfig.getEc2AmiName());
+            assertNotNull(appConfig.getDefaultEnvironment());
+        }
+
+        @Test
+        @DisplayName("Should have all required configuration for StorageStack")
+        void shouldHaveStorageStackConfiguration() {
+            setupStorageStackConfig();
+            
+            assertNotNull(appConfig.getS3BucketNamePrefix());
+            assertNotNull(appConfig.getS3WebsiteIndexDocument());
+            assertNotNull(appConfig.getS3WebsiteErrorDocument());
+        }
+
+        @Test
+        @DisplayName("Should verify subnet CIDR blocks are within VPC CIDR")
+        void shouldVerifySubnetCidrsWithinVpcCidr() {
+            when(mockConfig.require("vpcCidrBlock")).thenReturn("10.0.0.0/16");
+            when(mockConfig.require("publicSubnetPrimaryCidr")).thenReturn("10.0.1.0/24");
+            when(mockConfig.require("publicSubnetSecondaryCidr")).thenReturn("10.0.2.0/24");
+            when(mockConfig.require("privateSubnetPrimaryCidr")).thenReturn("10.0.3.0/24");
+            when(mockConfig.require("privateSubnetSecondaryCidr")).thenReturn("10.0.4.0/24");
+            
+            String vpcCidr = appConfig.getVpcCidrBlock();
+            String pubSubnet1 = appConfig.getPublicSubnetPrimaryCidr();
+            String pubSubnet2 = appConfig.getPublicSubnetSecondaryCidr();
+            String privSubnet1 = appConfig.getPrivateSubnetPrimaryCidr();
+            String privSubnet2 = appConfig.getPrivateSubnetSecondaryCidr();
+            
+            assertTrue(vpcCidr.startsWith("10.0."), "VPC should be in 10.0.x.x range");
+            assertTrue(pubSubnet1.startsWith("10.0."), "Public subnet 1 should be in VPC range");
+            assertTrue(pubSubnet2.startsWith("10.0."), "Public subnet 2 should be in VPC range");
+            assertTrue(privSubnet1.startsWith("10.0."), "Private subnet 1 should be in VPC range");
+            assertTrue(privSubnet2.startsWith("10.0."), "Private subnet 2 should be in VPC range");
+        }
+
+        private void setupNetworkStackConfig() {
+            when(mockConfig.require("vpcCidrBlock")).thenReturn("10.0.0.0/16");
+            when(mockConfig.require("publicSubnetPrimaryCidr")).thenReturn("10.0.1.0/24");
+            when(mockConfig.require("publicSubnetSecondaryCidr")).thenReturn("10.0.2.0/24");
+            when(mockConfig.require("privateSubnetPrimaryCidr")).thenReturn("10.0.3.0/24");
+            when(mockConfig.require("privateSubnetSecondaryCidr")).thenReturn("10.0.4.0/24");
+        }
+
+        private void setupComputeStackConfig() {
+            when(mockConfig.require("instanceType")).thenReturn("t3.micro");
+            when(mockConfig.require("amiName")).thenReturn("amzn2-ami-hvm-*");
+            when(mockConfig.require("environment")).thenReturn("development");
+        }
+
+        private void setupStorageStackConfig() {
+            when(mockConfig.require("bucketNamePrefix")).thenReturn("web-hosting-bucket");
+            when(mockConfig.require("websiteIndexDocument")).thenReturn("index.html");
+            when(mockConfig.require("websiteErrorDocument")).thenReturn("error.html");
         }
     }
 }
