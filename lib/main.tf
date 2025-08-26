@@ -410,7 +410,7 @@ resource "aws_config_configuration_recorder_status" "status" {
   depends_on = [aws_config_delivery_channel.dc]
 }
 
-# =========== GuardDuty ===========
+# =========== GuardDuty ==========
 resource "aws_guardduty_detector" "this" {
   count  = var.enable_guardduty ? 1 : 0
   enable = true
