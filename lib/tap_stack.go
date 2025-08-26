@@ -7,6 +7,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -47,10 +48,10 @@ func main() {
 			EnableDnsSupport:   pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("vpc-%s", environmentSuffix)),
-				"Environment": pulumi.String("Development"),
-				"Project":     pulumi.String("CloudEnvironmentSetup"),
-				"ManagedBy":   pulumi.String("Pulumi"),
-				"Suffix":      pulumi.String(environmentSuffix),
+				"Environment": commonTags["Environment"],
+				"Project":     commonTags["Project"],
+				"ManagedBy":   commonTags["ManagedBy"],
+				"Suffix":      commonTags["Suffix"],
 			},
 		})
 		if err != nil {
@@ -62,19 +63,24 @@ func main() {
 			VpcId: vpc.ID(),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("igw-%s", environmentSuffix)),
-				"Environment": pulumi.String("Development"),
-				"Project":     pulumi.String("CloudEnvironmentSetup"),
-				"ManagedBy":   pulumi.String("Pulumi"),
-				"Suffix":      pulumi.String(environmentSuffix),
+				"Environment": commonTags["Environment"],
+				"Project":     commonTags["Project"],
+				"ManagedBy":   commonTags["ManagedBy"],
+				"Suffix":      commonTags["Suffix"],
 			},
 		})
 		if err != nil {
 			return err
 		}
 
+		// Validate minimum AZ requirement
+		if len(azs.Names) < 2 {
+			return fmt.Errorf("at least 2 availability zones required, found %d", len(azs.Names))
+		}
+
 		// Create two public subnets in different AZs
 		var publicSubnets []*ec2.Subnet
-		for i := 0; i < 2 && i < len(azs.Names); i++ {
+		for i := 0; i < 2; i++ {
 			subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("public-subnet-%s-%d", environmentSuffix, i+1), &ec2.SubnetArgs{
 				VpcId:               vpc.ID(),
 				CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+1)),
@@ -82,11 +88,11 @@ func main() {
 				MapPublicIpOnLaunch: pulumi.Bool(true),
 				Tags: pulumi.StringMap{
 					"Name":        pulumi.String(fmt.Sprintf("public-subnet-%s-%d", environmentSuffix, i+1)),
-					"Environment": pulumi.String("Development"),
-					"Project":     pulumi.String("CloudEnvironmentSetup"),
-					"ManagedBy":   pulumi.String("Pulumi"),
+					"Environment": commonTags["Environment"],
+					"Project":     commonTags["Project"],
+					"ManagedBy":   commonTags["ManagedBy"],
+					"Suffix":      commonTags["Suffix"],
 					"Type":        pulumi.String("Public"),
-					"Suffix":      pulumi.String(environmentSuffix),
 				},
 			})
 			if err != nil {
@@ -100,10 +106,10 @@ func main() {
 			VpcId: vpc.ID(),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("public-route-table-%s", environmentSuffix)),
-				"Environment": pulumi.String("Development"),
-				"Project":     pulumi.String("CloudEnvironmentSetup"),
-				"ManagedBy":   pulumi.String("Pulumi"),
-				"Suffix":      pulumi.String(environmentSuffix),
+				"Environment": commonTags["Environment"],
+				"Project":     commonTags["Project"],
+				"ManagedBy":   commonTags["ManagedBy"],
+				"Suffix":      commonTags["Suffix"],
 			},
 		})
 		if err != nil {
@@ -131,30 +137,40 @@ func main() {
 			}
 		}
 
-		// Create security group for development environment
+		// Create security group for development environment with restricted access
 		devSecurityGroup, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("security-group-%s", environmentSuffix), &ec2.SecurityGroupArgs{
 			Name:        pulumi.String(fmt.Sprintf("security-group-%s", environmentSuffix)),
-			Description: pulumi.String("Security group for development environment"),
+			Description: pulumi.String("Security group for development environment with restricted access"),
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
+				// HTTP access from VPC only
 				&ec2.SecurityGroupIngressArgs{
 					Protocol:   pulumi.String("tcp"),
 					FromPort:   pulumi.Int(80),
 					ToPort:     pulumi.Int(80),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
 				},
+				// HTTPS access from VPC only
 				&ec2.SecurityGroupIngressArgs{
+					Protocol:   pulumi.String("tcp"),
+					FromPort:   pulumi.Int(443),
+					ToPort:     pulumi.Int(443),
+					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+				},
+			},
+			Egress: ec2.SecurityGroupEgressArray{
+				// HTTPS outbound for package updates
+				&ec2.SecurityGroupEgressArgs{
 					Protocol:   pulumi.String("tcp"),
 					FromPort:   pulumi.Int(443),
 					ToPort:     pulumi.Int(443),
 					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 				},
-			},
-			Egress: ec2.SecurityGroupEgressArray{
+				// HTTP outbound for package updates
 				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("-1"),
-					FromPort:   pulumi.Int(0),
-					ToPort:     pulumi.Int(0),
+					Protocol:   pulumi.String("tcp"),
+					FromPort:   pulumi.Int(80),
+					ToPort:     pulumi.Int(80),
 					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 				},
 			},
@@ -187,10 +203,43 @@ func main() {
 			return err
 		}
 
-		// Attach basic EC2 policies to the role
-		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("ec2-basic-policy-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+		// Create minimal EC2 policy with Session Manager access
+		ec2PolicyDocument := `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"logs:CreateLogGroup",
+						"logs:CreateLogStream",
+						"logs:PutLogEvents"
+					],
+					"Resource": "arn:aws:logs:*:*:*"
+				}
+			]
+		}`
+
+		// Attach Session Manager policy for secure SSH access
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("ec2-ssm-policy-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
 			Role:      ec2Role.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"),
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
+		})
+		if err != nil {
+			return err
+		}
+
+		ec2Policy, err := iam.NewPolicy(ctx, fmt.Sprintf("ec2-minimal-policy-%s", environmentSuffix), &iam.PolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("EC2-Minimal-Policy-%s", environmentSuffix)),
+			Policy: pulumi.String(ec2PolicyDocument),
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("ec2-minimal-policy-attachment-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+			Role:      ec2Role.Name,
+			PolicyArn: ec2Policy.Arn,
 		})
 		if err != nil {
 			return err
@@ -229,10 +278,72 @@ func main() {
 			return err
 		}
 
-		// Attach RDS enhanced monitoring policy
-		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("rds-monitoring-policy-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+		// Create minimal RDS policy with least privilege
+		rdsMonitoringPolicyDocument := `{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"logs:CreateLogGroup",
+						"logs:CreateLogStream",
+						"logs:PutLogEvents",
+						"logs:DescribeLogStreams"
+					],
+					"Resource": "arn:aws:logs:*:*:log-group:RDS*"
+				}
+			]
+		}`
+
+		rdsPolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("rds-minimal-policy-%s", environmentSuffix), &iam.PolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("RDS-Minimal-Policy-%s", environmentSuffix)),
+			Policy: pulumi.String(rdsMonitoringPolicyDocument),
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("rds-minimal-policy-attachment-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
 			Role:      rdsRole.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"),
+			PolicyArn: rdsPolicy.Arn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create VPC endpoints for Session Manager (secure access without internet)
+		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ssm-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
+			VpcId:            vpc.ID(),
+			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ssm"),
+			VpcEndpointType:  pulumi.String("Interface"),
+			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
+			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},
+			Tags:             commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ssmmessages-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
+			VpcId:            vpc.ID(),
+			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ssmmessages"),
+			VpcEndpointType:  pulumi.String("Interface"),
+			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
+			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},
+			Tags:             commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ec2messages-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
+			VpcId:            vpc.ID(),
+			ServiceName:      pulumi.String("com.amazonaws." + current.Region + ".ec2messages"),
+			VpcEndpointType:  pulumi.String("Interface"),
+			SubnetIds:        pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
+			SecurityGroupIds: pulumi.StringArray{devSecurityGroup.ID()},
+			Tags:             commonTags,
 		})
 		if err != nil {
 			return err
@@ -270,14 +381,35 @@ func main() {
 			return err
 		}
 
-		// Set bucket encryption
+		// Create KMS key for S3 encryption
+		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("logs-bucket-key-%s", environmentSuffix), &kms.KeyArgs{
+			Description: pulumi.String(fmt.Sprintf("KMS key for logs bucket encryption - %s", environmentSuffix)),
+			KeyUsage:    pulumi.String("ENCRYPT_DECRYPT"),
+			Tags:        commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create KMS key alias
+		_, err = kms.NewAlias(ctx, fmt.Sprintf("logs-bucket-key-alias-%s", environmentSuffix), &kms.AliasArgs{
+			Name:        pulumi.String(fmt.Sprintf("alias/logs-bucket-%s", environmentSuffix)),
+			TargetKeyId: kmsKey.KeyId,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Set bucket encryption with KMS
 		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("logs-bucket-encryption-%s", environmentSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: logsBucket.ID(),
 			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
 				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
 					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm: pulumi.String("AES256"),
+						SseAlgorithm:   pulumi.String("aws:kms"),
+						KmsMasterKeyId: kmsKey.Arn,
 					},
+					BucketKeyEnabled: pulumi.Bool(true),
 				},
 			},
 		})
@@ -285,9 +417,16 @@ func main() {
 			return err
 		}
 
-		// Export key values
+		// Export key values with validation
 		ctx.Export("vpcId", vpc.ID())
-		ctx.Export("publicSubnetIds", pulumi.All(publicSubnets[0].ID(), publicSubnets[1].ID()))
+
+		// Safely export subnet IDs
+		if len(publicSubnets) >= 2 {
+			ctx.Export("publicSubnetIds", pulumi.All(publicSubnets[0].ID(), publicSubnets[1].ID()))
+		} else {
+			return fmt.Errorf("insufficient public subnets created: expected 2, got %d", len(publicSubnets))
+		}
+
 		ctx.Export("internetGatewayId", igw.ID())
 		ctx.Export("securityGroupId", devSecurityGroup.ID())
 		ctx.Export("ec2RoleArn", ec2Role.Arn)
