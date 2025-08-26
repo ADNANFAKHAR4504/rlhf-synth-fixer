@@ -2,12 +2,29 @@ package app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.assertj.core.api.Assertions;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.model.GetBucketEncryptionRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketEncryptionResponse;
+import software.amazon.awssdk.services.s3.model.GetBucketLifecycleConfigurationRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketLifecycleConfigurationResponse;
+import software.amazon.awssdk.services.s3.model.GetBucketVersioningRequest;
+import software.amazon.awssdk.services.s3.model.GetBucketVersioningResponse;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.model.TransitionStorageClass;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
@@ -19,11 +36,30 @@ import software.amazon.awssdk.services.ec2.model.Vpc;
 import software.amazon.awssdk.services.ec2.model.Subnet;
 import software.amazon.awssdk.services.ec2.model.SecurityGroup;
 import software.amazon.awssdk.services.elasticloadbalancingv2.ElasticLoadBalancingV2Client;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeLoadBalancersRequest;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeLoadBalancersResponse;
 import software.amazon.awssdk.services.elasticloadbalancingv2.model.LoadBalancer;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.LoadBalancerSchemeEnum;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.LoadBalancerStateEnum;
 import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
+import software.amazon.awssdk.services.autoscaling.model.AutoScalingGroup;
 import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsRequest;
 import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGroupsResponse;
-import software.amazon.awssdk.services.autoscaling.model.AutoScalingGroup;
+import software.amazon.awssdk.services.autoscaling.model.DescribePoliciesRequest;
+import software.amazon.awssdk.services.autoscaling.model.DescribePoliciesResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeNatGatewaysRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeNatGatewaysResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
+import software.amazon.awssdk.services.ec2.model.Filter;
+import software.amazon.awssdk.services.ec2.model.NatGatewayState;
+import software.amazon.awssdk.services.ec2.model.SecurityGroup;
+import software.amazon.awssdk.services.ec2.model.Tag;
+import software.amazon.awssdk.services.ec2.model.Vpc;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -34,7 +70,6 @@ import java.net.http.HttpResponse;
 import java.net.URI;
 import java.time.Duration;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 
 /**
  * Integration tests for WebApp infrastructure deployment.
@@ -113,10 +148,18 @@ public class WebAppStackIntegrationTest {
     
     @AfterAll
     public static void closeClients() {
-        if (s3Client != null) s3Client.close();
-        if (ec2Client != null) ec2Client.close();
-        if (elbClient != null) elbClient.close();
-        if (asgClient != null) asgClient.close();
+        if (s3Client != null) {
+            s3Client.close();
+        }
+        if (ec2Client != null) {
+            ec2Client.close();
+        }
+        if (elbClient != null) {
+            elbClient.close();
+        }
+        if (asgClient != null) {
+            asgClient.close();
+        }
     }
     
     @Test
@@ -144,7 +187,7 @@ public class WebAppStackIntegrationTest {
         
         // Verify subnets
         DescribeSubnetsRequest subnetRequest = DescribeSubnetsRequest.builder()
-            .filters(software.amazon.awssdk.services.autoscaling.model.Filter.builder()
+            .filters(software.amazon.awssdk.services.ec2.model.Filter.builder()
                 .name("vpc-id")
                 .values(vpcId)
                 .build())
@@ -336,7 +379,7 @@ public class WebAppStackIntegrationTest {
         
         // Find security groups in the VPC
         DescribeSecurityGroupsRequest request = DescribeSecurityGroupsRequest.builder()
-            .filters(software.amazon.awssdk.services.autoscaling.model.Filter.builder()
+            .filters(software.amazon.awssdk.services.ec2.model.Filter.builder()
                 .name("vpc-id")
                 .values(vpcId)
                 .build())
@@ -382,8 +425,8 @@ public class WebAppStackIntegrationTest {
             // Check for required tags
             Map<String, String> tags = vpc.tags().stream()
                 .collect(java.util.stream.Collectors.toMap(
-                    software.amazon.awssdk.services.autoscaling.model.Tag::key,
-                    software.amazon.awssdk.services.autoscaling.model.Tag::value
+                    Tag::key,
+                    Tag::value
                 ));
                     
             // Verify Environment and App tags
@@ -395,7 +438,7 @@ public class WebAppStackIntegrationTest {
     }
     
     // Helper method to get output value
-    private String getOutput(String key) {
+    private String getOutput(final String key) {
         if (outputs == null || !outputs.has(key)) {
             return null;
         }

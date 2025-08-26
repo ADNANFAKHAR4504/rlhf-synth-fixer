@@ -5,11 +5,11 @@ import software.amazon.awscdk.StackProps;
 /**
  * Properties for the WebAppStack.
  */
-public class WebAppStackProps {
+public final class WebAppStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private WebAppStackProps(String environmentSuffix, StackProps stackProps) {
+    private WebAppStackProps(final String environmentSuffix, final StackProps stackProps) {
         this.environmentSuffix = environmentSuffix;
         this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
     }

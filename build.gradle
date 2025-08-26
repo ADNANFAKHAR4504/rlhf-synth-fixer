@@ -127,6 +127,8 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
     integrationTestImplementation 'software.amazon.awssdk:sns'
     integrationTestImplementation 'software.amazon.awssdk:sts'
+    integrationTestImplementation 'software.amazon.awssdk:elasticloadbalancingv2'
+    integrationTestImplementation 'software.amazon.awssdk:autoscaling'
     
     // JSON parsing for outputs
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'

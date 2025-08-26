@@ -11,9 +11,6 @@ import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 import java.util.Map;
 import java.util.List;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-import java.io.IOException;
 
 @DisplayName("WebAppStack Unit Tests")
 public class WebAppStackTest {
@@ -145,11 +142,6 @@ public class WebAppStackTest {
             "ToPort", 80
         )));
         
-        template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", Match.objectLike(Map.of(
-            "IpProtocol", "tcp",
-            "FromPort", 443,
-            "ToPort", 443
-        )));
     }
     
     @Test

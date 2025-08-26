@@ -3,13 +3,9 @@ package app;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.BeforeEach;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.assertions.Template;
 
 @DisplayName("Main Application Tests")
 public class MainTest {
