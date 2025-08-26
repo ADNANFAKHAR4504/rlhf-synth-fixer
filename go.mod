@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/kms v1.30.1
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.76.2
 	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.1
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.38.2
 	github.com/aws/aws-sdk-go-v2/service/securityhub v1.62.2
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
@@ -29,14 +29,14 @@ require (
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
 	github.com/pulumi/pulumi/sdk/v3 v3.191.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 )
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.6 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
