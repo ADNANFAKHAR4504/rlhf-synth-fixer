@@ -9,6 +9,7 @@ import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.ec2.ISubnet;
+import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.Subnet;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
 import software.amazon.awscdk.services.ec2.SubnetType;
@@ -356,7 +357,7 @@ public class TapStack extends software.amazon.awscdk.Stack {
     private VPCComponent buildVPCComponent() {
         // Create VPC
         Vpc vpc = Vpc.Builder.create(this, "MainVPC")
-            .cidr(config.vpcCidr)
+            .ipAddresses(IpAddresses.cidr(config.vpcCidr))
             .enableDnsHostnames(true)
             .enableDnsSupport(true)
             .maxAzs(2)

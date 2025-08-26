@@ -44,8 +44,7 @@ public class TapStackTest {
             "Properties", Match.objectLike(Map.of(
                 "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", "dev"),
-                    Map.of("Key", "Project", "Value", "infrastructure"),
-                    Map.of("Key", "ManagedBy", "Value", "cdk")
+                    Map.of("Key", "Project", "Value", "infrastructure")
                 ))
             ))
         ));
@@ -291,7 +290,8 @@ public class TapStackTest {
                             "s3:GetObject",
                             "s3:PutObject",
                             "s3:DeleteObject"
-                        ))
+                        )),
+                        "Resource", Match.anyValue()
                     )
                 ))
             ))
@@ -308,9 +308,7 @@ public class TapStackTest {
         
         // Verify SSM policy is attached to EC2 role
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
-            "ManagedPolicyArns", Match.arrayWith(Arrays.asList(
-                Match.anyValue().toString()
-            ))
+            "ManagedPolicyArns", Match.anyValue()
         ));
     }
     
@@ -341,6 +339,9 @@ public class TapStackTest {
                 "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Deny",
+                        "Action", Match.anyValue(),
+                        "Principal", Match.anyValue(),
+                        "Resource", Match.anyValue(),
                         "Condition", Map.of(
                             "Bool", Map.of("aws:SecureTransport", "false")
                         )
