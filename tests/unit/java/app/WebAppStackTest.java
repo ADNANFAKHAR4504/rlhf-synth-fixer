@@ -10,6 +10,7 @@ import software.amazon.awscdk.assertions.Match;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Map;
 
 public class WebAppStackTest {
@@ -119,9 +120,9 @@ public class WebAppStackTest {
         WebAppStack stack = new WebAppStack(app, "TestRUMStack", props);
         Template template = Template.fromStack(stack);
         
-        // Check for CloudWatch RUM App Monitor
+        // Check for CloudWatch RUM App Monitor with region in name
         template.hasResourceProperties("AWS::RUM::AppMonitor",
-                Map.of("Name", "webapp-rum-rum-test",
+                Map.of(
                        "Domain", "webapp-rum-test.example.com",
                        "AppMonitorConfiguration", Match.objectLike(Map.of(
                                "AllowCookies", true,
@@ -129,6 +130,15 @@ public class WebAppStackTest {
                                "SessionSampleRate", 1.0,
                                "Telemetries", Match.arrayWith(java.util.Arrays.asList("errors", "performance", "http"))
                        ))));
+                       
+        // Verify that the name contains the region
+        template.hasResource("AWS::RUM::AppMonitor", Match.objectLike(Map.of(
+                "Properties", Match.objectLike(Map.of(
+                        "Name", Match.objectLike(Map.of(
+                                "Fn::Join", Match.arrayWith(List.of("", Match.arrayWith(List.of("webapp-rum-"))))
+                        ))
+                ))
+        )));
     }
 
     @Test

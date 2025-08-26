@@ -354,8 +354,10 @@ public class WebAppStack extends Stack {
     }
 
     private CfnAppMonitor configureRealUserMonitoring() {
+        // Include region in the name to ensure uniqueness across regions
+        String region = this.getRegion();
         return CfnAppMonitor.Builder.create(this, "RUMAppMonitor" + environmentSuffix)
-                .name("webapp-rum-" + environmentSuffix)
+                .name("webapp-rum-" + region + "-" + environmentSuffix)
                 .domain("webapp-" + environmentSuffix + ".example.com")
                 .appMonitorConfiguration(CfnAppMonitor.AppMonitorConfigurationProperty.builder()
                         .allowCookies(true)
@@ -394,6 +396,8 @@ public class WebAppStack extends Stack {
         );
 
         // RUM metrics widget
+        String region = this.getRegion();
+        String rumAppName = "webapp-rum-" + region + "-" + environmentSuffix;
         dashboard.addWidgets(
                 GraphWidget.Builder.create()
                         .title("Real User Monitoring")
@@ -401,19 +405,19 @@ public class WebAppStack extends Stack {
                                 Metric.Builder.create()
                                         .namespace("AWS/RUM")
                                         .metricName("PageViewCount")
-                                        .dimensionsMap(java.util.Map.of("application_name", "webapp-rum-" + environmentSuffix))
+                                        .dimensionsMap(java.util.Map.of("application_name", rumAppName))
                                         .build(),
                                 Metric.Builder.create()
                                         .namespace("AWS/RUM")
                                         .metricName("JsErrorCount")
-                                        .dimensionsMap(java.util.Map.of("application_name", "webapp-rum-" + environmentSuffix))
+                                        .dimensionsMap(java.util.Map.of("application_name", rumAppName))
                                         .build()
                         ))
                         .right(Arrays.asList(
                                 Metric.Builder.create()
                                         .namespace("AWS/RUM")
                                         .metricName("PageLoadTime")
-                                        .dimensionsMap(java.util.Map.of("application_name", "webapp-rum-" + environmentSuffix))
+                                        .dimensionsMap(java.util.Map.of("application_name", rumAppName))
                                         .unit(Unit.MILLISECONDS)
                                         .build()
                         ))
