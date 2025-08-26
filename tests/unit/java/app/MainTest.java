@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import software.amazon.awscdk.App;
-import software.amazon.awscdk.assertions.Template;
 
 /**
  * Unit tests for the Main CDK application.

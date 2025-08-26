@@ -1,6 +1,9 @@
 package app;
 
-import app.stacks.*;
+import app.stacks.DatabaseStack;
+import app.stacks.ECSStack;
+import app.stacks.NetworkStack;
+import app.stacks.SecurityStack;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Environment;
@@ -16,11 +19,11 @@ import java.util.Optional;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
+    private TapStackProps(final String environmentSuffix, final StackProps stackProps) {
         this.environmentSuffix = environmentSuffix;
         this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
     }
@@ -37,16 +40,16 @@ class TapStackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    public static final class Builder {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
+        public Builder environmentSuffix(final String environmentSuffix) {
             this.environmentSuffix = environmentSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
+        public Builder stackProps(final StackProps stackProps) {
             this.stackProps = stackProps;
             return this;
         }
@@ -71,7 +74,7 @@ class TapStackProps {
  * @version 1.0
  * @since 1.0
  */
-class TapStack extends Stack {
+final class TapStack extends Stack {
     private final String environmentSuffix;
     private final Environment stackEnvironment;
 

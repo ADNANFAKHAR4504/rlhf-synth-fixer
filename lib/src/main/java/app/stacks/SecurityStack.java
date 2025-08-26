@@ -3,15 +3,18 @@ package app.stacks;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.kms.*;
-import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.kms.IKey;
+import software.amazon.awscdk.services.kms.Key;
 import software.constructs.Construct;
 
 import java.util.List;
-import java.util.Map;
 
-public class SecurityStack extends Stack {
+public final class SecurityStack extends Stack {
     private final IKey kmsKey;
     private final IKey rdsKmsKey;
     private final Role ecsTaskRole;

@@ -3,13 +3,22 @@ package app.stacks;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.ec2.*;
+import software.amazon.awscdk.services.ec2.IPeer;
+import software.amazon.awscdk.services.ec2.IPort;
+import software.amazon.awscdk.services.ec2.ISecurityGroup;
+import software.amazon.awscdk.services.ec2.IVpc;
+import software.amazon.awscdk.services.ec2.IpAddresses;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
 import software.constructs.Construct;
 
 import java.util.List;
-import java.util.Map;
 
-public class NetworkStack extends Stack {
+public final class NetworkStack extends Stack {
     private final IVpc vpc;
     private final ISecurityGroup ecsSecurityGroup;
     private final ISecurityGroup rdsSecurityGroup;
