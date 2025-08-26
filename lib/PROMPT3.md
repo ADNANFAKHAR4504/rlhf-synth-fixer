@@ -18,7 +18,7 @@ This is the error I encountered after applying your latest update:
 ```
 
 Your task is to:  
-1. Diagnose the root cause of the error.  
-2. Explain why Terraform cannot find version `8.0.35` for the MySQL database resource.  
-3. Recommend a valid MySQL engine version compatible with AWS RDS.  
-4. Update and rrovide corrected Terraform code for the database module.  
+1. Figure out what's causing the error.  
+2. Explain why Terraform can't find MySQL version `8.0.35`.  
+3. Suggest a valid MySQL version that actually works with RDS service  
+4. Update and fix the Terraform code for the database module
