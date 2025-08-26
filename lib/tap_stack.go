@@ -178,7 +178,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	rdsInstance := awsrds.NewDatabaseInstance(stack, jsii.String("cf-rds-mysql"), &awsrds.DatabaseInstanceProps{
 		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
-			Version: awsrds.MysqlEngineVersion_VER_8_0_32(),
+			Version: awsrds.MysqlEngineVersion_VER_8_0(),
 		}),
 		InstanceType:              awsec2.NewInstanceType(props.DBInstanceClass),
 		Vpc:                       vpc,
