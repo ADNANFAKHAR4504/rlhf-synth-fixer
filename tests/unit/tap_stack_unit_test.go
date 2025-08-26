@@ -5,6 +5,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/aws/jsii-runtime-go"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
+)
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -424,19 +433,16 @@ func validateStackProps(props *TapStackProps) bool {
 }
 
 func TestStackSynthesis(t *testing.T) {
-	app := cdktf.NewApp(nil)
-	stack := createTestTapStack("test")
-
 	// Synthesize the stack to JSON
-	synthesized := cdktf.Testing_Synth(app, &cdktf.TestingConfig{})
+	synthesized := cdktf.Testing_Synth(createTestTapStack("test"), nil)
 
-	if synthesized == "" {
+	if synthesized == nil || *synthesized == "" {
 		t.Error("Expected synthesized configuration to be non-empty")
 	}
 
 	// Parse the synthesized JSON to validate structure
 	var config map[string]interface{}
-	err := json.Unmarshal([]byte(synthesized), &config)
+	err := json.Unmarshal([]byte(*synthesized), &config)
 	if err != nil {
 		t.Errorf("Failed to parse synthesized configuration as JSON: %v", err)
 	}
