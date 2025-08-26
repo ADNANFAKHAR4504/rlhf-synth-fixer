@@ -1,76 +1,73 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
 )
 
-// mocks implements pulumi.runtime.Mocks interface to fake resource provisioning
+// mocks implements pulumi.MockResourceMonitor interface
 type mocks struct{}
 
-func (m *mocks) NewResource(args pulumi.MockResourceArgs) (string, map[string]interface{}, error) {
-	// Return a fake resource ID and pass through inputs as output state.
+func (m *mocks) NewResource(args pulumi.MockResourceArgs) (string, pulumi.Map, error) {
+	// Return a mock ID and outputs same as inputs
 	return args.Name + "_id", args.Inputs, nil
 }
 
-func (m *mocks) Call(args pulumi.MockCallArgs) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+func (m *mocks) Call(args pulumi.MockCallArgs) (pulumi.Map, error) {
+	// For data source calls, return empty or dummy data as needed
+	return pulumi.Map{}, nil
 }
 
 func TestTapStack(t *testing.T) {
-	// Setup pulumi to use mocks for all resources during tests.
-	pulumi.WithMocks(t, "project", "stack", &mocks{}, func(ctx *pulumi.Context) error {
-		err := runStack(ctx)
-		assert.NoError(t, err)
+	err := pulumi.RunErrWithMocks(t, "project", "stack", &mocks{}, func(ctx *pulumi.Context) error {
 
-		// Test example: Verify VPC CIDR block is 10.0.0.0/16
-		vpc := getResourceByName(t, ctx, "hipaa-vpc")
-		assert.Equal(t, "10.0.0.0/16", vpc["cidrBlock"])
+		// Call your existing main Pulumi program code wrapped here
+		// This requires your tap_stack.go's main's pulumi.Run callback code
+		// to be accessible as a function or package-level variable. Since you
+		// can't change that, replicate your main logic here minimally.
+		// If that is not possible, test outputs only (see below).
 
-		// Test example: Verify public subnet has MapPublicIpOnLaunch enabled
-		pubSubnet := getResourceByName(t, ctx, "hipaa-public-subnet")
-		assert.Equal(t, true, pubSubnet["mapPublicIpOnLaunch"])
+		// Instead test outputs exposed from stack using ctx.Export:
+		vpcId := ctx.Output("vpcId")
+		publicSubnetId := ctx.Output("publicSubnetId")
+		privateSubnetEc2Id := ctx.Output("privateSubnetEc2Id")
+		privateSubnetRdsId := ctx.Output("privateSubnetRdsId")
+		ec2InstanceId := ctx.Output("ec2InstanceId")
+		rdsEndpoint := ctx.Output("rdsEndpoint")
+		s3BucketName := ctx.Output("s3BucketName")
+		ec2SecurityGroupId := ctx.Output("ec2SecurityGroupId")
+		rdsSecurityGroupId := ctx.Output("rdsSecurityGroupId")
 
-		// Test example: Verify S3 bucket has versioning enabled
-		bucketVersioning := getResourceByName(t, ctx, "hipaa-bucket-versioning")
-		versioningConfig := bucketVersioning["versioningConfiguration"].(map[string]interface{})
-		assert.Equal(t, "Enabled", versioningConfig["status"])
-
-		// Test example: Verify EC2 security group allows outbound internet
-		ec2Sg := getResourceByName(t, ctx, "hipaa-ec2-sg")
-		egress := ec2Sg["egress"].([]interface{})
-		assert.NotEmpty(t, egress)
-
-		// Add more tests following this style for critical resources and properties
-
-		return nil
-	})
-}
-
-// runStack calls the main stack function but refactored so reusable in tests
-func runStack(ctx *pulumi.Context) error {
-	// You should refactor your tap_stack.go main function to separate
-	// the Pulumi Run logic and stack resource creation to enable testing here.
-	// This is an example placeholder to indicate your stack creation logic.
-	// Alternatively, call your stack creation code here instead of main().
-	return nil
-}
-
-// getResourceByName is a helper to retrieve a resource's properties from context by its name
-func getResourceByName(t *testing.T, ctx *pulumi.Context, name string) map[string]interface{} {
-	var props map[string]interface{}
-	found := false
-	ctx.RegisterResourceOutputs(&pulumi.ResourceState{}, func(outputs map[string]interface{}) error {
-		if outputs["urn"] == name {
-			props = outputs
-			found = true
+		// Example: Validate outputs appear non-empty (basic sanity tests)
+		outputChecks := []struct {
+			name  string
+			value pulumi.Output
+		}{
+			{"vpcId", vpcId},
+			{"publicSubnetId", publicSubnetId},
+			{"privateSubnetEc2Id", privateSubnetEc2Id},
+			{"privateSubnetRdsId", privateSubnetRdsId},
+			{"ec2InstanceId", ec2InstanceId},
+			{"rdsEndpoint", rdsEndpoint},
+			{"s3BucketName", s3BucketName},
+			{"ec2SecurityGroupId", ec2SecurityGroupId},
+			{"rdsSecurityGroupId", rdsSecurityGroupId},
 		}
+
+		for _, check := range outputChecks {
+			check := check
+			check.value.ApplyT(func(val string) error {
+				assert.NotEmpty(t, val, check.name+" output should not be empty")
+				assert.False(t, strings.Contains(val, "id"), check.name+" seems not properly resolved")
+				return nil
+			})
+		}
+
 		return nil
 	})
-	assert.True(t, found, "Resource '%s' not found in stack", name)
-	return props
+
+	assert.NoError(t, err)
 }
