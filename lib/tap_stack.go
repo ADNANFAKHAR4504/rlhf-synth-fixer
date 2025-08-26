@@ -1,4 +1,4 @@
-package main
+package tapstack
 
 import (
 	"archive/zip"
@@ -53,6 +53,7 @@ type TapStackConfig struct {
 type TapStack struct {
 	Stack      cdktf.TerraformStack
 	Config     *TapStackConfig
+	EnvPrefix  string
 	Networking *NetworkingResources
 	Security   *SecurityResources
 	Lambda     *LambdaResources
@@ -62,15 +63,19 @@ type TapStack struct {
 func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) *TapStack {
 	tfStack := cdktf.NewTerraformStack(scope, &id)
 
-	stack := &TapStack{
-		Stack:  tfStack,
-		Config: config,
-	}
-
 	// Get environment suffix from environment variable
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
 		environmentSuffix = config.EnvironmentSuffix // Default from props
+	}
+
+	// Create environment prefix for resource naming
+	envPrefix := fmt.Sprintf("%s-xk9f", environmentSuffix)
+
+	stack := &TapStack{
+		Stack:     tfStack,
+		Config:    config,
+		EnvPrefix: envPrefix,
 	}
 
 	// Get state bucket configuration from environment variables
@@ -89,10 +94,6 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 		Key:    jsii.String(fmt.Sprintf("%s/%s.tfstate", environmentSuffix, id)),
 		Region: jsii.String(stateBucketRegion),
 	})
-
-	// Create environment prefix for resource naming
-	envPrefix := fmt.Sprintf("%s-xk9f", environmentSuffix)
-	_ = envPrefix // Use this prefix for naming resources to avoid conflicts
 
 	// AWS Provider
 	provider.NewAwsProvider(stack.Stack, jsii.String("aws"), &provider.AwsProviderConfig{
@@ -218,7 +219,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 		EnableDnsHostnames: boolPtr(true),
 		EnableDnsSupport:   boolPtr(true),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-vpc"),
+			"Name": str(stack.EnvPrefix + "-vpc"),
 		},
 	})
 
@@ -226,7 +227,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 	resources.InternetGateway = internetgateway.NewInternetGateway(stack.Stack, str("igw"), &internetgateway.InternetGatewayConfig{
 		VpcId: resources.VPC.Id(),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-igw"),
+			"Name": str(stack.EnvPrefix + "-igw"),
 		},
 	})
 
@@ -240,7 +241,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 			AvailabilityZone:    getAvailabilityZone(azs, i),
 			MapPublicIpOnLaunch: boolPtr(true),
 			Tags: &map[string]*string{
-				"Name": str(fmt.Sprintf("%s-public-subnet-%d", stack.Config.AppName, i)),
+				"Name": str(fmt.Sprintf("%s-public-subnet-%d", stack.EnvPrefix, i)),
 				"Type": str("public"),
 			},
 		})
@@ -253,7 +254,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 			CidrBlock:        str(privateCidr),
 			AvailabilityZone: getAvailabilityZone(azs, i),
 			Tags: &map[string]*string{
-				"Name": str(fmt.Sprintf("%s-private-subnet-%d", stack.Config.AppName, i)),
+				"Name": str(fmt.Sprintf("%s-private-subnet-%d", stack.EnvPrefix, i)),
 				"Type": str("private"),
 			},
 		})
@@ -264,7 +265,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 	natEip := eip.NewEip(stack.Stack, str("nat-eip"), &eip.EipConfig{
 		Domain: str("vpc"),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-nat-eip"),
+			"Name": str(stack.EnvPrefix + "-nat-eip"),
 		},
 	})
 
@@ -273,7 +274,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 		AllocationId: natEip.Id(),
 		SubnetId:     resources.PublicSubnets[0].Id(),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-nat-gw"),
+			"Name": str(stack.EnvPrefix + "-nat-gw"),
 		},
 	})
 
@@ -285,7 +286,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 			GatewayId: resources.InternetGateway.Id(),
 		}},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-public-rt"),
+			"Name": str(stack.EnvPrefix + "-public-rt"),
 		},
 	})
 
@@ -296,7 +297,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 			NatGatewayId: resources.NatGateway.Id(),
 		}},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-private-rt"),
+			"Name": str(stack.EnvPrefix + "-private-rt"),
 		},
 	})
 
@@ -341,7 +342,7 @@ func (n *NetworkingResources) createVPCEndpoints(stack *TapStack) {
 			// Add route table IDs here
 		},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-dynamodb-endpoint"),
+			"Name": str(stack.EnvPrefix + "-dynamodb-endpoint"),
 		},
 	})
 
@@ -354,7 +355,7 @@ func (n *NetworkingResources) createVPCEndpoints(stack *TapStack) {
 			// Add route table IDs here
 		},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-s3-endpoint"),
+			"Name": str(stack.EnvPrefix + "-s3-endpoint"),
 		},
 	})
 }
@@ -366,7 +367,7 @@ func NewSecurityResources(stack *TapStack) *SecurityResources {
 
 	// Lambda execution role
 	resources.LambdaExecutionRole = iamrole.NewIamRole(stack.Stack, str("lambda-execution-role"), &iamrole.IamRoleConfig{
-		Name: str(stack.Config.AppName + "-lambda-execution-role"),
+		Name: str(stack.EnvPrefix + "-lambda-execution-role"),
 		AssumeRolePolicy: str(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -380,7 +381,7 @@ func NewSecurityResources(stack *TapStack) *SecurityResources {
 			]
 		}`),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-lambda-execution-role"),
+			"Name": str(stack.EnvPrefix + "-lambda-execution-role"),
 		},
 	})
 
@@ -412,11 +413,11 @@ func NewSecurityResources(stack *TapStack) *SecurityResources {
 func (s *SecurityResources) createSecurityGroups(stack *TapStack) {
 	// Lambda security group
 	s.SecurityGroups["lambda"] = securitygroup.NewSecurityGroup(stack.Stack, str("lambda-sg"), &securitygroup.SecurityGroupConfig{
-		Name:        str(stack.Config.AppName + "-lambda-sg"),
+		Name:        str(stack.EnvPrefix + "-lambda-sg"),
 		Description: str("Security group for Lambda functions"),
 		VpcId:       stack.Networking.VPC.Id(),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-lambda-sg"),
+			"Name": str(stack.EnvPrefix + "-lambda-sg"),
 		},
 	})
 
@@ -450,7 +451,7 @@ func NewMonitoringResources(stack *TapStack) *MonitoringResources {
 	// Create CloudWatch alarms for Lambda functions
 	for funcName, lambdaFunc := range stack.Lambda.Functions {
 		resources.LambdaErrorAlarms[funcName] = cloudwatchmetricalarm.NewCloudwatchMetricAlarm(stack.Stack, str(funcName+"-error-alarm"), &cloudwatchmetricalarm.CloudwatchMetricAlarmConfig{
-			AlarmName:          str(stack.Config.AppName + "-" + funcName + "-errors"),
+			AlarmName:          str(stack.EnvPrefix + "-" + funcName + "-errors"),
 			ComparisonOperator: str("GreaterThanOrEqualToThreshold"),
 			EvaluationPeriods:  num(1),
 			MetricName:         str("Errors"),
@@ -464,7 +465,7 @@ func NewMonitoringResources(stack *TapStack) *MonitoringResources {
 				"FunctionName": lambdaFunc.FunctionName(),
 			},
 			Tags: &map[string]*string{
-				"Name": str(stack.Config.AppName + "-" + funcName + "-error-alarm"),
+				"Name": str(stack.EnvPrefix + "-" + funcName + "-error-alarm"),
 			},
 		})
 	}
@@ -500,9 +501,9 @@ func NewLambdaResources(stack *TapStack) *LambdaResources {
 func (l *LambdaResources) createS3Bucket(stack *TapStack) {
 	// S3 bucket for Lambda deployment packages
 	l.S3Bucket = s3bucket.NewS3Bucket(stack.Stack, str("lambda-deployment-bucket"), &s3bucket.S3BucketConfig{
-		Bucket: str(stack.Config.AppName + "-s3-lambda-deploy-" + stack.Config.Environment),
+		Bucket: str(stack.EnvPrefix + "-s3-lambda-deploy-" + stack.Config.Environment),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-s3-lambda-deploy-" + stack.Config.Environment),
+			"Name": str(stack.EnvPrefix + "-s3-lambda-deploy-" + stack.Config.Environment),
 		},
 	})
 
@@ -554,7 +555,7 @@ func (l *LambdaResources) createS3Bucket(stack *TapStack) {
 
 func (l *LambdaResources) createDynamoDBTable(stack *TapStack) {
 	l.DynamoDBTable = dynamodbtable.NewDynamodbTable(stack.Stack, str("sessions-table"), &dynamodbtable.DynamodbTableConfig{
-		Name:        str(stack.Config.AppName + "-dynamodb-sessions-" + stack.Config.Environment),
+		Name:        str(stack.EnvPrefix + "-dynamodb-sessions-" + stack.Config.Environment),
 		BillingMode: str("PAY_PER_REQUEST"),
 		HashKey:     str("session_id"),
 		Attribute: &[]*dynamodbtable.DynamodbTableAttribute{{
@@ -568,19 +569,19 @@ func (l *LambdaResources) createDynamoDBTable(stack *TapStack) {
 			Enabled: bool(true),
 		},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-dynamodb-sessions-" + stack.Config.Environment),
+			"Name": str(stack.EnvPrefix + "-dynamodb-sessions-" + stack.Config.Environment),
 		},
 	})
 }
 
 func (l *LambdaResources) createSSMParameters(stack *TapStack) {
 	l.SSMParameters["api-key"] = ssmparameter.NewSsmParameter(stack.Stack, str("api-key-param"), &ssmparameter.SsmParameterConfig{
-		Name:        str("/" + stack.Config.AppName + "/api-key/" + stack.Config.Environment),
+		Name:        str("/" + stack.EnvPrefix + "/api-key/" + stack.Config.Environment),
 		Type:        str("SecureString"),
 		Value:       str("your-api-key-here"),
 		Description: str("API key for external services"),
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-ssm-api-key-" + stack.Config.Environment),
+			"Name": str(stack.EnvPrefix + "-ssm-api-key-" + stack.Config.Environment),
 		},
 	})
 }
@@ -644,16 +645,16 @@ exports.handler = async (event) => {
 	for _, funcName := range functionNames {
 		// Create CloudWatch Log Group
 		l.LogGroups[funcName] = cloudwatchloggroup.NewCloudwatchLogGroup(stack.Stack, str(funcName+"-logs"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-			Name:            str("/aws/lambda/" + stack.Config.AppName + "-lambda-" + funcName + "-" + stack.Config.Environment),
+			Name:            str("/aws/lambda/" + stack.EnvPrefix + "-lambda-" + funcName + "-" + stack.Config.Environment),
 			RetentionInDays: num(30),
 			Tags: &map[string]*string{
-				"Name": str(stack.Config.AppName + "-lambda-" + funcName + "-logs-" + stack.Config.Environment),
+				"Name": str(stack.EnvPrefix + "-lambda-" + funcName + "-logs-" + stack.Config.Environment),
 			},
 		})
 
 		// Create Lambda function
 		l.Functions[funcName] = lambdafunction.NewLambdaFunction(stack.Stack, str(funcName), &lambdafunction.LambdaFunctionConfig{
-			FunctionName: str(stack.Config.AppName + "-lambda-" + funcName + "-" + stack.Config.Environment),
+			FunctionName: str(stack.EnvPrefix + "-lambda-" + funcName + "-" + stack.Config.Environment),
 			Runtime:      str("nodejs20.x"),
 			Handler:      str("index.handler"),
 			Role:         stack.Security.LambdaExecutionRole.Arn(),
@@ -677,7 +678,7 @@ exports.handler = async (event) => {
 			},
 			DependsOn: &[]cdktf.ITerraformDependable{l.LogGroups[funcName]},
 			Tags: &map[string]*string{
-				"Name": str(stack.Config.AppName + "-lambda-" + funcName + "-" + stack.Config.Environment),
+				"Name": str(stack.EnvPrefix + "-lambda-" + funcName + "-" + stack.Config.Environment),
 			},
 		})
 	}
@@ -686,13 +687,13 @@ exports.handler = async (event) => {
 func (l *LambdaResources) createAPIGateway(stack *TapStack) {
 	// Create API Gateway
 	l.APIGateway = apigatewayrestapi.NewApiGatewayRestApi(stack.Stack, str("api-gateway"), &apigatewayrestapi.ApiGatewayRestApiConfig{
-		Name:        str(stack.Config.AppName + "-apigateway-api-" + stack.Config.Environment),
-		Description: str("API Gateway for " + stack.Config.AppName),
+		Name:        str(stack.EnvPrefix + "-apigateway-api-" + stack.Config.Environment),
+		Description: str("API Gateway for " + stack.EnvPrefix),
 		EndpointConfiguration: &apigatewayrestapi.ApiGatewayRestApiEndpointConfiguration{
 			Types: &[]*string{str("REGIONAL")},
 		},
 		Tags: &map[string]*string{
-			"Name": str(stack.Config.AppName + "-apigateway-api-" + stack.Config.Environment),
+			"Name": str(stack.EnvPrefix + "-apigateway-api-" + stack.Config.Environment),
 		},
 	})
 
