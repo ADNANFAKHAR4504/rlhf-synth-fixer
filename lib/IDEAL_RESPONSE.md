@@ -7,6 +7,7 @@ from pulumi_aws import s3  # example import for any AWS resource
 from typing import Optional
 import pulumi_aws as aws
 import json
+import os
 
 class TapStackArgs:
     """
@@ -504,8 +505,7 @@ class TapStack(pulumi.ComponentResource):
         })
 
 
-# Usage example (you would put this in your main __main__.py file)
-if __name__ == "__main__":
+if __name__ == "tap_stack":
     config = pulumi.Config()
     aws_config = pulumi.Config("aws")
     

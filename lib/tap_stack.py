@@ -1,12 +1,3 @@
-"""
-tap_stack.py
-
-This module defines the TapStack class, the main Pulumi ComponentResource for 
-the TAP (Test Automation Platform) project.
-
-It orchestrates the instantiation of other resource-specific components 
-and manages environment-specific configurations.
-"""
 
 from typing import Optional
 
