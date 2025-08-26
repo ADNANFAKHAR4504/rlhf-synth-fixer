@@ -12,8 +12,12 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func main() {
-	pulumi.Run(func(ctx *pulumi.Context) error {
+// CreateInfrastructure creates the infrastructure resources
+func CreateInfrastructure(ctx *pulumi.Context) error {
+	return createInfrastructure(ctx)
+}
+
+func createInfrastructure(ctx *pulumi.Context) error {
 		// Get environment suffix from environment variable
 		environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 		if environmentSuffix == "" {
@@ -440,6 +444,9 @@ func main() {
 		ctx.Export("logsBucketName", logsBucket.ID())
 		ctx.Export("logsBucketArn", logsBucket.Arn)
 
-		return nil
-	})
+	return nil
+}
+
+func main() {
+	pulumi.Run(CreateInfrastructure)
 }

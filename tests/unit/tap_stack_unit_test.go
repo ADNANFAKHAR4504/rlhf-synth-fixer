@@ -12,6 +12,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestMainFunction tests the main infrastructure creation function
+func TestMainFunction(t *testing.T) {
+	os.Setenv("ENVIRONMENT_SUFFIX", "test")
+	defer os.Unsetenv("ENVIRONMENT_SUFFIX")
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return CreateInfrastructure(ctx)
+	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
+
+	assert.NoError(t, err)
+}
+
+func TestEnvironmentSuffixDefault(t *testing.T) {
+	os.Unsetenv("ENVIRONMENT_SUFFIX")
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		return CreateInfrastructure(ctx)
+	}, pulumi.WithMocks("project", "stack", &infraMocks{}))
+
+	assert.NoError(t, err)
+}
+
 // TestEnvironmentSuffixHandling tests that environment suffix is handled correctly
 func TestEnvironmentSuffixHandling(t *testing.T) {
 	// Test with environment suffix set
@@ -189,14 +211,48 @@ func TestExportedOutputs(t *testing.T) {
 }
 
 // Mock implementation for Pulumi testing
-type mocks struct{}
+type infraMocks struct{}
 
-func (mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
-	// Return a unique ID and the input properties
-	return args.Name + "_id", args.Inputs, nil
+func (m *infraMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
+	outputs := resource.PropertyMap{}
+
+	switch args.TypeToken {
+	case "aws:ec2/vpc:Vpc":
+		outputs["id"] = resource.NewStringProperty("vpc-" + args.Name)
+		outputs["cidrBlock"] = resource.NewStringProperty("10.0.0.0/16")
+		outputs["enableDnsHostnames"] = resource.NewBoolProperty(true)
+		outputs["enableDnsSupport"] = resource.NewBoolProperty(true)
+	case "aws:ec2/subnet:Subnet":
+		outputs["id"] = resource.NewStringProperty("subnet-" + args.Name)
+		outputs["vpcId"] = resource.NewStringProperty("vpc-test")
+		outputs["availabilityZone"] = resource.NewStringProperty("us-east-1a")
+	case "aws:ec2/securityGroup:SecurityGroup":
+		outputs["id"] = resource.NewStringProperty("sg-" + args.Name)
+	case "aws:iam/role:Role":
+		outputs["arn"] = resource.NewStringProperty("arn:aws:iam::123456789:role/" + args.Name)
+		outputs["name"] = resource.NewStringProperty(args.Name)
+	case "aws:s3/bucketV2:BucketV2":
+		outputs["id"] = resource.NewStringProperty("bucket-" + args.Name)
+		outputs["arn"] = resource.NewStringProperty("arn:aws:s3:::bucket-" + args.Name)
+	}
+
+	return args.Name + "_id", outputs, nil
 }
 
-func (mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
-	// Return empty property map for calls
+func (m *infraMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
+	if args.Token == "aws:index/getCallerIdentity:getCallerIdentity" {
+		return resource.PropertyMap{
+			"accountId": resource.NewStringProperty("123456789"),
+			"region":    resource.NewStringProperty("us-east-1"),
+		}, nil
+	}
+	if args.Token == "aws:index/getAvailabilityZones:getAvailabilityZones" {
+		return resource.PropertyMap{
+			"names": resource.NewArrayProperty([]resource.PropertyValue{
+				resource.NewStringProperty("us-east-1a"),
+				resource.NewStringProperty("us-east-1b"),
+			}),
+		}, nil
+	}
 	return resource.PropertyMap{}, nil
 }
