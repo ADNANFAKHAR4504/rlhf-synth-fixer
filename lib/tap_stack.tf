@@ -444,34 +444,34 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 }
 
 # CloudTrail
-resource "aws_cloudtrail" "main" {
-  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
-
-  name           = "SecConfig-CloudTrail"
-  s3_bucket_name = aws_s3_bucket.cloudtrail_bucket.bucket
-  s3_key_prefix  = "cloudtrail-logs"
-
-  kms_key_id                = aws_kms_key.security_key.arn
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-
-  event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["${aws_s3_bucket.secure_bucket.arn}/"]
-    }
-  }
-
-  tags = {
-    Name    = "SecConfig-CloudTrail"
-    Project = "SecurityConfiguration"
-  }
-}
+#resource "aws_cloudtrail" "main" {
+#  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
+#
+#  name           = "SecConfig-CloudTrail"
+#  s3_bucket_name = aws_s3_bucket.cloudtrail_bucket.bucket
+#  s3_key_prefix  = "cloudtrail-logs"
+#
+#  kms_key_id                = aws_kms_key.security_key.arn
+#  include_global_service_events = true
+#  is_multi_region_trail         = true
+#  enable_logging                = true
+#
+#  event_selector {
+#    read_write_type                 = "All"
+#    include_management_events       = true
+#    exclude_management_event_sources = []
+#
+#    data_resource {
+#      type   = "AWS::S3::Object"
+#      values = ["${aws_s3_bucket.secure_bucket.arn}/"]
+#    }
+#  }
+#
+#  tags = {
+#    Name    = "SecConfig-CloudTrail"
+#    Project = "SecurityConfiguration"
+#  }
+#}
 
 # CloudWatch Log Group for failed login attempts (without KMS for now)
 resource "aws_cloudwatch_log_group" "security_logs" {
