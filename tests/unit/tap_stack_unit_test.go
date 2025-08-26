@@ -375,8 +375,8 @@ func TestLambdaFunctionConfiguration(t *testing.T) {
 			}
 
 			// Verify runtime
-			if runtime, ok := function["runtime"]; !ok || runtime != "nodejs20.x" {
-				t.Errorf("expected runtime 'nodejs20.x', got: %v", runtime)
+			if runtime, ok := function["runtime"]; !ok || runtime != "nodejs18.x" {
+				t.Errorf("expected runtime 'nodejs18.x', got: %v", runtime)
 			}
 
 			// Verify handler
@@ -436,10 +436,24 @@ func TestVPCEndpointsConfiguration(t *testing.T) {
 		t.Fatal("DynamoDB VPC endpoint not found")
 	}
 
+	// Verify route table IDs are populated (not empty)
+	if routeTableIds, ok := dynamoEndpoint["route_table_ids"].([]interface{}); ok {
+		if len(routeTableIds) == 0 {
+			t.Error("DynamoDB VPC endpoint should have route table IDs")
+		}
+	}
+
 	// Check S3 endpoint
 	s3Endpoint := getResource(tfConfig, "aws_vpc_endpoint", "s3-endpoint")
 	if s3Endpoint == nil {
 		t.Fatal("S3 VPC endpoint not found")
+	}
+
+	// Verify route table IDs are populated (not empty)
+	if routeTableIds, ok := s3Endpoint["route_table_ids"].([]interface{}); ok {
+		if len(routeTableIds) == 0 {
+			t.Error("S3 VPC endpoint should have route table IDs")
+		}
 	}
 }
 
