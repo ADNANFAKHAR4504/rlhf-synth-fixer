@@ -1716,17 +1716,9 @@
             "Properties": {
                 "DefaultActions": [
                     {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Fn::If": [
-                                "HasKeyPair",
-                                {
-                                    "Ref": "TargetGroup"
-                                },
-                                {
-                                    "Ref": "AWS::NoValue"
-                                }
-                            ]
+                        "type": "forward",
+                        "targetgrouparn": {
+                            "Ref": "TargetGroup"
                         }
                     }
                 ],

@@ -882,8 +882,8 @@ Resources:
     Condition: HasKeyPair
     Properties:
       DefaultActions:
-        - Type: forward
-          TargetGroupArn: !If [HasKeyPair, !Ref TargetGroup, !Ref 'AWS::NoValue'] # cfn-lint ignore:W1028
+        - type: forward
+          targetgrouparn: !Ref TargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
