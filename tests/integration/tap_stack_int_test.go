@@ -233,9 +233,11 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Equal(t, "Bastion", roleTag, "Bastion should be tagged with Role=Bastion")
 
 		// Verify security group allows SSH from trusted CIDR
+		// AFTER
 		sgResp, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
-			GroupIds: []string{instance.SecurityGroups[0].GroupId},
+			GroupIds: []string{aws.ToString(instance.SecurityGroups[0].GroupId)},
 		})
+
 		require.NoError(t, err, "Failed to describe security group")
 		require.Len(t, sgResp.SecurityGroups, 1, "Should find bastion security group")
 
@@ -307,18 +309,14 @@ func TestTapStackIntegration(t *testing.T) {
 		ec2Client := ec2.NewFromConfig(cfg)
 
 		// Find NAT gateways in the VPC
+		// AFTER
 		natResp, err := ec2Client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{
-			Filters: []ec2types.Filter{
-				{
-					Name:   aws.String("vpc-id"),
-					Values: []string{outputs.VpcId},
-				},
-				{
-					Name:   aws.String("state"),
-					Values: []string{"available"},
-				},
+			Filter: []ec2types.Filter{
+				{Name: aws.String("vpc-id"), Values: []string{outputs.VpcId}},
+				{Name: aws.String("state"), Values: []string{"available"}},
 			},
 		})
+
 		require.NoError(t, err, "Failed to describe NAT gateways")
 
 		// Should have 2 NAT gateways for HA (one per AZ)
