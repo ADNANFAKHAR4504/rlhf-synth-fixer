@@ -81,7 +81,7 @@ Resources:
               - 'kms:GenerateDataKeyWithoutPlaintext'
               - 'kms:Decrypt'
               - 'kms:Encrypt'
-            Resource: !GetAtt KMSKey.Arn
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}'
           - Sid: Allow RDS Service
             Effect: Allow
             Principal:
@@ -89,7 +89,7 @@ Resources:
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
-            Resource: !GetAtt KMSKey.Arn
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKey}'
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
@@ -438,7 +438,12 @@ Resources:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
         PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: false
+        IncludeSpace: false
+        ExcludeNumbers: false
+        ExcludeUppercase: false
+        ExcludeLowercase: false
+        ExcludePunctuation: true
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
