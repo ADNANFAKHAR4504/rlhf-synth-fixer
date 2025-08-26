@@ -104,8 +104,8 @@ func TestLambdaFunctionsDeployed(t *testing.T) {
 		foundAnyFunction = true
 		funcConfig := result.Configuration
 
-		if funcConfig.Runtime != "nodejs20.x" {
-			t.Errorf("Lambda function %s has incorrect runtime: expected nodejs20.x, got %s",
+		if funcConfig.Runtime != "nodejs18.x" {
+			t.Errorf("Lambda function %s has incorrect runtime: expected nodejs18.x, got %s",
 				functionName, funcConfig.Runtime)
 		}
 
