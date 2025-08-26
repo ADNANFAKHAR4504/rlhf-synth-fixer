@@ -856,7 +856,7 @@ func TestResourceTags(t *testing.T) {
 
 	if len(vpcResult.Vpcs) > 0 {
 		vpc := vpcResult.Vpcs[0]
-		
+
 		var hasEnvironmentTag, hasProjectTag bool
 		for _, tag := range vpc.Tags {
 			if *tag.Key == "Environment" && *tag.Value == envSuffix {
@@ -921,6 +921,6 @@ func TestDatabaseSubnetGroup(t *testing.T) {
 		t.Error("DB subnet group should span multiple availability zones")
 	}
 
-	t.Logf("✅ DB subnet group %s is properly configured with %d subnets across %d AZs", 
+	t.Logf("✅ DB subnet group %s is properly configured with %d subnets across %d AZs",
 		*subnetGroup.DBSubnetGroupName, len(subnetGroup.Subnets), len(azMap))
 }
