@@ -38,7 +38,7 @@ type TapStackProps struct {
 }
 
 // BuildSecurityStack creates the main security infrastructure (for unit tests)
-func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
+func BuildSecurityStack(stack cdktf.TerraformStack, region string, vpcId *string) {
 	// Get environment suffix from environment variable
 	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if environmentSuffix == "" {
@@ -188,9 +188,9 @@ func BuildSecurityStack(stack cdktf.TerraformStack, region string) {
 		},
 	})
 
-	// VPC Flow Logs (using hardcoded VPC ID for tests)
+	// VPC Flow Logs using passed VPC ID
 	flowlog.NewFlowLog(stack, jsii.String("prod-vpc-flow-logs"), &flowlog.FlowLogConfig{
-		VpcId:              jsii.String("vpc-0abcd1234"),
+		VpcId:              vpcId,
 		TrafficType:        jsii.String("ALL"),
 		LogDestinationType: jsii.String("s3"),
 		LogDestination:     jsii.String(fmt.Sprintf("arn:aws:s3:::%s/vpc-flow-logs/", *s3Bucket.Bucket())),
