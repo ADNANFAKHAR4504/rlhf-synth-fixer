@@ -1,0 +1,44 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291853",
+  "team": "1",
+  "startedAt": "2025-08-19T09:59:41.315Z",
+  "subtask": "multi_region_infrastructure_deployment",
+  "subject_labels": [
+    "typescript_compilation_errors",
+    "eslint_code_quality",
+    "infrastructure_design_issues",
+    "testing_validation_issues",
+    "environment_configuration",
+    "cicd_pipeline_integration",
+    "security_compliance",
+    "performance_scalability",
+    "resource_naming_conflicts",
+    "cleanup_strategy"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ApplicationLoadBalancer",
+    "AutoScalingGroup",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SecretsManager",
+    "ACM",
+    "SSM",
+    "CloudTrail",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
