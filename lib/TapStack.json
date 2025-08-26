@@ -1321,14 +1321,11 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:ListObject"
+                                        "s3:ListBucket"
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::GetAtt": [
-                                                "ApplicationBucket",
-                                                "Arn"
-                                            ]
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}"
                                         }
                                     ]
                                 }

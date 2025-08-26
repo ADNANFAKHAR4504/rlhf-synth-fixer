@@ -681,9 +681,9 @@ Resources:
                   - !Sub '${ApplicationBucket}/*'
               - Effect: Allow
                 Action:
-                  - s3:ListObject
+                  - s3:ListBucket
                 Resource: 
-                  - !GetAtt ApplicationBucket.Arn
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-ec2-role'
