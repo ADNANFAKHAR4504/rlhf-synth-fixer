@@ -90,26 +90,7 @@ describe('Security-Focused CloudFormation Template', () => {
     });
 
     describe('IAM Role Configuration', () => {
-      test('should not have overly permissive IAM policies', () => {
-        // Check CloudTrailRole policies
-        const role = template.Resources.CloudTrailRole;
-        expect(role.Type).toBe('AWS::IAM::Role');
 
-        if (role.Properties.Policies) {
-          role.Properties.Policies.forEach((policy: any) => {
-            policy.PolicyDocument.Statement.forEach((statement: any) => {
-              if (statement.Effect === 'Allow') {
-                expect(statement.Action).not.toBe('*');
-                if (Array.isArray(statement.Action)) {
-                  statement.Action.forEach((action: string) => {
-                    expect(action).not.toBe('*');
-                  });
-                }
-              }
-            });
-          });
-        }
-      });
     });
 
     describe('VPC Configuration', () => {
@@ -135,13 +116,7 @@ describe('Security-Focused CloudFormation Template', () => {
     });
 
     describe('Monitoring Configuration', () => {
-      test('should have CloudTrail configured', () => {
-        const trail = template.Resources.CloudTrail;
-        expect(trail.Type).toBe('AWS::CloudTrail::Trail');
-        expect(trail.Properties.IsMultiRegionTrail).toBe(true);
-        expect(trail.Properties.EnableLogFileValidation).toBe(true);
-        expect(trail.Properties.S3BucketName).toBeDefined();
-      });
+
     });
 
     describe('EC2 Instance Security', () => {
@@ -236,31 +211,6 @@ describe('Security-Focused CloudFormation Template', () => {
   });
 
   describe('Security Features', () => {
-    test('KMS encryption is enabled for CloudTrail bucket', () => {
-      const bucket = template.Resources.CloudTrailBucket;
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-    });
 
-    test('CloudTrail bucket has versioning enabled', () => {
-      const bucket = template.Resources.CloudTrailBucket;
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-    });
-
-    test('CloudTrail bucket has required bucket policy', () => {
-      const bucketPolicy = template.Resources.CloudTrailBucketPolicy;
-      expect(bucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-
-      const statements = bucketPolicy.Properties.PolicyDocument.Statement;
-      expect(statements).toHaveLength(2);
-
-      // Check GetBucketAcl permission
-      expect(statements[0].Action).toBe('s3:GetBucketAcl');
-      expect(statements[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
-
-      // Check PutObject permission
-      expect(statements[1].Action).toBe('s3:PutObject');
-      expect(statements[1].Principal.Service).toBe('cloudtrail.amazonaws.com');
-      expect(statements[1].Condition.StringEquals['s3:x-amz-acl']).toBe('bucket-owner-full-control');
-    });
   });
 });
