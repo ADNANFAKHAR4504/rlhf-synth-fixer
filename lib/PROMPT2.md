@@ -1,1 +1,1 @@
-Can you create more outputs covering all the resouurces created in the tech stack.
+Can you create outputs covering all the resouurces.
