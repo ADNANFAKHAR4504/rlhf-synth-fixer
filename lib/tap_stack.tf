@@ -309,13 +309,13 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${replace(local.unique_project_name, "-", "_")}_key"
+  name          = "alias/${replace(local.unique_project_name, "-", "_")}_${random_string.unique_suffix.result}_key"
   target_key_id = aws_kms_key.main.key_id
 }
 
 # IAM Role & Policy
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.unique_project_name}-ec2-role"
+  name = "${local.unique_project_name}-${random_string.unique_suffix.result}-ec2-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -328,7 +328,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name        = "${local.unique_project_name}-s3-access"
+  name        = "${local.unique_project_name}-${random_string.unique_suffix.result}-s3-access"
   description = "Allow EC2 to access S3, KMS, and SSM"
   policy = jsonencode({
     Version = "2012-10-17"
@@ -376,7 +376,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.unique_project_name}-ec2-profile"
+  name = "${local.unique_project_name}-${random_string.unique_suffix.result}-ec2-profile"
   role = aws_iam_role.ec2_role.name
   tags = local.common_tags
 }
@@ -501,7 +501,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.unique_project_name}-asg"
+  name                      = "${local.unique_project_name}-${random_string.unique_suffix.result}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"  # ✅ Critical: must be ELB when using ALB
@@ -538,14 +538,14 @@ resource "aws_autoscaling_group" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.unique_project_name}-db-subnet"
+  name       = "${local.unique_project_name}-${random_string.unique_suffix.result}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.unique_project_name}-db-subnet" })
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier           = "${local.unique_project_name}-database"
+  identifier           = "${local.unique_project_name}-${random_string.unique_suffix.result}-database"
   allocated_storage    = 20
   max_allocated_storage = 100
   storage_type         = "gp3"
