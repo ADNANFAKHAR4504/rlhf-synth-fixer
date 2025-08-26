@@ -1,0 +1,1 @@
+Use gradle instead of Maven. Generate a build.gradle and gradle wrapper for this, and restructure the your previous code response to use gradle. I do not want to use maven as our project uses gralde

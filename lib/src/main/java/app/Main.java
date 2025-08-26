@@ -256,7 +256,7 @@ public final class Main {
       environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
     }
     if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-      environmentSuffix = "";
+      environmentSuffix = "pr2253";
     }
 
     // Create the main TAP stack

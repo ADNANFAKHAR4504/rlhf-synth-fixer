@@ -1,4 +1,4 @@
-I need to create a basic AWS VPC setup in the us-west-2 region using CDK Java. Here’s what I need:
+I need to create a basic AWS VPC setup in the us-west-1 region using CDK Java. Here’s what I need:
 
 1. A VPC with CIDR 10.0.0.0/16
 2. Two public subnets in different availability zones
