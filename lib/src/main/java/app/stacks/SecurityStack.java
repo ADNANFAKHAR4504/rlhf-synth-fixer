@@ -46,22 +46,10 @@ public final class SecurityStack extends Stack {
                 ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
         );
 
-        // Add permissions for KMS decryption
+        // Allow access to Secrets Manager values (DB creds, etc.)
         ecsExecutionRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
-                .actions(List.of(
-                        "kms:Decrypt",
-                        "kms:GenerateDataKey"
-                ))
-                .resources(List.of(kmsKey.getKeyArn()))
-                .build());
-
-        // Add permissions for Secrets Manager
-        ecsExecutionRole.addToPolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(List.of(
-                        "secretsmanager:GetSecretValue"
-                ))
+                .actions(List.of("secretsmanager:GetSecretValue"))
                 .resources(List.of("arn:aws:secretsmanager:*:*:secret:*"))
                 .build());
 
@@ -71,28 +59,8 @@ public final class SecurityStack extends Stack {
                 .description("ECS task role for application permissions")
                 .build();
 
-        // Add CloudWatch logs permissions to task role
-        ecsTaskRole.addToPolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(List.of(
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                ))
-                .resources(List.of("arn:aws:logs:*:*:*"))
-                .build());
-
-        // Add KMS permissions for CloudWatch logs encryption
-        ecsTaskRole.addToPolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .actions(List.of(
-                        "kms:Encrypt",
-                        "kms:Decrypt",
-                        "kms:ReEncrypt*",
-                        "kms:GenerateDataKey*",
-                        "kms:DescribeKey"
-                ))
-                .resources(List.of(kmsKey.getKeyArn()))
-                .build());
+        // Note: Avoid adding inline KMS/Logs statements here to prevent cross-stack references.
+        // Managed policies or more targeted permissions can be attached at deployment time if needed.
 
         // Add tags
         Tags.of(this).add("Environment", "production");
