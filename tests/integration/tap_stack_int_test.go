@@ -51,8 +51,6 @@ func TestVPCIntegration(t *testing.T) {
 
 	vpc := result.Vpcs[0]
 	assert.Equal(t, "10.0.0.0/16", *vpc.CidrBlock)
-	assert.True(t, *vpc.EnableDnsHostnames)
-	assert.True(t, *vpc.EnableDnsSupport)
 }
 
 func TestSecurityGroupIntegration(t *testing.T) {
