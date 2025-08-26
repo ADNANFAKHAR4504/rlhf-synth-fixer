@@ -162,7 +162,7 @@ describe('TAP Stack Integration Tests', () => {
       } catch (error) {
         console.warn(
           'RDS validation test failed - this may be expected if RDS is not deployed or AWS CLI is not configured:',
-          error.message
+          error instanceof Error ? error.message : String(error)
         );
         // Don't fail the test as RDS might be in transition or AWS CLI might not be available
       }
