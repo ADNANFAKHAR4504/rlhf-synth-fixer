@@ -7,13 +7,14 @@ import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
 
 import java.util.*;
+// Import Stack from java.util explicitly resolved through full qualification where needed
 import java.util.stream.Collectors;
 
 /**
  * Complete infrastructure stack implementation using AWS CDK for Java
  * This single file contains all infrastructure components for multi-environment deployment
  */
-public class TapStack extends Stack {
+public class TapStack extends software.amazon.awscdk.Stack {
     
     // Environment configuration
     private static class EnvironmentConfig {
@@ -54,11 +55,11 @@ public class TapStack extends Stack {
         public final Vpc vpc;
         public final List<Subnet> publicSubnets;
         public final List<Subnet> privateSubnets;
-        public final InternetGateway internetGateway;
-        public final List<NatGateway> natGateways;
+        public final CfnInternetGateway internetGateway;
+        public final List<CfnNatGateway> natGateways;
         
         public VPCComponent(Vpc vpc, List<Subnet> publicSubnets, List<Subnet> privateSubnets,
-                          InternetGateway internetGateway, List<NatGateway> natGateways) {
+                          CfnInternetGateway internetGateway, List<CfnNatGateway> natGateways) {
             this.vpc = vpc;
             this.publicSubnets = publicSubnets;
             this.privateSubnets = privateSubnets;
