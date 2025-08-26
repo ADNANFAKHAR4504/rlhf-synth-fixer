@@ -16,6 +16,7 @@ from pulumi_aws import s3  # example import for any AWS resource
 from typing import Optional
 import pulumi_aws as aws
 import json
+import os
 
 class TapStackArgs:
     """

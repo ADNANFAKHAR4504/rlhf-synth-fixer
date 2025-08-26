@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch, MagicMock
 import pulumi
 from pulumi import ResourceOptions
 import pytest
+import json
 import pulumi_aws as aws
 import pulumi_random as random  
 import sys
