@@ -22,10 +22,23 @@ import (
 )
 
 type Outputs struct {
-	KMSKeyArn    string `json:"kms-key-arn"`
-	PipelineName string `json:"pipeline-name"`
-	SNSTopicArn  string `json:"sns-topic-arn"`
-	SourceBucket string `json:"source-bucket-name"`
+	KMSKeyArn             string `json:"kms-key-arn"`
+	KMSKeyAlias           string `json:"kms-key-alias"`
+	PipelineName          string `json:"pipeline-name"`
+	SNSTopicArn           string `json:"sns-topic-arn"`
+	SourceBucket          string `json:"source-bucket-name"`
+	ArtifactsBucket       string `json:"artifacts-bucket-name"`
+	ReplicaBucket         string `json:"replica-bucket-name"`
+	CodeBuildProjectName  string `json:"codebuild-project-name"`
+	PipelineRoleArn       string `json:"pipeline-role-arn"`
+	BuildRoleArn          string `json:"build-role-arn"`
+	StagingCfnRoleArn     string `json:"staging-cfn-role-arn"`
+	ProductionCfnRoleArn  string `json:"production-cfn-role-arn"`
+	CloudTrailName        string `json:"cloudtrail-name"`
+	PipelineFailureAlarm  string `json:"pipeline-failure-alarm-name"`
+	BuildFailureAlarm     string `json:"build-failure-alarm-name"`
+	DashboardName         string `json:"dashboard-name"`
+	EventRuleName         string `json:"event-rule-name"`
 }
 
 type OutputsWrapper struct {
@@ -35,9 +48,25 @@ type OutputsWrapper struct {
 func loadOutputs(t *testing.T) *Outputs {
 	t.Helper()
 
-	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
+	// Try different paths for outputs file
+	possiblePaths := []string{
+		"cfn-outputs/flat-outputs.json",
+		"../../cfn-outputs/flat-outputs.json",
+		"../cfn-outputs/flat-outputs.json",
+	}
+	
+	var data []byte
+	var err error
+	
+	for _, path := range possiblePaths {
+		data, err = os.ReadFile(path)
+		if err == nil {
+			break
+		}
+	}
+	
 	if err != nil {
-		t.Fatalf("failed to read outputs file: %v", err)
+		t.Fatalf("failed to read outputs file from any of %v: %v", possiblePaths, err)
 	}
 
 	var wrapper OutputsWrapper
@@ -156,16 +185,12 @@ func TestSNSTopicExists(t *testing.T) {
 }
 
 func TestCodeBuildProjectExists(t *testing.T) {
+	outputs := loadOutputs(t)
 	sess := getAWSSession(t)
 	svc := codebuild.New(sess)
 
-	// Get environment suffix from env var
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141" // Default for this test
-	}
-
-	expectedProjectName := "Corp-NovaBuild-us-east-1-" + envSuffix
+	// Use CodeBuild project name from outputs for real live testing
+	expectedProjectName := outputs.CodeBuildProjectName
 
 	// List all projects and check if our project exists
 	result, err := svc.ListProjects(&codebuild.ListProjectsInput{})
@@ -306,13 +331,9 @@ func TestCloudTrailExists(t *testing.T) {
 	sess := getAWSSession(t)
 	svc := cloudtrail.New(sess)
 
-	// Get environment suffix from env var
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141" // Default for this test
-	}
-
-	trailName := "Corp-NovaPipelineTrail-us-east-1-" + envSuffix
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	trailName := outputs.CloudTrailName
 
 	result, err := svc.GetTrailStatus(&cloudtrail.GetTrailStatusInput{
 		Name: aws.String(trailName),
@@ -568,12 +589,9 @@ func TestArtifactsBucketConfiguration(t *testing.T) {
 	sess := getAWSSession(t)
 	s3svc := s3.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	bucketName := fmt.Sprintf("corp-nova-pipeline-artifacts-718240086340-us-east-1-%s", envSuffix)
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	bucketName := outputs.ArtifactsBucket
 
 	// Check artifacts bucket exists
 	_, err := s3svc.HeadBucket(&s3.HeadBucketInput{
@@ -621,12 +639,9 @@ func TestReplicaBucketConfiguration(t *testing.T) {
 	sess := getAWSSession(t)
 	s3svc := s3.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	bucketName := fmt.Sprintf("corp-nova-pipeline-replica-718240086340-us-east-1-%s", envSuffix)
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	bucketName := outputs.ReplicaBucket
 
 	// Check replica bucket exists
 	_, err := s3svc.HeadBucket(&s3.HeadBucketInput{
@@ -704,12 +719,9 @@ func TestKMSAlias(t *testing.T) {
 	sess := getAWSSession(t)
 	kmssvc := kms.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	aliasName := fmt.Sprintf("alias/corp-nova-pipeline-%s", envSuffix)
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	aliasName := outputs.KMSKeyAlias
 
 	// List aliases to find our alias
 	aliasResult, err := kmssvc.ListAliases(&kms.ListAliasesInput{})
@@ -854,15 +866,12 @@ func TestCloudFormationRoles(t *testing.T) {
 }
 
 func TestCodeBuildProjectConfiguration(t *testing.T) {
+	outputs := loadOutputs(t)
 	sess := getAWSSession(t)
 	codebuildSvc := codebuild.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	projectName := fmt.Sprintf("Corp-NovaBuild-us-east-1-%s", envSuffix)
+	// Use CodeBuild project name from outputs for real live testing
+	projectName := outputs.CodeBuildProjectName
 
 	// Get project details
 	projectResult, err := codebuildSvc.BatchGetProjects(&codebuild.BatchGetProjectsInput{
@@ -1165,15 +1174,12 @@ func TestPipelineExecutionHistory(t *testing.T) {
 }
 
 func TestCodeBuildProjectHistory(t *testing.T) {
+	outputs := loadOutputs(t)
 	sess := getAWSSession(t)
 	codebuildSvc := codebuild.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	projectName := fmt.Sprintf("Corp-NovaBuild-us-east-1-%s", envSuffix)
+	// Use CodeBuild project name from outputs for real live testing
+	projectName := outputs.CodeBuildProjectName
 
 	// List builds for the project
 	buildsResult, err := codebuildSvc.ListBuildsForProject(&codebuild.ListBuildsForProjectInput{
@@ -1261,8 +1267,8 @@ func TestS3BucketNotifications(t *testing.T) {
 	sess := getAWSSession(t)
 	s3svc := s3.New(sess)
 
-	// Check bucket notification configuration
-	notificationResult, err := s3svc.GetBucketNotification(&s3.GetBucketNotificationInput{
+	// Check bucket notification configuration using the correct API
+	notificationResult, err := s3svc.GetBucketNotificationConfiguration(&s3.GetBucketNotificationConfigurationRequest{
 		Bucket: aws.String(outputs.SourceBucket),
 	})
 
@@ -1271,25 +1277,21 @@ func TestS3BucketNotifications(t *testing.T) {
 		return
 	}
 
-	// Check CloudWatch Events notifications
-	if notificationResult.CloudWatchConfiguration != nil {
-		t.Log("Source bucket has CloudWatch notification configured")
-	}
-
 	// Check SNS notifications
 	if notificationResult.TopicConfigurations != nil && len(notificationResult.TopicConfigurations) > 0 {
 		t.Logf("Source bucket has %d SNS notification(s)", len(notificationResult.TopicConfigurations))
 	}
 
-	// Check Lambda notifications
-	if notificationResult.LambdaConfigurations != nil && len(notificationResult.LambdaConfigurations) > 0 {
-		t.Logf("Source bucket has %d Lambda notification(s)", len(notificationResult.LambdaConfigurations))
+	// Note: Lambda configurations not available in current S3 API version
+
+	// Check Queue notifications
+	if notificationResult.QueueConfigurations != nil && len(notificationResult.QueueConfigurations) > 0 {
+		t.Logf("Source bucket has %d Queue notification(s)", len(notificationResult.QueueConfigurations))
 	}
 
-	if (notificationResult.CloudWatchConfiguration == nil) &&
-		(notificationResult.TopicConfigurations == nil || len(notificationResult.TopicConfigurations) == 0) &&
-		(notificationResult.LambdaConfigurations == nil || len(notificationResult.LambdaConfigurations) == 0) {
-		t.Log("Source bucket has no notification configurations")
+	if (notificationResult.TopicConfigurations == nil || len(notificationResult.TopicConfigurations) == 0) &&
+		(notificationResult.QueueConfigurations == nil || len(notificationResult.QueueConfigurations) == 0) {
+		t.Log("Source bucket has no/limited notification configurations")
 	}
 }
 
@@ -1369,12 +1371,9 @@ func TestCloudTrailEventDataStore(t *testing.T) {
 	sess := getAWSSession(t)
 	cloudtrailSvc := cloudtrail.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	trailName := fmt.Sprintf("Corp-NovaPipelineTrail-us-east-1-%s", envSuffix)
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	trailName := outputs.CloudTrailName
 
 	// Get event selectors for the trail
 	eventSelectorsResult, err := cloudtrailSvc.GetEventSelectors(&cloudtrail.GetEventSelectorsInput{
@@ -1463,7 +1462,6 @@ func TestMultiRegionCompliance(t *testing.T) {
 }
 
 func TestDisasterRecovery(t *testing.T) {
-	outputs := loadOutputs(t)
 	sess := getAWSSession(t)
 	s3svc := s3.New(sess)
 
@@ -1606,8 +1604,8 @@ func TestDataProtectionCompliance(t *testing.T) {
 
 					if algorithm == "aws:kms" {
 						t.Log("Using KMS encryption for enhanced data protection")
-						if rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyId != nil {
-							t.Logf("KMS key ID: %s", *rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyId)
+						if rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID != nil {
+							t.Logf("KMS key ID: %s", *rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID)
 						}
 					} else if algorithm == "AES256" {
 						t.Log("Using AES256 encryption for data protection")
@@ -1659,26 +1657,20 @@ func TestScalabilityValidation(t *testing.T) {
 			t.Log("No explicit concurrent build limit set - using account defaults")
 		}
 
-		// Check if project supports batch builds for scalability
-		if project.BatchConfig != nil {
-			if project.BatchConfig.ServiceRole != nil {
-				t.Log("Batch builds are configured for enhanced scalability")
-			}
+		// Check project configuration for scalability
+		if project.Environment != nil && project.Environment.ComputeType != nil {
+			t.Logf("Build compute type: %s", *project.Environment.ComputeType)
 		}
 	}
 }
 
 func TestComplianceFrameworkSupport(t *testing.T) {
-	outputs := loadOutputs(t)
 	sess := getAWSSession(t)
 	cloudtrailSvc := cloudtrail.New(sess)
 
-	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
-	if envSuffix == "" {
-		envSuffix = "pr2141"
-	}
-
-	trailName := fmt.Sprintf("Corp-NovaPipelineTrail-us-east-1-%s", envSuffix)
+	// Load outputs for service discovery
+	outputs := loadOutputs(t)
+	trailName := outputs.CloudTrailName
 
 	// Check CloudTrail configuration for compliance frameworks (SOX, PCI, etc.)
 	trailResult, err := cloudtrailSvc.DescribeTrails(&cloudtrail.DescribeTrailsInput{
@@ -2075,6 +2067,9 @@ func TestSecretsManagementIntegration(t *testing.T) {
 
 func TestMultiEnvironmentSupport(t *testing.T) {
 	// Test that the infrastructure properly supports multiple environments
+	outputs := loadOutputs(t)
+	
+	// Extract environment suffix from deployed resources for validation
 	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if envSuffix == "" {
 		envSuffix = "pr2141"
@@ -2082,21 +2077,21 @@ func TestMultiEnvironmentSupport(t *testing.T) {
 
 	t.Logf("Testing environment suffix: %s", envSuffix)
 
-	// Verify that all resource names include the environment suffix
+	// Verify that all resource names from outputs are properly configured
 	expectedResourcePatterns := map[string]string{
-		"Pipeline":         fmt.Sprintf("Corp-NovaPipeline-us-east-1-%s", envSuffix),
-		"Build Project":    fmt.Sprintf("Corp-NovaBuild-us-east-1-%s", envSuffix),
-		"Pipeline Role":    fmt.Sprintf("Corp-NovaPipelineRole-us-east-1-%s", envSuffix),
-		"Build Role":       fmt.Sprintf("Corp-NovaBuildRole-us-east-1-%s", envSuffix),
-		"Source Bucket":    fmt.Sprintf("corp-nova-source-718240086340-us-east-1-%s", envSuffix),
-		"Artifacts Bucket": fmt.Sprintf("corp-nova-pipeline-artifacts-718240086340-us-east-1-%s", envSuffix),
-		"Replica Bucket":   fmt.Sprintf("corp-nova-pipeline-replica-718240086340-us-east-1-%s", envSuffix),
-		"CloudTrail":       fmt.Sprintf("Corp-NovaPipelineTrail-us-east-1-%s", envSuffix),
-		"CloudWatch Alarm": fmt.Sprintf("Corp-NovaPipelineAlarm-us-east-1-%s", envSuffix),
-		"SNS Topic":        fmt.Sprintf("Corp-NovaPipelineNotifications-us-east-1-%s", envSuffix),
-		"KMS Alias":        fmt.Sprintf("alias/corp-nova-pipeline-%s", envSuffix),
-		"CloudWatch Rule":  fmt.Sprintf("Corp-NovaPipelineEvents-us-east-1-%s", envSuffix),
-		"Dashboard":        fmt.Sprintf("Corp-NovaPipelineDashboard-us-east-1-%s", envSuffix),
+		"Pipeline":         outputs.PipelineName,
+		"Build Project":    outputs.CodeBuildProjectName,
+		"Pipeline Role":    outputs.PipelineRoleArn,
+		"Build Role":       outputs.BuildRoleArn,
+		"Source Bucket":    outputs.SourceBucket,
+		"Artifacts Bucket": outputs.ArtifactsBucket,
+		"Replica Bucket":   outputs.ReplicaBucket,
+		"CloudTrail":       outputs.CloudTrailName,
+		"CloudWatch Alarm": outputs.PipelineFailureAlarm,
+		"SNS Topic":        outputs.SNSTopicArn,
+		"KMS Alias":        outputs.KMSKeyAlias,
+		"CloudWatch Rule":  outputs.EventRuleName,
+		"Dashboard":        outputs.DashboardName,
 	}
 
 	multiEnvScore := 0

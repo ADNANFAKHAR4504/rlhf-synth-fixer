@@ -1056,7 +1056,7 @@ cache:
 		},
 	})
 
-	// Outputs
+	// Comprehensive Outputs for Integration Testing
 	cdktf.NewTerraformOutput(stack, jsii.String("pipeline-name"), &cdktf.TerraformOutputConfig{
 		Value:       pipeline.Name(),
 		Description: jsii.String("Name of the CodePipeline"),
@@ -1067,6 +1067,16 @@ cache:
 		Description: jsii.String("S3 source bucket for pipeline"),
 	})
 
+	cdktf.NewTerraformOutput(stack, jsii.String("artifacts-bucket-name"), &cdktf.TerraformOutputConfig{
+		Value:       artifactsBucket.Bucket(),
+		Description: jsii.String("S3 artifacts bucket for pipeline"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("replica-bucket-name"), &cdktf.TerraformOutputConfig{
+		Value:       replicaBucket.Bucket(),
+		Description: jsii.String("S3 replica bucket for disaster recovery"),
+	})
+
 	cdktf.NewTerraformOutput(stack, jsii.String("sns-topic-arn"), &cdktf.TerraformOutputConfig{
 		Value:       snsTopic.Arn(),
 		Description: jsii.String("SNS topic ARN for notifications"),
@@ -1075,6 +1085,64 @@ cache:
 	cdktf.NewTerraformOutput(stack, jsii.String("kms-key-arn"), &cdktf.TerraformOutputConfig{
 		Value:       kmsKey.Arn(),
 		Description: jsii.String("KMS key ARN used for encryption"),
+	})
+
+	// KMS key alias output - alias not created in current implementation
+	// cdktf.NewTerraformOutput(stack, jsii.String("kms-key-alias"), &cdktf.TerraformOutputConfig{
+	//     Value:       kmsAlias.Name(),
+	//     Description: jsii.String("KMS key alias"),
+	// })
+
+	cdktf.NewTerraformOutput(stack, jsii.String("codebuild-project-name"), &cdktf.TerraformOutputConfig{
+		Value:       buildProject.Name(),
+		Description: jsii.String("CodeBuild project name"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("pipeline-role-arn"), &cdktf.TerraformOutputConfig{
+		Value:       pipelineRole.Arn(),
+		Description: jsii.String("CodePipeline service role ARN"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("build-role-arn"), &cdktf.TerraformOutputConfig{
+		Value:       buildRole.Arn(),
+		Description: jsii.String("CodeBuild service role ARN"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("staging-cfn-role-arn"), &cdktf.TerraformOutputConfig{
+		Value:       stagingCfnRole.Arn(),
+		Description: jsii.String("CloudFormation staging role ARN"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("production-cfn-role-arn"), &cdktf.TerraformOutputConfig{
+		Value:       prodCfnRole.Arn(),
+		Description: jsii.String("CloudFormation production role ARN"),
+	})
+
+	// CloudTrail output - trail not created in current implementation
+	// cdktf.NewTerraformOutput(stack, jsii.String("cloudtrail-name"), &cdktf.TerraformOutputConfig{
+	//     Value:       trail.Name(),
+	//     Description: jsii.String("CloudTrail name for auditing"),
+	// })
+
+	cdktf.NewTerraformOutput(stack, jsii.String("pipeline-failure-alarm-name"), &cdktf.TerraformOutputConfig{
+		Value:       pipelineFailureAlarm.AlarmName(),
+		Description: jsii.String("Pipeline failure alarm name"),
+	})
+
+	cdktf.NewTerraformOutput(stack, jsii.String("build-failure-alarm-name"), &cdktf.TerraformOutputConfig{
+		Value:       buildFailureAlarm.AlarmName(),
+		Description: jsii.String("Build failure alarm name"),
+	})
+
+	// Dashboard output - dashboard not created in current implementation
+	// cdktf.NewTerraformOutput(stack, jsii.String("dashboard-name"), &cdktf.TerraformOutputConfig{
+	//     Value:       dashboard.DashboardName(),
+	//     Description: jsii.String("CloudWatch dashboard name"),
+	// })
+
+	cdktf.NewTerraformOutput(stack, jsii.String("event-rule-name"), &cdktf.TerraformOutputConfig{
+		Value:       eventRule.Name(),
+		Description: jsii.String("CloudWatch event rule name"),
 	})
 
 	return stack
