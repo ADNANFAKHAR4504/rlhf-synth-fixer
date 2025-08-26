@@ -570,28 +570,39 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    set -e
-    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+    # Do NOT exit on first error; we'll handle errors explicitly to avoid aborting too early.
+    exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+    set -u
 
     echo "Starting EC2 setup..."
 
-    # Install and start Apache
-    yum install -y httpd
-    systemctl enable httpd
-    systemctl start httpd
+    # Ensure the document root exists
+    mkdir -p /var/www/html
 
-    # Create simple test page
-    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
-    echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-    echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
-
-    # Create health check endpoint
+    # Put the health file in place BEFORE installing httpd so ALB can see 200 as soon as Apache starts
     echo "OK" > /var/www/html/health
     chmod 644 /var/www/html/health
-    
-    # Verify Apache is running
-    systemctl status httpd
-    curl -f http://localhost/health || echo "Health check failed but continuing..."
+
+    # Simple index page
+    INSTANCE_ID_URL="http://169.254.169.254/latest/meta-data/instance-id"
+    INSTANCE_ID="$$(curl -s $${INSTANCE_ID_URL} || echo unknown)"
+    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
+    echo "<p>Instance ID: $${INSTANCE_ID}</p>" >> /var/www/html/index.html
+    echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
+
+    # Install Apache robustly
+    retry() { n=0; until [ $n -ge 5 ]; do "$@" && break; n=$((n+1)); sleep 5; done; }
+    retry yum -y install httpd
+
+    # Enable and start Apache; don't fail hard if status is temporarily non-zero
+    systemctl enable httpd || true
+    systemctl start httpd || true
+
+    # Give Apache a moment to bind and serve files
+    sleep 5
+
+    # Verify locally; do not crash on failure
+    curl -fsS http://localhost/health && echo "Local health OK" || echo "Local health check failed (continuing)"
 
     echo "EC2 setup complete"
   EOF
@@ -619,7 +630,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
   min_size         = 2
   max_size         = 6

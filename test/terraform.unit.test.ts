@@ -344,7 +344,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('user data installs and configures Apache', () => {
-      expect(stackContent).toMatch(/yum install -y httpd/);
+      expect(stackContent).toMatch(/retry yum -y install httpd/);
       expect(stackContent).toMatch(/systemctl start httpd/);
       expect(stackContent).toMatch(/systemctl enable httpd/);
     });
