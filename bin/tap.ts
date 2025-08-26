@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
