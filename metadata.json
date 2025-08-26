@@ -8,7 +8,12 @@
     "Resource Scaling",
     "Access Control"
   ],
+  "po_id": "synth-trainr354",
+  "team": "synth",
+  "startedAt": "2025-08-26T04:35:27.029Z",
   "training_quality": 8,
+  "complexity": "hard",
+  "author": "ashish-a-turing",
   "aws_services": [
     "EC2",
     "VPC",

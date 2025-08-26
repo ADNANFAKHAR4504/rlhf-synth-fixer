@@ -1,2 +1,0 @@
-task_id,status,trainr_notes,problem_id,difficulty,platform,language,subtask,subject_labels,problem,environment,background,input_file,constraint_count,constraint_items,problem_source_repo,problem_source_file,research
-trainr301,in_progress,,cloud-environment-setup_Terraform_HCL_w1e9zc8a3lfy,medium,Terraform,HCL,Cloud Environment Setup,Cloud Environment Setup,"Design a Terraform configuration to set up a simple web hosting environment on AWS. The configuration must meet the following requirements:
