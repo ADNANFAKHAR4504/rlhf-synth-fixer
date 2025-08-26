@@ -1,4 +1,4 @@
-Can you create tf output for below resources
+Can you help me with sample code structure in terraform outputs for below resources
 1. ec2_instance_id
 2. elasticache_endpoint
 3. ec2_instance_private_ip
