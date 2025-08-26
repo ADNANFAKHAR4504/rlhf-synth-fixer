@@ -337,22 +337,7 @@ Resources:
           Value: !Sub 'TAPS3Bucket${EnvironmentSuffix}'
         - Key: AutoTerminate
           Value: '30'
-  TAPS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TAPS3Bucket
-      PolicyDocument:
-        Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${TAPS3Bucket}/*'
-              - !GetAtt TAPS3Bucket.Arn
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+
   TAPLoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -643,12 +628,12 @@ Resources:
                   - s3:GetBucketAcl
                   - s3:GetBucketLocation
                   - s3:ListBucket
-                Resource: !GetAtt TAPConfigBucket.Arn
+                Resource: !Sub 'arn:aws:s3:::${TAPConfigBucket}'
               - Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub '${TAPConfigBucket.Arn}/*'
+                Resource: !Sub 'arn:aws:s3:::${TAPConfigBucket}/*'
       Tags:
         - Key: Name
           Value: !Sub 'TAPConfigRole${EnvironmentSuffix}'
