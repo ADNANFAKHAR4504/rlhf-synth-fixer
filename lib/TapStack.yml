@@ -621,6 +621,17 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # VPC Endpoint for S3 (Gateway)
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -636,21 +647,10 @@ Resources:
               - s3:ListBucket
             Resource:
               - !Sub '${ApplicationBucket}/*'
-              - !Ref ApplicationBucket
+              - !Sub 'arn:aws:s3:::${ApplicationBucket}'
             Condition:
               StringEquals:
-                aws:sourceVpc: !Ref S3VPCEndpoint
-
-  # VPC Endpoint for S3 (Gateway)
-  S3VPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
-      VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref PrivateRouteTable1
-        - !Ref PrivateRouteTable2
+                aws:sourceVpc: !Ref VPC
 
   # IAM Roles and Instance Profile
   EC2Role:
@@ -678,7 +678,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub '${ApplicationBucket}/*'
+                  - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket

@@ -1220,6 +1220,26 @@
                 ]
             }
         },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable1"
+                    },
+                    {
+                        "Ref": "PrivateRouteTable2"
+                    }
+                ]
+            }
+        },
         "ApplicationBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
@@ -1242,39 +1262,19 @@
                                     "Fn::Sub": "${ApplicationBucket}/*"
                                 },
                                 {
-                                    "Ref": "ApplicationBucket"
+                                    "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}"
                                 }
                             ],
                             "Condition": {
                                 "StringEquals": {
                                     "aws:sourceVpc": {
-                                        "Ref": "S3VPCEndpoint"
+                                        "Ref": "VPC"
                                     }
                                 }
                             }
                         }
                     ]
                 }
-            }
-        },
-        "S3VPCEndpoint": {
-            "Type": "AWS::EC2::VPCEndpoint",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
-                },
-                "VpcEndpointType": "Gateway",
-                "RouteTableIds": [
-                    {
-                        "Ref": "PrivateRouteTable1"
-                    },
-                    {
-                        "Ref": "PrivateRouteTable2"
-                    }
-                ]
             }
         },
         "EC2Role": {
@@ -1314,7 +1314,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${ApplicationBucket}/*"
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
                                         }
                                     ]
                                 },
