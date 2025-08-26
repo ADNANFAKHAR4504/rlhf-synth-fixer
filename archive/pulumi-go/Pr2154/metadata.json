@@ -13,9 +13,9 @@
   "po_id": "synth-trainr354",
   "team": "synth",
   "startedAt": "2025-08-26T04:35:27.029Z",
-  "training_quality": 8,
+  "training_quality": 9,
   "complexity": "hard",
-  "author": "ashish-a-turing",
+  "author": "Ashwin-DevAsh",
   "aws_services": [
     "EC2",
     "VPC",
@@ -24,6 +24,13 @@
     "Route Table",
     "Security Group",
     "IAM",
-    "S3"
-  ]
+    "S3",
+    "KMS",
+    "VPC Endpoints"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
