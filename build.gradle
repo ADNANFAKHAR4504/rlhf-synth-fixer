@@ -44,22 +44,9 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'com.google.guava:guava:33.4.0-jre'
 
-    // AWS CDK v2 core + constructs
+    // AWS CDK v2 (monolithic package includes ALL AWS services)
     implementation 'software.amazon.awscdk:aws-cdk-lib:2.210.0'
     implementation 'software.constructs:constructs:10.4.2'
-
-    // Explicit AWS CDK service modules required by Main.java
-    implementation 'software.amazon.awscdk:ec2:2.210.0'
-    implementation 'software.amazon.awscdk:autoscaling:2.210.0'
-    implementation 'software.amazon.awscdk:elasticloadbalancingv2:2.210.0'
-    implementation 'software.amazon.awscdk:s3:2.210.0'
-    implementation 'software.amazon.awscdk:iam:2.210.0'
-    implementation 'software.amazon.awscdk:rds:2.210.0'
-    implementation 'software.amazon.awscdk:cloudwatch:2.210.0'
-    implementation 'software.amazon.awscdk:cloudwatch-actions:2.210.0'
-    implementation 'software.amazon.awscdk:route53:2.210.0'
-    implementation 'software.amazon.awscdk:route53-targets:2.210.0'
-    implementation 'software.amazon.awscdk:sns:2.210.0'
 
     // Testing frameworks
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
