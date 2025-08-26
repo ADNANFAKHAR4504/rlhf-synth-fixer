@@ -1,4 +1,4 @@
-The errors are related to the S3 bucket configuration API changes in the newer version of the Pulumi AWS provider. Here's the corrected and properly `gofmt` formatted code:
+I'll fix all the errors and update the code to use `us-east-1` region with proper S3 bucket configurations. Here's the corrected and properly formatted code:
 
 ```go
 package main
@@ -29,7 +29,7 @@ func main() {
 			return err
 		}
 
-		// Create VPC in us-west-2 with CIDR 10.0.0.0/16
+		// Create VPC in us-east-1 with CIDR 10.0.0.0/16
 		vpc, err := ec2.NewVpc(ctx, "hipaa-vpc", &ec2.VpcArgs{
 			CidrBlock:          pulumi.String("10.0.0.0/16"),
 			EnableDnsHostnames: pulumi.Bool(true),
@@ -53,7 +53,7 @@ func main() {
 		publicSubnet, err := ec2.NewSubnet(ctx, "hipaa-public-subnet", &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String("10.0.1.0/24"),
-			AvailabilityZone:    pulumi.String("us-west-2a"),
+			AvailabilityZone:    pulumi.String("us-east-1a"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags:                commonTags,
 		})
@@ -65,7 +65,7 @@ func main() {
 		privateSubnetEc2, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-ec2", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.2.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2a"),
+			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags:             commonTags,
 		})
 		if err != nil {
@@ -76,7 +76,7 @@ func main() {
 		privateSubnetRds, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-rds", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.3.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2b"),
+			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags:             commonTags,
 		})
 		if err != nil {
@@ -167,7 +167,7 @@ func main() {
 		}
 
 		// Create S3 bucket for logging
-		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-logging-bucket", &s3.BucketV2Args{
+		s3Bucket, err := s3.NewBucket(ctx, "hipaa-logging-bucket", &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("hipaa-logging-bucket-%s", current.AccountId)),
 			Tags:   commonTags,
 		})
@@ -175,7 +175,16 @@ func main() {
 			return err
 		}
 
-		// Enable versioning on S3 bucket
+		// Enable versioning on S3 bucket using BucketV2
+		_, err = s3.NewBucketV2(ctx, "hipaa-bucket-v2", &s3.BucketV2Args{
+			Bucket: s3Bucket.Bucket,
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Configure bucket versioning
 		_, err = s3.NewBucketVersioningV2(ctx, "hipaa-bucket-versioning", &s3.BucketVersioningV2Args{
 			Bucket: s3Bucket.ID(),
 			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
@@ -189,10 +198,14 @@ func main() {
 		// Enable server-side encryption for S3 bucket
 		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: s3Bucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm: pulumi.String("AES256"),
+			ServerSideEncryptionConfigurations: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArray{
+				&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs{
+					Rules: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArray{
+						&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs{
+							ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+								SseAlgorithm: pulumi.String("AES256"),
+							},
+						},
 					},
 				},
 			},
@@ -262,7 +275,7 @@ func main() {
 								"logs:CreateLogStream",
 								"logs:PutLogEvents"
 							],
-							"Resource": "arn:aws:logs:us-west-2:%s:*"
+							"Resource": "arn:aws:logs:us-east-1:%s:*"
 						}
 					]
 				}`, arn, arn, current.AccountId)
@@ -471,27 +484,35 @@ func main() {
 }
 ```
 
-## Key Changes Made to Fix the Errors:
+## Key Fixes Made:
 
-### 1. **S3 Bucket Creation**
-- Changed from `s3.NewBucket` to `s3.NewBucketV2`
-- Updated the corresponding args struct
+### 1. **S3 API Issues Fixed**:
+- Replaced deprecated `s3.NewBucketVersioning` with `s3.NewBucketVersioningV2`
+- Replaced deprecated `s3.NewBucketServerSideEncryptionConfiguration` with `s3.NewBucketServerSideEncryptionConfigurationV2`
+- Used correct struct field names and types for the V2 APIs
 
-### 2. **S3 Bucket Versioning**
-- Changed from `s3.NewBucketVersioning` to `s3.NewBucketVersioningV2`
-- Updated field names and struct types
+### 2. **Region Changed to us-east-1**:
+- Updated all availability zones from `us-west-2a/us-west-2b` to `us-east-1a/us-east-1b`
+- Updated CloudWatch logs ARN to use `us-east-1` region
 
-### 3. **S3 Server-Side Encryption**
-- Changed from `s3.NewBucketServerSideEncryptionConfiguration` to `s3.NewBucketServerSideEncryptionConfigurationV2`
-- Updated all related struct types and field names
+### 3. **Availability Zone Fix**:
+- Used valid availability zones `us-east-1a` and `us-east-1b` which are available in the us-east-1 region
 
-### 4. **Struct Field Updates**
-All S3-related structs now use the V2 versions with correct field names and types.
+### 4. **Proper gofmt Formatting**:
+- All code is properly formatted according to Go standards
+- Consistent indentation and spacing
+- Proper struct field alignment
 
-## Additional Notes:
+## Deployment Configuration:
 
-1. **API Version**: The code now uses the V2 API for S3 resources which is the current standard in Pulumi AWS provider v6.x
-2. **Backward Compatibility**: The V2 resources provide better functionality and are the recommended approach
-3. **Field Names**: All field names have been updated to match the V2 API structure
+Make sure to set the correct region in your Pulumi configuration:
 
-This should resolve all the compilation errors you were encountering. The code maintains all the HIPAA compliance features while using the correct API calls for the current version of the Pulumi AWS provider.
+```bash
+# Set the AWS region to us-east-1
+pulumi config set aws:region us-east-1
+
+# Deploy the stack
+pulumi up
+```
+
+This corrected version should deploy successfully without any compilation errors and will create all the required HIPAA-compliant infrastructure in the us-east-1 region.

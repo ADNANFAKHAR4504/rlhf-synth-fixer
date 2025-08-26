@@ -26,7 +26,7 @@ func main() {
 			return err
 		}
 
-		// Create VPC in us-west-2 with CIDR 10.0.0.0/16
+		// Create VPC in us-east-1 with CIDR 10.0.0.0/16
 		vpc, err := ec2.NewVpc(ctx, "hipaa-vpc", &ec2.VpcArgs{
 			CidrBlock:          pulumi.String("10.0.0.0/16"),
 			EnableDnsHostnames: pulumi.Bool(true),
@@ -50,7 +50,7 @@ func main() {
 		publicSubnet, err := ec2.NewSubnet(ctx, "hipaa-public-subnet", &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String("10.0.1.0/24"),
-			AvailabilityZone:    pulumi.String("us-west-2a"),
+			AvailabilityZone:    pulumi.String("us-east-1a"),
 			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags:                commonTags,
 		})
@@ -62,7 +62,7 @@ func main() {
 		privateSubnetEc2, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-ec2", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.2.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2a"),
+			AvailabilityZone: pulumi.String("us-east-1a"),
 			Tags:             commonTags,
 		})
 		if err != nil {
@@ -73,7 +73,7 @@ func main() {
 		privateSubnetRds, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-rds", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.3.0/24"),
-			AvailabilityZone: pulumi.String("us-west-2b"),
+			AvailabilityZone: pulumi.String("us-east-1b"),
 			Tags:             commonTags,
 		})
 		if err != nil {
@@ -164,7 +164,7 @@ func main() {
 		}
 
 		// Create S3 bucket for logging
-		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-logging-bucket", &s3.BucketV2Args{
+		s3Bucket, err := s3.NewBucket(ctx, "hipaa-logging-bucket", &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("hipaa-logging-bucket-%s", current.AccountId)),
 			Tags:   commonTags,
 		})
@@ -172,7 +172,16 @@ func main() {
 			return err
 		}
 
-		// Enable versioning on S3 bucket
+		// Enable versioning on S3 bucket using BucketV2
+		_, err = s3.NewBucketV2(ctx, "hipaa-bucket-v2", &s3.BucketV2Args{
+			Bucket: s3Bucket.Bucket,
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Configure bucket versioning
 		_, err = s3.NewBucketVersioningV2(ctx, "hipaa-bucket-versioning", &s3.BucketVersioningV2Args{
 			Bucket: s3Bucket.ID(),
 			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
@@ -186,10 +195,14 @@ func main() {
 		// Enable server-side encryption for S3 bucket
 		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: s3Bucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						SseAlgorithm: pulumi.String("AES256"),
+			ServerSideEncryptionConfigurations: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArray{
+				&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs{
+					Rules: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArray{
+						&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs{
+							ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+								SseAlgorithm: pulumi.String("AES256"),
+							},
+						},
 					},
 				},
 			},
@@ -259,7 +272,7 @@ func main() {
 								"logs:CreateLogStream",
 								"logs:PutLogEvents"
 							],
-							"Resource": "arn:aws:logs:us-west-2:%s:*"
+							"Resource": "arn:aws:logs:us-east-1:%s:*"
 						}
 					]
 				}`, arn, arn, current.AccountId)
