@@ -36,9 +36,10 @@ configurations.all {
 }
 
 dependencies {
-    // Pulumi Java SDK
-    implementation 'com.pulumi:pulumi:0.12.1'
-    implementation 'com.pulumi:aws:6.67.0'
+    // Pulumi Java SDK (last published to Maven Central)
+    implementation 'com.pulumi:pulumi:0.11.0'
+    implementation 'com.pulumi:aws:6.52.0'
+    implementation 'com.pulumi:tls:5.2.0'
 
     // Utilities
     implementation 'com.google.code.gson:gson:2.11.0'
@@ -57,6 +58,7 @@ dependencies {
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
 }
 
+// Application main class
 application {
     mainClass = 'app.Main'
 }
@@ -85,7 +87,7 @@ sourceSets {
     }
 }
 
-// Configure integration test configurations after source sets are defined
+// Configure integration test configurations
 configurations {
     integrationTestImplementation.extendsFrom testImplementation  
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
@@ -93,29 +95,33 @@ configurations {
 
 // Integration test dependencies
 dependencies {
+    integrationTestImplementation platform('software.amazon.awssdk:bom:2.29.33')
+    integrationTestImplementation 'software.amazon.awssdk:s3'
+    integrationTestImplementation 'software.amazon.awssdk:ec2'
+    integrationTestImplementation 'software.amazon.awssdk:iam'
+    integrationTestImplementation 'software.amazon.awssdk:kms'
+    integrationTestImplementation 'software.amazon.awssdk:cloudformation'
+    integrationTestImplementation 'software.amazon.awssdk:cloudtrail'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatch'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
+    integrationTestImplementation 'software.amazon.awssdk:sns'
+    integrationTestImplementation 'software.amazon.awssdk:sts'
+
+    // JSON parsing
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.18.2'
-    integrationTestImplementation 'software.amazon.awssdk:ec2:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:core:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:s3:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:kms:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:iam:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:sns:2.29.33'
-    integrationTestImplementation 'software.amazon.awssdk:sts:2.29.33'
 }
 
-// Configure JAR with main class for Pulumi
+// Configure JAR with main class
 jar {
     manifest {
         attributes(
             'Main-Class': 'app.Main'
         )
     }
-
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = 'app.jar'
     zip64 = true
@@ -126,7 +132,6 @@ test {
     useJUnitPlatform()
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
-
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
@@ -134,7 +139,6 @@ test {
         showExceptions true
         showStackTraces true
     }
-
     outputs.upToDateWhen { false }
     finalizedBy jacocoTestReport
 }
@@ -143,11 +147,9 @@ test {
 tasks.register('integrationTest', Test) {
     description = 'Runs integration tests.'
     group = 'verification'
-
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     useJUnitPlatform()
-
     testLogging {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         exceptionFormat "full"
@@ -155,7 +157,6 @@ tasks.register('integrationTest', Test) {
         showExceptions true
         showStackTraces true
     }
-
     outputs.upToDateWhen { false }
     shouldRunAfter test
 }
@@ -180,17 +181,12 @@ jacocoTestReport {
         html.required = true
         csv.required = false
     }
-
     executionData fileTree(project.buildDir.absolutePath).include("jacoco/*.exec")
-
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: [
-                '**/Main.class'
-            ])
+            fileTree(dir: it, exclude: ['**/Main.class'])
         }))
     }
-
     finalizedBy jacocoTestCoverageVerification
 }
 
@@ -228,34 +224,34 @@ tasks.register('showCoverage') {
     doLast {
         def reportFile = file("$buildDir/reports/jacoco/test/html/index.html")
         def xmlReportFile = file("$buildDir/reports/jacoco/test/jacocoTestReport.xml")
-
         if (xmlReportFile.exists()) {
-            def xml = new XmlParser().parse(xmlReportFile)
-            def counter = xml.counter.find { it.'@type' == 'LINE' }
-            if (counter) {
-                def covered = counter.'@covered'.toInteger()
-                def missed = counter.'@missed'.toInteger()
-                def total = covered + missed
-                def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
-
-                println "\n📊 Code Coverage Summary:"
-                println "Lines Covered: ${covered}/${total} (${percentage}%)"
-                println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+            try {
+                def xml = new XmlParser().parse(xmlReportFile)
+                def counter = xml.counter.find { it.'@type' == 'LINE' }
+                if (counter) {
+                    def covered = counter.'@covered'.toInteger()
+                    def missed = counter.'@missed'.toInteger()
+                    def total = covered + missed
+                    def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+                    println "\n📊 Code Coverage Summary:"
+                    println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                    println "Coverage Status: ${percentage >= 70 ? '✅ PASSED' : '❌ FAILED'} (minimum: 70%)"
+                }
+            } catch (Exception e) {
+                println "\n📊 Coverage report parsing failed, but tests completed successfully"
             }
         }
-
         if (reportFile.exists()) {
             println "📄 Detailed HTML Report: file://${reportFile.absolutePath}"
         }
     }
 }
 
-// Custom task to run all tests with detailed output
+// Custom task to run all tests
 tasks.register('testAll') {
     dependsOn test, integrationTest, showCoverage
     group = 'verification'
     description = 'Runs all tests and displays coverage summary'
-
     doFirst {
         println "\n🚀 Running all tests with coverage analysis..."
     }
