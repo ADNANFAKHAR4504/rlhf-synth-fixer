@@ -736,7 +736,6 @@ This implementation provides:
 5. **S3 Bucket**: With versioning, encryption, and public access blocking
 6. **Lambda Function**: For S3 processing with VPC configuration and strict limits
 7. **EC2 Instances**: Bastion host and web servers with proper security
-8. **Cloudfront**: Cloudfront for HTTPS communications
-9. **CloudWatch Monitoring**: Alarms for CPU utilization and Lambda errors
-10. **Resource Tagging**: Comprehensive tagging for all resources
-11. **Multi-AZ Support**: Ready for deployment in multiple AZs
+8. **CloudWatch Monitoring**: Alarms for CPU utilization and Lambda errors
+9. **Resource Tagging**: Comprehensive tagging for all resources
+10. **Multi-AZ Support**: Ready for deployment in multiple AZs

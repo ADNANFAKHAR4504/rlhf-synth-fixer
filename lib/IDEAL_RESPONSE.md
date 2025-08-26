@@ -849,9 +849,8 @@ func main() {
 6. **Constraint #6**: Lambda uses environment variables for sensitive data
 7. **Constraint #7**: S3 bucket versioning enabled
 8. **Constraint #8**: CloudWatch alarms for unauthorized access and resource spikes
-9. **Constraint #9**: Cloudfront for HTTPS communications
-10. **Constraint #10**: Security groups deny all inbound except from specific IP ranges
-11. **Constraint #11**: Detailed tagging for all resources for cost tracking
+9. **Constraint #9**: Security groups deny all inbound except from specific IP ranges
+10. **Constraint #10**: Detailed tagging for all resources for cost tracking
 
 ### Infrastructure Components
 
