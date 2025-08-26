@@ -92,7 +92,6 @@ Resources:
             Condition:
               StringEquals:
                 "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
-      KeyRotationEnabled: true
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -207,7 +206,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: "s3:PutObject"
-            Resource: !Sub "${CloudTrailBucket}/*"
+            Resource: !Sub "${CloudTrailBucket.Arn}/*"
             Condition:
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
@@ -218,7 +217,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt CloudTrailBucket.Arn
-              - !Sub "${CloudTrailBucket}/*"
+              - !Sub "${CloudTrailBucket.Arn}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -244,7 +243,7 @@ Resources:
             Principal:
               Service: vpc-flow-logs.amazonaws.com
             Action: "s3:PutObject"
-            Resource: !Sub "${VPCFlowLogsBucket}/AWSLogs/${AWS::AccountId}/*"
+            Resource: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
@@ -264,7 +263,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt VPCFlowLogsBucket.Arn
-              - !Sub "${VPCFlowLogsBucket}/*"
+              - !Sub "${VPCFlowLogsBucket.Arn}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -320,7 +319,7 @@ Resources:
                   - "s3:GetObject"
                   - "s3:ListBucket"
                 Resource:
-                  - !Sub "${CloudTrailBucket}/*"
+                  - !Sub "${CloudTrailBucket.Arn}/*"
                   - !GetAtt CloudTrailBucket.Arn
               - Effect: Deny
                 Action: "*"
@@ -355,7 +354,7 @@ Resources:
                   - "logs:PutLogEvents"
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
-                Resource: !Sub "${CloudTrailLogGroup}:*"
+                Resource: !GetAtt CloudTrailLogGroup.Arn
 
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
@@ -380,7 +379,7 @@ Resources:
                   - "logs:PutLogEvents"
                   - "logs:DescribeLogGroups"
                   - "logs:DescribeLogStreams"
-                Resource: !Sub "${VPCFlowLogsLogGroup}:*"
+                Resource: !GetAtt VPCFlowLogsLogGroup.Arn
 
   # ========================================
   # CloudTrail Configuration
