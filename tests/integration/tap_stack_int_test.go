@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/configservice"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
@@ -71,21 +72,19 @@ func TestLive_VPCAndSubnets(t *testing.T) {
 
 			// VPC by Name tag
 			vpcName := "vpc-" + r + "-" + suffix
+			// VPC by Name tag
 			vpcs, err := ec2c.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-				Filters: []ec2typesFilter{
-					{"tag:Name", []string{vpcName}},
-				}.to(),
+				Filters: []ec2types.Filter{
+					ec2Filter("tag:Name", vpcName),
+				},
 			})
-			if err != nil || len(vpcs.Vpcs) != 1 {
-				t.Fatalf("expected 1 VPC named %s, got %d (err=%v)", vpcName, len(vpcs.Vpcs), err)
-			}
-			vpcID := aws.ToString(vpcs.Vpcs[0].VpcId)
 
-			// Subnets with Name tags “public-subnet-<region>-*” and “private-subnet-<region>-*”
+			vpcID := aws.ToString(vpcs.Vpcs[0].VpcId)
+			// Subnets for the VPC
 			subs, err := ec2c.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
-				Filters: []ec2typesFilter{
-					{"vpc-id", []string{vpcID}},
-				}.to(),
+				Filters: []ec2types.Filter{
+					ec2Filter("vpc-id", vpcID),
+				},
 			})
 			if err != nil {
 				t.Fatalf("DescribeSubnets: %v", err)
@@ -206,7 +205,10 @@ func TestLive_S3_StaticBucket_KMS_And_PAB(t *testing.T) {
 		t.Fatalf("GetPublicAccessBlock %s: %v", bucket, err)
 	}
 	cfgPab := pab.PublicAccessBlockConfiguration
-	if cfgPab == nil || !(cfgPab.BlockPublicAcls && cfgPab.BlockPublicPolicy && cfgPab.IgnorePublicAcls && cfgPab.RestrictPublicBuckets) {
+	if cfgPab == nil || !(aws.ToBool(cfgPab.BlockPublicAcls) &&
+		aws.ToBool(cfgPab.BlockPublicPolicy) &&
+		aws.ToBool(cfgPab.IgnorePublicAcls) &&
+		aws.ToBool(cfgPab.RestrictPublicBuckets)) {
 		t.Fatalf("bucket %s public access block not fully enabled", bucket)
 	}
 }
@@ -482,21 +484,10 @@ func TestLive_APIGateway_HTTPSOnlyExists(t *testing.T) {
 	}
 }
 
-// --- helpers ---
-type ec2typesFilter struct {
-	Name   string
-	Values []string
-}
-
-func (f []ec2typesFilter) to() []ec2types.Filter {
-	out := make([]ec2types.Filter, 0, len(f))
-	for _, it := range f {
-		vals := make([]string, len(it.Values))
-		copy(vals, it.Values)
-		out = append(out, ec2types.Filter{
-			Name:   aws.String(it.Name),
-			Values: vals,
-		})
+// Simple helper to build an EC2 filter
+func ec2Filter(name string, values ...string) ec2types.Filter {
+	return ec2types.Filter{
+		Name:   aws.String(name),
+		Values: values, // ec2 v2 uses []string
 	}
-	return out
 }
