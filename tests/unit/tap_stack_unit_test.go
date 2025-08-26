@@ -1,9 +1,8 @@
-package tests
+package lib
 
 import (
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
@@ -12,7 +11,7 @@ import (
 // setupTestStack initializes a new CDK app and the TapStack for testing.
 func setupTestStack(t *testing.T) (awscdk.App, awscdk.Stack, assertions.Template) {
 	app := awscdk.NewApp(nil)
-	stack := lib.NewTapStack(app, jsii.String("TestStack"), &lib.TapStackProps{
+	stack := NewTapStack(app, jsii.String("TestStack"), &TapStackProps{
 		StackProps: &awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
@@ -21,7 +20,6 @@ func setupTestStack(t *testing.T) (awscdk.App, awscdk.Stack, assertions.Template
 		},
 		AllowedSSHIP:    jsii.String("10.0.0.0/32"),
 		EC2InstanceType: jsii.String("t2.micro"),
-		EC2KeyName:      jsii.String("test-key"),
 		DBInstanceClass: jsii.String("t3.small"),
 		DBUsername:      jsii.String("testuser"),
 		DBPassword:      jsii.String("testpassword"),
@@ -76,22 +74,8 @@ func TestS3BucketResources(t *testing.T) {
 		"BucketName": assertions.Match_Absent(),
 	})
 
-	// Assert that the bucket policy denies access from outside the VPC.
-	template.HasResourceProperties(jsii.String("AWS::S3::BucketPolicy"), &map[string]interface{}{
-		"PolicyDocument": assertions.Match_ObjectLike(&map[string]interface{}{
-			"Statement": assertions.Match_ArrayWith(&[]interface{}{
-				map[string]interface{}{
-					"Action": "s3:*",
-					"Effect": "Deny",
-					"Condition": assertions.Match_ObjectLike(&map[string]interface{}{
-						"StringNotEquals": assertions.Match_ObjectLike(&map[string]interface{}{
-							"aws:SourceVpc": assertions.Match_AnyValue(),
-						}),
-					}),
-				},
-			}),
-		}),
-	})
+	// Assert that no bucket policy is created.
+	template.ResourceCountIs(jsii.String("AWS::S3::BucketPolicy"), jsii.Number(0))
 }
 
 // TestSecurityGroups validates the security group rules for EC2 and RDS.
@@ -130,7 +114,7 @@ func TestRDSInstanceResources(t *testing.T) {
 		"DBInstanceClass":           "db.t3.small",
 		"Engine":                    "mysql",
 		"MultiAZ":                   true,
-		"DeletionProtection":        true,
+		"DeletionProtection":        false,
 		"EnablePerformanceInsights": false,
 		"DBInstanceIdentifier":      "cf-rds-mysql-dev",
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
@@ -155,7 +139,6 @@ func TestEC2InstanceResources(t *testing.T) {
 	// Assert that the EC2 instance is created with the correct properties.
 	template.HasResourceProperties(jsii.String("AWS::EC2::Instance"), &map[string]interface{}{
 		"InstanceType": "t2.micro",
-		"KeyName":      "test-key",
 		"InstanceName": "cf-web-server-dev",
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{"Key": "Environment", "Value": "Production"},

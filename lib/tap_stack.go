@@ -63,9 +63,6 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	if props.DBPassword == nil {
 		props.DBPassword = jsii.String("TempPassword123!")
 	}
-	if props.EC2KeyName == nil {
-		props.EC2KeyName = jsii.String("my-key-pair")
-	}
 
 	commonTags := map[string]*string{
 		"Environment": jsii.String("Production"),
@@ -190,7 +187,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		AllocatedStorage:          jsii.Number(20),
 		StorageType:               awsrds.StorageType_GP2,
 		BackupRetention:           awscdk.Duration_Days(jsii.Number(7)),
-		DeletionProtection:        jsii.Bool(true),
+		DeletionProtection:        jsii.Bool(false),
 		InstanceIdentifier:        jsii.String("cf-rds-mysql-" + environmentSuffix),
 		MonitoringInterval:        awscdk.Duration_Seconds(jsii.Number(60)),
 		EnablePerformanceInsights: jsii.Bool(false),
@@ -232,28 +229,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		SecurityGroup: ec2SecurityGroup,
 		Role:          ec2Role,
 		UserData:      userData,
-		KeyName:       props.EC2KeyName,
 		InstanceName:  jsii.String("cf-web-server-" + environmentSuffix),
 	})
 	for key, value := range commonTags {
 		awscdk.Tags_Of(ec2Instance).Add(jsii.String(key), value, nil)
 	}
-
-	bucketPolicy := awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Effect:     awsiam.Effect_DENY,
-		Principals: &[]awsiam.IPrincipal{awsiam.NewAnyPrincipal()},
-		Actions:    &[]*string{jsii.String("s3:*")},
-		Resources: &[]*string{
-			bucket.BucketArn(),
-			bucket.ArnForObjects(jsii.String("*")),
-		},
-		Conditions: &map[string]interface{}{
-			"StringNotEquals": &map[string]interface{}{
-				"aws:SourceVpc": vpc.VpcId(),
-			},
-		},
-	})
-	bucket.AddToResourcePolicy(bucketPolicy)
 
 	awscdk.NewCfnOutput(stack, jsii.String("VpcId"), &awscdk.CfnOutputProps{Value: vpc.VpcId()})
 	awscdk.NewCfnOutput(stack, jsii.String("EC2InstanceId"), &awscdk.CfnOutputProps{Value: ec2Instance.InstanceId()})

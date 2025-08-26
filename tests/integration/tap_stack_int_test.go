@@ -1,11 +1,10 @@
-package tests
+package lib
 
 import (
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
@@ -16,7 +15,7 @@ import (
 func TestSnapshot(t *testing.T) {
 	// GIVEN
 	app := awscdk.NewApp(nil)
-	stack := lib.NewTapStack(app, jsii.String("TestStack"), &lib.TapStackProps{
+	stack := NewTapStack(app, jsii.String("TestStack"), &TapStackProps{
 		StackProps: &awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
@@ -25,7 +24,6 @@ func TestSnapshot(t *testing.T) {
 		},
 		AllowedSSHIP:    jsii.String("10.0.0.0/32"),
 		EC2InstanceType: jsii.String("t2.micro"),
-		EC2KeyName:      jsii.String("test-key"),
 		DBInstanceClass: jsii.String("t3.small"),
 		DBUsername:      jsii.String("testuser"),
 		DBPassword:      jsii.String("testpassword"),
