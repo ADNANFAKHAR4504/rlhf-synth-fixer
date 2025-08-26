@@ -1,26 +1,15 @@
 # main.tf
 
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.1"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.2"
-    }
-  }
-}
 
 # Variables
-variable "region" {
+variable "aws_region" {
   description = "AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "region" {
+  description = "AWS region (legacy)"
   type        = string
   default     = "us-east-1"
 }
@@ -53,10 +42,6 @@ locals {
   }
 }
 
-# Provider configuration
-provider "aws" {
-  region = var.region
-}
 
 # Random suffixes for unique naming
 resource "random_string" "bucket_suffix" {
@@ -343,7 +328,7 @@ resource "aws_db_instance" "main" {
 
 # RDS Monitoring Role
 resource "aws_iam_role" "rds_monitoring" {
-  name = "prod-rds-monitoring-role"
+  name = "prod-rds-monitoring-role-${random_string.db_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -368,7 +353,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda" {
-  name = "prod-lambda-execution-role"
+  name = "prod-lambda-execution-role-${random_string.db_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
