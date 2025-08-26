@@ -99,23 +99,23 @@ public class Route53Stack extends Stack {
                 .build();
 
         // Primary record (us-east-1)
-        // Note: In production, these would reference actual ALBs from other stacks
-        // For now, using simple A records for demonstration
+        // Using latency-based routing instead of geo-routing
         ARecord.Builder.create(this, "PrimaryRecord" + environmentSuffix)
                 .zone(hostedZone)
                 .recordName("www")
                 .target(RecordTarget.fromIpAddresses("192.0.2.1")) // Placeholder IP
                 .setIdentifier("primary")
-                .geoLocation(GeoLocation.continent(Continent.NORTH_AMERICA))
+                .region("us-east-1") // Use latency-based routing with region
                 .build();
 
         // Secondary record (us-west-2)
+        // Using latency-based routing instead of geo-routing
         ARecord.Builder.create(this, "SecondaryRecord" + environmentSuffix)
                 .zone(hostedZone)
                 .recordName("www")
                 .target(RecordTarget.fromIpAddresses("192.0.2.2")) // Placeholder IP
                 .setIdentifier("secondary")
-                .geoLocation(GeoLocation.continent(Continent.NORTH_AMERICA))
+                .region("us-west-2") // Use latency-based routing with region
                 .build();
     }
 }
