@@ -494,8 +494,8 @@ public class MainIntegrationTest {
         
         var rdsSg = sgResponse.securityGroups().get(0);
         boolean hasWildcardPostgres = rdsSg.ipPermissions().stream()
-            .anyMatch(rule -> rule.fromPort() != null && rule.fromPort() == 5432 &&
-                rule.ipRanges().stream().anyMatch(range -> "0.0.0.0/0".equals(range.cidrIp())));
+            .anyMatch(rule -> rule.fromPort() != null && rule.fromPort() == 5432 
+                && rule.ipRanges().stream().anyMatch(range -> "0.0.0.0/0".equals(range.cidrIp())));
         
         assertFalse(hasWildcardPostgres, "RDS security group should not allow 0.0.0.0/0 on port 5432");
     }
@@ -582,8 +582,8 @@ public class MainIntegrationTest {
         
         var locationResponse = s3Client.getBucketLocation(builder -> builder.bucket(bucketName));
         // us-east-1 returns null for location constraint
-        assertTrue(locationResponse.locationConstraint() == null || 
-                  "us-east-1".equals(locationResponse.locationConstraint().toString()),
+        assertTrue(locationResponse.locationConstraint() == null 
+                  || "us-east-1".equals(locationResponse.locationConstraint().toString()),
                   "S3 bucket should be in correct region");
     }
 
@@ -642,8 +642,8 @@ public class MainIntegrationTest {
             .build());
         
         boolean foundInstance = instancesResponse.dbInstances().stream()
-            .anyMatch(instance -> instance.endpoint() != null && 
-                     rdsEndpoint.equals(instance.endpoint().address()));
+            .anyMatch(instance -> instance.endpoint() != null 
+                     && rdsEndpoint.equals(instance.endpoint().address()));
         
         assertTrue(foundInstance, "RDS instance should exist with matching endpoint");
     }
