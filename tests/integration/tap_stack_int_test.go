@@ -32,7 +32,7 @@ type TapStackOutputs struct {
 
 // loadTapStackOutputs loads deployment outputs from cfn-outputs/flat-outputs.json
 func loadTapStackOutputs(t *testing.T) *TapStackOutputs {
-	data, err := os.ReadFile("../../cfn-outputs/flat-outputs.json")
+	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
 	if err != nil {
 		t.Skipf("Cannot load cfn-outputs/flat-outputs.json: %v", err)
 	}
