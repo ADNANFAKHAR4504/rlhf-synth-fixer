@@ -159,18 +159,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // S3 Bucket with versioning and encryption
-    const bucket = new s3.Bucket(this, 'TapBucket', {
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    this.primaryBucketArn = bucket.bucketArn;
-
     // Security Groups with least-privilege access
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
       vpc,
@@ -211,6 +199,42 @@ export class TapStack extends cdk.Stack {
       ec2.Port.tcp(443),
       'HTTPS outbound'
     );
+
+    // S3 Bucket - declared early to be referenced by IAM roles
+    const bucket = new s3.Bucket(this, 'TapBucket', {
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // Explicitly set versioning status on the underlying CFN resource
+    const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
+    cfnBucket.versioningConfiguration = {
+      status: 'Enabled',
+    };
+
+    const ec2Role = new iam.Role(this, 'Ec2Role', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+      ],
+      inlinePolicies: {
+        S3Access: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: [bucket.arnForObjects('*')],
+            }),
+          ],
+        }),
+      },
+    });
 
     // RDS MySQL Database with Multi-AZ
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
@@ -349,10 +373,7 @@ def handler(event, context):
                   's3:GetObjectVersionTagging',
                   's3:ListBucket',
                 ],
-                resources: [
-                  `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*`,
-                  `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*/*`,
-                ],
+                resources: [bucket.bucketArn, bucket.arnForObjects('*')],
               }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,

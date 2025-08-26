@@ -130,6 +130,26 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(lambdaSecurityGroup).add('Project', commonTags.Project);
     cdk.Tags.of(lambdaSecurityGroup).add('Owner', commonTags.Owner);
 
+    // S3 Bucket - declared early to be referenced by IAM roles
+    const bucket = new s3.Bucket(this, 'TapBucket', {
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // Explicitly set versioning status on the underlying CFN resource
+    const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
+    cfnBucket.versioningConfiguration = {
+      status: 'Enabled',
+    };
+
+    cdk.Tags.of(bucket).add('Environment', commonTags.Environment);
+    cdk.Tags.of(bucket).add('Project', commonTags.Project);
+    cdk.Tags.of(bucket).add('Owner', commonTags.Owner);
+
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
@@ -143,9 +163,7 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject'],
-              resources: [
-                `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*/*`,
-              ],
+              resources: [bucket.arnForObjects('*')],
             }),
           ],
         }),
@@ -282,25 +300,6 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(replicaBucket).add('Owner', commonTags.Owner);
     }
 
-    const bucket = new s3.Bucket(this, 'TapBucket', {
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-    });
-
-    // Explicitly set versioning status on the underlying CFN resource
-    const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
-    cfnBucket.versioningConfiguration = {
-      status: 'Enabled',
-    };
-
-    cdk.Tags.of(bucket).add('Environment', commonTags.Environment);
-    cdk.Tags.of(bucket).add('Project', commonTags.Project);
-    cdk.Tags.of(bucket).add('Owner', commonTags.Owner);
-
     // S3 Cross-Region Replication (Primary region only)
     if (props?.isPrimary) {
       // Create replication role first without bucket reference
@@ -317,10 +316,7 @@ export class TapStack extends cdk.Stack {
                   's3:GetObjectVersionTagging',
                   's3:ListBucket',
                 ],
-                resources: [
-                  `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*`,
-                  `arn:aws:s3:::tap-bucket-${props?.environmentSuffix || 'dev'}-*/*`,
-                ],
+                resources: [bucket.bucketArn, bucket.arnForObjects('*')],
               }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
@@ -429,7 +425,7 @@ export class TapStack extends cdk.Stack {
                 'logs:PutLogEvents',
               ],
               resources: [
-                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/*`,
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/TapReplicationMonitor*`,
               ],
             }),
           ],
