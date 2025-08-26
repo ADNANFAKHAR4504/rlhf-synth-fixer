@@ -7,5 +7,4 @@ Enforce MFA for all the IAM users.
 Implement AWS CloudTrail to log all the API call activities being made among the resources created in this stack.
 Also Use elastic cache for the better performance of the database.
 10.Ensure all the resources are tagged with 'Environment: Production'.
-11.Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.                                                    12. Can you give me all the outputs for all the resources geeting created.  
-
+11.Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management and outputs for all resources.             
