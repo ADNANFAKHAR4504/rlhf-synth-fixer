@@ -2,7 +2,7 @@
 
 ## Objective
 
-Generate a **complete, production-ready AWS CloudFormation YAML template** named `secure_infrastructure.yaml` that creates a secure, multi-region infrastructure adhering to AWS security best practices and organizational requirements.
+Generate a **complete, production-ready AWS CloudFormation YAML template** named `secure_infrastructure.yaml` that creates a secure, multi-region infrastructure adhering to AWS security best practices and organizational requirements. All infrastructure requirements should be defined mandatorily.
 
 ## Infrastructure Requirements
 
