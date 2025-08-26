@@ -22,23 +22,23 @@ import (
 )
 
 type Outputs struct {
-	KMSKeyArn             string `json:"kms-key-arn"`
-	KMSKeyAlias           string `json:"kms-key-alias"`
-	PipelineName          string `json:"pipeline-name"`
-	SNSTopicArn           string `json:"sns-topic-arn"`
-	SourceBucket          string `json:"source-bucket-name"`
-	ArtifactsBucket       string `json:"artifacts-bucket-name"`
-	ReplicaBucket         string `json:"replica-bucket-name"`
-	CodeBuildProjectName  string `json:"codebuild-project-name"`
-	PipelineRoleArn       string `json:"pipeline-role-arn"`
-	BuildRoleArn          string `json:"build-role-arn"`
-	StagingCfnRoleArn     string `json:"staging-cfn-role-arn"`
-	ProductionCfnRoleArn  string `json:"production-cfn-role-arn"`
-	CloudTrailName        string `json:"cloudtrail-name"`
-	PipelineFailureAlarm  string `json:"pipeline-failure-alarm-name"`
-	BuildFailureAlarm     string `json:"build-failure-alarm-name"`
-	DashboardName         string `json:"dashboard-name"`
-	EventRuleName         string `json:"event-rule-name"`
+	KMSKeyArn            string `json:"kms-key-arn"`
+	KMSKeyAlias          string `json:"kms-key-alias"`
+	PipelineName         string `json:"pipeline-name"`
+	SNSTopicArn          string `json:"sns-topic-arn"`
+	SourceBucket         string `json:"source-bucket-name"`
+	ArtifactsBucket      string `json:"artifacts-bucket-name"`
+	ReplicaBucket        string `json:"replica-bucket-name"`
+	CodeBuildProjectName string `json:"codebuild-project-name"`
+	PipelineRoleArn      string `json:"pipeline-role-arn"`
+	BuildRoleArn         string `json:"build-role-arn"`
+	StagingCfnRoleArn    string `json:"staging-cfn-role-arn"`
+	ProductionCfnRoleArn string `json:"production-cfn-role-arn"`
+	CloudTrailName       string `json:"cloudtrail-name"`
+	PipelineFailureAlarm string `json:"pipeline-failure-alarm-name"`
+	BuildFailureAlarm    string `json:"build-failure-alarm-name"`
+	DashboardName        string `json:"dashboard-name"`
+	EventRuleName        string `json:"event-rule-name"`
 }
 
 type OutputsWrapper struct {
@@ -54,17 +54,17 @@ func loadOutputs(t *testing.T) *Outputs {
 		"../../cfn-outputs/flat-outputs.json",
 		"../cfn-outputs/flat-outputs.json",
 	}
-	
+
 	var data []byte
 	var err error
-	
+
 	for _, path := range possiblePaths {
 		data, err = os.ReadFile(path)
 		if err == nil {
 			break
 		}
 	}
-	
+
 	if err != nil {
 		t.Fatalf("failed to read outputs file from any of %v: %v", possiblePaths, err)
 	}
@@ -2068,7 +2068,7 @@ func TestSecretsManagementIntegration(t *testing.T) {
 func TestMultiEnvironmentSupport(t *testing.T) {
 	// Test that the infrastructure properly supports multiple environments
 	outputs := loadOutputs(t)
-	
+
 	// Extract environment suffix from deployed resources for validation
 	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if envSuffix == "" {
