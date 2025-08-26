@@ -23,9 +23,9 @@ final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(final String environmentSuffix, final StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffixValue, final StackProps stackPropsValue) {
+        this.environmentSuffix = envSuffixValue;
+        this.stackProps = stackPropsValue != null ? stackPropsValue : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -41,21 +41,21 @@ final class TapStackProps {
     }
 
     public static final class Builder {
-        private String environmentSuffix;
-        private StackProps stackProps;
+        private String envSuffixValue;
+        private StackProps stackPropsValue;
 
-        public Builder environmentSuffix(final String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffixParam) {
+            this.envSuffixValue = envSuffixParam;
             return this;
         }
 
-        public Builder stackProps(final StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps stackPropsParam) {
+            this.stackPropsValue = stackPropsParam;
             return this;
         }
 
         public TapStackProps build() {
-            return new TapStackProps(environmentSuffix, stackProps);
+            return new TapStackProps(envSuffixValue, stackPropsValue);
         }
     }
 }
@@ -88,14 +88,12 @@ final class TapStack extends Stack {
     public TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
-        // Get environment suffix from props, context, or use 'dev' as default
         this.environmentSuffix = Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
                 .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
                         .map(Object::toString))
                 .orElse("dev");
         
-        // Store the environment for child stacks
         this.stackEnvironment = props != null && props.getStackProps() != null && props.getStackProps().getEnv() != null 
                 ? props.getStackProps().getEnv()
                 : Environment.builder()
@@ -103,7 +101,6 @@ final class TapStack extends Stack {
                         .region("us-east-1")
                         .build();
 
-        // Create networking stack
         NetworkStack networkStack = new NetworkStack(
                 this,
                 "NetworkStack",
@@ -112,7 +109,6 @@ final class TapStack extends Stack {
                         .build()
         );
 
-        // Create security stack
         SecurityStack securityStack = new SecurityStack(
                 this,
                 "SecurityStack",
@@ -121,7 +117,6 @@ final class TapStack extends Stack {
                         .build()
         );
 
-        // Create database stack
         DatabaseStack databaseStack = new DatabaseStack(
                 this,
                 "DatabaseStack",
@@ -136,7 +131,6 @@ final class TapStack extends Stack {
                         .build()
         );
 
-        // Create ECS stack
         ECSStack ecsStack = new ECSStack(
                 this,
                 "ECSStack",
@@ -153,10 +147,6 @@ final class TapStack extends Stack {
                         .build()
         );
 
-        // Add dependencies - removed to avoid cyclic dependencies
-        // Dependencies will be handled implicitly through resource references
-        
-        // Add outputs
         CfnOutput.Builder.create(this, "VPCId")
                 .value(networkStack.getVpc().getVpcId())
                 .description("VPC ID")
@@ -178,75 +168,38 @@ final class TapStack extends Stack {
                 .build();
     }
 
-    /**
-     * Gets the environment suffix used by this stack.
-     *
-     * @return The environment suffix (e.g., 'dev', 'prod')
-     */
     public String getEnvironmentSuffix() {
         return environmentSuffix;
     }
 
-    /**
-     * Gets the stack environment.
-     *
-     * @return The stack environment
-     */
     public Environment getStackEnv() {
         return this.stackEnvironment;
     }
 }
 
-/**
- * Main entry point for the TAP CDK Java application.
- *
- * This class serves as the entry point for the CDK application and is responsible
- * for initializing the CDK app and instantiating the main TapStack.
- *
- * The application supports environment-specific deployments through the
- * environmentSuffix context parameter.
- *
- * @version 1.0
- * @since 1.0
- */
 public final class Main {
 
-    /**
-     * Private constructor to prevent instantiation of utility class.
-     */
     private Main() {
-        // Utility class should not be instantiated
     }
 
-    /**
-     * Main entry point for the CDK application.
-     *
-     * This method creates a CDK App instance and instantiates the TapStack
-     * with appropriate configuration based on environment variables and context.
-     *
-     * @param args Command line arguments (not used in this application)
-     */
     public static void main(final String[] args) {
         App app = new App();
 
-        // Get environment suffix from context or default to 'dev'
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
         }
 
-        // Create the main TAP stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
                 .stackProps(StackProps.builder()
                         .env(Environment.builder()
                                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                                .region("us-east-1") // Fixed region as per requirements
+                                .region("us-east-1")
                                 .build())
                         .build())
                 .build());
 
-        // Synthesize the CDK app
         app.synth();
     }
 }

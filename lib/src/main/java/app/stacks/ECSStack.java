@@ -33,37 +33,32 @@ public final class ECSStack extends Stack {
     private final ICluster cluster;
     private final FargateService service;
 
-    public ECSStack(final Construct scope, final String id, final ECSStackProps props) {
-        super(scope, id, props.getStackProps());
+    ECSStack(final Construct scope, final String id, final ECSStackProps ecsProps) {
+        super(scope, id, ecsProps.getStackProps());
         
-        // Get environment suffix from the parent stack
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
             environmentSuffix = "dev";
         }
 
-        // Create ECS cluster with container insights enabled
         this.cluster = Cluster.Builder.create(this, "WebAppCluster")
-                .vpc(props.getVpc())
+                .vpc(ecsProps.getVpc())
                 .clusterName("secure-webapp-cluster-" + environmentSuffix)
                 .containerInsights(true)
                 .build();
 
-        // Create log group for ECS tasks (use default AWS managed KMS to avoid cross-stack cycles)
         LogGroup logGroup = LogGroup.Builder.create(this, "ECSLogGroup")
                 .logGroupName("/aws/ecs/secure-webapp-" + environmentSuffix)
                 .retention(RetentionDays.ONE_MONTH)
                 .build();
 
-        // Create task definition
         FargateTaskDefinition taskDefinition = FargateTaskDefinition.Builder.create(this, "WebAppTaskDef")
                 .memoryLimitMiB(512)
                 .cpu(256)
-                .executionRole(props.getEcsExecutionRole())
-                .taskRole(props.getEcsTaskRole())
+                .executionRole(ecsProps.getEcsExecutionRole())
+                .taskRole(ecsProps.getEcsTaskRole())
                 .build();
 
-        // Add container to task definition
         ContainerDefinition container = taskDefinition.addContainer("WebAppContainer", 
                 ContainerDefinitionOptions.builder()
                         .image(ContainerImage.fromRegistry("nginx:alpine"))
@@ -73,8 +68,8 @@ public final class ECSStack extends Stack {
                                 .streamPrefix("webapp")
                                 .build()))
                         .secrets(Map.of(
-                                "DB_PASSWORD", Secret.fromSecretsManager(props.getDatabaseSecret(), "password"),
-                                "DB_USERNAME", Secret.fromSecretsManager(props.getDatabaseSecret(), "username")
+                                "DB_PASSWORD", Secret.fromSecretsManager(ecsProps.getDatabaseSecret(), "password"),
+                                "DB_USERNAME", Secret.fromSecretsManager(ecsProps.getDatabaseSecret(), "username")
                         ))
                         .environment(Map.of(
                                 "ENV", "production"
@@ -86,7 +81,6 @@ public final class ECSStack extends Stack {
                 .protocol(Protocol.TCP)
                 .build());
 
-        // Create Fargate service
         this.service = FargateService.Builder.create(this, "WebAppService")
                 .cluster(cluster)
                 .taskDefinition(taskDefinition)
@@ -94,12 +88,11 @@ public final class ECSStack extends Stack {
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
                         .build())
-                .securityGroups(List.of(props.getEcsSecurityGroup()))
+                .securityGroups(List.of(ecsProps.getEcsSecurityGroup()))
                 .assignPublicIp(false)
                 .serviceName("secure-webapp-service-" + environmentSuffix)
                 .build();
 
-        // Add tags
         Tags.of(this).add("Environment", "production");
         Tags.of(this).add("Project", "SecureWebApp");
     }
@@ -121,17 +114,17 @@ public final class ECSStack extends Stack {
         private final Role ecsExecutionRole;
         private final ISecret databaseSecret;
 
-        private ECSStackProps(final StackProps stackProps, final IVpc vpc, 
-                             final ISecurityGroup ecsSecurityGroup, 
-                             final IKey kmsKey, final Role ecsTaskRole, 
-                             final Role ecsExecutionRole, final ISecret databaseSecret) {
-            this.stackProps = stackProps;
-            this.vpc = vpc;
-            this.ecsSecurityGroup = ecsSecurityGroup;
-            this.kmsKey = kmsKey;
-            this.ecsTaskRole = ecsTaskRole;
-            this.ecsExecutionRole = ecsExecutionRole;
-            this.databaseSecret = databaseSecret;
+        private ECSStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
+                             final ISecurityGroup ecsSecurityGroupValue, 
+                             final IKey kmsKeyValue, final Role ecsTaskRoleValue, 
+                             final Role ecsExecutionRoleValue, final ISecret databaseSecretValue) {
+            this.stackProps = stackPropsValue;
+            this.vpc = vpcValue;
+            this.ecsSecurityGroup = ecsSecurityGroupValue;
+            this.kmsKey = kmsKeyValue;
+            this.ecsTaskRole = ecsTaskRoleValue;
+            this.ecsExecutionRole = ecsExecutionRoleValue;
+            this.databaseSecret = databaseSecretValue;
         }
 
         public static Builder builder() {
@@ -167,52 +160,52 @@ public final class ECSStack extends Stack {
         }
 
         public static final class Builder {
-            private StackProps stackProps;
-            private IVpc vpc;
-            private ISecurityGroup ecsSecurityGroup;
-            private IKey kmsKey;
-            private Role ecsTaskRole;
-            private Role ecsExecutionRole;
-            private ISecret databaseSecret;
+            private StackProps stackPropsValue;
+            private IVpc vpcValue;
+            private ISecurityGroup ecsSecurityGroupValue;
+            private IKey kmsKeyValue;
+            private Role ecsTaskRoleValue;
+            private Role ecsExecutionRoleValue;
+            private ISecret databaseSecretValue;
 
-            public Builder stackProps(final StackProps stackProps) { 
-                this.stackProps = stackProps; 
+            public Builder stackProps(final StackProps stackPropsParam) { 
+                this.stackPropsValue = stackPropsParam; 
                 return this; 
             }
             
-            public Builder vpc(final IVpc vpc) { 
-                this.vpc = vpc; 
+            public Builder vpc(final IVpc vpcParam) { 
+                this.vpcValue = vpcParam; 
                 return this; 
             }
             
-            public Builder ecsSecurityGroup(final ISecurityGroup ecsSecurityGroup) { 
-                this.ecsSecurityGroup = ecsSecurityGroup; 
+            public Builder ecsSecurityGroup(final ISecurityGroup ecsSecurityGroupParam) { 
+                this.ecsSecurityGroupValue = ecsSecurityGroupParam; 
                 return this; 
             }
             
-            public Builder kmsKey(final IKey kmsKey) { 
-                this.kmsKey = kmsKey; 
+            public Builder kmsKey(final IKey kmsKeyParam) { 
+                this.kmsKeyValue = kmsKeyParam; 
                 return this; 
             }
             
-            public Builder ecsTaskRole(final Role ecsTaskRole) { 
-                this.ecsTaskRole = ecsTaskRole; 
+            public Builder ecsTaskRole(final Role ecsTaskRoleParam) { 
+                this.ecsTaskRoleValue = ecsTaskRoleParam; 
                 return this; 
             }
             
-            public Builder ecsExecutionRole(final Role ecsExecutionRole) { 
-                this.ecsExecutionRole = ecsExecutionRole; 
+            public Builder ecsExecutionRole(final Role ecsExecutionRoleParam) { 
+                this.ecsExecutionRoleValue = ecsExecutionRoleParam; 
                 return this; 
             }
             
-            public Builder databaseSecret(final ISecret databaseSecret) { 
-                this.databaseSecret = databaseSecret; 
+            public Builder databaseSecret(final ISecret databaseSecretParam) { 
+                this.databaseSecretValue = databaseSecretParam; 
                 return this; 
             }
 
             public ECSStackProps build() {
-                return new ECSStackProps(stackProps, vpc, ecsSecurityGroup, kmsKey, 
-                                       ecsTaskRole, ecsExecutionRole, databaseSecret);
+                return new ECSStackProps(stackPropsValue, vpcValue, ecsSecurityGroupValue, kmsKeyValue, 
+                                       ecsTaskRoleValue, ecsExecutionRoleValue, databaseSecretValue);
             }
         }
     }

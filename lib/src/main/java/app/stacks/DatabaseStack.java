@@ -33,7 +33,6 @@ public final class DatabaseStack extends Stack {
     public DatabaseStack(final Construct scope, final String id, final DatabaseStackProps props) {
         super(scope, id, props.getStackProps());
 
-        // Create secret for database credentials
         this.databaseSecret = Secret.Builder.create(this, "DatabaseSecret")
                 .secretName("prod/webapp/database")
                 .description("Database credentials for web application")
@@ -48,7 +47,6 @@ public final class DatabaseStack extends Stack {
                 .encryptionKey(props.getKmsKey())
                 .build();
 
-        // Create subnet group for RDS
         SubnetGroup dbSubnetGroup = SubnetGroup.Builder.create(this, "DatabaseSubnetGroup")
                 .vpc(props.getVpc())
                 .description("Subnet group for RDS database")
@@ -57,7 +55,6 @@ public final class DatabaseStack extends Stack {
                         .build())
                 .build();
 
-        // Create RDS PostgreSQL instance
         this.database = DatabaseInstance.Builder.create(this, "WebAppDatabase")
                 .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
                         .version(PostgresEngineVersion.VER_15_4)
@@ -81,7 +78,6 @@ public final class DatabaseStack extends Stack {
                 .performanceInsightEncryptionKey(props.getRdsKmsKey())
                 .build();
 
-        // Add tags
         Tags.of(this).add("Environment", "production");
         Tags.of(this).add("Project", "SecureWebApp");
     }
@@ -101,14 +97,14 @@ public final class DatabaseStack extends Stack {
         private final IKey kmsKey;
         private final IKey rdsKmsKey;
 
-        private DatabaseStackProps(final StackProps stackProps, final IVpc vpc, 
-                                 final ISecurityGroup rdsSecurityGroup, final IKey kmsKey, 
-                                 final IKey rdsKmsKey) {
-            this.stackProps = stackProps;
-            this.vpc = vpc;
-            this.rdsSecurityGroup = rdsSecurityGroup;
-            this.kmsKey = kmsKey;
-            this.rdsKmsKey = rdsKmsKey;
+        private DatabaseStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
+                                 final ISecurityGroup rdsSecurityGroupValue, final IKey kmsKeyValue, 
+                                 final IKey rdsKmsKeyValue) {
+            this.stackProps = stackPropsValue;
+            this.vpc = vpcValue;
+            this.rdsSecurityGroup = rdsSecurityGroupValue;
+            this.kmsKey = kmsKeyValue;
+            this.rdsKmsKey = rdsKmsKeyValue;
         }
 
         public static Builder builder() {
@@ -136,39 +132,39 @@ public final class DatabaseStack extends Stack {
         }
 
         public static final class Builder {
-            private StackProps stackProps;
-            private IVpc vpc;
-            private ISecurityGroup rdsSecurityGroup;
-            private IKey kmsKey;
-            private IKey rdsKmsKey;
+            private StackProps stackPropsValue;
+            private IVpc vpcValue;
+            private ISecurityGroup rdsSecurityGroupValue;
+            private IKey kmsKeyValue;
+            private IKey rdsKmsKeyValue;
 
-            public Builder stackProps(final StackProps stackProps) { 
-                this.stackProps = stackProps; 
+            public Builder stackProps(final StackProps stackPropsParam) { 
+                this.stackPropsValue = stackPropsParam; 
                 return this; 
             }
             
-            public Builder vpc(final IVpc vpc) { 
-                this.vpc = vpc; 
+            public Builder vpc(final IVpc vpcParam) { 
+                this.vpcValue = vpcParam; 
                 return this; 
             }
             
-            public Builder rdsSecurityGroup(final ISecurityGroup rdsSecurityGroup) { 
-                this.rdsSecurityGroup = rdsSecurityGroup; 
+            public Builder rdsSecurityGroup(final ISecurityGroup rdsSecurityGroupParam) { 
+                this.rdsSecurityGroupValue = rdsSecurityGroupParam; 
                 return this; 
             }
             
-            public Builder kmsKey(final IKey kmsKey) { 
-                this.kmsKey = kmsKey; 
+            public Builder kmsKey(final IKey kmsKeyParam) { 
+                this.kmsKeyValue = kmsKeyParam; 
                 return this; 
             }
             
-            public Builder rdsKmsKey(final IKey rdsKmsKey) { 
-                this.rdsKmsKey = rdsKmsKey; 
+            public Builder rdsKmsKey(final IKey rdsKmsKeyParam) { 
+                this.rdsKmsKeyValue = rdsKmsKeyParam; 
                 return this; 
             }
 
             public DatabaseStackProps build() {
-                return new DatabaseStackProps(stackProps, vpc, rdsSecurityGroup, kmsKey, rdsKmsKey);
+                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue, kmsKeyValue, rdsKmsKeyValue);
             }
         }
     }
