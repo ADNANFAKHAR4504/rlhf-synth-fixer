@@ -7,14 +7,16 @@ This tool is meant only to test IaC tasks from Turing Enterprises.
 
 **This application should ONLY be run in a fresh, clean AWS account dedicated for testing purposes.**
 
-### Why This Matters:
+### Why This Matters
+
 - **Resource Creation**: IaC tasks will create various AWS resources (EC2 instances, VPCs, S3 buckets, etc.)
 - **Resource Accumulation**: With 450+ tasks, hundreds of resources may be created across multiple regions
 - **Potential Conflicts**: Existing resources in your account may interfere with task execution
 - **Cost Impact**: Created resources may incur charges if not properly cleaned up
 - **Account Pollution**: Running this in a production or shared account will create clutter
 
-### Recommended Setup:
+### Recommended Setup
+
 1. **Create a new AWS account** specifically for this testing
 2. **Use a dedicated test account** that contains no important resources
 3. **Ensure proper permissions** for creating/managing AWS resources
@@ -57,6 +59,7 @@ For **ALL regions** listed in `aws-nuke-config.yaml` (us-east-1, us-east-2, us-w
    - **Repeat for ALL regions** where you plan to run tasks
 
 2. **Via AWS CLI** (example for EC2 instances in us-east-1):
+
    ```bash
    aws service-quotas request-service-quota-increase \
      --service-code ec2 \
@@ -79,9 +82,11 @@ For **ALL regions** listed in `aws-nuke-config.yaml` (us-east-1, us-east-2, us-w
 ## Setup
 
 1. **Set your AWS Account ID as an environment variable**:
+
    ```bash
    export AWS_ACCOUNT_ID=123456789012
    ```
+
    Replace `123456789012` with your actual AWS account ID. This is required for aws-nuke configuration and safety verification.
 
 2. Ensure `tasks.json` is in the same directory
@@ -132,32 +137,39 @@ Inside the container, you can find the code for each task in the `archive/` dire
 The script includes aws-nuke integration to perform garbage collection on the AWS account and prevent resource quota limits:
 
 ### Purpose
+
 - **Garbage Collection**: Identifies and reports AWS resources that accumulate during task processing
 - **Quota Management**: Helps prevent hitting AWS service limits (EC2 instances, VPCs, security groups, etc.)
 - **Resource Monitoring**: Tracks resource creation patterns across multiple IaC tasks
 - **Cost Optimization**: Identifies resources that may incur ongoing charges if left running
 
 ### How It Works
+
 - **Automatic Installation**: aws-nuke is automatically downloaded and installed if not present
 - **Configuration**: A configuration file (`aws-nuke-config.yaml`) is created with comprehensive IAM exclusions
 - **Batch Dry-Run Mode**: aws-nuke runs in dry-run mode every 20 tasks and at the end to show what resources would be deleted
 - **Safety First**: No actual resource deletion occurs - this is for monitoring and reporting purposes only
 
 ### IAM Protection
+
 The following IAM resources are completely excluded from nuke operations to ensure account security:
-  - IAM Users, Roles, Groups
-  - IAM Policies (both managed and inline)
-  - IAM Policy Attachments
-  - IAM Instance Profiles
-  - All other IAM-related resources
+
+- IAM Users, Roles, Groups
+- IAM Policies (both managed and inline)
+- IAM Policy Attachments
+- IAM Instance Profiles
+- All other IAM-related resources
 
 ### Tag-Based Resource Protection
+
 Resources tagged with `NUKE_RETAIN=true` are automatically excluded from all nuke operations. This provides a simple way to protect specific resources from cleanup:
+
 - Tag any AWS resource with `NUKE_RETAIN=true` to exclude it from aws-nuke
 - This applies globally across all resource types and regions
 - Useful for preserving important test infrastructure or shared resources
 
 ### Why This Matters
+
 - **Service Limits**: AWS accounts have default limits (e.g., 20 EC2 instances, 5 VPCs per region)
 - **Resource Accumulation**: IaC tasks may create resources that aren't always cleaned up properly
 - **Billing Impact**: Some resources (EC2 instances, NAT gateways, load balancers) incur charges while running
