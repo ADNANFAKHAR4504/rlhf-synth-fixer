@@ -549,7 +549,7 @@ describe('Task Management Application Integration Tests', () => {
   describe('Security and Compliance Tests', () => {
     test('should verify IAM role exists and has proper ARN format', () => {
       const roleArn = outputs.LambdaExecutionRoleArn;
-      expect(roleArn).toMatch(/^arn:aws:iam::\d{12}:role\/TaskManagementLambdaRole-/);
+      expect(roleArn).toMatch(/^arn:aws:iam::\d{12}:role\/TaskMgmtLambdaRole-/);
     });
 
     test('should verify all resources are tagged properly', async () => {

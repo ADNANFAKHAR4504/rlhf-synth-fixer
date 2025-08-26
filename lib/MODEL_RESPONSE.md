@@ -116,7 +116,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'TaskManagementLambdaRole-${EnvironmentSuffix}'
+      RoleName: !Sub 'TaskMgmtLambdaRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
