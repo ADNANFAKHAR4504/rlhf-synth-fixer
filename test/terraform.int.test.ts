@@ -106,7 +106,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('should have public subnets with correct configuration in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
-        const subnetId = outputs.subnetIds[region];
+        const subnetIds = outputs.subnetIds[region];
+        const subnetId = Array.isArray(subnetIds) ? subnetIds[0] : subnetIds;
 
         const command = new DescribeSubnetsCommand({
           SubnetIds: [subnetId],
@@ -334,7 +335,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
         const vpcId = outputs.vpcIds[region];
-        const subnetId = outputs.subnetIds[region];
+        const subnetIds = outputs.subnetIds[region];
+        const subnetId = Array.isArray(subnetIds) ? subnetIds[0] : subnetIds;
 
         const command = new DescribeRouteTablesCommand({
           Filters: [
@@ -380,7 +382,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(vpcEnvTag?.Value).toBe(TEST_CONFIG.environment);
 
         // Test subnet tags
-        const subnetId = outputs.subnetIds[region];
+        const subnetIds = outputs.subnetIds[region];
+        const subnetId = Array.isArray(subnetIds) ? subnetIds[0] : subnetIds;
         const subnetCommand = new DescribeSubnetsCommand({
           SubnetIds: [subnetId],
         });
