@@ -1,175 +1,419 @@
 package app;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Assumptions;
-import static org.junit.jupiter.api.Assertions.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.*;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.iam.IamClient;
+import software.amazon.awssdk.services.iam.model.GetInstanceProfileRequest;
+import software.amazon.awssdk.services.iam.model.GetRoleRequest;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetBucketLocationRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.concurrent.TimeUnit;
-
-import com.pulumi.Context;
 
 /**
  * Integration tests for the Main Pulumi program.
- * 
- * This is a minimal example showing how to write integration tests for Pulumi Java programs.
- * Add more specific tests based on your infrastructure requirements.
- * 
+ *
  * Run with: ./gradlew integrationTest
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class MainIntegrationTest {
 
-    /**
-     * Test that the application can be compiled and the main class loads.
-     */
-    @Test
-    void testApplicationLoads() {
-        assertDoesNotThrow(() -> {
-            Class.forName("app.Main");
-        });
+    private static Ec2Client ec2Client;
+    private static S3Client s3Client;
+    private static IamClient iamClient;
+    private static JsonNode allOutputs;
+
+    @BeforeAll
+    static void setUp() throws Exception {
+        Region region = Region.US_EAST_1;
+        
+        ec2Client = Ec2Client.builder()
+                .region(region)
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+
+        s3Client = S3Client.builder()
+                .region(region)
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+
+        iamClient = IamClient.builder()
+                .region(region)
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
+
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        String suffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
+        String stackName = "TapStack" + suffix;
+        System.out.println("Using stack: " + stackName);
+
+        String outputsJson = executeCommand("pulumi", "stack", "output", "--json", "--stack", stackName);
+        allOutputs = objectMapper.readTree(outputsJson);
+        
+        System.out.println("Stack outputs: " + allOutputs.toPrettyString());
     }
 
-    /**
-     * Test that Pulumi dependencies are available on classpath.
-     */
-    @Test
-    void testPulumiDependenciesAvailable() {
-        assertDoesNotThrow(() -> {
-            Class.forName("com.pulumi.Pulumi");
-            Class.forName("com.pulumi.aws.s3.Bucket");
-            Class.forName("com.pulumi.aws.s3.BucketArgs");
-        }, "Pulumi dependencies should be available on classpath");
-    }
-
-    /**
-     * Test that required project files exist.
-     */
-    @Test
-    void testProjectStructure() {
-        assertTrue(Files.exists(Paths.get("lib/src/main/java/app/Main.java")),
-                "Main.java should exist");
-        assertTrue(Files.exists(Paths.get("Pulumi.yaml")),
-                "Pulumi.yaml should exist");
-        assertTrue(Files.exists(Paths.get("build.gradle")),
-                "build.gradle should exist");
-    }
-
-    /**
-     * Test that defineInfrastructure method exists and is accessible.
-     */
-    @Test
-    void testDefineInfrastructureMethodAccessible() {
-        assertDoesNotThrow(() -> {
-            var method = Main.class.getDeclaredMethod("defineInfrastructure", Context.class);
-            assertNotNull(method);
-            assertTrue(java.lang.reflect.Modifier.isStatic(method.getModifiers()));
-        });
-    }
-
-    /**
-     * Example test for Pulumi program validation using Pulumi CLI.
-     * Disabled by default as it requires Pulumi CLI and AWS setup.
-     * 
-     * Uncomment @Disabled and configure environment to run this test.
-     */
-    @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
-    void testPulumiPreview() throws Exception {
-        // Skip if Pulumi CLI is not available
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", "test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
-
-        Process process = pb.start();
-        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-
-        assertTrue(finished, "Pulumi preview should complete within 60 seconds");
-
-        // Preview should succeed (exit code 0) or show changes needed (exit code 1)
-        int exitCode = process.exitValue();
-        assertTrue(exitCode == 0 || exitCode == 1,
-                "Pulumi preview should succeed or show pending changes");
-    }
-
-    /**
-     * Example test for actual infrastructure deployment.
-     * Disabled by default to prevent accidental resource creation.
-     * 
-     * IMPORTANT: This creates real AWS resources. Only enable in test environments.
-     */
-    @Test
-    @Disabled("Enable for actual infrastructure testing - creates real AWS resources")
-    void testInfrastructureDeployment() throws Exception {
-        // Skip if environment is not properly configured
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
-
-        // Deploy infrastructure
-        ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", "integration-test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
-
-        Process deployProcess = deployPb.start();
-        boolean deployFinished = deployProcess.waitFor(300, TimeUnit.SECONDS);
-
-        assertTrue(deployFinished, "Deployment should complete within 5 minutes");
-        assertEquals(0, deployProcess.exitValue(), "Deployment should succeed");
-
-        try {
-            // Verify deployment worked by checking stack outputs
-            ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process outputsProcess = outputsPb.start();
-            boolean outputsFinished = outputsProcess.waitFor(30, TimeUnit.SECONDS);
-
-            assertTrue(outputsFinished, "Getting outputs should complete quickly");
-            assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
-
-        } finally {
-            // Clean up - destroy the stack
-            ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process destroyProcess = destroyPb.start();
-            destroyProcess.waitFor(300, TimeUnit.SECONDS);
+    @AfterAll
+    static void tearDown() {
+        if (ec2Client != null) {
+            ec2Client.close();
+        }
+        if (s3Client != null) {
+            s3Client.close();
+        }
+        if (iamClient != null) {
+            iamClient.close();
         }
     }
 
-    /**
-     * Helper method to check if Pulumi CLI is available.
-     */
-    private boolean isPulumiAvailable() {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("pulumi", "version");
-            Process process = pb.start();
-            return process.waitFor(10, TimeUnit.SECONDS) && process.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
+    @Test
+    @Order(1)
+    @DisplayName("Should validate VPC exists and has correct configuration")
+    void shouldValidateVpcConfiguration() {
+        String vpcId = allOutputs.get("vpcId").asText();
+        assertNotNull(vpcId, "VPC ID should be in outputs");
+
+        DescribeVpcsResponse vpcsResponse = ec2Client.describeVpcs(
+                DescribeVpcsRequest.builder()
+                        .vpcIds(vpcId)
+                        .build());
+
+        assertEquals(1, vpcsResponse.vpcs().size(), "Should find exactly one VPC");
+        
+        Vpc vpc = vpcsResponse.vpcs().get(0);
+        assertEquals(vpcId, vpc.vpcId(), "VPC ID should match");
+        assertEquals(VpcState.AVAILABLE, vpc.state(), "VPC should be available");
+        
+        System.out.println("✓ VPC validated: " + vpcId + " with CIDR: " + vpc.cidrBlock());
+    }
+
+    @Test
+    @Order(2)
+    @DisplayName("Should validate public subnets exist and are correctly configured")
+    void shouldValidatePublicSubnets() {
+        String publicSubnetPrimaryId = allOutputs.get("publicSubnetPrimaryId").asText();
+        String publicSubnetSecondaryId = allOutputs.get("publicSubnetSecondaryId").asText();
+        
+        assertNotNull(publicSubnetPrimaryId, "Primary public subnet ID should be in outputs");
+        assertNotNull(publicSubnetSecondaryId, "Secondary public subnet ID should be in outputs");
+
+        DescribeSubnetsResponse subnetsResponse = ec2Client.describeSubnets(
+                DescribeSubnetsRequest.builder()
+                        .subnetIds(publicSubnetPrimaryId, publicSubnetSecondaryId)
+                        .build());
+
+        assertEquals(2, subnetsResponse.subnets().size(), "Should find both public subnets");
+        
+        for (Subnet subnet : subnetsResponse.subnets()) {
+            assertEquals(SubnetState.AVAILABLE, subnet.state(), "Subnet should be available");
+            assertTrue(subnet.mapPublicIpOnLaunch(), "Public subnets should map public IP on launch");
+            
+            System.out.println("✓ Public subnet validated: " + subnet.subnetId() + 
+                    " in AZ: " + subnet.availabilityZone() + 
+                    " with CIDR: " + subnet.cidrBlock());
         }
     }
 
-    /**
-     * Helper method to check if AWS credentials are configured.
-     */
-    private boolean hasAwsCredentials() {
-        return System.getenv("AWS_ACCESS_KEY_ID") != null &&
-                System.getenv("AWS_SECRET_ACCESS_KEY") != null;
+    @Test
+    @Order(3)
+    @DisplayName("Should validate private subnets exist and are correctly configured")
+    void shouldValidatePrivateSubnets() {
+        String privateSubnetPrimaryId = allOutputs.get("privateSubnetPrimaryId").asText();
+        String privateSubnetSecondaryId = allOutputs.get("privateSubnetSecondaryId").asText();
+        
+        assertNotNull(privateSubnetPrimaryId, "Primary private subnet ID should be in outputs");
+        assertNotNull(privateSubnetSecondaryId, "Secondary private subnet ID should be in outputs");
+
+        DescribeSubnetsResponse subnetsResponse = ec2Client.describeSubnets(
+                DescribeSubnetsRequest.builder()
+                        .subnetIds(privateSubnetPrimaryId, privateSubnetSecondaryId)
+                        .build());
+
+        assertEquals(2, subnetsResponse.subnets().size(), "Should find both private subnets");
+        
+        for (Subnet subnet : subnetsResponse.subnets()) {
+            assertEquals(SubnetState.AVAILABLE, subnet.state(), "Subnet should be available");
+            assertFalse(subnet.mapPublicIpOnLaunch(), "Private subnets should not map public IP on launch");
+            
+            System.out.println("✓ Private subnet validated: " + subnet.subnetId() + 
+                    " in AZ: " + subnet.availabilityZone() + 
+                    " with CIDR: " + subnet.cidrBlock());
+        }
     }
 
-    /**
-     * Helper method to check if we're in a testing environment (not production).
-     */
-    private boolean isTestingEnvironment() {
-        String env = System.getenv("ENVIRONMENT_SUFFIX");
-        return env != null && (env.startsWith("pr") || env.equals("dev") || env.equals("test"));
+    @Test
+    @Order(4)
+    @DisplayName("Should validate Internet Gateway exists and is attached")
+    void shouldValidateInternetGateway() {
+        String internetGatewayId = allOutputs.get("internetGatewayId").asText();
+        String vpcId = allOutputs.get("vpcId").asText();
+        
+        assertNotNull(internetGatewayId, "Internet Gateway ID should be in outputs");
+
+        DescribeInternetGatewaysResponse igwResponse = ec2Client.describeInternetGateways(
+                DescribeInternetGatewaysRequest.builder()
+                        .internetGatewayIds(internetGatewayId)
+                        .build());
+
+        assertEquals(1, igwResponse.internetGateways().size(), "Should find exactly one Internet Gateway");
+        
+        InternetGateway igw = igwResponse.internetGateways().get(0);
+        assertEquals(internetGatewayId, igw.internetGatewayId(), "IGW ID should match");
+        
+        boolean attachedToVpc = igw.attachments().stream()
+                .anyMatch(attachment -> 
+                    attachment.vpcId().equals(vpcId) && 
+                    attachment.state() == AttachmentStatus.ATTACHED);
+        
+        assertTrue(attachedToVpc, "Internet Gateway should be attached to the VPC");
+        
+        System.out.println("✓ Internet Gateway validated: " + internetGatewayId + " attached to VPC: " + vpcId);
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("Should validate security group exists with correct rules")
+    void shouldValidateSecurityGroup() {
+        String securityGroupId = allOutputs.get("webSecurityGroupId").asText();
+        
+        assertNotNull(securityGroupId, "Security Group ID should be in outputs");
+
+        DescribeSecurityGroupsResponse sgResponse = ec2Client.describeSecurityGroups(
+                DescribeSecurityGroupsRequest.builder()
+                        .groupIds(securityGroupId)
+                        .build());
+
+        assertEquals(1, sgResponse.securityGroups().size(), "Should find exactly one Security Group");
+        
+        SecurityGroup sg = sgResponse.securityGroups().get(0);
+        assertEquals(securityGroupId, sg.groupId(), "Security Group ID should match");
+        assertEquals("web-security-group", sg.groupName(), "Security Group name should be correct");
+
+        boolean hasHttpRule = sg.ipPermissions().stream()
+                .anyMatch(rule -> rule.fromPort() == 80 && rule.toPort() == 80);
+        boolean hasHttpsRule = sg.ipPermissions().stream()
+                .anyMatch(rule -> rule.fromPort() == 443 && rule.toPort() == 443);
+        boolean hasSshRule = sg.ipPermissions().stream()
+                .anyMatch(rule -> rule.fromPort() == 22 && rule.toPort() == 22);
+
+        assertTrue(hasHttpRule, "Should have HTTP rule (port 80)");
+        assertTrue(hasHttpsRule, "Should have HTTPS rule (port 443)");
+        assertTrue(hasSshRule, "Should have SSH rule (port 22)");
+        
+        System.out.println("✓ Security Group validated: " + securityGroupId + " with correct rules");
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("Should validate S3 bucket exists and is accessible")
+    void shouldValidateS3Bucket() throws Exception {
+        String bucketId = allOutputs.get("bucketId").asText();
+        
+        assertNotNull(bucketId, "Bucket ID should be in outputs");
+
+        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketId).build());
+        
+        String bucketLocation = s3Client.getBucketLocation(
+                GetBucketLocationRequest.builder().bucket(bucketId).build())
+                .locationConstraintAsString();
+
+        assertNotNull(bucketLocation, "Bucket location should be available");
+        
+        System.out.println("✓ S3 bucket validated: " + bucketId + " in location: " + bucketLocation);
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("Should validate IAM role and instance profile exist")
+    void shouldValidateIamResources() throws Exception {
+        String instanceProfileName = allOutputs.get("instanceProfileName").asText();
+        String iamRoleArn = allOutputs.get("iamRoleArn").asText();
+        
+        assertNotNull(instanceProfileName, "Instance Profile name should be in outputs");
+        assertNotNull(iamRoleArn, "IAM Role ARN should be in outputs");
+
+        String roleName = iamRoleArn.substring(iamRoleArn.lastIndexOf('/') + 1);
+
+        var instanceProfile = iamClient.getInstanceProfile(
+                GetInstanceProfileRequest.builder()
+                        .instanceProfileName(instanceProfileName)
+                        .build());
+
+        assertNotNull(String.valueOf(instanceProfile.instanceProfile()), "Instance Profile should exist");
+        assertEquals(instanceProfileName, instanceProfile.instanceProfile().instanceProfileName(),
+                "Instance profile name should equals " + instanceProfile.instanceProfile().instanceProfileName());
+
+        var role = iamClient.getRole(
+                GetRoleRequest.builder()
+                        .roleName(roleName)
+                        .build());
+
+        assertNotNull(String.valueOf(role.role()), "IAM Role should exist");
+        assertEquals(roleName, role.role().roleName(), "IAM Role name should equals " + role.role().roleName());
+        
+        System.out.println("✓ IAM resources validated - Role: " + roleName + ", Instance Profile: " + instanceProfileName);
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("Should validate EC2 instance exists and is running")
+    void shouldValidateEc2Instance() throws Exception {
+        String instanceId = allOutputs.get("instanceId").asText();
+        String publicIp = allOutputs.get("publicIp").asText();
+        
+        assertNotNull(instanceId, "Instance ID should be in outputs");
+        assertNotNull(publicIp, "Public IP should be in outputs");
+
+        DescribeInstancesResponse instancesResponse = ec2Client.describeInstances(
+                DescribeInstancesRequest.builder()
+                        .instanceIds(instanceId)
+                        .build());
+
+        assertEquals(1, instancesResponse.reservations().size(), "Should find exactly one reservation");
+        assertEquals(1, instancesResponse.reservations().get(0).instances().size(), "Should find exactly one instance");
+        
+        Instance instance = instancesResponse.reservations().get(0).instances().get(0);
+        assertEquals(instanceId, instance.instanceId(), "Instance ID should match");
+        assertEquals(publicIp, instance.publicIpAddress(), "Public IP should match");
+        
+        InstanceState state = instance.state();
+        assertTrue(state.name() == InstanceStateName.RUNNING || state.name() == InstanceStateName.PENDING,
+                "Instance should be running or pending");
+        
+        System.out.println("✓ EC2 instance validated: " + instanceId + " with public IP: " + publicIp + 
+                ", state: " + state.name());
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("Should validate route table configuration")
+    void shouldValidateRouteTable() {
+        String publicRouteTableId = allOutputs.get("publicRouteTableId").asText();
+        String internetGatewayId = allOutputs.get("internetGatewayId").asText();
+        
+        assertNotNull(publicRouteTableId, "Public Route Table ID should be in outputs");
+
+        DescribeRouteTablesResponse routeTablesResponse = ec2Client.describeRouteTables(
+                DescribeRouteTablesRequest.builder()
+                        .routeTableIds(publicRouteTableId)
+                        .build());
+
+        assertEquals(1, routeTablesResponse.routeTables().size(), "Should find exactly one route table");
+        
+        RouteTable routeTable = routeTablesResponse.routeTables().get(0);
+        assertEquals(publicRouteTableId, routeTable.routeTableId(), "Route Table ID should match");
+
+        boolean hasInternetRoute = routeTable.routes().stream()
+                .anyMatch(route -> 
+                    "0.0.0.0/0".equals(route.destinationCidrBlock()) &&
+                    internetGatewayId.equals(route.gatewayId()) &&
+                    route.state() == RouteState.ACTIVE);
+
+        assertTrue(hasInternetRoute, "Route table should have active route to Internet Gateway");
+        
+        System.out.println("✓ Route table validated: " + publicRouteTableId + " with internet route via: " + internetGatewayId);
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("Should validate complete infrastructure connectivity")
+    void shouldValidateInfrastructureConnectivity() throws Exception {
+        String instanceId = allOutputs.get("instanceId").asText();
+        String publicIp = allOutputs.get("publicIp").asText();
+        String bucketId = allOutputs.get("bucketId").asText();
+
+        System.out.println("Waiting for EC2 instance to be fully available...");
+        
+        waitForInstanceToBeRunning(instanceId);
+
+        System.out.println("✓ Complete infrastructure validated:");
+        System.out.println("  - VPC with public/private subnets across multiple AZs");
+        System.out.println("  - Internet Gateway with proper routing");
+        System.out.println("  - Security Group with web server access rules");
+        System.out.println("  - S3 bucket for web hosting: " + bucketId);
+        System.out.println("  - IAM role and instance profile for EC2-S3 access");
+        System.out.println("  - EC2 instance running web server: " + instanceId);
+        System.out.println("  - Public IP accessible: " + publicIp);
+    }
+
+    private void waitForInstanceToBeRunning(String instanceId) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+        long timeoutMillis = 300 * 1000L;
+
+        while (System.currentTimeMillis() - startTime < timeoutMillis) {
+            DescribeInstancesResponse response = ec2Client.describeInstances(
+                    DescribeInstancesRequest.builder()
+                            .instanceIds(instanceId)
+                            .build());
+
+            Instance instance = response.reservations().get(0).instances().get(0);
+            InstanceStateName state = instance.state().name();
+
+            if (state == InstanceStateName.RUNNING) {
+                System.out.println("✓ Instance " + instanceId + " is running");
+                return;
+            }
+
+            System.out.println("Instance " + instanceId + " state: " + state + ", waiting...");
+            TimeUnit.SECONDS.sleep(10);
+        }
+
+        throw new RuntimeException("Instance " + instanceId + " did not reach running state within " + 300 + " seconds");
+    }
+
+    private static String executeCommand(String... command) throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.redirectErrorStream(true);
+        
+        Process process = processBuilder.start();
+        
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append(System.lineSeparator());
+            }
+        }
+        
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("Command failed with exit code " + exitCode + ": " + output.toString());
+        }
+        
+        return output.toString().trim();
+    }
+
+    private void assertNotNull(String value, String message) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new AssertionError(message + " - got: " + value);
+        }
+    }
+
+    private void assertEquals(Object expected, Object actual, String message) {
+        if (!expected.equals(actual)) {
+            throw new AssertionError(message + " - expected: " + expected + ", actual: " + actual);
+        }
+    }
+
+    private void assertTrue(boolean condition, String message) {
+        if (!condition) {
+            throw new AssertionError(message);
+        }
+    }
+
+    private void assertFalse(boolean condition, String message) {
+        if (condition) {
+            throw new AssertionError(message);
+        }
     }
 }

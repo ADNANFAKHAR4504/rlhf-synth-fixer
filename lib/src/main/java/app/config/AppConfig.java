@@ -11,11 +11,10 @@ public class AppConfig {
         this.config = ctx.config();
     }
 
-    public String  getDefaultEnvironment() {
+    public String getDefaultEnvironment() {
         return config.require("environment");
     }
 
-    // AWS Regions
     public String getPrimaryRegion() {
         return config.require("primaryRegion");
     }
