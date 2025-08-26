@@ -22,7 +22,6 @@ import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
-import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
 import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
 import software.amazon.awscdk.services.ec2.SubnetType;
@@ -36,14 +35,19 @@ import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.kms.KeySpec;
 import software.amazon.awscdk.services.kms.KeyUsage;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.sns.Topic;
 import software.amazon.awscdk.services.sns.subscriptions.EmailSubscription;
+import software.amazon.awscdk.services.events.Rule;
+import software.amazon.awscdk.services.events.Schedule;
+import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.constructs.Construct;
-import software.amazon.awscdk.Fn;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -81,8 +85,8 @@ public class Main {
             createTapStack(app, region, environment, costCenter, projectName);
         }
         
-        // Create cross-region networking stack for VPC peering
-        createCrossRegionNetworkingStack(app, environment, costCenter, projectName);
+        // Create VPC peering orchestrator stack
+        createVpcPeeringOrchestratorStack(app, environment, costCenter, projectName);
         
         app.synth();
     }
@@ -146,13 +150,13 @@ public class Main {
             environment, costCenter, projectName, region);
     }
     
-    // NEW: Cross-region networking stack for VPC peering
-    private static void createCrossRegionNetworkingStack(App app, String environment, String costCenter, String projectName) {
-        CrossRegionNetworkingStack networkingStack = new CrossRegionNetworkingStack(app, "CrossRegionNetworkingStack", 
+    // NEW: VPC Peering Orchestrator Stack with Lambda
+    private static void createVpcPeeringOrchestratorStack(App app, String environment, String costCenter, String projectName) {
+        VpcPeeringOrchestratorStack orchestratorStack = new VpcPeeringOrchestratorStack(app, "VpcPeeringOrchestratorStack", 
             StackProps.builder()
                 .env(Environment.builder()
                     .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                    .region("us-east-2") // Primary region for networking
+                    .region("us-east-2") // Primary region for orchestrator
                     .build())
                 .build(), 
             environment, costCenter, projectName);
@@ -176,51 +180,224 @@ public class Main {
         }
     }
     
-    // NEW: Cross-region networking stack
-    public static class CrossRegionNetworkingStack extends Stack {
+    // NEW: VPC Peering Orchestrator Stack with Lambda
+    public static class VpcPeeringOrchestratorStack extends Stack {
         
-        public CrossRegionNetworkingStack(final Construct scope, final String id, final StackProps props, 
-                                        String environment, String costCenter, String projectName) {
+        public VpcPeeringOrchestratorStack(final Construct scope, final String id, final StackProps props, 
+                                          String environment, String costCenter, String projectName) {
             super(scope, id, props);
             
             // Apply standard tags
             applyStandardTags(this, environment, costCenter, projectName);
             
-            // Create VPC peering connections between regions
-            // This stack will run after all individual region stacks are deployed
-            createCrossRegionVpcPeering(environment, projectName);
+            // Create Lambda function for VPC peering orchestration
+            createVpcPeeringOrchestrator(environment, projectName);
         }
         
-        private void createCrossRegionVpcPeering(String environment, String projectName) {
-            // Create VPC peering connections between all regions
-            for (int i = 0; i < REGIONS.size(); i++) {
-                for (int j = i + 1; j < REGIONS.size(); j++) {
-                    String region1 = REGIONS.get(i);
-                    String region2 = REGIONS.get(j);
-                    
-                    // Create peering connection from region1 to region2
-                    CfnVPCPeeringConnection.Builder.create(this, 
-                            String.format("Peering%sTo%s", region1.replace("-", ""), region2.replace("-", "")))
-                        .vpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region1)))
-                        .peerRegion(region2)
-                        .peerVpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region2)))
-                        .tags(Arrays.asList(
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Name")
-                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region1, region2))
-                                .build(),
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Environment")
-                                .value(environment)
-                                .build(),
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Project")
-                                .value(projectName)
+        private void createVpcPeeringOrchestrator(String environment, String projectName) {
+            // Create IAM role for Lambda
+            Role lambdaRole = Role.Builder.create(this, "VpcPeeringOrchestratorRole")
+                .roleName(String.format("%s-%s-vpc-peering-orchestrator-role", projectName, environment))
+                .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
+                .managedPolicies(Arrays.asList(
+                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+                    ManagedPolicy.fromAwsManagedPolicyName("AmazonEC2FullAccess")
+                ))
+                .inlinePolicies(Map.of(
+                    "CrossRegionVpcPeeringPolicy", PolicyDocument.Builder.create()
+                        .statements(Arrays.asList(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(Arrays.asList(
+                                    "ec2:CreateVpcPeeringConnection",
+                                    "ec2:AcceptVpcPeeringConnection",
+                                    "ec2:DescribeVpcPeeringConnections",
+                                    "ec2:DescribeVpcs",
+                                    "ec2:CreateTags",
+                                    "cloudformation:DescribeStacks",
+                                    "cloudformation:ListExports"
+                                ))
+                                .resources(Arrays.asList("*"))
                                 .build()
                         ))
-                        .build();
-                }
-            }
+                        .build()
+                ))
+                .build();
+            
+            // Create Lambda function
+            Function vpcPeeringOrchestrator = Function.Builder.create(this, "VpcPeeringOrchestrator")
+                .functionName(String.format("%s-%s-vpc-peering-orchestrator", projectName, environment))
+                .runtime(Runtime.PYTHON_3_9)
+                .handler("index.handler")
+                .code(Code.fromInline(createLambdaCode(environment, projectName)))
+                .role(lambdaRole)
+                .timeout(Duration.minutes(5))
+                .memorySize(256)
+                .environment(Map.of(
+                    "ENVIRONMENT", environment,
+                    "PROJECT_NAME", projectName,
+                    "REGIONS", String.join(",", REGIONS)
+                ))
+                .build();
+            
+            // Create EventBridge rule to trigger Lambda after deployment
+            Rule.Builder.create(this, "VpcPeeringOrchestratorRule")
+                .ruleName(String.format("%s-%s-vpc-peering-orchestrator-rule", projectName, environment))
+                .description("Trigger VPC peering orchestration after stack deployment")
+                .schedule(Schedule.rate(Duration.minutes(5))) // Run every 5 minutes to check for new VPCs
+                .targets(Arrays.asList(new LambdaFunction(vpcPeeringOrchestrator)))
+                .build();
+        }
+        
+        private String createLambdaCode(String environment, String projectName) {
+            return String.format("""
+import json
+import boto3
+import os
+import time
+from typing import Dict, List, Optional
+
+def handler(event, context):
+    print("Starting VPC Peering Orchestration")
+    
+    environment = os.environ['ENVIRONMENT']
+    project_name = os.environ['PROJECT_NAME']
+    regions = os.environ['REGIONS'].split(',')
+    
+    # Get VPC IDs from CloudFormation exports
+    vpc_ids = get_vpc_ids_from_exports(regions, project_name, environment)
+    
+    if not vpc_ids:
+        print("No VPCs found in exports yet. Will retry later.")
+        return {
+            'statusCode': 200,
+            'body': json.dumps('No VPCs found - will retry later')
+        }
+    
+    # Create VPC peering connections
+    create_vpc_peering_connections(vpc_ids, environment, project_name)
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('VPC peering orchestration completed')
+    }
+
+def get_vpc_ids_from_exports(regions: List[str], project_name: str, environment: str) -> Dict[str, str]:
+    """Get VPC IDs from CloudFormation exports across regions."""
+    vpc_ids = {}
+    cloudformation = boto3.client('cloudformation')
+    
+    for region in regions:
+        try:
+            cloudformation_region = boto3.client('cloudformation', region_name=region)
+            response = cloudformation_region.list_exports()
+            
+            export_name = f"{project_name}-{environment}-{region}-vpc-id"
+            
+            for export in response['Exports']:
+                if export['Name'] == export_name:
+                    vpc_ids[region] = export['Value']
+                    print(f"Found VPC ID for {region}: {export['Value']}")
+                    break
+            else:
+                print(f"VPC export not found for {region}: {export_name}")
+                
+        except Exception as e:
+            print(f"Error getting exports for {region}: {str(e)}")
+    
+    return vpc_ids
+
+def create_vpc_peering_connections(vpc_ids: Dict[str, str], environment: str, project_name: str):
+    """Create VPC peering connections between all regions."""
+    if len(vpc_ids) < 2:
+        print("Need at least 2 VPCs to create peering connections")
+        return
+    
+    regions = list(vpc_ids.keys())
+    ec2_clients = {}
+    
+    # Create EC2 clients for each region
+    for region in regions:
+        ec2_clients[region] = boto3.client('ec2', region_name=region)
+    
+    # Create peering connections between all region pairs
+    for i, region1 in enumerate(regions):
+        for region2 in regions[i+1:]:
+            try:
+                print(f"Creating VPC peering between {region1} and {region2}")
+                
+                # Create peering connection from region1 to region2
+                response = ec2_clients[region1].create_vpc_peering_connection(
+                    VpcId=vpc_ids[region1],
+                    PeerVpcId=vpc_ids[region2],
+                    PeerRegion=region2,
+                    TagSpecifications=[{
+                        'ResourceType': 'vpc-peering-connection',
+                        'Tags': [
+                            {'Key': 'Name', 'Value': f"{project_name}-{environment}-peering-{region1}-to-{region2}"},
+                            {'Key': 'Environment', 'Value': environment},
+                            {'Key': 'Project', 'Value': project_name},
+                            {'Key': 'ManagedBy', 'Value': 'CDK-Lambda'}
+                        ]
+                    }]
+                )
+                
+                peering_connection_id = response['VpcPeeringConnection']['VpcPeeringConnectionId']
+                print(f"Created peering connection: {peering_connection_id}")
+                
+                # Accept the peering connection in the target region
+                ec2_clients[region2].accept_vpc_peering_connection(
+                    VpcPeeringConnectionId=peering_connection_id
+                )
+                print(f"Accepted peering connection: {peering_connection_id}")
+                
+                # Wait a moment before creating the next connection
+                time.sleep(2)
+                
+            except Exception as e:
+                print(f"Error creating peering between {region1} and {region2}: {str(e)}")
+                
+                # Check if peering already exists
+                try:
+                    existing_peerings = ec2_clients[region1].describe_vpc_peering_connections(
+                        Filters=[
+                            {'Name': 'requester-vpc-info.vpc-id', 'Values': [vpc_ids[region1]]},
+                            {'Name': 'accepter-vpc-info.vpc-id', 'Values': [vpc_ids[region2]]}
+                        ]
+                    )
+                    
+                    if existing_peerings['VpcPeeringConnections']:
+                        print(f"Peering connection already exists between {region1} and {region2}")
+                        
+                except Exception as check_error:
+                    print(f"Error checking existing peering: {str(check_error)}")
+
+def check_existing_peerings(vpc_ids: Dict[str, str]) -> bool:
+    """Check if VPC peering connections already exist."""
+    if len(vpc_ids) < 2:
+        return False
+    
+    regions = list(vpc_ids.keys())
+    ec2_clients = {}
+    
+    for region in regions:
+        ec2_clients[region] = boto3.client('ec2', region_name=region)
+    
+    # Check if peering exists between first two regions
+    try:
+        existing_peerings = ec2_clients[regions[0]].describe_vpc_peering_connections(
+            Filters=[
+                {'Name': 'requester-vpc-info.vpc-id', 'Values': [vpc_ids[regions[0]]]},
+                {'Name': 'accepter-vpc-info.vpc-id', 'Values': [vpc_ids[regions[1]]]}
+            ]
+        )
+        
+        return len(existing_peerings['VpcPeeringConnections']) > 0
+        
+    except Exception as e:
+        print(f"Error checking existing peerings: {str(e)}")
+        return False
+""");
         }
     }
     
