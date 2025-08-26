@@ -153,7 +153,10 @@ public class Main extends App {
           .build());
 
       new CfnOutput(this, "PipelineArn", CfnOutputProps.builder()
-          .value(pipeline.getPipeline().getPipelineArn())
+          .value(String.format("arn:aws:codepipeline:%s:%s:%s-%s-pipeline",
+              System.getenv("CDK_DEFAULT_REGION"),
+              System.getenv("CDK_DEFAULT_ACCOUNT"),
+              projectName, environment))
           .description("CodePipeline ARN")
           .exportName(String.format("%s-%s-pipeline-arn", projectName, environment))
           .build());
