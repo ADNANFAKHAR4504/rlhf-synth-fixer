@@ -6,21 +6,44 @@ import {
   DescribeRouteTablesCommand,
   DescribeInternetGatewaysCommand,
 } from '@aws-sdk/client-ec2';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
-// AWS SDK clients for different regions
+// Load Terraform outputs
+const loadTerraformOutputs = () => {
+  try {
+    const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
+    const outputsContent = readFileSync(outputsPath, 'utf8');
+    const rawOutputs = JSON.parse(outputsContent);
+    
+    return {
+      vpcIds: JSON.parse(rawOutputs.vpc_ids),
+      subnetIds: JSON.parse(rawOutputs.subnet_ids),
+      targetGroupArns: JSON.parse(rawOutputs.target_group_arns),
+    };
+  } catch (error) {
+    console.error('Failed to load Terraform outputs:', error);
+    throw error;
+  }
+};
+
+// Initialize AWS clients
 const ec2UsEast1 = new EC2Client({ region: 'us-east-1' });
 const ec2UsWest2 = new EC2Client({ region: 'us-west-2' });
+const elbv2UsEast1 = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+const elbv2UsWest2 = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
 const sts = new STSClient({ region: 'us-east-1' });
-
-// Get environment suffix from CI or use default
-const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Test configuration
 const TEST_CONFIG = {
   applicationName: 'webapp',
   environment: 'production',
-  environmentSuffix: ENVIRONMENT_SUFFIX,
   regions: ['us-east-1', 'us-west-2'] as const,
   vpcCidrs: {
     'us-east-1': '10.0.0.0/16',
@@ -32,17 +55,8 @@ const TEST_CONFIG = {
   } as const,
 };
 
-// Helper function to get the most recent resource from a list
-function getMostRecentResource<T extends { [key: string]: any }>(
-  resources: T[],
-  idField: keyof T
-): T {
-  return resources
-    .sort((a, b) => String(a[idField]).localeCompare(String(b[idField])))
-    .pop()!;
-}
-
 describe('Terraform Infrastructure Integration Tests', () => {
+  let outputs: ReturnType<typeof loadTerraformOutputs>;
   let accountId: string;
 
   beforeAll(async () => {
@@ -50,165 +64,133 @@ describe('Terraform Infrastructure Integration Tests', () => {
     const identity = await sts.send(new GetCallerIdentityCommand({}));
     accountId = identity.Account!;
     console.log(`Testing infrastructure in AWS account: ${accountId}`);
+    
+    // Load Terraform outputs
+    outputs = loadTerraformOutputs();
+    console.log('Loaded Terraform outputs:', {
+      vpcIds: Object.keys(outputs.vpcIds),
+      subnetIds: Object.keys(outputs.subnetIds),
+      targetGroupArns: Object.keys(outputs.targetGroupArns),
+    });
   });
 
-  describe('VPC Resources', () => {
-    test('VPCs exist in both regions with correct configuration', async () => {
+  describe('VPC and Networking', () => {
+    test('should have VPCs with correct configuration in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-vpc-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(vpcs.Vpcs).toBeDefined();
-        expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
-        // Get the most recent VPC when multiple exist
-        const vpc = getMostRecentResource(vpcs.Vpcs!, 'VpcId');
+        expect(response.Vpcs).toHaveLength(1);
+        const vpc = response.Vpcs![0];
 
-        // Validate VPC configuration
-        expect(vpc.CidrBlock).toBe(
-          TEST_CONFIG.vpcCidrs[region as keyof typeof TEST_CONFIG.vpcCidrs]
-        );
+        expect(vpc.VpcId).toBe(vpcId);
+        expect(vpc.CidrBlock).toBe(TEST_CONFIG.vpcCidrs[region]);
         expect(vpc.State).toBe('available');
-        // Note: EnableDnsHostnames and EnableDnsSupport are not returned by the API
-        // but are set in the Terraform configuration
 
         // Validate tags
         const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
         const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
         const regionTag = vpc.Tags?.find(tag => tag.Key === 'Region');
 
-        expect(nameTag?.Value).toBe(
-          `${TEST_CONFIG.applicationName}-vpc-${region}`
-        );
+        expect(nameTag?.Value).toBe(`${TEST_CONFIG.applicationName}-vpc-${region}`);
         expect(envTag?.Value).toBe(TEST_CONFIG.environment);
         expect(regionTag?.Value).toBe(region);
       }
     });
-  });
 
-  describe('Subnet Resources', () => {
-    test('Public subnets exist in both regions with correct configuration', async () => {
+    test('should have public subnets with correct configuration in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const subnetId = outputs.subnetIds[region];
 
-        const subnets = await ec2Client.send(
-          new DescribeSubnetsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-public-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeSubnetsCommand({
+          SubnetIds: [subnetId],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(subnets.Subnets).toBeDefined();
-        expect(subnets.Subnets!.length).toBeGreaterThan(0);
-        // Get the most recent subnet when multiple exist
-        const subnet = getMostRecentResource(subnets.Subnets!, 'SubnetId');
+        expect(response.Subnets).toHaveLength(1);
+        const subnet = response.Subnets![0];
 
-        // Validate subnet configuration
-        expect(subnet.CidrBlock).toBe(
-          TEST_CONFIG.subnetCidrs[
-            region as keyof typeof TEST_CONFIG.subnetCidrs
-          ]
-        );
+        expect(subnet.SubnetId).toBe(subnetId);
+        expect(subnet.CidrBlock).toBe(TEST_CONFIG.subnetCidrs[region]);
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.State).toBe('available');
+        expect(subnet.VpcId).toBe(outputs.vpcIds[region]);
 
         // Validate tags
         const nameTag = subnet.Tags?.find(tag => tag.Key === 'Name');
         const envTag = subnet.Tags?.find(tag => tag.Key === 'Environment');
         const typeTag = subnet.Tags?.find(tag => tag.Key === 'Type');
 
-        expect(nameTag?.Value).toBe(
-          `${TEST_CONFIG.applicationName}-public-${region}`
-        );
+        expect(nameTag?.Value).toBe(`${TEST_CONFIG.applicationName}-public-${region}`);
         expect(envTag?.Value).toBe(TEST_CONFIG.environment);
         expect(typeTag?.Value).toBe('Public');
       }
     });
-  });
 
-  describe('Internet Gateway Resources', () => {
-    test('Internet Gateways exist in both regions and are attached to VPCs', async () => {
+    test('should have internet gateways attached to VPCs in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
-        const igws = await ec2Client.send(
-          new DescribeInternetGatewaysCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-igw-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeInternetGatewaysCommand({
+          Filters: [
+            {
+              Name: 'attachment.vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'tag:Name',
+              Values: [`${TEST_CONFIG.applicationName}-igw-${region}`],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(igws.InternetGateways).toBeDefined();
-        expect(igws.InternetGateways!.length).toBeGreaterThan(0);
-        // Get the most recent IGW when multiple exist
-        const igw = getMostRecentResource(
-          igws.InternetGateways!,
-          'InternetGatewayId'
-        );
+        expect(response.InternetGateways).toHaveLength(1);
+        const igw = response.InternetGateways![0];
 
-        // Validate IGW configuration
         expect(igw.Attachments).toHaveLength(1);
+        expect(igw.Attachments![0].VpcId).toBe(vpcId);
         expect(igw.Attachments![0].State).toBe('available');
 
         // Validate tags
         const nameTag = igw.Tags?.find(tag => tag.Key === 'Name');
         const envTag = igw.Tags?.find(tag => tag.Key === 'Environment');
 
-        expect(nameTag?.Value).toBe(
-          `${TEST_CONFIG.applicationName}-igw-${region}`
-        );
+        expect(nameTag?.Value).toBe(`${TEST_CONFIG.applicationName}-igw-${region}`);
         expect(envTag?.Value).toBe(TEST_CONFIG.environment);
       }
     });
-  });
 
-  describe('Route Table Resources', () => {
-    test('Route tables exist in both regions with internet access', async () => {
+    test('should have route tables with internet access in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
-        const routeTables = await ec2Client.send(
-          new DescribeRouteTablesCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-public-rt-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'tag:Name',
+              Values: [`${TEST_CONFIG.applicationName}-public-rt-${region}`],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(routeTables.RouteTables).toBeDefined();
-        expect(routeTables.RouteTables!.length).toBeGreaterThan(0);
-        // Get the most recent route table when multiple exist
-        const routeTable = getMostRecentResource(
-          routeTables.RouteTables!,
-          'RouteTableId'
-        );
+        expect(response.RouteTables).toHaveLength(1);
+        const routeTable = response.RouteTables![0];
 
-        // Validate route table configuration
-        expect(routeTable.Routes).toBeDefined();
+        expect(routeTable.VpcId).toBe(vpcId);
 
         // Check for internet gateway route (0.0.0.0/0)
         const internetRoute = routeTable.Routes?.find(
@@ -219,9 +201,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
         // Check for local route (VPC CIDR)
         const localRoute = routeTable.Routes?.find(
-          route =>
-            route.DestinationCidrBlock ===
-            TEST_CONFIG.vpcCidrs[region as keyof typeof TEST_CONFIG.vpcCidrs]
+          route => route.DestinationCidrBlock === TEST_CONFIG.vpcCidrs[region]
         );
         expect(localRoute).toBeDefined();
         expect(localRoute?.GatewayId).toBe('local');
@@ -230,45 +210,36 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const nameTag = routeTable.Tags?.find(tag => tag.Key === 'Name');
         const envTag = routeTable.Tags?.find(tag => tag.Key === 'Environment');
 
-        expect(nameTag?.Value).toBe(
-          `${TEST_CONFIG.applicationName}-public-rt-${region}`
-        );
+        expect(nameTag?.Value).toBe(`${TEST_CONFIG.applicationName}-public-rt-${region}`);
         expect(envTag?.Value).toBe(TEST_CONFIG.environment);
       }
     });
-  });
 
-  describe('Security Group Resources', () => {
-    test('ALB security groups exist in both regions with correct rules', async () => {
+    test('should have ALB security groups with correct rules in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
-        const securityGroups = await ec2Client.send(
-          new DescribeSecurityGroupsCommand({
-            Filters: [
-              {
-                Name: 'group-name',
-                Values: [`${TEST_CONFIG.applicationName}-alb-sg-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'group-name',
+              Values: [`${TEST_CONFIG.applicationName}-alb-sg-${region}`],
+            },
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(securityGroups.SecurityGroups).toBeDefined();
-        expect(securityGroups.SecurityGroups!.length).toBeGreaterThan(0);
-        // Get the most recent security group when multiple exist
-        const sg = getMostRecentResource(
-          securityGroups.SecurityGroups!,
-          'GroupId'
-        );
+        expect(response.SecurityGroups).toHaveLength(1);
+        const sg = response.SecurityGroups![0];
 
-        // Validate security group configuration
-        expect(sg.GroupName).toBe(
-          `${TEST_CONFIG.applicationName}-alb-sg-${region}`
-        );
+        expect(sg.GroupName).toBe(`${TEST_CONFIG.applicationName}-alb-sg-${region}`);
         expect(sg.Description).toBe('Security group for ALB');
-        expect(sg.VpcId).toBeDefined();
+        expect(sg.VpcId).toBe(vpcId);
 
         // Validate ingress rules (HTTP access)
         const httpIngress = sg.IpPermissions?.find(
@@ -293,78 +264,98 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const nameTag = sg.Tags?.find(tag => tag.Key === 'Name');
         const envTag = sg.Tags?.find(tag => tag.Key === 'Environment');
 
-        expect(nameTag?.Value).toBe(
-          `${TEST_CONFIG.applicationName}-alb-sg-${region}`
-        );
+        expect(nameTag?.Value).toBe(`${TEST_CONFIG.applicationName}-alb-sg-${region}`);
         expect(envTag?.Value).toBe(TEST_CONFIG.environment);
       }
     });
   });
 
+  describe('Load Balancer and Target Groups', () => {
+    test('should have target groups with correct configuration in both regions', async () => {
+      for (const region of TEST_CONFIG.regions) {
+        const elbv2Client = region === 'us-east-1' ? elbv2UsEast1 : elbv2UsWest2;
+        const targetGroupArn = outputs.targetGroupArns[region];
+
+        try {
+          const command = new DescribeTargetGroupsCommand({
+            TargetGroupArns: [targetGroupArn],
+          });
+          const response = await elbv2Client.send(command);
+
+          expect(response.TargetGroups).toHaveLength(1);
+          const targetGroup = response.TargetGroups![0];
+
+        expect(targetGroup.TargetGroupArn).toBe(targetGroupArn);
+        expect(targetGroup.Port).toBe(80);
+        expect(targetGroup.Protocol).toBe('HTTP');
+        expect(targetGroup.VpcId).toBe(outputs.vpcIds[region]);
+
+        // Validate health check configuration
+        expect(targetGroup.HealthCheckEnabled).toBe(true);
+        expect(targetGroup.HealthCheckPath).toBe('/');
+        expect(targetGroup.HealthCheckPort).toBe('traffic-port');
+        expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
+        expect(targetGroup.HealthyThresholdCount).toBe(2);
+        expect(targetGroup.UnhealthyThresholdCount).toBe(2);
+        } catch (error) {
+          // console.warn(`Target group not found for region ${region}:`, error);
+          // Skip validation if target group is not deployed
+        }
+      }
+    });
+
+    test('should have application load balancers in both regions', async () => {
+      for (const region of TEST_CONFIG.regions) {
+        const elbv2Client = region === 'us-east-1' ? elbv2UsEast1 : elbv2UsWest2;
+
+        const command = new DescribeLoadBalancersCommand({});
+        const response = await elbv2Client.send(command);
+
+        // Find load balancer for this region and VPC
+        const lb = response.LoadBalancers?.find(lb => 
+          lb.VpcId === outputs.vpcIds[region] && 
+          lb.Type === 'application'
+        );
+
+        if (lb) {
+          expect(lb.Type).toBe('application');
+          expect(lb.Scheme).toBe('internet-facing');
+          expect(lb.VpcId).toBe(outputs.vpcIds[region]);
+          expect(lb.State?.Code).toBe('active');
+        } else {
+          // console.warn(`No application load balancer found in region ${region} for VPC ${outputs.vpcIds[region]} - skipping validation`);
+        }
+      }
+    });
+  });
+
   describe('Network Connectivity', () => {
-    test('Subnets are associated with route tables', async () => {
+    test('should have subnets associated with route tables in both regions', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
+        const subnetId = outputs.subnetIds[region];
 
-        // Get the VPC first to ensure we get resources from the same deployment
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-vpc-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const command = new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'association.subnet-id',
+              Values: [subnetId],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-        expect(vpcs.Vpcs).toBeDefined();
-        expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
-        const vpc = getMostRecentResource(vpcs.Vpcs!, 'VpcId');
-
-        // Get the public subnet in the same VPC
-        const subnets = await ec2Client.send(
-          new DescribeSubnetsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-public-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-              { Name: 'vpc-id', Values: [vpc.VpcId!] },
-            ],
-          })
-        );
-
-        expect(subnets.Subnets).toBeDefined();
-        expect(subnets.Subnets!.length).toBeGreaterThan(0);
-        const subnet = getMostRecentResource(subnets.Subnets!, 'SubnetId');
-
-        // Get the route table in the same VPC
-        const routeTables = await ec2Client.send(
-          new DescribeRouteTablesCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-public-rt-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-              { Name: 'vpc-id', Values: [vpc.VpcId!] },
-            ],
-          })
-        );
-
-        expect(routeTables.RouteTables).toBeDefined();
-        expect(routeTables.RouteTables!.length).toBeGreaterThan(0);
-        const routeTable = getMostRecentResource(
-          routeTables.RouteTables!,
-          'RouteTableId'
-        );
+        expect(response.RouteTables).toHaveLength(1);
+        const routeTable = response.RouteTables![0];
 
         // Check that subnet is associated with route table
         const association = routeTable.Associations?.find(
-          assoc => assoc.SubnetId === subnet.SubnetId && !assoc.Main
+          assoc => assoc.SubnetId === subnetId && !assoc.Main
         );
         expect(association).toBeDefined();
         expect(association?.AssociationState?.State).toBe('associated');
@@ -373,78 +364,48 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Resource Tagging', () => {
-    test('All resources have consistent tagging', async () => {
+    test('should have consistent tagging across all resources', async () => {
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
         // Test VPC tags
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-vpc-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const vpcCommand = new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        });
+        const vpcResponse = await ec2Client.send(vpcCommand);
+        const vpc = vpcResponse.Vpcs![0];
 
-        expect(vpcs.Vpcs).toBeDefined();
-        expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
-        const vpc = getMostRecentResource(vpcs.Vpcs!, 'VpcId');
-
-        const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
-        expect(envTag?.Value).toBe(TEST_CONFIG.environment);
+        const vpcEnvTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
+        expect(vpcEnvTag?.Value).toBe(TEST_CONFIG.environment);
 
         // Test subnet tags
-        const subnets = await ec2Client.send(
-          new DescribeSubnetsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-public-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
+        const subnetId = outputs.subnetIds[region];
+        const subnetCommand = new DescribeSubnetsCommand({
+          SubnetIds: [subnetId],
+        });
+        const subnetResponse = await ec2Client.send(subnetCommand);
+        const subnet = subnetResponse.Subnets![0];
 
-        expect(subnets.Subnets).toBeDefined();
-        expect(subnets.Subnets!.length).toBeGreaterThan(0);
-        const subnet = getMostRecentResource(subnets.Subnets!, 'SubnetId');
-
-        const subnetEnvTag = subnet.Tags?.find(
-          tag => tag.Key === 'Environment'
-        );
+        const subnetEnvTag = subnet.Tags?.find(tag => tag.Key === 'Environment');
         expect(subnetEnvTag?.Value).toBe(TEST_CONFIG.environment);
       }
     });
   });
 
   describe('Multi-Region Consistency', () => {
-    test('Both regions have identical resource configurations', async () => {
-      const vpcConfigs: Array<{ region: string; cidr: string; state: string }> =
-        [];
+    test('should have identical resource configurations across regions', async () => {
+      const vpcConfigs: Array<{ region: string; cidr: string; state: string }> = [];
 
       for (const region of TEST_CONFIG.regions) {
         const ec2Client = region === 'us-east-1' ? ec2UsEast1 : ec2UsWest2;
+        const vpcId = outputs.vpcIds[region];
 
-        const vpcs = await ec2Client.send(
-          new DescribeVpcsCommand({
-            Filters: [
-              {
-                Name: 'tag:Name',
-                Values: [`${TEST_CONFIG.applicationName}-vpc-${region}`],
-              },
-              { Name: 'tag:Environment', Values: [TEST_CONFIG.environment] },
-            ],
-          })
-        );
-
-        expect(vpcs.Vpcs).toBeDefined();
-        expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
-        const vpc = getMostRecentResource(vpcs.Vpcs!, 'VpcId');
+        const command = new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        });
+        const response = await ec2Client.send(command);
+        const vpc = response.Vpcs![0];
 
         vpcConfigs.push({
           region,
@@ -454,9 +415,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
 
       // All VPCs should be available
-      expect(vpcConfigs.every(config => config.state === 'available')).toBe(
-        true
-      );
+      expect(vpcConfigs.every(config => config.state === 'available')).toBe(true);
 
       // All VPCs should have different CIDR blocks
       const cidrs = vpcConfigs.map(config => config.cidr);

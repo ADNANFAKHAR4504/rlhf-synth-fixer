@@ -163,7 +163,7 @@ resource "aws_internet_gateway" "main_us_west_2" {
   }
 }
 
-# Public Subnet for us-east-1
+# Public Subnet for us-east-1 (AZ 1)
 resource "aws_subnet" "public_us_east_1" {
   provider                = aws.us_east_1
   vpc_id                  = aws_vpc.main_us_east_1.id
@@ -178,7 +178,22 @@ resource "aws_subnet" "public_us_east_1" {
   }
 }
 
-# Public Subnet for us-west-2
+# Public Subnet for us-east-1 (AZ 2)
+resource "aws_subnet" "public_us_east_1_az2" {
+  provider                = aws.us_east_1
+  vpc_id                  = aws_vpc.main_us_east_1.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = data.aws_availability_zones.available_us_east_1.names[1]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.application_name}-public-us-east-1-az2"
+    Environment = var.environment
+    Type        = "Public"
+  }
+}
+
+# Public Subnet for us-west-2 (AZ 1)
 resource "aws_subnet" "public_us_west_2" {
   provider                = aws.us_west_2
   vpc_id                  = aws_vpc.main_us_west_2.id
@@ -188,6 +203,21 @@ resource "aws_subnet" "public_us_west_2" {
 
   tags = {
     Name        = "${var.application_name}-public-us-west-2"
+    Environment = var.environment
+    Type        = "Public"
+  }
+}
+
+# Public Subnet for us-west-2 (AZ 2)
+resource "aws_subnet" "public_us_west_2_az2" {
+  provider                = aws.us_west_2
+  vpc_id                  = aws_vpc.main_us_west_2.id
+  cidr_block              = "10.1.2.0/24"
+  availability_zone       = data.aws_availability_zones.available_us_west_2.names[1]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.application_name}-public-us-west-2-az2"
     Environment = var.environment
     Type        = "Public"
   }
@@ -225,17 +255,31 @@ resource "aws_route_table" "public_us_west_2" {
   }
 }
 
-# Route Table Association for us-east-1
+# Route Table Association for us-east-1 (AZ 1)
 resource "aws_route_table_association" "public_us_east_1" {
   provider       = aws.us_east_1
   subnet_id      = aws_subnet.public_us_east_1.id
   route_table_id = aws_route_table.public_us_east_1.id
 }
 
-# Route Table Association for us-west-2
+# Route Table Association for us-east-1 (AZ 2)
+resource "aws_route_table_association" "public_us_east_1_az2" {
+  provider       = aws.us_east_1
+  subnet_id      = aws_subnet.public_us_east_1_az2.id
+  route_table_id = aws_route_table.public_us_east_1.id
+}
+
+# Route Table Association for us-west-2 (AZ 1)
 resource "aws_route_table_association" "public_us_west_2" {
   provider       = aws.us_west_2
   subnet_id      = aws_subnet.public_us_west_2.id
+  route_table_id = aws_route_table.public_us_west_2.id
+}
+
+# Route Table Association for us-west-2 (AZ 2)
+resource "aws_route_table_association" "public_us_west_2_az2" {
+  provider       = aws.us_west_2
+  subnet_id      = aws_subnet.public_us_west_2_az2.id
   route_table_id = aws_route_table.public_us_west_2.id
 }
 
@@ -293,6 +337,122 @@ resource "aws_security_group" "alb_us_west_2" {
   }
 }
 
+# Application Load Balancer for us-east-1
+resource "aws_lb" "main_us_east_1" {
+  provider           = aws.us_east_1
+  name               = "${var.application_name}-alb-us-east-1"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_us_east_1.id]
+  subnets            = [aws_subnet.public_us_east_1.id, aws_subnet.public_us_east_1_az2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name        = "${var.application_name}-alb-us-east-1"
+    Environment = var.environment
+    Region      = "us-east-1"
+  }
+}
+
+# Application Load Balancer for us-west-2
+resource "aws_lb" "main_us_west_2" {
+  provider           = aws.us_west_2
+  name               = "${var.application_name}-alb-us-west-2"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_us_west_2.id]
+  subnets            = [aws_subnet.public_us_west_2.id, aws_subnet.public_us_west_2_az2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name        = "${var.application_name}-alb-us-west-2"
+    Environment = var.environment
+    Region      = "us-west-2"
+  }
+}
+
+# ALB Target Group for us-east-1
+resource "aws_lb_target_group" "main_us_east_1" {
+  provider    = aws.us_east_1
+  name        = "${var.application_name}-tg-us-east-1"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main_us_east_1.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name        = "${var.application_name}-tg-us-east-1"
+    Environment = var.environment
+  }
+}
+
+# ALB Target Group for us-west-2
+resource "aws_lb_target_group" "main_us_west_2" {
+  provider    = aws.us_west_2
+  name        = "${var.application_name}-tg-us-west-2"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main_us_west_2.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name        = "${var.application_name}-tg-us-west-2"
+    Environment = var.environment
+  }
+}
+
+# ALB Listener for us-east-1
+resource "aws_lb_listener" "main_us_east_1" {
+  provider          = aws.us_east_1
+  load_balancer_arn = aws_lb.main_us_east_1.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main_us_east_1.arn
+  }
+}
+
+# ALB Listener for us-west-2
+resource "aws_lb_listener" "main_us_west_2" {
+  provider          = aws.us_west_2
+  load_balancer_arn = aws_lb.main_us_west_2.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main_us_west_2.arn
+  }
+}
+
 # Outputs
 output "vpc_ids" {
   description = "VPC IDs for each region"
@@ -305,7 +465,31 @@ output "vpc_ids" {
 output "subnet_ids" {
   description = "Subnet IDs for each region"
   value = {
-    "us-east-1" = aws_subnet.public_us_east_1.id
-    "us-west-2" = aws_subnet.public_us_west_2.id
+    "us-east-1" = [aws_subnet.public_us_east_1.id, aws_subnet.public_us_east_1_az2.id]
+    "us-west-2" = [aws_subnet.public_us_west_2.id, aws_subnet.public_us_west_2_az2.id]
+  }
+}
+
+output "alb_dns_names" {
+  description = "ALB DNS names for each region"
+  value = {
+    "us-east-1" = aws_lb.main_us_east_1.dns_name
+    "us-west-2" = aws_lb.main_us_west_2.dns_name
+  }
+}
+
+output "alb_arns" {
+  description = "ALB ARNs for each region"
+  value = {
+    "us-east-1" = aws_lb.main_us_east_1.arn
+    "us-west-2" = aws_lb.main_us_west_2.arn
+  }
+}
+
+output "target_group_arns" {
+  description = "Target Group ARNs for each region"
+  value = {
+    "us-east-1" = aws_lb_target_group.main_us_east_1.arn
+    "us-west-2" = aws_lb_target_group.main_us_west_2.arn
   }
 }
