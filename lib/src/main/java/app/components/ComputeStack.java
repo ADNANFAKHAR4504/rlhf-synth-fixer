@@ -9,11 +9,13 @@ import com.pulumi.aws.ec2.InstanceArgs;
 import com.pulumi.aws.ec2.inputs.GetAmiFilterArgs;
 import com.pulumi.aws.ec2.outputs.GetAmiResult;
 import com.pulumi.core.Output;
+import com.pulumi.deployment.InvokeOptions;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ComputeStack extends ComponentResource {
     public final Output<String> instanceId;
@@ -34,8 +36,9 @@ public class ComputeStack extends ComponentResource {
                 .filters(GetAmiFilterArgs.builder()
                         .name("name")
                         .values(config.getEc2AmiName())
-                        .build())
-                .build());
+                        .build()).build(),
+                InvokeOptions.builder().provider(Objects.requireNonNull(options.getProvider().orElse(null)))
+                        .build());
 
         // User data script to install and configure web server
         String userData = """
