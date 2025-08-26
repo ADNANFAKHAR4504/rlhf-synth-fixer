@@ -1,5 +1,7 @@
+//go:build ignore
+// +build ignore
 
-package lib
+package main
 
 import (
 	"encoding/json"

@@ -29,13 +29,13 @@ func Test_TapStack_Integration(t *testing.T) {
 		Quick:                true,
 		ExpectRefreshChanges: false,
 		Config: map[string]string{
-			"projectName":      "tap",
-			"environment":      "prod",
+			"projectName":       "tap",
+			"environment":       "prod",
 			"notificationEmail": "admin@example.com",
-			"vpcCidr":          "10.0.0.0/16",
-			"asgMinSize":       "2",
-			"asgMaxSize":       "2",
-			"dbInstanceClass":  "db.t3.micro",
+			"vpcCidr":           "10.0.0.0/16",
+			"asgMinSize":        "2",
+			"asgMaxSize":        "2",
+			"dbInstanceClass":   "db.t3.micro",
 		},
 		ExtraRuntimeValidation: func(t *testing.T, stackInfo integration.RuntimeValidationStackInfo) {
 			outs := stackInfo.Outputs
