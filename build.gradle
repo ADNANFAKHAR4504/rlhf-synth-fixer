@@ -1,4 +1,3 @@
-# This file is synchronized with main branch
 import groovy.xml.XmlParser;
 
 plugins {
