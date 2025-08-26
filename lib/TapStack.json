@@ -64,7 +64,7 @@
             "Description": "EC2 instance type"
         },
         "KeyPairName": {
-            "Type": "String",
+            "Type": "AWS::EC2::KeyPair::KeyName",
             "Default": "",
             "Description": "EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)"
         },

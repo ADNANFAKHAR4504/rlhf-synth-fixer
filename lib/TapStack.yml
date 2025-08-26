@@ -55,7 +55,7 @@ Parameters:
     Description: EC2 instance type
 
   KeyPairName:
-    Type: String
+    Type: AWS::EC2::KeyPair::KeyName
     Default: ''
     Description: EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)
 
@@ -156,7 +156,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PublicSubnet1Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -171,7 +171,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PublicSubnet2Cidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -187,7 +187,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet1Cidr
       Tags:
         - Key: Name
@@ -201,7 +201,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2Cidr
       Tags:
         - Key: Name
@@ -216,7 +216,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref DatabaseSubnet1Cidr
       Tags:
         - Key: Name
@@ -230,7 +230,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref DatabaseSubnet2Cidr
       Tags:
         - Key: Name
@@ -681,7 +681,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: 
+                Resource:
                   - !Sub 'arn:aws:s3:::${ApplicationBucket}'
       Tags:
         - Key: Name
@@ -726,7 +726,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-launch-template'
       LaunchTemplateData:
-        ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -809,7 +809,7 @@ Resources:
     Type: AWS::EC2::Instance
     Condition: HasKeyPair
     Properties:
-      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t3.micro
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet1
