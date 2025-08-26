@@ -17,15 +17,25 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// CfnOutput represents a single output from a CloudFormation stack.
+type CfnOutput struct {
+	OutputKey   string `json:"OutputKey"`
+	OutputValue string `json:"OutputValue"`
+}
+
+// CdkOutputsFile represents the structure of the all-outputs.json file.
+type CdkOutputsFile struct {
+	TapStackdev []CfnOutput `json:"TapStackdev"`
+}
+
+// CdkOutputs holds the parsed output values for use in tests.
 type CdkOutputs struct {
-	TestStack struct {
-		VpcId               string `json:"VpcId"`
-		EC2InstanceId       string `json:"EC2InstanceId"`
-		EC2PublicIP         string `json:"EC2PublicIP"`
-		RDSEndpoint         string `json:"RDSEndpoint"`
-		S3BucketName        string `json:"S3BucketName"`
-		S3LoggingBucketName string `json:"S3LoggingBucketName"`
-	} `json:"TestStack"`
+	VpcId               string
+	EC2InstanceId       string
+	EC2PublicIP         string
+	RDSEndpoint         string
+	S3BucketName        string
+	S3LoggingBucketName string
 }
 
 func readCdkOutputs(t *testing.T) CdkOutputs {
@@ -36,13 +46,34 @@ func readCdkOutputs(t *testing.T) CdkOutputs {
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		t.Fatalf("failed to read cdk-outputs.json: %v", err)
+		t.Fatalf("failed to read all-outputs.json: %v", err)
 	}
-	var outputs CdkOutputs
-	if err := json.Unmarshal(data, &outputs); err != nil {
-		t.Fatalf("failed to parse cdk-outputs.json: %v", err)
+
+	var outputsFile CdkOutputsFile
+	if err := json.Unmarshal(data, &outputsFile); err != nil {
+		t.Fatalf("failed to parse all-outputs.json: %v", err)
 	}
-	return outputs
+
+	// Helper function to find a value by key from the list of outputs.
+	findOutput := func(key string) string {
+		for _, o := range outputsFile.TapStackdev {
+			if o.OutputKey == key {
+				return o.OutputValue
+			}
+		}
+		t.Logf("warning: output key '%s' not found in all-outputs.json", key)
+		return ""
+	}
+
+	// Populate the struct for the tests.
+	return CdkOutputs{
+		VpcId:               findOutput("VpcId"),
+		EC2InstanceId:       findOutput("EC2InstanceId"),
+		EC2PublicIP:         findOutput("EC2PublicIP"),
+		RDSEndpoint:         findOutput("RDSEndpoint"),
+		S3BucketName:        findOutput("S3BucketName"),
+		S3LoggingBucketName: findOutput("S3LoggingBucketName"),
+	}
 }
 
 func retry[T any](t *testing.T, fn func() (*T, error), attempts int, baseMs time.Duration) *T {
@@ -71,7 +102,7 @@ func TestLiveVPC(t *testing.T) {
 
 	vpc := retry(t, func() (*ec2.DescribeVpcsOutput, error) {
 		return client.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.TestStack.VpcId},
+			VpcIds: []string{outputs.VpcId},
 		})
 	}, 5, 1*time.Second)
 
@@ -90,7 +121,7 @@ func TestLiveS3(t *testing.T) {
 
 	versioning := retry(t, func() (*s3.GetBucketVersioningOutput, error) {
 		return client.GetBucketVersioning(context.TODO(), &s3.GetBucketVersioningInput{
-			Bucket: &outputs.TestStack.S3BucketName,
+			Bucket: &outputs.S3BucketName,
 		})
 	}, 5, 1*time.Second)
 
@@ -109,7 +140,7 @@ func TestLiveEC2(t *testing.T) {
 
 	instance := retry(t, func() (*ec2.DescribeInstancesOutput, error) {
 		return client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-			InstanceIds: []string{outputs.TestStack.EC2InstanceId},
+			InstanceIds: []string{outputs.EC2InstanceId},
 		})
 	}, 5, 1*time.Second)
 
@@ -128,11 +159,30 @@ func TestLiveRDS(t *testing.T) {
 
 	dbInstance := retry(t, func() (*rds.DescribeDBInstancesOutput, error) {
 		return client.DescribeDBInstances(context.TODO(), &rds.DescribeDBInstancesInput{
-			DBInstanceIdentifier: &outputs.TestStack.RDSEndpoint,
+			DBInstanceIdentifier: &outputs.RDSEndpoint,
 		})
 	}, 5, 1*time.Second)
 
 	if len(dbInstance.DBInstances) != 1 {
 		t.Fatalf("expected 1 DB instance, got %d", len(dbInstance.DBInstances))
+	}
+}
+
+func TestLiveLoggingS3(t *testing.T) {
+	outputs := readCdkOutputs(t)
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		t.Fatalf("unable to load SDK config, %v", err)
+	}
+	client := s3.NewFromConfig(cfg)
+
+	logging := retry(t, func() (*s3.GetBucketLoggingOutput, error) {
+		return client.GetBucketLogging(context.TODO(), &s3.GetBucketLoggingInput{
+			Bucket: &outputs.S3BucketName,
+		})
+	}, 5, 1*time.Second)
+
+	if logging.LoggingEnabled == nil {
+		t.Errorf("expected logging to be enabled, but it was not")
 	}
 }
