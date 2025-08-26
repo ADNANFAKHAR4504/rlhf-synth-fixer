@@ -46,13 +46,13 @@ func TestTapStackIntegration(t *testing.T) {
 		// ACT
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, jsii.String(stackName), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String("inttest"),
+			StackProps:  awscdk.StackProps{},
+			Environment: "inttest",
 		})
 
 		// ASSERT
 		assert.NotNil(t, stack)
-		assert.Equal(t, "inttest", *stack.EnvironmentSuffix)
+		assert.Equal(t, "inttest", stack.Environment)
 
 		// Note: Actual deployment testing would require CDK CLI or programmatic deployment
 		// This is a placeholder for more comprehensive integration testing
@@ -66,13 +66,13 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT
 		stack := lib.NewTapStack(app, jsii.String("TapStackResourceTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(envSuffix),
+			StackProps:  awscdk.StackProps{},
+			Environment: envSuffix,
 		})
 
 		// ASSERT
 		assert.NotNil(t, stack)
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
+		assert.Equal(t, envSuffix, stack.Environment)
 
 		// Add more specific resource assertions here when resources are actually created
 		// For example:

@@ -4,9 +4,6 @@ import (
 	tapConstructs "github.com/TuringGpt/iac-test-automations/lib/constructs"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -22,26 +19,8 @@ type TapStackProps struct {
 	Environment string
 }
 
-// TapStack represents the main CDK stack for the TAP Infrastructure project.
-//
-// This stack creates a comprehensive, secure, and auditable cloud environment including:
-// - CloudTrail for audit logging
-// - S3 buckets with versioning and access logging
-// - DynamoDB table with encryption and point-in-time recovery
-// - Lambda function for S3 event processing
-// - IAM roles with least-privilege access
-// - CloudWatch logging and monitoring
 type TapStack struct {
 	awscdk.Stack
-	// Environment stores the deployment environment identifier
-	Environment string
-	// Resources created by this stack
-	CloudTrailBucket awss3.IBucket
-	MainBucket       awss3.IBucket
-	LoggingBucket    awss3.IBucket
-	DynamoDBTable    awsdynamodb.ITable
-	LambdaFunction   awslambda.IFunction
-	LambdaRole       awsiam.IRole
 }
 
 // NewTapStack creates a new instance of TapStack with comprehensive AWS infrastructure.
@@ -70,29 +49,40 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		environment = props.Environment
 	}
 
-	// Create CloudTrail bucket for audit logging
+	// Enhanced CloudTrail setup
 	cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String("proj-cloudtrail-" + environment),
 		Versioned:         jsii.Bool(true),
 		PublicReadAccess:  jsii.Bool(false),
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		EnforceSSL:        jsii.Bool(true),
 		LifecycleRules: &[]*awss3.LifecycleRule{
 			{
 				Id:         jsii.String("DeleteOldLogs"),
 				Enabled:    jsii.Bool(true),
 				Expiration: awscdk.Duration_Days(jsii.Number(90)),
+				Transitions: &[]*awss3.Transition{
+					{
+						StorageClass:    awss3.StorageClass_INFREQUENT_ACCESS(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(30)),
+					},
+					{
+						StorageClass:    awss3.StorageClass_GLACIER(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(60)),
+					},
+				},
 			},
 		},
 	})
 
-	// Create CloudTrail for comprehensive audit logging
 	awscloudtrail.NewTrail(stack, jsii.String("AuditTrail"), &awscloudtrail.TrailProps{
 		TrailName:                  jsii.String("proj-audit-trail-" + environment),
 		Bucket:                     cloudTrailBucket,
 		IncludeGlobalServiceEvents: jsii.Bool(true),
 		IsMultiRegionTrail:         jsii.Bool(true),
 		EnableFileValidation:       jsii.Bool(true),
+		SendToCloudWatchLogs:       jsii.Bool(true),
 	})
 
 	// Create security construct (IAM roles and policies)
@@ -110,22 +100,28 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Environment: environment,
 	})
 
-	// Create compute construct (Lambda function)
-	computeConstruct := tapConstructs.NewComputeConstruct(stack, "ComputeConstruct", &tapConstructs.ComputeConstructProps{
+	// Create enhanced compute construct with monitoring
+	tapConstructs.NewComputeConstruct(stack, "ComputeConstruct", &tapConstructs.ComputeConstructProps{
 		Environment:   environment,
 		LambdaRole:    securityConstruct.LambdaRole,
 		S3Bucket:      storageConstruct.Bucket,
 		DynamoDBTable: databaseConstruct.Table,
+		AlertingTopic: securityConstruct.AlertingTopic,
+		VPC:           securityConstruct.VPC,
+	})
+
+	// Stack outputs
+	awscdk.NewCfnOutput(stack, jsii.String("AlertingTopicArn"), &awscdk.CfnOutputProps{
+		Value:       securityConstruct.AlertingTopic.TopicArn(),
+		Description: jsii.String("SNS Topic ARN for infrastructure alerts"),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("VPCId"), &awscdk.CfnOutputProps{
+		Value:       securityConstruct.VPC.VpcId(),
+		Description: jsii.String("VPC ID for private endpoints"),
 	})
 
 	return &TapStack{
-		Stack:            stack,
-		Environment:      environment,
-		CloudTrailBucket: cloudTrailBucket,
-		MainBucket:       storageConstruct.Bucket,
-		LoggingBucket:    storageConstruct.LoggingBucket,
-		DynamoDBTable:    databaseConstruct.Table,
-		LambdaFunction:   computeConstruct.LambdaFunction,
-		LambdaRole:       securityConstruct.LambdaRole,
+		Stack: stack,
 	}
 }
