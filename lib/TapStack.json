@@ -1240,7 +1240,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRole"
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
                 ],
                 "Policies": [
                     {
