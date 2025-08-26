@@ -1,3 +1,2 @@
-Getting WAF creation error, can you explain the error and fix this error
-
+Can you help me to undertsand this error and solve this error.
 WAFInvalidParameterException: Error reason: The scope is not valid., field: SCOPE_VALUE, parameter: CLOUDFRONT

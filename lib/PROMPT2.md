@@ -1,1 +1,1 @@
-Can you inlcude missing outputs for all the resources in details.
+Can you create more outputs covering all the resouurces created in the tech stack.
