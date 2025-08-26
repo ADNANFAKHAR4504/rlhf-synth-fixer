@@ -244,7 +244,7 @@ resource "aws_s3_bucket_versioning" "main" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "main" {
+resource "aws_s3_bucket_encryption" {
   bucket = aws_s3_bucket.main.id
 
   server_side_encryption_configuration {
