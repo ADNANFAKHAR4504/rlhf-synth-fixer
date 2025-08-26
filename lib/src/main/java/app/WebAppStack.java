@@ -355,10 +355,19 @@ public class WebAppStack extends Stack {
 
     private CfnAppMonitor configureRealUserMonitoring() {
         // Include region in the name to ensure uniqueness across regions
-        String region = this.getRegion();
+        // Get the actual deployment region, not the stack's region
+        String region = Stack.of(this).getRegion();
+        
+        // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
+        if (this.getNode().getPath().contains("TapStackSecondary")) {
+            region = "us-west-2"; // Hardcode region for secondary stack
+        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
+            region = "us-east-1"; // Hardcode region for primary stack
+        }
+        
         return CfnAppMonitor.Builder.create(this, "RUMAppMonitor" + environmentSuffix)
                 .name("webapp-rum-" + region + "-" + environmentSuffix)
-                .domain("myapp-" + environmentSuffix + ".example.org")
+                .domain("myapp-" + environmentSuffix + "-primary-1.example.org")
                 .appMonitorConfiguration(CfnAppMonitor.AppMonitorConfigurationProperty.builder()
                         .allowCookies(true)
                         .enableXRay(true)
@@ -396,7 +405,15 @@ public class WebAppStack extends Stack {
         );
 
         // RUM metrics widget
-        String region = this.getRegion();
+        String region = Stack.of(this).getRegion();
+        
+        // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
+        if (this.getNode().getPath().contains("TapStackSecondary")) {
+            region = "us-west-2"; // Hardcode region for secondary stack
+        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
+            region = "us-east-1"; // Hardcode region for primary stack
+        }
+        
         String rumAppName = "webapp-rum-" + region + "-" + environmentSuffix;
         dashboard.addWidgets(
                 GraphWidget.Builder.create()
