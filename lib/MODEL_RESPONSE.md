@@ -24,7 +24,7 @@ func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Configuration
 		cfg := config.New(ctx, "")
-		
+
 		// Common tags for all resources
 		commonTags := pulumi.StringMap{
 			"Environment": pulumi.String("production"),
@@ -39,7 +39,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		
+
 		region, err := aws.GetRegion(ctx, nil, nil)
 		if err != nil {
 			return err
@@ -445,25 +445,25 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     logger.info('S3 object processing started')
-    
+
     # Process S3 event
     s3_client = boto3.client('s3')
-    
+
     for record in event['Records']:
         bucket_name = record['s3']['bucket']['name']
         object_key = record['s3']['object']['key']
-        
+
         logger.info(f'Processing object: {object_key} from bucket: {bucket_name}')
-        
+
         try:
             # Simple processing - get object metadata
             response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
             logger.info(f'Object size: {response.get("ContentLength", 0)} bytes')
-            
+
         except Exception as e:
             logger.error(f'Error processing object: {str(e)}')
             raise e
-    
+
     return {
         'statusCode': 200,
         'body': json.dumps('Object processing completed successfully')
@@ -607,21 +607,6 @@ echo "Web server setup complete" > /var/log/setup.log
 			}
 		}
 
-		// Request SSL certificate from ACM
-		certificate, err := acm.NewCertificate(ctx, "ssl-certificate", &acm.CertificateArgs{
-			DomainName:       pulumi.String("*.example.com"), // Replace with your domain
-			ValidationMethod: pulumi.String("DNS"),
-			Tags: pulumi.StringMap{
-				"Name": pulumi.String("secure-web-app-certificate"),
-			}.Merge(commonTags),
-			Lifecycle: &pulumi.ResourceOptions{
-				CreateBeforeDestroy: pulumi.BoolPtr(true),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
 		// Create CloudWatch alarms
 		// High CPU utilization alarm
 		_, err = cloudwatch.NewMetricAlarm(ctx, "high-cpu-alarm", &cloudwatch.MetricAlarmArgs{
@@ -697,7 +682,6 @@ echo "Web server setup complete" > /var/log/setup.log
 		ctx.Export("s3BucketName", bucket.ID())
 		ctx.Export("lambdaFunctionName", lambdaFunction.Name)
 		ctx.Export("kmsKeyId", kmsKey.KeyId)
-		ctx.Export("certificateArn", certificate.Arn)
 		ctx.Export("region", pulumi.String(region.Name))
 
 		return nil
@@ -752,7 +736,7 @@ This implementation provides:
 5. **S3 Bucket**: With versioning, encryption, and public access blocking
 6. **Lambda Function**: For S3 processing with VPC configuration and strict limits
 7. **EC2 Instances**: Bastion host and web servers with proper security
-8. **SSL/TLS**: ACM certificate for HTTPS communications
+8. **Cloudfront**: Cloudfront for HTTPS communications
 9. **CloudWatch Monitoring**: Alarms for CPU utilization and Lambda errors
 10. **Resource Tagging**: Comprehensive tagging for all resources
 11. **Multi-region Support**: Ready for deployment in multiple regions

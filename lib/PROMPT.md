@@ -7,54 +7,64 @@ I need to create a secure AWS infrastructure for a web application using Pulumi 
 Please create Pulumi Go code that implements the following components:
 
 ### Networking & VPC
+
 - Create a VPC with 2 public subnets and 2 private subnets across 2 availability zones
 - Set up an internet gateway for public subnets
 - Configure NAT gateways for private subnet internet access
 - Create appropriate route tables
 
 ### Security Groups & Access Control
+
 - Implement restrictive security groups that deny all inbound traffic except from specific IP ranges
 - Create separate security groups for bastion hosts, application servers, and Lambda functions
 - Use least privilege access principles
 
 ### IAM Roles & Policies
+
 - Create IAM roles with least privilege access for all services
 - Separate roles for EC2 instances, Lambda functions, and other AWS services
 - Include policies for S3 access, CloudWatch logging, and KMS encryption
 
 ### Storage & Encryption
+
 - Set up S3 buckets with versioning enabled
 - Use AWS KMS for encryption of all data at rest
 - Configure bucket policies for secure access
 - Include new KMS FIPS 140-3 Security Level 3 validated HSM features for enhanced security
 
 ### Compute Resources
+
 - Deploy EC2 instances in private subnets
 - Create a bastion host in public subnet for secure access
 - Use appropriate instance types and security configurations
 
 ### Lambda Functions
+
 - Create Lambda functions for S3 object processing
 - Set strict timeout (30 seconds) and memory limits (256 MB)
 - Use environment variables for configuration
 - Implement the new Lambda response streaming capabilities where applicable
 
 ### Monitoring & Alarms
+
 - Set up CloudWatch alarms for security monitoring
 - Monitor unauthorized access attempts
 - Alert on resource usage spikes
 - Include metrics for Lambda function performance
 
-### TLS
+### HTTPS
+
 - Ensure all communications are over HTTPS
-- Configure SSL/TLS for load balancers and applications using cloudfront
+- Configure all the traffic comes on https to applications using cloudfront
 
 ### Resource Management
+
 - Apply detailed tags to all resources for cost tracking and management
 - Use consistent naming conventions
 - Include environment, project, and owner tags
 
 ### Multi-Region Deployment
+
 - Deploy infrastructure across us-east-1 and us-west-2 regions
 - Ensure cross-region replication for critical data
 
