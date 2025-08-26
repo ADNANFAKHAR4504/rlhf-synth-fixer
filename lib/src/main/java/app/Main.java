@@ -14,6 +14,7 @@ import software.amazon.awscdk.pipelines.CodePipeline;
 import software.amazon.awscdk.pipelines.CodePipelineSource;
 import software.amazon.awscdk.pipelines.ShellStep;
 import software.amazon.awscdk.pipelines.StageDeployment;
+import software.amazon.awscdk.services.codecommit.Repository;
 import software.amazon.awscdk.services.backup.BackupPlan;
 import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
@@ -92,13 +93,20 @@ public class Main extends App {
                               String environment, String costCenter, String projectName) {
             super(scope, id, props);
             
-            // Create pipeline
+            // Create pipeline with CodeCommit source (more suitable for testing/demo)
+            // Note: For production use, configure with actual GitHub repo via environment variables
             CodePipeline pipeline = CodePipeline.Builder.create(this, "Pipeline")
                 .pipelineName(String.format("%s-%s-pipeline", projectName, environment))
                 .crossAccountKeys(true)
                 .dockerEnabledForSynth(true)
                 .synth(ShellStep.Builder.create("Synth")
-                    .input(CodePipelineSource.gitHub("your-org/your-repo", "main"))
+                    .input(CodePipelineSource.codeCommit(
+                        Repository.Builder
+                            .create(this, "SourceRepo")
+                            .repositoryName(String.format("%s-%s-source", projectName, environment))
+                            .description("Source repository for CDK pipeline")
+                            .build(),
+                        "main"))
                     .commands(Arrays.asList(
                         "npm ci",
                         "npm run build",
