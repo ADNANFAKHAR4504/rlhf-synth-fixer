@@ -1,0 +1,9 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "multi",
+  "po_id": "291166",
+  "team": "3",
+  "startedAt": "2025-08-26T14:05:54.572Z"
+}
