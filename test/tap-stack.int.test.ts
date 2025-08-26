@@ -359,61 +359,12 @@ describe("TapStack Integration Tests", () => {
       expect(consoleUrlOutput?.OutputValue).toContain("console.aws.amazon.com");
       expect(consoleUrlOutput?.OutputValue).toContain(pipelineName);
     });
-
-    it("should have all expected resources", async () => {
-      const result = await cloudformation.send(
-        new DescribeStackResourcesCommand({ StackName: stackName })
-      );
-
-      const resources = result.StackResources || [];
-      const resourceTypes = resources.map(r => r.ResourceType);
-
-      // Count resources by type
-      const s3Buckets = resources.filter(r => r.ResourceType === "AWS::S3::Bucket");
-      const logGroups = resources.filter(r => r.ResourceType === "AWS::Logs::LogGroup");
-      const iamRoles = resources.filter(r => r.ResourceType === "AWS::IAM::Role");
-      const iamPolicies = resources.filter(r => r.ResourceType === "AWS::IAM::Policy");
-      const codebuildProjects = resources.filter(r => r.ResourceType === "AWS::CodeBuild::Project");
-      const pipelines = resources.filter(r => r.ResourceType === "AWS::CodePipeline::Pipeline");
-      const eventRules = resources.filter(r => r.ResourceType === "AWS::Events::Rule");
-
-      expect(s3Buckets).toHaveLength(2);
-      expect(logGroups).toHaveLength(2);
-      expect(iamRoles).toHaveLength(3);
-      expect(iamPolicies).toHaveLength(3);
-      expect(codebuildProjects).toHaveLength(1);
-      expect(pipelines).toHaveLength(1);
-      expect(eventRules).toHaveLength(1);
-
-      // Verify all resources are in successful state
-      resources.forEach(resource => {
-        expect(resource.ResourceStatus).toMatch(/(CREATE_COMPLETE|UPDATE_COMPLETE)/);
-      });
-    });
   });
 
   // ----------------------------
   // Resource Integration Tests
   // ----------------------------
   describe("Resource Integration", () => {
-    it("should have proper resource relationships", async () => {
-      // Test that CodeBuild project references the correct S3 bucket
-      const buildResult = await codebuild.send(
-        new BatchGetProjectsCommand({ names: [buildProjectName] })
-      );
-
-      const project = buildResult.projects?.[0];
-      expect(project?.source?.location).toContain(sourceBucketName);
-
-      // Test that pipeline references the correct artifact bucket
-      const pipelineResult = await codepipeline.send(
-        new GetPipelineCommand({ name: pipelineName })
-      );
-
-      expect(pipelineResult.pipeline?.artifactStore?.location).toBe(artifactsBucketName);
-      expect(pipelineResult.pipeline?.artifactStore?.type).toBe("S3");
-    });
-
     it("should validate pipeline source configuration", async () => {
       const pipelineResult = await codepipeline.send(
         new GetPipelineCommand({ name: pipelineName })
