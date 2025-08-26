@@ -463,7 +463,7 @@ Resources:
           - Sid: ALBAccessLogsPolicy
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::127311923021:root' # ELB service account for us-east-1
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 's3:PutObject'
             Resource: !Sub '${TAPLoggingBucket.Arn}/alb-logs/*'
   TAPApplicationLoadBalancer:
