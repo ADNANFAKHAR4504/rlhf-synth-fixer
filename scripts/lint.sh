@@ -37,8 +37,6 @@ elif [ "$LANGUAGE" = "go" ]; then
 
     # Module dependencies are prepared during build; skipping go mod tidy here
 
-    gofmt -w lib/ tests/ 2>/dev/null || true
-
     UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
         echo "❌ The following files are not gofmt formatted:"
