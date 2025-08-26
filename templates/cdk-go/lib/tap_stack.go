@@ -107,7 +107,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	awscdk.Tags_Of(privateSg).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 
 	privateSg.AddIngressRule(
-		awsec2.Peer_SecurityGroupId(bastionSg.SecurityGroupId()),
+		awsec2.Peer_SecurityGroupId(bastionSg.SecurityGroupId(), nil),
 		awsec2.Port_Tcp(jsii.Number(22)),
 		jsii.String("SSH from bastion"),
 		jsii.Bool(false),
@@ -168,7 +168,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		EnforceSSL:        jsii.Bool(true),
-		RemovalPolicy:     awscdk.RemovalPolicy_RETAIN,
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 	})
 	awscdk.Tags_Of(bucket).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 

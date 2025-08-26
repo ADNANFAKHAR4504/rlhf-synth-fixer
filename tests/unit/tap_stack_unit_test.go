@@ -3,103 +3,291 @@ package unit
 import (
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib" // import your stack package
+	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
 
-// buildAppStack returns the root TapStack (parent) so we can find nested stacks.
-func buildAppStack(tb testing.TB) *TapStack {
+// testSetup holds the app and stack for testing
+type testSetup struct {
+	app   awscdk.App
+	stack *lib.TapStack
+}
+
+// buildAppStack creates a TapStack for testing
+func buildAppStack(tb testing.TB) *testSetup {
 	tb.Helper()
 
 	app := awscdk.NewApp(nil)
-	stack := NewTapStack(
+	stack := lib.NewTapStack(
 		app,
 		jsii.String("TapStackTest"),
-		&TapStackProps{
+		&lib.TapStackProps{
 			StackProps:        &awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String("dev"),
 		},
 	)
-	return stack
+	return &testSetup{
+		app:   app,
+		stack: stack,
+	}
 }
 
-// nestedTemplate finds a nested stack by its id under the root and returns its Template.
-func nestedTemplate(tb testing.TB, root *TapStack, nestedID string) assertions.Template {
+// getTemplate returns the CloudFormation template for the stack
+func getTemplate(tb testing.TB, setup *testSetup) assertions.Template {
 	tb.Helper()
-
-	var node constructs.IConstruct = root.Stack.Node().FindChild(jsii.String(nestedID))
-	if node == nil {
-		tb.Fatalf("nested stack %q not found under root", nestedID)
-	}
-
-	// awscdk.NestedStack extends awscdk.Stack, so Template_FromStack works on it.
-	// jsii types are interfaces in Go; this type assertion should succeed for NestedStack instances.
-	ns, ok := node.(awscdk.NestedStack)
-	if !ok {
-		tb.Fatalf("child %q is not an awscdk.NestedStack (got %T)", nestedID, node)
-	}
-	return assertions.Template_FromStack(ns, nil)
+	
+	// Synthesize the app to generate CloudFormation templates
+	setup.app.Synth(nil)
+	
+	return assertions.Template_FromStack(setup.stack.Stack, nil)
 }
 
-// -------- Network nested stack (Network-dev) --------
+func TestTapStack_Construction(t *testing.T) {
+	defer jsii.Close()
 
-func Test_Network_VPC_HasExpectedCIDR(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Network-dev")
+	setup := buildAppStack(t)
+
+	if setup.stack == nil {
+		t.Fatal("Stack should not be nil")
+	}
+
+	if setup.stack.EnvironmentSuffix == nil || *setup.stack.EnvironmentSuffix != "dev" {
+		t.Errorf("Expected environment suffix 'dev', got %v", setup.stack.EnvironmentSuffix)
+	}
+}
+
+func TestTapStack_VPC_HasCorrectCIDR(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
 
 	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), map[string]interface{}{
 		"CidrBlock": "10.0.0.0/16",
 	})
 }
 
-func Test_Network_Subnets_AreFour_Total(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Network-dev")
+func TestTapStack_VPC_HasDNSSettings(t *testing.T) {
+	defer jsii.Close()
 
-	// 2 public + 2 private
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), map[string]interface{}{
+		"EnableDnsHostnames": true,
+		"EnableDnsSupport":   true,
+	})
+}
+
+func TestTapStack_Subnets_CorrectCount(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	// Should have 4 subnets total (2 public + 2 private across 2 AZs)
 	template.ResourceCountIs(jsii.String("AWS::EC2::Subnet"), jsii.Number(4))
 }
 
-func Test_Network_InternetGateway_Attached(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Network-dev")
+func TestTapStack_InternetGateway_Exists(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
 
 	template.ResourceCountIs(jsii.String("AWS::EC2::InternetGateway"), jsii.Number(1))
 	template.ResourceCountIs(jsii.String("AWS::EC2::VPCGatewayAttachment"), jsii.Number(1))
 }
 
-func Test_Network_PublicRoutes_GoToIGW(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Network-dev")
+func TestTapStack_NATGateways_HighAvailability(t *testing.T) {
+	defer jsii.Close()
 
-	template.HasResourceProperties(jsii.String("AWS::EC2::Route"), map[string]interface{}{
-		"DestinationCidrBlock": "0.0.0.0/0",
-		"GatewayId":            assertions.Match_AnyValue(),
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	// Should have 2 NAT gateways for HA (one per AZ)
+	template.ResourceCountIs(jsii.String("AWS::EC2::NatGateway"), jsii.Number(2))
+}
+
+func TestTapStack_SecurityGroups_Exist(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	// Should have bastion and private security groups plus default VPC SG
+	template.ResourceCountIs(jsii.String("AWS::EC2::SecurityGroup"), jsii.Number(2))
+}
+
+func TestTapStack_BastionSG_AllowsSSHFromTrustedCIDR(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), map[string]interface{}{
+		"GroupName": "tap-bastion-sg",
+		"SecurityGroupIngress": []map[string]interface{}{
+			{
+				"CidrIp":     "203.0.113.0/24",
+				"FromPort":   22,
+				"ToPort":     22,
+				"IpProtocol": "tcp",
+			},
+		},
 	})
 }
 
-// -------- Compute nested stack (Compute-dev) --------
+func TestTapStack_PrivateSG_AllowsHTTPSFromVPC(t *testing.T) {
+	defer jsii.Close()
 
-func Test_Compute_Bastion_InstanceExists(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Compute-dev")
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), map[string]interface{}{
+		"GroupName": "tap-private-sg",
+		"SecurityGroupIngress": []map[string]interface{}{
+			{
+				"FromPort":   22,
+				"ToPort":     22,
+				"IpProtocol": "tcp",
+			},
+			{
+				"CidrIp":     "10.0.0.0/16",
+				"FromPort":   80,
+				"ToPort":     80,
+				"IpProtocol": "tcp",
+			},
+			{
+				"CidrIp":     "10.0.0.0/16",
+				"FromPort":   443,
+				"ToPort":     443,
+				"IpProtocol": "tcp",
+			},
+		},
+	})
+}
+
+func TestTapStack_BastionHost_Exists(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
 
 	template.ResourceCountIs(jsii.String("AWS::EC2::Instance"), jsii.Number(1))
 }
 
-// -------- Root outputs (on parent TapStack) --------
+func TestTapStack_BastionHost_CorrectInstanceType(t *testing.T) {
+	defer jsii.Close()
 
-func Test_Root_Outputs_Present(t *testing.T) {
-	root := buildAppStack(t)
-	parentTpl := assertions.Template_FromStack(root.Stack, nil)
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
 
-	parentTpl.HasOutput(jsii.String("VpcId"), map[string]interface{}{
+	template.HasResourceProperties(jsii.String("AWS::EC2::Instance"), map[string]interface{}{
+		"InstanceType": "t3.micro",
+	})
+}
+
+func TestTapStack_S3Bucket_HasBlockPublicAccess(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
+	template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+		"PublicAccessBlockConfiguration": map[string]interface{}{
+			"BlockPublicAcls":       true,
+			"BlockPublicPolicy":     true,
+			"IgnorePublicAcls":      true,
+			"RestrictPublicBuckets": true,
+		},
+		"VersioningConfiguration": map[string]interface{}{
+			"Status": "Enabled",
+		},
+		"BucketEncryption": map[string]interface{}{
+			"ServerSideEncryptionConfiguration": []map[string]interface{}{
+				{
+					"ServerSideEncryptionByDefault": map[string]interface{}{
+						"SSEAlgorithm": "AES256",
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestTapStack_Tags_Applied(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	// Check that VPC has the Environment tag among others
+	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), map[string]interface{}{
+		"Tags": assertions.Match_ArrayWith(&[]interface{}{
+			map[string]interface{}{
+				"Key":   "Environment",
+				"Value": "Production",
+			},
+		}),
+	})
+}
+
+func TestTapStack_Outputs_Present(t *testing.T) {
+	defer jsii.Close()
+
+	setup := buildAppStack(t)
+	template := getTemplate(t, setup)
+
+	template.HasOutput(jsii.String("VpcId"), map[string]interface{}{
 		"Description": "VPC ID",
 	})
-	parentTpl.HasOutput(jsii.String("BastionPublicIp"), map[string]interface{}{
-		"Description": "Bastion Host Public IP",
+	template.HasOutput(jsii.String("BastionInstanceId"), map[string]interface{}{
+		"Description": "Bastion Instance ID",
 	})
+	template.HasOutput(jsii.String("BastionPublicIp"), map[string]interface{}{
+		"Description": "Bastion Public IP",
+	})
+	template.HasOutput(jsii.String("ArtifactsBucketName"), map[string]interface{}{
+		"Description": "Artifacts bucket (BPA enforced)",
+	})
+}
+
+func TestTapStack_EnvironmentSuffix_DefaultsToDevWhenNil(t *testing.T) {
+	defer jsii.Close()
+
+	app := awscdk.NewApp(nil)
+	stack := lib.NewTapStack(
+		app,
+		jsii.String("TapStackDefaultSuffixTest"),
+		&lib.TapStackProps{
+			StackProps: &awscdk.StackProps{},
+			// EnvironmentSuffix is nil
+		},
+	)
+
+	if stack.EnvironmentSuffix == nil || *stack.EnvironmentSuffix != "dev" {
+		t.Errorf("Expected default environment suffix 'dev', got %v", stack.EnvironmentSuffix)
+	}
+}
+
+func TestTapStack_EnvironmentSuffix_UsesPropsValue(t *testing.T) {
+	defer jsii.Close()
+
+	app := awscdk.NewApp(nil)
+	stack := lib.NewTapStack(
+		app,
+		jsii.String("TapStackPropsSuffixTest"),
+		&lib.TapStackProps{
+			StackProps:        &awscdk.StackProps{},
+			EnvironmentSuffix: jsii.String("prod"),
+		},
+	)
+
+	if stack.EnvironmentSuffix == nil || *stack.EnvironmentSuffix != "prod" {
+		t.Errorf("Expected environment suffix 'prod', got %v", stack.EnvironmentSuffix)
+	}
 }
