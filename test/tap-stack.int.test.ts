@@ -303,8 +303,14 @@ describe('TapStack Integration Tests', () => {
 
   describe('AWS Config Rules', () => {
     test('Required config rules should be active', async () => {
-      // Set timeout specifically for this long-running test
-      jest.setTimeout(300000); // 5 minutes
+      jest.setTimeout(300000);
+
+      interface ComplianceResult {
+        rule: string;
+        isCompliant: boolean;
+        status?: string;
+        reason?: string;
+      }
 
       try {
         const { ConfigRules } = await configService.describeConfigRules().promise();
@@ -315,17 +321,18 @@ describe('TapStack Integration Tests', () => {
         
         const ruleNames = ConfigRules.map((r: AWS.ConfigService.ConfigRule) => r.ConfigRuleName);
         
-        // Check if all required rules exist
-        for (const ruleName of requiredRules) {
-          expect(ruleNames).toContain(ruleName);
+        // Validate rule existence
+        const missingRules = requiredRules.filter(rule => !ruleNames.includes(rule));
+        if (missingRules.length > 0) {
+          throw new Error(`Missing required Config Rules: ${missingRules.join(', ')}`);
         }
-        
-        // Check compliance status with proper async handling
+
+        // Check compliance with better error handling
         const complianceResults = await Promise.all(
-          requiredRules.map(async (rule) => {
+          requiredRules.map(async (rule): Promise<ComplianceResult> => {
             let attempts = 0;
             const maxAttempts = 10;
-            const waitTime = 30000; // 30 seconds
+            const waitTime = 30000;
 
             while (attempts < maxAttempts) {
               try {
@@ -333,32 +340,56 @@ describe('TapStack Integration Tests', () => {
                   ConfigRuleNames: [rule]
                 }).promise();
 
-                if (response.ComplianceByConfigRules?.[0]?.Compliance?.ComplianceType === 'COMPLIANT') {
-                  return { rule, isCompliant: true };
+                const compliance = response.ComplianceByConfigRules?.[0]?.Compliance;
+                
+                if (compliance?.ComplianceType === 'COMPLIANT') {
+                  return { 
+                    rule, 
+                    isCompliant: true, 
+                    status: 'COMPLIANT' 
+                  };
+                }
+
+                // Log non-compliant details
+                console.log(`Rule ${rule} status: ${compliance?.ComplianceType || 'UNKNOWN'}`);
+                if (compliance?.ComplianceContributorCount?.CappedCount) {
+                  console.log(`Non-compliant resource count: ${compliance.ComplianceContributorCount.CappedCount}`);
                 }
 
                 await new Promise(resolve => setTimeout(resolve, waitTime));
                 attempts++;
               } catch (error) {
+                console.warn(`Attempt ${attempts + 1}/${maxAttempts} failed for rule ${rule}:`, error);
                 if (attempts === maxAttempts - 1) throw error;
                 await new Promise(resolve => setTimeout(resolve, waitTime));
                 attempts++;
               }
             }
 
-            return { rule, isCompliant: false };
+            return { 
+              rule, 
+              isCompliant: false,
+              status: 'NON_COMPLIANT',
+              reason: `Rule did not become compliant after ${maxAttempts} attempts`
+            };
           })
         );
 
-        // Verify all rules are compliant with better error messages
-        complianceResults.forEach(({ rule, isCompliant }) => {
-            if (!isCompliant) {
-            console.warn(`Rule ${rule} is still non-compliant after some attempts`);
-            }
-            expect(isCompliant).toBe(true);
+        // Better error reporting
+        const nonCompliantRules = complianceResults.filter(r => !r.isCompliant);
+        if (nonCompliantRules.length > 0) {
+          const details = nonCompliantRules.map(r => 
+            `\n- ${r.rule}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`
+          ).join('');
+          throw new Error(`The following rules are not compliant: ${details}`);
+        }
+
+        // All rules should be compliant
+        complianceResults.forEach(result => {
+          expect(result.isCompliant).toBe(true);
         });
       } catch (error) {
-        console.error('Error checking Config Rules:', error);
+        console.error('Config Rules compliance check failed:', error);
         throw error;
       }
     }, 300000);
