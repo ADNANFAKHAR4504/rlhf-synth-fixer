@@ -74,6 +74,22 @@ func asMap(v any) map[string]any {
 	return nil
 }
 
+// createTestTapStack creates a TapStack instance for testing
+func createTestTapStack(env string) cdktf.TerraformStack {
+	app := cdktf.NewApp(nil)
+	props := &TapStackProps{
+		EnvironmentSuffix: env,
+		StateBucket:       "test-state-bucket",
+		StateBucketRegion: "us-east-1",
+		AwsRegion:         "us-east-1",
+		RepositoryName:    "test-repo",
+		CommitAuthor:      "test-author",
+		OfficeIP:          "203.0.113.0/32",
+		InstanceType:      "t3.micro",
+	}
+	return NewTapStack(app, "TapStack", props)
+}
+
 func Test_Synth_ResourcesPresentAndConfigured(t *testing.T) {
 	tfPath := synthStack(t, "us-west-2")
 	root := readTF(t, tfPath)
@@ -248,34 +264,9 @@ func Test_Database_Configuration(t *testing.T) {
 	// Check backup configuration
 	if retention := db["backup_retention_period"]; retention != float64(7) {
 		t.Fatalf("backup_retention_period = %v, want 7", retention)
-func Test_Database_Configuration(t *testing.T) {
-	tfPath := synthStack(t, "us-east-1")
-	root := readTF(t, tfPath)
-	resources := asMap(root["resource"])
-
-	db := asMap(asMap(resources["aws_db_instance"])["main"])
-	if db == nil {
-		t.Fatalf("aws_db_instance.main missing")
-	}
-
-	// Check required database settings
-	if storage := db["allocated_storage"]; storage != float64(20) {
-		t.Fatalf("allocated_storage = %v, want 20", storage)
-	}
-	if encrypted := db["storage_encrypted"]; encrypted != true {
-		t.Fatalf("storage_encrypted = %v, want true", encrypted)
-	}
-	if dbName := db["db_name"]; dbName != "webapp" {
-		t.Fatalf("db_name = %v, want webapp", dbName)
-	}
-
-	// Check backup configuration
-	if retention := db["backup_retention_period"]; retention != float64(7) {
-		t.Fatalf("backup_retention_period = %v, want 7", retention)
 	}
 }
 
-func TestEnvironmentVariableDefaults(t *testing.T) {
 func TestEnvironmentVariableDefaults(t *testing.T) {
 	tests := []struct {
 		name         string
