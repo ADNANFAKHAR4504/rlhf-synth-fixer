@@ -5,7 +5,7 @@
   "language": "go",
   "po_id": "trainr310",
   "complexity": "hard",
-  "author": "ashish-a-turing",
+  "author": "Ashwin-DevAsh",
   "team": "synth",
   "startedAt": "2025-08-25T10:35:03+00:00",
   "difficulty": "hard",
@@ -33,5 +33,10 @@
     "Internet Gateway",
     "Security Groups",
     "Route Tables"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
