@@ -87,9 +87,27 @@ jobs:
               --instance-ids $EXISTING_INSTANCE \
               --query 'Reservations[0].Instances[0].PublicIpAddress' \
               --output text)
-            echo "📋 Reusing existing jump box:"
+            
+            # Get existing security group ID
+            EXISTING_SG=$(aws ec2 describe-instances \
+              --instance-ids $EXISTING_INSTANCE \
+              --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' \
+              --output text)
+            
+            echo "🔧 Updating existing jump box security group: $EXISTING_SG"
+            
+            # Add ICMP rule if not already present
+            aws ec2 authorize-security-group-ingress \
+              --group-id $EXISTING_SG \
+              --protocol icmp \
+              --port -1 \
+              --cidr 0.0.0.0/0 \
+              || echo "ICMP rule may already exist"
+            
+            echo "📋 Reusing existing jump box with updated security group:"
             echo "   Instance ID: $EXISTING_INSTANCE"
             echo "   Public IP: $EXISTING_IP"
+            echo "   Security Group: $EXISTING_SG (updated with ICMP)"
             echo "   ⚠️  Note: Using existing instance - password may be different"
             
             # Store existing jump box info in outputs
@@ -97,10 +115,10 @@ jobs:
             echo "INSTANCE_ID=$EXISTING_INSTANCE" > jump-box-outputs/jump-box-info.env
             echo "PUBLIC_IP=$EXISTING_IP" >> jump-box-outputs/jump-box-info.env
             echo "PASSWORD=<existing-password>" >> jump-box-outputs/jump-box-info.env
-            echo "SECURITY_GROUP_ID=<existing-sg>" >> jump-box-outputs/jump-box-info.env
+            echo "SECURITY_GROUP_ID=$EXISTING_SG" >> jump-box-outputs/jump-box-info.env
             echo "REGION=us-east-1" >> jump-box-outputs/jump-box-info.env
             
-            echo "✅ Reusing existing jump box, skipping creation"
+            echo "✅ Reusing existing jump box with connectivity fixes applied"
             exit 0
           fi
           
