@@ -302,7 +302,7 @@ export class TapStack extends cdk.Stack {
       functionName: 'tap-create-item',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'create_item.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lib/lambda'),
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
@@ -318,7 +318,7 @@ export class TapStack extends cdk.Stack {
       functionName: 'tap-get-items',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'get_item.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lib/lambda'),
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
@@ -334,7 +334,7 @@ export class TapStack extends cdk.Stack {
       functionName: 'tap-upload-file',
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'upload_file.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lib/lambda'),
       role: lambdaExecutionRole,
       timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
