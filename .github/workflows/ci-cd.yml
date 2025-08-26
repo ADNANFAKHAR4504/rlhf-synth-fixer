@@ -181,17 +181,86 @@ jobs:
           # Wait for IAM propagation
           sleep 30
 
-          # Get default VPC and public subnet with internet gateway
+          # Get default VPC and debug network configuration
           VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
-          # Find a public subnet (one that has a route to internet gateway)
-          SUBNET_ID=$(aws ec2 describe-subnets \
-            --filters "Name=vpc-id,Values=$VPC_ID" "Name=map-public-ip-on-launch,Values=true" \
-            --query 'Subnets[0].SubnetId' \
+          echo "🔍 Default VPC ID: $VPC_ID"
+          
+          # List all Internet Gateways for this VPC
+          echo "🌐 Internet Gateways in VPC $VPC_ID:"
+          aws ec2 describe-internet-gateways \
+            --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
+            --query 'InternetGateways[*].[InternetGatewayId,State,Attachments[0].State]' \
+            --output table
+          
+          # List all subnets with their routing info
+          echo "🗺️  All subnets in VPC $VPC_ID:"
+          aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query 'Subnets[*].[SubnetId,AvailabilityZone,MapPublicIpOnLaunch,CidrBlock]' \
+            --output table
+          
+          # Find route tables and their routes
+          echo "🛣️  Route tables for VPC $VPC_ID:"
+          ROUTE_TABLES=$(aws ec2 describe-route-tables \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query 'RouteTables[*].RouteTableId' \
             --output text)
           
-          # If no public subnet found, fall back to first subnet
-          if [ "$SUBNET_ID" = "None" ] || [ -z "$SUBNET_ID" ]; then
+          for rt_id in $ROUTE_TABLES; do
+            echo "Route table $rt_id:"
+            aws ec2 describe-route-tables \
+              --route-table-ids $rt_id \
+              --query 'RouteTables[0].Routes[*].[DestinationCidrBlock,GatewayId,State]' \
+              --output table
+            echo "Associated subnets:"
+            aws ec2 describe-route-tables \
+              --route-table-ids $rt_id \
+              --query 'RouteTables[0].Associations[*].[SubnetId,Main]' \
+              --output table
+            echo "---"
+          done
+          
+          # Find a truly public subnet (has route to IGW)
+          echo "🔍 Finding public subnet with IGW route..."
+          IGW_ID=$(aws ec2 describe-internet-gateways \
+            --filters "Name=attachment.vpc-id,Values=$VPC_ID" \
+            --query 'InternetGateways[0].InternetGatewayId' \
+            --output text)
+          echo "Internet Gateway ID: $IGW_ID"
+          
+          # Find subnet with route to this IGW
+          PUBLIC_SUBNET=""
+          for rt_id in $ROUTE_TABLES; do
+            # Check if this route table has IGW route
+            HAS_IGW_ROUTE=$(aws ec2 describe-route-tables \
+              --route-table-ids $rt_id \
+              --query "RouteTables[0].Routes[?GatewayId=='$IGW_ID' && DestinationCidrBlock=='0.0.0.0/0'] | length(@)" \
+              --output text)
+            
+            if [ "$HAS_IGW_ROUTE" -gt 0 ]; then
+              echo "✅ Route table $rt_id has IGW route"
+              # Get subnets associated with this route table
+              ASSOCIATED_SUBNETS=$(aws ec2 describe-route-tables \
+                --route-table-ids $rt_id \
+                --query 'RouteTables[0].Associations[?SubnetId!=null].SubnetId' \
+                --output text)
+              
+              if [ -n "$ASSOCIATED_SUBNETS" ]; then
+                PUBLIC_SUBNET=$(echo $ASSOCIATED_SUBNETS | awk '{print $1}')
+                echo "✅ Found public subnet: $PUBLIC_SUBNET"
+                break
+              fi
+            fi
+          done
+          
+          # Use the public subnet we found, or fall back
+          if [ -n "$PUBLIC_SUBNET" ] && [ "$PUBLIC_SUBNET" != "None" ]; then
+            SUBNET_ID=$PUBLIC_SUBNET
+            echo "🎯 Using verified public subnet: $SUBNET_ID"
+          else
+            echo "⚠️  No public subnet with IGW route found, using first available subnet"
             SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query 'Subnets[0].SubnetId' --output text)
+            echo "📍 Using subnet: $SUBNET_ID (may not have internet access)"
           fi
 
           # Create security group for jump box
