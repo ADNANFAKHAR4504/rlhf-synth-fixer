@@ -1,8 +1,12 @@
 import {
   CloudFormationClient,
-  DescribeStacksCommand,
   DescribeStackResourcesCommand,
+  DescribeStacksCommand,
 } from "@aws-sdk/client-cloudformation";
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 import {
   BatchGetProjectsCommand,
   CodeBuildClient,
@@ -13,27 +17,21 @@ import {
   GetPipelineStateCommand,
 } from "@aws-sdk/client-codepipeline";
 import {
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  GetRolePolicyCommand,
-  ListRolePoliciesCommand,
-} from "@aws-sdk/client-iam";
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
-import {
   EventBridgeClient,
   ListRulesCommand,
 } from "@aws-sdk/client-eventbridge";
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand
+} from "@aws-sdk/client-iam";
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import fs from "fs";
 
 const outputs = JSON.parse(
@@ -99,7 +97,7 @@ describe("TapStack Integration Tests", () => {
         new GetBucketLifecycleConfigurationCommand({ Bucket: artifactsBucketName })
       );
       expect(lifecycleResult.Rules).toHaveLength(1);
-      expect(lifecycleResult.Rules?.[0]?.Id).toBe("DeleteOldVersions");
+      expect(lifecycleResult.Rules?.[0]?.ID).toBe("DeleteOldVersions");
       expect(lifecycleResult.Rules?.[0]?.NoncurrentVersionExpiration?.NoncurrentDays).toBe(30);
       expect(lifecycleResult.Rules?.[0]?.Status).toBe("Enabled");
     });
@@ -207,9 +205,9 @@ describe("TapStack Integration Tests", () => {
         const roleResult = await iam.send(
           new GetRoleCommand({ RoleName: pipelineRole.PhysicalResourceId })
         );
-        
+
         expect(roleResult.Role?.Description).toBe("Role for CodePipeline to execute pipeline operations");
-        
+
         const trustPolicy = JSON.parse(decodeURIComponent(roleResult.Role?.AssumeRolePolicyDocument || '{}'));
         expect(trustPolicy.Statement[0].Principal.Service).toBe("codepipeline.amazonaws.com");
       }
@@ -225,9 +223,9 @@ describe("TapStack Integration Tests", () => {
         const roleResult = await iam.send(
           new GetRoleCommand({ RoleName: buildRole.PhysicalResourceId })
         );
-        
+
         expect(roleResult.Role?.Description).toBe("Role for CodeBuild to execute build operations");
-        
+
         const trustPolicy = JSON.parse(decodeURIComponent(roleResult.Role?.AssumeRolePolicyDocument || '{}'));
         expect(trustPolicy.Statement[0].Principal.Service).toBe("codebuild.amazonaws.com");
       }
@@ -243,13 +241,13 @@ describe("TapStack Integration Tests", () => {
         const roleResult = await iam.send(
           new GetRoleCommand({ RoleName: deployRole.PhysicalResourceId })
         );
-        
+
         expect(roleResult.Role?.Description).toBe("Role for CloudFormation to deploy resources");
-        
+
         const attachedPoliciesResult = await iam.send(
           new ListAttachedRolePoliciesCommand({ RoleName: deployRole.PhysicalResourceId })
         );
-        
+
         const powerUserPolicy = attachedPoliciesResult.AttachedPolicies?.find(
           p => p.PolicyName === "PowerUserAccess"
         );
@@ -264,13 +262,13 @@ describe("TapStack Integration Tests", () => {
   describe("CloudWatch Logs", () => {
     it("should have build log group with correct retention", async () => {
       const buildLogGroupName = `/aws/codebuild/nova-model-build-${environmentSuffix}`;
-      
+
       const result = await logs.send(
-        new DescribeLogGroupsCommand({ 
-          logGroupNamePrefix: buildLogGroupName 
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: buildLogGroupName
         })
       );
-      
+
       const logGroup = result.logGroups?.find(lg => lg.logGroupName === buildLogGroupName);
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(30);
@@ -278,13 +276,13 @@ describe("TapStack Integration Tests", () => {
 
     it("should have pipeline log group with correct retention", async () => {
       const pipelineLogGroupName = `/aws/codepipeline/nova-model-pipeline-${environmentSuffix}`;
-      
+
       const result = await logs.send(
-        new DescribeLogGroupsCommand({ 
-          logGroupNamePrefix: pipelineLogGroupName 
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: pipelineLogGroupName
         })
       );
-      
+
       const logGroup = result.logGroups?.find(lg => lg.logGroupName === pipelineLogGroupName);
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(30);
@@ -299,14 +297,14 @@ describe("TapStack Integration Tests", () => {
       const result = await eventbridge.send(
         new ListRulesCommand({ NamePrefix: stackName })
       );
-      
-      const pipelineRule = result.Rules?.find(r => 
+
+      const pipelineRule = result.Rules?.find(r =>
         r.Description === "Capture pipeline state changes"
       );
-      
+
       expect(pipelineRule).toBeDefined();
       expect(pipelineRule?.State).toBe("ENABLED");
-      
+
       // Check event pattern
       if (pipelineRule?.EventPattern) {
         const eventPattern = JSON.parse(pipelineRule.EventPattern);
@@ -403,7 +401,7 @@ describe("TapStack Integration Tests", () => {
       const buildResult = await codebuild.send(
         new BatchGetProjectsCommand({ names: [buildProjectName] })
       );
-      
+
       const project = buildResult.projects?.[0];
       expect(project?.source?.location).toContain(sourceBucketName);
 
@@ -411,7 +409,7 @@ describe("TapStack Integration Tests", () => {
       const pipelineResult = await codepipeline.send(
         new GetPipelineCommand({ name: pipelineName })
       );
-      
+
       expect(pipelineResult.pipeline?.artifactStore?.location).toBe(artifactsBucketName);
       expect(pipelineResult.pipeline?.artifactStore?.type).toBe("S3");
     });
