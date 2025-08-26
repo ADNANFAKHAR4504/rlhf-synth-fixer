@@ -172,13 +172,15 @@ func (stack *TapStack) createOutputs() {
 
 // NetworkingResources contains all networking-related AWS resources
 type NetworkingResources struct {
-	VPC             vpc.Vpc
-	PublicSubnets   []subnet.Subnet
-	PrivateSubnets  []subnet.Subnet
-	InternetGateway internetgateway.InternetGateway
-	NatGateway      natgateway.NatGateway
-	SecurityGroups  map[string]securitygroup.SecurityGroup
-	VPCEndpoints    map[string]vpcendpoint.VpcEndpoint
+	VPC               vpc.Vpc
+	PublicSubnets     []subnet.Subnet
+	PrivateSubnets    []subnet.Subnet
+	InternetGateway   internetgateway.InternetGateway
+	NatGateway        natgateway.NatGateway
+	PublicRouteTable  routetable.RouteTable
+	PrivateRouteTable routetable.RouteTable
+	SecurityGroups    map[string]securitygroup.SecurityGroup
+	VPCEndpoints      map[string]vpcendpoint.VpcEndpoint
 }
 
 // SecurityResources contains all security-related AWS resources
@@ -279,7 +281,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 	})
 
 	// Create route tables
-	publicRouteTable := routetable.NewRouteTable(stack.Stack, str("public-rt"), &routetable.RouteTableConfig{
+	resources.PublicRouteTable = routetable.NewRouteTable(stack.Stack, str("public-rt"), &routetable.RouteTableConfig{
 		VpcId: resources.VPC.Id(),
 		Route: &[]*routetable.RouteTableRoute{{
 			CidrBlock: str("0.0.0.0/0"),
@@ -290,7 +292,7 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 		},
 	})
 
-	privateRouteTable := routetable.NewRouteTable(stack.Stack, str("private-rt"), &routetable.RouteTableConfig{
+	resources.PrivateRouteTable = routetable.NewRouteTable(stack.Stack, str("private-rt"), &routetable.RouteTableConfig{
 		VpcId: resources.VPC.Id(),
 		Route: &[]*routetable.RouteTableRoute{{
 			CidrBlock:    str("0.0.0.0/0"),
@@ -305,14 +307,14 @@ func NewNetworkingResources(stack *TapStack) *NetworkingResources {
 	for i, subnet := range resources.PublicSubnets {
 		routetableassociation.NewRouteTableAssociation(stack.Stack, str(fmt.Sprintf("public-rta-%d", i)), &routetableassociation.RouteTableAssociationConfig{
 			SubnetId:     subnet.Id(),
-			RouteTableId: publicRouteTable.Id(),
+			RouteTableId: resources.PublicRouteTable.Id(),
 		})
 	}
 
 	for i, subnet := range resources.PrivateSubnets {
 		routetableassociation.NewRouteTableAssociation(stack.Stack, str(fmt.Sprintf("private-rta-%d", i)), &routetableassociation.RouteTableAssociationConfig{
 			SubnetId:     subnet.Id(),
-			RouteTableId: privateRouteTable.Id(),
+			RouteTableId: resources.PrivateRouteTable.Id(),
 		})
 	}
 
@@ -338,8 +340,9 @@ func (n *NetworkingResources) createVPCEndpoints(stack *TapStack) {
 		VpcId:           n.VPC.Id(),
 		ServiceName:     str("com.amazonaws." + stack.Config.Region + ".dynamodb"),
 		VpcEndpointType: str("Gateway"),
-		RouteTableIds:   &[]*string{
-			// Add route table IDs here
+		RouteTableIds: &[]*string{
+			n.PublicRouteTable.Id(),
+			n.PrivateRouteTable.Id(),
 		},
 		Tags: &map[string]*string{
 			"Name": str(stack.EnvPrefix + "-dynamodb-endpoint"),
@@ -351,8 +354,9 @@ func (n *NetworkingResources) createVPCEndpoints(stack *TapStack) {
 		VpcId:           n.VPC.Id(),
 		ServiceName:     str("com.amazonaws." + stack.Config.Region + ".s3"),
 		VpcEndpointType: str("Gateway"),
-		RouteTableIds:   &[]*string{
-			// Add route table IDs here
+		RouteTableIds: &[]*string{
+			n.PublicRouteTable.Id(),
+			n.PrivateRouteTable.Id(),
 		},
 		Tags: &map[string]*string{
 			"Name": str(stack.EnvPrefix + "-s3-endpoint"),
@@ -655,7 +659,7 @@ exports.handler = async (event) => {
 		// Create Lambda function
 		l.Functions[funcName] = lambdafunction.NewLambdaFunction(stack.Stack, str(funcName), &lambdafunction.LambdaFunctionConfig{
 			FunctionName: str(stack.EnvPrefix + "-lambda-" + funcName + "-" + stack.Config.Environment),
-			Runtime:      str("nodejs20.x"),
+			Runtime:      str("nodejs18.x"),
 			Handler:      str("index.handler"),
 			Role:         stack.Security.LambdaExecutionRole.Arn(),
 			S3Bucket:     l.S3Bucket.Id(),
@@ -740,16 +744,6 @@ func (l *LambdaResources) createAPIGateway(stack *TapStack) {
 			SourceArn:    l.APIGateway.ExecutionArn(),
 		})
 	}
-
-	// Deploy API Gateway - commented out as it needs to be deployed after methods
-	// The deployment will be done manually after methods and integrations are created
-	/*
-		apigatewaydeployment.NewApiGatewayDeployment(stack.Stack, str("api-deployment"), &apigatewaydeployment.ApiGatewayDeploymentConfig{
-			RestApiId:   l.APIGateway.Id(),
-			StageName:   str("prod"),
-			Description: str("Production deployment"),
-		})
-	*/
 }
 
 func convertSubnetIds(subnets []subnet.Subnet) *[]*string {
