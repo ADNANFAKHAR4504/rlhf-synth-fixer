@@ -1,0 +1,428 @@
+package app;
+
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.Tags;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Runtime;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.FunctionProps;
+// Removed unused VpcConfig import
+import software.amazon.awscdk.services.apigateway.RestApi;
+import software.amazon.awscdk.services.apigateway.LambdaIntegration;
+import software.amazon.awscdk.services.apigateway.RestApiProps;
+import software.amazon.awscdk.services.dynamodb.TableV2;
+import software.amazon.awscdk.services.dynamodb.Attribute;
+import software.amazon.awscdk.services.dynamodb.AttributeType;
+import software.amazon.awscdk.services.dynamodb.TablePropsV2;
+import software.amazon.awscdk.services.dynamodb.Billing;
+import software.amazon.awscdk.services.dynamodb.Capacity;
+import software.amazon.awscdk.services.dynamodb.ThroughputProps;
+import software.amazon.awscdk.services.dynamodb.AutoscaledCapacityOptions;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.VpcProps;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SecurityGroupProps;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.PolicyStatementProps;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.logs.LogGroup;
+import software.amazon.awscdk.services.logs.RetentionDays;
+import software.amazon.awscdk.services.logs.LogGroupProps;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.MetricProps;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
+import software.amazon.awscdk.services.applicationinsights.CfnApplication;
+import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
+import software.amazon.awscdk.services.config.CfnDeliveryChannel;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketProps;
+import software.constructs.Construct;
+
+import java.util.Optional;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import software.amazon.awscdk.Duration;
+
+/**
+ * TapStackProps holds configuration for the TapStack CDK stack.
+ *
+ * This class provides a simple container for stack-specific configuration
+ * including environment suffix for resource naming.
+ */
+class TapStackProps {
+    private final String environmentSuffix;
+    private final StackProps stackProps;
+
+    private TapStackProps(String environmentSuffix, StackProps stackProps) {
+        this.environmentSuffix = environmentSuffix;
+        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    }
+
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
+
+    public StackProps getStackProps() {
+        return stackProps;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private String environmentSuffix;
+        private StackProps stackProps;
+
+        public Builder environmentSuffix(String environmentSuffix) {
+            this.environmentSuffix = environmentSuffix;
+            return this;
+        }
+
+        public Builder stackProps(StackProps stackProps) {
+            this.stackProps = stackProps;
+            return this;
+        }
+
+        public TapStackProps build() {
+            return new TapStackProps(environmentSuffix, stackProps);
+        }
+    }
+}
+
+/**
+ * Represents the main CDK stack for the Tap project - Serverless Web Application.
+ *
+ * This stack creates a complete serverless infrastructure including:
+ * - Lambda function for backend processing
+ * - API Gateway for HTTP requests
+ * - DynamoDB table with provisioned capacity
+ * - VPC with private subnets
+ * - CloudWatch monitoring and alarms
+ * - Application Insights and Config for enhanced monitoring
+ * - Proper IAM roles with least privilege
+ *
+ * @version 1.0
+ * @since 1.0
+ */
+class TapStack extends Stack {
+    private final String environmentSuffix;
+    
+    /**
+     * Constructs a new TapStack with complete serverless infrastructure.
+     *
+     * @param scope The parent construct
+     * @param id The unique identifier for this stack
+     * @param props Optional properties for configuring the stack, including environment suffix
+     */
+    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+        super(scope, id, props != null ? props.getStackProps() : null);
+
+        // Get environment suffix from props, environment variable, context, or use 'dev' as default
+        this.environmentSuffix = Optional.ofNullable(props)
+                .map(TapStackProps::getEnvironmentSuffix)
+                .or(() -> Optional.ofNullable(System.getenv("ENVIRONMENT_SUFFIX")))
+                .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
+                        .map(Object::toString))
+                .orElse("dev");
+
+        // Common tags for all resources
+        Map<String, String> commonTags = new HashMap<>();
+        commonTags.put("Environment", this.environmentSuffix);
+        commonTags.put("Project", "ServerlessWebApp");
+
+        // Create VPC with public and private subnets
+        Vpc vpc = new Vpc(this, "ServerlessVpc", VpcProps.builder()
+                .maxAzs(2)
+                .subnetConfiguration(List.of(
+                    SubnetConfiguration.builder()
+                        .name("PublicSubnet")
+                        .subnetType(SubnetType.PUBLIC)
+                        .cidrMask(24)
+                        .build(),
+                    SubnetConfiguration.builder()
+                        .name("PrivateSubnet")
+                        .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                        .cidrMask(24)
+                        .build()
+                ))
+                .build());
+        
+        // Add tags to VPC
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(vpc).add(key, value));
+
+        // Security group for Lambda
+        SecurityGroup lambdaSecurityGroup = new SecurityGroup(this, "LambdaSecurityGroup" + this.environmentSuffix, 
+                SecurityGroupProps.builder()
+                    .vpc(vpc)
+                    .description("Security group for Lambda function")
+                    .build());
+        
+        // Allow HTTPS outbound for Lambda to access DynamoDB and other AWS services
+        lambdaSecurityGroup.addEgressRule(
+            Peer.anyIpv4(),
+            Port.tcp(443),
+            "HTTPS outbound for AWS services"
+        );
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(lambdaSecurityGroup).add(key, value));
+
+        // S3 bucket for AWS Config
+        Bucket configBucket = new Bucket(this, "ConfigBucket", BucketProps.builder()
+                .bucketName("tap-" + this.environmentSuffix.toLowerCase() + "-config-bucket")
+                .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                .autoDeleteObjects(true)
+                .build());
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(configBucket).add(key, value));
+
+        // DynamoDB table with provisioned capacity using TableV2 (latest feature)
+        TableV2 dynamoTable = new TableV2(this, "ApplicationDataTable", TablePropsV2.builder()
+                .tableName("tap-" + this.environmentSuffix.toLowerCase() + "-data")
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .partitionKey(Attribute.builder()
+                    .name("id")
+                    .type(AttributeType.STRING)
+                    .build())
+                // Billing mode is set via the billing() method above
+                .billing(software.amazon.awscdk.services.dynamodb.Billing.provisioned(
+                    software.amazon.awscdk.services.dynamodb.ThroughputProps.builder()
+                        .readCapacity(software.amazon.awscdk.services.dynamodb.Capacity.autoscaled(
+                            software.amazon.awscdk.services.dynamodb.AutoscaledCapacityOptions.builder()
+                                .minCapacity(5)
+                                .maxCapacity(10)
+                                .build()))
+                        .writeCapacity(software.amazon.awscdk.services.dynamodb.Capacity.autoscaled(
+                            software.amazon.awscdk.services.dynamodb.AutoscaledCapacityOptions.builder()
+                                .minCapacity(5)
+                                .maxCapacity(10)
+                                .build()))
+                        .build()))
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(dynamoTable).add(key, value));
+
+        // IAM role for Lambda with least privilege
+        Role lambdaRole = new Role(this, "LambdaExecutionRole", software.amazon.awscdk.services.iam.RoleProps.builder()
+                .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
+                .managedPolicies(List.of(
+                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole")
+                ))
+                .build());
+
+        // Add DynamoDB permissions to Lambda role
+        lambdaRole.addToPolicy(new PolicyStatement(software.amazon.awscdk.services.iam.PolicyStatementProps.builder()
+                .effect(Effect.ALLOW)
+                .actions(List.of(
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                ))
+                .resources(List.of(dynamoTable.getTableArn()))
+                .build()));
+
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(lambdaRole).add(key, value));
+
+        // CloudWatch Log Group for Lambda
+        LogGroup lambdaLogGroup = new LogGroup(this, "LambdaLogGroup", LogGroupProps.builder()
+                .logGroupName("/aws/lambda/tap-" + this.environmentSuffix + "-backend")
+                .retention(RetentionDays.TWO_WEEKS)
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(lambdaLogGroup).add(key, value));
+
+        // Lambda function for backend processing
+        Function backendFunction = new Function(this, "BackendFunction", FunctionProps.builder()
+                .functionName("tap-" + this.environmentSuffix + "-backend")
+                .runtime(Runtime.JAVA_21)
+                .handler("com.serverless.Handler::handleRequest")
+                .code(Code.fromAsset("lib/lambda"))
+                .memorySize(512)
+                .timeout(Duration.seconds(30))
+                .role(lambdaRole)
+                .logGroup(lambdaLogGroup)
+                .vpc(vpc)
+                .vpcSubnets(software.amazon.awscdk.services.ec2.SubnetSelection.builder()
+                    .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                    .build())
+                .securityGroups(List.of(lambdaSecurityGroup))
+                .environment(Map.of(
+                    "DYNAMODB_TABLE", dynamoTable.getTableName(),
+                    "ENVIRONMENT", this.environmentSuffix
+                ))
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(backendFunction).add(key, value));
+
+        // REST API Gateway
+        RestApi api = new RestApi(this, "ServerlessApi", RestApiProps.builder()
+                .restApiName("tap-" + this.environmentSuffix + "-api")
+                .description("Serverless API Gateway for web application")
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(api).add(key, value));
+
+        // API Gateway Lambda integration
+        LambdaIntegration lambdaIntegration = new LambdaIntegration(backendFunction);
+        api.getRoot().addMethod("GET", lambdaIntegration);
+        api.getRoot().addResource("health").addMethod("GET", lambdaIntegration);
+
+        // CloudWatch alarm for Lambda error rate > 1%
+        Alarm lambdaErrorAlarm = new Alarm(this, "LambdaErrorAlarm", software.amazon.awscdk.services.cloudwatch.AlarmProps.builder()
+                .metric(new Metric(software.amazon.awscdk.services.cloudwatch.MetricProps.builder()
+                    .namespace("AWS/Lambda")
+                    .metricName("ErrorRate")
+                    .dimensionsMap(Map.of("FunctionName", backendFunction.getFunctionName()))
+                    .statistic("Average")
+                    .period(Duration.minutes(5))
+                    .build()))
+                .threshold(1.0)
+                .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                .evaluationPeriods(2)
+                .treatMissingData(TreatMissingData.NOT_BREACHING)
+                .alarmDescription("Lambda error rate exceeds 1%")
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(lambdaErrorAlarm).add(key, value));
+
+        // AWS Application Insights for enhanced monitoring (latest feature)
+        CfnApplication appInsights = new CfnApplication(this, "AppInsights", software.amazon.awscdk.services.applicationinsights.CfnApplicationProps.builder()
+                .resourceGroupName("ServerlessApp-" + this.environmentSuffix)
+                .autoConfigurationEnabled(true)
+                .cweMonitorEnabled(true)
+                .opsCenterEnabled(true)
+                .build());
+        
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(appInsights).add(key, value));
+
+        // AWS Config for compliance monitoring (latest feature)
+        Role configRole = new Role(this, "ConfigRole", software.amazon.awscdk.services.iam.RoleProps.builder()
+                .assumedBy(new ServicePrincipal("config.amazonaws.com"))
+                .managedPolicies(List.of(
+                    ManagedPolicy.fromAwsManagedPolicyName("service-role/ConfigRole")
+                ))
+                .build());
+
+        // AWS Config Configuration Recorder using CFN construct
+        CfnConfigurationRecorder configRecorder = new CfnConfigurationRecorder(this, "ConfigRecorder",
+                software.amazon.awscdk.services.config.CfnConfigurationRecorderProps.builder()
+                    .roleArn(configRole.getRoleArn())
+                    .recordingGroup(software.amazon.awscdk.services.config.CfnConfigurationRecorder.RecordingGroupProperty.builder()
+                        .allSupported(true)
+                        .includeGlobalResourceTypes(true)
+                        .build())
+                    .build());
+
+        // AWS Config Delivery Channel using CFN construct
+        CfnDeliveryChannel configDelivery = new CfnDeliveryChannel(this, "ConfigDelivery",
+                software.amazon.awscdk.services.config.CfnDeliveryChannelProps.builder()
+                    .s3BucketName(configBucket.getBucketName())
+                    .build());
+
+        commonTags.forEach((key, value) -> software.amazon.awscdk.Tags.of(configRole).add(key, value));
+
+        // Stack outputs for integration testing
+        CfnOutput.Builder.create(this, "ApiGatewayUrl")
+                .description("API Gateway URL")
+                .value(api.getUrl())
+                .build();
+
+        CfnOutput.Builder.create(this, "DynamoDBTableName")
+                .description("DynamoDB Table Name")
+                .value(dynamoTable.getTableName())
+                .build();
+
+        CfnOutput.Builder.create(this, "LambdaFunctionArn")
+                .description("Lambda Function ARN")
+                .value(backendFunction.getFunctionArn())
+                .build();
+
+        CfnOutput.Builder.create(this, "VpcId")
+                .description("VPC ID")
+                .value(vpc.getVpcId())
+                .build();
+    }
+
+    /**
+     * Gets the environment suffix used by this stack.
+     *
+     * @return The environment suffix (e.g., 'dev', 'prod')
+     */
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
+}
+
+/**
+ * Main entry point for the TAP CDK Java application.
+ *
+ * This class serves as the entry point for the CDK application and is responsible
+ * for initializing the CDK app and instantiating the main TapStack.
+ *
+ * The application supports environment-specific deployments through the
+ * environmentSuffix context parameter.
+ *
+ * @version 1.0
+ * @since 1.0
+ */
+public final class Main {
+
+    /**
+     * Private constructor to prevent instantiation of utility class.
+     */
+    private Main() {
+        // Utility class should not be instantiated
+    }
+
+    /**
+     * Main entry point for the CDK application.
+     *
+     * This method creates a CDK App instance and instantiates the TapStack
+     * with appropriate configuration based on environment variables and context.
+     *
+     * @param args Command line arguments (not used in this application)
+     */
+    public static void main(final String[] args) {
+        App app = new App();
+
+        // Get environment suffix from environment variable, context or default to 'dev'
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        if (environmentSuffix == null) {
+            environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+        }
+        if (environmentSuffix == null) {
+            environmentSuffix = "dev";
+        }
+
+        // Create the main TAP stack
+        new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
+                .environmentSuffix(environmentSuffix)
+                .stackProps(StackProps.builder()
+                        .env(Environment.builder()
+                                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                                .region("us-west-2")
+                                .build())
+                        .build())
+                .build());
+
+        // Synthesize the CDK app
+        app.synth();
+    }
+}
