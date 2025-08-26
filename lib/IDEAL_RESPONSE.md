@@ -94,11 +94,13 @@ VPC Flow Logs are enabled.
 Security groups restrict traffic appropriately.
 All resources are tagged correctly.
 Lambda remediation function corrects non-compliant S3 bucket settings.
-`TapStack.yml` code
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   AWS CloudFormation template for a secure, compliant FinTech application infrastructure
   with VPC, S3, DynamoDB, RDS, CloudTrail, Lambda for remediation, and strict IAM policies.
+
 # Parameters for customizable inputs
 Parameters:
   EnvironmentName:
@@ -845,6 +847,7 @@ Resources:
           import json
           import boto3
           import cfnresponse
+
           def handler(event, context):
               s3 = boto3.client('s3')
               responseData = {}
@@ -954,4 +957,4 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
     Export:
       Name: !Sub ${EnvironmentName}-ALBArn
-
+```
