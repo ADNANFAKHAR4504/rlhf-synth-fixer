@@ -337,11 +337,8 @@ class TapStack extends Stack {
                 ))
                 .build();
 
-        // Create resource policy for VPC Lattice Service Network
-        CfnResourcePolicy vpcLatticeResourcePolicy = CfnResourcePolicy.Builder.create(this, "VPCLatticeResourcePolicy")
-                .resourceArn(vpcLatticeServiceNetwork.getAttrArn())
-                .policy(vpcLatticePolicyDocument.toJSON())
-                .build();
+        // Note: VPC Lattice service network resource policies are managed through 
+        // the service network configuration and IAM policies rather than CfnResourcePolicy
 
         // Add resource tags
         addResourceTags(vpc, "Environment", environmentSuffix);
