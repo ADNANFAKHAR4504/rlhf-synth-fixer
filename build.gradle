@@ -89,7 +89,7 @@ sourceSets {
         srcDirs = ['src/main/java', 'lib/src/main/java']
     }
     test.java {
-        srcDirs = ['tests/unit/java']
+        srcDirs = ['tests/unit/java', 'lib/src/test/java']
     }
     integrationTest {
         java.srcDirs = ['tests/integration/java']
@@ -236,7 +236,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.09
+                minimum = 0.90
             }
         }
         rule {
@@ -244,7 +244,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.09
+                minimum = 0.90
             }
             // Exclude Main class and infrastructure classes from coverage requirements
             excludes = [
