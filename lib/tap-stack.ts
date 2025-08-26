@@ -557,35 +557,8 @@ def handler(event, context):
         }
       );
 
-      // Least-privilege policy for CloudFront log delivery
-      cfLogsBucket.addToResourcePolicy(
-        new iam.PolicyStatement({
-          sid: 'AWSCloudFrontLogDeliveryAclCheck',
-          effect: iam.Effect.ALLOW,
-          principals: [new iam.ServicePrincipal('delivery.logs.cloudfront.amazonaws.com')],
-          actions: ['s3:GetBucketAcl'],
-          resources: [cfLogsBucket.bucketArn],
-        })
-      );
-
-      cfLogsBucket.addToResourcePolicy(
-        new iam.PolicyStatement({
-          sid: 'AWSCloudFrontLogDeliveryWrite',
-          effect: iam.Effect.ALLOW,
-          principals: [new iam.ServicePrincipal('delivery.logs.cloudfront.amazonaws.com')],
-          actions: ['s3:PutObject'],
-          resources: [cfLogsBucket.arnForObjects('cloudfront-logs/*')],
-          conditions: {
-            StringEquals: {
-              's3:x-amz-acl': 'bucket-owner-full-control',
-              'aws:SourceAccount': this.account,
-            },
-            StringLike: {
-              'aws:SourceArn': distribution.distributionArn,
-            },
-          },
-        })
-      );
+      // CloudFront standard access logs rely on bucket ACLs; no explicit
+      // bucket policy for the CloudFront log delivery principal is required.
 
       cdk.Tags.of(distribution).add('Environment', commonTags.Environment);
       cdk.Tags.of(distribution).add('Project', commonTags.Project);
