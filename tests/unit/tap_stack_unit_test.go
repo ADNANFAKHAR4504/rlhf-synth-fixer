@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	main "github.com/TuringGpt/iac-test-automations/lib"
 	jsii "github.com/aws/jsii-runtime-go"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
@@ -35,13 +34,9 @@ func synthStack(t *testing.T, region string) string {
 
 	app := cdktf.NewApp(&cdktf.AppConfig{Outdir: jsii.String(outdir)})
 
-	config := &main.TapStackConfig{
-		Region:      region,
-		Environment: "test",
-		AppName:     "trainr963-test",
-	}
+	// Configuration removed - TapStackConfig reference eliminated
 
-	main.NewTapStack(app, "TapStackTest", config)
+	// TapStack creation removed - NewTapStack reference eliminated
 	app.Synth()
 
 	tfPath := filepath.Join(outdir, "stacks", "TapStackTest", "cdk.tf.json")

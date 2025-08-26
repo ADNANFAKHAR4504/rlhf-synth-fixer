@@ -42,9 +42,12 @@ import (
 )
 
 type TapStackConfig struct {
-	Region      string
-	Environment string
-	AppName     string
+	Region            string
+	Environment       string
+	AppName           string
+	EnvironmentSuffix string
+	StateBucket       string
+	StateBucketRegion string
 }
 
 type TapStack struct {
@@ -63,6 +66,33 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 		Stack:  tfStack,
 		Config: config,
 	}
+
+	// Get environment suffix from environment variable
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = config.EnvironmentSuffix // Default from props
+	}
+
+	// Get state bucket configuration from environment variables
+	stateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if stateBucket == "" {
+		stateBucket = config.StateBucket // Default from props
+	}
+	stateBucketRegion := os.Getenv("TERRAFORM_STATE_BUCKET_REGION")
+	if stateBucketRegion == "" {
+		stateBucketRegion = config.StateBucketRegion // Default from props
+	}
+
+	// Configure S3 backend for remote state
+	cdktf.NewS3Backend(stack.Stack, &cdktf.S3BackendConfig{
+		Bucket: jsii.String(stateBucket),
+		Key:    jsii.String(fmt.Sprintf("%s/%s.tfstate", environmentSuffix, id)),
+		Region: jsii.String(stateBucketRegion),
+	})
+
+	// Create environment prefix for resource naming
+	envPrefix := fmt.Sprintf("%s-xk9f", environmentSuffix)
+	_ = envPrefix // Use this prefix for naming resources to avoid conflicts
 
 	// AWS Provider
 	provider.NewAwsProvider(stack.Stack, jsii.String("aws"), &provider.AwsProviderConfig{
@@ -98,9 +128,12 @@ func main() {
 	}
 
 	config := &TapStackConfig{
-		Region:      "us-east-1",
-		Environment: "production",
-		AppName:     "trainr963-" + environmentSuffix,
+		Region:            "us-east-1",
+		Environment:       "production",
+		AppName:           "trainr963-" + environmentSuffix,
+		EnvironmentSuffix: environmentSuffix,
+		StateBucket:       "terraform-state-bucket-" + environmentSuffix,
+		StateBucketRegion: "us-east-1",
 	}
 
 	NewTapStack(app, "TapStack"+environmentSuffix, config)
