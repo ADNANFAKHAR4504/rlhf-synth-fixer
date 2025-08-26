@@ -164,7 +164,7 @@ func main() {
 		}
 
 		// Create S3 bucket for logging
-		s3Bucket, err := s3.NewBucket(ctx, "hipaa-logging-bucket", &s3.BucketArgs{
+		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-logging-bucket", &s3.BucketV2Args{
 			Bucket: pulumi.String(fmt.Sprintf("hipaa-logging-bucket-%s", current.AccountId)),
 			Tags:   commonTags,
 		})
@@ -172,16 +172,7 @@ func main() {
 			return err
 		}
 
-		// Enable versioning on S3 bucket using BucketV2
-		_, err = s3.NewBucketV2(ctx, "hipaa-bucket-v2", &s3.BucketV2Args{
-			Bucket: s3Bucket.Bucket,
-			Tags:   commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Configure bucket versioning
+		// Enable versioning on S3 bucket
 		_, err = s3.NewBucketVersioningV2(ctx, "hipaa-bucket-versioning", &s3.BucketVersioningV2Args{
 			Bucket: s3Bucket.ID(),
 			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
@@ -195,7 +186,7 @@ func main() {
 		// Enable server-side encryption for S3 bucket
 		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: s3Bucket.ID(),
-			ServerSideEncryptionConfigurations: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArray{
+			ServerSideEncryptionConfiguration: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArray{
 				&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs{
 					Rules: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArray{
 						&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs{
