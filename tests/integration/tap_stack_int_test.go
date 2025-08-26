@@ -47,7 +47,7 @@ type AWSClients struct {
 }
 
 func loadOutputs(t *testing.T) *TapStackOutputs {
-	data, err := os.ReadFile("../../cfn-outputs/flat-outputs.json")
+	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
 	if err != nil {
 		t.Fatalf("Failed to read outputs file: %v", err)
 	}
