@@ -1,5 +1,4 @@
 ## lib/modules.ts
-
 ```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -229,5 +228,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-```
 ```
