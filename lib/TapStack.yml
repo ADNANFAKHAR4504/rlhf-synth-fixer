@@ -397,7 +397,7 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
-      CloudWatchLogsLogGroupArn: !Sub "${CloudTrailLogGroup}:*"
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailCloudWatchLogsRole.Arn
       EventSelectors:
         - ReadWriteType: All
@@ -469,8 +469,8 @@ Resources:
       ResourceId: !Ref SecureVPC
       TrafficType: ALL
       LogDestinationType: s3
-      LogDestination: !Sub "${VPCFlowLogsBucket}/AWSLogs/"
-      LogFormat: "${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}"
+      LogDestination: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/"
+      LogFormat: "${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}"
       MaxAggregationInterval: 60
       Tags:
         - Key: Name
@@ -595,6 +595,6 @@ Outputs:
 
   VPCFlowLogsS3Destination:
     Description: "S3 destination for VPC Flow Logs"
-    Value: !Sub "${VPCFlowLogsBucket}/AWSLogs/"
+    Value: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/"
     Export:
       Name: !Sub "${AWS::StackName}-VPCFlowLogsDestination"
