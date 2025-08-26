@@ -54,9 +54,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have ProjectName parameter', () => {
       expect(template.Parameters.ProjectName).toBeDefined();
       expect(template.Parameters.ProjectName.Type).toBe('String');
-      expect(template.Parameters.ProjectName.Default).toBe(
-        'iac-aws-nova-breaking'
-      );
+      expect(template.Parameters.ProjectName.Default).toBe('iac-aws-nova');
     });
 
     test('should have Environment parameter', () => {

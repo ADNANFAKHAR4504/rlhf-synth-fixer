@@ -4,7 +4,7 @@ Description: Secure Three-Tier Web Application Infrastructure - TapStack
 Parameters:
   ProjectName:
     Type: String
-    Default: 'iac-aws-nova-breaking'
+    Default: 'iac-aws-nova'
     Description: Project name for resource tagging
 
   Environment:
