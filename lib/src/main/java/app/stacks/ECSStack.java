@@ -49,11 +49,10 @@ public final class ECSStack extends Stack {
                 .containerInsights(true)
                 .build();
 
-        // Create log group for ECS tasks with KMS encryption
+        // Create log group for ECS tasks (use default AWS managed KMS to avoid cross-stack cycles)
         LogGroup logGroup = LogGroup.Builder.create(this, "ECSLogGroup")
                 .logGroupName("/aws/ecs/secure-webapp-" + environmentSuffix)
                 .retention(RetentionDays.ONE_MONTH)
-                .encryptionKey(props.getKmsKey())
                 .build();
 
         // Create task definition
