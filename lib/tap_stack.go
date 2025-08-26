@@ -17,7 +17,6 @@ type TapStackProps struct {
 	// Configurable parameters
 	AllowedSSHIP      *string
 	EC2InstanceType   *string
-	EC2KeyName        *string
 	DBInstanceClass   *string
 	DBUsername        *string
 	DBPassword        *string

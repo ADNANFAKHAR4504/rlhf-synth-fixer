@@ -1,8 +1,9 @@
-package lib
+package lib_test
 
 import (
 	"testing"
 
+	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
@@ -11,7 +12,7 @@ import (
 // setupTestStack initializes a new CDK app and the TapStack for testing.
 func setupTestStack(t *testing.T) (awscdk.App, awscdk.Stack, assertions.Template) {
 	app := awscdk.NewApp(nil)
-	stack := NewTapStack(app, jsii.String("TestStack"), &TapStackProps{
+	stack := lib.NewTapStack(app, jsii.String("TestStack"), &lib.TapStackProps{
 		StackProps: &awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
