@@ -1,3 +1,5 @@
+import groovy.xml.XmlParser;
+
 plugins {
     id 'java'
     id 'application'
@@ -34,18 +36,29 @@ configurations.all {
 }
 
 dependencies {
-    // Pulumi dependencies
-    implementation 'com.pulumi:pulumi:1.16.1'
-    implementation 'com.pulumi:aws:7.5.0'
+    // Fixed Pulumi core dependencies - using stable versions that work together
+
+    implementation 'com.pulumi:pulumi:0.11.0'
+    implementation 'com.pulumi:aws:6.52.0'
     implementation 'com.pulumi:tls:5.2.0'
-    
+
+    // Additional Pulumi core classes that might be needed
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.google.guava:guava:33.0.0-jre'
+
     // AWS CDK dependencies
     implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
     implementation 'software.constructs:constructs:10.4.2'
-    
+
+    // AWS CDK dependencies
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.204.0'
+    implementation 'software.constructs:constructs:10.4.2'
+
+
     // Additional utilities
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.google.guava:guava:33.0.0-jre'
+
 
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
@@ -54,6 +67,8 @@ dependencies {
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
     testImplementation 'org.assertj:assertj-core:3.24.2'
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+
 }
 
 application {
@@ -86,8 +101,16 @@ sourceSets {
 
 // Configure integration test configurations after source sets are defined
 configurations {
-    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestImplementation.extendsFrom testImplementation  
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Integration test dependencies
+dependencies {
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.16.1'
+    integrationTestImplementation 'software.amazon.awssdk:ec2:2.21.29'
+    integrationTestImplementation 'software.amazon.awssdk:core:2.21.29'
 }
 
 // Integration test dependencies - consolidated from both versions
@@ -304,9 +327,3 @@ tasks.register('testAll') {
 
 // Make check depend on integration tests and coverage
 check.dependsOn integrationTest, jacocoTestCoverageVerification
-
-task checkNode(type: Exec) {
-    description = 'Check if Node.js is available to Gradle and Java processes'
-    group = 'verification'
-    commandLine 'node', '--version'
-}
