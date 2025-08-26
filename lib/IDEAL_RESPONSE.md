@@ -722,12 +722,11 @@ Outputs:
 2. **Environment suffix**: Use the EnvironmentSuffix parameter for versioned deployments
 3. **Email verification**: The SNS subscription will require email confirmation
 4. **Valid AMI**: Template uses verified Amazon Linux 2023 AMI
-5. **CloudTrail limit**: Template removes CloudTrail to avoid AWS 5-trail limit conflicts
 
 ## Key Security Improvements
 
 - **Fixed IAM wildcard violations** - Replaced `kms:*` and `Resource: '*'` with specific actions and ARN scoping
-- **Removed CloudTrail dependency** - Eliminates conflicts with existing trails in AWS accounts
+- **Streamlined architecture** - Focused on core security infrastructure without redundant logging services
 - **Enhanced Lambda security** - Fixed missing imports and scoped permissions to specific resources
 - **KMS key policy compliance** - Specific actions instead of wildcards for better security posture
 - **Resource-scoped permissions** - CloudWatch Logs and SNS permissions are properly scoped
