@@ -87,10 +87,10 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 
 	// Public Subnet
 	publicSubnet := cdktf.NewTerraformResource(stack, jsii.String("public_subnet"), jsii.String("aws_subnet"), &map[string]interface{}{
-		"vpc_id":                   vpcResource.GetString(jsii.String("id")),
-		"cidr_block":               "10.0.1.0/24",
-		"availability_zone":        cdktf.Fn_Element(azDataSource.Get(jsii.String("names")), jsii.Number(0)),
-		"map_public_ip_on_launch":  true,
+		"vpc_id":                  vpcResource.GetString(jsii.String("id")),
+		"cidr_block":              "10.0.1.0/24",
+		"availability_zone":       cdktf.Fn_Element(azDataSource.Get(jsii.String("names")), jsii.Number(0)),
+		"map_public_ip_on_launch": true,
 		"tags": map[string]string{
 			"Name":        fmt.Sprintf("%s-public-subnet", envPrefix),
 			"Type":        "Public",
@@ -264,24 +264,24 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 
 	// RDS MySQL Instance
 	rdsInstance := cdktf.NewTerraformResource(stack, jsii.String("mysql_database"), jsii.String("aws_db_instance"), &map[string]interface{}{
-		"identifier":                fmt.Sprintf("%s-mysql-db", envPrefix),
-		"allocated_storage":         20,
-		"storage_type":              "gp2",
-		"engine":                    "mysql",
-		"engine_version":            "8.0",
-		"instance_class":            "db.t3.micro",
-		"db_name":                   "webapp",
-		"username":                  dbUsername,
-		"password":                  dbPassword,
-		"vpc_security_group_ids":    []string{rdsSecurityGroup.GetString(jsii.String("id"))},
-		"db_subnet_group_name":      dbSubnetGroup.GetString(jsii.String("name")),
-		"parameter_group_name":      dbParameterGroup.GetString(jsii.String("name")),
-		"backup_retention_period":   7,
-		"backup_window":             "03:00-04:00",
-		"maintenance_window":        "Mon:04:00-Mon:05:00",
-		"storage_encrypted":         true,
-		"deletion_protection":       false, // Set to true for production
-		"skip_final_snapshot":       true,  // Set to false for production
+		"identifier":              fmt.Sprintf("%s-mysql-db", envPrefix),
+		"allocated_storage":       20,
+		"storage_type":            "gp2",
+		"engine":                  "mysql",
+		"engine_version":          "8.0",
+		"instance_class":          "db.t3.micro",
+		"db_name":                 "webapp",
+		"username":                dbUsername,
+		"password":                dbPassword,
+		"vpc_security_group_ids":  []string{rdsSecurityGroup.GetString(jsii.String("id"))},
+		"db_subnet_group_name":    dbSubnetGroup.GetString(jsii.String("name")),
+		"parameter_group_name":    dbParameterGroup.GetString(jsii.String("name")),
+		"backup_retention_period": 7,
+		"backup_window":           "03:00-04:00",
+		"maintenance_window":      "Mon:04:00-Mon:05:00",
+		"storage_encrypted":       true,
+		"deletion_protection":     false, // Set to true for production
+		"skip_final_snapshot":     true,  // Set to false for production
 		"tags": map[string]string{
 			"Name":        fmt.Sprintf("%s-mysql-db", envPrefix),
 			"Environment": props.EnvironmentSuffix,
@@ -325,11 +325,11 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 
 	// S3 Bucket Public Access Block
 	cdktf.NewTerraformResource(stack, jsii.String("terraform_state_pab"), jsii.String("aws_s3_bucket_public_access_block"), &map[string]interface{}{
-		"bucket":                   stateBucket.GetString(jsii.String("id")),
-		"block_public_acls":        true,
-		"block_public_policy":      true,
-		"ignore_public_acls":       true,
-		"restrict_public_buckets":  true,
+		"bucket":                  stateBucket.GetString(jsii.String("id")),
+		"block_public_acls":       true,
+		"block_public_policy":     true,
+		"ignore_public_acls":      true,
+		"restrict_public_buckets": true,
 	})
 
 	// Outputs
