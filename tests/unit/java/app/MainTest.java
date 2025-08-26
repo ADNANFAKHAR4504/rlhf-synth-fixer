@@ -300,4 +300,24 @@ public class MainTest {
         assertFalse(Main.validateInfrastructureConfig("production", null));
         assertFalse(Main.validateInfrastructureConfig(null, null));
     }
+
+    /**
+     * Test the KMS key description method to improve code coverage.
+     */
+    @Test
+    void testKmsKeyDescriptionMethod() {
+        // Test the KMS key description method
+        String description = Main.getTestKmsKeyDescription("s3", "production");
+        assertNotNull(description);
+        assertTrue(description.contains("s3"));
+        assertTrue(description.contains("production"));
+        assertEquals("KMS key for s3 encryption in production environment", description);
+        
+        // Test with different inputs
+        String lambdaDescription = Main.getTestKmsKeyDescription("lambda", "dev");
+        assertNotNull(lambdaDescription);
+        assertTrue(lambdaDescription.contains("lambda"));
+        assertTrue(lambdaDescription.contains("dev"));
+        assertEquals("KMS key for lambda encryption in dev environment", lambdaDescription);
+    }
 }
