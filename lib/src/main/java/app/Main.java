@@ -154,7 +154,7 @@ class TapStack extends Stack {
                         .subnets(Arrays.asList(publicSubnet1))
                         .build())
                 .securityGroup(ec2SecurityGroup)
-                .keyName(keyPair.getKeyName())
+                .keyPair(KeyPair.fromKeyPairName(this, "ImportedKeyPair", keyPair.getKeyName()))
                 .role(ec2Role)
                 .userData(UserData.forLinux())
                 .build();

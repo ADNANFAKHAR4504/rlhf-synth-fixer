@@ -498,8 +498,8 @@ public class MainTest {
     }
     
     @Test
-    @DisplayName("Should create VPC Lattice Resource Policy")
-    public void testVpcLatticeResourcePolicyCreation() {
+    @DisplayName("Should create VPC Lattice Service Network with IAM authentication")
+    public void testVpcLatticeServiceNetworkAuth() {
         // Create the stack
         TapStack stack = new TapStack(app, "TapStackTest", TapStackProps.builder()
                 .environmentSuffix(environmentSuffix)
@@ -508,8 +508,10 @@ public class MainTest {
         // Get the CloudFormation template
         Template template = Template.fromStack(stack);
 
-        // Verify VPC Lattice Resource Policy exists
-        template.resourceCountIs("AWS::VpcLattice::ResourcePolicy", 1);
+        // Verify VPC Lattice Service Network has IAM authentication
+        template.hasResourceProperties("AWS::VpcLattice::ServiceNetwork", java.util.Map.of(
+                "AuthType", "AWS_IAM"
+        ));
     }
     
     @Test
