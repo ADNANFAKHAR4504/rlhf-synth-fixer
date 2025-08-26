@@ -11,12 +11,8 @@ public class AppConfig {
         this.config = ctx.config();
     }
 
-    public String getS3WebsiteErrorDocument() {
-        return config.require("primaryRegion");
-    }
-
     public String  getDefaultEnvironment() {
-        return config.require("Development");
+        return config.require("environment");
     }
 
     // AWS Regions
@@ -58,11 +54,15 @@ public class AppConfig {
     }
 
     public String getS3BucketNamePrefix() {
-        return config.require("websiteIndexDocument");
+        return config.require("bucketNamePrefix");
     }
 
     public String getS3WebsiteIndexDocument() {
-        return config.require("bucketNamePrefix");
+        return config.require("websiteIndexDocument");
+    }
+
+    public String getS3WebsiteErrorDocument() {
+        return config.require("websiteErrorDocument");
     }
 
     public String getProjectName() {
