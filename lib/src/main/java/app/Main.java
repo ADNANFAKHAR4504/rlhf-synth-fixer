@@ -15,6 +15,7 @@ import software.amazon.awscdk.pipelines.CodePipelineSource;
 import software.amazon.awscdk.pipelines.ShellStep;
 import software.amazon.awscdk.pipelines.StageDeployment;
 import software.amazon.awscdk.services.backup.BackupPlan;
+import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
 import software.amazon.awscdk.services.backup.BackupSelection;
 import software.amazon.awscdk.services.backup.BackupVault;
@@ -25,6 +26,7 @@ import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
 import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
 import software.amazon.awscdk.services.ec2.IVpc;
+import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.iam.Effect;
@@ -35,6 +37,7 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.kms.KeySpec;
+import software.amazon.awscdk.services.kms.KeyUsage;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
@@ -147,6 +150,7 @@ public class Main extends App {
         private Vpc vpc;
         private Key kmsKey;
         private Bucket s3Bucket;
+        private Bucket logsBucket;
         private BackupVault backupVault;
         
         public TapStack(final Construct scope, final String id, final StackProps props, 
@@ -195,7 +199,7 @@ public class Main extends App {
             
             vpc = Vpc.Builder.create(this, "VPC")
                 .vpcName(String.format("%s-%s-%s-vpc", projectName, environment, region))
-                .cidr(cidrBlock)
+                .ipAddresses(IpAddresses.cidr(cidrBlock))
                 .maxAzs(2)
                 .subnetConfiguration(Arrays.asList(
                     software.amazon.awscdk.services.ec2.SubnetConfiguration.builder()
@@ -224,6 +228,7 @@ public class Main extends App {
         private void createKmsKey(String environment, String projectName, String region) {
             kmsKey = Key.Builder.create(this, "KMSKey")
                 .keySpec(KeySpec.SYMMETRIC_DEFAULT)
+                .keyUsage(KeyUsage.ENCRYPT_DECRYPT)
                 .enableKeyRotation(true)
                 .description(String.format("KMS key for %s %s in %s", projectName, environment, region))
                 .alias(String.format("%s-%s-%s-key", projectName, environment, region))
@@ -231,9 +236,10 @@ public class Main extends App {
         }
         
         private void createS3Bucket(String environment, String projectName, String region) {
-            s3Bucket = Bucket.Builder.create(this, "S3Bucket")
-                .bucketName(String.format("%s-%s-%s-%s-%s", projectName, environment, region, 
-                    System.getenv("CDK_DEFAULT_ACCOUNT"), region))
+            // Data bucket
+            s3Bucket = Bucket.Builder.create(this, "DataS3Bucket")
+                .bucketName(String.format("%s-%s-%s-%s-data", projectName, environment, region, 
+                    System.getenv("CDK_DEFAULT_ACCOUNT")))
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
                 .blockPublicAccess(software.amazon.awscdk.services.s3.BlockPublicAccess.BLOCK_ALL)
@@ -246,6 +252,16 @@ public class Main extends App {
                         .build()
                 ))
                 .build();
+                
+            // Logs bucket
+            logsBucket = Bucket.Builder.create(this, "LogsS3Bucket")
+                .bucketName(String.format("%s-%s-%s-%s-logs", projectName, environment, region, 
+                    System.getenv("CDK_DEFAULT_ACCOUNT")))
+                .encryption(BucketEncryption.S3_MANAGED)
+                .versioned(true)
+                .blockPublicAccess(software.amazon.awscdk.services.s3.BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
         }
         
         private void createBackupResources(String environment, String projectName, String region) {
@@ -256,16 +272,19 @@ public class Main extends App {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
             
-            // Create backup plan with rules using the correct CDK v2 approach
+            // Create backup plan with rules using the high-level CDK approach
             BackupPlan backupPlan = BackupPlan.Builder.create(this, "BackupPlan")
                 .backupPlanName(String.format("%s-%s-%s-plan", projectName, environment, region))
                 .backupVault(backupVault)
                 .backupPlanRules(Arrays.asList(
-                    software.amazon.awscdk.services.backup.BackupPlanRule.Builder.create()
-                        .ruleName("DailyBackupRule")
-                        .backupVault(backupVault)
-                        .scheduleExpression("cron(0 5 ? * * *)") // Daily at 5 AM UTC
-                        .deleteAfter(Duration.days(30))
+                    BackupPlanRule.Builder.create()
+                        .ruleName("DailyBackup")
+                        .scheduleExpression(software.amazon.awscdk.services.events.Schedule.cron(
+                            software.amazon.awscdk.services.events.CronOptions.builder()
+                                .hour("2")
+                                .minute("0")
+                                .build()))
+                        .deleteAfter(Duration.days(120)) // Must be at least 90 days after moveToColdStorage
                         .moveToColdStorageAfter(Duration.days(7))
                         .build()
                 ))
@@ -387,12 +406,17 @@ public class Main extends App {
                 .exportName(String.format("%s-%s-%s-vpc-id", projectName, environment, region))
                 .build());
             
-            new CfnOutput(this, "S3BucketName", CfnOutputProps.builder()
+            new CfnOutput(this, "S3Bucket0Name", CfnOutputProps.builder()
                 .value(s3Bucket.getBucketName())
-                .description("S3 Bucket Name")
+                .description("S3 Data Bucket Name")
+                .build());
+                
+            new CfnOutput(this, "S3Bucket1Name", CfnOutputProps.builder()
+                .value(logsBucket.getBucketName())
+                .description("S3 Logs Bucket Name")
                 .build());
             
-            new CfnOutput(this, "KMSKeyId", CfnOutputProps.builder()
+            new CfnOutput(this, "KmsKeyId", CfnOutputProps.builder()
                 .value(kmsKey.getKeyId())
                 .description("KMS Key ID")
                 .build());

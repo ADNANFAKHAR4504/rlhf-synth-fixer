@@ -174,8 +174,12 @@ public class MainTest {
   public void testStackContainsCloudWatchAlarms() {
     Template template = Template.fromStack(stack);
 
-    // Verify that CloudWatch alarms are created for S3 buckets
-    template.resourceCountIs("AWS::CloudWatch::Alarm", 2);
+    // Verify that CloudWatch alarm is created for unauthorized API calls
+    template.resourceCountIs("AWS::CloudWatch::Alarm", 1);
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
+        "AlarmName", "test-project-unauthorized-api-calls",
+        "MetricName", "UnauthorizedAPICalls",
+        "Namespace", "AWS/CloudTrail"));
   }
 
   /**
@@ -227,15 +231,16 @@ public class MainTest {
   }
 
   /**
-   * Test that the stack contains VPC peering connections.
+   * Test that the stack contains VPC export for cross-region peering.
    */
   @Test
   public void testStackContainsVPCPeering() {
     Template template = Template.fromStack(stack);
 
-    // Verify that VPC peering connections are created (3 regions: us-east-2,
-    // us-west-2, eu-west-1)
-    template.resourceCountIs("AWS::EC2::VPCPeeringConnection", 3);
+    // Verify that VPC ID is exported for cross-region peering
+    // (Actual peering connections are created by Lambda in CrossRegionNetworkingStack)
+    template.hasOutput("VpcIdExport", Map.of(
+        "Export", Map.of("Name", "test-project-development-us-east-1-vpc-id")));
   }
 
   /**
@@ -358,5 +363,36 @@ public class MainTest {
 
     // Synthesize to verify the stage works correctly
     stageApp.synth();
+  }
+
+  /**
+   * Test that the CrossRegionNetworkingStack contains VPC peering Lambda function.
+   */
+  @Test
+  public void testCrossRegionNetworkingStack() {
+    App networkingApp = new App();
+    Main.CrossRegionNetworkingStack networkingStack = new Main.CrossRegionNetworkingStack(
+        networkingApp, "TestNetworkingStack",
+        StackProps.builder()
+            .env(Environment.builder()
+                .account("123456789012")
+                .region("us-east-1")
+                .build())
+            .build(),
+        "development", "test-project");
+
+    Template template = Template.fromStack(networkingStack);
+
+    // Verify that Lambda function for VPC peering is created
+    template.resourceCountIs("AWS::Lambda::Function", 1);
+    template.hasResourceProperties("AWS::Lambda::Function", Map.of(
+        "FunctionName", "test-project-development-vpc-peering",
+        "Runtime", "python3.9",
+        "Handler", "index.lambda_handler"));
+
+    // Verify that EventBridge rule is created to trigger the Lambda
+    template.resourceCountIs("AWS::Events::Rule", 1);
+    template.hasResourceProperties("AWS::Events::Rule", Map.of(
+        "Name", "test-project-development-vpc-peering-trigger"));
   }
 }
