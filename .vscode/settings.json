@@ -51,15 +51,6 @@
       "source.organizeImports": "explicit"
     }
   },
-  "[java]": {
-    "editor.defaultFormatter": "redhat.java",
-    "editor.formatOnSave": true,
-    "editor.tabSize": 4,
-    "editor.rulers": [120],
-    "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit"
-    }
-  },
 
   // Editor settings for consistency
   "editor.tabSize": 2,
@@ -69,9 +60,6 @@
   "editor.codeActionsOnSave": {
     "source.organizeImports": "explicit"
   },
-  // Disable auto-organize imports for Java to prevent AWS CDK import conflicts
-  "java.saveActions.organizeImports": false,
-  "source.organizeImports.sortImports": "never",
   // Test file patterns
   "files.exclude": {
     "**/node_modules": true,
