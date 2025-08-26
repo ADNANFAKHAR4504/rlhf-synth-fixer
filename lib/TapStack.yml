@@ -976,7 +976,11 @@ Resources:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
                   Resource:
-                    !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKeyId,
+                    ]
           - PolicyName: KMSOnlyAccess
             PolicyDocument:
               Version: '2012-10-17'
@@ -986,7 +990,11 @@ Resources:
                     - 'kms:Decrypt'
                     - 'kms:GenerateDataKey'
                   Resource:
-                    !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKeyId,
+                    ]
         - PolicyName: ParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1043,7 +1051,11 @@ Resources:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                 Resource:
-                  !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt KMSKey.Arn,
+                    !Ref UseExistingKMSKeyId,
+                  ]
 
   CodeDeployRole:
     Type: AWS::IAM::Role
