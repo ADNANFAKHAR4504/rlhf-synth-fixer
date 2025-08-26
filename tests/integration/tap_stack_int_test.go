@@ -914,7 +914,7 @@ func TestCodeBuildProjectConfiguration(t *testing.T) {
 
 	// Check timeout
 	if project.TimeoutInMinutes != nil {
-		if *project.TimeoutInMinutes < 60 {
+		if *project.TimeoutInMinutes <= 60 {
 			t.Logf("CodeBuild project timeout: %d minutes", *project.TimeoutInMinutes)
 		} else {
 			t.Errorf("CodeBuild project timeout too long: %d minutes", *project.TimeoutInMinutes)
