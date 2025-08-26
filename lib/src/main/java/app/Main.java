@@ -1,7 +1,6 @@
 package app;
 
 import software.amazon.awscdk.App;
-import software.amazon.awscdk.Environment;
 
 
 

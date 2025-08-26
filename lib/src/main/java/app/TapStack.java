@@ -1,9 +1,34 @@
 package app;
 
-import software.amazon.awscdk.*;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.s3.*;
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.CfnOutputProps;
+import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.Tags;
+import software.amazon.awscdk.services.ec2.ISubnet;
+import software.amazon.awscdk.services.ec2.Subnet;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.AnyPrincipal;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Policy;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyProps;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.CfnBucket;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.s3.StorageClass;
+import software.amazon.awscdk.services.s3.Transition;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -22,75 +47,81 @@ public class TapStack extends software.amazon.awscdk.Stack {
     
     // Environment configuration
     private static final class EnvironmentConfig {
-        public final String environment;
-        public final String region;
-        public final String accountId;
-        public final String suffix;
-        public final String randomSuffix;
-        public final String vpcCidr;
-        public final List<String> publicSubnetCidrs;
-        public final List<String> privateSubnetCidrs;
-        public final String loggingBucket;
-        public final String replicationBucket;
-        public final String rolePrefix;
-        public final Map<String, String> commonTags;
+        private final String environment;
+        private final String region;
+        private final String accountId;
+        private final String suffix;
+        private final String randomSuffix;
+        private final String vpcCidr;
+        private final List<String> publicSubnetCidrs;
+        private final List<String> privateSubnetCidrs;
+        private final String loggingBucket;
+        private final String replicationBucket;
+        private final String rolePrefix;
+        private final Map<String, String> commonTags;
         
-        public EnvironmentConfig(final String environment, final String region, final String accountId, final String suffix,
-                                final String randomSuffix, final String vpcCidr, final List<String> publicSubnetCidrs,
-                                final List<String> privateSubnetCidrs, final String loggingBucket, final String replicationBucket,
-                                final String rolePrefix, final Map<String, String> commonTags) {
-            this.environment = environment;
-            this.region = region;
-            this.accountId = accountId;
-            this.suffix = suffix;
-            this.randomSuffix = randomSuffix;
-            this.vpcCidr = vpcCidr;
-            this.publicSubnetCidrs = publicSubnetCidrs;
-            this.privateSubnetCidrs = privateSubnetCidrs;
-            this.loggingBucket = loggingBucket;
-            this.replicationBucket = replicationBucket;
-            this.rolePrefix = rolePrefix;
-            this.commonTags = commonTags;
+        EnvironmentConfig(final String envName, final String regionName, 
+                         final String accountIdValue, final String suffixValue,
+                         final String randomSuffixValue, final String vpcCidrValue, 
+                         final List<String> publicSubnetCidrsList,
+                         final List<String> privateSubnetCidrsList, 
+                         final String loggingBucketName, 
+                         final String replicationBucketName,
+                         final String rolePrefixValue, 
+                         final Map<String, String> commonTagsMap) {
+            this.environment = envName;
+            this.region = regionName;
+            this.accountId = accountIdValue;
+            this.suffix = suffixValue;
+            this.randomSuffix = randomSuffixValue;
+            this.vpcCidr = vpcCidrValue;
+            this.publicSubnetCidrs = publicSubnetCidrsList;
+            this.privateSubnetCidrs = privateSubnetCidrsList;
+            this.loggingBucket = loggingBucketName;
+            this.replicationBucket = replicationBucketName;
+            this.rolePrefix = rolePrefixValue;
+            this.commonTags = commonTagsMap;
         }
     }
     
     // VPC Component class
     private static final class VPCComponent {
-        public final Vpc vpc;
-        public final List<Subnet> publicSubnets;
-        public final List<Subnet> privateSubnets;
-        public final CfnInternetGateway internetGateway;
-        public final List<CfnNatGateway> natGateways;
+        private final Vpc vpc;
+        private final List<Subnet> publicSubnets;
+        private final List<Subnet> privateSubnets;
+        private final software.amazon.awscdk.services.ec2.CfnInternetGateway internetGateway;
+        private final List<software.amazon.awscdk.services.ec2.CfnNatGateway> natGateways;
         
-        public VPCComponent(final Vpc vpc, final List<Subnet> publicSubnets, final List<Subnet> privateSubnets,
-                          final CfnInternetGateway internetGateway, final List<CfnNatGateway> natGateways) {
-            this.vpc = vpc;
-            this.publicSubnets = publicSubnets;
-            this.privateSubnets = privateSubnets;
-            this.internetGateway = internetGateway;
-            this.natGateways = natGateways;
+        VPCComponent(final Vpc vpcInstance, final List<Subnet> publicSubnetsList, final List<Subnet> privateSubnetsList,
+                          final software.amazon.awscdk.services.ec2.CfnInternetGateway internetGatewayInstance, 
+                          final List<software.amazon.awscdk.services.ec2.CfnNatGateway> natGatewaysList) {
+            this.vpc = vpcInstance;
+            this.publicSubnets = publicSubnetsList;
+            this.privateSubnets = privateSubnetsList;
+            this.internetGateway = internetGatewayInstance;
+            this.natGateways = natGatewaysList;
         }
     }
     
     // IAM Component class
     private static final class IAMComponent {
-        public final Role ec2Role;
-        public final Role lambdaRole;
+        private final Role ec2Role;
+        private final Role lambdaRole;
         
-        public IAMComponent(final Role ec2Role, final Role lambdaRole) {
-            this.ec2Role = ec2Role;
-            this.lambdaRole = lambdaRole;
+        IAMComponent(final Role ec2RoleInstance, final Role lambdaRoleInstance) {
+            this.ec2Role = ec2RoleInstance;
+            this.lambdaRole = lambdaRoleInstance;
         }
     }
     
     // S3 Component class
     private static final class S3Component {
-        public final Bucket loggingBucket;
-        public final Bucket replicationBucket;
+        private final Bucket loggingBucket;
+        private final Bucket replicationBucket;
         
-        public S3Component(final Bucket loggingBucket, final Bucket replicationBucket) {
-            this.loggingBucket = loggingBucket;
-            this.replicationBucket = replicationBucket;
+        S3Component(final Bucket loggingBucketInstance, final Bucket replicationBucketInstance) {
+            this.loggingBucket = loggingBucketInstance;
+            this.replicationBucket = replicationBucketInstance;
         }
     }
     
@@ -143,12 +174,12 @@ public class TapStack extends software.amazon.awscdk.Stack {
         configs.put("staging", getStagingConfig());
         configs.put("prod", getProdConfig());
         
-        EnvironmentConfig config = configs.get(env);
-        if (config == null) {
+        final EnvironmentConfig envConfig = configs.get(env);
+        if (envConfig == null) {
             throw new IllegalArgumentException("Unknown environment: " + env);
         }
         
-        return config;
+        return envConfig;
     }
     
     /**
@@ -295,8 +326,8 @@ public class TapStack extends software.amazon.awscdk.Stack {
         // Note: Internet Gateway and NAT Gateways are automatically created by CDK
         return new VPCComponent(
             vpc,
-            publicSubnets.stream().map(s -> (Subnet)s).collect(Collectors.toList()),
-            privateSubnets.stream().map(s -> (Subnet)s).collect(Collectors.toList()),
+            publicSubnets.stream().map(s -> (Subnet) s).collect(Collectors.toList()),
+            privateSubnets.stream().map(s -> (Subnet) s).collect(Collectors.toList()),
             null, // Internet Gateway is managed by CDK
             null  // NAT Gateways are managed by CDK
         );
