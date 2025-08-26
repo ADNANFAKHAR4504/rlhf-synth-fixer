@@ -14,6 +14,11 @@ import com.pulumi.aws.s3.BucketPolicy;
 import com.pulumi.aws.s3.BucketPolicyArgs;
 import com.pulumi.aws.cloudtrail.Trail;
 import com.pulumi.aws.cloudtrail.TrailArgs;
+import com.pulumi.aws.iam.IamFunctions;
+import com.pulumi.aws.iam.inputs.GetPolicyDocumentArgs;
+import com.pulumi.aws.iam.inputs.GetPolicyDocumentStatementArgs;
+import com.pulumi.aws.iam.inputs.GetPolicyDocumentStatementPrincipalArgs;
+import com.pulumi.aws.iam.inputs.GetPolicyDocumentStatementConditionArgs;
 import com.pulumi.resources.CustomResourceOptions;
 import com.pulumi.core.Output;
 import java.util.Map;
@@ -284,11 +289,39 @@ public final class Main {
             .tags(getStandardTags(config, "storage", "s3"))
             .build());
         
-        // 5.1. S3 Bucket Policy for CloudTrail logs
+        // 5.1. S3 Bucket Policy for CloudTrail logs using IAM policy document
+        var cloudTrailPolicy = IamFunctions.getPolicyDocument(GetPolicyDocumentArgs.builder()
+            .statements(
+                GetPolicyDocumentStatementArgs.builder()
+                    .sid("AWSCloudTrailAclCheck")
+                    .effect("Allow")
+                    .principals(GetPolicyDocumentStatementPrincipalArgs.builder()
+                        .type("Service")
+                        .identifiers("cloudtrail.amazonaws.com")
+                        .build())
+                    .actions("s3:GetBucketAcl")
+                    .resources(cloudTrailBucket.arn().apply(arn -> Output.of(java.util.List.of(arn))))
+                    .build(),
+                GetPolicyDocumentStatementArgs.builder()
+                    .sid("AWSCloudTrailWrite")
+                    .effect("Allow")
+                    .principals(GetPolicyDocumentStatementPrincipalArgs.builder()
+                        .type("Service")
+                        .identifiers("cloudtrail.amazonaws.com")
+                        .build())
+                    .actions("s3:PutObject")
+                    .resources(cloudTrailBucket.arn().apply(arn -> Output.of(java.util.List.of(arn + "/AWSLogs/*"))))
+                    .conditions(GetPolicyDocumentStatementConditionArgs.builder()
+                        .test("StringEquals")
+                        .variable("s3:x-amz-acl")
+                        .values(java.util.List.of("bucket-owner-full-control"))
+                        .build())
+                    .build())
+            .build());
+
         new BucketPolicy("bucket-policy-cloudtrail-logs", BucketPolicyArgs.builder()
             .bucket(cloudTrailBucket.bucket())
-            .policy(cloudTrailBucket.arn().apply(bucketArn -> 
-                Output.of("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AWSCloudTrailAclCheck\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:GetBucketAcl\",\"Resource\":\"" + bucketArn + "\"},{\"Sid\":\"AWSCloudTrailWrite\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:PutObject\",\"Resource\":\"" + bucketArn + "/AWSLogs/*\",\"Condition\":{\"StringEquals\":{\"s3:x-amz-acl\":\"bucket-owner-full-control\"}}}]}")))
+            .policy(cloudTrailPolicy.applyValue(policy -> policy.json()))
             .build());
         
         // 6. CloudTrail for audit trails and governance
