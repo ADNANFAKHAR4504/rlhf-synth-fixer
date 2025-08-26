@@ -7,6 +7,16 @@
   "team": "5",
   "startedAt": "2025-08-25T09:29:46.339Z",
   "description": "Enterprise AWS infrastructure migration with multi-environment support, security hardening, and compliance features",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
   "aws_services": [
     "ec2",
     "kms",
@@ -36,5 +46,11 @@
     "utility_classes": 3,
     "custom_resources": 1,
     "lines_of_code": 800
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Govardhan527",
+  "dockerS3Location": ""
 }
