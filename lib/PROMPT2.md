@@ -1,5 +1,6 @@
 Follwing code block giving build error -
 
+```typescript
   // Build Stage
         {
           stageName: 'Build',
@@ -22,5 +23,6 @@ Error:
  error TS2339: Property 'variable' does not exist on type 'typeof CodeBuildAction'.
 
                value: codepipeline_actions.CodeBuildAction.variable('CODEBUILD_BUILD_NUMBER'),
+```
 
 Fix it and provide me error free code

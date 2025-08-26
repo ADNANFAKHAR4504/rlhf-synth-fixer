@@ -1,3 +1,6 @@
+I'll create a comprehensive CDK TypeScript stack for your CI/CD pipeline requirements. Here's the complete implementation:
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -449,3 +452,80 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('CostCenter', 'Engineering');
   }
 }
+
+// =============================================
+// App Definition
+// =============================================
+const app = new cdk.App();
+new CicdPipelineStack(app, 'CicdPipelineStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+  description: 'CI/CD Pipeline for Nova Model Breaking project with multi-region deployment',
+});
+```
+
+## Key Features Implemented
+
+### 🔐 **Security & IAM**
+- **Principle of least privilege** applied to all IAM roles
+- Separate roles for CodePipeline, CodeBuild, and CloudFormation
+- Encrypted S3 bucket with versioning enabled
+- Block public access on artifacts bucket
+
+### 🏗️ **Pipeline Architecture**
+- **3-stage pipeline**: Source → Build → Deploy
+- **Multi-region deployment** to us-east-1 and us-west-2
+- **Automatic triggering** on commits to main branch
+- **Parallel deployment** stages for efficiency
+
+### 📦 **Artifact Management**
+- S3 bucket with AES-256 encryption
+- Versioning enabled for artifact history
+- Lifecycle rules to manage storage costs
+- Secure access controls
+
+### 🔧 **Build Configuration**
+- Comprehensive buildspec with multiple phases
+- Environment variables for build customization
+- Caching enabled for faster builds
+- Detailed logging to CloudWatch
+
+### 📊 **Monitoring & Logging**
+- CloudWatch Log Groups for pipeline and build logs
+- Event rules for pipeline state monitoring
+- Comprehensive outputs for easy access to resources
+- Resource tagging for cost management
+
+### 🚀 **Deployment**
+
+To deploy this stack:
+
+1. **Install dependencies:**
+   ```bash
+   npm install aws-cdk-lib constructs
+   ```
+
+2. **Deploy the stack:**
+   ```bash
+   cdk deploy CicdPipelineStack
+   ```
+
+3. **Push code to trigger pipeline:**
+   ```bash
+   git clone <repository-clone-url>
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
+   ```
+
+### 📋 **Generated CloudFormation Template**
+
+To generate the `cicd_pipeline.yaml` file:
+
+```bash
+cdk synth CicdPipelineStack > cicd_pipeline.yaml
+```
+
+This CDK stack creates a production-ready, secure, and scalable CI/CD pipeline that meets all your requirements while following AWS best practices for security, monitoring, and multi-region deployment.
