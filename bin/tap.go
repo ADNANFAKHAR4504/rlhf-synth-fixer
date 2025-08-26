@@ -56,7 +56,7 @@ func main() {
 		AllowedSSHIP:      jsii.String(getEnv("ALLOWED_SSH_IP", "0.0.0.0/0")),
 		EC2InstanceType:   jsii.String(getEnv("EC2_INSTANCE_TYPE", "t3.micro")),
 		EC2KeyName:        jsii.String(getEnv("EC2_KEY_NAME", "my-key-pair")),
-		DBInstanceClass:   jsii.String(getEnv("DB_INSTANCE_CLASS", "db.t3.micro")),
+		DBInstanceClass:   jsii.String(getEnv("DB_INSTANCE_CLASS", "t3.micro")),
 		DBUsername:        jsii.String(getEnv("DB_USERNAME", "admin")),
 		DBPassword:        jsii.String(getEnv("DB_PASSWORD", "TempPassword123!")),
 	}

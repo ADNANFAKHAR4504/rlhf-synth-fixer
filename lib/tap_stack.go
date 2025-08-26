@@ -55,7 +55,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		props.EC2InstanceType = jsii.String("t3.micro")
 	}
 	if props.DBInstanceClass == nil {
-		props.DBInstanceClass = jsii.String("db.t3.micro")
+		props.DBInstanceClass = jsii.String("t3.micro")
 	}
 	if props.DBUsername == nil {
 		props.DBUsername = jsii.String("admin")

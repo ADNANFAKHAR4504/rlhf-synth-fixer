@@ -27,7 +27,7 @@ func TestSnapshot(t *testing.T) {
 		AllowedSSHIP:    jsii.String("10.0.0.0/32"),
 		EC2InstanceType: jsii.String("t2.micro"),
 		EC2KeyName:      jsii.String("test-key"),
-		DBInstanceClass: jsii.String("db.t3.small"),
+		DBInstanceClass: jsii.String("t3.small"),
 		DBUsername:      jsii.String("testuser"),
 		DBPassword:      jsii.String("testpassword"),
 	})
