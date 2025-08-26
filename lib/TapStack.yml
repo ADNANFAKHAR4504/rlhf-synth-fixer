@@ -80,7 +80,9 @@ Resources:
           - Sid: "Allow VPC Flow Logs to encrypt logs"
             Effect: Allow
             Principal:
-              Service: vpc-flow-logs.amazonaws.com
+              Service:
+                - vpc-flow-logs.amazonaws.com
+                - delivery.logs.amazonaws.com
             Action:
               - "kms:GenerateDataKey*"
               - "kms:DescribeKey"
@@ -152,12 +154,6 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       BucketName: !Sub "secure-vpc-flow-logs-${AWS::AccountId}-${EnvironmentSuffix}"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
-            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -182,8 +178,6 @@ Resources:
       Tags:
         - Key: Purpose
           Value: VPCFlowLogs
-        - Key: Encryption
-          Value: KMS
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -233,59 +227,21 @@ Resources:
             Effect: Allow
             Principal:
               Service: vpc-flow-logs.amazonaws.com
-            Action: "s3:GetBucketAcl"
+            Action: s3:GetBucketAcl
             Resource: !GetAtt VPCFlowLogsBucket.Arn
             Condition:
               StringEquals:
-                "AWS:SourceAccount": !Ref "AWS::AccountId"
+                AWS:SourceAccount: !Ref AWS::AccountId
           - Sid: AWSVPCFlowLogsWrite
             Effect: Allow
             Principal:
               Service: vpc-flow-logs.amazonaws.com
-            Action: "s3:PutObject"
+            Action: s3:PutObject
             Resource: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
-                "AWS:SourceAccount": !Ref "AWS::AccountId"
-          - Sid: AWSVPCFlowLogsDeliveryRolePolicy
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: "s3:PutObject"
-            Resource: !Sub "${VPCFlowLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-            Condition:
-              StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
-                "AWS:SourceAccount": !Ref "AWS::AccountId"
-          - Sid: AWSVPCFlowLogsDeliveryRoleAclCheck
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Action: "s3:GetBucketAcl"
-            Resource: !GetAtt VPCFlowLogsBucket.Arn
-            Condition:
-              StringEquals:
-                "AWS:SourceAccount": !Ref "AWS::AccountId"
-          - Sid: AWSVPCFlowLogsListBucket
-            Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: "s3:ListBucket"
-            Resource: !GetAtt VPCFlowLogsBucket.Arn
-            Condition:
-              StringEquals:
-                "AWS:SourceAccount": !Ref "AWS::AccountId"
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource:
-              - !GetAtt VPCFlowLogsBucket.Arn
-              - !Sub "${VPCFlowLogsBucket.Arn}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
+                s3:x-amz-acl: bucket-owner-full-control
+                AWS:SourceAccount: !Ref AWS::AccountId
 
   # ========================================
   # CloudWatch Log Groups
