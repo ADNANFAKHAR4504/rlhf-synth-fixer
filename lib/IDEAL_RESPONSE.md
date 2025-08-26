@@ -849,7 +849,7 @@ func main() {
 6. **Constraint #6**: Lambda uses environment variables for sensitive data
 7. **Constraint #7**: S3 bucket versioning enabled
 8. **Constraint #8**: CloudWatch alarms for unauthorized access and resource spikes
-9. **Constraint #9**: ACM for TLS certificates ensuring HTTPS communications
+9. **Constraint #9**: Cloudfront for HTTPS communications
 10. **Constraint #10**: Security groups deny all inbound except from specific IP ranges
 11. **Constraint #11**: Detailed tagging for all resources for cost tracking
 
@@ -865,7 +865,6 @@ func main() {
 - **Lambda Function**: S3 event processor with VPC config
 - **EC2 Instances**: Bastion host and web servers
 - **CloudWatch Alarms**: CPU, Lambda errors, unauthorized access
-- **ACM Certificate**: For TLS/HTTPS
 
 ### Best Practices
 
