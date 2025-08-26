@@ -60,27 +60,102 @@ public class TapStack extends software.amazon.awscdk.Stack {
         private final String rolePrefix;
         private final Map<String, String> commonTags;
         
-        EnvironmentConfig(final String envName, final String regionName, 
-                         final String accountIdValue, final String suffixValue,
-                         final String randomSuffixValue, final String vpcCidrValue, 
-                         final List<String> publicSubnetCidrsList,
-                         final List<String> privateSubnetCidrsList, 
-                         final String loggingBucketName, 
-                         final String replicationBucketName,
-                         final String rolePrefixValue, 
-                         final Map<String, String> commonTagsMap) {
-            this.environment = envName;
-            this.region = regionName;
-            this.accountId = accountIdValue;
-            this.suffix = suffixValue;
-            this.randomSuffix = randomSuffixValue;
-            this.vpcCidr = vpcCidrValue;
-            this.publicSubnetCidrs = publicSubnetCidrsList;
-            this.privateSubnetCidrs = privateSubnetCidrsList;
-            this.loggingBucket = loggingBucketName;
-            this.replicationBucket = replicationBucketName;
-            this.rolePrefix = rolePrefixValue;
-            this.commonTags = commonTagsMap;
+        private EnvironmentConfig(final Builder builder) {
+            this.environment = builder.environment;
+            this.region = builder.region;
+            this.accountId = builder.accountId;
+            this.suffix = builder.suffix;
+            this.randomSuffix = builder.randomSuffix;
+            this.vpcCidr = builder.vpcCidr;
+            this.publicSubnetCidrs = builder.publicSubnetCidrs;
+            this.privateSubnetCidrs = builder.privateSubnetCidrs;
+            this.loggingBucket = builder.loggingBucket;
+            this.replicationBucket = builder.replicationBucket;
+            this.rolePrefix = builder.rolePrefix;
+            this.commonTags = builder.commonTags;
+        }
+        
+        static Builder builder() {
+            return new Builder();
+        }
+        
+        static final class Builder {
+            private String environment;
+            private String region;
+            private String accountId;
+            private String suffix;
+            private String randomSuffix;
+            private String vpcCidr;
+            private List<String> publicSubnetCidrs;
+            private List<String> privateSubnetCidrs;
+            private String loggingBucket;
+            private String replicationBucket;
+            private String rolePrefix;
+            private Map<String, String> commonTags;
+            
+            Builder environment(final String value) {
+                this.environment = value;
+                return this;
+            }
+            
+            Builder region(final String value) {
+                this.region = value;
+                return this;
+            }
+            
+            Builder accountId(final String value) {
+                this.accountId = value;
+                return this;
+            }
+            
+            Builder suffix(final String value) {
+                this.suffix = value;
+                return this;
+            }
+            
+            Builder randomSuffix(final String value) {
+                this.randomSuffix = value;
+                return this;
+            }
+            
+            Builder vpcCidr(final String value) {
+                this.vpcCidr = value;
+                return this;
+            }
+            
+            Builder publicSubnetCidrs(final List<String> value) {
+                this.publicSubnetCidrs = value;
+                return this;
+            }
+            
+            Builder privateSubnetCidrs(final List<String> value) {
+                this.privateSubnetCidrs = value;
+                return this;
+            }
+            
+            Builder loggingBucket(final String value) {
+                this.loggingBucket = value;
+                return this;
+            }
+            
+            Builder replicationBucket(final String value) {
+                this.replicationBucket = value;
+                return this;
+            }
+            
+            Builder rolePrefix(final String value) {
+                this.rolePrefix = value;
+                return this;
+            }
+            
+            Builder commonTags(final Map<String, String> value) {
+                this.commonTags = value;
+                return this;
+            }
+            
+            EnvironmentConfig build() {
+                return new EnvironmentConfig(this);
+            }
         }
     }
     
@@ -197,20 +272,20 @@ public class TapStack extends software.amazon.awscdk.Stack {
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
-        return new EnvironmentConfig(
-            environmentName,
-            "us-east-1",
-            accountId,
-            suffix,
-            randomSuffix,
-            "10.0.0.0/16",
-            Arrays.asList("10.0.1.0/24", "10.0.2.0/24"),
-            Arrays.asList("10.0.10.0/24", "10.0.20.0/24"),
-            String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("%s-%s", suffix, randomSuffix),
-            commonTags
-        );
+        return EnvironmentConfig.builder()
+            .environment(environmentName)
+            .region("us-east-1")
+            .accountId(accountId)
+            .suffix(suffix)
+            .randomSuffix(randomSuffix)
+            .vpcCidr("10.0.0.0/16")
+            .publicSubnetCidrs(Arrays.asList("10.0.1.0/24", "10.0.2.0/24"))
+            .privateSubnetCidrs(Arrays.asList("10.0.10.0/24", "10.0.20.0/24"))
+            .loggingBucket(String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix))
+            .replicationBucket(String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix))
+            .rolePrefix(String.format("%s-%s", suffix, randomSuffix))
+            .commonTags(commonTags)
+            .build();
     }
     
     /**
@@ -228,20 +303,20 @@ public class TapStack extends software.amazon.awscdk.Stack {
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
-        return new EnvironmentConfig(
-            environmentName,
-            "us-east-2",
-            accountId,
-            suffix,
-            randomSuffix,
-            "10.1.0.0/16",
-            Arrays.asList("10.1.1.0/24", "10.1.2.0/24"),
-            Arrays.asList("10.1.10.0/24", "10.1.20.0/24"),
-            String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("%s-%s", suffix, randomSuffix),
-            commonTags
-        );
+        return EnvironmentConfig.builder()
+            .environment(environmentName)
+            .region("us-east-2")
+            .accountId(accountId)
+            .suffix(suffix)
+            .randomSuffix(randomSuffix)
+            .vpcCidr("10.1.0.0/16")
+            .publicSubnetCidrs(Arrays.asList("10.1.1.0/24", "10.1.2.0/24"))
+            .privateSubnetCidrs(Arrays.asList("10.1.10.0/24", "10.1.20.0/24"))
+            .loggingBucket(String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix))
+            .replicationBucket(String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix))
+            .rolePrefix(String.format("%s-%s", suffix, randomSuffix))
+            .commonTags(commonTags)
+            .build();
     }
     
     /**
@@ -259,20 +334,20 @@ public class TapStack extends software.amazon.awscdk.Stack {
         commonTags.put("ManagedBy", "cdk");
         commonTags.put("Suffix", suffix);
         
-        return new EnvironmentConfig(
-            environmentName,
-            "us-west-1",
-            accountId,
-            suffix,
-            randomSuffix,
-            "10.2.0.0/16",
-            Arrays.asList("10.2.1.0/24", "10.2.2.0/24"),
-            Arrays.asList("10.2.10.0/24", "10.2.20.0/24"),
-            String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix),
-            String.format("%s-%s", suffix, randomSuffix),
-            commonTags
-        );
+        return EnvironmentConfig.builder()
+            .environment(environmentName)
+            .region("us-west-1")
+            .accountId(accountId)
+            .suffix(suffix)
+            .randomSuffix(randomSuffix)
+            .vpcCidr("10.2.0.0/16")
+            .publicSubnetCidrs(Arrays.asList("10.2.1.0/24", "10.2.2.0/24"))
+            .privateSubnetCidrs(Arrays.asList("10.2.10.0/24", "10.2.20.0/24"))
+            .loggingBucket(String.format("logs-%s-%s-%s", accountId, suffix, randomSuffix))
+            .replicationBucket(String.format("logs-replica-%s-%s-%s", accountId, suffix, randomSuffix))
+            .rolePrefix(String.format("%s-%s", suffix, randomSuffix))
+            .commonTags(commonTags)
+            .build();
     }
     
     /**
