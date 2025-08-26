@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.112.0
-	github.com/cdktf/cdktf-provider-aws-go/aws/v18 v18.0.0
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
 )
 

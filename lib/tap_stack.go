@@ -9,38 +9,36 @@ import (
 
 	"github.com/aws/constructs-go/constructs/v10"
 	jsii "github.com/aws/jsii-runtime-go"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/apigatewayintegration"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/apigatewaymethod"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/apigatewayresource"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/apigatewayrestapi"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/cloudwatchmetricalarm"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dataawsavailabilityzones"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/dynamodbtable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/eip"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/natgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/routetable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/routetableassociation"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketobject"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketpolicy"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/securitygroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/securitygrouprule"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/ssmparameter"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/subnet"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/vpc"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v18/vpcendpoint"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayintegration"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewaymethod"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayresource"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/apigatewayrestapi"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchmetricalarm"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsavailabilityzones"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dynamodbtable"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lambdafunction"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lambdapermission"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketobject"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpolicy"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketserversideencryptionconfiguration"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketversioning"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygrouprule"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/ssmparameter"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpcendpoint"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
-
-	// Local generated AWS provider imports
-	logs "github.com/TuringGpt/iac-test-automations/.gen/aws/cloudwatchloggroup"
-	iamrole "github.com/TuringGpt/iac-test-automations/.gen/aws/iamrole"
-	iampolattach "github.com/TuringGpt/iac-test-automations/.gen/aws/iamrolepolicyattachment"
-	lambda "github.com/TuringGpt/iac-test-automations/.gen/aws/lambdafunction"
-	lambdaperm "github.com/TuringGpt/iac-test-automations/.gen/aws/lambdapermission"
-	awscdktf "github.com/TuringGpt/iac-test-automations/.gen/aws/provider"
-	s3 "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucket"
-	s3enc "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucketserversideencryptionconfiguration"
-	s3ver "github.com/TuringGpt/iac-test-automations/.gen/aws/s3bucketversioning"
 )
 
 type TapStackConfig struct {
@@ -67,9 +65,9 @@ func NewTapStack(scope constructs.Construct, id string, config *TapStackConfig) 
 	}
 
 	// AWS Provider
-	awscdktf.NewAwsProvider(stack.Stack, jsii.String("aws"), &awscdktf.AwsProviderConfig{
+	provider.NewAwsProvider(stack.Stack, jsii.String("aws"), &provider.AwsProviderConfig{
 		Region: jsii.String(config.Region),
-		DefaultTags: &[]*awscdktf.AwsProviderDefaultTags{{
+		DefaultTags: &[]*provider.AwsProviderDefaultTags{{
 			Tags: &map[string]*string{
 				"Environment": jsii.String(config.Environment),
 				"Application": jsii.String(config.AppName),
@@ -162,11 +160,11 @@ type MonitoringResources struct {
 
 // LambdaResources contains all Lambda-related AWS resources
 type LambdaResources struct {
-	Functions     map[string]lambda.LambdaFunction
+	Functions     map[string]lambdafunction.LambdaFunction
 	APIGateway    apigatewayrestapi.ApiGatewayRestApi
 	DynamoDBTable dynamodbtable.DynamodbTable
-	S3Bucket      s3.S3Bucket
-	LogGroups     map[string]logs.CloudwatchLogGroup
+	S3Bucket      s3bucket.S3Bucket
+	LogGroups     map[string]cloudwatchloggroup.CloudwatchLogGroup
 	SSMParameters map[string]ssmparameter.SsmParameter
 }
 
@@ -354,17 +352,17 @@ func NewSecurityResources(stack *TapStack) *SecurityResources {
 	})
 
 	// Attach managed policies with minimal permissions
-	iampolattach.NewIamRolePolicyAttachment(stack.Stack, str("lambda-basic-execution"), &iampolattach.IamRolePolicyAttachmentConfig{
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack.Stack, str("lambda-basic-execution"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      resources.LambdaExecutionRole.Name(),
 		PolicyArn: str("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"),
 	})
 
-	iampolattach.NewIamRolePolicyAttachment(stack.Stack, str("lambda-vpc-execution"), &iampolattach.IamRolePolicyAttachmentConfig{
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack.Stack, str("lambda-vpc-execution"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      resources.LambdaExecutionRole.Name(),
 		PolicyArn: str("arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"),
 	})
 
-	iampolattach.NewIamRolePolicyAttachment(stack.Stack, str("lambda-xray-write"), &iampolattach.IamRolePolicyAttachmentConfig{
+	iamrolepolicyattachment.NewIamRolePolicyAttachment(stack.Stack, str("lambda-xray-write"), &iamrolepolicyattachment.IamRolePolicyAttachmentConfig{
 		Role:      resources.LambdaExecutionRole.Name(),
 		PolicyArn: str("arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"),
 	})
@@ -443,8 +441,8 @@ func NewMonitoringResources(stack *TapStack) *MonitoringResources {
 
 func NewLambdaResources(stack *TapStack) *LambdaResources {
 	resources := &LambdaResources{
-		Functions:     make(map[string]lambda.LambdaFunction),
-		LogGroups:     make(map[string]logs.CloudwatchLogGroup),
+		Functions:     make(map[string]lambdafunction.LambdaFunction),
+		LogGroups:     make(map[string]cloudwatchloggroup.CloudwatchLogGroup),
 		SSMParameters: make(map[string]ssmparameter.SsmParameter),
 	}
 
@@ -468,7 +466,7 @@ func NewLambdaResources(stack *TapStack) *LambdaResources {
 
 func (l *LambdaResources) createS3Bucket(stack *TapStack) {
 	// S3 bucket for Lambda deployment packages
-	l.S3Bucket = s3.NewS3Bucket(stack.Stack, str("lambda-deployment-bucket"), &s3.S3BucketConfig{
+	l.S3Bucket = s3bucket.NewS3Bucket(stack.Stack, str("lambda-deployment-bucket"), &s3bucket.S3BucketConfig{
 		Bucket: str(stack.Config.AppName + "-s3-lambda-deploy-" + stack.Config.Environment),
 		Tags: &map[string]*string{
 			"Name": str(stack.Config.AppName + "-s3-lambda-deploy-" + stack.Config.Environment),
@@ -476,18 +474,18 @@ func (l *LambdaResources) createS3Bucket(stack *TapStack) {
 	})
 
 	// Enable versioning
-	s3ver.NewS3BucketVersioningA(stack.Stack, str("lambda-bucket-versioning"), &s3ver.S3BucketVersioningAConfig{
+	s3bucketversioning.NewS3BucketVersioningA(stack.Stack, str("lambda-bucket-versioning"), &s3bucketversioning.S3BucketVersioningAConfig{
 		Bucket: l.S3Bucket.Id(),
-		VersioningConfiguration: &s3ver.S3BucketVersioningVersioningConfiguration{
+		VersioningConfiguration: &s3bucketversioning.S3BucketVersioningVersioningConfiguration{
 			Status: str("Enabled"),
 		},
 	})
 
 	// Enable encryption
-	s3enc.NewS3BucketServerSideEncryptionConfigurationA(stack.Stack, str("lambda-bucket-encryption"), &s3enc.S3BucketServerSideEncryptionConfigurationAConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfigurationA(stack.Stack, str("lambda-bucket-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationAConfig{
 		Bucket: l.S3Bucket.Id(),
-		Rule: &[]*s3enc.S3BucketServerSideEncryptionConfigurationRuleA{{
-			ApplyServerSideEncryptionByDefault: &s3enc.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+		Rule: &[]*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleA{{
+			ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
 				SseAlgorithm: str("AES256"),
 			},
 		}},
@@ -612,7 +610,7 @@ exports.handler = async (event) => {
 
 	for _, funcName := range functionNames {
 		// Create CloudWatch Log Group
-		l.LogGroups[funcName] = logs.NewCloudwatchLogGroup(stack.Stack, str(funcName+"-logs"), &logs.CloudwatchLogGroupConfig{
+		l.LogGroups[funcName] = cloudwatchloggroup.NewCloudwatchLogGroup(stack.Stack, str(funcName+"-logs"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 			Name:            str("/aws/lambda/" + stack.Config.AppName + "-lambda-" + funcName + "-" + stack.Config.Environment),
 			RetentionInDays: num(30),
 			Tags: &map[string]*string{
@@ -621,7 +619,7 @@ exports.handler = async (event) => {
 		})
 
 		// Create Lambda function
-		l.Functions[funcName] = lambda.NewLambdaFunction(stack.Stack, str(funcName), &lambda.LambdaFunctionConfig{
+		l.Functions[funcName] = lambdafunction.NewLambdaFunction(stack.Stack, str(funcName), &lambdafunction.LambdaFunctionConfig{
 			FunctionName: str(stack.Config.AppName + "-lambda-" + funcName + "-" + stack.Config.Environment),
 			Runtime:      str("nodejs20.x"),
 			Handler:      str("index.handler"),
@@ -629,7 +627,7 @@ exports.handler = async (event) => {
 			S3Bucket:     l.S3Bucket.Id(),
 			S3Key:        lambdaZip.Key(),
 			Timeout:      num(30),
-			Environment: &lambda.LambdaFunctionEnvironment{
+			Environment: &lambdafunction.LambdaFunctionEnvironment{
 				Variables: &map[string]*string{
 					"LOG_LEVEL":      str("INFO"),
 					"DEBUG_ENABLED":  str("false"),
@@ -637,11 +635,11 @@ exports.handler = async (event) => {
 					"REGION":         str(stack.Config.Region),
 				},
 			},
-			VpcConfig: &lambda.LambdaFunctionVpcConfig{
+			VpcConfig: &lambdafunction.LambdaFunctionVpcConfig{
 				SubnetIds:        convertSubnetIds(stack.Networking.PrivateSubnets),
 				SecurityGroupIds: &[]*string{stack.Security.SecurityGroups["lambda"].Id()},
 			},
-			TracingConfig: &lambda.LambdaFunctionTracingConfig{
+			TracingConfig: &lambdafunction.LambdaFunctionTracingConfig{
 				Mode: str("Active"),
 			},
 			DependsOn: &[]cdktf.ITerraformDependable{l.LogGroups[funcName]},
@@ -700,7 +698,7 @@ func (l *LambdaResources) createAPIGateway(stack *TapStack) {
 		})
 
 		// Grant API Gateway permission to invoke Lambda
-		lambdaperm.NewLambdaPermission(stack.Stack, str("api-lambda-permission-"+method), &lambdaperm.LambdaPermissionConfig{
+		lambdapermission.NewLambdaPermission(stack.Stack, str("api-lambda-permission-"+method), &lambdapermission.LambdaPermissionConfig{
 			StatementId:  str("AllowExecutionFromAPIGateway-" + method),
 			Action:       str("lambda:InvokeFunction"),
 			FunctionName: l.Functions[funcName].FunctionName(),
