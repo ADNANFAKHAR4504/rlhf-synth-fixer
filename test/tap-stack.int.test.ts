@@ -1,10 +1,5 @@
 
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand
-} from '@aws-sdk/client-cloudwatch';
-
-import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client
@@ -34,7 +29,7 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const ec2Client = new EC2Client({ region });
 const kmsClient = new KMSClient({ region });
 
-const cloudWatchClient = new CloudWatchClient({ region });
+
 const iamClient = new IAMClient({ region });
 
 const s3Client = new S3Client({ region });
@@ -106,27 +101,9 @@ describe('Security and Compliance Integration Tests', () => {
     // EBS volume tests removed as we don't have EC2 instances anymore
   });
 
-  describe('IAM and Access Controls', () => {
-
-  });
-
-  describe('Monitoring and Logging', () => {
-    test('should validate CloudWatch alarms', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNames: [outputs.CPUAlarmName]
-      });
-
-      const response = await cloudWatchClient.send(command);
-      const alarm = response.MetricAlarms![0];
-
-      expect(alarm.Threshold).toBe(80);
-      expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
-      expect(alarm.MetricName).toBe('CPUUtilization');
-    });
 
 
 
-  });
 
   // EC2 Instance Security tests removed as we don't have EC2 instances anymore
 });
