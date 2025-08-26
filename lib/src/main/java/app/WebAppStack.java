@@ -21,7 +21,8 @@ import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ec2.CfnInstance;
-import software.amazon.awscdk.services.iam.InstanceProfile;
+import software.amazon.awscdk.services.ec2.CfnSecurityGroupIngress;
+import software.amazon.awscdk.services.ec2.CfnSecurityGroupEgress;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
@@ -59,19 +60,28 @@ public class WebAppStack extends Stack {
                 ))
                 .build();
 
-        // Create security group allowing only HTTPS traffic
-        SecurityGroup webSecurityGroup = SecurityGroup.Builder.create(this, "myapp-securitygroup-" + environmentSuffix)
+        // Create security group for web application (without implicit rules)
+        SecurityGroup webSecurityGroup = SecurityGroup.Builder.create(this, "myapp-sg-" + environmentSuffix)
                 .vpc(vpc)
                 .description("Security group for web application - HTTPS only")
-                .allowAllOutbound(true)
+                .allowAllOutbound(false)  // Disable implicit outbound rules
                 .build();
 
-        // Add inbound rule for HTTPS traffic only
-        webSecurityGroup.addIngressRule(
-                Peer.anyIpv4(),
-                Port.tcp(443),
-                "Allow HTTPS traffic"
-        );
+        // Create explicit ingress rule for HTTPS traffic
+        CfnSecurityGroupIngress httpsIngress = CfnSecurityGroupIngress.Builder.create(this, "myapp-sg-ingress-https-" + environmentSuffix)
+                .groupId(webSecurityGroup.getSecurityGroupId())
+                .ipProtocol("tcp")
+                .fromPort(443)
+                .toPort(443)
+                .cidrIp("0.0.0.0/0")
+                .build();
+
+        // Create explicit egress rule for all outbound traffic
+        CfnSecurityGroupEgress allOutboundEgress = CfnSecurityGroupEgress.Builder.create(this, "myapp-sg-egress-all-" + environmentSuffix)
+                .groupId(webSecurityGroup.getSecurityGroupId())
+                .ipProtocol("-1")
+                .cidrIp("0.0.0.0/0")
+                .build();
 
         // Create IAM role with S3 read-only access
         Role ec2Role = Role.Builder.create(this, "myapp-ec2role-" + environmentSuffix)
