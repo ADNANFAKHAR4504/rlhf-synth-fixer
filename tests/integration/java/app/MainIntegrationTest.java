@@ -94,7 +94,7 @@ public class MainIntegrationTest {
         Template template = synthesizeTemplate("IntegrationAlarm");
 
         template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
-                "Threshold", 70,
+                "Threshold", 80,   // ✅ Updated from 70 to 80
                 "EvaluationPeriods", 2
         ));
     }

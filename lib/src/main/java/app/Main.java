@@ -38,7 +38,7 @@ import software.amazon.awscdk.services.s3.LifecycleRule;
 // IAM
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;  // ✅ FIXED
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 
 // RDS
 import software.amazon.awscdk.services.rds.Credentials;
@@ -63,14 +63,14 @@ import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.RecordTarget;
 
 // Route53 alias target for ALB
-import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;  // ✅ FIXED
+import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 
 // SNS
 import software.amazon.awscdk.services.sns.Topic;
 
 import java.util.List;
 
-public final class Main {   // Final utility class
+public final class Main {
 
     private Main() {
         // Prevent instantiation
@@ -177,6 +177,7 @@ public final class Main {   // Final utility class
                 .credentials(Credentials.fromGeneratedSecret("dbadmin"))
                 .multiAz(true)
                 .allocatedStorage(20)
+                .storageEncrypted(true)   // ✅ Added to satisfy test
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
