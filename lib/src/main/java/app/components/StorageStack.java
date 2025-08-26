@@ -36,7 +36,7 @@ public class StorageStack extends ComponentResource {
         super("custom:infrastructure:StorageStack", name, options);
 
         // Create S3 Bucket for static website hosting
-        var bucket = new Bucket("web-hosting-bucket",
+        var bucket = new Bucket(name + "web-hosting-bucket",
                 BucketArgs.builder()
                         .bucket(config.getS3BucketNamePrefix() + "-" + System.currentTimeMillis())
                         .tags(TagUtils.getTagsWithName("Web-Hosting-Bucket", config))
@@ -48,7 +48,7 @@ public class StorageStack extends ComponentResource {
         this.bucketArn = bucket.arn();
 
         // Configure bucket for static website hosting
-        new BucketWebsiteConfiguration("bucket-website-config",
+        new BucketWebsiteConfiguration(name + "bucket-website-config",
                 BucketWebsiteConfigurationArgs.builder()
                         .bucket(bucket.id())
                         .indexDocument(BucketWebsiteConfigurationIndexDocumentArgs.builder()
@@ -62,7 +62,7 @@ public class StorageStack extends ComponentResource {
                 .build());
 
         // Block public access (we'll use CloudFront for public access)
-        new BucketPublicAccessBlock("bucket-public-access-block",
+        new BucketPublicAccessBlock(name + "bucket-public-access-block",
                 BucketPublicAccessBlockArgs.builder()
                         .bucket(bucket.id())
                         .blockPublicAcls(true)
@@ -89,7 +89,7 @@ public class StorageStack extends ComponentResource {
                 }
                 """;
 
-        var iamRole = new Role("ec2-s3-access-role",
+        var iamRole = new Role(name + "ec2-s3-access-role",
                 RoleArgs.builder()
                         .name("ec2-s3-access-role")
                         .assumeRolePolicy(assumeRolePolicy)
@@ -122,16 +122,16 @@ public class StorageStack extends ComponentResource {
                 }
                 """, arn, arn));
 
-        var policy = new Policy("s3-access-policy",
+        var policy = new Policy(name + "s3-access-policy",
                 PolicyArgs.builder()
-                        .name("s3-access-policy")
+                        .name(name + "s3-access-policy")
                         .policy(s3AccessPolicy.applyValue(Either::ofLeft))
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
 
         // Attach policy to role
-        new RolePolicyAttachment("role-policy-attachment",
+        new RolePolicyAttachment(name + "role-policy-attachment",
                 RolePolicyAttachmentArgs.builder()
                         .role(iamRole.name())
                         .policyArn(policy.arn())
@@ -140,9 +140,9 @@ public class StorageStack extends ComponentResource {
                 .build());
 
         // Create Instance Profile
-        var instanceProfile = new InstanceProfile("ec2-instance-profile",
+        var instanceProfile = new InstanceProfile(name + "ec2-instance-profile",
                 InstanceProfileArgs.builder()
-                        .name("ec2-instance-profile")
+                        .name(name + "ec2-instance-profile")
                         .role(iamRole.name())
                         .build(), CustomResourceOptions.builder()
                 .parent(this)

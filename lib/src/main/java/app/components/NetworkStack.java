@@ -39,7 +39,7 @@ public class NetworkStack extends ComponentResource {
         );
 
         // Create VPC
-        var vpc = new Vpc("web-hosting-vpc", VpcArgs.builder()
+        var vpc = new Vpc(name + "web-hosting-vpc", VpcArgs.builder()
                 .cidrBlock(config.getVpcCidrBlock())
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
@@ -51,7 +51,7 @@ public class NetworkStack extends ComponentResource {
         this.vpcId = vpc.id();
 
         // Create Internet Gateway
-        var internetGateway = new InternetGateway("web-hosting-igw",
+        var internetGateway = new InternetGateway(name + "web-hosting-igw",
                 InternetGatewayArgs.builder()
                         .vpcId(vpc.id())
                         .tags(TagUtils.getTagsWithName("WebHosting-IGW", config))
@@ -62,7 +62,7 @@ public class NetworkStack extends ComponentResource {
         this.internetGatewayId = internetGateway.id();
 
         // Create Public Subnets
-        var publicSubnetPrimary = new Subnet("public-subnet-primary",
+        var publicSubnetPrimary = new Subnet(name + "public-subnet-primary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
                         .cidrBlock(config.getPublicSubnetPrimaryCidr())
@@ -73,7 +73,7 @@ public class NetworkStack extends ComponentResource {
                 .parent(this)
                 .build());
 
-        var publicSubnetSecondary = new Subnet("public-subnet-secondary",
+        var publicSubnetSecondary = new Subnet(name + "public-subnet-secondary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
                         .cidrBlock(config.getPublicSubnetSecondaryCidr())
@@ -88,7 +88,7 @@ public class NetworkStack extends ComponentResource {
         this.publicSubnetSecondaryId = publicSubnetSecondary.id();
 
         // Create Private Subnets
-        var privateSubnetPrimary = new Subnet("private-subnet-primary",
+        var privateSubnetPrimary = new Subnet(name + "private-subnet-primary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
                         .cidrBlock(config.getPrivateSubnetPrimaryCidr())
@@ -98,7 +98,7 @@ public class NetworkStack extends ComponentResource {
                 .parent(this)
                 .build());
 
-        var privateSubnetSecondary = new Subnet("private-subnet-secondary",
+        var privateSubnetSecondary = new Subnet(name + "private-subnet-secondary",
                 SubnetArgs.builder()
                         .vpcId(vpc.id())
                         .cidrBlock(config.getPrivateSubnetSecondaryCidr())
@@ -112,7 +112,7 @@ public class NetworkStack extends ComponentResource {
         this.privateSubnetSecondaryId = privateSubnetSecondary.id();
 
         // Create Route Table for Public Subnets
-        var publicRouteTable = new RouteTable("public-route-table",
+        var publicRouteTable = new RouteTable(name + "public-route-table",
                 RouteTableArgs.builder()
                         .vpcId(vpc.id())
                         .routes(RouteTableRouteArgs.builder()
@@ -127,7 +127,7 @@ public class NetworkStack extends ComponentResource {
         this.publicRouteTableId = publicRouteTable.id();
 
         // Associate Route Table with Public Subnets
-        new RouteTableAssociation("public-subnet-primary-association",
+        new RouteTableAssociation(name + "public-subnet-primary-association",
                 RouteTableAssociationArgs.builder()
                         .subnetId(publicSubnetPrimary.id())
                         .routeTableId(publicRouteTable.id())
@@ -135,7 +135,7 @@ public class NetworkStack extends ComponentResource {
                 .parent(this)
                 .build());
 
-        new RouteTableAssociation("public-subnet-secondary-association",
+        new RouteTableAssociation(name + "public-subnet-secondary-association",
                 RouteTableAssociationArgs.builder()
                         .subnetId(publicSubnetSecondary.id())
                         .routeTableId(publicRouteTable.id())

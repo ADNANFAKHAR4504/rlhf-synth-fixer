@@ -20,7 +20,7 @@ public class SecurityStack extends ComponentResource {
         super("custom:infrastructure:SecurityStack", name, options);
 
         // Create Security Group for Web Servers
-        var webSecurityGroup = new SecurityGroup("web-security-group",
+        var webSecurityGroup = new SecurityGroup(name + "web-security-group",
                 SecurityGroupArgs.builder()
                         .name("web-security-group")
                         .description("Security group for web servers")

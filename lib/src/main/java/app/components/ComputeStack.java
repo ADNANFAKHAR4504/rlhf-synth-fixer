@@ -50,7 +50,7 @@ public class ComputeStack extends ComponentResource {
                 """.formatted(config.getDefaultEnvironment());
 
         // Create EC2 Instance
-        var instance = new Instance("web-server",
+        var instance = new Instance(name + "web-server",
                 InstanceArgs.builder()
                         .instanceType(config.getEc2InstanceType())
                         .ami(ami.applyValue(GetAmiResult::id))
