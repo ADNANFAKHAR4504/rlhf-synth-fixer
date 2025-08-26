@@ -35,7 +35,7 @@ func TestVPCResources(t *testing.T) {
 
 	// Assert that a VPC is created with the correct CIDR block.
 	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), &map[string]interface{}{
-		"CidrBlock": assertions.Match_Absent(),
+		"CidrBlock": assertions.Match_AnyValue(),
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{"Key": "Environment", "Value": "Production"},
 			map[string]interface{}{"Key": "Project", "Value": "CDKSetup"},

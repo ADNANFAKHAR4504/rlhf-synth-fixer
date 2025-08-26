@@ -69,15 +69,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	}
 
 	vpc := awsec2.NewVpc(stack, jsii.String("cf-vpc"), &awsec2.VpcProps{
-		IpAddresses:        awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
 		MaxAzs:             jsii.Number(2),
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{Name: jsii.String("cf-public-subnet"), SubnetType: awsec2.SubnetType_PUBLIC, CidrMask: jsii.Number(24)},
-			{Name: jsii.String("cf-private-subnet"), SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS, CidrMask: jsii.Number(24)},
+			{Name: jsii.String("cf-private-subnet"), SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED, CidrMask: jsii.Number(24)},
 		},
-		NatGateways: jsii.Number(1),
+		NatGateways: jsii.Number(0),
 	})
 	awscdk.Tags_Of(vpc).Add(jsii.String("Name"), jsii.String("cf-vpc"), nil)
 	for key, value := range commonTags {
@@ -108,7 +107,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Service: awsec2.GatewayVpcEndpointAwsService_S3(),
 		Subnets: &[]*awsec2.SubnetSelection{
 			{SubnetType: awsec2.SubnetType_PUBLIC},
-			{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+			{SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED},
 		},
 	})
 	for key, value := range commonTags {
@@ -165,7 +164,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	dbSubnetGroup := awsrds.NewSubnetGroup(stack, jsii.String("cf-db-subnet-group"), &awsrds.SubnetGroupProps{
 		Description:     jsii.String("Subnet group for RDS instance"),
 		Vpc:             vpc,
-		VpcSubnets:      &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+		VpcSubnets:      &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED},
 		SubnetGroupName: jsii.String("cf-db-subnet-group-" + environmentSuffix),
 	})
 	for key, value := range commonTags {
