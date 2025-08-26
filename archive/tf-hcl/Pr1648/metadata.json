@@ -28,5 +28,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "EIP"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
 }
