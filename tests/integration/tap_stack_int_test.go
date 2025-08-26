@@ -985,24 +985,24 @@ func TestHighAvailabilitySetup(t *testing.T) {
 func TestPerformanceMonitoring(t *testing.T) {
 	outputs := loadDeploymentOutputs(t)
 	cfg := createAWSConfig(t)
-	
+
 	// For future enhancement: Add CloudWatch monitoring tests
 	// This test ensures outputs exist for monitoring setup
-	
+
 	instanceID, ok := outputs["ec2_instance_id"]
 	if !ok {
 		t.Fatal("ec2_instance_id not found in outputs - needed for monitoring")
 	}
-	
+
 	rdsEndpoint, ok := outputs["rds_endpoint"]
 	if !ok {
 		t.Fatal("rds_endpoint not found in outputs - needed for monitoring")
 	}
-	
+
 	// Basic validation that we have the resources needed for monitoring
 	if instanceID == "" || rdsEndpoint == "" {
 		t.Error("monitoring setup requires valid instance ID and RDS endpoint")
 	}
-	
+
 	t.Logf("Monitoring targets available - EC2: %s, RDS: %s", instanceID, rdsEndpoint)
 }
