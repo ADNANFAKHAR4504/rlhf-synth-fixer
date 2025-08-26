@@ -169,7 +169,7 @@ public final class Main {
             DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
                 .engine(DatabaseInstanceEngine.postgres(
                     PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_15_4)
+                        .version(PostgresEngineVersion.VER_16)
                         .build()))
                 .vpc(vpc)
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
