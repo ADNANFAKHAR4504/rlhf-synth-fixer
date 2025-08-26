@@ -169,4 +169,4 @@ runs:
           build/
           go.mod
           go.sum
-          tap.go    
+          tap.go
