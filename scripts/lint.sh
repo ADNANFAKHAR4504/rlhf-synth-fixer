@@ -37,9 +37,6 @@ elif [ "$LANGUAGE" = "go" ]; then
 
     # Module dependencies are prepared during build; skipping go mod tidy here
 
-    # Auto-format Go files before checking
-    echo "Auto-formatting Go files..."
-    gofmt -w lib/ tests/ 2>/dev/null || true
 
     UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
