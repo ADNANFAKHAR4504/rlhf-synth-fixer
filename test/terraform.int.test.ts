@@ -371,8 +371,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
         });
       }
 
-              // All VPCs should be available
-        expect(vpcConfigs.every(config => config.cidr)).toBeDefined();
+      // All VPCs should be available
+      expect(vpcConfigs.every(config => config.cidr)).toBeDefined();
 
       // Compare subnet configurations
       const subnetConfigs = [];
