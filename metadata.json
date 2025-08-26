@@ -8,6 +8,16 @@
   "startedAt": "2025-08-25T14:13:26.232Z",
   "subtask": "Infrastructure Migration",
   "subject_labels": ["Multi-Region Infrastructure", "VPC Deployment", "Terraform Configuration"],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "Subnets",
+    "Route Tables",
+    "Security Groups",
+    "Availability Zones"
+  ],
   "testDependencies": [
     {
       "name": "@aws-sdk/client-ec2",
