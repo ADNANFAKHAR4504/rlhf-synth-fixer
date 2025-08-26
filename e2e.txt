@@ -1,0 +1,61 @@
+Instructions:This is a CDK JAVA project.
+Ignore any files inside the archive/ folder.
+Main infrastructure code is in lib/src/main/java/app/Main.java 
+Test code is in the tests folder. tests/unit/java/app/MainTest.java and tests/integration/java/app/MainIntegrationTest.java
+All the requirementsare in lib/PROMPT.md.
+Your job is to check weather all the requirements are covers in our Main.java file or not, 
+The language and platform are also confirmed in metadata.json as JAVA, 
+
+
+ What this is
+
+- A CDK JAVA project where **all infrastructure code lives in one file**: `Main.java`.
+
+
+ 
+---
+
+Task1: Ensure that the infrastructure in lib/src/main/java/app/Main.java  fully covers all the requirements in lib/PROMPT.md. If the current code does not satisfy the requirements, fix it before proceeding. Wrte a code for complete requirements:
+Consideration: make sure code follow least permissions in roles/policies. do not use * or wildcard. Make sure code follows proper depends_on and relationship between each resources. Make sure we follow security and compliance in all resources creation, like in s3 bucket enalble versioning, encryption, block public access and so on...
+Ensure that the code is well-structured, follows best practices, and is easy to understand. 
+Ensure that the code is modular, with clear separation of concerns.
+
+Before Task 2: Fully understand the CI CD pipeline under .github folder (.github/workflows/ci-cd.yml)
+We have to complete Build Job / Testing jobs like unit and live integration test and deployment jobs so undetstand it
+
+Task2: Build Job: Ensure the build step completes successfully
+
+Task3: Write and build unit tests that are 100 percentage coverage and passing fully.
+Consideration: code is in tests folder for java. 
+```
+I need comprehensive Unit tests based on below information
+1. I have main.java file available inside lib directory and directory name should be read as lib/src/main/java/app/Main.java  
+2. It should validate components based on user requirements.
+3. I need test cases in tests java files
+```
+
+Task4: Write and build integration tests that are 100 percentage coverage and passing fully. integration tests using mock outputs if needed (e.g., before deployment or if cfn-outputs are missing).
+Consideration code is in tests folder
+```
+Integration tests should not apply any init or deploy commands.
+They must run using live AWS read-only checks, driven by the CI/CD outputs file
+Our CI/CD pipeline generates a JSON file for resource outputs under the deploy stage called "Get Deployment Outputs".
+That JSON file is saved at cfn-outputs/all-outputs.json — use this path in tests.
+
+I need integration tests based on below information:
+1. avoid running init or apply commands
+2. I need test cases in java
+
+```
+
+Task5: Make sure Lint and Synt jobs/test is passing.
+
+Task6: Generate the Ideal Response MD file content at ./lib/IDEAL_RESPONSE.nd,  
+Rules for IDEAL_RESPONSE.md: Ideal response file should have ```java and complete code in Main.java ``` 
+After the solution is ready, and changes are made in code, 
+copy it into Ideal response file. And then generate MODEL_FAILURES.md file 
+by compare ideal response with model response files. 
+Document all differences in lib/MODEL_FAILURES.md.Task7: 
+Markdown Linting verification: Run markdownlint on all .md files in the lib/ folder. 
+Rules: Must be self-contained (do not reference other .md files).
+
