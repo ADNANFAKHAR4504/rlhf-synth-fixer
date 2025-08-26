@@ -5,5 +5,19 @@
   "turn_type": "single",
   "po_id": "310050",
   "team": "6",
-  "startedAt": "2025-08-25T17:18:27.170Z"
+  "startedAt": "2025-08-25T17:18:27.170Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Resource Scaling"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "InternetGateway",
+    "RouteTable",
+    "Subnet"
+  ]
 }
