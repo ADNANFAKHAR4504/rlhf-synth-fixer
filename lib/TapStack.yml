@@ -878,7 +878,7 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !If [HasKeyPair, !Ref TargetGroup, !Ref 'AWS::NoValue']
+          TargetGroupArn: !If [HasKeyPair, !Ref TargetGroup, !Ref 'AWS::NoValue'] # cfn-lint ignore:W1028
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -985,4 +985,3 @@ Outputs:
     Description: Public DNS name of the Application Load Balancer
     Value: !If [HasKeyPair, !GetAtt ApplicationLoadBalancer.DNSName, 'Not Created - No Key Pair Provided']
     Condition: HasKeyPair
-
