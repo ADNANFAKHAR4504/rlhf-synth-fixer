@@ -22,7 +22,6 @@ import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Metric;
-import software.amazon.awscdk.services.cloudwatch.MetricOptions;
 import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
 import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
 import software.amazon.awscdk.services.ec2.IpAddresses;
@@ -41,11 +40,11 @@ import software.amazon.awscdk.services.kms.KeyUsage;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.s3.BucketNotification;
 import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.sns.Topic;
 import software.amazon.awscdk.services.sns.subscriptions.EmailSubscription;
 import software.constructs.Construct;
+import software.amazon.awscdk.Fn;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -58,9 +57,10 @@ public class Main {
     private static final List<String> REGIONS = Arrays.asList("us-east-2", "us-west-2", "eu-west-1");
     private static final List<String> ENVIRONMENTS = Arrays.asList("development", "staging", "production");
     private static final Map<String, String> CIDR_BLOCKS = new HashMap<String, String>() {{
-        put("us-east-2", "10.0.0.0/16");
-        put("us-west-2", "10.1.0.0/16");
-        put("eu-west-1", "10.2.0.0/16");
+        put("us-east-1", "10.0.0.0/16");
+        put("us-east-2", "10.1.0.0/16");
+        put("us-west-2", "10.2.0.0/16");
+        put("eu-west-1", "10.3.0.0/16");
     }};
     
     public static void main(final String[] args) {
@@ -116,7 +116,7 @@ public class Main {
         // Add stages for each region
         for (String region : REGIONS) {
             TapStage stage = new TapStage(pipelineStack, String.format("Deploy-%s", region), 
-                StageProps.builder()
+                software.amazon.awscdk.StageProps.builder()
                     .env(Environment.builder()
                         .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                         .region(region)
@@ -174,6 +174,8 @@ public class Main {
         Tags.of(construct).add("Environment", environment);
         Tags.of(construct).add("CostCenter", costCenter);
         Tags.of(construct).add("Project", projectName);
+        Tags.of(construct).add("CostCenter", costCenter);
+        Tags.of(construct).add("Project", projectName);
         Tags.of(construct).add("ManagedBy", "CDK");
     }
     
@@ -185,33 +187,6 @@ public class Main {
             
             new TapStack(this, "TapStack", StackProps.builder().build(), 
                 environment, costCenter, projectName, region);
-        }
-    }
-    
-    public static class StageProps {
-        private Environment env;
-        
-        public static Builder builder() {
-            return new Builder();
-        }
-        
-        public static class Builder {
-            private Environment env;
-            
-            public Builder env(Environment env) {
-                this.env = env;
-                return this;
-            }
-            
-            public StageProps build() {
-                StageProps props = new StageProps();
-                props.env = this.env;
-                return props;
-            }
-        }
-        
-        public Environment getEnv() {
-            return env;
         }
     }
     
@@ -243,8 +218,8 @@ public class Main {
             // Create CloudWatch monitoring
             createCloudWatchMonitoring(buckets, projectName, environment, region);
             
-            // Create VPC peering connections
-            createVpcPeering(vpc, region, environment, projectName);
+            // Create VPC peering connections using CloudFormation imports
+            createVpcPeeringWithImports(vpc, region, environment, projectName);
             
             // Create CloudTrail for auditing
             createCloudTrail(kmsKey, projectName, environment, region);
@@ -285,8 +260,7 @@ public class Main {
                         .name("IsolatedSubnet")
                         .subnetType(SubnetType.PRIVATE_ISOLATED)
                         .cidrMask(24)
-                        .build()
-                ))
+                        .build()))
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
                 .build();
@@ -305,16 +279,7 @@ public class Main {
                     LifecycleRule.builder()
                         .id("TransitionToIA")
                         .enabled(true)
-                        .transitions(Arrays.asList(
-                            LifecycleRule.Transition.builder()
-                                .storageClass(software.amazon.awscdk.services.s3.StorageClass.INFREQUENT_ACCESS)
-                                .transitionAfter(Duration.days(30))
-                                .build(),
-                            LifecycleRule.Transition.builder()
-                                .storageClass(software.amazon.awscdk.services.s3.StorageClass.GLACIER)
-                                .transitionAfter(Duration.days(90))
-                                .build()
-                        ))
+                        .expiration(Duration.days(365))
                         .build()
                 ))
                 .removalPolicy(RemovalPolicy.DESTROY) // Use RETAIN for production
@@ -325,6 +290,7 @@ public class Main {
                 .bucketName(String.format("%s-%s-%s-logs-%s", projectName, environment, region, 
                     System.currentTimeMillis() / 1000))
                 .encryption(BucketEncryption.KMS)
+                .encryptionKey(kmsKey)
                 .encryptionKey(kmsKey)
                 .versioned(true)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -381,7 +347,7 @@ public class Main {
                                 .hour("2")
                                 .minute("0")
                                 .build()))
-                        .deleteAfter(Duration.days(30))
+                        .deleteAfter(Duration.days(120)) // Fixed: Must be at least 90 days after moveToColdStorage
                         .moveToColdStorageAfter(Duration.days(7))
                         .build()
                 ))
@@ -390,7 +356,6 @@ public class Main {
             // Create backup selection
             BackupSelection.Builder.create(this, "BackupSelection")
                 .backupPlan(backupPlan)
-                .selectionName(String.format("%s-%s-selection", projectName, environment))
                 .resources(Arrays.asList(
                     BackupResource.fromTag("Environment", environment),
                     BackupResource.fromTag("Project", projectName)
@@ -435,21 +400,36 @@ public class Main {
             }
         }
         
-        private void createVpcPeering(Vpc vpc, String region, String environment, String projectName) {
-            // Create VPC peering connections to other regions
+        // NEW: VPC Peering with CloudFormation imports to resolve circular dependency
+        private void createVpcPeeringWithImports(Vpc vpc, String region, String environment, String projectName) {
+            // Create VPC peering connections to other regions using CloudFormation imports
             for (String peerRegion : REGIONS) {
                 if (!peerRegion.equals(region)) {
-                    CfnVPCPeeringConnection.Builder.create(this, String.format("PeeringTo%s", peerRegion.replace("-", "")))
+                    // Create the VPC peering connection
+                    CfnVPCPeeringConnection peeringConnection = CfnVPCPeeringConnection.Builder.create(this, 
+                            String.format("PeeringTo%s", peerRegion.replace("-", "")))
                         .vpcId(vpc.getVpcId())
                         .peerRegion(peerRegion)
-                        .peerVpcId(String.format("${%s-%s-%s-vpc-id}", projectName, environment, peerRegion))
+                        // Use Fn.importValue to reference the exported VPC ID from the other region
+                        .peerVpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, peerRegion)))
                         .tags(Arrays.asList(
                             software.amazon.awscdk.CfnTag.builder()
                                 .key("Name")
                                 .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region, peerRegion))
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Environment")
+                                .value(environment)
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Project")
+                                .value(projectName)
                                 .build()
                         ))
                         .build();
+                    
+                    // Add dependency on the VPC to ensure it's created first
+                    peeringConnection.addDependsOn(vpc.getNode().getDefaultChild());
                 }
             }
         }
@@ -461,7 +441,6 @@ public class Main {
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(false) // Region-specific trail
                 .enableFileValidation(true)
-                .kmsKey(kmsKey)
                 .build();
         }
         
@@ -469,7 +448,13 @@ public class Main {
             CfnOutput.Builder.create(this, "VpcId")
                 .value(vpc.getVpcId())
                 .description("VPC ID")
-                .exportName(String.format("%s-vpc-id", this.getStackName()))
+                .exportName(String.format("%s-%s-%s-vpc-id", 
+                    (String) this.getNode().tryGetContext("projectName") != null ? 
+                        (String) this.getNode().tryGetContext("projectName") : "tap-project",
+                    (String) this.getNode().tryGetContext("environment") != null ? 
+                        (String) this.getNode().tryGetContext("environment") : "development",
+                    (String) this.getNode().tryGetContext("region") != null ? 
+                        (String) this.getNode().tryGetContext("region") : "unknown"))
                 .build();
             
             CfnOutput.Builder.create(this, "KmsKeyId")
