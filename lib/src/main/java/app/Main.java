@@ -41,6 +41,7 @@ import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
@@ -297,7 +298,7 @@ class NovaModelStack extends Stack {
         bucket.addToResourcePolicy(
             PolicyStatement.Builder.create()
                 .effect(Effect.DENY)
-                .principals(Arrays.asList(new ServicePrincipal("*")))
+                .principals(Arrays.asList(new AnyPrincipal()))
                 .actions(Arrays.asList("s3:*"))
                 .resources(Arrays.asList(bucket.getBucketArn(), bucket.getBucketArn() + "/*"))
                 .conditions(Map.of(
