@@ -338,15 +338,23 @@ public class WebAppStack extends Stack {
         String region = Stack.of(this).getRegion();
         
         // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
+        // Use shortened region codes to stay within the 32-character name limit
+        String regionCode;
         if (this.getNode().getPath().contains("TapStackSecondary")) {
             region = "us-west-2"; // Hardcode region for secondary stack
+            regionCode = "usw2"; // Short code for us-west-2
         } else if (this.getNode().getPath().contains("TapStackPrimary")) {
             region = "us-east-1"; // Hardcode region for primary stack
+            regionCode = "use1"; // Short code for us-east-1
+        } else {
+            // Default case - create short code from region
+            regionCode = region.replaceAll("-", "").substring(0, Math.min(region.length(), 4));
         }
         
-        // Configure X-Ray sampling rule with proper properties structure and region-specific name
+        // Configure X-Ray sampling rule with proper properties structure and shorter region code
+        // AWS X-Ray has a 32 character limit for rule names
         CfnSamplingRule.SamplingRuleProperty samplingRule = CfnSamplingRule.SamplingRuleProperty.builder()
-                .ruleName("WebAppSamplingRule-" + region + "-" + environmentSuffix)
+                .ruleName("XRaySR-" + regionCode + "-" + environmentSuffix)
                 .priority(9000)
                 .fixedRate(0.1)
                 .reservoirSize(1)

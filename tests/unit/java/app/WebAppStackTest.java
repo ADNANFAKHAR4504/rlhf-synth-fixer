@@ -97,12 +97,12 @@ public class WebAppStackTest {
         WebAppStack stack = new WebAppStack(app, "TestXRayStack", props);
         Template template = Template.fromStack(stack);
         
-        // Check for X-Ray sampling rule with CloudFormation property names and region in name
-        // Using partial matching since the rule name now includes the region
+        // Check for X-Ray sampling rule with CloudFormation property names and region code in name
+        // Using partial matching since the rule name now includes the region code
         template.hasResourceProperties("AWS::XRay::SamplingRule", 
                 Map.of("SamplingRule", Match.objectLike(
                         new java.util.HashMap<String, Object>() {{
-                            put("RuleName", Match.stringLikeRegexp("WebAppSamplingRule-.*xray-test"));
+                            put("RuleName", Match.stringLikeRegexp("XRaySR-.*-xray-test"));
                             put("Priority", 9000);
                             put("FixedRate", 0.1);
                             put("ReservoirSize", 1);
@@ -116,11 +116,12 @@ public class WebAppStackTest {
                         }}
                 )));
         
-        // Verify that the name contains the region (us-east-1)
+        // Verify that the name contains a shortened region code for us-east-1
+        // The implementation uses substring logic which results in "usea" for "us-east-1"
         template.hasResource("AWS::XRay::SamplingRule", Match.objectLike(Map.of(
                 "Properties", Match.objectLike(Map.of(
                         "SamplingRule", Match.objectLike(Map.of(
-                                "RuleName", "WebAppSamplingRule-us-east-1-xray-test"
+                                "RuleName", "XRaySR-usea-xray-test"
                         ))
                 ))
         )));
