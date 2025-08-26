@@ -304,3 +304,9 @@ tasks.register('testAll') {
 
 // Make check depend on integration tests and coverage
 check.dependsOn integrationTest, jacocoTestCoverageVerification
+
+task checkNode(type: Exec) {
+    description = 'Check if Node.js is available to Gradle and Java processes'
+    group = 'verification'
+    commandLine 'node', '--version'
+}
