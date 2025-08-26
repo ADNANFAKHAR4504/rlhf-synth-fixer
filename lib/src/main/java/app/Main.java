@@ -472,8 +472,8 @@ public final class Main {
      * This method can be called by tests to exercise some of the Main class logic.
      */
     public static String getTestS3BucketName(String environment, String companyName, String service, String resource) {
-        return String.format("%s-%s-%s-%s-%05d", companyName, environment, service, resource, 
-            (int)(Math.random() * 100000));
+        return String.format("%s-%s-%s-%s-%06d", companyName, environment, service, resource, 
+            (int)(Math.random() * 1000000));
     }
 
     /**
@@ -564,8 +564,8 @@ public final class Main {
             bucketName = bucketName + "bucket";
         }
         
-        // Add timestamp for global uniqueness
-        String timestamp = String.valueOf(System.currentTimeMillis()).substring(8); // Last 4 digits
+        // Add timestamp for global uniqueness (use more digits for better uniqueness)
+        String timestamp = String.valueOf(System.currentTimeMillis()).substring(6); // Last 6 digits
         bucketName = bucketName + "-" + timestamp;
         
         // Final length check

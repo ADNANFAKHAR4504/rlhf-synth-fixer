@@ -210,7 +210,7 @@ public class MainTest {
         assertTrue(bucketName.contains("production"));
         assertTrue(bucketName.contains("s3"));
         assertTrue(bucketName.contains("bucket"));
-        assertTrue(bucketName.matches(".*-\\d{5}$")); // Should end with 5 digits
+        assertTrue(bucketName.matches(".*-\\d{6}$")); // Should end with 6 digits (timestamp)
     }
 
     /**
