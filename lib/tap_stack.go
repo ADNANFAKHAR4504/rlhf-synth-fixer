@@ -39,49 +39,45 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		Encrypt: jsii.Bool(true),
 	})
 
-	// AWS Provider using raw Terraform resource
-	cdktf.NewTerraformProvider(stack, jsii.String("aws"), &map[string]interface{}{
-		"region": props.AwsRegion,
-		"default_tags": []map[string]interface{}{
-			{
-				"tags": map[string]string{
-					"Environment": props.EnvironmentSuffix,
-					"Repository":  props.RepositoryName,
-					"Author":      props.CommitAuthor,
-					"Project":     "webapp-foundation",
-					"ManagedBy":   "CDKTF",
-				},
-			},
+	// Configure required providers using escape hatch
+	stack.AddOverride(jsii.String("terraform.required_providers"), map[string]interface{}{
+		"aws": map[string]interface{}{
+			"source":  "hashicorp/aws",
+			"version": "~> 5.0",
 		},
 	})
 
-	// Common tags
-	commonTags := map[string]string{
-		"Environment": props.EnvironmentSuffix,
-		"Project":     "webapp-foundation",
-		"ManagedBy":   "CDKTF",
-		"Owner":       "DevOps",
-	}
+	// Configure AWS provider using escape hatch
+	stack.AddOverride(jsii.String("provider.aws.region"), jsii.String(props.AwsRegion))
+	stack.AddOverride(jsii.String("provider.aws.default_tags"), map[string]interface{}{
+		"tags": map[string]interface{}{
+			"Environment": props.EnvironmentSuffix,
+			"Repository":  props.RepositoryName,
+			"Author":      props.CommitAuthor,
+			"Project":     "webapp-foundation",
+			"ManagedBy":   "CDKTF",
+		},
+	})
 
-	// Data source for availability zones
-	azDataSource := cdktf.NewTerraformDataSource(stack, jsii.String("available_azs"), jsii.String("aws_availability_zones"), &map[string]interface{}{
+	// Data source for availability zones using escape hatch
+	stack.AddOverride(jsii.String("data.aws_availability_zones.available"), map[string]interface{}{
 		"state": "available",
 	})
 
-	// VPC using raw Terraform resource
-	vpcResource := cdktf.NewTerraformResource(stack, jsii.String("main_vpc"), jsii.String("aws_vpc"), &map[string]interface{}{
+	// VPC using escape hatch
+	stack.AddOverride(jsii.String("resource.aws_vpc.main"), map[string]interface{}{
 		"cidr_block":           "10.0.0.0/16",
 		"enable_dns_hostnames": true,
 		"enable_dns_support":   true,
-		"tags": map[string]string{
+		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-vpc", envPrefix),
 			"Environment": props.EnvironmentSuffix,
 			"Project":     "webapp-foundation",
 		},
 	})
 
-	// Internet Gateway
-	igwResource := cdktf.NewTerraformResource(stack, jsii.String("main_igw"), jsii.String("aws_internet_gateway"), &map[string]interface{}{
+	// Internet Gateway using escape hatch
+	stack.AddOverride(jsii.String("resource.aws_internet_gateway.main"), map[string]interface{}{
 		"vpc_id": vpcResource.GetString(jsii.String("id")),
 		"tags": map[string]string{
 			"Name":        fmt.Sprintf("%s-igw", envPrefix),
