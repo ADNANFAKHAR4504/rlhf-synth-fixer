@@ -75,7 +75,11 @@ tasks.named('run') {
     standardInput = System.in
     workingDir = projectDir
     systemProperties = System.getProperties()
-    environment = System.getenv()
+    
+    // Ensure node is in PATH
+    def currentPath = System.getenv('PATH') ?: ''
+    def nodePath = '/Users/django/.nvm/versions/node/v22.17.0/bin'
+    environment = System.getenv() + ['PATH': "${nodePath}:${currentPath}"]
 }
 
 // Configure source directories
@@ -220,7 +224,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.09
+                minimum = 0.90
             }
         }
         rule {
@@ -228,17 +232,11 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.09
+                minimum = 0.80
             }
-            // Exclude Main class and infrastructure classes from coverage requirements
+            // Exclude Main class from coverage requirements
             excludes = [
-                'app.Main',
-                'app.WebAppStack',
-                'app.WebAppStack.NetworkResources',
-                'app.WebAppStack.SecurityResources',
-                'app.WebAppStack.ComputeResources',
-                'app.WebAppStack.LoadBalancerResources',
-                'app.WebAppStack.StorageResources'
+                'app.Main'
             ]
         }
     }
