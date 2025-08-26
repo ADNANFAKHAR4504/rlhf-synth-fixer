@@ -243,4 +243,3 @@ func TestResourceNamingConvention(t *testing.T) {
 
 	t.Logf("Resource naming convention verified for prefix: %s", expectedPrefix)
 }
-
