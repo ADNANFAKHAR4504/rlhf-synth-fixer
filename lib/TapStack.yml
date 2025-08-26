@@ -34,6 +34,7 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
+    Default: 'TempPassword123!'
     Description: 'RDS MySQL master password'
     MinLength: 8
     MaxLength: 41
@@ -47,6 +48,7 @@ Parameters:
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default: 'tap-keypair'
     Description: 'EC2 Key Pair for SSH access'
 
   DomainName:
@@ -632,17 +634,18 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.medium
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.37'
       AllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
