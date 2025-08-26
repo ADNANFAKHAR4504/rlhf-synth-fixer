@@ -333,7 +333,7 @@ public final class Main {
             .build());
         
         // 5. S3 Buckets for CloudTrail logs
-        var cloudTrailBucket = new Bucket("cloudtrail-bucket", BucketArgs.builder()
+        var cloudTrailBucket = new Bucket("cloudtrail-bucket-" + System.currentTimeMillis(), BucketArgs.builder()
             .bucket("yourcompany-production-cloudtrail-logs-" + System.currentTimeMillis())
             .forceDestroy(true)
             .tags(getStandardTags(config, "storage", "s3"))
@@ -371,7 +371,7 @@ public final class Main {
                     .build())
             .build());
 
-        var cloudTrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy", BucketPolicyArgs.builder()
+        var cloudTrailBucketPolicy = new BucketPolicy("cloudtrail-bucket-policy-" + System.currentTimeMillis(), BucketPolicyArgs.builder()
             .bucket(cloudTrailBucket.bucket())
             .policy(cloudTrailPolicy.applyValue(policy -> policy.json()))
             .build());
