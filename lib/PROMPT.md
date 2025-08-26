@@ -1,10 +1,10 @@
 # Security Configuration as Code for Web Application
 
-I need to create a secure AWS infrastructure for a web application using Pulumi Go. The infrastructure should include comprehensive security features and follow AWS security best practices.
+I need help in creating a secure AWS infrastructure for a web application using Pulumi Go. The infrastructure should include comprehensive security features and follow AWS security best practices.
 
 ## Requirements
 
-Please create Pulumi Go code that implements the following components:
+Please create Pulumi Go code that implements the following components and make them follow all security guidelines:
 
 ### Networking & VPC
 
@@ -30,7 +30,6 @@ Please create Pulumi Go code that implements the following components:
 - Set up S3 buckets with versioning enabled
 - Use AWS KMS for encryption of all data at rest
 - Configure bucket policies for secure access
-- Include new KMS FIPS 140-3 Security Level 3 validated HSM features for enhanced security
 
 ### Compute Resources
 
@@ -68,6 +67,6 @@ Please create Pulumi Go code that implements the following components:
 - Include proper error handling and resource dependencies
 - Minimize deployment time by avoiding slow-deploying resources where possible
 - Implement security monitoring using the latest AWS Inspector and GuardDuty integration features
-- Use the new IAM Access Analyzer internal access findings for comprehensive permission visibility
+- Use the new IAM Access Analyzer for comprehensive permission visibility
 
-Please provide the infrastructure code with one code block per file, ensuring each file can be independently created and executed.
+Please add all the infrastructure code in one code block in a file, ensuring each file can be independently instantiated and executed.
