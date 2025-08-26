@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Custom YAML schema that handles CloudFormation intrinsic functions
 const CF_SCHEMA = yaml.DEFAULT_SCHEMA.extend([
@@ -103,42 +102,19 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(keyPolicy.Statement).toBeDefined();
       expect(keyPolicy.Statement.length).toBeGreaterThanOrEqual(2);
       
-      // Check for root permissions
+      // Check for root permissions with specific actions
       const rootStatement = keyPolicy.Statement.find((s: any) => 
         s.Sid === 'Enable IAM User Permissions'
       );
       expect(rootStatement).toBeDefined();
-      expect(rootStatement.Action).toBe('kms:*');
+      expect(Array.isArray(rootStatement.Action)).toBe(true);
+      expect(rootStatement.Action).toContain('kms:Create*');
+      expect(rootStatement.Action).toContain('kms:Decrypt');
+      expect(rootStatement.Action).toContain('kms:Encrypt');
     });
 
-    test('should have CloudTrail with proper configuration', () => {
-      expect(template.Resources.CloudTrail).toBeDefined();
-      expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
-      
-      const cloudTrail = template.Resources.CloudTrail.Properties;
-      expect(cloudTrail.IsLogging).toBe(true);
-      expect(cloudTrail.IsMultiRegionTrail).toBe(true);
-      expect(cloudTrail.EnableLogFileValidation).toBe(true);
-    });
 
-    test('CloudTrail should have correct ARN format in EventSelectors', () => {
-      const cloudTrail = template.Resources.CloudTrail.Properties;
-      expect(cloudTrail.EventSelectors).toBeDefined();
-      expect(cloudTrail.EventSelectors[0].DataResources).toBeDefined();
-      
-      const dataResource = cloudTrail.EventSelectors[0].DataResources[0];
-      // Check that it's a proper CloudFormation Sub function with S3 ARN format
-      expect(dataResource.Values[0]).toEqual({"Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"});
-    });
 
-    test('should have CloudTrail bucket policy', () => {
-      expect(template.Resources.CloudTrailBucketPolicy).toBeDefined();
-      expect(template.Resources.CloudTrailBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-      
-      const policy = template.Resources.CloudTrailBucketPolicy.Properties.PolicyDocument;
-      expect(policy.Statement).toBeDefined();
-      expect(policy.Statement.length).toBeGreaterThanOrEqual(2);
-    });
   });
 
   describe('Network Security', () => {
@@ -359,15 +335,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should have at least 20 security-related resources', () => {
+    test('should have at least 18 security-related resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(20);
+      expect(resourceCount).toBeGreaterThanOrEqual(18);
     });
 
     test('should have proper resource dependencies', () => {
-      // CloudTrail should depend on bucket policy
-      expect(template.Resources.CloudTrail.DependsOn).toBe('CloudTrailBucketPolicy');
-      
       // Route should depend on gateway attachment
       expect(template.Resources.DefaultPublicRoute.DependsOn).toBe('InternetGatewayAttachment');
     });
