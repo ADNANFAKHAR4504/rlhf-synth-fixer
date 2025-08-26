@@ -32,5 +32,11 @@
     "SSM Parameter Store",
     "Security Groups",
     "Route 53"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
