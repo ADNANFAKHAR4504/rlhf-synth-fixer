@@ -218,38 +218,8 @@ class TapStack extends Stack {
                 .description("Global network for multi-region connectivity with Cloud WAN")
                 .build();
 
-        // Create Cloud WAN Core Network with simplified policy
-        // Using a simplified policy to avoid complex serialization issues
-        CfnCoreNetwork coreNetwork = CfnCoreNetwork.Builder.create(this, "CloudWANCoreNetwork")
-                .globalNetworkId(globalNetwork.getRef())
-                .description("Core network for intent-based networking with segments")
-                .build();
-
-        // Create VPC attachment to Cloud WAN core network
-        CfnVpcAttachment vpcAttachment = CfnVpcAttachment.Builder.create(this, "CloudWANVPCAttachment")
-                .coreNetworkId(coreNetwork.getRef())
-                .vpcArn(vpc.getVpcArn())
-                .subnetArns(Arrays.asList(
-                        String.format("arn:aws:ec2:%s:%s:subnet/%s", 
-                                "us-west-2", 
-                                System.getenv("CDK_DEFAULT_ACCOUNT") != null ? System.getenv("CDK_DEFAULT_ACCOUNT") : "123456789012",
-                                publicSubnet1.getSubnetId()),
-                        String.format("arn:aws:ec2:%s:%s:subnet/%s", 
-                                "us-west-2", 
-                                System.getenv("CDK_DEFAULT_ACCOUNT") != null ? System.getenv("CDK_DEFAULT_ACCOUNT") : "123456789012",
-                                publicSubnet2.getSubnetId())
-                ))
-                .tags(Arrays.asList(
-                        software.amazon.awscdk.CfnTag.builder()
-                                .key("Environment")
-                                .value(environmentSuffix.equals("prod") ? "production" : "development")
-                                .build(),
-                        software.amazon.awscdk.CfnTag.builder()
-                                .key("Project")
-                                .value("SecureCloudEnvironment")
-                                .build()
-                ))
-                .build();
+        // Note: Cloud WAN Core Network and VPC Attachment removed due to policy configuration complexity
+        // The Global Network provides the foundation for future Cloud WAN expansion
 
         // Create VPC Lattice Service Network
         CfnServiceNetwork vpcLatticeServiceNetwork = CfnServiceNetwork.Builder.create(this, "VPCLatticeServiceNetwork")
@@ -262,9 +232,6 @@ class TapStack extends Stack {
                 .serviceNetworkIdentifier(vpcLatticeServiceNetwork.getRef())
                 .vpcIdentifier(vpc.getVpcId())
                 .build();
-        
-        // Add dependency to ensure VPC Association is created after VPC Attachment
-        serviceNetworkVpcAssociation.getNode().addDependency(vpcAttachment);
 
         // Create VPC Lattice Target Group for EC2 instance
         software.amazon.awscdk.services.vpclattice.CfnTargetGroup vpcLatticeTargetGroup = software.amazon.awscdk.services.vpclattice.CfnTargetGroup.Builder.create(this, "VPCLatticeTargetGroup")
@@ -354,8 +321,6 @@ class TapStack extends Stack {
         addResourceTags(alb, "Environment", environmentSuffix);
         addResourceTags(distribution, "Environment", environmentSuffix);
         addResourceTags(globalNetwork, "Environment", environmentSuffix);
-        addResourceTags(coreNetwork, "Environment", environmentSuffix);
-        addResourceTags(vpcAttachment, "Environment", environmentSuffix);
         addResourceTags(vpcLatticeServiceNetwork, "Environment", environmentSuffix);
         addResourceTags(vpcLatticeService, "Environment", environmentSuffix);
         addResourceTags(vpcLatticeTargetGroup, "Environment", environmentSuffix);
@@ -416,19 +381,9 @@ class TapStack extends Stack {
                 .value(vpcLatticeService.getAttrArn())
                 .build();
 
-        CfnOutput.Builder.create(this, "CloudWANCoreNetworkArn")
-                .description("Cloud WAN Core Network ARN for global connectivity")
-                .value(coreNetwork.getAttrCoreNetworkArn())
-                .build();
-
         CfnOutput.Builder.create(this, "CloudWANGlobalNetworkId")
                 .description("Cloud WAN Global Network ID")
                 .value(globalNetwork.getRef())
-                .build();
-
-        CfnOutput.Builder.create(this, "CloudWANVPCAttachmentId")
-                .description("Cloud WAN VPC Attachment ID")
-                .value(vpcAttachment.getRef())
                 .build();
     }
 
