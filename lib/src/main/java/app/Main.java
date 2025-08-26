@@ -17,7 +17,6 @@ import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
 import software.amazon.awscdk.services.backup.BackupSelection;
 import software.amazon.awscdk.services.backup.BackupVault;
-import software.amazon.awscdk.services.cloudformation.CfnStackSet;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
@@ -44,6 +43,7 @@ import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.sns.Topic;
 import software.amazon.awscdk.services.sns.subscriptions.EmailSubscription;
 import software.constructs.Construct;
+import software.amazon.awscdk.Fn;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -81,8 +81,8 @@ public class Main {
             createTapStack(app, region, environment, costCenter, projectName);
         }
         
-        // Create StackSet for cross-region deployment
-        createStackSetStack(app, environment, costCenter, projectName);
+        // Create cross-region networking stack for VPC peering
+        createCrossRegionNetworkingStack(app, environment, costCenter, projectName);
         
         app.synth();
     }
@@ -146,27 +146,16 @@ public class Main {
             environment, costCenter, projectName, region);
     }
     
-    private static void createStackSetStack(App app, String environment, String costCenter, String projectName) {
-        Stack stackSetStack = new Stack(app, "TapStackSetStack", StackProps.builder()
-            .env(Environment.builder()
-                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-east-2") // Primary region
-                .build())
-            .build());
-        
-        applyStandardTags(stackSetStack, environment, costCenter, projectName);
-        
-        // Create StackSet for cross-region deployment
-        CfnStackSet stackSet = CfnStackSet.Builder.create(stackSetStack, "CrossRegionStackSet")
-            .stackSetName(String.format("%s-stackset-%s", projectName, environment))
-            .capabilities(Arrays.asList("CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"))
-            .permissionModel("SELF_MANAGED")
-            .operationPreferences(CfnStackSet.OperationPreferencesProperty.builder()
-                .regionConcurrencyType("PARALLEL")
-                .maxConcurrentPercentage(100)
-                .failureTolerancePercentage(10)
-                .build())
-            .build();
+    // NEW: Cross-region networking stack for VPC peering
+    private static void createCrossRegionNetworkingStack(App app, String environment, String costCenter, String projectName) {
+        CrossRegionNetworkingStack networkingStack = new CrossRegionNetworkingStack(app, "CrossRegionNetworkingStack", 
+            StackProps.builder()
+                .env(Environment.builder()
+                    .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                    .region("us-east-2") // Primary region for networking
+                    .build())
+                .build(), 
+            environment, costCenter, projectName);
     }
     
     private static void applyStandardTags(Construct construct, String environment, String costCenter, String projectName) {
@@ -187,7 +176,53 @@ public class Main {
         }
     }
     
-    // StageProps class removed - using built-in software.amazon.awscdk.StageProps
+    // NEW: Cross-region networking stack
+    public static class CrossRegionNetworkingStack extends Stack {
+        
+        public CrossRegionNetworkingStack(final Construct scope, final String id, final StackProps props, 
+                                        String environment, String costCenter, String projectName) {
+            super(scope, id, props);
+            
+            // Apply standard tags
+            applyStandardTags(this, environment, costCenter, projectName);
+            
+            // Create VPC peering connections between regions
+            // This stack will run after all individual region stacks are deployed
+            createCrossRegionVpcPeering(environment, projectName);
+        }
+        
+        private void createCrossRegionVpcPeering(String environment, String projectName) {
+            // Create VPC peering connections between all regions
+            for (int i = 0; i < REGIONS.size(); i++) {
+                for (int j = i + 1; j < REGIONS.size(); j++) {
+                    String region1 = REGIONS.get(i);
+                    String region2 = REGIONS.get(j);
+                    
+                    // Create peering connection from region1 to region2
+                    CfnVPCPeeringConnection.Builder.create(this, 
+                            String.format("Peering%sTo%s", region1.replace("-", ""), region2.replace("-", "")))
+                        .vpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region1)))
+                        .peerRegion(region2)
+                        .peerVpcId(Fn.importValue(String.format("%s-%s-%s-vpc-id", projectName, environment, region2)))
+                        .tags(Arrays.asList(
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Name")
+                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region1, region2))
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Environment")
+                                .value(environment)
+                                .build(),
+                            software.amazon.awscdk.CfnTag.builder()
+                                .key("Project")
+                                .value(projectName)
+                                .build()
+                        ))
+                        .build();
+                }
+            }
+        }
+    }
     
     // Main infrastructure stack
     public static class TapStack extends Stack {
@@ -216,9 +251,6 @@ public class Main {
             
             // Create CloudWatch monitoring
             createCloudWatchMonitoring(buckets, projectName, environment, region);
-            
-            // Create VPC peering connections
-            createVpcPeering(vpc, region, environment, projectName);
             
             // Create CloudTrail for auditing
             createCloudTrail(kmsKey, projectName, environment, region);
@@ -345,7 +377,7 @@ public class Main {
                                 .hour("2")
                                 .minute("0")
                                 .build()))
-                        .deleteAfter(Duration.days(30))
+                        .deleteAfter(Duration.days(120)) // Fixed: Must be at least 90 days after moveToColdStorage
                         .moveToColdStorageAfter(Duration.days(7))
                         .build()
                 ))
@@ -398,25 +430,6 @@ public class Main {
             }
         }
         
-        private void createVpcPeering(Vpc vpc, String region, String environment, String projectName) {
-            // Create VPC peering connections to other regions
-            for (String peerRegion : REGIONS) {
-                if (!peerRegion.equals(region)) {
-                    CfnVPCPeeringConnection.Builder.create(this, String.format("PeeringTo%s", peerRegion.replace("-", "")))
-                        .vpcId(vpc.getVpcId())
-                        .peerRegion(peerRegion)
-                        .peerVpcId(String.format("${%s-%s-%s-vpc-id}", projectName, environment, peerRegion))
-                        .tags(Arrays.asList(
-                            software.amazon.awscdk.CfnTag.builder()
-                                .key("Name")
-                                .value(String.format("%s-%s-peering-%s-to-%s", projectName, environment, region, peerRegion))
-                                .build()
-                        ))
-                        .build();
-                }
-            }
-        }
-        
         private void createCloudTrail(Key kmsKey, String projectName, String environment, String region) {
             // Create CloudTrail for auditing
             Trail.Builder.create(this, "CloudTrail")
@@ -431,7 +444,13 @@ public class Main {
             CfnOutput.Builder.create(this, "VpcId")
                 .value(vpc.getVpcId())
                 .description("VPC ID")
-                .exportName(String.format("%s-vpc-id", this.getStackName()))
+                .exportName(String.format("%s-%s-%s-vpc-id", 
+                    (String) this.getNode().tryGetContext("projectName") != null ? 
+                        (String) this.getNode().tryGetContext("projectName") : "tap-project",
+                    (String) this.getNode().tryGetContext("environment") != null ? 
+                        (String) this.getNode().tryGetContext("environment") : "development",
+                    (String) this.getNode().tryGetContext("region") != null ? 
+                        (String) this.getNode().tryGetContext("region") : "unknown"))
                 .build();
             
             CfnOutput.Builder.create(this, "KmsKeyId")
