@@ -10,9 +10,12 @@ import com.pulumi.aws.kms.AliasArgs;
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.s3.BucketPolicy;
+import com.pulumi.aws.s3.BucketPolicyArgs;
 import com.pulumi.aws.cloudtrail.Trail;
 import com.pulumi.aws.cloudtrail.TrailArgs;
 import com.pulumi.resources.CustomResourceOptions;
+import com.pulumi.core.Output;
 import java.util.Map;
 
 public final class Main {
@@ -279,6 +282,13 @@ public final class Main {
         var cloudTrailBucket = new Bucket("bucket-cloudtrail-logs", BucketArgs.builder()
             .bucket(getS3BucketName(config, "cloudtrail", "logs"))
             .tags(getStandardTags(config, "storage", "s3"))
+            .build());
+        
+        // 5.1. S3 Bucket Policy for CloudTrail logs
+        new BucketPolicy("bucket-policy-cloudtrail-logs", BucketPolicyArgs.builder()
+            .bucket(cloudTrailBucket.bucket())
+            .policy(cloudTrailBucket.arn().apply(bucketArn -> 
+                Output.of("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AWSCloudTrailAclCheck\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:GetBucketAcl\",\"Resource\":\"" + bucketArn + "\"},{\"Sid\":\"AWSCloudTrailWrite\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cloudtrail.amazonaws.com\"},\"Action\":\"s3:PutObject\",\"Resource\":\"" + bucketArn + "/AWSLogs/*\",\"Condition\":{\"StringEquals\":{\"s3:x-amz-acl\":\"bucket-owner-full-control\"}}}]}")))
             .build());
         
         // 6. CloudTrail for audit trails and governance
