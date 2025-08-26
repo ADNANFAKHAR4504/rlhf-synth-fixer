@@ -4,12 +4,31 @@ import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.ec2.AmazonLinux2ImageSsmParameterProps;
+import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.Instance;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.CfnInstance;
+import software.amazon.awscdk.services.iam.InstanceProfile;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 
 import java.util.Arrays;
-import java.util.List;
+import java.util.Map;
 
 public class WebAppStack extends Stack {
     
@@ -20,12 +39,12 @@ public class WebAppStack extends Stack {
     }
     
     public WebAppStack(final Construct scope, final String id, final StackProps props) {
-        this(scope, id, props, "dev");
+        this(scope, id, props, "prod");
     }
 
-    public WebAppStack(final Construct scope, final String id, final StackProps props, final String environmentSuffix) {
+    public WebAppStack(final Construct scope, final String id, final StackProps props, final String envSuffix) {
         super(scope, id, props);
-        this.environmentSuffix = environmentSuffix != null ? environmentSuffix : "dev";
+        this.environmentSuffix = envSuffix != null ? envSuffix : "dev";
 
         // Create VPC for the application
         Vpc vpc = Vpc.Builder.create(this, "myapp-vpc-" + environmentSuffix)
@@ -66,10 +85,7 @@ public class WebAppStack extends Stack {
         // Add Systems Manager Session Manager policy for secure access
         ec2Role.addManagedPolicy(ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"));
 
-        // Create instance profile for the EC2 role
-        InstanceProfile instanceProfile = InstanceProfile.Builder.create(this, "myapp-instanceprofile-" + environmentSuffix)
-                .role(ec2Role)
-                .build();
+        // Instance profile will be automatically created by CDK when role is assigned to EC2 instance
 
         // Get the latest Amazon Linux 2 AMI
         IMachineImage amazonLinuxImage = MachineImage.latestAmazonLinux2(
@@ -90,6 +106,13 @@ public class WebAppStack extends Stack {
                 .requireImdsv2(true) // Enforce IMDSv2 for enhanced security
                 .userData(UserData.forLinux()) // Empty user data for basic setup
                 .build();
+
+        // Add explicit metadata options for IMDSv2 enforcement (required by tests)
+        CfnInstance cfnInstance = (CfnInstance) webInstance.getNode().getDefaultChild();
+        cfnInstance.addPropertyOverride("MetadataOptions", Map.of(
+                "HttpTokens", "required",
+                "HttpPutResponseHopLimit", 2
+        ));
 
         // Tag all resources for better organization
         Tags.of(this).add("Project", "myapp");
