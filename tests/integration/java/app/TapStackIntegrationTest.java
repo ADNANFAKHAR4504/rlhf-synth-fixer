@@ -12,6 +12,7 @@ import software.amazon.awscdk.assertions.Match;
 
 import java.util.Map;
 import java.util.List;
+import java.util.Arrays;
 import java.util.ArrayList;
 
 /**
@@ -69,10 +70,10 @@ public class TapStackIntegrationTest {
         // Verify IAM roles can reference S3 buckets
         template.hasResourceProperties("AWS::IAM::Policy", Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
-                        "Action", Match.arrayWith(new String[]{"s3:ListBucket"}),
+                        "Action", Match.arrayWith(Arrays.asList("s3:ListBucket"}),
                         "Resource", Match.anyValue()
                     )
                 })
@@ -125,7 +126,7 @@ public class TapStackIntegrationTest {
         // Verify replication role exists for production
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Principal", Map.of("Service", "s3.amazonaws.com")
                     )
@@ -137,7 +138,7 @@ public class TapStackIntegrationTest {
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "ReplicationConfiguration", Match.objectLike(Map.of(
                 "Role", Match.anyValue(),
-                "Rules", Match.arrayWith(new Map[]{
+                "Rules", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Status", "Enabled",
                         "Priority", 1,
@@ -162,7 +163,7 @@ public class TapStackIntegrationTest {
         // Verify S3 buckets have encryption enabled
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "BucketEncryption", Match.objectLike(Map.of(
-                "ServerSideEncryptionConfiguration", Match.arrayWith(new Map[]{
+                "ServerSideEncryptionConfiguration", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "ServerSideEncryptionByDefault", Map.of(
                             "SSEAlgorithm", "AES256"
@@ -185,7 +186,7 @@ public class TapStackIntegrationTest {
         // Verify IAM roles follow least privilege
         template.hasResourceProperties("AWS::IAM::Policy", Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.not(Match.arrayWith(new Map[]{
+                "Statement", Match.not(Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
                         "Action", "*",
@@ -213,7 +214,7 @@ public class TapStackIntegrationTest {
             // Verify VPC has required tags
             template.hasResource("AWS::EC2::VPC", Map.of(
                 "Properties", Match.objectLike(Map.of(
-                    "Tags", Match.arrayWith(new Map[]{
+                    "Tags", Match.arrayWith(Arrays.asList(
                         Map.of("Key", "Environment", "Value", env),
                         Map.of("Key", "Project", "Value", "infrastructure"),
                         Map.of("Key", "ManagedBy", "Value", "cdk")
@@ -224,7 +225,7 @@ public class TapStackIntegrationTest {
             // Verify S3 buckets have required tags
             template.hasResource("AWS::S3::Bucket", Map.of(
                 "Properties", Match.objectLike(Map.of(
-                    "Tags", Match.arrayWith(new Map[]{
+                    "Tags", Match.arrayWith(Arrays.asList(
                         Map.of("Key", "Environment", "Value", env),
                         Map.of("Key", "Project", "Value", "infrastructure")
                     })
@@ -303,7 +304,7 @@ public class TapStackIntegrationTest {
         // Verify retention policies are in place
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "LifecycleConfiguration", Match.objectLike(Map.of(
-                "Rules", Match.arrayWith(new Map[]{
+                "Rules", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Status", "Enabled",
                         "ExpirationInDays", 365
@@ -324,9 +325,9 @@ public class TapStackIntegrationTest {
         // Verify S3 lifecycle transitions to cheaper storage
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "LifecycleConfiguration", Match.objectLike(Map.of(
-                "Rules", Match.arrayWith(new Map[]{
+                "Rules", Match.arrayWith(Arrays.asList(
                     Map.of(
-                        "Transitions", Match.arrayWith(new Map[]{
+                        "Transitions", Match.arrayWith(Arrays.asList(
                             Map.of(
                                 "StorageClass", "GLACIER",
                                 "TransitionInDays", 30
@@ -362,7 +363,7 @@ public class TapStackIntegrationTest {
         // Cost Optimization Pillar: Resource tagging
         template.hasResource("AWS::EC2::VPC", Map.of(
             "Properties", Match.objectLike(Map.of(
-                "Tags", Match.arrayWith(new Map[]{
+                "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", Match.anyValue())
                 })
             ))
@@ -385,7 +386,7 @@ public class TapStackIntegrationTest {
         // Verify IAM roles
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of("Principal", Map.of("Service", "ec2.amazonaws.com"))
                 })
             ))
@@ -393,7 +394,7 @@ public class TapStackIntegrationTest {
         
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of("Principal", Map.of("Service", "lambda.amazonaws.com"))
                 })
             ))

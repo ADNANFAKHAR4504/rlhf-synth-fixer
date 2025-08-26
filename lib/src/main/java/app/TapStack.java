@@ -380,7 +380,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
             .versioned(true)
             .encryption(BucketEncryption.S3_MANAGED)
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-            .enforceSSL(true)
             .lifecycleRules(Arrays.asList(
                 LifecycleRule.builder()
                     .id("transition-to-glacier")
@@ -410,7 +409,6 @@ public class TapStack extends software.amazon.awscdk.Stack {
             .versioned(true)
             .encryption(BucketEncryption.S3_MANAGED)
             .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-            .enforceSSL(true)
             .lifecycleRules(Arrays.asList(
                 LifecycleRule.builder()
                     .id("transition-to-glacier")

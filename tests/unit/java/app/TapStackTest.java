@@ -11,6 +11,7 @@ import software.amazon.awscdk.assertions.Match;
 
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Arrays;
 
 /**
  * Comprehensive unit tests for the TapStack CDK application.
@@ -43,11 +44,11 @@ public class TapStackTest {
         // Verify VPC has correct tags
         template.hasResource("AWS::EC2::VPC", Map.of(
             "Properties", Match.objectLike(Map.of(
-                "Tags", Match.arrayWith(new Map[]{
+                "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", "dev"),
                     Map.of("Key", "Project", "Value", "infrastructure"),
                     Map.of("Key", "ManagedBy", "Value", "cdk")
-                })
+                ))
             ))
         ));
     }
@@ -98,26 +99,26 @@ public class TapStackTest {
         // Verify EC2 role is created
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
                         "Principal", Map.of("Service", "ec2.amazonaws.com"),
                         "Action", "sts:AssumeRole"
                     )
-                })
+                ))
             ))
         ));
         
         // Verify Lambda role is created
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
                         "Principal", Map.of("Service", "lambda.amazonaws.com"),
                         "Action", "sts:AssumeRole"
                     )
-                })
+                ))
             ))
         ));
     }
@@ -138,13 +139,13 @@ public class TapStackTest {
         // Verify bucket encryption
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "BucketEncryption", Match.objectLike(Map.of(
-                "ServerSideEncryptionConfiguration", Match.arrayWith(new Map[]{
+                "ServerSideEncryptionConfiguration", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "ServerSideEncryptionByDefault", Map.of(
                             "SSEAlgorithm", "AES256"
                         )
                     )
-                })
+                ))
             ))
         ));
         
@@ -170,18 +171,18 @@ public class TapStackTest {
         // Verify lifecycle rules are configured
         template.hasResourceProperties("AWS::S3::Bucket", Map.of(
             "LifecycleConfiguration", Match.objectLike(Map.of(
-                "Rules", Match.arrayWith(new Map[]{
+                "Rules", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Status", "Enabled",
-                        "Transitions", Match.arrayWith(new Map[]{
+                        "Transitions", Match.arrayWith(Arrays.asList(
                             Map.of(
                                 "StorageClass", "GLACIER",
                                 "TransitionInDays", 30
                             )
-                        }),
+                        )),
                         "ExpirationInDays", 365
                     )
-                })
+                ))
             ))
         ));
     }
@@ -243,9 +244,9 @@ public class TapStackTest {
         // Verify staging environment tags
         template.hasResource("AWS::EC2::VPC", Map.of(
             "Properties", Match.objectLike(Map.of(
-                "Tags", Match.arrayWith(new Map[]{
+                "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", "staging")
-                })
+                ))
             ))
         ));
     }
@@ -267,9 +268,9 @@ public class TapStackTest {
         // Verify production environment tags
         template.hasResource("AWS::EC2::VPC", Map.of(
             "Properties", Match.objectLike(Map.of(
-                "Tags", Match.arrayWith(new Map[]{
+                "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", "prod")
-                })
+                ))
             ))
         ));
     }
@@ -285,16 +286,16 @@ public class TapStackTest {
         // Verify S3 policy is created
         template.hasResourceProperties("AWS::IAM::Policy", Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
-                        "Action", Match.arrayWith(new String[]{
+                        "Action", Match.arrayWith(Arrays.asList(
                             "s3:GetObject",
                             "s3:PutObject",
                             "s3:DeleteObject"
-                        })
+                        ))
                     )
-                })
+                ))
             ))
         ));
     }
@@ -309,9 +310,9 @@ public class TapStackTest {
         
         // Verify SSM policy is attached to EC2 role
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
-            "ManagedPolicyArns", Match.arrayWith(new String[]{
+            "ManagedPolicyArns", Match.arrayWith(Arrays.asList(
                 Match.anyValue().toString()
-            })
+            ))
         ));
     }
     
@@ -339,14 +340,14 @@ public class TapStackTest {
         // Verify SSL enforcement via bucket policy
         template.hasResourceProperties("AWS::S3::BucketPolicy", Map.of(
             "PolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Deny",
                         "Condition", Map.of(
                             "Bool", Map.of("aws:SecureTransport", "false")
                         )
                     )
-                })
+                ))
             ))
         ));
     }
@@ -363,13 +364,13 @@ public class TapStackTest {
         // Verify replication role is created for production
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
-                "Statement", Match.arrayWith(new Map[]{
+                "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
                         "Principal", Map.of("Service", "s3.amazonaws.com"),
                         "Action", "sts:AssumeRole"
                     )
-                })
+                ))
             ))
         ));
     }
