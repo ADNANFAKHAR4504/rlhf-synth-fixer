@@ -770,6 +770,7 @@ resource "aws_cloudfront_origin_access_control" "main" {
 
 # WAF Web ACL
 resource "aws_wafv2_web_acl" "main" {
+  provider = aws.us_east_1
   name  = "${local.name_prefix}-waf"
   scope = "CLOUDFRONT"
 
