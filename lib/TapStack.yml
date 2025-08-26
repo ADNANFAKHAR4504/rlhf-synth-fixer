@@ -738,6 +738,7 @@ Resources:
       S3BucketName: !Ref SecureLoggingBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IsMultiRegionTrail: true
+      IsLogging: true
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
       EventSelectors:
