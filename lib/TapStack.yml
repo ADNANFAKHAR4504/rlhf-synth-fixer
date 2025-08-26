@@ -141,7 +141,7 @@ Parameters:
   UseExistingKMSKeyId:
     Type: String
     Default: ''
-    Description: 'Existing KMS key ARN to use. Leave empty to create new key. (e.g., arn:aws:kms:us-east-1:718240086340:key/12345678-1234-1234-1234-123456789012)'
+    Description: 'Existing KMS key ARN to use. Leave empty to create new key.'
 
   UseExistingGlobalCluster:
     Type: String
