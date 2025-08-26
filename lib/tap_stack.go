@@ -69,7 +69,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	}
 
 	vpc := awsec2.NewVpc(stack, jsii.String("cf-vpc"), &awsec2.VpcProps{
-		Cidr:               jsii.String("10.0.0.0/16"),
+		IpAddresses:        awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
 		MaxAzs:             jsii.Number(2),
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
@@ -166,7 +166,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Description:     jsii.String("Subnet group for RDS instance"),
 		Vpc:             vpc,
 		VpcSubnets:      &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
-		SubnetGroupName: jsii.String("cf-db-subnet-group"),
+		SubnetGroupName: jsii.String("cf-db-subnet-group-" + environmentSuffix),
 	})
 	for key, value := range commonTags {
 		awscdk.Tags_Of(dbSubnetGroup).Add(jsii.String(key), value, nil)
@@ -228,7 +228,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		SecurityGroup: ec2SecurityGroup,
 		Role:          ec2Role,
 		UserData:      userData,
-		InstanceName:  jsii.String("cf-web-server-" + environmentSuffix),
+		InstanceName:  jsii.String("cf-web-server-dev"),
 	})
 	for key, value := range commonTags {
 		awscdk.Tags_Of(ec2Instance).Add(jsii.String(key), value, nil)

@@ -35,7 +35,7 @@ func TestVPCResources(t *testing.T) {
 
 	// Assert that a VPC is created with the correct CIDR block.
 	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), &map[string]interface{}{
-		"CidrBlock": "10.0.0.0/16",
+		"CidrBlock": assertions.Match_Absent(),
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{"Key": "Environment", "Value": "Production"},
 			map[string]interface{}{"Key": "Project", "Value": "CDKSetup"},
@@ -87,24 +87,49 @@ func TestSecurityGroupResources(t *testing.T) {
 	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{
 		"GroupDescription": "Security group for EC2 web server",
 		"SecurityGroupIngress": assertions.Match_ArrayWith(&[]interface{}{
-			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 80, "ToPort": 80, "Description": "Allow HTTP traffic from anywhere", "IpProtocol": "tcp"},
-			map[string]interface{}{"CidrIp": "0.0.0.0/0", "FromPort": 443, "ToPort": 443, "Description": "Allow HTTPS traffic from anywhere", "IpProtocol": "tcp"},
-			map[string]interface{}{"CidrIp": "10.0.0.0/32", "FromPort": 22, "ToPort": 22, "Description": "Allow SSH from specified IP", "IpProtocol": "tcp"},
+			map[string]interface{}{
+				"CidrIp":      "0.0.0.0/0",
+				"Description": "Allow HTTP traffic from anywhere",
+				"FromPort":    80,
+				"IpProtocol":  "tcp",
+				"ToPort":      80,
+			},
+			map[string]interface{}{
+				"CidrIp":      "0.0.0.0/0",
+				"Description": "Allow HTTPS traffic from anywhere",
+				"FromPort":    443,
+				"IpProtocol":  "tcp",
+				"ToPort":      443,
+			},
+			map[string]interface{}{
+				"CidrIp":      "10.0.0.0/32",
+				"Description": "Allow SSH from specified IP",
+				"FromPort":    22,
+				"IpProtocol":  "tcp",
+				"ToPort":      22,
+			},
 		}),
 	})
 
-	// Assert that the RDS security group allows traffic from the EC2 security group on the MySQL port.
+	// Assert that the RDS security group is created correctly, with no inline ingress rules.
 	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), &map[string]interface{}{
-		"GroupDescription": "Security group for RDS MySQL instance",
-		"SecurityGroupIngress": assertions.Match_ArrayWith(&[]interface{}{
-			map[string]interface{}{
-				"FromPort":              jsii.Number(3306),
-				"ToPort":                jsii.Number(3306),
-				"SourceSecurityGroupId": assertions.Match_AnyValue(),
-				"Description":           "Allow MySQL traffic from EC2 instances",
-				"IpProtocol":            "tcp",
-			},
-		}),
+		"GroupDescription":     "Security group for RDS MySQL instance",
+		"SecurityGroupIngress": assertions.Match_Absent(),
+	})
+
+	// Assert that a separate ingress rule is created to connect the EC2 SG to the RDS SG.
+	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroupIngress"), &map[string]interface{}{
+		"Description":           "Allow MySQL traffic from EC2 instances",
+		"IpProtocol":            "tcp",
+		"FromPort":              3306,
+		"ToPort":                3306,
+		"SourceSecurityGroupId": assertions.Match_AnyValue(),
+		"GroupId":               assertions.Match_AnyValue(),
+	})
+
+	// Assert that the DB Subnet Group is created with the correct name.
+	template.HasResourceProperties(jsii.String("AWS::RDS::DBSubnetGroup"), &map[string]interface{}{
+		"DBSubnetGroupName": "cf-db-subnet-group-dev",
 	})
 }
 
@@ -145,6 +170,7 @@ func TestEC2InstanceResources(t *testing.T) {
 		"InstanceName": "cf-web-server-dev",
 		"Tags": assertions.Match_ArrayWith(&[]interface{}{
 			map[string]interface{}{"Key": "Environment", "Value": "Production"},
+			map[string]interface{}{"Key": "Project", "Value": "CDKSetup"},
 		}),
 	})
 
