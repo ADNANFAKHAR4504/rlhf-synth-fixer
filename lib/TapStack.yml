@@ -282,6 +282,21 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: Allow EC2/EBS to use the key for EBS encryption
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': true
       Tags:
         - Key: Environment
           Value: !Ref Environment
