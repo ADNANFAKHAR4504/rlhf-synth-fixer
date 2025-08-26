@@ -1,5 +1,6 @@
 """
-Integration test
+Working integration tests for Pulumi infrastructure using unittest.TestCase
+Tests actual AWS resource creation and connectivity
 """
 
 import unittest
@@ -20,17 +21,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         """Set up integration test with live stack (run once for all tests)."""
         cls.stack_name = "prod"  
         cls.project_name = "cloudsetup"  
-
-        cls.outputs = {}
-        outputs_file = os.path.join(os.path.dirname(
-        __file__), '..', '..', 'cfn-outputs', 'flat-outputs.json')
-        
-        if os.path.exists(outputs_file):
-            try:
-                with open(outputs_file, 'r', encoding='utf-8') as f:
-                cls.outputs = json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
-                cls.outputs = {}
         
         # Configure Pulumi to use S3 backend (not Pulumi Cloud)
         cls.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
@@ -38,8 +28,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Check if Pulumi is available
         try:
             subprocess.run(['pulumi', 'version'], capture_output=True, check=True)
+            cls.pulumi_available = True
         except (subprocess.CalledProcessError, FileNotFoundError):
-            raise unittest.SkipTest("Pulumi CLI not available")
+            cls.pulumi_available = False
+            print("Pulumi CLI not available, using CloudFormation outputs only")
         
         # Check AWS credentials
         try:
@@ -66,26 +58,50 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     
     @classmethod
     def _get_stack_outputs(cls) -> Dict[str, str]:
-        """Get stack outputs from Pulumi"""
-        try:
-            # Get outputs using pulumi CLI
-            result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
-                                  capture_output=True, text=True, check=True)
-            outputs = json.loads(result.stdout)
-            
-            # Convert to expected format
-            return {
-                'vpc_id': outputs.get('vpc_id'),
-                'alb_dns_name': outputs.get('alb_dns_name'),
-                'db_endpoint': outputs.get('db_endpoint')
-            }
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
-            # If pulumi outputs aren't available, return mock data for testing structure
-            return {
-                'vpc_id': 'vpc-mock123',
-                'alb_dns_name': 'mock-alb-123.us-west-2.elb.amazonaws.com',
-                'db_endpoint': 'mock-db.123.us-west-2.rds.amazonaws.com'
-            }
+        """Get stack outputs from CloudFormation outputs file"""
+        cls.outputs = {}
+        outputs_file = os.path.join(os.path.dirname(__file__), '..', '..', 'cfn-outputs', 'flat-outputs.json')
+        
+        print(f"Looking for outputs file at: {os.path.abspath(outputs_file)}")
+        
+        if os.path.exists(outputs_file):
+            try:
+                with open(outputs_file, 'r', encoding='utf-8') as f:
+                    cls.outputs = json.load(f)
+                print(f"Loaded outputs from file: {list(cls.outputs.keys())}")
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                print(f"Error reading outputs file: {e}")
+                cls.outputs = {}
+        else:
+            print("Outputs file does not exist, trying Pulumi CLI fallback")
+            # Fallback to Pulumi CLI
+            try:
+                result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
+                                      capture_output=True, text=True, check=True)
+                if result.stdout.strip():
+                    cls.outputs = json.loads(result.stdout)
+                    print(f"Loaded outputs from Pulumi CLI: {list(cls.outputs.keys())}")
+            except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+                print(f"Pulumi CLI also failed: {e}")
+                cls.outputs = {}
+        
+        # Convert to expected format with flexible key mapping
+        return {
+            'vpc_id': (cls.outputs.get('vpc_id') or 
+                      cls.outputs.get('vpcId') or 
+                      cls.outputs.get('VpcId') or 
+                      cls.outputs.get('VPC_ID')),
+            'alb_dns_name': (cls.outputs.get('alb_dns_name') or 
+                            cls.outputs.get('albDnsName') or 
+                            cls.outputs.get('loadBalancerDns') or
+                            cls.outputs.get('LoadBalancerDns') or
+                            cls.outputs.get('ALB_DNS_NAME')),
+            'db_endpoint': (cls.outputs.get('db_endpoint') or 
+                           cls.outputs.get('dbEndpoint') or 
+                           cls.outputs.get('rdsEndpoint') or
+                           cls.outputs.get('RdsEndpoint') or
+                           cls.outputs.get('DB_ENDPOINT'))
+        }
     
     def setUp(self):
         """Set up for individual test methods."""
@@ -97,10 +113,115 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.skipTest("AWS credentials not available")
     
     # =====================
+    # Diagnostic Tests
+    # =====================
+    
+    def test_pulumi_stack_status(self):
+        """Test and debug Pulumi stack status"""
+        try:
+            # Check current stack
+            result = subprocess.run(['pulumi', 'stack', 'ls'], 
+                                  capture_output=True, text=True, check=True)
+            print(f"Available stacks:\n{result.stdout}")
+            
+            # Check stack info
+            info_result = subprocess.run(['pulumi', 'stack', '--show-name'], 
+                                       capture_output=True, text=True)
+            if info_result.returncode == 0:
+                print(f"Current stack: {info_result.stdout.strip()}")
+            
+            # Check if we're in the right directory
+            pwd_result = subprocess.run(['pwd'], capture_output=True, text=True)
+            print(f"Current directory: {pwd_result.stdout.strip()}")
+            
+            # Check for Pulumi.yaml
+            pulumi_yaml_exists = os.path.exists('Pulumi.yaml')
+            print(f"Pulumi.yaml exists: {pulumi_yaml_exists}")
+            
+            # Try to get stack outputs with better error handling
+            output_result = subprocess.run(['pulumi', 'stack', 'output'], 
+                                         capture_output=True, text=True)
+            print(f"Stack output command return code: {output_result.returncode}")
+            print(f"Stack output stdout: {output_result.stdout}")
+            print(f"Stack output stderr: {output_result.stderr}")
+            
+            self.assertEqual(result.returncode, 0, "Pulumi stack ls failed")
+            
+        except subprocess.CalledProcessError as e:
+            self.fail(f"Pulumi command failed: {e}")
+    
+    def test_stack_outputs_debug(self):
+        """Debug what outputs are actually available"""
+        print(f"Retrieved stack outputs: {self.stack_outputs}")
+        
+        # Check if outputs are mock values
+        vpc_id = self.stack_outputs.get('vpc_id')
+        alb_dns = self.stack_outputs.get('alb_dns_name')
+        db_endpoint = self.stack_outputs.get('db_endpoint')
+        
+        is_mock_vpc = not vpc_id or vpc_id.startswith('vpc-mock')
+        is_mock_alb = not alb_dns or 'mock' in alb_dns
+        is_mock_db = not db_endpoint or 'mock' in db_endpoint
+        
+        print(f"VPC ID: {vpc_id} (mock: {is_mock_vpc})")
+        print(f"ALB DNS: {alb_dns} (mock: {is_mock_alb})")
+        print(f"DB Endpoint: {db_endpoint} (mock: {is_mock_db})")
+        
+        if is_mock_vpc and is_mock_alb and is_mock_db:
+            self.fail("All stack outputs are mock values - stack may not be deployed or outputs not configured")
+        
+        # This test always passes - it's just for debugging
+        self.assertTrue(True, "Debug test completed")
+
+    # =====================
     # Basic Resource Tests
     # =====================
     
-    def test_pulumi_stack_exists(self):
+    def test_pulumi_stack_selection(self):
+        """Test and potentially fix Pulumi stack selection"""
+        try:
+            # List all stacks with JSON output for better parsing
+            result = subprocess.run(['pulumi', 'stack', 'ls', '--json'], 
+                                  capture_output=True, text=True, check=True)
+            stacks = json.loads(result.stdout)
+            
+            print(f"Found {len(stacks)} stacks:")
+            for stack in stacks:
+                status = "CURRENT" if stack.get('current') else ""
+                print(f"  - {stack['name']} {status}")
+            
+            # Check if the expected stack exists
+            expected_stack_name = f"{self.project_name}/{self.stack_name}"
+            stack_names = [s['name'] for s in stacks]
+            
+            # Look for stack that matches our expected pattern
+            matching_stacks = [name for name in stack_names 
+                              if self.stack_name in name or expected_stack_name in name]
+            
+            print(f"Expected stack pattern: {expected_stack_name}")
+            print(f"Matching stacks: {matching_stacks}")
+            
+            if matching_stacks:
+                # If we found matching stacks, try to select the first one
+                target_stack = matching_stacks[0]
+                
+                # Check if it's already current
+                current_stack = next((s for s in stacks if s.get('current')), None)
+                if not current_stack or current_stack['name'] != target_stack:
+                    print(f"Switching to stack: {target_stack}")
+                    switch_result = subprocess.run(['pulumi', 'stack', 'select', target_stack], 
+                                                 capture_output=True, text=True)
+                    if switch_result.returncode != 0:
+                        print(f"Failed to switch stack: {switch_result.stderr}")
+                    else:
+                        print(f"Successfully switched to stack: {target_stack}")
+                        # Refresh outputs after switching
+                        self.__class__.stack_outputs = self._get_stack_outputs()
+            
+            self.assertGreater(len(stacks), 0, "No Pulumi stacks found")
+            
+        except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
+            self.fail(f"Error checking Pulumi stacks: {e}")
         """Test that a Pulumi stack exists"""
         try:
             result = subprocess.run(['pulumi', 'stack', 'ls'], 
