@@ -380,10 +380,10 @@ Resources:
           DataResources:
             - Type: "AWS::S3::Object"
               Values:
-                - "arn:aws:s3:::*/*"
+                - "arn:aws:s3"
             - Type: "AWS::S3::Bucket"
               Values:
-                - "arn:aws:s3:::*"
+                - "arn:aws:s3"
       Tags:
         - Key: Purpose
           Value: SecurityAuditing
