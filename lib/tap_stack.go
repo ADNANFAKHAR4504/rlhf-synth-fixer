@@ -391,7 +391,7 @@ func createSSHSecurityGroup(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pul
 				FromPort: pulumi.Int(22),
 				ToPort:   pulumi.Int(22),
 				CidrBlocks: pulumi.StringArray{
-					pulumi.String("203.0.113.0/24"), // Company office
+					pulumi.String("203.0.113.0/24"),  // Company office
 					pulumi.String("198.51.100.0/24"), // Remote work VPN
 				},
 			},
@@ -422,9 +422,9 @@ func createDatabaseSecurityGroup(ctx *pulumi.Context, vpcId, webSGId pulumi.IDOu
 		VpcId:       vpcId,
 		Ingress: ec2.SecurityGroupIngressArray{
 			&ec2.SecurityGroupIngressArgs{
-				Protocol:              pulumi.String("tcp"),
-				FromPort:              pulumi.Int(3306),
-				ToPort:                pulumi.Int(3306),
+				Protocol:       pulumi.String("tcp"),
+				FromPort:       pulumi.Int(3306),
+				ToPort:         pulumi.Int(3306),
 				SecurityGroups: pulumi.StringArray{webSGId.ToStringOutput()},
 			},
 		},
@@ -600,7 +600,7 @@ func createVPCFlowLogs(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pulumi.S
 	logGroup, err := cloudwatch.NewLogGroup(ctx, "secure-vpc-flow-logs", &cloudwatch.LogGroupArgs{
 		Name:            pulumi.String("/aws/vpc/secure-vpc-flowlogs"),
 		RetentionInDays: pulumi.Int(14),
-		Tags: tags,
+		Tags:            tags,
 	})
 	if err != nil {
 		return err
@@ -623,7 +623,7 @@ func createVPCFlowLogs(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pulumi.S
 
 	flowLogsRole, err := iam.NewRole(ctx, "secure-vpc-flow-logs-role", &iam.RoleArgs{
 		AssumeRolePolicy: pulumi.String(assumeRolePolicy),
-		Tags: tags,
+		Tags:             tags,
 	})
 	if err != nil {
 		return err
@@ -657,12 +657,12 @@ func createVPCFlowLogs(ctx *pulumi.Context, vpcId pulumi.IDOutput, tags pulumi.S
 
 	// Create VPC Flow Log
 	_, err = ec2.NewFlowLog(ctx, "secure-vpc-flow-log", &ec2.FlowLogArgs{
-		VpcId:                   vpcId,
-		TrafficType:             pulumi.String("ALL"),
-		IamRoleArn:              flowLogsRole.Arn,
-		LogDestinationType:      pulumi.String("cloud-watch-logs"),
-		LogGroupName:            logGroup.Name,
-		MaxAggregationInterval:  pulumi.Int(60),
+		VpcId:                  vpcId,
+		TrafficType:            pulumi.String("ALL"),
+		IamRoleArn:             flowLogsRole.Arn,
+		LogDestinationType:     pulumi.String("cloud-watch-logs"),
+		LogGroupName:           logGroup.Name,
+		MaxAggregationInterval: pulumi.Int(60),
 		Tags: mergeTags(pulumi.StringMap{
 			"Name": pulumi.String("secure-vpc-flow-log"),
 		}, tags),
@@ -792,7 +792,7 @@ func isValidNACLRule(rule NACLRule) bool {
 	if rule.RuleNumber <= 0 || rule.RuleNumber > 32767 {
 		return false
 	}
-	
+
 	// Protocol validation
 	validProtocols := []string{"tcp", "udp", "icmp", "-1"}
 	validProtocol := false
@@ -805,17 +805,17 @@ func isValidNACLRule(rule NACLRule) bool {
 	if !validProtocol {
 		return false
 	}
-	
+
 	// Port validation
 	if rule.FromPort < 0 || rule.FromPort > 65535 || rule.ToPort < 0 || rule.ToPort > 65535 {
 		return false
 	}
-	
+
 	// Action validation
 	if rule.Action != "allow" && rule.Action != "deny" {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -835,7 +835,7 @@ func isValidFlowLogConfig(config FlowLogConfig) bool {
 			break
 		}
 	}
-	
+
 	validDestinations := []string{"cloud-watch-logs", "s3"}
 	validDestination := false
 	for _, d := range validDestinations {
@@ -844,13 +844,13 @@ func isValidFlowLogConfig(config FlowLogConfig) bool {
 			break
 		}
 	}
-	
+
 	return validTrafficType && validDestination
 }
 
 func isValidDHCPOptions(options map[string]string) bool {
 	validKeys := []string{"domain-name", "domain-name-servers", "ntp-servers", "netbios-name-servers"}
-	
+
 	for key := range options {
 		valid := false
 		for _, validKey := range validKeys {
@@ -873,7 +873,7 @@ func hasInfrastructureComponent(component string) bool {
 		"elastic_ips", "nat_gateways", "security_groups",
 		"route_tables", "network_acls", "flow_logs",
 	}
-	
+
 	for _, expected := range expectedComponents {
 		if component == expected {
 			return true
