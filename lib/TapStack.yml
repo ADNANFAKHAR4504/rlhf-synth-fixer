@@ -52,22 +52,31 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
-              - 'kms:Create*'
-              - 'kms:Describe*'
-              - 'kms:Enable*'
-              - 'kms:List*'
-              - 'kms:Put*'
-              - 'kms:Update*'
-              - 'kms:Revoke*'
-              - 'kms:Disable*'
-              - 'kms:Get*'
-              - 'kms:Delete*'
+              - 'kms:CreateKey'
+              - 'kms:CreateAlias'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:EnableKey'
+              - 'kms:EnableKeyRotation'
+              - 'kms:ListKeys'
+              - 'kms:ListAliases'
+              - 'kms:ListGrants'
+              - 'kms:PutKeyPolicy'
+              - 'kms:UpdateKeyDescription'
+              - 'kms:UpdateAlias'
+              - 'kms:RevokeGrant'
+              - 'kms:DisableKey'
+              - 'kms:DisableKeyRotation'
+              - 'kms:GetKeyPolicy'
+              - 'kms:GetKeyRotationStatus'
+              - 'kms:DeleteAlias'
               - 'kms:ScheduleKeyDeletion'
               - 'kms:CancelKeyDeletion'
-              - 'kms:GenerateDataKey*'
+              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
               - 'kms:Decrypt'
               - 'kms:Encrypt'
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+            Resource: !GetAtt KMSKey.Arn
           - Sid: Allow RDS Service
             Effect: Allow
             Principal:
@@ -75,7 +84,7 @@ Resources:
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+            Resource: !GetAtt KMSKey.Arn
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
