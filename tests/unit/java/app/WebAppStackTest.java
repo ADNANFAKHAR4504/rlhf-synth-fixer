@@ -123,7 +123,7 @@ public class WebAppStackTest {
         // Check for CloudWatch RUM App Monitor with region in name
         template.hasResourceProperties("AWS::RUM::AppMonitor",
                 Map.of(
-                       "Domain", "webapp-rum-test.example.com",
+                       "Domain", "myapp-rum-test.example.org",
                        "AppMonitorConfiguration", Match.objectLike(Map.of(
                                "AllowCookies", true,
                                "EnableXRay", true,

@@ -358,7 +358,7 @@ public class WebAppStack extends Stack {
         String region = this.getRegion();
         return CfnAppMonitor.Builder.create(this, "RUMAppMonitor" + environmentSuffix)
                 .name("webapp-rum-" + region + "-" + environmentSuffix)
-                .domain("webapp-" + environmentSuffix + ".example.com")
+                .domain("myapp-" + environmentSuffix + ".example.org")
                 .appMonitorConfiguration(CfnAppMonitor.AppMonitorConfigurationProperty.builder()
                         .allowCookies(true)
                         .enableXRay(true)
