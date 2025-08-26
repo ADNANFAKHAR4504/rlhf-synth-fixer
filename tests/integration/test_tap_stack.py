@@ -14,18 +14,18 @@ from botocore.exceptions import ClientError, NoCredentialsError
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
-    """Integration tests against live deployed Pulumi stack."""
+
     
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live stack (run once for all tests)."""
         cls.stack_name = "prod"  
-        cls.project_name = "cloudsetup"  
+        cls.project_name = "cloudsetup"
         
         # Configure Pulumi to use S3 backend (not Pulumi Cloud)
         cls.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
         
-        # Check if Pulumi is available
+        # Check if Pulumi is available (optional since we're using CFN outputs)
         try:
             subprocess.run(['pulumi', 'version'], capture_output=True, check=True)
             cls.pulumi_available = True
@@ -53,17 +53,29 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except NoCredentialsError:
             raise unittest.SkipTest("AWS credentials not configured")
         
-        # Get stack outputs from Pulumi
+        # Get stack outputs from CloudFormation file or Pulumi
         cls.stack_outputs = cls._get_stack_outputs()
+        
+        # Print summary of what was loaded
+        print(f"\n=== Integration Test Setup Summary ===")
+        print(f"AWS Credentials: {'✓' if cls.aws_clients else '✗'}")
+        print(f"Pulumi CLI: {'✓' if cls.pulumi_available else '✗'}")
+        print(f"Stack Outputs: {len([v for v in cls.stack_outputs.values() if v])} of 3 loaded")
+        
+        for key, value in cls.stack_outputs.items():
+            status = "✓" if value and not str(value).startswith(('vpc-mock', 'mock')) else "✗"
+            print(f"  {key}: {status} {value or 'Not found'}")
+        print("=" * 40)
     
     @classmethod
     def _get_stack_outputs(cls) -> Dict[str, str]:
-        """Get stack outputs from CloudFormation outputs file"""
+        """Get stack outputs from CloudFormation outputs file or Pulumi"""
         cls.outputs = {}
         outputs_file = os.path.join(os.path.dirname(__file__), '..', '..', 'cfn-outputs', 'flat-outputs.json')
         
         print(f"Looking for outputs file at: {os.path.abspath(outputs_file)}")
         
+        # Try CloudFormation outputs file first
         if os.path.exists(outputs_file):
             try:
                 with open(outputs_file, 'r', encoding='utf-8') as f:
@@ -74,15 +86,50 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 cls.outputs = {}
         else:
             print("Outputs file does not exist, trying Pulumi CLI fallback")
-            # Fallback to Pulumi CLI
+            
+            # Check if PULUMI_CONFIG_PASSPHRASE is set
+            passphrase = os.getenv('PULUMI_CONFIG_PASSPHRASE')
+            if not passphrase:
+                print("PULUMI_CONFIG_PASSPHRASE not set, trying without passphrase")
+                # Try with empty passphrase
+                env = os.environ.copy()
+                env['PULUMI_CONFIG_PASSPHRASE'] = ''
+            else:
+                env = None
+            
+            # Check if we're getting outputs properly
             try:
-                result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
-                                      capture_output=True, text=True, check=True)
-                if result.stdout.strip():
-                    cls.outputs = json.loads(result.stdout)
-                    print(f"Loaded outputs from Pulumi CLI: {list(cls.outputs.keys())}")
-            except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
-                print(f"Pulumi CLI also failed: {e}")
+                # Try with different approaches to get Pulumi outputs
+                methods_to_try = [
+                    # Method 1: Standard JSON output
+                    ['pulumi', 'stack', 'output', '--json'],
+                    # Method 2: Individual outputs (if JSON fails)
+                    ['pulumi', 'stack', 'output', 'vpc_id'],
+                    # Method 3: Show all outputs in plain text
+                    ['pulumi', 'stack', 'output']
+                ]
+                
+                for method in methods_to_try:
+                    try:
+                        result = subprocess.run(method, capture_output=True, text=True, check=True, env=env)
+                        print(f"Command {' '.join(method)} succeeded:")
+                        print(f"Stdout: {result.stdout}")
+                        
+                        if method[2] == '--json' and result.stdout.strip():
+                            cls.outputs = json.loads(result.stdout)
+                            print(f"Successfully loaded JSON outputs: {list(cls.outputs.keys())}")
+                            break
+                        elif len(method) == 3 and method[2] != '--json':  # Individual output command
+                            print(f"Individual output result: {result.stdout.strip()}")
+                        else:
+                            print(f"Plain text outputs:\n{result.stdout}")
+                            
+                    except subprocess.CalledProcessError as e:
+                        print(f"Method {' '.join(method)} failed: {e.stderr}")
+                        continue
+                        
+            except Exception as e:
+                print(f"Error trying Pulumi methods: {e}")
                 cls.outputs = {}
         
         # Convert to expected format with flexible key mapping
@@ -619,8 +666,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         print("\nIntegration test cleanup completed")
     
     def tearDown(self):
-        """Clean up after each test method."""
-        # Add any per-test cleanup here if needed
         pass
     
     # =====================
@@ -630,8 +675,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def _get_resource_tags(self, resource_arn: str) -> Dict[str, str]:
         """Helper method to get tags for a resource"""
         try:
-            # This would need to be implemented based on the specific AWS service
-            # Different services have different tag APIs
             pass
         except Exception:
             return {}
@@ -660,7 +703,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 if current_state == expected_state:
                     return True
                 
-                time.sleep(30)  # Wait 30 seconds before checking again
+                time.sleep(30)  
             except Exception:
                 time.sleep(30)
         
@@ -668,6 +711,5 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
 
 # Test suite configuration
-if __name__ == '__main__':
-    # Run tests with verbose output
+if __name__ == 'tap_stack':
     unittest.main(verbosity=2, buffer=True)
