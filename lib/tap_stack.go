@@ -19,13 +19,11 @@ func main() {
 			"Project":     pulumi.String("SecureInfrastructure"),
 		}
 
-		// Get current AWS account info
 		current, err := aws.GetCallerIdentity(ctx, nil, nil)
 		if err != nil {
 			return err
 		}
 
-		// Create VPC in us-east-1 with CIDR 10.0.0.0/16
 		vpc, err := ec2.NewVpc(ctx, "hipaa-vpc", &ec2.VpcArgs{
 			CidrBlock:          pulumi.String("10.0.0.0/16"),
 			EnableDnsHostnames: pulumi.Bool(true),
@@ -36,7 +34,6 @@ func main() {
 			return err
 		}
 
-		// Create Internet Gateway
 		igw, err := ec2.NewInternetGateway(ctx, "hipaa-igw", &ec2.InternetGatewayArgs{
 			VpcId: vpc.ID(),
 			Tags:  commonTags,
@@ -45,7 +42,6 @@ func main() {
 			return err
 		}
 
-		// Create public subnet in us-east-1a
 		publicSubnet, err := ec2.NewSubnet(ctx, "hipaa-public-subnet", &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String("10.0.1.0/24"),
@@ -57,7 +53,6 @@ func main() {
 			return err
 		}
 
-		// Private subnet for EC2 in us-east-1a
 		privateSubnetEc2, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-ec2", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.2.0/24"),
@@ -68,7 +63,6 @@ func main() {
 			return err
 		}
 
-		// Private subnet for RDS in us-east-1b (Multi-AZ)
 		privateSubnetRds, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-rds", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.3.0/24"),
@@ -79,7 +73,6 @@ func main() {
 			return err
 		}
 
-		// Allocate Elastic IP for NAT Gateway
 		natEip, err := ec2.NewEip(ctx, "hipaa-nat-eip", &ec2.EipArgs{
 			Domain: pulumi.String("vpc"),
 			Tags:   commonTags,
@@ -88,7 +81,6 @@ func main() {
 			return err
 		}
 
-		// Create NAT Gateway in the public subnet
 		natGateway, err := ec2.NewNatGateway(ctx, "hipaa-nat-gateway", &ec2.NatGatewayArgs{
 			AllocationId: natEip.ID(),
 			SubnetId:     publicSubnet.ID(),
@@ -98,7 +90,6 @@ func main() {
 			return err
 		}
 
-		// Create public route table
 		publicRouteTable, err := ec2.NewRouteTable(ctx, "hipaa-public-rt", &ec2.RouteTableArgs{
 			VpcId: vpc.ID(),
 			Tags:  commonTags,
@@ -107,7 +98,6 @@ func main() {
 			return err
 		}
 
-		// Create route to Internet Gateway for public subnet
 		_, err = ec2.NewRoute(ctx, "hipaa-public-route", &ec2.RouteArgs{
 			RouteTableId:         publicRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
@@ -117,7 +107,6 @@ func main() {
 			return err
 		}
 
-		// Associate public subnet to public route table
 		_, err = ec2.NewRouteTableAssociation(ctx, "hipaa-public-rta", &ec2.RouteTableAssociationArgs{
 			SubnetId:     publicSubnet.ID(),
 			RouteTableId: publicRouteTable.ID(),
@@ -126,7 +115,6 @@ func main() {
 			return err
 		}
 
-		// Create private route table
 		privateRouteTable, err := ec2.NewRouteTable(ctx, "hipaa-private-rt", &ec2.RouteTableArgs{
 			VpcId: vpc.ID(),
 			Tags:  commonTags,
@@ -135,7 +123,6 @@ func main() {
 			return err
 		}
 
-		// Route private subnet traffic through NAT Gateway
 		_, err = ec2.NewRoute(ctx, "hipaa-private-route", &ec2.RouteArgs{
 			RouteTableId:         privateRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
@@ -145,7 +132,6 @@ func main() {
 			return err
 		}
 
-		// Associate private subnets with private route table
 		_, err = ec2.NewRouteTableAssociation(ctx, "hipaa-private-rta-ec2", &ec2.RouteTableAssociationArgs{
 			SubnetId:     privateSubnetEc2.ID(),
 			RouteTableId: privateRouteTable.ID(),
@@ -153,6 +139,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+
 		_, err = ec2.NewRouteTableAssociation(ctx, "hipaa-private-rta-rds", &ec2.RouteTableAssociationArgs{
 			SubnetId:     privateSubnetRds.ID(),
 			RouteTableId: privateRouteTable.ID(),
@@ -161,7 +148,6 @@ func main() {
 			return err
 		}
 
-		// Create S3 bucket for logging
 		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-logging-bucket", &s3.BucketV2Args{
 			Bucket: pulumi.String(fmt.Sprintf("hipaa-logging-bucket-%s", current.AccountId)),
 			Tags:   commonTags,
@@ -170,7 +156,6 @@ func main() {
 			return err
 		}
 
-		// Enable versioning on S3 bucket
 		_, err = s3.NewBucketVersioningV2(ctx, "hipaa-bucket-versioning", &s3.BucketVersioningV2Args{
 			Bucket: s3Bucket.ID(),
 			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
@@ -181,12 +166,11 @@ func main() {
 			return err
 		}
 
-		// Enable server-side encryption for S3 bucket (fixed for v6 SDK)
-		_, err = s3.NewBucketServerSideEncryptionConfiguration(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationArgs{
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: s3Bucket.ID(),
-			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationArgs{
-				Rule: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationRuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
 						SseAlgorithm: pulumi.String("AES256"),
 					},
 				},
@@ -196,7 +180,6 @@ func main() {
 			return err
 		}
 
-		// Block public access to S3 bucket
 		_, err = s3.NewBucketPublicAccessBlock(ctx, "hipaa-bucket-pab", &s3.BucketPublicAccessBlockArgs{
 			Bucket:                s3Bucket.ID(),
 			BlockPublicAcls:       pulumi.Bool(true),
@@ -208,7 +191,6 @@ func main() {
 			return err
 		}
 
-		// Create IAM role for EC2
 		ec2Role, err := iam.NewRole(ctx, "hipaa-ec2-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
@@ -228,7 +210,6 @@ func main() {
 			return err
 		}
 
-		// Create IAM policy for EC2 to access S3 logging bucket
 		ec2Policy, err := iam.NewPolicy(ctx, "hipaa-ec2-policy", &iam.PolicyArgs{
 			Policy: s3Bucket.Arn.ApplyT(func(arn string) string {
 				return fmt.Sprintf(`{
@@ -268,7 +249,6 @@ func main() {
 			return err
 		}
 
-		// Attach policy to EC2 role
 		_, err = iam.NewRolePolicyAttachment(ctx, "hipaa-ec2-policy-attachment", &iam.RolePolicyAttachmentArgs{
 			Role:      ec2Role.Name,
 			PolicyArn: ec2Policy.Arn,
@@ -277,7 +257,6 @@ func main() {
 			return err
 		}
 
-		// Create instance profile for EC2
 		ec2InstanceProfile, err := iam.NewInstanceProfile(ctx, "hipaa-ec2-instance-profile", &iam.InstanceProfileArgs{
 			Role: ec2Role.Name,
 			Tags: commonTags,
@@ -286,7 +265,6 @@ func main() {
 			return err
 		}
 
-		// Create security group for EC2
 		ec2SecurityGroup, err := ec2.NewSecurityGroup(ctx, "hipaa-ec2-sg", &ec2.SecurityGroupArgs{
 			VpcId:       vpc.ID(),
 			Description: pulumi.String("Security group for HIPAA compliant EC2 instance"),
@@ -304,7 +282,6 @@ func main() {
 			return err
 		}
 
-		// Get latest Amazon Linux 2 AMI
 		ami, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
 			MostRecent: pulumi.BoolRef(true),
 			Owners:     []string{"amazon"},
@@ -319,7 +296,6 @@ func main() {
 			return err
 		}
 
-		// Create EC2 instance in private subnet
 		ec2Instance, err := ec2.NewInstance(ctx, "hipaa-ec2-instance", &ec2.InstanceArgs{
 			Ami:                 pulumi.String(ami.Id),
 			InstanceType:        pulumi.String("t3.micro"),
@@ -343,7 +319,6 @@ func main() {
 			return err
 		}
 
-		// Create DB subnet group
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "hipaa-db-subnet-group", &rds.SubnetGroupArgs{
 			SubnetIds: pulumi.StringArray{
 				privateSubnetEc2.ID(),
@@ -355,7 +330,6 @@ func main() {
 			return err
 		}
 
-		// Create security group for RDS
 		rdsSecurityGroup, err := ec2.NewSecurityGroup(ctx, "hipaa-rds-sg", &ec2.SecurityGroupArgs{
 			VpcId:       vpc.ID(),
 			Description: pulumi.String("Security group for HIPAA compliant RDS instance"),
@@ -373,7 +347,6 @@ func main() {
 			return err
 		}
 
-		// Create IAM role for RDS enhanced monitoring
 		rdsRole, err := iam.NewRole(ctx, "hipaa-rds-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
@@ -393,7 +366,6 @@ func main() {
 			return err
 		}
 
-		// Attach enhanced monitoring policy to RDS role
 		_, err = iam.NewRolePolicyAttachment(ctx, "hipaa-rds-policy-attachment", &iam.RolePolicyAttachmentArgs{
 			Role:      rdsRole.Name,
 			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"),
@@ -402,7 +374,6 @@ func main() {
 			return err
 		}
 
-		// Create RDS parameter group for encryption
 		dbParameterGroup, err := rds.NewParameterGroup(ctx, "hipaa-db-parameter-group", &rds.ParameterGroupArgs{
 			Family: pulumi.String("mysql8.0"),
 			Parameters: rds.ParameterGroupParameterArray{
@@ -417,7 +388,6 @@ func main() {
 			return err
 		}
 
-		// Create RDS instance
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-rds-instance", &rds.InstanceArgs{
 			AllocatedStorage:      pulumi.Int(20),
 			StorageType:           pulumi.String("gp3"),
@@ -426,7 +396,7 @@ func main() {
 			InstanceClass:         pulumi.String("db.t3.micro"),
 			DbName:                pulumi.String("hipaadb"),
 			Username:              pulumi.String("admin"),
-			Password:              pulumi.String("SecurePassword123!"), // Use Secrets Manager in production
+			Password:              pulumi.String("SecurePassword123!"), // Use Secrets Manager for production
 			VpcSecurityGroupIds:   pulumi.StringArray{rdsSecurityGroup.ID()},
 			DbSubnetGroupName:     dbSubnetGroup.Name,
 			ParameterGroupName:    dbParameterGroup.Name,
@@ -449,7 +419,6 @@ func main() {
 			return err
 		}
 
-		// Export outputs
 		ctx.Export("vpcId", vpc.ID())
 		ctx.Export("publicSubnetId", publicSubnet.ID())
 		ctx.Export("privateSubnetEc2Id", privateSubnetEc2.ID())
