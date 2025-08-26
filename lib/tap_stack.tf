@@ -49,6 +49,12 @@ data "aws_ami" "amazon_linux2" {
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}
 
+# Key pair for SSH access (optional, for debugging)
+resource "aws_key_pair" "main" {
+  key_name   = "${local.unique_project_name}-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD3F6tyPEFEzV0LX3X8BsXdMsQz1x2cEikKDEY0aIj41qgxMCP/iteneqXSIFZBp5vizPvaoIR3Um9xK7PGoW8giupGn+EPuxIA4cDM4vzOqOkiMpnzJrKrnS2O4thkRnc4Xyq/OV/ujq5pNta6cG85q9tT1zcoyuEO1exV6/7fcxM9deWIZGJSQUXg0ewONxrkajSjVqoJ85JeEj6cd4oA84sOtWDc08MYNCUI6a+EwvJfvcwqhV7ElWvPLpfPRwXOFcyU1/AtBZdh3cff68ELqVt2uEG+L/lmsAeDkMVXZbjM0QHfO2u2x9RkdRMC1H0IhB3lveeRHXlghr3uDHZGgiuB6XxRyBFS9QeWopGxXvEFqyT/eWcsKscwIDAQAB"
+}
+
 # Local values for common tags and configurations
 locals {
   project_name = "iac-aws-nova"
@@ -319,6 +325,14 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  ingress {
+    description = "SSH from anywhere (for debugging)"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -514,13 +528,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
         tags = merge(local.common_tags, {
@@ -547,6 +561,7 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.unique_project_name}-lt-"
   image_id      = data.aws_ami.amazon_linux2.id
   instance_type = "t3.micro"
+  key_name      = aws_key_pair.main.key_name
 
   network_interfaces {
     associate_public_ip_address = true
@@ -573,30 +588,48 @@ resource "aws_launch_template" "main" {
     set -euxo pipefail
     exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "Bootstrapping..."
+    echo "Starting EC2 bootstrap..."
 
-    # Update repos
-    yum clean all
-    yum makecache -y
+    # Create web directory first
+    mkdir -p /var/www/html
 
-    # Install Apache with retries
-    n=0
-    until [ $n -ge 5 ]
-    do
-      yum install -y httpd && break
-      n=$((n+1))
-      sleep 10
-    done
+    # Create health endpoint immediately (before Apache install)
+    echo "OK" > /var/www/html/health
+    chmod 644 /var/www/html/health
 
+    # Create simple index page
+    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
+    echo "<p>Instance is healthy!</p>" >> /var/www/html/index.html
+
+    # Update system and install Apache
+    yum update -y
+    yum install -y httpd
+
+    # Configure Apache to start on boot and start it
     systemctl enable httpd
     systemctl start httpd
 
-    # Health check page
-    echo "OK" > /var/www/html/health
-    echo "<h1>Hello from ASG</h1>" > /var/www/html/index.html
+    # Wait for Apache to fully start
+    sleep 10
 
-    # Verify Apache
-    curl -fs http://localhost/health || exit 1
+    # Verify Apache is running and serving content
+    for i in {1..10}; do
+      if curl -f -s http://localhost/health > /dev/null; then
+        echo "Apache is running and serving /health endpoint"
+        break
+      else
+        echo "Attempt $i: Apache not ready yet, waiting..."
+        sleep 5
+      fi
+    done
+
+    # Final verification
+    if ! curl -f -s http://localhost/health > /dev/null; then
+      echo "ERROR: Apache health check failed after all attempts"
+      exit 1
+    fi
+
+    echo "EC2 bootstrap completed successfully"
   EOF
   )
 
