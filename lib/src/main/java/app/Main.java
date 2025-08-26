@@ -57,7 +57,7 @@ public class Main {
      */
     static void defineInfrastructure(Context ctx) {
         // ------------------------------------------------------------------
-        // 0) Provider: pin everything to us-east-1 for this stack
+        // 0) Provider: pin everything to us-east-1 for this stack 
         // ------------------------------------------------------------------
         var awsUsEast1 = buildAwsProvider("aws-us-east-1", "us-east-1");
         var opts = CustomResourceOptions.builder().provider(awsUsEast1).build();
