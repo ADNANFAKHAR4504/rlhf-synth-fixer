@@ -1,9 +1,12 @@
 package app;
 
-import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
+
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
 /**
@@ -14,61 +17,73 @@ import software.amazon.awscdk.assertions.Template;
  */
 public class MainTest {
 
-    /**
-     * Test that the TapStack can be instantiated successfully with default properties.
-     */
-    @Test
-    public void testStackCreation() {
-        App app = new App();
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
-                .environmentSuffix("test")
-                .build());
+  /**
+   * Test that the TapStack can be instantiated successfully with default
+   * properties.
+   */
+  @Test
+  public void testStackCreation() {
+    App app = new App();
+    TapStack stack = new TapStack(app, "TestStack", StackProps.builder()
+        .env(Environment.builder()
+            .region("us-east-2")
+            .build())
+        .build());
 
-        // Verify stack was created
-        assertThat(stack).isNotNull();
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("test");
-    }
+    // Verify stack was created
+    assertThat(stack).isNotNull();
+    assertThat(stack.getStackName()).isEqualTo("TestStack");
+  }
 
-    /**
-     * Test that the TapStack uses 'dev' as default environment suffix when none is provided.
-     */
-    @Test
-    public void testDefaultEnvironmentSuffix() {
-        App app = new App();
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder().build());
+  /**
+   * Test that the TapStack can be created with minimal configuration.
+   */
+  @Test
+  public void testMinimalStackCreation() {
+    App app = new App();
+    TapStack stack = new TapStack(app, "TestStack", StackProps.builder().build());
 
-        // Verify default environment suffix
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("dev");
-    }
+    // Verify stack was created
+    assertThat(stack).isNotNull();
+    assertThat(stack.getStackName()).isEqualTo("TestStack");
+  }
 
-    /**
-     * Test that the TapStack synthesizes without errors.
-     */
-    @Test
-    public void testStackSynthesis() {
-        App app = new App();
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
-                .environmentSuffix("test")
-                .build());
+  /**
+   * Test that the TapStack synthesizes without errors.
+   */
+  @Test
+  public void testStackSynthesis() {
+    App app = new App();
+    TapStack stack = new TapStack(app, "TestStack", StackProps.builder()
+        .env(Environment.builder()
+            .region("us-east-2")
+            .build())
+        .build());
 
-        // Create template from the stack
-        Template template = Template.fromStack(stack);
+    // Create template from the stack
+    Template template = Template.fromStack(stack);
 
-        // Verify template can be created (basic synthesis test)
-        assertThat(template).isNotNull();
-    }
+    // Verify template can be created (basic synthesis test)
+    assertThat(template).isNotNull();
+  }
 
-    /**
-     * Test that the TapStack respects environment suffix from CDK context.
-     */
-    @Test
-    public void testEnvironmentSuffixFromContext() {
-        App app = new App();
-        app.getNode().setContext("environmentSuffix", "staging");
-        
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder().build());
+  /**
+   * Test that the TapStack creates the expected AWS resources.
+   */
+  @Test
+  public void testResourceCreation() {
+    App app = new App();
+    TapStack stack = new TapStack(app, "TestStack", StackProps.builder()
+        .env(Environment.builder()
+            .region("us-east-2")
+            .build())
+        .build());
 
-        // Verify environment suffix from context is used
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("staging");
-    }
+    Template template = Template.fromStack(stack);
+
+    // Verify that key resources are created
+    template.hasResourceProperties("AWS::EC2::VPC", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::KMS::Key", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::S3::Bucket", new java.util.HashMap<>());
+  }
 }

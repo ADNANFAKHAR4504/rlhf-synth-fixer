@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
@@ -57,7 +58,13 @@ public class Main {
   public static void main(final String[] args) {
     App app = new App();
 
-    new TapStack(app, "TapStack", StackProps.builder()
+    // Get environment suffix from environment variable, context, or default
+    String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+    if (environmentSuffix == null || environmentSuffix.isEmpty()) {
+      environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+    }
+
+    new TapStack(app, "TapStack" + environmentSuffix, StackProps.builder()
         .env(Environment.builder()
             .region("us-east-2")
             .build())
@@ -110,7 +117,10 @@ class TapStack extends Stack {
     createCpuAlarms(ec2Instances, alertTopic);
 
     // Create RDS instance with multi-AZ and encryption
-    createRdsInstance(vpc, rdsSecurityGroup, kmsKey);
+    DatabaseInstance rdsInstance = createRdsInstance(vpc, rdsSecurityGroup, kmsKey);
+
+    // Create outputs for testing and integration
+    createOutputs(vpc, cloudTrailBucket, alertTopic, ec2Instances, rdsInstance, kmsKey);
   }
 
   private Key createKmsKey() {
@@ -283,7 +293,7 @@ class TapStack extends Stack {
     }
   }
 
-  private void createRdsInstance(Vpc vpc, SecurityGroup sg, Key kmsKey) {
+  private DatabaseInstance createRdsInstance(Vpc vpc, SecurityGroup sg, Key kmsKey) {
     // Create subnet group for RDS
     SubnetGroup subnetGroup = SubnetGroup.Builder.create(this, getResourceName("rds-subnet-group"))
         .subnetGroupName(getResourceName("rds-subnets"))
@@ -303,7 +313,7 @@ class TapStack extends Stack {
         .build();
 
     // Create RDS instance
-    DatabaseInstance.Builder.create(this, getResourceName("rds-instance"))
+    DatabaseInstance dbInstance = DatabaseInstance.Builder.create(this, getResourceName("rds-instance"))
         .instanceIdentifier(getResourceName("mysql-db"))
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
             .version(MysqlEngineVersion.VER_8_0)
@@ -326,9 +336,122 @@ class TapStack extends Stack {
         .monitoringInterval(Duration.minutes(1))
         // Remove Performance Insights as it's not supported on t3.micro
         .build();
+
+    return dbInstance;
   }
 
   private String getResourceName(String resource) {
     return String.format("%s-%s-%s", PROJECT_NAME, ENVIRONMENT, resource);
+  }
+
+  private void createOutputs(Vpc vpc, Bucket cloudTrailBucket, Topic alertTopic, 
+                           List<Instance> ec2Instances, DatabaseInstance rdsInstance, Key kmsKey) {
+    // VPC outputs
+    CfnOutput.Builder.create(this, "VpcId")
+        .description("VPC ID for the infrastructure")
+        .value(vpc.getVpcId())
+        .exportName(getResourceName("vpc-id"))
+        .build();
+
+    CfnOutput.Builder.create(this, "VpcCidr")
+        .description("VPC CIDR block")
+        .value(vpc.getVpcCidrBlock())
+        .exportName(getResourceName("vpc-cidr"))
+        .build();
+
+    // Private subnet IDs for testing
+    List<ISubnet> privateSubnets = vpc.getPrivateSubnets();
+    for (int i = 0; i < privateSubnets.size(); i++) {
+      CfnOutput.Builder.create(this, "PrivateSubnet" + (i + 1))
+          .description("Private subnet " + (i + 1) + " ID")
+          .value(privateSubnets.get(i).getSubnetId())
+          .exportName(getResourceName("private-subnet-" + (i + 1)))
+          .build();
+    }
+
+    // Public subnet IDs for testing
+    List<ISubnet> publicSubnets = vpc.getPublicSubnets();
+    for (int i = 0; i < publicSubnets.size(); i++) {
+      CfnOutput.Builder.create(this, "PublicSubnet" + (i + 1))
+          .description("Public subnet " + (i + 1) + " ID")
+          .value(publicSubnets.get(i).getSubnetId())
+          .exportName(getResourceName("public-subnet-" + (i + 1)))
+          .build();
+    }
+
+    // EC2 instance outputs
+    for (int i = 0; i < ec2Instances.size(); i++) {
+      Instance instance = ec2Instances.get(i);
+      CfnOutput.Builder.create(this, "Ec2Instance" + (i + 1) + "Id")
+          .description("EC2 instance " + (i + 1) + " ID")
+          .value(instance.getInstanceId())
+          .exportName(getResourceName("ec2-instance-" + (i + 1) + "-id"))
+          .build();
+
+      CfnOutput.Builder.create(this, "Ec2Instance" + (i + 1) + "PrivateIp")
+          .description("EC2 instance " + (i + 1) + " private IP")
+          .value(instance.getInstancePrivateIp())
+          .exportName(getResourceName("ec2-instance-" + (i + 1) + "-private-ip"))
+          .build();
+    }
+
+    // RDS outputs
+    CfnOutput.Builder.create(this, "RdsInstanceId")
+        .description("RDS instance identifier")
+        .value(rdsInstance.getInstanceIdentifier())
+        .exportName(getResourceName("rds-instance-id"))
+        .build();
+
+    CfnOutput.Builder.create(this, "RdsEndpoint")
+        .description("RDS instance endpoint")
+        .value(rdsInstance.getInstanceEndpoint().getHostname())
+        .exportName(getResourceName("rds-endpoint"))
+        .build();
+
+    CfnOutput.Builder.create(this, "RdsPort")
+        .description("RDS instance port")
+        .value(rdsInstance.getInstanceEndpoint().getPort().toString())
+        .exportName(getResourceName("rds-port"))
+        .build();
+
+    // S3 CloudTrail bucket output
+    CfnOutput.Builder.create(this, "CloudTrailBucketName")
+        .description("CloudTrail S3 bucket name")
+        .value(cloudTrailBucket.getBucketName())
+        .exportName(getResourceName("cloudtrail-bucket"))
+        .build();
+
+    // SNS topic output
+    CfnOutput.Builder.create(this, "AlertTopicArn")
+        .description("SNS topic ARN for alerts")
+        .value(alertTopic.getTopicArn())
+        .exportName(getResourceName("alert-topic-arn"))
+        .build();
+
+    // KMS key output
+    CfnOutput.Builder.create(this, "KmsKeyId")
+        .description("KMS key ID for encryption")
+        .value(kmsKey.getKeyId())
+        .exportName(getResourceName("kms-key-id"))
+        .build();
+
+    CfnOutput.Builder.create(this, "KmsKeyArn")
+        .description("KMS key ARN for encryption")
+        .value(kmsKey.getKeyArn())
+        .exportName(getResourceName("kms-key-arn"))
+        .build();
+
+    // Region and account information
+    CfnOutput.Builder.create(this, "Region")
+        .description("AWS region where resources are deployed")
+        .value(this.getRegion())
+        .exportName(getResourceName("region"))
+        .build();
+
+    CfnOutput.Builder.create(this, "Account")
+        .description("AWS account ID")
+        .value(this.getAccount())
+        .exportName(getResourceName("account"))
+        .build();
   }
 }
