@@ -5,5 +5,26 @@
   "turn_type": "multi",
   "po_id": "291601",
   "team": "3",
-  "startedAt": "2025-08-25T08:42:04.334Z"
+  "startedAt": "2025-08-25T08:42:04.334Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ]
 }
