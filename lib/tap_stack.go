@@ -239,6 +239,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	awscdk.NewCfnOutput(stack, jsii.String("RDSEndpoint"), &awscdk.CfnOutputProps{Value: rdsInstance.InstanceEndpoint().Hostname()})
 	awscdk.NewCfnOutput(stack, jsii.String("S3BucketName"), &awscdk.CfnOutputProps{Value: bucket.BucketName()})
 	awscdk.NewCfnOutput(stack, jsii.String("S3LoggingBucketName"), &awscdk.CfnOutputProps{Value: loggingBucket.BucketName()})
+	awscdk.NewCfnOutput(stack, jsii.String("SecurityGroupId"), &awscdk.CfnOutputProps{Value: ec2SecurityGroup.SecurityGroupId()})
+	awscdk.NewCfnOutput(stack, jsii.String("VPCCidr"), &awscdk.CfnOutputProps{Value: vpc.VpcCidrBlock()})
 
 	return &TapStack{
 		Stack:             stack,
