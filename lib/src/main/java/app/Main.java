@@ -127,7 +127,6 @@ final class TapStack extends Stack {
                                 .build())
                         .vpc(networkStack.getVpc())
                         .rdsSecurityGroup(networkStack.getRdsSecurityGroup())
-                        .kmsKey(securityStack.getKmsKey())
                         .rdsKmsKey(securityStack.getRdsKmsKey())
                         .build()
         );
@@ -141,7 +140,7 @@ final class TapStack extends Stack {
                                 .build())
                         .vpc(networkStack.getVpc())
                         .ecsSecurityGroup(networkStack.getEcsSecurityGroup())
-                        .kmsKey(securityStack.getKmsKey())
+
                         .ecsTaskRole(securityStack.getEcsTaskRole())
                         .ecsExecutionRole(securityStack.getEcsExecutionRole())
                         .databaseSecret(databaseStack.getDatabaseSecret())

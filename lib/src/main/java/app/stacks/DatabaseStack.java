@@ -44,7 +44,7 @@ public final class DatabaseStack extends Stack {
                                 .passwordLength(32)
                                 .build()
                 )
-                .encryptionKey(props.getKmsKey())
+                // KMS encryption can be configured separately to avoid cross-stack references
                 .build();
 
         SubnetGroup dbSubnetGroup = SubnetGroup.Builder.create(this, "DatabaseSubnetGroup")
@@ -94,16 +94,15 @@ public final class DatabaseStack extends Stack {
         private final StackProps stackProps;
         private final IVpc vpc;
         private final ISecurityGroup rdsSecurityGroup;
-        private final IKey kmsKey;
+
         private final IKey rdsKmsKey;
 
         private DatabaseStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
-                                 final ISecurityGroup rdsSecurityGroupValue, final IKey kmsKeyValue, 
+                                 final ISecurityGroup rdsSecurityGroupValue, 
                                  final IKey rdsKmsKeyValue) {
             this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.rdsSecurityGroup = rdsSecurityGroupValue;
-            this.kmsKey = kmsKeyValue;
             this.rdsKmsKey = rdsKmsKeyValue;
         }
 
@@ -123,9 +122,7 @@ public final class DatabaseStack extends Stack {
             return rdsSecurityGroup; 
         }
         
-        public IKey getKmsKey() { 
-            return kmsKey; 
-        }
+
         
         public IKey getRdsKmsKey() { 
             return rdsKmsKey; 
@@ -136,7 +133,7 @@ public final class DatabaseStack extends Stack {
             private StackProps stackPropsValue;
             private IVpc vpcValue;
             private ISecurityGroup rdsSecurityGroupValue;
-            private IKey kmsKeyValue;
+
             private IKey rdsKmsKeyValue;
 
             public Builder stackProps(final StackProps stackPropsParam) { 
@@ -154,10 +151,7 @@ public final class DatabaseStack extends Stack {
                 return this; 
             }
             
-            public Builder kmsKey(final IKey kmsKeyParam) { 
-                this.kmsKeyValue = kmsKeyParam; 
-                return this; 
-            }
+
             
             public Builder rdsKmsKey(final IKey rdsKmsKeyParam) { 
                 this.rdsKmsKeyValue = rdsKmsKeyParam; 
@@ -165,7 +159,7 @@ public final class DatabaseStack extends Stack {
             }
 
             public DatabaseStackProps build() {
-                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue, kmsKeyValue, rdsKmsKeyValue);
+                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue, rdsKmsKeyValue);
             }
         }
     }

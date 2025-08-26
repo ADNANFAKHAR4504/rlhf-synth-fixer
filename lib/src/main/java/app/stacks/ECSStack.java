@@ -22,7 +22,6 @@ import software.amazon.awscdk.services.ecs.Secret;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.logs.ILogGroup;
-import software.amazon.awscdk.services.logs.ILogGroup;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
 import software.constructs.Construct;
 
@@ -106,7 +105,7 @@ public final class ECSStack extends Stack {
         private final StackProps stackProps;
         private final IVpc vpc;
         private final ISecurityGroup ecsSecurityGroup;
-        private final IKey kmsKey;
+
         private final Role ecsTaskRole;
         private final Role ecsExecutionRole;
         private final ISecret databaseSecret;
@@ -115,13 +114,13 @@ public final class ECSStack extends Stack {
         @SuppressWarnings("checkstyle:ParameterNumber")
         private ECSStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
                              final ISecurityGroup ecsSecurityGroupValue, 
-                             final IKey kmsKeyValue, final Role ecsTaskRoleValue, 
+                             final Role ecsTaskRoleValue, 
                              final Role ecsExecutionRoleValue, final ISecret databaseSecretValue,
                              final ILogGroup logGroupValue) {
             this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.ecsSecurityGroup = ecsSecurityGroupValue;
-            this.kmsKey = kmsKeyValue;
+
             this.ecsTaskRole = ecsTaskRoleValue;
             this.ecsExecutionRole = ecsExecutionRoleValue;
             this.databaseSecret = databaseSecretValue;
@@ -144,9 +143,7 @@ public final class ECSStack extends Stack {
             return ecsSecurityGroup; 
         }
         
-        public IKey getKmsKey() { 
-            return kmsKey; 
-        }
+
         
         public Role getEcsTaskRole() { 
             return ecsTaskRole; 
@@ -169,7 +166,7 @@ public final class ECSStack extends Stack {
             private StackProps stackPropsValue;
             private IVpc vpcValue;
             private ISecurityGroup ecsSecurityGroupValue;
-            private IKey kmsKeyValue;
+
             private Role ecsTaskRoleValue;
             private Role ecsExecutionRoleValue;
             private ISecret databaseSecretValue;
@@ -190,10 +187,7 @@ public final class ECSStack extends Stack {
                 return this; 
             }
             
-            public Builder kmsKey(final IKey kmsKeyParam) { 
-                this.kmsKeyValue = kmsKeyParam; 
-                return this; 
-            }
+
             
             public Builder ecsTaskRole(final Role ecsTaskRoleParam) { 
                 this.ecsTaskRoleValue = ecsTaskRoleParam; 
@@ -216,7 +210,7 @@ public final class ECSStack extends Stack {
             }
 
             public ECSStackProps build() {
-                return new ECSStackProps(stackPropsValue, vpcValue, ecsSecurityGroupValue, kmsKeyValue, 
+                return new ECSStackProps(stackPropsValue, vpcValue, ecsSecurityGroupValue, 
                                        ecsTaskRoleValue, ecsExecutionRoleValue, databaseSecretValue, logGroupValue);
             }
         }
