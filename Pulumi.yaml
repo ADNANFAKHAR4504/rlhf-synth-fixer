@@ -9,9 +9,3 @@ config:
   environment:
     description: Target environment (development, testing, staging, production)
     default: development
-  
-backend:
-  url: file://./
-
-options:
-  refreshOnPreview: true
