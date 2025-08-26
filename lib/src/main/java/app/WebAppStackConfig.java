@@ -23,7 +23,7 @@ public class WebAppStackConfig {
 
     // Instance configuration with defaults
     this.instanceType =
-      Optional.ofNullable(System.getenv("INSTANCE_TYPE")).orElse("t3.micro");
+      Optional.ofNullable(System.getenv("INSTANCE_TYPE")).orElse("t4g.micro");
   }
 
   public String getAwsRegion() {
