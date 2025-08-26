@@ -108,6 +108,18 @@ final class TapStackProps {
 final class TapStack extends Stack {
     private final String environmentSuffix;
     private final Environment stackEnvironment;
+    private final IVpc vpc;
+    private final ISecurityGroup ecsSecurityGroup;
+    private final ISecurityGroup rdsSecurityGroup;
+    private final IKey kmsKey;
+    private final IKey rdsKmsKey;
+    private final ILogGroup ecsLogGroup;
+    private final Role ecsTaskRole;
+    private final Role ecsExecutionRole;
+    private final ISecret databaseSecret;
+    private final ISubnetGroup dbSubnetGroup;
+    private final IDatabaseInstance database;
+    private final ICluster cluster;
 
     /**
      * Constructs a new TapStack.
@@ -132,8 +144,26 @@ final class TapStack extends Stack {
                         .region("us-east-1")
                         .build();
 
-        // Create VPC with public and private subnets across 2 AZs
-        IVpc vpc = Vpc.Builder.create(this, "SecureVPC")
+        // Create infrastructure components
+        this.vpc = createVpc();
+        this.ecsSecurityGroup = createEcsSecurityGroup();
+        this.rdsSecurityGroup = createRdsSecurityGroup();
+        this.kmsKey = createGeneralKmsKey();
+        this.rdsKmsKey = createRdsKmsKey();
+        this.ecsLogGroup = createEcsLogGroup();
+        this.ecsTaskRole = createEcsTaskRole();
+        this.ecsExecutionRole = createEcsExecutionRole();
+        this.databaseSecret = createDatabaseSecret();
+        this.dbSubnetGroup = createDatabaseSubnetGroup();
+        this.database = createDatabase();
+        this.cluster = createEcsCluster();
+
+        // Create outputs
+        createOutputs();
+    }
+
+    private IVpc createVpc() {
+        return Vpc.Builder.create(this, "SecureVPC")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
                 .maxAzs(2)
                 .natGateways(2)
@@ -157,77 +187,90 @@ final class TapStack extends Stack {
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
                 .build();
+    }
 
-        // Security group for ECS tasks
-        ISecurityGroup ecsSecurityGroup = SecurityGroup.Builder.create(this, "ECSSecurityGroup")
+    private ISecurityGroup createEcsSecurityGroup() {
+        ISecurityGroup securityGroup = SecurityGroup.Builder.create(this, "ECSSecurityGroup")
                 .vpc(vpc)
                 .description("Security group for ECS tasks")
                 .allowAllOutbound(true)
                 .build();
 
         // Allow inbound HTTPS traffic
-        ecsSecurityGroup.addIngressRule(
+        securityGroup.addIngressRule(
                 Peer.anyIpv4(),
                 Port.tcp(443),
                 "Allow HTTPS inbound"
         );
 
         // Allow inbound HTTP traffic (for ALB health checks)
-        ecsSecurityGroup.addIngressRule(
+        securityGroup.addIngressRule(
                 Peer.anyIpv4(),
                 Port.tcp(80),
                 "Allow HTTP inbound"
         );
 
-        // Security group for RDS
-        ISecurityGroup rdsSecurityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup")
+        return securityGroup;
+    }
+
+    private ISecurityGroup createRdsSecurityGroup() {
+        ISecurityGroup securityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup")
                 .vpc(vpc)
                 .description("Security group for RDS database")
                 .allowAllOutbound(false)
                 .build();
 
         // Allow ECS tasks to connect to RDS on port 5432 (PostgreSQL)
-        rdsSecurityGroup.addIngressRule(
+        securityGroup.addIngressRule(
                 ecsSecurityGroup,
                 Port.tcp(5432),
                 "Allow ECS tasks to connect to RDS"
         );
 
-        // Create KMS keys
-        IKey kmsKey = Key.Builder.create(this, "GeneralKMSKey")
+        return securityGroup;
+    }
+
+    private IKey createGeneralKmsKey() {
+        return Key.Builder.create(this, "GeneralKMSKey")
                 .description("General purpose KMS key for the application")
                 .enableKeyRotation(true)
                 .build();
+    }
 
-        IKey rdsKmsKey = Key.Builder.create(this, "RDSKMSKey")
+    private IKey createRdsKmsKey() {
+        return Key.Builder.create(this, "RDSKMSKey")
                 .description("KMS key for RDS encryption")
                 .enableKeyRotation(true)
                 .build();
+    }
 
-        // Create ECS log group
-        ILogGroup ecsLogGroup = LogGroup.Builder.create(this, "ECSLogGroup")
+    private ILogGroup createEcsLogGroup() {
+        return LogGroup.Builder.create(this, "ECSLogGroup")
                 .logGroupName(String.format("/aws/ecs/tap/%s", environmentSuffix))
                 .retention(RetentionDays.ONE_MONTH)
                 .build();
+    }
 
-        // Create ECS task role
-        Role ecsTaskRole = Role.Builder.create(this, "ECSTaskRole")
+    private Role createEcsTaskRole() {
+        return Role.Builder.create(this, "ECSTaskRole")
                 .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))
                 .managedPolicies(List.of(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
                 ))
                 .build();
+    }
 
-        // Create ECS execution role
-        Role ecsExecutionRole = Role.Builder.create(this, "ECSExecutionRole")
+    private Role createEcsExecutionRole() {
+        return Role.Builder.create(this, "ECSExecutionRole")
                 .assumedBy(new ServicePrincipal("ecs-tasks.amazonaws.com"))
                 .managedPolicies(List.of(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonECSTaskExecutionRolePolicy")
                 ))
                 .build();
+    }
 
-        // Create database secret
-        ISecret databaseSecret = Secret.Builder.create(this, "DatabaseSecret")
+    private ISecret createDatabaseSecret() {
+        return Secret.Builder.create(this, "DatabaseSecret")
                 .description("Database credentials")
                 .generateSecretString(SecretStringGenerator.builder()
                         .secretStringTemplate("{\"username\":\"admin\"}")
@@ -236,16 +279,18 @@ final class TapStack extends Stack {
                         .excludeCharacters("\"@/\\")
                         .build())
                 .build();
+    }
 
-        // Create database subnet group
-        ISubnetGroup dbSubnetGroup = SubnetGroup.Builder.create(this, "DatabaseSubnetGroup")
+    private ISubnetGroup createDatabaseSubnetGroup() {
+        return SubnetGroup.Builder.create(this, "DatabaseSubnetGroup")
                 .description("Subnet group for RDS database")
                 .vpc(vpc)
                 .subnetGroupName("database-subnet-group")
                 .build();
+    }
 
-        // Create RDS database
-        IDatabaseInstance database = DatabaseInstance.Builder.create(this, "Database")
+    private IDatabaseInstance createDatabase() {
+        return DatabaseInstance.Builder.create(this, "Database")
                 .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
                         .version(PostgresEngineVersion.VER_15_4)
                         .build()))
@@ -264,16 +309,17 @@ final class TapStack extends Stack {
                 .monitoringInterval(Duration.seconds(60))
                 .enablePerformanceInsights(true)
                 .build();
+    }
 
-        // Create ECS cluster
-        ICluster cluster = Cluster.Builder.create(this, "ECSCluster")
+    private ICluster createEcsCluster() {
+        return Cluster.Builder.create(this, "ECSCluster")
                 .clusterName(String.format("tap-cluster-%s", environmentSuffix))
                 .vpc(vpc)
                 .containerInsights(true)
                 .build();
+    }
 
-        // ECS service will be added later when container definition is properly configured
-
+    private void createOutputs() {
         CfnOutput.Builder.create(this, "VPCId")
                 .value(vpc.getVpcId())
                 .description("VPC ID")
