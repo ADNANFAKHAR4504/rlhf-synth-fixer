@@ -1,23 +1,14 @@
 {
-  "po_id": "trainr302",
-  "problem_id": "Multi-Environment-Consistency-CloudFormation-YAML-8j28xnav4r2c",
-  "difficulty": "expert",
   "platform": "cdk",
   "language": "ts",
-  "original_platform": "CloudFormation",
-  "original_language": "YAML",
-  "task_type": "Multi-Environment Consistency & Replication",
-  "description": "Multi-region AWS infrastructure with S3 cross-region replication, IAM roles for Lambda, and consistent tagging",
-  "regions": ["us-east-1", "eu-west-1", "ap-southeast-1"],
-  "constraints": [
-    "Resources must be available in us-east-1, eu-west-1, and ap-southeast-1 regions",
-    "All IAM resources must have tags using format 'Environment:Production'",
-    "Template must accommodate additions and modifications with minimal risk"
-  ],
-  "subtask": "General Infrastructure Provisioning",
+  "complexity": "expert",
+  "po_id": "trainr302",
+  "team": "infrastructure",
+  "startedAt": "2024-01-15T10:00:00Z",
+  "subtask": "Multi-Environment Consistency & Replication",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization", 
+    "IaC Optimization",
     "Security Configuration",
     "Resource Scaling",
     "Access Control"
@@ -27,5 +18,6 @@
     "S3",
     "IAM",
     "CloudFormation"
-  ]
+  ],
+  "author": "shreyaspturing"
 }
