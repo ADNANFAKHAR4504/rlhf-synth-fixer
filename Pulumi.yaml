@@ -5,7 +5,7 @@ description: Enterprise AWS infrastructure migration solution with multi-environ
 config:
   aws:region:
     description: AWS region for deployment
-    default: us-east-1
+    value: us-east-1
   environment:
     description: Target environment (development, testing, staging, production)
     default: development
