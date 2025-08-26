@@ -6,10 +6,7 @@ import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
-import {
-  ConfigServiceClient,
-  DescribeConfigurationRecordersCommand
-} from '@aws-sdk/client-config-service';
+
 import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
@@ -17,8 +14,7 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   GetRoleCommand,
-  IAMClient,
-  ListAttachedRolePoliciesCommand
+  IAMClient
 } from '@aws-sdk/client-iam';
 import {
   DescribeKeyCommand,
@@ -44,7 +40,7 @@ const region = process.env.AWS_REGION || 'us-east-1';
 // AWS SDK clients
 const ec2Client = new EC2Client({ region });
 const kmsClient = new KMSClient({ region });
-const configClient = new ConfigServiceClient({ region });
+
 const cloudWatchClient = new CloudWatchClient({ region });
 const iamClient = new IAMClient({ region });
 const cloudTrailClient = new CloudTrailClient({ region });
@@ -176,27 +172,7 @@ describe('Security and Compliance Integration Tests', () => {
       expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
     });
 
-    test('should validate Config role permissions', async () => {
-      const command = new GetRoleCommand({
-        RoleName: `${outputs.StackName}-ConfigRole`
-      });
 
-      const response = await iamClient.send(command);
-      expect(response.Role).toBeDefined();
-
-      const policiesCommand = new ListAttachedRolePoliciesCommand({
-        RoleName: `${outputs.StackName}-ConfigRole`
-      });
-
-      const policiesResponse = await iamClient.send(policiesCommand);
-      expect(policiesResponse.AttachedPolicies).toBeDefined();
-      expect(policiesResponse.AttachedPolicies!.length).toBeGreaterThan(0);
-
-      const hasConfigPolicy = policiesResponse.AttachedPolicies!.some(
-        policy => policy.PolicyName === 'AWS_ConfigRole'
-      );
-      expect(hasConfigPolicy).toBe(true);
-    });
   });
 
   describe('Monitoring and Logging', () => {
@@ -213,15 +189,6 @@ describe('Security and Compliance Integration Tests', () => {
       expect(alarm.MetricName).toBe('CPUUtilization');
     });
 
-    test('should validate AWS Config recorder', async () => {
-      const command = new DescribeConfigurationRecordersCommand({});
-      const response = await configClient.send(command);
-
-      expect(response.ConfigurationRecorders).toHaveLength(1);
-      const recorder = response.ConfigurationRecorders![0];
-      expect(recorder.recordingGroup?.allSupported).toBe(true);
-      expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
-    });
 
     test('should validate CloudTrail configuration', async () => {
       const command = new GetTrailCommand({

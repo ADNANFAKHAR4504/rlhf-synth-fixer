@@ -156,29 +156,6 @@ Resources:
         - Key: Name
           Value: !Sub "myapp-ec2-sg-${Environment}"
 
-  # AWS Config
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub "myapp-config-recorder-${Environment}"
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-      RoleARN: !GetAtt ConfigRole.Arn
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-
   # CloudTrail
   CloudTrailBucket:
     Type: AWS::S3::Bucket

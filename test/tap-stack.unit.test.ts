@@ -91,25 +91,24 @@ describe('Security-Focused CloudFormation Template', () => {
 
     describe('IAM Role Configuration', () => {
       test('should not have overly permissive IAM policies', () => {
-        // Check ConfigRole and CloudTrailRole policies
-        [template.Resources.ConfigRole, template.Resources.CloudTrailRole].forEach(role => {
-          expect(role.Type).toBe('AWS::IAM::Role');
+        // Check CloudTrailRole policies
+        const role = template.Resources.CloudTrailRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
 
-          if (role.Properties.Policies) {
-            role.Properties.Policies.forEach((policy: any) => {
-              policy.PolicyDocument.Statement.forEach((statement: any) => {
-                if (statement.Effect === 'Allow') {
-                  expect(statement.Action).not.toBe('*');
-                  if (Array.isArray(statement.Action)) {
-                    statement.Action.forEach((action: string) => {
-                      expect(action).not.toBe('*');
-                    });
-                  }
+        if (role.Properties.Policies) {
+          role.Properties.Policies.forEach((policy: any) => {
+            policy.PolicyDocument.Statement.forEach((statement: any) => {
+              if (statement.Effect === 'Allow') {
+                expect(statement.Action).not.toBe('*');
+                if (Array.isArray(statement.Action)) {
+                  statement.Action.forEach((action: string) => {
+                    expect(action).not.toBe('*');
+                  });
                 }
-              });
+              }
             });
-          }
-        });
+          });
+        }
       });
     });
 
@@ -136,13 +135,6 @@ describe('Security-Focused CloudFormation Template', () => {
     });
 
     describe('Monitoring Configuration', () => {
-      test('should have AWS Config recorder enabled', () => {
-        const configRecorder = template.Resources.ConfigRecorder;
-        expect(configRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-        expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
-        expect(configRecorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
-      });
-
       test('should have CloudTrail configured', () => {
         const trail = template.Resources.CloudTrail;
         expect(trail.Type).toBe('AWS::CloudTrail::Trail');
