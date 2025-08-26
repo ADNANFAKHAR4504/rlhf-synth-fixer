@@ -1,6 +1,8 @@
 {
   "task_id": "trainr354",
   "subtask": "General Infrastructure Provisioning",
+  "platform": "pulumi",
+  "language": "go",
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Network Configuration",
