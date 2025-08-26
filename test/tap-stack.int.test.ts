@@ -354,7 +354,7 @@ describe('TapStack Integration Tests', () => {
     it('should fail to describe a non-existent ALB', async () => {
       await expect(
         elbv2.describeLoadBalancers({ LoadBalancerArns: [`arn:aws:elasticloadbalancing:us-east-1:${accountId}:loadbalancer/app/nonexistent-alb/1234567890abcdef`] }).promise()
-      ).rejects.toThrow('not a valid load balancer ARN');
+      ).rejects.toThrow('One or more load balancers not found');
     });
   });
 
