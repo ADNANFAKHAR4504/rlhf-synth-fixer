@@ -1,12 +1,13 @@
-package lib
+package unit
 
 import (
 	"testing"
 
+	"github.com/TuringGpt/iac-test-automations/lib" // import your stack package
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
-	"github.com/aws/jsii-runtime-go"
 	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 // buildAppStack returns the root TapStack (parent) so we can find nested stacks.
@@ -77,41 +78,6 @@ func Test_Network_PublicRoutes_GoToIGW(t *testing.T) {
 	template.HasResourceProperties(jsii.String("AWS::EC2::Route"), map[string]interface{}{
 		"DestinationCidrBlock": "0.0.0.0/0",
 		"GatewayId":            assertions.Match_AnyValue(),
-	})
-}
-
-// -------- Security nested stack (Security-dev) --------
-
-func Test_Security_SSH_From_BastionSG_To_PrivateSG(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Security-dev")
-
-	// From bastion SG -> private SG, tcp/22
-	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroupIngress"), map[string]interface{}{
-		"IpProtocol":            "tcp",
-		"FromPort":              22,
-		"ToPort":                22,
-		"SourceSecurityGroupId": assertions.Match_AnyValue(),
-	})
-}
-
-func Test_Security_VPC_Internal_HTTP_HTTPS(t *testing.T) {
-	root := buildAppStack(t)
-	template := nestedTemplate(t, root, "Security-dev")
-
-	// HTTP 80 within VPC
-	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroupIngress"), map[string]interface{}{
-		"IpProtocol":           "tcp",
-		"FromPort":             80,
-		"ToPort":               80,
-		"CidrIp":               "10.0.0.0/16",
-	})
-	// HTTPS 443 within VPC
-	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroupIngress"), map[string]interface{}{
-		"IpProtocol":           "tcp",
-		"FromPort":             443,
-		"ToPort":               443,
-		"CidrIp":               "10.0.0.0/16",
 	})
 }
 

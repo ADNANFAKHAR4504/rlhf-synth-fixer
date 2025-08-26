@@ -3,8 +3,8 @@ package lib
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -152,7 +152,7 @@ type ComputeNestedStack struct {
 
 type ComputeNestedStackProps struct {
 	awscdk.NestedStackProps
-	Vpc      awsec2.IVpc
+	Vpc       awsec2.IVpc
 	BastionSG awsec2.ISecurityGroup
 }
 
@@ -278,17 +278,17 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	network := NewNetworkNestedStack(stack, jsii.String("Network-"+environmentSuffix), &awscdk.NestedStackProps{})
 	security := NewSecurityNestedStack(stack, jsii.String("Security-"+environmentSuffix), &SecurityNestedStackProps{
 		NestedStackProps: awscdk.NestedStackProps{},
-		Vpc:             network.Vpc,
+		Vpc:              network.Vpc,
 	})
 	compute := NewComputeNestedStack(stack, jsii.String("Compute-"+environmentSuffix), &ComputeNestedStackProps{
 		NestedStackProps: awscdk.NestedStackProps{},
-		Vpc:             network.Vpc,
-		BastionSG:       security.BastionSG,
+		Vpc:              network.Vpc,
+		BastionSG:        security.BastionSG,
 	})
 	_ = NewStorageNestedStack(stack, jsii.String("Storage-"+environmentSuffix), &awscdk.NestedStackProps{})
 	_ = NewObservabilityNestedStack(stack, jsii.String("Observability-"+environmentSuffix), &ObservabilityNestedStackProps{
 		NestedStackProps: awscdk.NestedStackProps{},
-		Vpc:             network.Vpc,
+		Vpc:              network.Vpc,
 	})
 
 	// Useful outputs
