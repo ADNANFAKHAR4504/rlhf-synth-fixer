@@ -257,8 +257,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     test('S3 bucket names contain project identifier', () => {
-      expect(outputs['s3_bucket_names_main_use1']).toContain('iac-aws-nova-model-breaking');
-      expect(outputs['s3_bucket_names_main_apse2']).toContain('iac-aws-nova-model-breaking');
+      expect(outputs['s3_bucket_names_main_use1']).toContain('tap-development-main-use1');
+      expect(outputs['s3_bucket_names_main_apse2']).toContain('tap-development-main-apse2');
     });
   });
 
@@ -270,7 +270,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(outputs['cloudtrail_arns_use1']).toMatch(arnPattern);
         expect(outputs['cloudtrail_arns_use1']).toContain(':us-east-1:');
       }
-      
+
       if (outputs['cloudtrail_arns_apse2'] && outputs['cloudtrail_arns_apse2'] !== 'null') {
         const arnPattern = /^arn:aws:cloudtrail:[\w-]+:\d{12}:trail\/.+$/;
         expect(outputs['cloudtrail_arns_apse2']).toMatch(arnPattern);
@@ -285,7 +285,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(outputs['waf_web_acl_arns_use1']).toMatch(arnPattern);
         expect(outputs['waf_web_acl_arns_use1']).toContain(':us-east-1:');
       }
-      
+
       if (outputs['waf_web_acl_arns_apse2'] && outputs['waf_web_acl_arns_apse2'] !== 'null') {
         const arnPattern = /^arn:aws:wafv2:[\w-]+:\d{12}:(global|regional)\/webacl\/.+$/;
         expect(outputs['waf_web_acl_arns_apse2']).toMatch(arnPattern);
@@ -331,8 +331,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       expect(outputs['ecs_cluster_names_use1']).toContain(projectPrefix);
       expect(outputs['ecs_cluster_names_apse2']).toContain(projectPrefix);
-      expect(outputs['s3_bucket_names_main_use1']).toContain('iac-aws-nova-model-breaking');
-      expect(outputs['s3_bucket_names_main_apse2']).toContain('iac-aws-nova-model-breaking');
+      expect(outputs['s3_bucket_names_main_use1']).toContain('tap-development-main-use1');
+      expect(outputs['s3_bucket_names_main_apse2']).toContain('tap-development-main-apse2');
     });
 
     test('all outputs contain environment information', () => {
@@ -352,7 +352,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       // US East 1 resources
       expect(outputs['ecs_cluster_names_use1']).toContain('-use1');
       expect(outputs['s3_bucket_names_main_use1']).toContain('-use1-');
-      
+
       // AP Southeast 2 resources  
       expect(outputs['ecs_cluster_names_apse2']).toContain('-apse2');
       expect(outputs['s3_bucket_names_main_apse2']).toContain('-apse2-');
@@ -384,7 +384,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(subnetA).toBeDefined();
         expect(subnetB).toBeDefined();
         expect(subnetA).not.toBe(subnetB);
-        
+
         // Subnets should be different but in same VPC (can't directly test without AWS API)
         expect(subnetA).toMatch(/^subnet-[a-f0-9]{17}$/);
         expect(subnetB).toMatch(/^subnet-[a-f0-9]{17}$/);
@@ -415,7 +415,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     test('validates output key naming convention', () => {
       const allOutputKeys = Object.keys(outputs);
-      
+
       expect(allOutputKeys.length).toBeGreaterThan(0);
 
       // Ensure all keys follow expected naming patterns
