@@ -42,11 +42,11 @@ public final class ECSStack extends Stack {
             environmentSuffix = "dev";
         }
 
-        // Create ECS cluster with container insights v2 enabled
+        // Create ECS cluster with container insights enabled
         this.cluster = Cluster.Builder.create(this, "WebAppCluster")
                 .vpc(props.getVpc())
                 .clusterName("secure-webapp-cluster-" + environmentSuffix)
-                .containerInsightsV2(true)
+                .containerInsights(true)
                 .build();
 
         // Create log group for ECS tasks with KMS encryption
