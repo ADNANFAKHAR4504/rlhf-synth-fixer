@@ -324,7 +324,7 @@ class TapStack extends Stack {
         .databaseName("webapp")
         .credentials(Credentials.fromGeneratedSecret("admin"))
         .monitoringInterval(Duration.minutes(1))
-        .enablePerformanceInsights(true)
+        // Remove Performance Insights as it's not supported on t3.micro
         .build();
   }
 
