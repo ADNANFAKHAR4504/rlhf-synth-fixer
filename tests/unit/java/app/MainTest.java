@@ -100,8 +100,9 @@ public class MainTest {
         Main.FaultTolerantStack stack = createTestStack(app, "TestAlarm");
         Template template = Template.fromStack(stack);
 
+        // Updated threshold from 70 -> 80 to match Main.java
         template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
-                "Threshold", 70
+                "Threshold", 80
         ));
     }
 

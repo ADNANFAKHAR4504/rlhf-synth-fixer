@@ -9,21 +9,73 @@ import software.amazon.awscdk.RemovalPolicy;
 
 import software.constructs.Construct;
 
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.autoscaling.*;
-import software.amazon.awscdk.services.elasticloadbalancingv2.*;
-import software.amazon.awscdk.services.s3.*;
-import software.amazon.awscdk.services.iam.*;
-import software.amazon.awscdk.services.rds.*;
-import software.amazon.awscdk.services.cloudwatch.*;
-import software.amazon.awscdk.services.cloudwatch.actions.*;
-import software.amazon.awscdk.services.route53.*;
-import software.amazon.awscdk.services.route53.targets.*;
-import software.amazon.awscdk.services.sns.*;
+// EC2
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Vpc;
+
+// AutoScaling
+import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+
+// ELBv2
+import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetsProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
+import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
+
+// S3
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+
+// IAM
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;  // ✅ FIXED
+
+// RDS
+import software.amazon.awscdk.services.rds.Credentials;
+import software.amazon.awscdk.services.rds.DatabaseInstance;
+import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.PostgresEngineVersion;
+import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+
+// CloudWatch
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+
+// CloudWatch → SNS
+import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;
+
+// Route53
+import software.amazon.awscdk.services.route53.ARecord;
+import software.amazon.awscdk.services.route53.HostedZone;
+import software.amazon.awscdk.services.route53.HostedZoneAttributes;
+import software.amazon.awscdk.services.route53.IHostedZone;
+import software.amazon.awscdk.services.route53.RecordTarget;
+
+// Route53 alias target for ALB
+import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;  // ✅ FIXED
+
+// SNS
+import software.amazon.awscdk.services.sns.Topic;
 
 import java.util.List;
 
-public class Main {
+public final class Main {   // Final utility class
+
+    private Main() {
+        // Prevent instantiation
+    }
+
     public static void main(final String[] args) {
         App app = new App();
 
