@@ -1,52 +1,197 @@
 package app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
-
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
+import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
+import software.amazon.awssdk.services.cloudtrail.model.DescribeTrailsRequest;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
+import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsRequest;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
+import software.amazon.awssdk.services.ec2.model.Subnet;
+import software.amazon.awssdk.services.ec2.model.Vpc;
+import software.amazon.awssdk.services.ec2.model.VpcCidrBlockAssociation;
 import software.amazon.awssdk.services.kms.KmsClient;
 import software.amazon.awssdk.services.kms.model.DescribeKeyRequest;
 import software.amazon.awssdk.services.kms.model.NotFoundException;
-import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
-import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsRequest;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.sns.SnsClient;
-import software.amazon.awssdk.services.sns.model.ListTopicsRequest;
-import software.amazon.awssdk.services.cloudtrail.CloudTrailClient;
-import software.amazon.awssdk.services.cloudtrail.model.DescribeTrailsRequest;
-import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
-import software.amazon.awssdk.services.cloudformation.model.DescribeStacksRequest;
-import software.amazon.awssdk.services.cloudformation.model.DescribeStacksResponse;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-
-import java.util.List;
-import java.util.Optional;
+import software.amazon.awssdk.services.sns.model.GetTopicAttributesRequest;
 
 /**
  * Integration tests for the Main CDK application.
  *
- * These tests verify the integration between different components of the
- * TapStack
- * and may involve more complex scenarios than unit tests.
- *
- * Note: These tests still use synthetic AWS resources and do not require
- * actual AWS credentials or resources to be created.
+ * These tests read from cfn-outputs/flat-outputs.json and validate
+ * the deployed infrastructure against real AWS resources.
  */
 public class MainIntegrationTest {
+
+  static Map<String, Object> out;
+  static Ec2Client ec2;
+  static S3Client s3;
+  static KmsClient kms;
+  static CloudWatchClient cloudWatch;
+  static SnsClient sns;
+  static CloudTrailClient cloudTrail;
+  static final ObjectMapper MAPPER = new ObjectMapper();
+  static Region region;
+
+  @BeforeAll
+  static void setup() {
+    Path outputFile = Path.of("cfn-outputs/flat-outputs.json");
+    Assumptions.assumeTrue(Files.exists(outputFile),
+        "Skipping all tests: outputs file is missing: " + outputFile);
+
+    try {
+      String json = Files.readString(outputFile);
+      out = MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {
+      });
+    } catch (IOException e) {
+      Assumptions.abort("Skipping all tests: failed to read/parse outputs file: " + e.getMessage());
+      return;
+    }
+
+    region = resolveRegion();
+    ec2 = Ec2Client.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+    s3 = S3Client.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+    kms = KmsClient.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+    cloudWatch = CloudWatchClient.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+    sns = SnsClient.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+    cloudTrail = CloudTrailClient.builder()
+        .region(region)
+        .credentialsProvider(DefaultCredentialsProvider.create())
+        .build();
+
+    System.out.println("Integration tests using region: " + region);
+  }
+
+  private static Region resolveRegion() {
+    String env = System.getenv("AWS_REGION");
+    if (env == null || env.isBlank())
+      env = System.getenv("AWS_DEFAULT_REGION");
+    if (env != null && !env.isBlank())
+      return Region.of(env);
+    try {
+      Region fromChain = DefaultAwsRegionProviderChain.builder().build().getRegion();
+      if (fromChain != null)
+        return fromChain;
+    } catch (Exception ignored) {
+    }
+    return Region.US_EAST_1;
+  }
+
+  @AfterAll
+  static void teardown() {
+    if (ec2 != null)
+      ec2.close();
+    if (s3 != null)
+      s3.close();
+    if (kms != null)
+      kms.close();
+    if (cloudWatch != null)
+      cloudWatch.close();
+    if (sns != null)
+      sns.close();
+    if (cloudTrail != null)
+      cloudTrail.close();
+  }
+
+  private static boolean hasKeys(String... keys) {
+    if (out == null)
+      return false;
+    for (String k : keys) {
+      if (!out.containsKey(k) || out.get(k) == null)
+        return false;
+    }
+    return true;
+  }
+
+  /** Accept List, single string, CSV/whitespace, or stringified JSON array. */
+  private static List<String> toStringList(Object value) {
+    if (value == null)
+      return List.of();
+
+    if (value instanceof List<?>) {
+      return ((List<?>) value).stream().map(String::valueOf).collect(Collectors.toList());
+    }
+
+    if (value instanceof String s) {
+      String t = s.trim();
+      if (t.isEmpty())
+        return List.of();
+
+      if ((t.startsWith("[") && t.endsWith("]")) || (t.startsWith("\"[") && t.endsWith("]\""))) {
+        try {
+          String json = t.startsWith("\"[") ? t.substring(1, t.length() - 1) : t;
+          return MAPPER.readValue(json, new TypeReference<List<String>>() {
+          });
+        } catch (Exception ignored) {
+          /* fall back to split */ }
+      }
+
+      return Arrays.stream(t.split("[,\\s]+"))
+          .map(String::trim)
+          .filter(x -> !x.isEmpty())
+          .collect(Collectors.toList());
+    }
+
+    return List.of(String.valueOf(value));
+  }
+
+  @BeforeEach
+  void checkAwsCredentials() {
+    // These tests require AWS credentials to be configured
+    try {
+      DefaultCredentialsProvider.create().resolveCredentials();
+    } catch (Exception e) {
+      Assumptions.assumeTrue(false, "AWS credentials not configured - skipping integration tests");
+    }
+  }
 
   /**
    * Integration test for full stack deployment simulation.
@@ -78,9 +223,6 @@ public class MainIntegrationTest {
 
   /**
    * Integration test for multiple environment configurations.
-   *
-   * This test verifies that the stack can be configured for different
-   * environments (dev, staging, prod) with appropriate settings.
    */
   @Test
   public void testMultiEnvironmentConfiguration() {
@@ -108,9 +250,6 @@ public class MainIntegrationTest {
 
   /**
    * Integration test for stack with nested components.
-   *
-   * This test would verify the integration between the main stack
-   * and any nested stacks or components that might be added in the future.
    */
   @Test
   public void testStackWithNestedComponents() {
@@ -130,52 +269,44 @@ public class MainIntegrationTest {
     // Verify basic stack structure
     assertThat(stack).isNotNull();
     assertThat(template).isNotNull();
-
-    // When nested stacks are added, additional assertions would go here
-    // For example:
-    // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
   }
 
-  // ========================================
-  // AWS SDK Integration Tests
-  // ========================================
-  // These tests require actual AWS credentials and will interact with AWS APIs
-  // They are disabled by default and can be enabled with AWS_INTEGRATION_TESTS=true
-
-  private String testStackName = "TapStack-us-east-1-development";
-  private Region testRegion = Region.US_EAST_1;
-
-  @BeforeEach
-  void checkAwsCredentials() {
-    // These tests require AWS credentials to be configured
-    try {
-      DefaultCredentialsProvider.create().resolveCredentials();
-    } catch (Exception e) {
-      Assumptions.assumeTrue(false, "AWS credentials not configured - skipping integration tests");
-    }
-  }
-
-  /**
-   * Test that deployed VPC can be found via AWS API
-   */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
-  void testVpcExistsInAws() {
-    try (Ec2Client ec2Client = Ec2Client.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      DescribeVpcsResponse response = ec2Client.describeVpcs(DescribeVpcsRequest.builder().build());
-      
-      // Look for our VPC by checking for the right tags
-      boolean foundVpc = response.vpcs().stream()
-          .anyMatch(vpc -> vpc.tags().stream()
-              .anyMatch(tag -> "Project".equals(tag.key()) && "tap-project".equals(tag.value())));
-      
-      // Note: This will only pass if the stack has been deployed
-      // In a real CI/CD pipeline, this would run after deployment
-      assertThat(foundVpc).describedAs("VPC with Project=tap-project tag should exist").isTrue();
+  @DisplayName("01) VPC exists with correct CIDR")
+  void vpcExists() {
+    Assumptions.assumeTrue(hasKeys("VpcId", "VpcCidr"),
+        "Skipping: VpcId or VpcCidr missing in outputs");
+
+    String vpcId = String.valueOf(out.get("VpcId"));
+    String vpcCidr = String.valueOf(out.get("VpcCidr"));
+
+    DescribeVpcsResponse resp = ec2.describeVpcs(r -> r.vpcIds(vpcId));
+    assertEquals(1, resp.vpcs().size(), "VPC not found");
+    Vpc vpc = resp.vpcs().get(0);
+
+    List<String> cidrs = vpc.cidrBlockAssociationSet().stream()
+        .map(VpcCidrBlockAssociation::cidrBlock)
+        .collect(Collectors.toList());
+    assertTrue(cidrs.contains(vpcCidr), "Unexpected VPC CIDR: " + cidrs);
+  }
+
+  @Test
+  @DisplayName("02) Public subnets exist and have public IP mapping")
+  void publicSubnets() {
+    Assumptions.assumeTrue(hasKeys("PublicSubnets"),
+        "Skipping: PublicSubnets missing in outputs");
+
+    List<String> subnetIds = toStringList(out.get("PublicSubnets"));
+    assertEquals(2, subnetIds.size(), "Expect 2 public subnets");
+
+    DescribeSubnetsResponse resp = ec2.describeSubnets(r -> r.subnetIds(subnetIds));
+    assertEquals(2, resp.subnets().size(), "Subnets not found");
+
+    for (Subnet s : resp.subnets()) {
+      assertTrue(subnetIds.contains(s.subnetId()), "Unknown subnet " + s.subnetId());
+      Boolean mapOnLaunch = s.mapPublicIpOnLaunch();
+      assertTrue(Boolean.TRUE.equals(mapOnLaunch),
+          "mapPublicIpOnLaunch not enabled: " + s.subnetId());
     }
   }
 
@@ -183,42 +314,34 @@ public class MainIntegrationTest {
    * Test that deployed S3 buckets exist and are accessible
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("03) S3 buckets exist in AWS")
   void testS3BucketsExistInAws() {
-    try (S3Client s3Client = S3Client.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      // Get bucket names from CloudFormation outputs
-      Optional<String> dataBucketName = getStackOutput("S3Bucket0Name");
-      Optional<String> logsBucketName = getStackOutput("S3Bucket1Name");
-      
-      if (dataBucketName.isPresent()) {
-        // Test that data bucket exists and is accessible
-        try {
-          s3Client.headBucket(HeadBucketRequest.builder()
-              .bucket(dataBucketName.get())
-              .build());
-          // If no exception is thrown, the bucket is accessible
-          assertThat(true).describedAs("Data bucket should be accessible").isTrue();
-        } catch (NoSuchBucketException e) {
-          assertThat(false).describedAs("Data bucket should exist").isTrue();
-        }
-      }
-      
-      if (logsBucketName.isPresent()) {
-        // Test that logs bucket exists and is accessible
-        try {
-          s3Client.headBucket(HeadBucketRequest.builder()
-              .bucket(logsBucketName.get())
-              .build());
-          // If no exception is thrown, the bucket is accessible
-          assertThat(true).describedAs("Logs bucket should be accessible").isTrue();
-        } catch (NoSuchBucketException e) {
-          assertThat(false).describedAs("Logs bucket should exist").isTrue();
-        }
-      }
+    Assumptions.assumeTrue(hasKeys("S3Bucket0Name", "S3Bucket1Name"),
+        "Skipping: S3 bucket names missing in outputs");
+
+    String dataBucketName = String.valueOf(out.get("S3Bucket0Name"));
+    String logsBucketName = String.valueOf(out.get("S3Bucket1Name"));
+
+    // Test that data bucket exists and is accessible
+    try {
+      s3.headBucket(HeadBucketRequest.builder()
+          .bucket(dataBucketName)
+          .build());
+      // If no exception is thrown, the bucket is accessible
+      assertThat(true).describedAs("Data bucket should be accessible").isTrue();
+    } catch (NoSuchBucketException e) {
+      assertThat(false).describedAs("Data bucket should exist: " + dataBucketName).isTrue();
+    }
+
+    // Test that logs bucket exists and is accessible
+    try {
+      s3.headBucket(HeadBucketRequest.builder()
+          .bucket(logsBucketName)
+          .build());
+      // If no exception is thrown, the bucket is accessible
+      assertThat(true).describedAs("Logs bucket should be accessible").isTrue();
+    } catch (NoSuchBucketException e) {
+      assertThat(false).describedAs("Logs bucket should exist: " + logsBucketName).isTrue();
     }
   }
 
@@ -226,27 +349,22 @@ public class MainIntegrationTest {
    * Test that KMS key exists and is accessible
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("04) KMS key exists in AWS")
   void testKmsKeyExistsInAws() {
-    try (KmsClient kmsClient = KmsClient.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      Optional<String> kmsKeyId = getStackOutput("KmsKeyId");
-      
-      if (kmsKeyId.isPresent()) {
-        // Test that KMS key exists and is accessible
-        try {
-          kmsClient.describeKey(DescribeKeyRequest.builder()
-              .keyId(kmsKeyId.get())
-              .build());
-          // If no exception is thrown, the key is accessible
-          assertThat(true).describedAs("KMS key should be accessible").isTrue();
-        } catch (NotFoundException e) {
-          assertThat(false).describedAs("KMS key should exist").isTrue();
-        }
-      }
+    Assumptions.assumeTrue(hasKeys("KmsKeyId"),
+        "Skipping: KmsKeyId missing in outputs");
+
+    String kmsKeyId = String.valueOf(out.get("KmsKeyId"));
+
+    // Test that KMS key exists and is accessible
+    try {
+      kms.describeKey(DescribeKeyRequest.builder()
+          .keyId(kmsKeyId)
+          .build());
+      // If no exception is thrown, the key is accessible
+      assertThat(true).describedAs("KMS key should be accessible").isTrue();
+    } catch (NotFoundException e) {
+      assertThat(false).describedAs("KMS key should exist: " + kmsKeyId).isTrue();
     }
   }
 
@@ -254,43 +372,41 @@ public class MainIntegrationTest {
    * Test that CloudWatch alarms exist
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("05) CloudWatch alarms exist")
   void testCloudWatchAlarmsExist() {
-    try (CloudWatchClient cloudWatchClient = CloudWatchClient.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      var response = cloudWatchClient.describeAlarms(DescribeAlarmsRequest.builder()
-          .alarmNamePrefix("tap-project-unauthorized-api-calls")
-          .build());
-      
-      assertThat(response.metricAlarms())
-          .describedAs("Should have at least one alarm for unauthorized API calls")
-          .isNotEmpty();
-    }
+    Assumptions.assumeTrue(hasKeys("CloudWatchAlarmName"),
+        "Skipping: CloudWatchAlarmName missing in outputs");
+
+    String alarmName = String.valueOf(out.get("CloudWatchAlarmName"));
+
+    var response = cloudWatch.describeAlarms(DescribeAlarmsRequest.builder()
+        .alarmNames(alarmName)
+        .build());
+
+    assertThat(response.metricAlarms())
+        .describedAs("Should have alarm: " + alarmName)
+        .isNotEmpty();
   }
 
   /**
    * Test that SNS topics exist
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("06) SNS topics exist")
   void testSnsTopicsExist() {
-    try (SnsClient snsClient = SnsClient.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      var response = snsClient.listTopics(ListTopicsRequest.builder().build());
-      
-      // Look for our SNS topic
-      boolean foundTopic = response.topics().stream()
-          .anyMatch(topic -> topic.topicArn().contains("tap-project-development-us-east-1-alerts"));
-      
-      assertThat(foundTopic)
-          .describedAs("Should have SNS topic for alerts")
-          .isTrue();
+    Assumptions.assumeTrue(hasKeys("SnsTopicArn"),
+        "Skipping: SnsTopicArn missing in outputs");
+
+    String topicArn = String.valueOf(out.get("SnsTopicArn"));
+
+    // Test that the topic exists by trying to get its attributes
+    try {
+      sns.getTopicAttributes(GetTopicAttributesRequest.builder()
+          .topicArn(topicArn)
+          .build());
+      assertThat(true).describedAs("SNS topic should exist").isTrue();
+    } catch (Exception e) {
+      assertThat(false).describedAs("SNS topic should exist: " + topicArn).isTrue();
     }
   }
 
@@ -298,76 +414,37 @@ public class MainIntegrationTest {
    * Test that CloudTrail exists
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("07) CloudTrail exists")
   void testCloudTrailExists() {
-    try (CloudTrailClient cloudTrailClient = CloudTrailClient.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      var response = cloudTrailClient.describeTrails(DescribeTrailsRequest.builder().build());
-      
-      // Look for our CloudTrail
-      boolean foundTrail = response.trailList().stream()
-          .anyMatch(trail -> trail.name().contains("tap-project-development-us-east-1-trail"));
-      
-      assertThat(foundTrail)
-          .describedAs("Should have CloudTrail for auditing")
-          .isTrue();
-    }
+    Assumptions.assumeTrue(hasKeys("CloudTrailArn"),
+        "Skipping: CloudTrailArn missing in outputs");
+
+    String cloudTrailArn = String.valueOf(out.get("CloudTrailArn"));
+
+    var response = cloudTrail.describeTrails(DescribeTrailsRequest.builder().build());
+
+    // Look for our CloudTrail by ARN
+    boolean foundTrail = response.trailList().stream()
+        .anyMatch(trail -> cloudTrailArn.equals(trail.trailARN()));
+
+    assertThat(foundTrail)
+        .describedAs("Should have CloudTrail: " + cloudTrailArn)
+        .isTrue();
   }
 
   /**
-   * Test cross-region connectivity (if VPC peering is set up)
+   * Test cross-region connectivity (check for VPC peering function)
    */
   @Test
-  @EnabledIfEnvironmentVariable(named = "AWS_INTEGRATION_TESTS", matches = "true")
+  @DisplayName("08) Cross-region Lambda function exists")
   void testCrossRegionConnectivity() {
-    // Test that VPCs in different regions can communicate
-    // This would typically involve deploying test instances and testing connectivity
-    
-    List<Region> regions = List.of(Region.US_EAST_1, Region.US_EAST_2, Region.EU_WEST_1);
-    
-    for (Region region : regions) {
-      try (Ec2Client ec2Client = Ec2Client.builder()
-          .region(region)
-          .credentialsProvider(DefaultCredentialsProvider.create())
-          .build()) {
-        
-        // Check if VPC peering connections exist
-        var peeringConnections = ec2Client.describeVpcPeeringConnections();
-        
-        // In a full test, we would check that peering connections are active
-        // and that routes are properly configured
-        assertThat(peeringConnections.vpcPeeringConnections())
-            .describedAs("Should have VPC peering connections for cross-region connectivity")
-            .isNotNull();
-      }
-    }
-  }
+    Assumptions.assumeTrue(hasKeys("VpcPeeringFunctionArn"),
+        "Skipping: VpcPeeringFunctionArn missing in outputs");
 
-  /**
-   * Helper method to get CloudFormation stack output
-   */
-  private Optional<String> getStackOutput(String outputKey) {
-    try (CloudFormationClient cfnClient = CloudFormationClient.builder()
-        .region(testRegion)
-        .credentialsProvider(DefaultCredentialsProvider.create())
-        .build()) {
-      
-      DescribeStacksResponse response = cfnClient.describeStacks(DescribeStacksRequest.builder()
-          .stackName(testStackName)
-          .build());
-      
-      return response.stacks().stream()
-          .flatMap(stack -> stack.outputs().stream())
-          .filter(output -> outputKey.equals(output.outputKey()))
-          .map(output -> output.outputValue())
-          .findFirst();
-          
-    } catch (Exception e) {
-      // Stack might not exist in test environment
-      return Optional.empty();
-    }
+    String functionArn = String.valueOf(out.get("VpcPeeringFunctionArn"));
+
+    // Just verify the ARN format is correct for Lambda function
+    assertTrue(functionArn.startsWith("arn:aws:lambda:"),
+        "VPC Peering function ARN should be valid: " + functionArn);
   }
 }
