@@ -334,7 +334,7 @@ public final class Main {
         
         // 5. S3 Buckets for CloudTrail logs
         var cloudTrailBucket = new Bucket("bucket-cloudtrail-logs", BucketArgs.builder()
-            .bucket(getS3BucketName(config, "cloudtrail", "logs"))
+            .bucket("yourcompany-production-cloudtrail-logs-3771461")
             .forceDestroy(true)
             .tags(getStandardTags(config, "storage", "s3"))
             .build(), CustomResourceOptions.builder()
