@@ -44,6 +44,9 @@ function isAWSError(error: unknown): error is AWSErrorWithCode {
 }
 
 describe('TapStack Integration Tests', () => {
+  // Increase the default timeout for all tests in this suite
+  jest.setTimeout(120000); // 2 minutes
+
   const stackName = `tap-stack-${process.env.ENVIRONMENT_SUFFIX || 'test'}`;
   const region = process.env.AWS_REGION || 'us-east-1';
   
@@ -300,60 +303,65 @@ describe('TapStack Integration Tests', () => {
 
   describe('AWS Config Rules', () => {
     test('Required config rules should be active', async () => {
-      const { ConfigRules } = await configService.describeConfigRules().promise();
-      
-      if (!ConfigRules) {
-        throw new Error('No Config Rules found');
-      }
-      
-      const ruleNames = ConfigRules.map((r: AWS.ConfigService.ConfigRule) => r.ConfigRuleName);
-      
-      requiredRules.forEach((ruleName: string) => {
-        expect(ruleNames).toContain(ruleName);
-      });
-      
-      // Check rules are compliant or wait for compliance
-      for (const rule of requiredRules) {
-        let attempts = 0;
-        const maxAttempts = 5;
-        let isCompliant = false;
+      // Set timeout specifically for this long-running test
+      jest.setTimeout(300000); // 5 minutes
 
-        while (attempts < maxAttempts && !isCompliant) {
-          const response = await configService.describeComplianceByConfigRule({
-            ConfigRuleNames: [rule]
-          }).promise();
-
-          if (!response.ComplianceByConfigRules || response.ComplianceByConfigRules.length === 0) {
-            console.warn(`No compliance information found for rule: ${rule}`);
-            await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-            attempts++;
-            continue;
-          }
-
-          const compliance = response.ComplianceByConfigRules[0].Compliance;
-          
-          if (!compliance) {
-            console.warn(`No compliance type found for rule: ${rule}`);
-            await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-            attempts++;
-            continue;
-          }
-
-          if (compliance.ComplianceType === 'COMPLIANT') {
-            isCompliant = true;
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
-            attempts++;
-          }
-        }
-
-        if (!isCompliant) {
-          console.warn(`Rule ${rule} is still non-compliant after ${maxAttempts} attempts`);
+      try {
+        const { ConfigRules } = await configService.describeConfigRules().promise();
+        
+        if (!ConfigRules) {
+          throw new Error('No Config Rules found');
         }
         
-        expect(isCompliant).toBe(true);
+        const ruleNames = ConfigRules.map((r: AWS.ConfigService.ConfigRule) => r.ConfigRuleName);
+        
+        // Check if all required rules exist
+        for (const ruleName of requiredRules) {
+          expect(ruleNames).toContain(ruleName);
+        }
+        
+        // Check compliance status with proper async handling
+        const complianceResults = await Promise.all(
+          requiredRules.map(async (rule) => {
+            let attempts = 0;
+            const maxAttempts = 10;
+            const waitTime = 30000; // 30 seconds
+
+            while (attempts < maxAttempts) {
+              try {
+                const response = await configService.describeComplianceByConfigRule({
+                  ConfigRuleNames: [rule]
+                }).promise();
+
+                if (response.ComplianceByConfigRules?.[0]?.Compliance?.ComplianceType === 'COMPLIANT') {
+                  return { rule, isCompliant: true };
+                }
+
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                attempts++;
+              } catch (error) {
+                if (attempts === maxAttempts - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                attempts++;
+              }
+            }
+
+            return { rule, isCompliant: false };
+          })
+        );
+
+        // Verify all rules are compliant with better error messages
+        complianceResults.forEach(({ rule, isCompliant }) => {
+            if (!isCompliant) {
+            console.warn(`Rule ${rule} is still non-compliant after some attempts`);
+            }
+            expect(isCompliant).toBe(true);
+        });
+      } catch (error) {
+        console.error('Error checking Config Rules:', error);
+        throw error;
       }
-    });
+    }, 300000);
   });
 
   describe('Security Hub', () => {
@@ -365,17 +373,50 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  // Cleanup (if needed)
+  // Clean up AWS SDK clients after all tests
   afterAll(async () => {
-    if (process.env.CLEANUP === 'true') {
-      await cloudformation.deleteStack({
-        StackName: stackName
-      }).promise();
-      
-      // Wait for stack deletion
-      await cloudformation.waitFor('stackDeleteComplete', {
-        StackName: stackName
-      }).promise();
+    try {
+      if (process.env.CLEANUP === 'true') {
+        console.log(`Cleaning up stack: ${stackName}`);
+        
+        // Delete the stack if it exists
+        try {
+          await cloudformation.deleteStack({
+            StackName: stackName
+          }).promise();
+          
+          console.log('Waiting for stack deletion to complete...');
+          
+          await cloudformation.waitFor('stackDeleteComplete', {
+            StackName: stackName,
+            $waiter: {
+              delay: 30,
+              maxAttempts: 40
+            }
+          }).promise();
+          
+          console.log('Stack deletion completed successfully');
+        } catch (error) {
+          if (isAWSError(error) && error.code === 'ValidationError') {
+            console.log('Stack does not exist, skipping deletion');
+          } else {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      throw error;
+    } finally {
+      // Close all AWS SDK clients by removing their event listeners
+      [cloudformation, kms, s3, iam, cloudtrail, configService].forEach(client => {
+        if (client.config && client.config.httpOptions && client.config.httpOptions.agent) {
+          client.config.httpOptions.agent.destroy();
+        }
+      });
+
+      // Clear any remaining timeouts
+      jest.clearAllTimers();
     }
-  });
+  }, 600000); // 10 minute timeout for cleanup
 });
