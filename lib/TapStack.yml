@@ -730,6 +730,67 @@ Resources:
         Owner: AWS
         SourceIdentifier: CLOUD_TRAIL_ENABLED
 
+  # CloudTrail for security auditing (multi-region, all management events)
+  SecurityCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub '${StackPrefix}-${EnvironmentName}-security-trail'
+      S3BucketName: !Ref SecureLoggingBucket
+      S3KeyPrefix: 'cloudtrail-logs'
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Security Audit Trail'
+
+  # Bucket policy for SecureLoggingBucket (deny public, enforce HTTPS, allow CloudTrail)
+  SecureLoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureLoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyPublicAccess
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
+              - !Ref SecureLoggingBucket
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
+              - !Ref SecureLoggingBucket
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Ref SecureLoggingBucket
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${SecureLoggingBucket}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+                'AWS:SourceAccount': !Ref AWS::AccountId
+
 # =============================================================================
 # OUTPUTS - Important resource identifiers and endpoints
 # =============================================================================
