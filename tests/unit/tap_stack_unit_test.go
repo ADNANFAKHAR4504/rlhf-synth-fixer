@@ -4,101 +4,11 @@
 package main
 
 import (
-	"context"
 	"testing"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-// Mock for Pulumi Context
-type MockContext struct {
-	mock.Mock
-	exports map[string]interface{}
-}
-
-func (m *MockContext) Export(name string, value interface{}) {
-	m.exports[name] = value
-}
-
-// Mock for AWS EC2 VPC
-type MockVpc struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockVpc) ID() pulumi.IDOutput {
-	return m.id
-}
-
-// Mock for AWS EC2 InternetGateway
-type MockInternetGateway struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockInternetGateway) ID() pulumi.IDOutput {
-	return m.id
-}
-
-// Mock for AWS EC2 Subnet
-type MockSubnet struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockSubnet) ID() pulumi.IDOutput {
-	return m.id
-}
-
-// Mock for AWS EC2 Eip
-type MockEip struct {
-	mock.Mock
-	id     pulumi.IDOutput
-	publicIp pulumi.StringOutput
-}
-
-func (m *MockEip) ID() pulumi.IDOutput {
-	return m.id
-}
-
-func (m *MockEip) PublicIp() pulumi.StringOutput {
-	return m.publicIp
-}
-
-// Mock for AWS EC2 NatGateway
-type MockNatGateway struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockNatGateway) ID() pulumi.IDOutput {
-	return m.id
-}
-
-// Mock for AWS EC2 SecurityGroup
-type MockSecurityGroup struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockSecurityGroup) ID() pulumi.IDOutput {
-	return m.id
-}
-
-// Mock for AWS EC2 RouteTable
-type MockRouteTable struct {
-	mock.Mock
-	id pulumi.IDOutput
-}
-
-func (m *MockRouteTable) ID() pulumi.IDOutput {
-	return m.id
-}
 
 func TestCreateVPC(t *testing.T) {
 	// Create mock pulumi context
@@ -130,7 +40,6 @@ func TestCreateInternetGateway(t *testing.T) {
 		"ManagedBy":   pulumi.String("pulumi"),
 	}
 
-	// Create a mock VPC ID
 	mockVpcId := pulumi.ID("vpc-12345").ToIDOutput()
 
 	// Test function signature
@@ -284,7 +193,7 @@ func TestCreatePrivateRouteTable(t *testing.T) {
 func TestAssociateRouteTableWithSubnet(t *testing.T) {
 	ctx := &pulumi.Context{}
 
-	mockRouteTableId := pulumi.ID("rt-12345").ToIDOutput()
+	mockRouteTableId := pulumi.ID("rtb-12345").ToIDOutput()
 	mockSubnetId := pulumi.ID("subnet-12345").ToIDOutput()
 
 	err := associateRouteTableWithSubnet(ctx, mockRouteTableId, mockSubnetId, "test-association")
@@ -366,108 +275,13 @@ func TestMergeTags(t *testing.T) {
 
 func TestMainFunction(t *testing.T) {
 	// Test that main function exists and can be called
-	// This is a basic smoke test for the entry point
+	// This will likely fail/panic in test environment, which is expected
 	defer func() {
 		if r := recover(); r != nil {
-			// Expected to panic or fail without proper Pulumi context
 			t.Log("Main function panicked as expected in test environment:", r)
 		}
 	}()
 
 	// This will likely fail/panic in test environment, which is expected
 	main()
-}
-
-// Test that verifies the structure of tag creation
-func TestTagStructure(t *testing.T) {
-	commonTags := pulumi.StringMap{
-		"Environment": pulumi.String("production"),
-		"Project":     pulumi.String("secure-vpc"),
-		"ManagedBy":   pulumi.String("pulumi"),
-	}
-
-	// Verify tag structure
-	assert.Equal(t, 3, len(commonTags))
-	assert.NotNil(t, commonTags["Environment"])
-	assert.NotNil(t, commonTags["Project"])
-	assert.NotNil(t, commonTags["ManagedBy"])
-}
-
-// Test resource naming patterns
-func TestResourceNamingPatterns(t *testing.T) {
-	tests := []struct {
-		name     string
-		resource string
-		expected string
-	}{
-		{"VPC", "secure-vpc-main", "secure-vpc-main"},
-		{"IGW", "secure-vpc-igw", "secure-vpc-igw"},
-		{"Public Subnet A", "secure-vpc-public-subnet-a", "secure-vpc-public-subnet-a"},
-		{"Private Subnet A", "secure-vpc-private-subnet-a", "secure-vpc-private-subnet-a"},
-		{"Web SG", "secure-vpc-web-sg", "secure-vpc-web-sg"},
-		{"SSH SG", "secure-vpc-ssh-sg", "secure-vpc-ssh-sg"},
-		{"DB SG", "secure-vpc-db-sg", "secure-vpc-db-sg"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.resource)
-		})
-	}
-}
-
-// Test CIDR block validations
-func TestCIDRBlocks(t *testing.T) {
-	tests := []struct {
-		name string
-		cidr string
-		valid bool
-	}{
-		{"VPC CIDR", "10.0.0.0/16", true},
-		{"Public Subnet A", "10.0.1.0/24", true},
-		{"Public Subnet B", "10.0.2.0/24", true},
-		{"Private Subnet A", "10.0.11.0/24", true},
-		{"Private Subnet B", "10.0.12.0/24", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Basic CIDR format validation
-			assert.Contains(t, tt.cidr, "/")
-			if tt.valid {
-				assert.True(t, len(tt.cidr) > 0)
-			}
-		})
-	}
-}
-
-// Test availability zones
-func TestAvailabilityZones(t *testing.T) {
-	azA := "us-east-1a"
-	azB := "us-east-1b"
-
-	assert.Equal(t, "us-east-1a", azA)
-	assert.Equal(t, "us-east-1b", azB)
-	assert.NotEqual(t, azA, azB) // Ensure different AZs for HA
-}
-
-// Test security group ports
-func TestSecurityGroupPorts(t *testing.T) {
-	webPorts := []int{80, 443}
-	sshPort := 22
-	dbPort := 3306
-
-	assert.Contains(t, webPorts, 80)
-	assert.Contains(t, webPorts, 443)
-	assert.Equal(t, 22, sshPort)
-	assert.Equal(t, 3306, dbPort)
-}
-
-// Test SSH IP ranges
-func TestSSHIPRanges(t *testing.T) {
-	companyOffice := "203.0.113.0/24"
-	remoteVPN := "198.51.100.0/24"
-
-	assert.Equal(t, "203.0.113.0/24", companyOffice)
-	assert.Equal(t, "198.51.100.0/24", remoteVPN)
 }
