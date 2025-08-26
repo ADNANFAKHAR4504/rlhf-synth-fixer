@@ -1,7 +1,6 @@
 package app.stacks;
 
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.StackProps;
+
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.ec2.ISecurityGroup;
 import software.amazon.awscdk.services.ec2.IVpc;
@@ -28,12 +27,12 @@ import software.constructs.Construct;
 import java.util.List;
 import java.util.Map;
 
-public final class ECSStack extends Stack {
+public final class ECSStack extends Construct {
     private final ICluster cluster;
     private final FargateService service;
 
     public ECSStack(final Construct scope, final String id, final ECSStackProps ecsProps) {
-        super(scope, id, ecsProps.getStackProps());
+        super(scope, id);
         
         String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
@@ -102,7 +101,6 @@ public final class ECSStack extends Stack {
     }
 
     public static final class ECSStackProps {
-        private final StackProps stackProps;
         private final IVpc vpc;
         private final ISecurityGroup ecsSecurityGroup;
 
@@ -112,12 +110,11 @@ public final class ECSStack extends Stack {
         private final ILogGroup logGroup;
 
         @SuppressWarnings("checkstyle:ParameterNumber")
-        private ECSStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
+        private ECSStackProps(final IVpc vpcValue, 
                              final ISecurityGroup ecsSecurityGroupValue, 
                              final Role ecsTaskRoleValue, 
                              final Role ecsExecutionRoleValue, final ISecret databaseSecretValue,
                              final ILogGroup logGroupValue) {
-            this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.ecsSecurityGroup = ecsSecurityGroupValue;
 
@@ -131,9 +128,7 @@ public final class ECSStack extends Stack {
             return new Builder();
         }
 
-        public StackProps getStackProps() { 
-            return stackProps; 
-        }
+
         
         public IVpc getVpc() { 
             return vpc; 
@@ -163,7 +158,6 @@ public final class ECSStack extends Stack {
 
         @SuppressWarnings("checkstyle:HiddenField")
         public static final class Builder {
-            private StackProps stackPropsValue;
             private IVpc vpcValue;
             private ISecurityGroup ecsSecurityGroupValue;
 
@@ -172,10 +166,7 @@ public final class ECSStack extends Stack {
             private ISecret databaseSecretValue;
             private ILogGroup logGroupValue;
 
-            public Builder stackProps(final StackProps stackPropsParam) { 
-                this.stackPropsValue = stackPropsParam; 
-                return this; 
-            }
+
             
             public Builder vpc(final IVpc vpcParam) { 
                 this.vpcValue = vpcParam; 
@@ -210,7 +201,7 @@ public final class ECSStack extends Stack {
             }
 
             public ECSStackProps build() {
-                return new ECSStackProps(stackPropsValue, vpcValue, ecsSecurityGroupValue, 
+                return new ECSStackProps(vpcValue, ecsSecurityGroupValue, 
                                        ecsTaskRoleValue, ecsExecutionRoleValue, databaseSecretValue, logGroupValue);
             }
         }

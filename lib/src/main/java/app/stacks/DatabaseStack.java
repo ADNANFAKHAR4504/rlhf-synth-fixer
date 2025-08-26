@@ -1,8 +1,7 @@
 package app.stacks;
 
 import software.amazon.awscdk.Duration;
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.StackProps;
+
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
@@ -26,12 +25,12 @@ import software.constructs.Construct;
 
 import java.util.List;
 
-public final class DatabaseStack extends Stack {
+public final class DatabaseStack extends Construct {
     private final IDatabaseInstance database;
     private final ISecret databaseSecret;
 
     public DatabaseStack(final Construct scope, final String id, final DatabaseStackProps props) {
-        super(scope, id, props.getStackProps());
+        super(scope, id);
 
         this.databaseSecret = Secret.Builder.create(this, "DatabaseSecret")
                 .secretName("prod/webapp/database")
@@ -91,15 +90,11 @@ public final class DatabaseStack extends Stack {
     }
 
     public static final class DatabaseStackProps {
-        private final StackProps stackProps;
         private final IVpc vpc;
         private final ISecurityGroup rdsSecurityGroup;
 
-
-
-        private DatabaseStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
+        private DatabaseStackProps(final IVpc vpcValue, 
                                  final ISecurityGroup rdsSecurityGroupValue) {
-            this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.rdsSecurityGroup = rdsSecurityGroupValue;
         }
@@ -108,9 +103,7 @@ public final class DatabaseStack extends Stack {
             return new Builder();
         }
 
-        public StackProps getStackProps() { 
-            return stackProps; 
-        }
+
         
         public IVpc getVpc() { 
             return vpc; 
@@ -126,16 +119,12 @@ public final class DatabaseStack extends Stack {
 
         @SuppressWarnings("checkstyle:HiddenField")
         public static final class Builder {
-            private StackProps stackPropsValue;
             private IVpc vpcValue;
             private ISecurityGroup rdsSecurityGroupValue;
 
 
 
-            public Builder stackProps(final StackProps stackPropsParam) { 
-                this.stackPropsValue = stackPropsParam; 
-                return this; 
-            }
+
             
             public Builder vpc(final IVpc vpcParam) { 
                 this.vpcValue = vpcParam; 
@@ -152,7 +141,7 @@ public final class DatabaseStack extends Stack {
 
 
             public DatabaseStackProps build() {
-                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue);
+                return new DatabaseStackProps(vpcValue, rdsSecurityGroupValue);
             }
         }
     }
