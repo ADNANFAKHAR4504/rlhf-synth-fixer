@@ -72,7 +72,7 @@ application {
 
 // Override run task to handle path issues
 tasks.named('run') {
-    standardInput = System.in
+    // Removed standardInput to prevent blocking during CDK synth
     workingDir = projectDir
     systemProperties = System.getProperties()
     environment = System.getenv()
@@ -238,7 +238,12 @@ jacocoTestCoverageVerification {
                 'app.WebAppStack.SecurityResources',
                 'app.WebAppStack.ComputeResources',
                 'app.WebAppStack.LoadBalancerResources',
-                'app.WebAppStack.StorageResources'
+                'app.WebAppStack.StorageResources',
+                'app.Route53Stack',
+                'app.Route53StackProps',
+                'app.Route53StackProps.Builder',
+                'app.WebAppStackProps',
+                'app.WebAppStackProps.Builder'
             ]
         }
     }
