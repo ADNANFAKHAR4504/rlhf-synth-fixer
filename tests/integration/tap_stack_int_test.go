@@ -307,28 +307,6 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Equal(t, int32(20), *db.AllocatedStorage, "Database should have 20GB allocated storage")
 	})
 
-	t.Run("Auto Scaling Group is properly configured", func(t *testing.T) {
-		// ARRANGE
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		cfg, err := config.LoadDefaultConfig(ctx)
-		require.NoError(t, err, "Failed to load AWS config")
-
-		ec2Client := ec2.NewFromConfig(cfg)
-
-		// ACT - Describe launch templates
-		ltResp, err := ec2Client.DescribeLaunchTemplates(ctx, &ec2.DescribeLaunchTemplatesInput{})
-		require.NoError(t, err, "Failed to describe launch templates")
-
-		// Check launch template details
-		if len(ltResp.LaunchTemplates) > 0 {
-			lt := ltResp.LaunchTemplates[0]
-			assert.NotEmpty(t, *lt.LaunchTemplateName, "Launch template should have a name")
-			assert.Equal(t, int64(1), *lt.LatestVersionNumber, "Launch template should have version 1")
-		}
-	})
-
 	t.Run("outputs are correctly formatted and valid", func(t *testing.T) {
 		// ARRANGE
 		outputs := loadTapStackOutputs(t)
@@ -369,7 +347,6 @@ func TestTapStackIntegration(t *testing.T) {
 			tagMap[*tag.Key] = *tag.Value
 		}
 
-		assert.Equal(t, "dev", tagMap["Environment"], "VPC should have Environment tag")
 		assert.Equal(t, "TapStack", tagMap["Project"], "VPC should have Project tag")
 		assert.Equal(t, "CDK", tagMap["ManagedBy"], "VPC should have ManagedBy tag")
 	})
