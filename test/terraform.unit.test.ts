@@ -84,8 +84,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
     });
 
-    test('declares aws_ami data source for Amazon Linux', () => {
-      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux"/);
+    test('declares aws_ami data source for Amazon Linux 2', () => {
+      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux2"/);
     });
 
     test('AMI data source filters for Amazon Linux 2', () => {
@@ -322,8 +322,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/resource\s+"aws_launch_template"\s+"main"/);
     });
 
-    test('launch template uses Amazon Linux AMI', () => {
-      expect(stackContent).toMatch(/image_id\s*=\s*data\.aws_ami\.amazon_linux\.id/);
+    test('launch template uses Amazon Linux 2 AMI', () => {
+      expect(stackContent).toMatch(/image_id\s*=\s*data\.aws_ami\.amazon_linux2\.id/);
     });
 
     test('launch template uses t3.micro instance type', () => {

@@ -31,7 +31,7 @@ data "aws_availability_zones" "available" {
 }
 
 # Data source for latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
+data "aws_ami" "amazon_linux2" {
   most_recent = true
   owners      = ["amazon"]
 
@@ -545,7 +545,7 @@ resource "aws_lb_listener" "main" {
 # Launch Template
 resource "aws_launch_template" "main" {
   name_prefix   = "${local.unique_project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.amazon_linux2.id
   instance_type = "t3.micro"
 
   network_interfaces {
@@ -570,24 +570,12 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
     set -euxo pipefail
+    exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-    echo "Bootstrapping instance..."
+    echo "Bootstrapping..."
 
-    # Ensure doc root exists
-    mkdir -p /var/www/html
-
-    # Health check page (so ALB can pass quickly)
-    echo "OK" > /var/www/html/health
-
-    # Simple index page
-    INSTANCE_ID=$$(curl -s http://169.254.169.254/latest/meta-data/instance-id || echo "unknown")
-    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
-    echo "<p>Instance ID: $${INSTANCE_ID}</p>" >> /var/www/html/index.html
-    echo "<p>Health Status: OK</p>" >> /var/www/html/index.html
-
-    # Update yum repos
+    # Update repos
     yum clean all
     yum makecache -y
 
@@ -603,13 +591,12 @@ resource "aws_launch_template" "main" {
     systemctl enable httpd
     systemctl start httpd
 
-    # Double check
-    for i in {1..5}; do
-      curl -fs http://localhost/health && break
-      sleep 5
-    done
+    # Health check page
+    echo "OK" > /var/www/html/health
+    echo "<h1>Hello from ASG</h1>" > /var/www/html/index.html
 
-    echo "User data complete."
+    # Verify Apache
+    curl -fs http://localhost/health || exit 1
   EOF
   )
 
@@ -638,7 +625,7 @@ resource "aws_autoscaling_group" "main" {
   health_check_grace_period = 600
 
   min_size         = 2
-  max_size         = 6
+  max_size         = 2
   desired_capacity = 2
 
   launch_template {
@@ -648,7 +635,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${local.unique_project_name}-asg-instance"
+    value               = "${local.unique_project_name}-asg"
     propagate_at_launch = true
   }
 
