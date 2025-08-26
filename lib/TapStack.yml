@@ -228,10 +228,11 @@ Resources:
   # SNS Topic for CloudFormation Notifications
   CloudFormationNotificationTopic:
     Type: AWS::SNS::Topic
+    Condition: CreateKMSKey
     Properties:
       TopicName: !Sub '${Environment}-cloudformation-notifications'
       DisplayName: 'CloudFormation Stack Notifications'
-      KmsMasterKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      KmsMasterKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -240,6 +241,7 @@ Resources:
 
   CloudFormationNotificationSubscription:
     Type: AWS::SNS::Subscription
+    Condition: CreateKMSKey
     Properties:
       Protocol: email
       TopicArn: !Ref CloudFormationNotificationTopic
@@ -342,13 +344,15 @@ Resources:
 
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateKMSKey
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      KmsKeyId: !Ref KMSKey
 
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
+    Condition: CreateKMSKey
     Properties:
       ResourceType: 'VPC'
       ResourceId: !Ref VPC
@@ -917,24 +921,27 @@ Resources:
   # CloudWatch Log Groups
   WebServerLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateKMSKey
     Properties:
       LogGroupName: !Sub '/aws/ec2/webserver/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      KmsKeyId: !Ref KMSKey
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateKMSKey
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      KmsKeyId: !Ref KMSKey
 
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateKMSKey
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
-      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      KmsKeyId: !Ref KMSKey
 
   # IAM Roles
   EC2Role:
@@ -1286,6 +1293,7 @@ Resources:
   # CloudWatch Alarms
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateKMSKey
     Properties:
       AlarmName: !Sub '${Environment}-asg-high-cpu'
       AlarmDescription: 'Alarm when ASG CPU utilization is high'
@@ -1306,6 +1314,7 @@ Resources:
 
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateKMSKey
     Properties:
       AlarmName: !Sub '${Environment}-asg-low-cpu'
       AlarmDescription: 'Alarm when ASG CPU utilization is low'
