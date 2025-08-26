@@ -1,8 +1,8 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >-
+Description: >
   Secure, production-ready multi-region infrastructure (us-east-1 and eu-central-1).
-  Adheres to AWS security best practices and enterprise requirements.
+  Adheres to AWS security best practices and organizational requirements.
 
 Parameters:
   EnvironmentName:
@@ -70,7 +70,6 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # Public Subnets (2, mapped to separate AZs)
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -101,7 +100,6 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # Private Subnets (2, mapped to separate AZs)
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -132,7 +130,6 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # Internet Gateway and Attach
   IGW:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -148,7 +145,6 @@ Resources:
       InternetGatewayId: !Ref IGW
       VpcId: !Ref VPC
 
-  # Elastic IPs for NAT Gateways
   NATEIPA:
     Type: AWS::EC2::EIP
     DependsOn: IGWAttach
@@ -167,7 +163,6 @@ Resources:
         - Key: Name
           Value: !Sub 'eip-natgw-b-${AWS::Region}'
 
-  # NAT Gateways (one per public subnet)
   NATGatewayA:
     Type: AWS::EC2::NatGateway
     DependsOn: IGWAttach
@@ -188,7 +183,6 @@ Resources:
         - Key: Name
           Value: !Sub 'natgw-b-${AWS::Region}'
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -213,7 +207,6 @@ Resources:
         - Key: Name
           Value: !Sub 'private-b-rt-${AWS::Region}'
 
-  # Routes & Associations
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: IGWAttach
@@ -260,7 +253,6 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGatewayB
 
-  # S3 Bucket
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -288,7 +280,6 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # RDS Subnet Group
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -302,7 +293,26 @@ Resources:
         - Key: ManagedBy
           Value: CloudFormation
 
-  # RDS Instance
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'RDS Security Group, restricted'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !If [IsUSEast1, !Ref VPCUSEast1CIDR, !Ref VPCEUCentral1CIDR]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Region
+          Value: !Ref 'AWS::Region'
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -328,27 +338,6 @@ Resources:
           Value: !Ref 'AWS::Region'
       DeletionProtection: true
 
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'RDS Security Group, restricted'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: !Ref VPCUSEast1CIDR
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: ManagedBy
-          Value: CloudFormation
-        - Key: Project
-          Value: IaC-AWS-Nova-Model
-        - Key: Region
-          Value: !Ref 'AWS::Region'
-
-  # IAM Role for EC2
   EC2IAMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -360,15 +349,8 @@ Resources:
             Principal:
               Service: [ec2.amazonaws.com]
             Action: ['sts:AssumeRole']
-      Policies:
-        - PolicyName: ec2-minimal
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ec2:Describe*
-                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -383,9 +365,30 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub 'role-ec2-${AWS::Region}'
-      Roles: [!Ref EC2IAMRole]
+      Roles:
+        - !Ref EC2IAMRole
 
-  # Security Group for EC2
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref EC2InstanceType
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      SubnetId: !Ref PrivateSubnetA
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'prod-ec2-${AWS::Region}'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Region
+          Value: !Ref 'AWS::Region'
+
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -409,7 +412,6 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # ECS Cluster (minimal example)
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -427,24 +429,79 @@ Resources:
         - Key: Region
           Value: !Ref 'AWS::Region'
 
-  # CloudWatch Log Groups
-  EC2LogGroup:
-    Type: AWS::Logs::LogGroup
+  ECSTaskRole:
+    Type: AWS::IAM::Role
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${AWS::Region}-metrics'
-      RetentionInDays: 30
+      RoleName: !Sub 'role-ecs-task-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Region
+          Value: !Ref 'AWS::Region'
 
-  RDSLogGroup:
-    Type: AWS::Logs::LogGroup
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      LogGroupName: !Sub '/aws/rds/${AWS::Region}-metrics'
-      RetentionInDays: 30
+      Family: !Sub 'prod-ecs-task-${AWS::Region}'
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: app
+          Image: amazonlinux
+          Essential: true
+          Cpu: 512
+          Memory: 512
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: app
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      DesiredCount: 1
+      LaunchType: FARGATE
+      TaskDefinition: !Ref ECSTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref PrivateSubnetA
+            - !Ref PrivateSubnetB
+          SecurityGroups:
+            - !Ref EC2SecurityGroup
+          AssignPublicIp: DISABLED
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: Region
+          Value: !Ref 'AWS::Region'
 
   ECSLogGroup:
     Type: AWS::Logs::LogGroup
@@ -455,7 +512,6 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  # CloudTrail for S3 API activities
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
