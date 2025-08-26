@@ -596,6 +596,30 @@ Resources:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-${EnvironmentSuffix}-cloudtrail'
 
   # ============================================================================
+  # Secrets Manager for Database Password
+  # ============================================================================
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
+      Description: 'RDS MySQL master password'
+      SecretString: !Sub |
+        {
+          "username": "${DBUsername}",
+          "password": "${DBPassword}"
+        }
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
+        - Key: Project
+          Value: 'Migration'
+        - Key: Creator
+          Value: 'CloudEngineer'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ============================================================================
   # RDS Database
   # ============================================================================
   DBSubnetGroup:
