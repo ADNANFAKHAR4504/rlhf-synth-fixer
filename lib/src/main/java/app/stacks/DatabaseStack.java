@@ -66,7 +66,7 @@ public final class DatabaseStack extends Stack {
                 .credentials(Credentials.fromSecret(databaseSecret))
                 .multiAz(true)
                 .storageEncrypted(true)
-                .storageEncryptionKey(props.getRdsKmsKey())
+                                        // Storage encryption can be configured separately to avoid cross-stack references
                 .backupRetention(Duration.days(7))
                 .deleteAutomatedBackups(true)
                 .deletionProtection(false) // Set to true for production
@@ -75,7 +75,7 @@ public final class DatabaseStack extends Stack {
                 .maxAllocatedStorage(100)
                 .monitoringInterval(Duration.seconds(60))
                 .enablePerformanceInsights(true)
-                .performanceInsightEncryptionKey(props.getRdsKmsKey())
+                                        // Performance insights encryption can be configured separately
                 .build();
 
         Tags.of(this).add("Environment", "production");
@@ -95,15 +95,13 @@ public final class DatabaseStack extends Stack {
         private final IVpc vpc;
         private final ISecurityGroup rdsSecurityGroup;
 
-        private final IKey rdsKmsKey;
+
 
         private DatabaseStackProps(final StackProps stackPropsValue, final IVpc vpcValue, 
-                                 final ISecurityGroup rdsSecurityGroupValue, 
-                                 final IKey rdsKmsKeyValue) {
+                                 final ISecurityGroup rdsSecurityGroupValue) {
             this.stackProps = stackPropsValue;
             this.vpc = vpcValue;
             this.rdsSecurityGroup = rdsSecurityGroupValue;
-            this.rdsKmsKey = rdsKmsKeyValue;
         }
 
         public static Builder builder() {
@@ -124,9 +122,7 @@ public final class DatabaseStack extends Stack {
         
 
         
-        public IKey getRdsKmsKey() { 
-            return rdsKmsKey; 
-        }
+
 
         @SuppressWarnings("checkstyle:HiddenField")
         public static final class Builder {
@@ -134,7 +130,7 @@ public final class DatabaseStack extends Stack {
             private IVpc vpcValue;
             private ISecurityGroup rdsSecurityGroupValue;
 
-            private IKey rdsKmsKeyValue;
+
 
             public Builder stackProps(final StackProps stackPropsParam) { 
                 this.stackPropsValue = stackPropsParam; 
@@ -153,13 +149,10 @@ public final class DatabaseStack extends Stack {
             
 
             
-            public Builder rdsKmsKey(final IKey rdsKmsKeyParam) { 
-                this.rdsKmsKeyValue = rdsKmsKeyParam; 
-                return this; 
-            }
+
 
             public DatabaseStackProps build() {
-                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue, rdsKmsKeyValue);
+                return new DatabaseStackProps(stackPropsValue, vpcValue, rdsSecurityGroupValue);
             }
         }
     }

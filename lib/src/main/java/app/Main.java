@@ -127,7 +127,7 @@ final class TapStack extends Stack {
                                 .build())
                         .vpc(networkStack.getVpc())
                         .rdsSecurityGroup(networkStack.getRdsSecurityGroup())
-                        .rdsKmsKey(securityStack.getRdsKmsKey())
+
                         .build()
         );
 

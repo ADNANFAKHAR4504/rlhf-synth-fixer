@@ -20,7 +20,7 @@ import software.amazon.awscdk.services.ecs.PortMapping;
 import software.amazon.awscdk.services.ecs.Protocol;
 import software.amazon.awscdk.services.ecs.Secret;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.kms.IKey;
+
 import software.amazon.awscdk.services.logs.ILogGroup;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
 import software.constructs.Construct;
