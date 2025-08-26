@@ -315,7 +315,18 @@ public class WebAppStack extends Stack {
 
     private void configureLoadBalancer(AutoScalingGroup autoScalingGroup) {
         // Create target group with health checks
-        ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(this, "WebAppTargetGroup" + environmentSuffix)
+        // Include region in the target group name to ensure uniqueness across regions
+        String targetGroupId;
+        if (this.getNode().getPath().contains("TapStackSecondary")) {
+            targetGroupId = "WebAppTargetGroup-uswe-" + environmentSuffix;
+        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
+            targetGroupId = "WebAppTargetGroup-usea-" + environmentSuffix;
+        } else {
+            // For tests and other scenarios, just use the environment suffix without a region code
+            targetGroupId = "WebAppTargetGroup" + environmentSuffix;
+        }
+        
+        ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(this, targetGroupId)
                 .port(80)
                 .protocol(ApplicationProtocol.HTTP)
                 .vpc(vpc)
