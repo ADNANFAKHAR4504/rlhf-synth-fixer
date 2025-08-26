@@ -50,5 +50,11 @@
     "ALB",
     "EC2",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
