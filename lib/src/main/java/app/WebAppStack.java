@@ -415,8 +415,25 @@ public class WebAppStack extends Stack {
     }
 
     private void createMonitoringDashboard() {
+        // Determine appropriate dashboard name based on stack path
+        String dashboardName;
+        String region = Stack.of(this).getRegion();
+        
+        // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
+        if (this.getNode().getPath().contains("TapStackSecondary")) {
+            region = "us-west-2"; // Hardcode region for secondary stack
+            dashboardName = "WebApp-" + environmentSuffix + "-" + region;
+        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
+            region = "us-east-1"; // Hardcode region for primary stack
+            // Add suffix '-primary-a' for the primary stack to ensure uniqueness
+            dashboardName = "WebApp-" + environmentSuffix + "-" + region + "-primary-a";
+        } else {
+            // For tests or other environments
+            dashboardName = "WebApp-" + environmentSuffix + "-" + this.getRegion();
+        }
+        
         Dashboard dashboard = Dashboard.Builder.create(this, "MonitoringDashboard" + environmentSuffix)
-                .dashboardName("WebApp-" + environmentSuffix + "-" + this.getRegion())
+                .dashboardName(dashboardName)
                 .build();
 
         // X-Ray service map widget
@@ -442,14 +459,8 @@ public class WebAppStack extends Stack {
         );
 
         // RUM metrics widget
-        String region = Stack.of(this).getRegion();
-        
         // For the secondary stack in us-west-2, ensure we use "us-west-2" in the name
-        if (this.getNode().getPath().contains("TapStackSecondary")) {
-            region = "us-west-2"; // Hardcode region for secondary stack
-        } else if (this.getNode().getPath().contains("TapStackPrimary")) {
-            region = "us-east-1"; // Hardcode region for primary stack
-        }
+        // We already set the region above, so no need to do it again
         
         String rumAppName = "webapp-rum-" + region + "-" + environmentSuffix;
         dashboard.addWidgets(
