@@ -59,3 +59,24 @@ variable "monitoring_role_arn" {
   type        = string
   default     = ""
 }
+
+variable "parameter_group_suffix" {
+  description = "Suffix for the custom parameter group name"
+  type        = string
+  default     = "custom"
+}
+
+variable "custom_parameters" {
+  description = "List of custom parameters for the parameter group"
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default = []
+}
+
+variable "subnet_group_suffix" {
+  description = "Suffix for the custom subnet group name"
+  type        = string
+  default     = "custom"
+}

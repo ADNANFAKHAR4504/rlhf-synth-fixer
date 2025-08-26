@@ -5,9 +5,15 @@ resource "aws_db_subnet_group" "main" {
   tags = {
     Name = "prod-db-subnet-group-${var.region}"
   }
+}
 
-  lifecycle {
-    ignore_changes = [name]
+# New subnet group with unique identifier to avoid VPC conflicts
+resource "aws_db_subnet_group" "custom" {
+  name       = "prod-db-subnet-group-${var.region}-${var.subnet_group_suffix}"
+  subnet_ids = var.private_subnet_ids
+
+  tags = {
+    Name = "prod-db-subnet-group-${var.region}-${var.subnet_group_suffix}"
   }
 }
 
@@ -62,9 +68,39 @@ resource "aws_db_parameter_group" "main" {
   tags = {
     Name = "prod-db-params-${var.region}"
   }
+}
 
-  lifecycle {
-    ignore_changes = [name]
+# New parameter group with unique identifier
+resource "aws_db_parameter_group" "custom" {
+  family = "mysql8.0"
+  name   = "prod-db-params-${var.region}-${var.parameter_group_suffix}"
+
+  parameter {
+    name  = "innodb_buffer_pool_size"
+    value = "{DBInstanceClassMemory*3/4}"
+  }
+
+  parameter {
+    name  = "slow_query_log"
+    value = "1"
+  }
+
+  parameter {
+    name  = "long_query_time"
+    value = "2"
+  }
+
+  # Add any custom parameters here
+  dynamic "parameter" {
+    for_each = var.custom_parameters
+    content {
+      name  = parameter.value.name
+      value = parameter.value.value
+    }
+  }
+
+  tags = {
+    Name = "prod-db-params-${var.region}-${var.parameter_group_suffix}"
   }
 }
 
@@ -97,9 +133,9 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   # Security settings
-  deletion_protection       = true
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "prod-database-${var.region}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  deletion_protection = true
+  skip_final_snapshot = true
+  # final_snapshot_identifier = "prod-database-${var.region}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   # Monitoring
   monitoring_interval             = 60
@@ -115,7 +151,6 @@ resource "aws_db_instance" "main" {
 
   lifecycle {
     ignore_changes = [
-      final_snapshot_identifier,
       password
     ]
   }
@@ -129,10 +164,6 @@ resource "aws_cloudwatch_log_group" "rds_error" {
   tags = {
     Name = "prod-rds-error-logs-${var.region}"
   }
-
-  lifecycle {
-    ignore_changes = [name]
-  }
 }
 
 resource "aws_cloudwatch_log_group" "rds_general" {
@@ -141,10 +172,6 @@ resource "aws_cloudwatch_log_group" "rds_general" {
 
   tags = {
     Name = "prod-rds-general-logs-${var.region}"
-  }
-
-  lifecycle {
-    ignore_changes = [name]
   }
 }
 

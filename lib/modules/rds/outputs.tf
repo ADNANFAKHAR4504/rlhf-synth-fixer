@@ -18,3 +18,33 @@ output "db_security_group_id" {
   description = "Security group ID for RDS"
   value       = aws_security_group.rds.id
 }
+
+output "db_parameter_group_name" {
+  description = "Name of the main RDS parameter group"
+  value       = aws_db_parameter_group.main.name
+}
+
+output "db_custom_parameter_group_name" {
+  description = "Name of the custom RDS parameter group"
+  value       = aws_db_parameter_group.custom.name
+}
+
+output "db_custom_parameter_group_id" {
+  description = "ID of the custom RDS parameter group"
+  value       = aws_db_parameter_group.custom.id
+}
+
+output "db_subnet_group_name" {
+  description = "Name of the main RDS subnet group"
+  value       = aws_db_subnet_group.main.name
+}
+
+output "db_custom_subnet_group_name" {
+  description = "Name of the custom RDS subnet group"
+  value       = aws_db_subnet_group.custom.name
+}
+
+output "db_custom_subnet_group_id" {
+  description = "ID of the custom RDS subnet group"
+  value       = aws_db_subnet_group.custom.id
+}

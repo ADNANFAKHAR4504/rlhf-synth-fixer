@@ -455,6 +455,52 @@ output "rds_endpoints" {
   sensitive = true
 }
 
+# RDS Parameter Group Outputs
+output "rds_parameter_groups" {
+  description = "RDS parameter group names"
+  value = {
+    us_east_1 = {
+      main   = module.rds_us_east_1.db_parameter_group_name
+      custom = module.rds_us_east_1.db_custom_parameter_group_name
+    }
+    us_west_2 = {
+      main   = module.rds_us_west_2.db_parameter_group_name
+      custom = module.rds_us_west_2.db_custom_parameter_group_name
+    }
+  }
+}
+
+output "rds_custom_parameter_group_ids" {
+  description = "RDS custom parameter group IDs"
+  value = {
+    us_east_1 = module.rds_us_east_1.db_custom_parameter_group_id
+    us_west_2 = module.rds_us_west_2.db_custom_parameter_group_id
+  }
+}
+
+# RDS Subnet Group Outputs
+output "rds_subnet_groups" {
+  description = "RDS subnet group names"
+  value = {
+    us_east_1 = {
+      main   = module.rds_us_east_1.db_subnet_group_name
+      custom = module.rds_us_east_1.db_custom_subnet_group_name
+    }
+    us_west_2 = {
+      main   = module.rds_us_west_2.db_subnet_group_name
+      custom = module.rds_us_west_2.db_custom_subnet_group_name
+    }
+  }
+}
+
+output "rds_custom_subnet_group_ids" {
+  description = "RDS custom subnet group IDs"
+  value = {
+    us_east_1 = module.rds_us_east_1.db_custom_subnet_group_id
+    us_west_2 = module.rds_us_west_2.db_custom_subnet_group_id
+  }
+}
+
 # KMS Key Outputs
 output "kms_key_ids" {
   description = "KMS key IDs"
