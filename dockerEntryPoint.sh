@@ -306,6 +306,8 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 # Set CFN_S3_BUCKET. If lib/AWS_REGION is present, use the region there. If not use us-east-1
 if [ -f "lib/AWS_REGION" ]; then
     region="$(cat lib/AWS_REGION)"
+    export AWS_REGION="$region"
+    export AWS_DEFAULT_REGION="$region"
 else
     region="us-east-1"
 fi
