@@ -302,22 +302,12 @@ export class TapStack extends cdk.Stack {
 
     // S3 Cross-Region Replication (Primary region only)
     if (props?.isPrimary) {
-      // Create replication role first without bucket reference
+      // Create replication role without bucket reference to avoid circular dependency
       const replicationRole = new iam.Role(this, 'TapS3ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
         inlinePolicies: {
           ReplicationPolicy: new iam.PolicyDocument({
             statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObjectVersionForReplication',
-                  's3:GetObjectVersionAcl',
-                  's3:GetObjectVersionTagging',
-                  's3:ListBucket',
-                ],
-                resources: [bucket.bucketArn, bucket.arnForObjects('*')],
-              }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
                 actions: [

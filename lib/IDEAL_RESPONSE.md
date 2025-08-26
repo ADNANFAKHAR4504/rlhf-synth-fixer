@@ -360,6 +360,7 @@ def handler(event, context):
 
     // S3 Cross-Region Replication (Primary region only)
     if (props?.isPrimary) {
+      // Create replication role without bucket reference to avoid circular dependency
       const replicationRole = new iam.Role(this, 'TapS3ReplicationRole', {
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
         inlinePolicies: {
@@ -368,28 +369,61 @@ def handler(event, context):
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
                 actions: [
-                  's3:GetObjectVersionForReplication',
-                  's3:GetObjectVersionAcl',
-                  's3:GetObjectVersionTagging',
-                  's3:ListBucket',
-                ],
-                resources: [bucket.bucketArn, bucket.arnForObjects('*')],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
                   's3:ReplicateObject',
                   's3:ReplicateDelete',
                   's3:ReplicateTags',
                 ],
-                resources: [`arn:aws:s3:::tap-replica-bucket-${props?.environmentSuffix || 'dev'}-uswest1/*`],
+                resources: [
+                  `arn:aws:s3:::tap-replica-bucket-${props?.environmentSuffix || 'dev'}-uswest1/*`,
+                ],
+              }),
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'kms:Decrypt',
+                  'kms:Encrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                resources: [
+                  kmsKey.keyArn,
+                  `arn:aws:kms:us-west-1:${this.account}:alias/aws/s3`, // For cross-region replication
+                ],
               }),
             ],
           }),
         },
       });
 
-      // Configure S3 replication
+      cdk.Tags.of(replicationRole).add('Environment', commonTags.Environment);
+      cdk.Tags.of(replicationRole).add('Project', commonTags.Project);
+      cdk.Tags.of(replicationRole).add('Owner', commonTags.Owner);
+
+      // Grant the replication role permissions on the source bucket via bucket policy
+      bucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AllowReplicationRoleListAndGetReplicationConfig',
+          principals: [new iam.ArnPrincipal(replicationRole.roleArn)],
+          actions: ['s3:ListBucket', 's3:GetReplicationConfiguration'],
+          resources: [bucket.bucketArn],
+        })
+      );
+
+      bucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AllowReplicationRoleReadSourceObjects',
+          principals: [new iam.ArnPrincipal(replicationRole.roleArn)],
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [bucket.arnForObjects('*')],
+        })
+      );
+
+      // Configure replication on the primary bucket using CFN
       const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
       cfnBucket.replicationConfiguration = {
         role: replicationRole.roleArn,
