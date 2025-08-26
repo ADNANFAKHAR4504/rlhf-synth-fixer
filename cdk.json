@@ -19,7 +19,7 @@
   "context": {
     "environments": {
       "dev": {
-        "existingVpcId": "vpc-0a0c0e357833827e0",
+        "existingVpcId": "vpc-03d43d0faacf0130c",
         "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "192.168.1.0/24",
         "trustedOutboundCidrs": [
@@ -28,7 +28,7 @@
         "environment": "Production"
       },
       "prod": {
-        "existingVpcId": "vpc-0a0c0e357833827e0",
+        "existingVpcId": "vpc-03d43d0faacf0130c",
         "existingS3Bucket": "test-logs-bucket20250819215334277900000001",
         "sshCidrBlock": "10.0.0.0/8",
         "trustedOutboundCidrs": [
