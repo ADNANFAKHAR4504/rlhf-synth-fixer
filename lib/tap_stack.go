@@ -13,14 +13,13 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Common tags for HIPAA compliance
 		commonTags := pulumi.StringMap{
 			"Environment": pulumi.String("Development"),
 			"Compliance":  pulumi.String("HIPAA"),
 			"Project":     pulumi.String("SecureInfrastructure"),
 		}
 
-		// Get current AWS region and account ID
+		// Get current AWS account info
 		current, err := aws.GetCallerIdentity(ctx, nil, nil)
 		if err != nil {
 			return err
@@ -46,7 +45,7 @@ func main() {
 			return err
 		}
 
-		// Create public subnet
+		// Create public subnet in us-east-1a
 		publicSubnet, err := ec2.NewSubnet(ctx, "hipaa-public-subnet", &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String("10.0.1.0/24"),
@@ -58,7 +57,7 @@ func main() {
 			return err
 		}
 
-		// Create private subnet for EC2
+		// Private subnet for EC2 in us-east-1a
 		privateSubnetEc2, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-ec2", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.2.0/24"),
@@ -69,7 +68,7 @@ func main() {
 			return err
 		}
 
-		// Create private subnet for RDS (different AZ for Multi-AZ deployment)
+		// Private subnet for RDS in us-east-1b (Multi-AZ)
 		privateSubnetRds, err := ec2.NewSubnet(ctx, "hipaa-private-subnet-rds", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String("10.0.3.0/24"),
@@ -80,7 +79,7 @@ func main() {
 			return err
 		}
 
-		// Create Elastic IP for NAT Gateway
+		// Allocate Elastic IP for NAT Gateway
 		natEip, err := ec2.NewEip(ctx, "hipaa-nat-eip", &ec2.EipArgs{
 			Domain: pulumi.String("vpc"),
 			Tags:   commonTags,
@@ -89,7 +88,7 @@ func main() {
 			return err
 		}
 
-		// Create NAT Gateway
+		// Create NAT Gateway in the public subnet
 		natGateway, err := ec2.NewNatGateway(ctx, "hipaa-nat-gateway", &ec2.NatGatewayArgs{
 			AllocationId: natEip.ID(),
 			SubnetId:     publicSubnet.ID(),
@@ -108,7 +107,7 @@ func main() {
 			return err
 		}
 
-		// Create public route
+		// Create route to Internet Gateway for public subnet
 		_, err = ec2.NewRoute(ctx, "hipaa-public-route", &ec2.RouteArgs{
 			RouteTableId:         publicRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
@@ -118,7 +117,7 @@ func main() {
 			return err
 		}
 
-		// Associate public subnet with public route table
+		// Associate public subnet to public route table
 		_, err = ec2.NewRouteTableAssociation(ctx, "hipaa-public-rta", &ec2.RouteTableAssociationArgs{
 			SubnetId:     publicSubnet.ID(),
 			RouteTableId: publicRouteTable.ID(),
@@ -136,7 +135,7 @@ func main() {
 			return err
 		}
 
-		// Create private route to NAT Gateway
+		// Route private subnet traffic through NAT Gateway
 		_, err = ec2.NewRoute(ctx, "hipaa-private-route", &ec2.RouteArgs{
 			RouteTableId:         privateRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
@@ -154,7 +153,6 @@ func main() {
 		if err != nil {
 			return err
 		}
-
 		_, err = ec2.NewRouteTableAssociation(ctx, "hipaa-private-rta-rds", &ec2.RouteTableAssociationArgs{
 			SubnetId:     privateSubnetRds.ID(),
 			RouteTableId: privateRouteTable.ID(),
@@ -183,17 +181,13 @@ func main() {
 			return err
 		}
 
-		// Enable server-side encryption for S3 bucket
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
+		// Enable server-side encryption for S3 bucket (fixed for v6 SDK)
+		_, err = s3.NewBucketServerSideEncryptionConfiguration(ctx, "hipaa-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationArgs{
 			Bucket: s3Bucket.ID(),
-			ServerSideEncryptionConfiguration: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArray{
-				&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs{
-					Rules: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArray{
-						&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs{
-							ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
-								SseAlgorithm: pulumi.String("AES256"),
-							},
-						},
+			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationArgs{
+				Rule: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationRuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
 					},
 				},
 			},
@@ -310,7 +304,7 @@ func main() {
 			return err
 		}
 
-		// Get the latest Amazon Linux 2 AMI
+		// Get latest Amazon Linux 2 AMI
 		ami, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
 			MostRecent: pulumi.BoolRef(true),
 			Owners:     []string{"amazon"},
@@ -425,23 +419,23 @@ func main() {
 
 		// Create RDS instance
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-rds-instance", &rds.InstanceArgs{
-			AllocatedStorage:      pulumi.Int(20),
-			StorageType:           pulumi.String("gp3"),
-			Engine:                pulumi.String("mysql"),
-			EngineVersion:         pulumi.String("8.0"),
-			InstanceClass:         pulumi.String("db.t3.micro"),
-			DbName:                pulumi.String("hipaadb"),
-			Username:              pulumi.String("admin"),
-			Password:              pulumi.String("SecurePassword123!"), // In production, use AWS Secrets Manager
-			VpcSecurityGroupIds:   pulumi.StringArray{rdsSecurityGroup.ID()},
-			DbSubnetGroupName:     dbSubnetGroup.Name,
-			ParameterGroupName:    dbParameterGroup.Name,
-			BackupRetentionPeriod: pulumi.Int(30),
-			BackupWindow:          pulumi.String("03:00-04:00"),
-			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
-			StorageEncrypted:      pulumi.Bool(true),
-			MonitoringInterval:    pulumi.Int(60),
-			MonitoringRoleArn:     rdsRole.Arn,
+			AllocatedStorage:             pulumi.Int(20),
+			StorageType:                  pulumi.String("gp3"),
+			Engine:                      pulumi.String("mysql"),
+			EngineVersion:               pulumi.String("8.0"),
+			InstanceClass:               pulumi.String("db.t3.micro"),
+			DbName:                      pulumi.String("hipaadb"),
+			Username:                    pulumi.String("admin"),
+			Password:                    pulumi.String("SecurePassword123!"), // Use Secrets Manager in production
+			VpcSecurityGroupIds:         pulumi.StringArray{rdsSecurityGroup.ID()},
+			DbSubnetGroupName:           dbSubnetGroup.Name,
+			ParameterGroupName:          dbParameterGroup.Name,
+			BackupRetentionPeriod:       pulumi.Int(30),
+			BackupWindow:                pulumi.String("03:00-04:00"),
+			MaintenanceWindow:           pulumi.String("sun:04:00-sun:05:00"),
+			StorageEncrypted:            pulumi.Bool(true),
+			MonitoringInterval:          pulumi.Int(60),
+			MonitoringRoleArn:           rdsRole.Arn,
 			EnabledCloudwatchLogsExports: pulumi.StringArray{
 				pulumi.String("error"),
 				pulumi.String("general"),
@@ -455,7 +449,7 @@ func main() {
 			return err
 		}
 
-		// Export important values
+		// Export outputs
 		ctx.Export("vpcId", vpc.ID())
 		ctx.Export("publicSubnetId", publicSubnet.ID())
 		ctx.Export("privateSubnetEc2Id", privateSubnetEc2.ID())
