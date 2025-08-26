@@ -327,4 +327,3 @@ tasks.register('testAll') {
 
 // Make check depend on integration tests and coverage
 check.dependsOn integrationTest, jacocoTestCoverageVerification
-# Force sync
