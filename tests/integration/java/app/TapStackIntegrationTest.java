@@ -11,9 +11,7 @@ import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 
 import java.util.Map;
-import java.util.List;
 import java.util.Arrays;
-import java.util.ArrayList;
 
 /**
  * Integration tests for the TapStack CDK application.
@@ -73,10 +71,10 @@ public class TapStackIntegrationTest {
                 "Statement", Match.arrayWith(Arrays.asList(
                     Map.of(
                         "Effect", "Allow",
-                        "Action", Match.arrayWith(Arrays.asList("s3:ListBucket"}),
+                        "Action", Match.arrayWith(Arrays.asList("s3:ListBucket")),
                         "Resource", Match.anyValue()
                     )
-                })
+                ))
             ))
         ));
         
@@ -130,7 +128,7 @@ public class TapStackIntegrationTest {
                     Map.of(
                         "Principal", Map.of("Service", "s3.amazonaws.com")
                     )
-                })
+                ))
             ))
         ));
         
@@ -147,7 +145,7 @@ public class TapStackIntegrationTest {
                             "StorageClass", "STANDARD_IA"
                         ))
                     )
-                })
+                ))
             ))
         ));
     }
@@ -169,7 +167,7 @@ public class TapStackIntegrationTest {
                             "SSEAlgorithm", "AES256"
                         )
                     )
-                })
+                ))
             ))
         ));
         
@@ -192,7 +190,7 @@ public class TapStackIntegrationTest {
                         "Action", "*",
                         "Resource", "*"
                     )
-                }))
+                )))
             ))
         ));
     }
@@ -218,7 +216,7 @@ public class TapStackIntegrationTest {
                         Map.of("Key", "Environment", "Value", env),
                         Map.of("Key", "Project", "Value", "infrastructure"),
                         Map.of("Key", "ManagedBy", "Value", "cdk")
-                    })
+                    ))
                 ))
             ));
             
@@ -228,7 +226,7 @@ public class TapStackIntegrationTest {
                     "Tags", Match.arrayWith(Arrays.asList(
                         Map.of("Key", "Environment", "Value", env),
                         Map.of("Key", "Project", "Value", "infrastructure")
-                    })
+                    ))
                 ))
             ));
         }
@@ -309,7 +307,7 @@ public class TapStackIntegrationTest {
                         "Status", "Enabled",
                         "ExpirationInDays", 365
                     )
-                })
+                ))
             ))
         ));
     }
@@ -332,9 +330,9 @@ public class TapStackIntegrationTest {
                                 "StorageClass", "GLACIER",
                                 "TransitionInDays", 30
                             )
-                        })
+                        ))
                     )
-                })
+                ))
             ))
         ));
     }
@@ -365,7 +363,7 @@ public class TapStackIntegrationTest {
             "Properties", Match.objectLike(Map.of(
                 "Tags", Match.arrayWith(Arrays.asList(
                     Map.of("Key", "Environment", "Value", Match.anyValue())
-                })
+                ))
             ))
         ));
     }
@@ -373,7 +371,7 @@ public class TapStackIntegrationTest {
     /**
      * Helper method to verify complete infrastructure
      */
-    private void verifyCompleteInfrastructure(Template template, String environment) {
+    private void verifyCompleteInfrastructure(final Template template, final String environment) {
         // Verify VPC components
         template.resourceCountIs("AWS::EC2::VPC", 1);
         template.resourceCountIs("AWS::EC2::InternetGateway", 1);
@@ -388,7 +386,7 @@ public class TapStackIntegrationTest {
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
                 "Statement", Match.arrayWith(Arrays.asList(
                     Map.of("Principal", Map.of("Service", "ec2.amazonaws.com"))
-                })
+                ))
             ))
         ));
         
@@ -396,7 +394,7 @@ public class TapStackIntegrationTest {
             "AssumeRolePolicyDocument", Match.objectLike(Map.of(
                 "Statement", Match.arrayWith(Arrays.asList(
                     Map.of("Principal", Map.of("Service", "lambda.amazonaws.com"))
-                })
+                ))
             ))
         ));
         

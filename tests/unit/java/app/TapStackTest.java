@@ -3,14 +3,12 @@ package app;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 
 import java.util.Map;
-import java.util.HashMap;
 import java.util.Arrays;
 
 /**
