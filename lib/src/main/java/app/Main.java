@@ -14,7 +14,6 @@ import software.amazon.awscdk.pipelines.CodePipeline;
 import software.amazon.awscdk.pipelines.CodePipelineSource;
 import software.amazon.awscdk.pipelines.ShellStep;
 import software.amazon.awscdk.pipelines.StageDeployment;
-import software.amazon.awscdk.services.codecommit.Repository;
 import software.amazon.awscdk.services.backup.BackupPlan;
 import software.amazon.awscdk.services.backup.BackupPlanRule;
 import software.amazon.awscdk.services.backup.BackupResource;
@@ -25,8 +24,7 @@ import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Metric;
 import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
-import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
-import software.amazon.awscdk.services.ec2.IVpc;
+
 import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.Vpc;
@@ -34,8 +32,7 @@ import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
+
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.kms.KeySpec;
 import software.amazon.awscdk.services.kms.KeyUsage;
@@ -45,8 +42,7 @@ import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.LifecycleRule;
-import software.amazon.awscdk.services.sns.Subscription;
-import software.amazon.awscdk.services.sns.SubscriptionProtocol;
+
 import software.amazon.awscdk.services.sns.Topic;
 import software.amazon.awscdk.services.wafv2.CfnWebACL;
 import software.amazon.awscdk.services.wafv2.CfnWebACL.RuleProperty;
@@ -93,20 +89,22 @@ public class Main extends App {
                               String environment, String costCenter, String projectName) {
             super(scope, id, props);
             
-            // Create pipeline with CodeCommit source (more suitable for testing/demo)
+            // Create S3 bucket for pipeline source (more suitable for testing/demo)
             // Note: For production use, configure with actual GitHub repo via environment variables
+            Bucket sourceBucket = Bucket.Builder.create(this, "PipelineSourceBucket")
+                .bucketName(String.format("%s-%s-pipeline-source-%s", projectName, environment, 
+                    System.getenv("CDK_DEFAULT_ACCOUNT")))
+                .versioned(true)
+                .blockPublicAccess(software.amazon.awscdk.services.s3.BlockPublicAccess.BLOCK_ALL)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+            
             CodePipeline pipeline = CodePipeline.Builder.create(this, "Pipeline")
                 .pipelineName(String.format("%s-%s-pipeline", projectName, environment))
                 .crossAccountKeys(true)
                 .dockerEnabledForSynth(true)
                 .synth(ShellStep.Builder.create("Synth")
-                    .input(CodePipelineSource.codeCommit(
-                        Repository.Builder
-                            .create(this, "SourceRepo")
-                            .repositoryName(String.format("%s-%s-source", projectName, environment))
-                            .description("Source repository for CDK pipeline")
-                            .build(),
-                        "main"))
+                    .input(CodePipelineSource.s3(sourceBucket, "source.zip"))
                     .commands(Arrays.asList(
                         "npm ci",
                         "npm run build",
@@ -333,14 +331,6 @@ public class Main extends App {
         }
         
         private void createIamResources(String environment, String projectName, String region) {
-            // Create IAM role for MFA enforcement
-            Role mfaRole = Role.Builder.create(this, "MFARole")
-                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-                .managedPolicies(Arrays.asList(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonS3ReadOnlyAccess")
-                ))
-                .build();
-            
             // Create MFA enforcement policy
             ManagedPolicy.Builder.create(this, "MFAPolicy")
                 .managedPolicyName(String.format("%s-mfa-enforcement-policy", projectName))

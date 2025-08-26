@@ -200,9 +200,8 @@ public class MainTest {
   public void testStackContainsIAMResources() {
     Template template = Template.fromStack(stack);
 
-    // Verify that IAM roles and policies are created (there are 2 roles: backup
-    // role and default role)
-    template.resourceCountIs("AWS::IAM::Role", 2);
+    // Verify that IAM roles and policies are created (there is 1 backup service role)
+    template.resourceCountIs("AWS::IAM::Role", 1);
     template.resourceCountIs("AWS::IAM::ManagedPolicy", 1);
   }
 
@@ -394,5 +393,52 @@ public class MainTest {
     template.resourceCountIs("AWS::Events::Rule", 1);
     template.hasResourceProperties("AWS::Events::Rule", Map.of(
         "Name", "test-project-development-vpc-peering-trigger"));
+  }
+
+  /**
+   * Test that the TapPipelineStack can be instantiated successfully.
+   */
+  @Test
+  void testTapPipelineStack() {
+    App app = new App();
+    Main.TapPipelineStack stack = new Main.TapPipelineStack(app, "TestPipelineStack", 
+        StackProps.builder()
+            .env(Environment.builder()
+                .account("123456789012")
+                .region("us-east-1")
+                .build())
+            .build(),
+        "development", "cost-center-123", "tap-project");
+    
+    Template template = Template.fromStack(stack);
+    
+    // Test that pipeline bucket and artifact store buckets are created
+    // CDK pipeline creates at least 2 buckets: source bucket + artifact stores
+    template.resourceCountIs("AWS::S3::Bucket", 2);
+    
+    // Test that CodePipeline is created
+    template.resourceCountIs("AWS::CodePipeline::Pipeline", 1);
+  }
+
+  /**
+   * Test that the TapPipelineStack handles cross-account keys correctly.
+   */
+  @Test
+  void testTapPipelineStackCrossAccountKeys() {
+    App app = new App();
+    Main.TapPipelineStack stack = new Main.TapPipelineStack(app, "TestPipelineStack", 
+        StackProps.builder()
+            .env(Environment.builder()
+                .account("123456789012")
+                .region("us-east-1")
+                .build())
+            .build(),
+        "production", "cost-center-456", "enterprise-project");
+    
+    Template template = Template.fromStack(stack);
+    
+    // Test that pipeline and artifact buckets are created
+    template.resourceCountIs("AWS::CodePipeline::Pipeline", 1);
+    template.resourceCountIs("AWS::S3::Bucket", 2);
   }
 }
