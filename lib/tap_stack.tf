@@ -661,7 +661,7 @@ resource "aws_ecs_service" "app" {
   }
 
   lifecycle {
-    ignore_changes = [task_definition]
+    ignore_changes = [task_definition, load_balancer, network_configuration]
   }
 
   depends_on = [aws_lb_listener.http]
