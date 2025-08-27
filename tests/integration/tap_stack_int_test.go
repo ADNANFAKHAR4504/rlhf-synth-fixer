@@ -58,6 +58,8 @@ func TestTapStackIntegration(t *testing.T) {
 	outputs := loadOutputs(t)
 
 	t.Run("VPC is correctly configured", func(t *testing.T) {
+		require.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
+
 		vpcResp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
 			VpcIds: []string{outputs.VPCId},
 		})
@@ -84,6 +86,8 @@ func TestTapStackIntegration(t *testing.T) {
 	})
 
 	t.Run("Security Groups have correct rules", func(t *testing.T) {
+		require.NotEmpty(t, outputs.WebServerInstanceId, "WebServerInstanceId should be exported")
+
 		instanceResp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 			InstanceIds: []string{outputs.WebServerInstanceId},
 		})
@@ -111,6 +115,8 @@ func TestTapStackIntegration(t *testing.T) {
 	})
 
 	t.Run("VPC has correct subnets and Internet Gateway", func(t *testing.T) {
+		require.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
+
 		// Describe subnets
 		subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
 			Filters: []ec2types.Filter{
@@ -137,6 +143,8 @@ func TestTapStackIntegration(t *testing.T) {
 	})
 
 	t.Run("RDS instance is encrypted", func(t *testing.T) {
+		require.NotEmpty(t, outputs.DatabaseIdentifier, "DatabaseIdentifier should be exported")
+
 		dbResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
 			DBInstanceIdentifier: aws.String(outputs.DatabaseIdentifier),
 		})
