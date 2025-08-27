@@ -1,0 +1,15 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291604",
+  "team": "1",
+  "startedAt": "2025-08-25T17:41:58.132Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}
