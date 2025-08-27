@@ -32,9 +32,6 @@ func synthStack(t *testing.T, stackId string) string {
 		},
 		AllowedSSHIP:    jsii.String("10.0.0.0/32"),
 		EC2InstanceType: jsii.String("t2.micro"),
-		DBInstanceClass: jsii.String("t3.small"),
-		DBUsername:      jsii.String("testuser"),
-		DBPassword:      jsii.String("testpassword"),
 	})
 	assembly := app.Synth(nil)
 	stack := assembly.GetStackByName(&stackId)

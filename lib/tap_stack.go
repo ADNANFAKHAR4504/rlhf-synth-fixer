@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -17,9 +18,6 @@ type TapStackProps struct {
 	// Configurable parameters
 	AllowedSSHIP      *string
 	EC2InstanceType   *string
-	DBInstanceClass   *string
-	DBUsername        *string
-	DBPassword        *string
 	EnvironmentSuffix *string
 }
 
@@ -53,15 +51,13 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	if props.EC2InstanceType == nil {
 		props.EC2InstanceType = jsii.String("t3.micro")
 	}
-	if props.DBInstanceClass == nil {
-		props.DBInstanceClass = jsii.String("t3.micro")
-	}
-	if props.DBUsername == nil {
-		props.DBUsername = jsii.String("admin")
-	}
-	if props.DBPassword == nil {
-		props.DBPassword = jsii.String("TempPassword123!")
-	}
+	// Create a new secret for the database password
+	dbPasswordSecret := awssecretsmanager.NewSecret(stack, jsii.String("DBPasswordSecret"), &awssecretsmanager.SecretProps{
+		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
+			PasswordLength:     jsii.Number(16),
+			ExcludePunctuation: jsii.Bool(true),
+		},
+	})
 
 	commonTags := map[string]*string{
 		"Environment": jsii.String("Production"),
@@ -175,12 +171,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
 			Version: awsrds.MysqlEngineVersion_VER_8_0(),
 		}),
-		InstanceType:              awsec2.NewInstanceType(props.DBInstanceClass),
-		Vpc:                       vpc,
-		SecurityGroups:            &[]awsec2.ISecurityGroup{rdsSecurityGroup},
-		SubnetGroup:               dbSubnetGroup,
-		DatabaseName:              jsii.String("cfdb"),
-		Credentials:               awsrds.Credentials_FromPassword(props.DBUsername, awscdk.SecretValue_UnsafePlainText(props.DBPassword)),
+		InstanceType:   awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
+		Vpc:            vpc,
+		SecurityGroups: &[]awsec2.ISecurityGroup{rdsSecurityGroup},
+		SubnetGroup:    dbSubnetGroup,
+		DatabaseName:   jsii.String("cfdb"),
+		Credentials: awsrds.Credentials_FromUsername(jsii.String("admin"), &awsrds.CredentialsFromUsernameOptions{
+			Password: dbPasswordSecret.SecretValue(),
+		}),
 		MultiAz:                   jsii.Bool(true),
 		AllocatedStorage:          jsii.Number(20),
 		StorageType:               awsrds.StorageType_GP2,
