@@ -180,35 +180,46 @@ describe("Terraform TAP Stack Integration Tests", () => {
   });
 
   describe("IAM Roles", () => {
-    const roles = [
+    const roles: { key: keyof TerraformOutputs; nameContains: string }[] = [
       { key: "role_arn_cloudtrail", nameContains: "cloudtrail" },
       { key: "role_arn_config", nameContains: "config" },
       { key: "role_arn_mfa", nameContains: "MFA" },
     ];
+  
     roles.forEach(({ key }) => {
       test(`${key} should exist`, async () => {
         if (process.env.RUN_LIVE_TESTS !== "true") return;
-        const roleName = outputs[key].split("/").pop()!;
+      
+        const roleArn = outputs[key];
+        const roleName = roleArn.split("/").pop()!;
         const res = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-        expect(res.Role?.Arn).toBe(outputs[key]);
+      
+        expect(res.Role?.Arn).toBe(roleArn);
       });
     });
   });
-
+  
   describe("CloudWatch Logs", () => {
-    const logGroups = [
+    const logGroups: { key: keyof TerraformOutputs }[] = [
       { key: "cloudtrail_log_group_name" },
       { key: "cloudwatch_log_group_name" },
     ];
+  
     logGroups.forEach(({ key }) => {
       test(`${key} should exist`, async () => {
         if (process.env.RUN_LIVE_TESTS !== "true") return;
-        const name = outputs[key].split(":log-group:")[1];
-        const res = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name }));
+      
+        const logGroupNameFull = outputs[key];
+        const name = logGroupNameFull.split(":log-group:")[1];
+        const res = await logsClient.send(
+          new DescribeLogGroupsCommand({ logGroupNamePrefix: name })
+        );
+      
         expect(res.logGroups?.some(g => g.logGroupName === name)).toBe(true);
       });
     });
   });
+
 
   describe("Config Service", () => {
     test("Delivery channel should exist", async () => {
