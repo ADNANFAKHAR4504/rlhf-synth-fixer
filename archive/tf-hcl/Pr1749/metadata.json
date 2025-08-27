@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291477",
+  "team": "6",
+  "startedAt": "2025-08-20T07:51:45.706Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Performance Optimization",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "S3",
+    "IAM",
+    "VPC",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP",
+    "CloudWatch",
+    "Route Tables",
+    "Security Groups",
+    "Availability Zones"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "po_id": "trainr191cdkpy",
+  "subtask": "Security and Compliance Implementation",
+  "team": "synth",
+  "startedAt": "2025-08-25T13:44:39+05:30",
+  "subject_labels": [
+    "Security Configuration",
+    "Web Application Deployment",
+    "Network Infrastructure Design",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "WAF v2",
+    "CloudWatch",
+    "S3",
+    "IAM",
+    "Systems Manager",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

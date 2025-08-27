@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291949",
+  "team": "1",
+  "startedAt": "2025-08-25T12:31:33.702Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "KMS",
+    "S3",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "Network Firewall",
+    "Config",
+    "CloudTrail",
+    "IAM",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}
