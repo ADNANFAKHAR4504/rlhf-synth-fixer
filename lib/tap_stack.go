@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
@@ -30,7 +30,7 @@ func main() {
 		}
 
 		// Get current account ID
-		callerIdentity, err := aws.GetCallerIdentity(ctx)
+		callerIdentity, err := aws.GetCallerIdentity(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -226,47 +226,7 @@ func main() {
 			return err
 		}
 
-		privateSg, err := ec2.NewSecurityGroup(ctx, "private", &ec2.SecurityGroupArgs{
-			Name:        pulumi.Sprintf("%s-%s-private-sg", projectName, environment),
-			Description: pulumi.String("Security group for private subnets"),
-			VpcId:       vpc.ID(),
-			Ingress: ec2.SecurityGroupIngressArray{
-				&ec2.SecurityGroupIngressArgs{
-					FromPort:    pulumi.Int(443),
-					ToPort:      pulumi.Int(443),
-					Protocol:    pulumi.String("tcp"),
-					CidrBlocks:  pulumi.StringArray{pulumi.String(vpcCidr)},
-					Description: pulumi.String("HTTPS from VPC"),
-				},
-				&ec2.SecurityGroupIngressArgs{
-					FromPort:    pulumi.Int(80),
-					ToPort:      pulumi.Int(80),
-					Protocol:    pulumi.String("tcp"),
-					CidrBlocks:  pulumi.StringArray{pulumi.String(vpcCidr)},
-					Description: pulumi.String("HTTP from VPC"),
-				},
-			},
-			Egress: ec2.SecurityGroupEgressArray{
-				&ec2.SecurityGroupEgressArgs{
-					FromPort:    pulumi.Int(443),
-					ToPort:      pulumi.Int(443),
-					Protocol:    pulumi.String("tcp"),
-					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
-					Description: pulumi.String("HTTPS to internet"),
-				},
-				&ec2.SecurityGroupEgressArgs{
-					FromPort:    pulumi.Int(80),
-					ToPort:      pulumi.Int(80),
-					Protocol:    pulumi.String("tcp"),
-					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
-					Description: pulumi.String("HTTP to internet"),
-				},
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+
 
 		// Create VPC endpoints
 		s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "s3", &ec2.VpcEndpointArgs{
@@ -329,11 +289,11 @@ func main() {
 		}
 
 		// Configure S3 bucket encryption
-		_, err = s3.NewBucketServerSideEncryptionConfiguration(ctx, "cloudtrail-logs-encryption", &s3.BucketServerSideEncryptionConfigurationArgs{
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "cloudtrail-logs-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: cloudtrailLogsBucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationRuleArray{
-				&s3.BucketServerSideEncryptionConfigurationRuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
 						KmsMasterKeyId: kmsKey.Arn,
 						SseAlgorithm:   pulumi.String("aws:kms"),
 					},
@@ -357,9 +317,9 @@ func main() {
 		}
 
 		// Configure S3 bucket versioning
-		_, err = s3.NewBucketVersioning(ctx, "cloudtrail-logs-versioning", &s3.BucketVersioningArgs{
+		_, err = s3.NewBucketVersioningV2(ctx, "cloudtrail-logs-versioning", &s3.BucketVersioningV2Args{
 			Bucket: cloudtrailLogsBucket.ID(),
-			VersioningConfiguration: &s3.BucketVersioningVersioningConfigurationArgs{
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
 				Status: pulumi.String("Enabled"),
 			},
 		})
@@ -377,11 +337,11 @@ func main() {
 		}
 
 		// Configure app data bucket encryption
-		_, err = s3.NewBucketServerSideEncryptionConfiguration(ctx, "app-data-encryption", &s3.BucketServerSideEncryptionConfigurationArgs{
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "app-data-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
 			Bucket: appDataBucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationRuleArray{
-				&s3.BucketServerSideEncryptionConfigurationRuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
 						KmsMasterKeyId: kmsKey.Arn,
 						SseAlgorithm:   pulumi.String("aws:kms"),
 					},
@@ -405,9 +365,9 @@ func main() {
 		}
 
 		// Configure app data bucket versioning
-		_, err = s3.NewBucketVersioning(ctx, "app-data-versioning", &s3.BucketVersioningArgs{
+		_, err = s3.NewBucketVersioningV2(ctx, "app-data-versioning", &s3.BucketVersioningV2Args{
 			Bucket: appDataBucket.ID(),
-			VersioningConfiguration: &s3.BucketVersioningVersioningConfigurationArgs{
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
 				Status: pulumi.String("Enabled"),
 			},
 		})
@@ -418,23 +378,26 @@ func main() {
 		// Create IAM roles
 		developerRole, err := iam.NewRole(ctx, "developer", &iam.RoleArgs{
 			Name: pulumi.Sprintf("%s-%s-developer-role", projectName, environment),
-			AssumeRolePolicy: pulumi.String(`{
-				"Version": "2012-10-17",
-				"Statement": [
-					{
-						"Action": "sts:AssumeRole",
-						"Effect": "Allow",
-						"Principal": {
-							"AWS": "arn:aws:iam::ACCOUNT_ID:root"
-						},
-						"Condition": {
-							"StringEquals": {
-								"sts:ExternalId": "developer-access"
+			AssumeRolePolicy: pulumi.All(callerIdentity.AccountId).ApplyT(func(args []interface{}) string {
+				accountId := args[0].(string)
+				return fmt.Sprintf(`{
+					"Version": "2012-10-17",
+					"Statement": [
+						{
+							"Action": "sts:AssumeRole",
+							"Effect": "Allow",
+							"Principal": {
+								"AWS": "arn:aws:iam::%s:root"
+							},
+							"Condition": {
+								"StringEquals": {
+									"sts:ExternalId": "developer-access"
+								}
 							}
 						}
-					}
-				]
-			}`),
+					]
+				}`, accountId)
+			}).(pulumi.StringOutput),
 			Tags: commonTags,
 		})
 		if err != nil {
@@ -486,7 +449,7 @@ func main() {
 
 		// Create CloudWatch log groups
 		cloudtrailLogGroup, err := cloudwatch.NewLogGroup(ctx, "cloudtrail", &cloudwatch.LogGroupArgs{
-			LogGroupName:    pulumi.Sprintf("/aws/cloudtrail/%s-%s", projectName, environment),
+			Name:            pulumi.Sprintf("/aws/cloudtrail/%s-%s", projectName, environment),
 			RetentionInDays: pulumi.Int(2557), // 7 years
 			Tags:            commonTags,
 		})
@@ -495,7 +458,7 @@ func main() {
 		}
 
 		applicationLogGroup, err := cloudwatch.NewLogGroup(ctx, "application", &cloudwatch.LogGroupArgs{
-			LogGroupName:    pulumi.Sprintf("/aws/application/%s-%s", projectName, environment),
+			Name:            pulumi.Sprintf("/aws/application/%s-%s", projectName, environment),
 			RetentionInDays: pulumi.Int(90),
 			Tags:            commonTags,
 		})
@@ -519,6 +482,10 @@ func main() {
 			"kms":        kmsEndpoint.ID(),
 			"cloudtrail": cloudtrailEndpoint.ID(),
 			"logs":       logsEndpoint.ID(),
+		})
+		ctx.Export("cloudwatch_log_groups", pulumi.Map{
+			"cloudtrail": cloudtrailLogGroup.Name,
+			"application": applicationLogGroup.Name,
 		})
 
 		return nil
