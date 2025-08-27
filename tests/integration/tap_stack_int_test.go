@@ -116,13 +116,22 @@ func readPulumiOutputs(t *testing.T) *PulumiOutputs {
 		}
 	}
 
-	// Try to read from output file first (if exists)
-	outputFile := "outputs.json"
-	if data, err := os.ReadFile(outputFile); err == nil {
-		var outputs PulumiOutputs
-		if err := json.Unmarshal(data, &outputs); err == nil {
-			outputsCache = &outputs
-			return &outputs
+	// Try to read from various output files (if exists)
+	outputFiles := []string{
+		"outputs.json",
+		"cfn-outputs/flat-outputs.json", 
+		"lib/cfn-outputs/flat-outputs.json",
+		"flat-outputs.json",
+	}
+	
+	for _, outputFile := range outputFiles {
+		if data, err := os.ReadFile(outputFile); err == nil {
+			var outputs PulumiOutputs
+			if err := json.Unmarshal(data, &outputs); err == nil {
+				t.Logf("Successfully read outputs from %s", outputFile)
+				outputsCache = &outputs
+				return &outputs
+			}
 		}
 	}
 
