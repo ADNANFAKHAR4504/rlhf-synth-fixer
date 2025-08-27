@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/autoscaling"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
@@ -343,11 +344,12 @@ func main() {
 			return err
 		}
 
+		dbSubnetGroupName := strings.ToLower(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName))
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "db-subnet-group", &rds.SubnetGroupArgs{
-			Name:      pulumi.String(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName)),
+			Name:      pulumi.String(dbSubnetGroupName),
 			SubnetIds: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName)),
+				"Name":        pulumi.String(dbSubnetGroupName),
 				"Environment": pulumi.String(stackName),
 			},
 		})
@@ -406,8 +408,6 @@ func main() {
 		if err != nil {
 			return err
 		}
-
-		// Use BucketV2 + BucketVersioningV2 + BucketServerSideEncryptionConfigurationV2
 
 		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-bucket", &s3.BucketV2Args{
 			Bucket: pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
