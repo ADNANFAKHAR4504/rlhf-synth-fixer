@@ -6,8 +6,24 @@
   "po_id": "310052",
   "team": "6",
   "startedAt": "2025-08-26T09:23:20.383Z",
-  "subtask": "multi-region-web-infrastructure",
-  "subject_labels": ["vpc", "alb", "autoscaling", "cloudwatch", "security-groups", "multi-region", "web-application"],
-  "training_quality": "high",
-  "aws_services": ["EC2", "VPC", "ELB", "AutoScaling", "CloudWatch"]
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing v2 (ALB)",
+    "Auto Scaling",
+    "CloudWatch"
+  ]
 }
