@@ -90,7 +90,7 @@ public class MainTest {
     template.hasResourceProperties("AWS::Lambda::Function", java.util.Map.of());
     template.hasResourceProperties("AWS::SNS::Topic", java.util.Map.of());
     template.hasResourceProperties("AWS::CloudWatch::Alarm", java.util.Map.of());
-    
+
     // Verify stack outputs
     template.hasOutput("LoadBalancerDNS", java.util.Map.of());
     template.hasOutput("DatabaseEndpoint", java.util.Map.of());
@@ -127,7 +127,7 @@ public class MainTest {
     template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", java.util.Map.of());
     template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", java.util.Map.of());
     template.hasResourceProperties("AWS::Lambda::Function", java.util.Map.of());
-    
+
     // Verify stack outputs
     template.hasOutput("LoadBalancerDNS", java.util.Map.of());
     template.hasOutput("DatabaseEndpoint", java.util.Map.of());

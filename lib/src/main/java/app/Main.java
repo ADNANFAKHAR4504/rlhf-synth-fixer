@@ -142,9 +142,9 @@ class TapStack extends Stack {
     // Region Information
     CfnOutput.Builder.create(this, "RegionInfo")
         .description("Region and Role Information")
-        .value(String.format("Region: %s, Role: %s", 
-               this.getRegion(), 
-               isPrimary ? "Primary" : "Secondary"))
+        .value(String.format("Region: %s, Role: %s",
+            this.getRegion(),
+            isPrimary ? "Primary" : "Secondary"))
         .build();
   }
 
@@ -213,14 +213,14 @@ class TapStack extends Stack {
     // Create parameter group for MySQL
     ParameterGroup parameterGroup = ParameterGroup.Builder.create(this, "DbParameterGroup")
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-            .version(MysqlEngineVersion.VER_8_0_35)
+            .version(MysqlEngineVersion.VER_8_0_37)
             .build()))
         .description("Parameter group for TapApp database")
         .build();
 
     DatabaseInstance database = DatabaseInstance.Builder.create(this, "TapDatabase")
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-            .version(MysqlEngineVersion.VER_8_0_35)
+            .version(MysqlEngineVersion.VER_8_0_37)
             .build()))
         .instanceType(
             software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
@@ -397,7 +397,7 @@ class TapStack extends Stack {
         .build();
 
     Tags.of(secondaryHostedZone).add("Name", "TapApp-Secondary-HostedZone");
-    
+
     // Note: In production, you would typically:
     // 1. Use Route53 health checks with failover routing
     // 2. Configure proper DNS delegation between regions
