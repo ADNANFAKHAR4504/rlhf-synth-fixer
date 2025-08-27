@@ -69,15 +69,14 @@ public class GuardDutyStack extends Stack {
             AwsCustomResourceProps.builder()
                 .onUpdate(AwsSdkCall.builder()
                     .service("GuardDuty")
-                    // Use the GetDetector action first to check if one exists
-                    // If it exists, we'll get a response with its configuration
-                    // If it doesn't, we'll get a not found error
                     .action("createDetector") // We'll always try to create
                     .region(props.getEnv() != null ? props.getEnv().getRegion() : "us-east-1")
                     .parameters(detectorConfig)
                     // Set ignoreErrorCodesMatching to ignore AlreadyExists error
                     // This way the custom resource won't fail if a detector already exists
-                    .ignoreErrorCodesMatching(".*AlreadyExistsException.*")
+                    .ignoreErrorCodesMatching(".*AlreadyExistsException.*|.*BadRequestException.*")
+                    .outputPaths(Arrays.asList("DetectorId")) // Extract detector ID from response if creation succeeds
+                    // Use deterministic physical ID to prevent resource replacement during updates
                     .physicalResourceId(PhysicalResourceId.of("guardduty-detector-" + id))
                     .build())
                 .policy(AwsCustomResourcePolicy.fromStatements(Arrays.asList(
@@ -85,7 +84,8 @@ public class GuardDutyStack extends Stack {
                         .actions(Arrays.asList(
                             "guardduty:CreateDetector", 
                             "guardduty:GetDetector",
-                            "guardduty:UpdateDetector"
+                            "guardduty:UpdateDetector",
+                            "guardduty:ListDetectors"
                         ))
                         .resources(Arrays.asList("*"))
                         .effect(Effect.ALLOW)
@@ -109,13 +109,16 @@ public class GuardDutyStack extends Stack {
                     }})
                     // This will only run if a detector ID is found in the list
                     // If the list is empty, this will be skipped
-                    .ignoreErrorCodesMatching(".*ResourceNotFoundException.*")
+                    .ignoreErrorCodesMatching(".*ResourceNotFoundException.*|.*BadRequestException.*")
                     .physicalResourceId(PhysicalResourceId.of("guardduty-detector-update-" + id))
+                    // Update a previous detector if one exists, but don't fail if there isn't one
+                    .outputPaths(Arrays.asList("DetectorId")) // Extract detector ID from response
                     .build())
                 .policy(AwsCustomResourcePolicy.fromStatements(Arrays.asList(
                     PolicyStatement.Builder.create()
                         .actions(Arrays.asList(
-                            "guardduty:UpdateDetector"
+                            "guardduty:UpdateDetector",
+                            "guardduty:GetDetector"
                         ))
                         .resources(Arrays.asList("*"))
                         .effect(Effect.ALLOW)
@@ -123,8 +126,13 @@ public class GuardDutyStack extends Stack {
                 )))
                 .build());
                 
-        // Make sure the update only runs after we've listed detectors
+        // Make sure the dependencies are set correctly for the custom resources:
+        // 1. First list existing detectors
+        // 2. Then try to create a detector (will be ignored if it already exists)
+        // 3. Finally, update the existing detector with our configuration
+        this.guardDutyDetector.getNode().addDependency(listDetectors);
         updateExistingDetector.getNode().addDependency(listDetectors);
+        updateExistingDetector.getNode().addDependency(this.guardDutyDetector);
         
         this.addCommonTags();
     }
