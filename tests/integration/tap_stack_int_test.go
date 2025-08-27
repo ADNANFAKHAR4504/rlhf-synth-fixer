@@ -23,12 +23,12 @@ import (
 
 // Outputs represents the structure of cfn-outputs/flat-outputs.json
 type Outputs struct {
-	VPCId                  string `json:"VpcId"`
-	LoadBalancerDNS        string `json:"LoadBalancerDNS"`
-	CloudFrontDomainName   string `json:"CloudFrontDomainName"`
-	S3BucketName           string `json:"S3BucketName"`
-	DatabaseEndpoint       string `json:"DatabaseEndpoint"`
-	DynamoDBTableName      string `json:"DynamoDBTableName"`
+	VPCId                string `json:"VpcId"`
+	LoadBalancerDNS      string `json:"LoadBalancerDNS"`
+	CloudFrontDomainName string `json:"CloudFrontDomainName"`
+	S3BucketName         string `json:"S3BucketName"`
+	DatabaseEndpoint     string `json:"DatabaseEndpoint"`
+	DynamoDBTableName    string `json:"DynamoDBTableName"`
 }
 
 // loadOutputs loads deployment outputs from cfn-outputs/flat-outputs.json
