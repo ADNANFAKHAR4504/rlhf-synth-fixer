@@ -204,14 +204,14 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${StackPrefix}-${EnvironmentName}-access-logs'
-      RetentionInDays: 90
+      RetentionInDays: 1
 
   # CloudWatch Log Group for VPC Flow Logs
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${StackPrefix}-${EnvironmentName}-3'
-      RetentionInDays: 30
+      RetentionInDays: 1
 
   # IAM Role for VPC Flow Logs
   VPCFlowLogsRole:
@@ -758,29 +758,12 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyPublicAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': false
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Ref SecureLoggingBucket
+            Resource: !Sub 'arn:aws:s3:::${SecureLoggingBucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -791,6 +774,23 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
                 'AWS:SourceAccount': !Ref AWS::AccountId
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
+              - !Ref SecureLoggingBucket
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+          - Sid: DenyPublicAccess
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
+              - !Ref SecureLoggingBucket
 
 # =============================================================================
 # OUTPUTS - Important resource identifiers and endpoints
