@@ -1,6 +1,9 @@
 package lib
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
@@ -18,6 +21,16 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	if props != nil {
 		sprops = props.StackProps
 	}
+
+	// Get environment suffix from props, context, or use 'dev' as default
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "dev"
+	}
+
+	// Create stack name with environment suffix
+	stackName := fmt.Sprintf("TapStack%s", environmentSuffix)
+	sprops.StackName = jsii.String(stackName)
 	stack := awscdk.NewStack(scope, jsii.String(id), &sprops)
 
 	// Apply tags to the stack
