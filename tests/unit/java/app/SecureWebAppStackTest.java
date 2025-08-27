@@ -162,15 +162,12 @@ public class SecureWebAppStackTest {
      */
     @Test
     public void testCloudTrailConfiguration() {
-        // Verify CloudTrail is created with correct settings
-        template.hasResourceProperties("AWS::CloudTrail::Trail", Map.of(
-            "IsMultiRegionTrail", true,
-            "IncludeGlobalServiceEvents", true,
-            "EnableLogFileValidation", true,
-            "IsLogging", true
-        ));
+        // We are now importing an existing CloudTrail instead of creating a new one
+        // Since we're using an imported CloudTrail, there should be no AWS::CloudTrail::Trail resources
+        // in our template
+        assertThat(template.findResources("AWS::CloudTrail::Trail", Map.of()).size()).isEqualTo(0);
         
-        // We are now using an imported log group, so there is no AWS::Logs::LogGroup resource to check
+        // We are also using an imported log group, so there is no AWS::Logs::LogGroup resource to check
     }
     
     /**
@@ -315,10 +312,7 @@ public class SecureWebAppStackTest {
             "BucketName", Match.anyValue()
         )));
         
-        // Verify CloudTrail naming
-        template.hasResourceProperties("AWS::CloudTrail::Trail", Map.of(
-            "TrailName", "WebAppSecurityTrail-" + testEnvironmentSuffix
-        ));
+        // CloudTrail is now imported, not created, so we don't check its name
         
         // Verify DynamoDB table naming
         template.hasResourceProperties("AWS::DynamoDB::Table", Map.of(
