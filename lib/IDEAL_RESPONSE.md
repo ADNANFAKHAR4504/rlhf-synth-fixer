@@ -1,4 +1,5 @@
 ```hcl
+
 # Simplified multi-region Terraform configuration
 
 # Variables
