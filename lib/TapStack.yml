@@ -136,6 +136,11 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+  ExistingKMSKeyArn:
+    Type: String
+    Description: 'If provided, use this KMS Key ARN instead of creating a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -146,6 +151,7 @@ Conditions:
   EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
   EnableGuardDutyCondition:
     !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
+  CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
 
 Resources:
   # VPC and Networking Resources
@@ -328,8 +334,11 @@ Resources:
   # KMS Key for Encryption
   ProdKMSKey:
     Type: AWS::KMS::Key
+    Condition: CreateKMSKey
     Properties:
       Description: !Sub 'KMS Key for ${Environment} environment encryption'
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
@@ -345,6 +354,9 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
@@ -381,7 +393,7 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
-          - Sid: AllowCloudWatchLogs
+          - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
@@ -392,6 +404,9 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-kms-key'
@@ -400,8 +415,7 @@ Resources:
 
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    Condition: CreateKMSKey
     Properties:
       AliasName: !Sub 'alias/${Environment}-encryption-key'
       TargetKeyId: !Ref ProdKMSKey
@@ -417,7 +431,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ProdKMSKey
+              KMSMasterKeyID:
+                !If [
+                  CreateKMSKey,
+                  !GetAtt ProdKMSKey.Arn,
+                  !Ref ExistingKMSKeyArn,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -439,7 +458,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ProdKMSKey
+              KMSMasterKeyID:
+                !If [
+                  CreateKMSKey,
+                  !GetAtt ProdKMSKey.Arn,
+                  !Ref ExistingKMSKeyArn,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -461,7 +485,12 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ProdKMSKey
+              KMSMasterKeyID:
+                !If [
+                  CreateKMSKey,
+                  !GetAtt ProdKMSKey.Arn,
+                  !Ref ExistingKMSKeyArn,
+                ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -515,7 +544,8 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-trail'
       RetentionInDays: 365
-      KmsKeyId: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/${Environment}-encryption-key'
+      KmsKeyId:
+        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-cloudtrail-logs'
@@ -563,7 +593,6 @@ Resources:
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !Sub '${ProdCloudTrailLogGroup.Arn}:*'
       CloudWatchLogsRoleArn: !GetAtt ProdCloudTrailRole.Arn
-      KMSKeyId: !Ref ProdKMSKey
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-cloudtrail'
@@ -655,7 +684,8 @@ Resources:
     Properties:
       TopicName: !Sub '${Environment}-security-notifications'
       DisplayName: !Sub '${Environment} Security Notifications'
-      KmsMasterKeyId: !Ref ProdKMSKey
+      KmsMasterKeyId:
+        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-security-notifications'
@@ -976,7 +1006,8 @@ Resources:
     Properties:
       Name: !Sub '${Environment}-database-credentials'
       Description: !Sub 'Database credentials for ${Environment} environment'
-      KmsKeyId: !Ref ProdKMSKey
+      KmsKeyId:
+        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
       SecretString: !Sub |
         {
           "username": "${DBUsername}",
@@ -1001,7 +1032,8 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !Ref ProdKMSKey
+      KmsKeyId:
+        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
       MasterUsername: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
@@ -1148,7 +1180,7 @@ Outputs:
 
   KMSKeyArn:
     Description: 'KMS Key ARN for encryption'
-    Value: !GetAtt ProdKMSKey.Arn
+    Value: !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
 
