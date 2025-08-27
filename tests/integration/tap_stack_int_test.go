@@ -224,7 +224,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 			// Test key schema
 			assert.Len(t, table.Table.KeySchema, 2)
-			
+
 			// Test PITR
 			backup, err := dynamoClient.DescribeContinuousBackups(ctx, &dynamodb.DescribeContinuousBackupsInput{
 				TableName: aws.String(tableName),
@@ -234,8 +234,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 			// Test basic operations
 			testItem := map[string]interface{}{
-				"pk": map[string]interface{}{"S": "test-integration"},
-				"sk": map[string]interface{}{"S": fmt.Sprintf("test-%d", time.Now().Unix())},
+				"pk":   map[string]interface{}{"S": "test-integration"},
+				"sk":   map[string]interface{}{"S": fmt.Sprintf("test-%d", time.Now().Unix())},
 				"data": map[string]interface{}{"S": "integration-test-data"},
 			}
 
@@ -370,7 +370,7 @@ func TestTapStackIntegration(t *testing.T) {
 				})
 				require.NoError(t, err)
 				assert.NotEmpty(t, *response.MessageId)
-				
+
 				t.Logf("Successfully published message to SNS topic: %s", *response.MessageId)
 				return
 			}
