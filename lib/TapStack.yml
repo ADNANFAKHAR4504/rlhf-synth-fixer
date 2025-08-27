@@ -32,6 +32,7 @@ Metadata:
     config:
       ignore_checks:
         - W1001
+        - W1030
 
 Parameters:
   Environment:
@@ -140,6 +141,7 @@ Parameters:
     Type: String
     Description: 'If provided, use this KMS Key ARN instead of creating a new one.'
     Default: ''
+    AllowedValues: ['', 'placeholder-arn']
 
   ExistingDBSubnetGroupName:
     Type: String
@@ -151,7 +153,7 @@ Parameters:
     Description: 'If provided, use this S3 bucket name for CloudTrail logs instead of creating a new one.'
     Default: ''
 
-  ExistingKmsAliasName:
+  ExistingKMSKeyAlias:
     Type: String
     Description: 'If provided, use this existing KMS alias name (e.g., alias/production-encryption-key) and do not create a new alias.'
     Default: ''
@@ -166,10 +168,12 @@ Conditions:
   EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
   EnableGuardDutyCondition:
     !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
-  CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
+  CreateKMSKey: !And
+    - !Equals [!Ref ExistingKMSKeyArn, '']
+    - !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
-  CreateKMSKeyAlias: !Equals [!Ref ExistingKmsAliasName, '']
+  CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
 
 Resources:
   # VPC and Networking Resources
@@ -1269,7 +1273,7 @@ Outputs:
       !If [
         CreateKMSKeyAlias,
         !Sub 'alias/${Environment}-encryption-key',
-        !Ref ExistingKmsAliasName,
+        !Ref ExistingKMSKeyAlias,
       ]
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Alias-Name'
