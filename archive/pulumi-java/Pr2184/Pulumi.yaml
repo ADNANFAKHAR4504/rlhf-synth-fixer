@@ -1,0 +1,7 @@
+name: TapStack
+runtime: java
+description: Web Application Deployment with Auto Scaling and Load Balancer
+config:
+  aws:region: us-east-1
+  environment: production
+  companyName: YourCompany
