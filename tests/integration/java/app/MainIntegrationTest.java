@@ -29,9 +29,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integration tests for FaultTolerantStack.
- * Live checks limited to SDK clients bundled with CDK (EC2, S3, CloudWatch, SNS).
- * IAM client is excluded since its module is not available in your runtime.
+ * Integration tests for Main.FaultTolerantStack.
+ * 
+ * - Synth tests run offline against generated templates.
+ * - Live AWS tests (EC2, S3, CloudWatch, SNS) are conditional and only run if
+ *   cdk-outputs.json is present from a real deployment.
  */
 public class MainIntegrationTest {
 
@@ -104,12 +106,12 @@ public class MainIntegrationTest {
         ));
     }
 
-    // ---------- LIVE AWS TESTS (only supported SDK clients) ----------
+    // ---------- LIVE AWS TESTS ----------
 
     @Test
     public void testVpcExistsInAws() {
         Assumptions.assumeTrue(outputs != null, "Skipping live VPC test: no outputs found");
-        String vpcId = outputs.path("Nova-East").path("VpcId").asText(null);
+        String vpcId = outputs.path("TapStack-East").path("VpcId").asText(null);
         Assumptions.assumeTrue(vpcId != null, "Skipping live VPC test: VpcId missing");
 
         try (Ec2Client ec2 = Ec2Client.create()) {
@@ -123,7 +125,7 @@ public class MainIntegrationTest {
     @Test
     public void testLogBucketExistsInAws() {
         Assumptions.assumeTrue(outputs != null, "Skipping live S3 test: no outputs found");
-        String bucket = outputs.path("Nova-East").path("LogBucket").asText(null);
+        String bucket = outputs.path("TapStack-East").path("LogBucket").asText(null);
         Assumptions.assumeTrue(bucket != null, "Skipping live S3 test: LogBucket missing");
 
         try (S3Client s3 = S3Client.create()) {
@@ -135,7 +137,7 @@ public class MainIntegrationTest {
     @Test
     public void testCloudWatchAlarmExistsInAws() {
         Assumptions.assumeTrue(outputs != null, "Skipping live Alarm test: no outputs found");
-        String alarmName = outputs.path("Nova-East").path("CpuAlarmName").asText(null);
+        String alarmName = outputs.path("TapStack-East").path("CpuAlarmName").asText(null);
         Assumptions.assumeTrue(alarmName != null, "Skipping live Alarm test: CpuAlarmName missing");
 
         try (CloudWatchClient cw = CloudWatchClient.create()) {
@@ -147,7 +149,7 @@ public class MainIntegrationTest {
     @Test
     public void testSnsTopicExistsInAws() {
         Assumptions.assumeTrue(outputs != null, "Skipping live SNS test: no outputs found");
-        String topicArn = outputs.path("Nova-East").path("AlarmTopicArn").asText(null);
+        String topicArn = outputs.path("TapStack-East").path("AlarmTopicArn").asText(null);
         Assumptions.assumeTrue(topicArn != null, "Skipping live SNS test: AlarmTopicArn missing");
 
         try (SnsClient sns = SnsClient.create()) {

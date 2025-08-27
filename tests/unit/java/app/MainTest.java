@@ -101,7 +101,6 @@ public class MainTest {
         Main.FaultTolerantStack stack = createTestStack(app, "TestAlarm");
         Template template = Template.fromStack(stack);
 
-        // ✅ Match actual threshold (70 from Main.java)
         template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
                 "Threshold", 70
         ));
@@ -111,7 +110,6 @@ public class MainTest {
     public void testRoute53RecordCreated() {
         App app = new App();
 
-        // ✅ Skip test if no hostedZoneId provided
         String hostedZoneId = app.getNode().tryGetContext("hostedZoneId") != null
                 ? app.getNode().tryGetContext("hostedZoneId").toString()
                 : null;

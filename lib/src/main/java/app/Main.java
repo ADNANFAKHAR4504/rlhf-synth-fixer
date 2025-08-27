@@ -19,7 +19,6 @@ import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.ec2.ISubnet;
 
 // AutoScaling
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -81,41 +80,28 @@ public final class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        // East region stack
-        new FaultTolerantStack(app, "TapStackEast",
-            StackProps.builder()
-                .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                        .region("us-east-1")
-                        .build())
-                .stackName("TapStack-East") // actual CFN stack name
-                .build(),
-            "TapStack-East"
-        );
+        // ✅ Use TapStackEast / TapStackWest logical IDs for pipeline detection
+        new FaultTolerantStack(app, "TapStackEast", StackProps.builder()
+            .env(Environment.builder()
+                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                .region("us-east-1")
+                .build())
+            .stackName("TapStack-East")
+            .build());
 
-        // West region stack
-        new FaultTolerantStack(app, "TapStackWest",
-            StackProps.builder()
-                .env(Environment.builder()
-                        .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                        .region("us-west-2")
-                        .build())
-                .stackName("TapStack-West")
-                .build(),
-            "TapStack-West"
-        );
+        new FaultTolerantStack(app, "TapStackWest", StackProps.builder()
+            .env(Environment.builder()
+                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
+                .region("us-west-2")
+                .build())
+            .stackName("TapStack-West")
+            .build());
 
         app.synth();
     }
 
     public static class FaultTolerantStack extends Stack {
-        // Overloaded constructor for tests (3 args)
         public FaultTolerantStack(final Construct scope, final String id, final StackProps props) {
-            this(scope, id, props, null);
-        }
-
-        // Main constructor (4 args, used in Main.java)
-        public FaultTolerantStack(final Construct scope, final String id, final StackProps props, final String customName) {
             super(scope, id, props);
 
             String env = id.toLowerCase();
@@ -218,7 +204,7 @@ public final class Main {
             Topic alarmTopic = new Topic(this, env + "-alarm-topic");
             cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
 
-            // Route53 DNS (optional)
+            // Route53 DNS (only if context provided)
             String hostedZoneId = (String) this.getNode().tryGetContext("hostedZoneId");
             String zoneName = (String) this.getNode().tryGetContext("zoneName");
 
@@ -237,7 +223,7 @@ public final class Main {
                     .build();
             }
 
-            // ===== Outputs for Integration Tests =====
+            // ===== Outputs for Integration Tests (✅ hyphenated export names) =====
             CfnOutput.Builder.create(this, env + "-VpcId")
                 .value(vpc.getVpcId())
                 .exportName(env + "-VpcId")
@@ -245,14 +231,14 @@ public final class Main {
 
             CfnOutput.Builder.create(this, env + "-PublicSubnets")
                 .value(vpc.getPublicSubnets().stream()
-                    .map(ISubnet::getSubnetId)
+                    .map(s -> s.getSubnetId())
                     .collect(Collectors.joining(",")))
                 .exportName(env + "-PublicSubnets")
                 .build();
 
             CfnOutput.Builder.create(this, env + "-PrivateSubnets")
                 .value(vpc.getPrivateSubnets().stream()
-                    .map(ISubnet::getSubnetId)
+                    .map(s -> s.getSubnetId())
                     .collect(Collectors.joining(",")))
                 .exportName(env + "-PrivateSubnets")
                 .build();
