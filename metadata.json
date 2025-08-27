@@ -8,6 +8,6 @@
   "startedAt": "2025-08-27T11:09:44.021Z",
   "subtask": "Cloud Environment Setup",
   "subject_labels": "Cloud Environment Setup",
-  "training_quality": "high",
+  "training_quality": 9,
   "aws_services": ["VPC", "EC2", "IAM", "Secrets Manager", "CloudFormation"]
 }
