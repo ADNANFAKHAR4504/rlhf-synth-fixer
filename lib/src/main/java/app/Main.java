@@ -72,13 +72,15 @@ public final class Main {
             .region("us-west-2")
             .build();
 
-        new MultiRegionStack(app, "PrimaryStack-" + environment, 
+        String uniqueSuffix = String.valueOf(System.currentTimeMillis()).substring(8);
+        
+        new MultiRegionStack(app, "PrimaryStack-" + environment + "-" + uniqueSuffix, 
             StackProps.builder()
                 .env(usEast1)
                 .build(), 
             environment, "us-east-1", true);
 
-        new MultiRegionStack(app, "SecondaryStack-" + environment, 
+        new MultiRegionStack(app, "SecondaryStack-" + environment + "-" + uniqueSuffix, 
             StackProps.builder()
                 .env(usWest2)
                 .build(), 
