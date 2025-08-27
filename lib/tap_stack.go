@@ -406,7 +406,7 @@ func main() {
 			BackupRetentionPeriod:   pulumi.Int(30),
 			BackupWindow:            pulumi.String("03:00-04:00"),
 			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
-			DeletionProtection:      pulumi.Bool(true),
+			DeletionProtection:      pulumi.Bool(false),
 			SkipFinalSnapshot:       pulumi.Bool(false),
 			FinalSnapshotIdentifier: pulumi.String(fmt.Sprintf("%s-%s-final-snapshot", projectName, stackName)),
 			Tags: pulumi.StringMap{
