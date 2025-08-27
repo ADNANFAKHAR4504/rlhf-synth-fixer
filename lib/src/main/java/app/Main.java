@@ -19,7 +19,6 @@ import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.ec2.VpcLookupOptions;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
@@ -89,24 +88,41 @@ public final class Main {
     }
 
     static class MultiRegionStack extends Stack {
-        MultiRegionStack(final software.constructs.Construct scope, final String id, final StackProps props,
-                        final String environment, final String region, final boolean isPrimary) {
-            super(scope, id, props);
+        private final String environment;
+        private final String region;
+        private final boolean isPrimary;
+        private IVpc vpc;
+        private Key kmsKey;
+        private Bucket logsBucket;
+        private Role ec2Role;
 
+        MultiRegionStack(final software.constructs.Construct scope, final String id, final StackProps props,
+                        final String env, final String reg, final boolean primary) {
+            super(scope, id, props);
+            this.environment = env;
+            this.region = reg;
+            this.isPrimary = primary;
+
+            createBasicInfrastructure();
+            createComputeInfrastructure();
+            createDatabaseResources();
+            createLoggingResources();
+        }
+
+        private void createBasicInfrastructure() {
             Tags.of(this).add("Environment", environment);
             Tags.of(this).add("Project", "MultiRegionApp");
             Tags.of(this).add("Owner", "DevOps");
 
-            IVpc vpc = Vpc.Builder.create(this, "CustomVpc")
+            vpc = Vpc.Builder.create(this, "CustomVpc")
                 .maxAzs(2)
                 .natGateways(1)
                 .build();
 
-            Key kmsKey = Key.Builder.create(this, "KmsKey")
+            kmsKey = Key.Builder.create(this, "KmsKey")
                 .description("KMS key for " + environment + " in " + region)
                 .build();
 
-            Bucket logsBucket = null;
             if (isPrimary) {
                 logsBucket = Bucket.Builder.create(this, "LogsBucket")
                     .encryption(BucketEncryption.KMS)
@@ -117,7 +133,7 @@ public final class Main {
                     .build();
             }
 
-            Role ec2Role = Role.Builder.create(this, "Ec2Role")
+            ec2Role = Role.Builder.create(this, "Ec2Role")
                 .roleName("Ec2Role-" + environment + "-" + region)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
@@ -132,9 +148,9 @@ public final class Main {
                     .resources(Arrays.asList(logsBucket.getBucketArn() + "/*"))
                     .build());
             }
+        }
 
-            // InstanceProfile is handled automatically by CDK when using role in AutoScalingGroup
-
+        private void createComputeInfrastructure() {
             SecurityGroup albSg = SecurityGroup.Builder.create(this, "AlbSg")
                 .securityGroupName("AlbSg-" + environment + "-" + region)
                 .vpc(vpc)
@@ -185,8 +201,6 @@ public final class Main {
                 .defaultTargetGroups(Arrays.asList(targetGroup))
                 .build());
 
-            // Create AutoScaling Group directly without LaunchTemplate for simplicity
-
             AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "Asg")
                 .autoScalingGroupName("Asg-" + environment + "-" + region)
                 .vpc(vpc)
@@ -202,7 +216,9 @@ public final class Main {
                 .build();
 
             asg.attachToApplicationTargetGroup(targetGroup);
+        }
 
+        private void createDatabaseResources() {
             if (isPrimary) {
                 DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds")
                     .instanceIdentifier("Rds-" + environment + "-" + region)
@@ -247,11 +263,12 @@ public final class Main {
                         .build())
                     .build();
             }
+        }
 
+        private void createLoggingResources() {
             LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
                 .logGroupName("/aws/ec2/" + environment + "-" + region)
                 .retention(RetentionDays.ONE_WEEK)
-                .encryptionKey(kmsKey)
                 .build();
         }
     }

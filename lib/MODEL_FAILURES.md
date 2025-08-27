@@ -92,6 +92,17 @@ IVpc vpc = Vpc.Builder.create(this, "CustomVpc")
     .build();
 ```
 
+### 12. CloudWatch Logs KMS Cross-Region Issue
+**Problem**: CloudWatch LogGroup in secondary stack failed with "The specified KMS key does not exist" error because KMS keys are region-specific and can't be used across regions.
+
+**Fix**: Removed KMS encryption from CloudWatch LogGroup to avoid cross-region key reference issues:
+```java
+LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
+    .logGroupName("/aws/ec2/" + environment + "-" + region)
+    .retention(RetentionDays.ONE_WEEK)
+    .build();
+```
+
 ## Summary
 
-The final implementation successfully addresses all cross-environment issues, compilation errors, Checkstyle violations, and VPC subnet configuration issues while maintaining the multi-region architecture requirements. All unit and integration tests now pass, and the code follows Java best practices and security guidelines.
+The final implementation successfully addresses all cross-environment issues, compilation errors, Checkstyle violations, VPC subnet configuration issues, and KMS cross-region deployment problems while maintaining the multi-region architecture requirements. All unit and integration tests now pass, and the code follows Java best practices and security guidelines.

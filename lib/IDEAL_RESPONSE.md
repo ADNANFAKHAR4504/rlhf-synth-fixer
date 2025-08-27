@@ -258,7 +258,6 @@ public final class Main {
             LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
                 .logGroupName("/aws/ec2/" + environment + "-" + region)
                 .retention(RetentionDays.ONE_WEEK)
-                .encryptionKey(kmsKey)
                 .build();
         }
     }
