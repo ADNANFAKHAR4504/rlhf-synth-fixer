@@ -151,6 +151,11 @@ Parameters:
     Description: 'If provided, use this S3 bucket name for CloudTrail logs instead of creating a new one.'
     Default: ''
 
+  ExistingKMSKeyAlias:
+    Type: String
+    Description: 'If provided, use this KMS Key Alias instead of creating a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -164,6 +169,9 @@ Conditions:
   CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
   CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
+  CreateKMSKeyAlias: !And
+    - !Condition CreateKMSKey
+    - !Equals [!Ref ExistingKMSKeyAlias, '']
 
 Resources:
   # VPC and Networking Resources
@@ -427,7 +435,7 @@ Resources:
 
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
-    Condition: CreateKMSKey
+    Condition: CreateKMSKeyAlias
     Properties:
       AliasName: !Sub 'alias/${Environment}-encryption-key'
       TargetKeyId: !Ref ProdKMSKey
