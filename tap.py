@@ -17,14 +17,14 @@ commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 # Calculate the stack name
 stack_name = f"TapStack{environment_suffix}"
 
-# default_tags is structured in adherence to the AwsProvider default_tags interface
-default_tags = {
+# FIX: default_tags must be a list of objects
+default_tags = [{
     "tags": {
         "Environment": environment_suffix,
         "Repository": repository_name,
         "Author": commit_author,
     }
-}
+}]
 
 app = App()
 
