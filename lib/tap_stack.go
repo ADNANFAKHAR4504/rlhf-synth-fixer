@@ -299,7 +299,7 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 	}
 
 	// Build VPC Endpoints
-	_, err = buildVPCEndpoints(ctx, cfg, vpcComponent)
+	_, err = buildVPCEndpoints(ctx, cfg, vpcComponent, securityComponent)
 	if err != nil {
 		return nil, fmt.Errorf("error building VPC Endpoints: %v", err)
 	}
@@ -1296,8 +1296,40 @@ func buildMonitoringComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *
 }
 
 // buildVPCEndpoints creates VPC endpoints for AWS services
-func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent) ([]*ec2.VpcEndpoint, error) {
+func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent) ([]*ec2.VpcEndpoint, error) {
 	var endpoints []*ec2.VpcEndpoint
+
+	// Create security group for VPC endpoints
+	vpcEndpointSecurityGroup, err := ec2.NewSecurityGroup(ctx, "VPCEndpointSecurityGroup", &ec2.SecurityGroupArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-vpc-endpoint-sg", cfg.Environment)),
+		Description: pulumi.String("Security group for VPC endpoints"),
+		VpcId:       vpc.VPC.ID(),
+		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:       pulumi.String("tcp"),
+				FromPort:       pulumi.Int(443),
+				ToPort:         pulumi.Int(443),
+				SecurityGroups: pulumi.StringArray{security.AppSecurityGroup.ID()},
+			},
+		},
+		Egress: ec2.SecurityGroupEgressArray{
+			&ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-vpc-endpoint-sg", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating VPC endpoint security group: %v", err)
+	}
 
 	// S3 VPC Endpoint
 	s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "S3Endpoint", &ec2.VpcEndpointArgs{
@@ -1323,7 +1355,7 @@ func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComp
 		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.secretsmanager", cfg.Region)),
 		VpcEndpointType:   pulumi.String("Interface"),
 		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
-		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		SecurityGroupIds:  pulumi.StringArray{vpcEndpointSecurityGroup.ID()},
 		PrivateDnsEnabled: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("%s-secrets-endpoint", cfg.Environment)),
@@ -1343,7 +1375,7 @@ func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComp
 		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.logs", cfg.Region)),
 		VpcEndpointType:   pulumi.String("Interface"),
 		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
-		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		SecurityGroupIds:  pulumi.StringArray{vpcEndpointSecurityGroup.ID()},
 		PrivateDnsEnabled: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("%s-logs-endpoint", cfg.Environment)),
@@ -1363,7 +1395,7 @@ func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComp
 		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.ssm", cfg.Region)),
 		VpcEndpointType:   pulumi.String("Interface"),
 		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
-		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		SecurityGroupIds:  pulumi.StringArray{vpcEndpointSecurityGroup.ID()},
 		PrivateDnsEnabled: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("%s-ssm-endpoint", cfg.Environment)),
@@ -1383,7 +1415,7 @@ func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComp
 		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.kms", cfg.Region)),
 		VpcEndpointType:   pulumi.String("Interface"),
 		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
-		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		SecurityGroupIds:  pulumi.StringArray{vpcEndpointSecurityGroup.ID()},
 		PrivateDnsEnabled: pulumi.Bool(true),
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("%s-kms-endpoint", cfg.Environment)),
