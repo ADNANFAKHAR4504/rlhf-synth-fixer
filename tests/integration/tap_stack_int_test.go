@@ -119,11 +119,11 @@ func readPulumiOutputs(t *testing.T) *PulumiOutputs {
 	// Try to read from various output files (if exists)
 	outputFiles := []string{
 		"outputs.json",
-		"cfn-outputs/flat-outputs.json", 
+		"cfn-outputs/flat-outputs.json",
 		"lib/cfn-outputs/flat-outputs.json",
 		"flat-outputs.json",
 	}
-	
+
 	for _, outputFile := range outputFiles {
 		if data, err := os.ReadFile(outputFile); err == nil {
 			var outputs PulumiOutputs
