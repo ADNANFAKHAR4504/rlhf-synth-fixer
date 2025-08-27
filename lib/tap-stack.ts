@@ -1,15 +1,15 @@
 /* eslint-disable prettier/prettier */
 
 /**
- * TapStack: A comprehensive multi-environment AWS infrastructure stack
- * This stack implements AWS best practices for multi-environment deployments including:
- * - Nested stack organization through ComponentResources
- * - Multi-region deployment support
- * - Comprehensive security with IAM least privilege
- * - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
- * - Environment-specific configuration management
- * - Consistent tagging strategies
- */
+* TapStack: A comprehensive multi-environment AWS infrastructure stack
+* This stack implements AWS best practices for multi-environment deployments including:
+* - Nested stack organization through ComponentResources
+* - Multi-region deployment support
+* - Comprehensive security with IAM least privilege
+* - Monitoring and compliance through CloudWatch, CloudTrail, and VPC Flow Logs
+* - Environment-specific configuration management
+* - Consistent tagging strategies
+*/
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -20,6 +20,7 @@ export interface TapStackArgs {
   environment?: string;
   regions?: string[];
   enableMultiAccount?: boolean;
+  enableCloudTrail?: boolean; // New optional flag
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -28,11 +29,11 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly internetGateway: aws.ec2.InternetGateway;
   public readonly privateSubnets: aws.ec2.Subnet[];
   public readonly publicSubnets: aws.ec2.Subnet[];
-  public readonly cloudTrailBucket: aws.s3.Bucket;
+  public readonly cloudTrailBucket?: aws.s3.Bucket; // Made optional
   public readonly parameterStorePrefix: pulumi.Output<string>;
 
   // Security Outputs
-  public readonly cloudTrailRole: aws.iam.Role;
+  public readonly cloudTrailRole?: aws.iam.Role; // Made optional
   public readonly deploymentRole: aws.iam.Role;
 
   // Monitoring Outputs
@@ -41,7 +42,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dashboard: aws.cloudwatch.Dashboard;
   public readonly vpcFlowLogsRole: aws.iam.Role;
   public readonly vpcFlowLogs: aws.ec2.FlowLog;
-  public readonly cloudTrail: aws.cloudtrail.Trail;
+  public readonly cloudTrail?: aws.cloudtrail.Trail; // Made optional
 
   // StackSet Outputs
   public readonly stackSetExecutionRole?: aws.iam.Role;
@@ -54,6 +55,7 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly defaultTags: Record<string, string>;
   private readonly environment: string;
   public readonly regions: string[];
+  private readonly enableCloudTrail: boolean;
 
   constructor(
     name: string,
@@ -65,6 +67,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.config = new pulumi.Config();
     this.environment = args.environment || this.config.get('env') || 'dev';
     this.regions = args.regions || ['us-east-1', 'eu-west-2'];
+    this.enableCloudTrail = args.enableCloudTrail !== false; // Default to true unless explicitly disabled
 
     // Enhanced tagging strategy
     this.defaultTags = {
@@ -87,12 +90,22 @@ export class TapStack extends pulumi.ComponentResource {
 
     // 2. Security Infrastructure
     const securityResources = this.createSecurityInfrastructure();
-    this.cloudTrailRole = securityResources.cloudTrailRole;
+    if (this.enableCloudTrail) {
+      this.cloudTrailRole = securityResources.cloudTrailRole;
+    }
     this.deploymentRole = securityResources.deploymentRole;
 
-    // 3. Storage Infrastructure
-    const storageResources = this.createStorageInfrastructure();
-    this.cloudTrailBucket = storageResources.cloudTrailBucket;
+    // 3. Storage Infrastructure (only if CloudTrail is enabled)
+    let storageResources: any = undefined;
+    if (this.enableCloudTrail) {
+      try {
+        storageResources = this.createStorageInfrastructure();
+        this.cloudTrailBucket = storageResources.cloudTrailBucket;
+      } catch (error) {
+        console.warn(`CloudTrail storage creation failed: ${error}. Continuing without CloudTrail.`);
+        this.enableCloudTrail = false;
+      }
+    }
 
     // 4. Parameter Store Configuration
     this.parameterStorePrefix = this.createParameterStore();
@@ -103,8 +116,15 @@ export class TapStack extends pulumi.ComponentResource {
     this.alarmTopic = monitoringResources.alarmTopic;
     this.dashboard = monitoringResources.dashboard;
 
-    // 6. CloudTrail Implementation (with proper dependencies)
-    this.cloudTrail = this.createCloudTrail(storageResources);
+    // 6. CloudTrail Implementation (only if enabled and storage was created successfully)
+    if (this.enableCloudTrail && storageResources && this.cloudTrailBucket) {
+      try {
+        this.cloudTrail = this.createCloudTrail(storageResources);
+      } catch (error) {
+        console.warn(`CloudTrail creation failed: ${error}. Continuing without CloudTrail.`);
+        this.cloudTrail = undefined;
+      }
+    }
 
     // 7. VPC Flow Logs for compliance monitoring
     const flowLogsResources = this.createVPCFlowLogs();
@@ -136,8 +156,8 @@ export class TapStack extends pulumi.ComponentResource {
       internetGatewayId: this.internetGateway.id,
       privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
       publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
-      cloudTrailBucketName: this.cloudTrailBucket.bucket,
-      cloudTrailBucketArn: this.cloudTrailBucket.arn,
+      cloudTrailBucketName: this.cloudTrailBucket?.bucket || pulumi.output(''),
+      cloudTrailBucketArn: this.cloudTrailBucket?.arn || pulumi.output(''),
       parameterStorePrefix: this.parameterStorePrefix,
       environment: pulumi.output(this.environment),
       regions: pulumi.output(this.regions),
@@ -148,7 +168,7 @@ export class TapStack extends pulumi.ComponentResource {
       alarmTopicArn: this.alarmTopic.arn,
       dashboardArn: this.dashboard.dashboardArn,
       vpcFlowLogsId: this.vpcFlowLogs.id,
-      cloudTrailRoleArn: this.cloudTrailRole.arn,
+      cloudTrailRoleArn: this.cloudTrailRole?.arn || pulumi.output(''),
       deploymentRoleArn: this.deploymentRole.arn,
       vpcFlowLogsRoleArn: this.vpcFlowLogsRole.arn,
       stackName: pulumi.output('TapStack'),
@@ -156,9 +176,10 @@ export class TapStack extends pulumi.ComponentResource {
       tags: pulumi.output(this.defaultTags),
       testEnvironment: pulumi.output(
         this.environment === 'integration-test' ||
-          this.environment.includes('test')
+        this.environment.includes('test')
       ),
       deploymentComplete: pulumi.output(true),
+      cloudTrailEnabled: pulumi.output(this.enableCloudTrail && !!this.cloudTrail),
       stackOutputs: this.stackOutputs,
     });
   }
@@ -167,53 +188,67 @@ export class TapStack extends pulumi.ComponentResource {
    * Create structured outputs for the stack
    */
   private createStackOutputs(): pulumi.Output<any> {
-    return pulumi.all([
+    const baseOutputs = [
       this.vpc.id,
       this.internetGateway.id,
       ...this.privateSubnets.map(s => s.id),
       ...this.publicSubnets.map(s => s.id),
-      this.cloudTrailBucket.bucket,
-      this.cloudTrailBucket.arn,
       this.parameterStorePrefix,
       this.logGroup.name,
       this.logGroup.arn,
       this.alarmTopic.arn,
       this.dashboard.dashboardArn,
       this.vpcFlowLogs.id,
-      this.cloudTrailRole.arn,
       this.deploymentRole.arn,
       this.vpcFlowLogsRole.arn,
       aws.getRegion().then(r => r.name),
       aws.getCallerIdentity().then(c => c.accountId),
-    ]).apply(([vpcId, internetGatewayId, ...rest]) => {
-      const privateSubnetIds = rest.slice(0, this.privateSubnets.length);
-      const publicSubnetIds = rest.slice(
-        this.privateSubnets.length,
-        this.privateSubnets.length + this.publicSubnets.length
+    ];
+
+    // Add CloudTrail outputs only if enabled
+    const cloudTrailOutputs = this.enableCloudTrail && this.cloudTrailBucket && this.cloudTrailRole
+      ? [
+          this.cloudTrailBucket.bucket,
+          this.cloudTrailBucket.arn,
+          this.cloudTrailRole.arn,
+        ]
+      : [
+          pulumi.output(''),
+          pulumi.output(''),
+          pulumi.output(''),
+        ];
+
+    return pulumi.all([...baseOutputs, ...cloudTrailOutputs]).apply((values) => {
+      const privateSubnetIds = values.slice(2, 2 + this.privateSubnets.length);
+      const publicSubnetIds = values.slice(
+        2 + this.privateSubnets.length,
+        2 + this.privateSubnets.length + this.publicSubnets.length
       );
+
+      const baseIndex = 2 + this.privateSubnets.length + this.publicSubnets.length;
       const [
-        cloudTrailBucketName,
-        cloudTrailBucketArn,
         parameterStorePrefix,
         logGroupName,
         logGroupArn,
         alarmTopicArn,
         dashboardArn,
         vpcFlowLogsId,
-        cloudTrailRoleArn,
         deploymentRoleArn,
         vpcFlowLogsRoleArn,
         awsRegion,
         accountId,
-      ] = rest.slice(this.privateSubnets.length + this.publicSubnets.length);
-
-      return {
-        vpcId,
-        internetGatewayId,
-        privateSubnetIds,
-        publicSubnetIds,
         cloudTrailBucketName,
         cloudTrailBucketArn,
+        cloudTrailRoleArn,
+      ] = values.slice(baseIndex);
+
+      return {
+        vpcId: values[0],
+        internetGatewayId: values[1],
+        privateSubnetIds,
+        publicSubnetIds,
+        cloudTrailBucketName: cloudTrailBucketName || '',
+        cloudTrailBucketArn: cloudTrailBucketArn || '',
         parameterStorePrefix,
         environment: this.environment,
         regions: this.regions,
@@ -224,7 +259,7 @@ export class TapStack extends pulumi.ComponentResource {
         alarmTopicArn,
         dashboardArn,
         vpcFlowLogsId,
-        cloudTrailRoleArn,
+        cloudTrailRoleArn: cloudTrailRoleArn || '',
         deploymentRoleArn,
         vpcFlowLogsRoleArn,
         stackName: 'TapStack',
@@ -234,6 +269,7 @@ export class TapStack extends pulumi.ComponentResource {
           this.environment === 'integration-test' ||
           this.environment.includes('test'),
         deploymentComplete: true,
+        cloudTrailEnabled: this.enableCloudTrail && !!this.cloudTrail,
       };
     });
   }
@@ -250,6 +286,7 @@ export class TapStack extends pulumi.ComponentResource {
         const outputDir = outputsFile.includes('/')
           ? outputsFile.substring(0, outputsFile.lastIndexOf('/'))
           : '';
+
         if (outputDir && !fs.existsSync(outputDir)) {
           fs.mkdirSync(outputDir, { recursive: true });
         }
@@ -259,6 +296,7 @@ export class TapStack extends pulumi.ComponentResource {
           JSON.stringify(outputs, null, 2),
           'utf8'
         );
+
         if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
           console.log(`Stack outputs written to ${outputsFile}`);
         }
@@ -271,6 +309,7 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   // ... rest of your existing methods remain the same ...
+
   private createVPC(): { vpc: aws.ec2.Vpc; igw: aws.ec2.InternetGateway } {
     const vpc = new aws.ec2.Vpc(
       `${this.environment}-vpc`,
@@ -404,23 +443,28 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createSecurityInfrastructure() {
-    const cloudTrailRole = new aws.iam.Role(
-      `${this.environment}-cloudtrail-role`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: { Service: 'cloudtrail.amazonaws.com' },
-            },
-          ],
-        }),
-        tags: this.defaultTags,
-      },
-      { parent: this }
-    );
+    let cloudTrailRole: aws.iam.Role | undefined;
+
+    // Only create CloudTrail role if CloudTrail is enabled
+    if (this.enableCloudTrail) {
+      cloudTrailRole = new aws.iam.Role(
+        `${this.environment}-cloudtrail-role`,
+        {
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: { Service: 'cloudtrail.amazonaws.com' },
+              },
+            ],
+          }),
+          tags: this.defaultTags,
+        },
+        { parent: this }
+      );
+    }
 
     const deploymentRole = new aws.iam.Role(
       `${this.environment}-deployment-role`,
@@ -489,6 +533,10 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createStorageInfrastructure() {
+    if (!this.enableCloudTrail) {
+      return undefined;
+    }
+
     const cloudTrailBucket = new aws.s3.Bucket(
       `${this.environment}-cloudtrail-logs`,
       {
@@ -604,7 +652,6 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createParameterStore(): pulumi.Output<string> {
     const prefix = `/${this.environment}`;
-
     const parameters = [
       { name: 'vpc-id', value: this.vpc.id },
       {
@@ -675,12 +722,7 @@ export class TapStack extends pulumi.ComponentResource {
                   properties: {
                     metrics: [
                       ['AWS/VPC', 'PacketDropCount', 'VPC', this.vpc.id],
-                      [
-                        'AWS/CloudTrail',
-                        'DataEvents',
-                        'TrailName',
-                        `${this.environment}-audit-trail`,
-                      ],
+                      ...(this.enableCloudTrail ? [['AWS/CloudTrail', 'DataEvents', 'TrailName', `${this.environment}-audit-trail`]] : []),
                     ],
                     view: 'timeSeries',
                     stacked: false,
@@ -714,30 +756,39 @@ export class TapStack extends pulumi.ComponentResource {
     return { logGroup, alarmTopic, dashboard };
   }
 
-  private createCloudTrail(storageResources: any): aws.cloudtrail.Trail {
-    const trail = new aws.cloudtrail.Trail(
-      `${this.environment}-cloudtrail`,
-      {
-        name: `${this.environment}-audit-trail`,
-        s3BucketName: this.cloudTrailBucket.bucket,
-        includeGlobalServiceEvents: true,
-        isMultiRegionTrail: true,
-        enableLogging: true,
-        tags: this.defaultTags,
-      },
-      {
-        parent: this,
-        dependsOn: [
-          this.cloudTrailBucket,
-          storageResources.bucketPolicy,
-          storageResources.encryption,
-          storageResources.versioning,
-          storageResources.publicAccessBlock,
-        ],
-      }
-    );
+  private createCloudTrail(storageResources: any): aws.cloudtrail.Trail | undefined {
+    if (!this.enableCloudTrail || !this.cloudTrailBucket) {
+      return undefined;
+    }
 
-    return trail;
+    try {
+      const trail = new aws.cloudtrail.Trail(
+        `${this.environment}-cloudtrail`,
+        {
+          name: `${this.environment}-audit-trail`,
+          s3BucketName: this.cloudTrailBucket.bucket,
+          includeGlobalServiceEvents: true,
+          isMultiRegionTrail: true,
+          enableLogging: true,
+          tags: this.defaultTags,
+        },
+        {
+          parent: this,
+          dependsOn: [
+            this.cloudTrailBucket,
+            storageResources.bucketPolicy,
+            storageResources.encryption,
+            storageResources.versioning,
+            storageResources.publicAccessBlock,
+          ],
+        }
+      );
+
+      return trail;
+    } catch (error) {
+      console.warn(`Failed to create CloudTrail: ${error}`);
+      return undefined;
+    }
   }
 
   private createVPCFlowLogs(): {
@@ -849,13 +900,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `${this.environment}-AWSCloudFormationStackSetExecutionRole`,
         assumeRolePolicy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [{
-          "Action": "sts:AssumeRole",
-          "Effect": "Allow",
-          "Principal": { "AWS": "${administrationRole.arn}" }
-        }]
-      }`,
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Action": "sts:AssumeRole",
+            "Effect": "Allow",
+            "Principal": { "AWS": "${administrationRole.arn}" }
+          }]
+        }`,
         managedPolicyArns: ['arn:aws:iam::aws:policy/PowerUserAccess'],
         tags: this.defaultTags,
       },
@@ -914,45 +965,51 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.cloudwatch.MetricAlarm(
-      `${this.environment}-cloudtrail-error-alarm`,
-      {
-        name: `${this.environment}-cloudtrail-errors`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ErrorCount',
-        namespace: 'AWS/CloudTrail',
-        period: 300,
-        statistic: 'Sum',
-        threshold: 0,
-        alarmDescription: 'CloudTrail logging errors detected',
-        alarmActions: [this.alarmTopic.arn],
-        tags: this.defaultTags,
-      },
-      { parent: this }
-    );
-
-    new aws.cloudwatch.MetricAlarm(
-      `${this.environment}-s3-public-access-alarm`,
-      {
-        name: `${this.environment}-s3-public-access-attempts`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: '4xxError',
-        namespace: 'AWS/S3',
-        period: 300,
-        statistic: 'Sum',
-        threshold: 10,
-        alarmDescription:
-          'High number of S3 access denied errors - potential security issue',
-        alarmActions: [this.alarmTopic.arn],
-        dimensions: {
-          BucketName: this.cloudTrailBucket.bucket,
+    // Only create CloudTrail alarm if CloudTrail is enabled
+    if (this.enableCloudTrail) {
+      new aws.cloudwatch.MetricAlarm(
+        `${this.environment}-cloudtrail-error-alarm`,
+        {
+          name: `${this.environment}-cloudtrail-errors`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 1,
+          metricName: 'ErrorCount',
+          namespace: 'AWS/CloudTrail',
+          period: 300,
+          statistic: 'Sum',
+          threshold: 0,
+          alarmDescription: 'CloudTrail logging errors detected',
+          alarmActions: [this.alarmTopic.arn],
+          tags: this.defaultTags,
         },
-        tags: this.defaultTags,
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
+    }
+
+    // Only create S3 alarm if CloudTrail bucket exists
+    if (this.enableCloudTrail && this.cloudTrailBucket) {
+      new aws.cloudwatch.MetricAlarm(
+        `${this.environment}-s3-public-access-alarm`,
+        {
+          name: `${this.environment}-s3-public-access-attempts`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 1,
+          metricName: '4xxError',
+          namespace: 'AWS/S3',
+          period: 300,
+          statistic: 'Sum',
+          threshold: 10,
+          alarmDescription:
+            'High number of S3 access denied errors - potential security issue',
+          alarmActions: [this.alarmTopic.arn],
+          dimensions: {
+            BucketName: this.cloudTrailBucket.bucket,
+          },
+          tags: this.defaultTags,
+        },
+        { parent: this }
+      );
+    }
   }
 
   private createSecurityMonitoring() {

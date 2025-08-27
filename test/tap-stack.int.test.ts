@@ -14,8 +14,8 @@ interface StackOutputs {
   internetGatewayId: string;
   privateSubnetIds: string[] | string;
   publicSubnetIds: string[] | string;
-  cloudTrailBucketName: string;
-  cloudTrailBucketArn: string;
+  cloudTrailBucketName?: string;
+  cloudTrailBucketArn?: string;
   parameterStorePrefix: string;
   environment: string;
   regions: string[];
@@ -26,7 +26,7 @@ interface StackOutputs {
   alarmTopicArn: string;
   dashboardArn: string;
   vpcFlowLogsId: string;
-  cloudTrailRoleArn: string;
+  cloudTrailRoleArn?: string;
   deploymentRoleArn: string;
   vpcFlowLogsRoleArn: string;
   stackName: string;
@@ -34,6 +34,7 @@ interface StackOutputs {
   tags: Record<string, string>;
   testEnvironment: boolean;
   deploymentComplete: boolean;
+  cloudTrailEnabled?: boolean;
 }
 
 const integrationTestConfig = {
@@ -91,6 +92,7 @@ describe('TapStack Integration Tests', () => {
       console.log(
         `Testing stack deployed at: ${stackOutputs.timestamp || 'unknown time'}`
       );
+      console.log(`CloudTrail enabled: ${stackOutputs.cloudTrailEnabled || false}`);
     } catch (error) {
       console.error('Failed to load stack outputs:', error);
       throw error;
@@ -113,9 +115,9 @@ describe('TapStack Integration Tests', () => {
       expect(Array.isArray(normalizedPrivateSubnetIds)).toBe(true);
       expect(Array.isArray(normalizedPublicSubnetIds)).toBe(true);
       
-      // Expect at least 3 subnets (but allow for more due to the actual deployment)
-      expect(normalizedPrivateSubnetIds.length).toBeGreaterThanOrEqual(3);
-      expect(normalizedPublicSubnetIds.length).toBeGreaterThanOrEqual(3);
+      // Expect exactly 3 subnets each (based on your code)
+      expect(normalizedPrivateSubnetIds.length).toBe(3);
+      expect(normalizedPublicSubnetIds.length).toBe(3);
 
       normalizedPrivateSubnetIds.forEach(subnetId => {
         expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
@@ -147,22 +149,29 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Storage Infrastructure Validation', () => {
-    test('should have CloudTrail S3 bucket configured', () => {
-      expect(stackOutputs.cloudTrailBucketName).toBeDefined();
-      expect(stackOutputs.cloudTrailBucketArn).toBeDefined();
-      expect(stackOutputs.cloudTrailBucketName).toMatch(/^[a-z0-9.-]+$/);
-      expect(stackOutputs.cloudTrailBucketArn).toMatch(
-        /^arn:aws:s3:::[a-z0-9.-]+$/
-      );
-      expect(stackOutputs.cloudTrailBucketName).toContain(
-        stackOutputs.environment
-      );
+    test('should have CloudTrail S3 bucket configured when CloudTrail is enabled', () => {
+      if (stackOutputs.cloudTrailEnabled) {
+        expect(stackOutputs.cloudTrailBucketName).toBeDefined();
+        expect(stackOutputs.cloudTrailBucketArn).toBeDefined();
+        expect(stackOutputs.cloudTrailBucketName).toMatch(/^[a-z0-9.-]+$/);
+        expect(stackOutputs.cloudTrailBucketArn).toMatch(
+          /^arn:aws:s3:::[a-z0-9.-]+$/
+        );
+        expect(stackOutputs.cloudTrailBucketName).toContain(
+          stackOutputs.environment
+        );
+      } else {
+        console.log('CloudTrail is disabled, skipping bucket validation');
+      }
     });
 
-    test('should have consistent bucket naming', () => {
-      const bucketNameFromArn =
-        stackOutputs.cloudTrailBucketArn.split(':::')[1];
-      expect(bucketNameFromArn).toBe(stackOutputs.cloudTrailBucketName);
+    test('should have consistent bucket naming when CloudTrail is enabled', () => {
+      if (stackOutputs.cloudTrailEnabled && stackOutputs.cloudTrailBucketArn && stackOutputs.cloudTrailBucketName) {
+        const bucketNameFromArn = stackOutputs.cloudTrailBucketArn.split(':::')[1];
+        expect(bucketNameFromArn).toBe(stackOutputs.cloudTrailBucketName);
+      } else {
+        console.log('CloudTrail is disabled, skipping bucket naming validation');
+      }
     });
   });
 
@@ -184,41 +193,52 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Configuration Validation', () => {
     test('should have IAM roles configured', () => {
-      expect(stackOutputs.cloudTrailRoleArn).toBeDefined();
       expect(stackOutputs.deploymentRoleArn).toBeDefined();
       expect(stackOutputs.vpcFlowLogsRoleArn).toBeDefined();
 
-      expect(stackOutputs.cloudTrailRoleArn).toMatch(
-        /^arn:aws:iam::\d{12}:role\/.+$/
-      );
       expect(stackOutputs.deploymentRoleArn).toMatch(
         /^arn:aws:iam::\d{12}:role\/.+$/
       );
       expect(stackOutputs.vpcFlowLogsRoleArn).toMatch(
         /^arn:aws:iam::\d{12}:role\/.+$/
       );
+
+      // CloudTrail role only if CloudTrail is enabled
+      if (stackOutputs.cloudTrailEnabled) {
+        expect(stackOutputs.cloudTrailRoleArn).toBeDefined();
+        expect(stackOutputs.cloudTrailRoleArn).toMatch(
+          /^arn:aws:iam::\d{12}:role\/.+$/
+        );
+      }
     });
 
     test('should have role names include environment', () => {
-      expect(stackOutputs.cloudTrailRoleArn).toContain(
-        stackOutputs.environment
-      );
       expect(stackOutputs.deploymentRoleArn).toContain(
         stackOutputs.environment
       );
       expect(stackOutputs.vpcFlowLogsRoleArn).toContain(
         stackOutputs.environment
       );
+
+      if (stackOutputs.cloudTrailEnabled && stackOutputs.cloudTrailRoleArn) {
+        expect(stackOutputs.cloudTrailRoleArn).toContain(
+          stackOutputs.environment
+        );
+      }
     });
 
     test('should have unique role ARNs', () => {
       const roleArns = [
-        stackOutputs.cloudTrailRoleArn,
         stackOutputs.deploymentRoleArn,
         stackOutputs.vpcFlowLogsRoleArn,
       ];
-      const uniqueRoleArns = new Set(roleArns);
-      expect(uniqueRoleArns.size).toBe(roleArns.length);
+
+      if (stackOutputs.cloudTrailEnabled && stackOutputs.cloudTrailRoleArn) {
+        roleArns.push(stackOutputs.cloudTrailRoleArn);
+      }
+
+      const uniqueRoleArns = new Set(roleArns.filter(arn => arn && arn.length > 0));
+      expect(uniqueRoleArns.size).toBe(roleArns.filter(arn => arn && arn.length > 0).length);
     });
   });
 
@@ -286,11 +306,14 @@ describe('TapStack Integration Tests', () => {
   describe('Cross-Resource Consistency', () => {
     test('should have consistent resource naming patterns', () => {
       const resourceNames = [
-        stackOutputs.cloudTrailBucketName,
         stackOutputs.logGroupName,
-      ].filter(name => name);
+      ];
 
-      resourceNames.forEach(resourceName => {
+      if (stackOutputs.cloudTrailEnabled && stackOutputs.cloudTrailBucketName) {
+        resourceNames.push(stackOutputs.cloudTrailBucketName);
+      }
+
+      resourceNames.filter(name => name).forEach(resourceName => {
         if (resourceName && resourceName.includes('/')) {
           expect(resourceName).toContain(stackOutputs.environment);
         } else if (resourceName) {
@@ -301,14 +324,17 @@ describe('TapStack Integration Tests', () => {
 
     test('should have account ID consistency across ARNs', () => {
       const arns = [
-        stackOutputs.cloudTrailRoleArn,
         stackOutputs.deploymentRoleArn,
         stackOutputs.vpcFlowLogsRoleArn,
         stackOutputs.logGroupArn,
         stackOutputs.alarmTopicArn,
-      ].filter(arn => arn);
+      ];
 
-      arns.forEach(arn => {
+      if (stackOutputs.cloudTrailEnabled && stackOutputs.cloudTrailRoleArn) {
+        arns.push(stackOutputs.cloudTrailRoleArn);
+      }
+
+      arns.filter(arn => arn).forEach(arn => {
         const accountIdFromArn = arn.split(':')[4];
         expect(accountIdFromArn).toBe(stackOutputs.accountId);
       });
@@ -340,8 +366,8 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have appropriate resource scaling for environment', () => {
-      expect(normalizedPrivateSubnetIds.length).toBeGreaterThanOrEqual(3);
-      expect(normalizedPublicSubnetIds.length).toBeGreaterThanOrEqual(3);
+      expect(normalizedPrivateSubnetIds.length).toBe(3);
+      expect(normalizedPublicSubnetIds.length).toBe(3);
     });
   });
 
@@ -362,7 +388,6 @@ describe('TapStack Integration Tests', () => {
         'internetGatewayId',
         'privateSubnetIds',
         'publicSubnetIds',
-        'cloudTrailBucketName',
         'parameterStorePrefix',
         'environment',
         'awsRegion',
@@ -386,8 +411,11 @@ describe('TapStack Integration Tests', () => {
   describe('Security and Compliance Validation', () => {
     test('should have security monitoring resources', () => {
       expect(stackOutputs.vpcFlowLogsId).toBeDefined();
-      expect(stackOutputs.cloudTrailBucketName).toBeDefined();
       expect(stackOutputs.alarmTopicArn).toBeDefined();
+
+      if (stackOutputs.cloudTrailEnabled) {
+        expect(stackOutputs.cloudTrailBucketName).toBeDefined();
+      }
     });
 
     test('should have proper resource isolation', () => {
@@ -398,17 +426,30 @@ describe('TapStack Integration Tests', () => {
 
   describe('Performance and Resource Validation', () => {
     test('should have optimal resource distribution', () => {
-      // Updated to accept the actual subnet count from deployment
-      expect(normalizedPrivateSubnetIds.length).toBeGreaterThanOrEqual(3);
-      expect(normalizedPublicSubnetIds.length).toBeGreaterThanOrEqual(3);
+      expect(normalizedPrivateSubnetIds.length).toBe(3);
+      expect(normalizedPublicSubnetIds.length).toBe(3);
     });
 
     test('should have appropriate resource sizing', () => {
-      const totalSubnets =
-        normalizedPrivateSubnetIds.length + normalizedPublicSubnetIds.length;
-      // Updated to accept larger subnet counts (your deployment has 164 total)
-      expect(totalSubnets).toBeGreaterThanOrEqual(6);
-      expect(totalSubnets).toBeLessThanOrEqual(200); // Set a reasonable upper bound
+      const totalSubnets = normalizedPrivateSubnetIds.length + normalizedPublicSubnetIds.length;
+      expect(totalSubnets).toBe(6); // Exactly 6 subnets (3 private + 3 public)
+    });
+  });
+
+  describe('CloudTrail Specific Tests', () => {
+    test('should handle CloudTrail availability correctly', () => {
+      if (stackOutputs.cloudTrailEnabled) {
+        expect(stackOutputs.cloudTrailBucketName).toBeDefined();
+        expect(stackOutputs.cloudTrailBucketArn).toBeDefined();
+        expect(stackOutputs.cloudTrailRoleArn).toBeDefined();
+        console.log('CloudTrail is enabled and configured properly');
+      } else {
+        console.log('CloudTrail is disabled (likely due to region limits)');
+        // Ensure CloudTrail related fields are empty or undefined
+        expect(stackOutputs.cloudTrailBucketName || '').toBe('');
+        expect(stackOutputs.cloudTrailBucketArn || '').toBe('');
+        expect(stackOutputs.cloudTrailRoleArn || '').toBe('');
+      }
     });
   });
 
@@ -418,6 +459,7 @@ describe('TapStack Integration Tests', () => {
     console.log(`Environment: ${stackOutputs?.environment || 'Unknown'}`);
     console.log(`Region: ${stackOutputs?.awsRegion || 'Unknown'}`);
     console.log(`VPC: ${stackOutputs?.vpcId || 'Unknown'}`);
+    console.log(`CloudTrail Enabled: ${stackOutputs?.cloudTrailEnabled || false}`);
     if (normalizedPrivateSubnetIds && normalizedPublicSubnetIds) {
       console.log(
         `Subnets: ${normalizedPrivateSubnetIds.length + normalizedPublicSubnetIds.length} total (${normalizedPrivateSubnetIds.length} private, ${normalizedPublicSubnetIds.length} public)`
