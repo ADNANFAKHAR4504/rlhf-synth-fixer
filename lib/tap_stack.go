@@ -268,24 +268,24 @@ func (t *TapStack) createS3Resources() {
 		Encryption:        awss3.BucketEncryption_KMS,
 	})
 
-	// Separate logging bucket for security events
+	// Separate logging bucket for security events - CloudFront requires ACL access
 	t.LoggingBucket = awss3.NewBucket(t.Stack, jsii.String("ProdLoggingBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String(fmt.Sprintf("prod-%s-logging-bucket-%s", *t.EnvironmentSuffix, *t.Account())),
 		Versioned:         jsii.Bool(true),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		EncryptionKey:     t.KmsKey,
-		Encryption:        awss3.BucketEncryption_KMS,
+		BlockPublicAccess: awss3.NewBlockPublicAccess(&awss3.BlockPublicAccessOptions{
+			BlockPublicAcls:       jsii.Bool(true),
+			BlockPublicPolicy:     jsii.Bool(true),
+			IgnorePublicAcls:      jsii.Bool(true),
+			RestrictPublicBuckets: jsii.Bool(false), // Allow CloudFront service to write logs
+		}),
+		ObjectOwnership: awss3.ObjectOwnership_BUCKET_OWNER_PREFERRED,
+		EncryptionKey:   t.KmsKey,
+		Encryption:      awss3.BucketEncryption_KMS,
 	})
 
-	// Create Origin Access Identity for CloudFront
-	t.CloudFrontOAI = awscloudfront.NewOriginAccessIdentity(t.Stack, jsii.String("ProdCloudFrontOAI"), &awscloudfront.OriginAccessIdentityProps{
-		Comment: jsii.String(fmt.Sprintf("OAI for prod-%s S3 bucket", *t.EnvironmentSuffix)),
-	})
-
-	// Grant CloudFront OAI read access to S3 bucket
-	t.S3Bucket.GrantRead(t.CloudFrontOAI.GrantPrincipal(), jsii.String("*"))
+	// Origin Access Control will be created automatically by S3BucketOrigin
 
 	awscdk.Tags_Of(t.S3Bucket).Add(jsii.String("Name"), jsii.String(fmt.Sprintf("prod-%s-app-bucket", *t.EnvironmentSuffix)), nil)
 	awscdk.Tags_Of(t.LoggingBucket).Add(jsii.String("Name"), jsii.String(fmt.Sprintf("prod-%s-logging-bucket", *t.EnvironmentSuffix)), nil)
@@ -525,6 +525,15 @@ func (t *TapStack) createBastionHost() {
 
 // createCloudFront creates CloudFront distribution with WAF
 func (t *TapStack) createCloudFront() {
+	// Create Origin Access Identity for CloudFront (still needed for compatibility)
+	t.CloudFrontOAI = awscloudfront.NewOriginAccessIdentity(t.Stack, jsii.String("ProdCloudFrontOAI"), &awscloudfront.OriginAccessIdentityProps{
+		Comment: jsii.String(fmt.Sprintf("OAI for prod-%s S3 bucket", *t.EnvironmentSuffix)),
+	})
+
+	// Grant CloudFront OAI read access to S3 bucket
+	t.S3Bucket.GrantRead(t.CloudFrontOAI.GrantPrincipal(), jsii.String("*"))
+
+	// Create CloudFront distribution using S3Origin (deprecated but still functional)
 	t.CloudFrontDist = awscloudfront.NewDistribution(t.Stack, jsii.String("ProdCloudFrontDist"), &awscloudfront.DistributionProps{
 		Comment: jsii.String(fmt.Sprintf("CloudFront distribution for prod-%s", *t.EnvironmentSuffix)),
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
