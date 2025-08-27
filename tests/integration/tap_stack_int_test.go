@@ -24,16 +24,16 @@ import (
 )
 
 type DeploymentOutputs struct {
-	Ec2InstanceId       string `json:"ec2InstanceId"`
-	Ec2PrivateIp        string `json:"ec2PrivateIp"`
-	Ec2SecurityGroupId  string `json:"ec2SecurityGroupId"`
-	PrivateSubnetEc2Id  string `json:"privateSubnetEc2Id"`
-	PrivateSubnetRdsId  string `json:"privateSubnetRdsId"`
-	PublicSubnetId      string `json:"publicSubnetId"`
-	RdsEndpoint         string `json:"rdsEndpoint"`
-	RdsSecurityGroupId  string `json:"rdsSecurityGroupId"`
-	S3BucketName        string `json:"s3BucketName"`
-	VpcId               string `json:"vpcId"`
+	Ec2InstanceId      string `json:"ec2InstanceId"`
+	Ec2PrivateIp       string `json:"ec2PrivateIp"`
+	Ec2SecurityGroupId string `json:"ec2SecurityGroupId"`
+	PrivateSubnetEc2Id string `json:"privateSubnetEc2Id"`
+	PrivateSubnetRdsId string `json:"privateSubnetRdsId"`
+	PublicSubnetId     string `json:"publicSubnetId"`
+	RdsEndpoint        string `json:"rdsEndpoint"`
+	RdsSecurityGroupId string `json:"rdsSecurityGroupId"`
+	S3BucketName       string `json:"s3BucketName"`
+	VpcId              string `json:"vpcId"`
 }
 
 var (
@@ -177,7 +177,6 @@ func TestSecurityGroupsTags(t *testing.T) {
 		assert.True(t, hasComplianceTag)
 	}
 }
-
 
 func TestEndToEndWorkflow(t *testing.T) {
 	t.Run("Basic sanity checks", func(t *testing.T) {
