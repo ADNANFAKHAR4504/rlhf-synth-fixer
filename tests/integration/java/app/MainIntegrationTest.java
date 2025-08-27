@@ -84,19 +84,12 @@ public class MainIntegrationTest {
     @DisplayName("Load Balancer DNS should be available in deployment outputs")
     public void testLoadBalancerDnsOutput() {
         if (!deploymentOutputs.isEmpty()) {
-            // Check for environment-specific output keys
-            String[] possibleKeys = {
-                "LoadBalancerDNSintegration",
-                "LoadBalancerDNSdev", 
-                "LoadBalancerDNSprod",
-                "LoadBalancerDNS"
-            };
-            
+            // Find any LoadBalancerDNS key with any environment suffix
             String loadBalancerDns = null;
             String foundKey = null;
             
-            for (String key : possibleKeys) {
-                if (deploymentOutputs.containsKey(key)) {
+            for (String key : deploymentOutputs.keySet()) {
+                if (key.startsWith("LoadBalancerDNS")) {
                     loadBalancerDns = (String) deploymentOutputs.get(key);
                     foundKey = key;
                     break;
@@ -123,19 +116,12 @@ public class MainIntegrationTest {
     @DisplayName("VPC ID should be available in deployment outputs")
     public void testVpcIdOutput() {
         if (!deploymentOutputs.isEmpty()) {
-            // Check for environment-specific output keys
-            String[] possibleKeys = {
-                "VPCIDintegration",
-                "VPCIDdev",
-                "VPCIDprod", 
-                "VPCID"
-            };
-            
+            // Find any VPCID key with any environment suffix
             String vpcId = null;
             String foundKey = null;
             
-            for (String key : possibleKeys) {
-                if (deploymentOutputs.containsKey(key)) {
+            for (String key : deploymentOutputs.keySet()) {
+                if (key.startsWith("VPCID")) {
                     vpcId = (String) deploymentOutputs.get(key);
                     foundKey = key;
                     break;
