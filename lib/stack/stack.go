@@ -1,6 +1,8 @@
 package stack
 
 import (
+	"strings"
+
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/dynamodb"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -17,6 +19,10 @@ func CreateTapStack(ctx *pulumi.Context) error {
 	if environment == "" {
 		environment = "dev"
 	}
+	
+	// For PR environments, also check stack name if environment doesn't start with "pr"
+	stackName := ctx.Stack()
+	isPREnv := strings.HasPrefix(environment, "pr") || strings.Contains(stackName, "pr")
 	notificationEmail := cfg.Get("notificationEmail")
 	if notificationEmail == "" {
 		notificationEmail = "noreply@example.com"
@@ -76,11 +82,11 @@ func CreateTapStack(ctx *pulumi.Context) error {
 		return err
 	}
 
-	usEast1Infra, err := createRegionalInfra(ctx, "us-east-1", usEast1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId)
+	usEast1Infra, err := createRegionalInfra(ctx, "us-east-1", usEast1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId, isPREnv)
 	if err != nil {
 		return err
 	}
-	euWest1Infra, err := createRegionalInfra(ctx, "eu-west-1", euWest1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId)
+	euWest1Infra, err := createRegionalInfra(ctx, "eu-west-1", euWest1Provider, projectName, environment, vpcCidr, asgMinSize, asgMaxSize, dbInstanceClass, tags, current.AccountId, isPREnv)
 	if err != nil {
 		return err
 	}
@@ -88,11 +94,11 @@ func CreateTapStack(ctx *pulumi.Context) error {
 	if err := createS3Replication(ctx, usEast1Provider, euWest1Provider, usEast1Infra.DataBucketName, euWest1Infra.DataBucketName, projectName, environment, tags, current.AccountId); err != nil {
 		return err
 	}
-	cfDomain, err := createCloudFront(ctx, usEast1Provider, usEast1Infra.DataBucketName, projectName, environment, tags)
+	cfDomain, err := createCloudFront(ctx, usEast1Provider, usEast1Infra.DataBucketName, projectName, environment, tags, isPREnv)
 	if err != nil {
 		return err
 	}
-	if err := createMonitoring(ctx, usEast1Provider, euWest1Provider, projectName, environment, notificationEmail, tags, current.AccountId); err != nil {
+	if err := createMonitoring(ctx, usEast1Provider, euWest1Provider, projectName, environment, notificationEmail, tags, current.AccountId, isPREnv); err != nil {
 		return err
 	}
 

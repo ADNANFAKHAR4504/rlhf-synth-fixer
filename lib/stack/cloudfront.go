@@ -1,20 +1,18 @@
 package stack
 
 import (
-	"strings"
-
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/acm"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudfront"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func createCloudFront(ctx *pulumi.Context, usEast1Provider pulumi.ProviderResource, primaryBucket pulumi.StringOutput, projectName, environment string, tags pulumi.StringMap) (pulumi.StringOutput, error) {
+func createCloudFront(ctx *pulumi.Context, usEast1Provider pulumi.ProviderResource, primaryBucket pulumi.StringOutput, projectName, environment string, tags pulumi.StringMap, isPREnv bool) (pulumi.StringOutput, error) {
 	oac, err := cloudfront.NewOriginAccessControl(ctx, "s3-oac", &cloudfront.OriginAccessControlArgs{Name: pulumi.Sprintf("%s-%s-oac", projectName, environment), Description: pulumi.String("OAC for S3 bucket"), OriginAccessControlOriginType: pulumi.String("s3"), SigningBehavior: pulumi.String("always"), SigningProtocol: pulumi.String("sigv4")}, pulumi.Provider(usEast1Provider))
 	if err != nil {
 		return pulumi.StringOutput{}, err
 	}
 
-	if strings.HasPrefix(environment, "pr") {
+	if isPREnv {
 		// Use default CloudFront certificate; avoid ACM in PR envs.
 		distribution, err := cloudfront.NewDistribution(ctx, "cloudfront", &cloudfront.DistributionArgs{
 			Origins:              cloudfront.DistributionOriginArray{&cloudfront.DistributionOriginArgs{DomainName: pulumi.All(primaryBucket).ApplyT(func(args []interface{}) string { return args[0].(string) + ".s3.amazonaws.com" }).(pulumi.StringOutput), OriginId: pulumi.String("S3-primary"), OriginAccessControlId: oac.ID()}},

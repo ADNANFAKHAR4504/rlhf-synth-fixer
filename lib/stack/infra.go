@@ -1,9 +1,9 @@
 package stack
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/acm"
@@ -19,7 +19,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func createRegionalInfra(ctx *pulumi.Context, region string, provider pulumi.ProviderResource, projectName, environment, vpcCidr string, asgMinSize, asgMaxSize int, dbInstanceClass string, tags pulumi.StringMap, accountId string) (*RegionalInfra, error) {
+func createRegionalInfra(ctx *pulumi.Context, region string, provider pulumi.ProviderResource, projectName, environment, vpcCidr string, asgMinSize, asgMaxSize int, dbInstanceClass string, tags pulumi.StringMap, accountId string, isPREnv bool) (*RegionalInfra, error) {
 	azs, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{State: pulumi.StringRef("available")}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
@@ -171,14 +171,14 @@ func createRegionalInfra(ctx *pulumi.Context, region string, provider pulumi.Pro
 			Name: instanceProfile.Name,
 		},
 		VpcSecurityGroupIds: pulumi.StringArray{ec2Sg.ID()},
-		UserData: pulumi.String(`#!/bin/bash
+		UserData: pulumi.String(base64.StdEncoding.EncodeToString([]byte(`#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo '<h1>Healthy</h1>' > /var/www/html/healthz
 echo '<h1>Hello from ` + region + `</h1>' > /var/www/html/index.html
-systemctl restart httpd`),
+systemctl restart httpd`))),
 		Tags: tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
@@ -195,7 +195,7 @@ systemctl restart httpd`),
 		return nil, err
 	}
 
-	if strings.HasPrefix(environment, "pr") {
+	if isPREnv {
 		// PR environments: use HTTP listener to avoid ACM dependency/timeouts.
 		_, err = lb.NewListener(ctx, fmt.Sprintf("alb-listener-%s", region), &lb.ListenerArgs{LoadBalancerArn: alb.Arn, Port: pulumi.Int(80), Protocol: pulumi.String("HTTP"), DefaultActions: lb.ListenerDefaultActionArray{&lb.ListenerDefaultActionArgs{Type: pulumi.String("forward"), TargetGroupArn: targetGroup.Arn}}}, pulumi.Provider(provider))
 		if err != nil {

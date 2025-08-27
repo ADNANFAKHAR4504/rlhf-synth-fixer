@@ -2,7 +2,6 @@ package stack
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
@@ -11,7 +10,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulumi.ProviderResource, projectName, environment, notificationEmail string, tags pulumi.StringMap, accountId string) error {
+func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulumi.ProviderResource, projectName, environment, notificationEmail string, tags pulumi.StringMap, accountId string, isPREnv bool) error {
 	snsTopic, err := sns.NewTopic(ctx, "alerts", &sns.TopicArgs{Name: pulumi.Sprintf("%s-%s-alerts", projectName, environment), Tags: tags}, pulumi.Provider(usEast1Provider))
 	if err != nil {
 		return err
@@ -22,7 +21,7 @@ func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulu
 	}
 
 	// In PR environments, skip CloudTrail to avoid account-level trail limits and reduce blast radius.
-	if strings.HasPrefix(environment, "pr") {
+	if isPREnv {
 		return nil
 	}
 
