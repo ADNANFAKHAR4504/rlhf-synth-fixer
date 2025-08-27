@@ -23,6 +23,29 @@ import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.autoscaling.BlockDevice;
+import software.amazon.awscdk.services.autoscaling.BlockDeviceVolume;
+import software.amazon.awscdk.services.autoscaling.EbsDeviceOptions;
+import software.amazon.awscdk.services.autoscaling.EbsDeviceVolumeType;
+
+// CloudWatch
+import software.amazon.awscdk.services.cloudwatch.Dashboard;
+import software.amazon.awscdk.services.cloudwatch.DashboardProps;
+import software.amazon.awscdk.services.cloudwatch.GraphWidget;
+import software.amazon.awscdk.services.cloudwatch.GraphWidgetProps;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.MetricProps;
+
+// Backup
+import software.amazon.awscdk.services.backup.BackupPlan;
+import software.amazon.awscdk.services.backup.BackupPlanProps;
+import software.amazon.awscdk.services.backup.BackupPlanRule;
+import software.amazon.awscdk.services.backup.BackupVault;
+import software.amazon.awscdk.services.backup.BackupVaultProps;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+
 
 // ASG
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
@@ -158,7 +181,18 @@ class WebTierStack extends Stack {
             .allowAllOutbound(true)
             .build();
         sg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "Allow HTTP");
-        // Removed SSH access - use AWS Systems Manager Session Manager instead
+        // SSH access removed for production security - use AWS Systems Manager Session Manager instead
+        
+        // Create security group for ALB
+        SecurityGroup albSg = SecurityGroup.Builder.create(this, "AlbSg" + envSuffix)
+            .vpc(vpc)
+            .description("Security group for Application Load Balancer")
+            .allowAllOutbound(true)
+            .build();
+        albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "Allow HTTP from internet");
+        
+        // Update web server SG to only allow traffic from ALB
+        sg.addIngressRule(Peer.securityGroupId(albSg.getSecurityGroupId()), Port.tcp(80), "Allow HTTP from ALB only");
 
         // User data to install Apache and a simple index
         UserData userData = UserData.forLinux();
@@ -197,6 +231,18 @@ class WebTierStack extends Stack {
             .healthCheck(HealthCheck.elb(software.amazon.awscdk.services.autoscaling.ElbHealthCheckOptions.builder()
                 .grace(Duration.minutes(5))
                 .build()))
+            // Enable IMDSv2 and encrypted EBS volumes
+            .blockDevices(List.of(
+                BlockDevice.builder()
+                    .deviceName("/dev/xvda")
+                    .volume(BlockDeviceVolume.ebs(20, EbsDeviceOptions.builder()
+                        .volumeType(EbsDeviceVolumeType.GP3)
+                        .encrypted(true)
+                        .deleteOnTermination(true)
+                        .build()))
+                    .build()
+            ))
+            .requireImdsv2(true)  // Enforce IMDSv2
             .build();
 
         // Target group (instances on port 80)
@@ -214,13 +260,14 @@ class WebTierStack extends Stack {
                 .build())
             .build());
 
-        // ALB in public subnets
+        // ALB in public subnets with enhanced security
         ApplicationLoadBalancer alb = new ApplicationLoadBalancer(this, "Alb" + envSuffix, ApplicationLoadBalancerProps.builder()
             .vpc(vpc)
             .internetFacing(true)
             .vpcSubnets(software.amazon.awscdk.services.ec2.SubnetSelection.builder()
                 .subnetGroupName("public")
                 .build())
+            .securityGroup(albSg)
             .build());
 
         // Listener forwards to TG
@@ -244,6 +291,91 @@ class WebTierStack extends Stack {
             .value("http://" + alb.getLoadBalancerDnsName())
             .description("URL to access the web application")
             .exportName("AlbUrl-" + envSuffix)
+            .build());
+            
+        new CfnOutput(this, "VpcId" + envSuffix, CfnOutputProps.builder()
+            .value(vpc.getVpcId())
+            .description("VPC ID")
+            .exportName("VpcId-" + envSuffix)
+            .build());
+            
+        new CfnOutput(this, "AsgName" + envSuffix, CfnOutputProps.builder()
+            .value(asg.getAutoScalingGroupName())
+            .description("Auto Scaling Group Name")
+            .exportName("AsgName-" + envSuffix)
+            .build());
+            
+        // CloudWatch Dashboard for monitoring
+        createCloudWatchDashboard(envSuffix, alb, asg);
+        
+        // Backup strategy
+        createBackupStrategy(envSuffix);
+    }
+    
+    private void createCloudWatchDashboard(String envSuffix, ApplicationLoadBalancer alb, AutoScalingGroup asg) {
+        Dashboard dashboard = new Dashboard(this, "MonitoringDashboard" + envSuffix, DashboardProps.builder()
+            .dashboardName("tap-monitoring-" + envSuffix)
+            .build());
+            
+        // Add ALB metrics widget
+        GraphWidget albWidget = new GraphWidget(GraphWidgetProps.builder()
+            .title("Application Load Balancer Metrics")
+            .left(List.of(
+                new Metric(MetricProps.builder()
+                    .namespace("AWS/ApplicationELB")
+                    .metricName("RequestCount")
+                    .dimensionsMap(java.util.Map.of("LoadBalancer", alb.getLoadBalancerFullName()))
+                    .build()),
+                new Metric(MetricProps.builder()
+                    .namespace("AWS/ApplicationELB")
+                    .metricName("TargetResponseTime")
+                    .dimensionsMap(java.util.Map.of("LoadBalancer", alb.getLoadBalancerFullName()))
+                    .build())
+            ))
+            .build());
+            
+        // Add ASG metrics widget
+        GraphWidget asgWidget = new GraphWidget(GraphWidgetProps.builder()
+            .title("Auto Scaling Group Metrics")
+            .left(List.of(
+                new Metric(MetricProps.builder()
+                    .namespace("AWS/AutoScaling")
+                    .metricName("GroupDesiredCapacity")
+                    .dimensionsMap(java.util.Map.of("AutoScalingGroupName", asg.getAutoScalingGroupName()))
+                    .build()),
+                new Metric(MetricProps.builder()
+                    .namespace("AWS/AutoScaling")
+                    .metricName("GroupInServiceInstances")
+                    .dimensionsMap(java.util.Map.of("AutoScalingGroupName", asg.getAutoScalingGroupName()))
+                    .build())
+            ))
+            .build());
+            
+        dashboard.addWidgets(albWidget, asgWidget);
+    }
+    
+    private void createBackupStrategy(String envSuffix) {
+        // Create backup vault
+        BackupVault backupVault = new BackupVault(this, "BackupVault" + envSuffix, BackupVaultProps.builder()
+            .backupVaultName("tap-backup-vault-" + envSuffix)
+            .build());
+            
+        // Create backup service role
+        Role backupRole = Role.Builder.create(this, "BackupRole" + envSuffix)
+            .assumedBy(new ServicePrincipal("backup.amazonaws.com"))
+            .managedPolicies(List.of(
+                ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSBackupServiceRolePolicyForBackup"),
+                ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSBackupServiceRolePolicyForRestores")
+            ))
+            .build();
+            
+        // Create backup plan with daily retention
+        BackupPlan backupPlan = new BackupPlan(this, "BackupPlan" + envSuffix, BackupPlanProps.builder()
+            .backupPlanName("tap-backup-plan-" + envSuffix)
+            .backupVault(backupVault)
+            .backupPlanRules(List.of(
+                BackupPlanRule.daily(backupVault)
+            ))
             .build());
     }
 }
@@ -286,7 +418,11 @@ public final class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+        // Get environment suffix from multiple sources with priority
+        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
+        if (environmentSuffix == null) {
+            environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+        }
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
         }
