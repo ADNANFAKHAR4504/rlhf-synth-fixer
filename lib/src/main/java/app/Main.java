@@ -1,56 +1,56 @@
 package app;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.CfnOutput;
-import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.lambda.Function;
-import software.amazon.awscdk.services.lambda.Runtime;
-import software.amazon.awscdk.services.lambda.Code;
-import software.amazon.awscdk.services.lambda.FunctionProps;
+import software.amazon.awscdk.services.apigateway.LambdaIntegration;
 // Removed unused VpcConfig import
 import software.amazon.awscdk.services.apigateway.RestApi;
-import software.amazon.awscdk.services.apigateway.LambdaIntegration;
 import software.amazon.awscdk.services.apigateway.RestApiProps;
-import software.amazon.awscdk.services.dynamodb.TableV2;
+import software.amazon.awscdk.services.applicationinsights.CfnApplication;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
+import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
+import software.amazon.awscdk.services.config.CfnDeliveryChannel;
 import software.amazon.awscdk.services.dynamodb.Attribute;
 import software.amazon.awscdk.services.dynamodb.AttributeType;
 import software.amazon.awscdk.services.dynamodb.TablePropsV2;
-import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.ec2.VpcProps;
-import software.amazon.awscdk.services.ec2.SubnetConfiguration;
-import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.dynamodb.TableV2;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SecurityGroupProps;
-import software.amazon.awscdk.services.ec2.Port;
-import software.amazon.awscdk.services.ec2.Peer;
-import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.VpcProps;
+import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.FunctionProps;
+import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.logs.LogGroupProps;
-import software.amazon.awscdk.services.cloudwatch.Alarm;
-import software.amazon.awscdk.services.cloudwatch.Metric;
-import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
-import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
-import software.amazon.awscdk.services.applicationinsights.CfnApplication;
-import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
-import software.amazon.awscdk.services.config.CfnDeliveryChannel;
+import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketProps;
 import software.constructs.Construct;
-
-import java.util.Optional;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import software.amazon.awscdk.Duration;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
@@ -62,9 +62,9 @@ final class TapStackProps {
   private final String environmentSuffix;
   private final StackProps stackProps;
 
-  private TapStackProps(final String environmentSuffix, final StackProps stackProps) {
-    this.environmentSuffix = environmentSuffix;
-    this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+  private TapStackProps(final String envSuffixValue, final StackProps stackPropsValue) {
+    this.environmentSuffix = envSuffixValue;
+    this.stackProps = stackPropsValue != null ? stackPropsValue : StackProps.builder().build();
   }
 
   public String getEnvironmentSuffix() {
@@ -79,22 +79,23 @@ final class TapStackProps {
     return new Builder();
   }
 
-  public static class Builder {
-    private String environmentSuffix;
-    private StackProps stackProps;
+  @SuppressWarnings("checkstyle:HiddenField")
+  public static final class Builder {
+    private String envSuffixValue;
+    private StackProps stackPropsValue;
 
-    public Builder environmentSuffix(final String environmentSuffix) {
-      this.environmentSuffix = environmentSuffix;
+    public Builder environmentSuffix(final String envSuffixParam) {
+      this.envSuffixValue = envSuffixParam;
       return this;
     }
 
-    public Builder stackProps(final StackProps stackProps) {
-      this.stackProps = stackProps;
+    public Builder stackProps(final StackProps stackPropsParam) {
+      this.stackPropsValue = stackPropsParam;
       return this;
     }
 
     public TapStackProps build() {
-      return new TapStackProps(environmentSuffix, stackProps);
+      return new TapStackProps(envSuffixValue, stackPropsValue);
     }
   }
 }
@@ -137,7 +138,6 @@ class TapStack extends Stack {
   private String getEnvironmentSuffix(final TapStackProps props) {
     return Optional.ofNullable(props)
         .map(TapStackProps::getEnvironmentSuffix)
-        .or(() -> Optional.ofNullable(System.getenv("ENVIRONMENT_SUFFIX")))
         .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
             .map(Object::toString))
         .orElse("dev");
