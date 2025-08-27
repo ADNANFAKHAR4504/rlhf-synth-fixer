@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
-    "IaC Optimization", 
+    "IaC Optimization",
     "General Infrastructure Tooling QA",
     "Network Configuration",
     "Access Control",
@@ -20,7 +20,7 @@
   "aws_services": [
     "AWS CDK",
     "Amazon VPC",
-    "Amazon EC2", 
+    "Amazon EC2",
     "Amazon S3",
     "Amazon RDS",
     "AWS KMS",
@@ -31,5 +31,11 @@
     "Amazon CloudWatch",
     "AWS Systems Manager",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
