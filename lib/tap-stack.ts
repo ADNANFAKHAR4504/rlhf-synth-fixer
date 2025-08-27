@@ -452,9 +452,24 @@ export class TapStack extends cdk.Stack {
       description: 'ALB DNS name for SecureApp',
     });
 
+    new cdk.CfnOutput(this, 'SecureAppALBArn', {
+      value: alb.loadBalancerArn,
+      description: 'ALB ARN for SecureApp',
+    });
+
+    new cdk.CfnOutput(this, 'SecureAppVPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID for SecureApp',
+    });
+
     new cdk.CfnOutput(this, 'SecureAppKMSKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for SecureApp encryption',
+    });
+
+    new cdk.CfnOutput(this, 'SecureAppALBLogsBucketName', {
+      value: albLogsBucket.bucketName,
+      description: 'S3 bucket name for ALB access logs',
     });
   }
 
