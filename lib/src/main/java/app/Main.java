@@ -19,6 +19,7 @@ import software.amazon.awscdk.RemovalPolicy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public class Main {
     public static void main(final String[] args) {
@@ -36,9 +37,15 @@ public class Main {
 }
 
 class TapStack extends Stack {
+    private final String uniqueId;
+    private final String timestamp;
     
     public TapStack(final App scope, final String id, final StackProps props) {
         super(scope, id, props);
+        
+        // Generate unique identifiers for this deployment
+        this.uniqueId = UUID.randomUUID().toString().substring(0, 8);
+        this.timestamp = String.valueOf(System.currentTimeMillis());
         
         // 1. Create KMS Keys for encryption
         Key mainKmsKey = createKmsKey();
@@ -65,20 +72,20 @@ class TapStack extends Stack {
     }
     
     private Key createKmsKey() {
-        return Key.Builder.create(this, "MainKMSKey")
-                .description("Main KMS key for general encryption")
+        return Key.Builder.create(this, "MainKMSKey" + uniqueId)
+                .description("Main KMS key for general encryption - " + uniqueId)
                 .enableKeyRotation(true)
                 .policy(PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
                                 PolicyStatement.Builder.create()
-                                        .sid("Enable IAM User Permissions")
+                                        .sid("EnableIAMUserPermissions")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
                                         .actions(Arrays.asList("kms:*"))
                                         .resources(Arrays.asList("*"))
                                         .build(),
                                 PolicyStatement.Builder.create()
-                                        .sid("Allow CloudWatch Logs")
+                                        .sid("AllowCloudWatchLogs")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new ServicePrincipal("logs." + this.getRegion() + ".amazonaws.com")))
                                         .actions(Arrays.asList(
@@ -96,20 +103,20 @@ class TapStack extends Stack {
     }
     
     private Key createS3KmsKey() {
-        return Key.Builder.create(this, "S3KMSKey")
-                .description("KMS key for S3 bucket encryption")
+        return Key.Builder.create(this, "S3KMSKey" + uniqueId)
+                .description("KMS key for S3 bucket encryption - " + uniqueId)
                 .enableKeyRotation(true)
                 .policy(PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
                                 PolicyStatement.Builder.create()
-                                        .sid("Enable IAM User Permissions")
+                                        .sid("EnableIAMUserPermissions")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
                                         .actions(Arrays.asList("kms:*"))
                                         .resources(Arrays.asList("*"))
                                         .build(),
                                 PolicyStatement.Builder.create()
-                                        .sid("Allow S3 Service")
+                                        .sid("AllowS3Service")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new ServicePrincipal("s3.amazonaws.com")))
                                         .actions(Arrays.asList(
@@ -127,20 +134,20 @@ class TapStack extends Stack {
     }
     
     private Key createRdsKmsKey() {
-        return Key.Builder.create(this, "RDSKMSKey")
-                .description("KMS key for RDS encryption")
+        return Key.Builder.create(this, "RDSKMSKey" + uniqueId)
+                .description("KMS key for RDS encryption - " + uniqueId)
                 .enableKeyRotation(true)
                 .policy(PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
                                 PolicyStatement.Builder.create()
-                                        .sid("Enable IAM User Permissions")
+                                        .sid("EnableIAMUserPermissions")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new AccountRootPrincipal()))
                                         .actions(Arrays.asList("kms:*"))
                                         .resources(Arrays.asList("*"))
                                         .build(),
                                 PolicyStatement.Builder.create()
-                                        .sid("Allow RDS Service")
+                                        .sid("AllowRDSService")
                                         .effect(Effect.ALLOW)
                                         .principals(Arrays.asList(new ServicePrincipal("rds.amazonaws.com")))
                                         .actions(Arrays.asList(
@@ -158,24 +165,24 @@ class TapStack extends Stack {
     }
     
     private Vpc createSecureVpc() {
-        return Vpc.Builder.create(this, "SecureVPC")
+        return Vpc.Builder.create(this, "SecureVPC" + uniqueId)
                 .maxAzs(3)
                 .cidr("10.0.0.0/16")
                 .enableDnsHostnames(true)
                 .enableDnsSupport(true)
                 .subnetConfiguration(Arrays.asList(
                         SubnetConfiguration.builder()
-                                .name("PublicSubnet")
+                                .name("PublicSubnet" + uniqueId)
                                 .subnetType(SubnetType.PUBLIC)
                                 .cidrMask(24)
                                 .build(),
                         SubnetConfiguration.builder()
-                                .name("PrivateSubnet")
+                                .name("PrivateSubnet" + uniqueId)
                                 .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
                                 .cidrMask(24)
                                 .build(),
                         SubnetConfiguration.builder()
-                                .name("IsolatedSubnet")
+                                .name("IsolatedSubnet" + uniqueId)
                                 .subnetType(SubnetType.PRIVATE_ISOLATED)
                                 .cidrMask(24)
                                 .build()
@@ -186,28 +193,38 @@ class TapStack extends Stack {
     
     private Bucket createSecureS3Bucket(Key s3KmsKey) {
         // Create CloudWatch Log Group for S3 access logs
-        LogGroup s3LogGroup = LogGroup.Builder.create(this, "S3AccessLogGroup")
-                .logGroupName("/aws/s3/access-logs")
+        LogGroup s3LogGroup = LogGroup.Builder.create(this, "S3AccessLogGroup" + uniqueId)
+                .logGroupName("/aws/s3/access-logs-" + uniqueId)
                 .retention(RetentionDays.ONE_YEAR)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
-        return Bucket.Builder.create(this, "SecureS3Bucket")
-                .bucketName("secure-infrastructure-bucket-" + System.currentTimeMillis())
+        // Create access logs bucket first
+        Bucket accessLogsBucket = Bucket.Builder.create(this, "S3AccessLogsBucket" + uniqueId)
+                .bucketName("s3-access-logs-" + uniqueId + "-" + timestamp)
+                .encryption(BucketEncryption.S3_MANAGED)
+                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+                .versioned(false)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+        
+        return Bucket.Builder.create(this, "SecureS3Bucket" + uniqueId)
+                .bucketName("secure-infrastructure-bucket-" + uniqueId + "-" + timestamp)
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(s3KmsKey)
                 .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
                 .versioned(true)
                 .bucketKeyEnabled(true)
+                .serverAccessLogsBucket(accessLogsBucket)
                 .serverAccessLogsPrefix("access-logs/")
                 .lifecycleRules(Arrays.asList(
                         LifecycleRule.builder()
-                                .id("DeleteIncompleteMultipartUploads")
+                                .id("DeleteIncompleteMultipartUploads" + uniqueId)
                                 .abortIncompleteMultipartUploadAfter(Duration.days(7))
                                 .enabled(true)
                                 .build(),
                         LifecycleRule.builder()
-                                .id("TransitionToIA")
+                                .id("TransitionToIA" + uniqueId)
                                 .transitions(Arrays.asList(
                                         Transition.builder()
                                                 .storageClass(StorageClass.INFREQUENT_ACCESS)
@@ -217,27 +234,22 @@ class TapStack extends Stack {
                                 .enabled(true)
                                 .build()
                 ))
-                .notificationsHandlerRole(Role.Builder.create(this, "S3NotificationRole")
-                        .assumedBy(new ServicePrincipal("s3.amazonaws.com"))
-                        .managedPolicies(Arrays.asList(
-                                ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSS3NotificationServiceRolePolicy")
-                        ))
-                        .build())
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
     
     private void createCloudTrail(Bucket s3Bucket, Key kmsKey) {
         // Create CloudWatch Log Group for CloudTrail
-        LogGroup cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
-                .logGroupName("/aws/cloudtrail/secure-infrastructure")
+        LogGroup cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup" + uniqueId)
+                .logGroupName("/aws/cloudtrail/secure-infrastructure-" + uniqueId)
                 .retention(RetentionDays.ONE_YEAR)
                 .encryptionKey(kmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
         // Create IAM role for CloudTrail to write to CloudWatch Logs
-        Role cloudTrailRole = Role.Builder.create(this, "CloudTrailRole")
+        Role cloudTrailRole = Role.Builder.create(this, "CloudTrailRole" + uniqueId)
+                .roleName("CloudTrailRole-" + uniqueId)
                 .assumedBy(new ServicePrincipal("cloudtrail.amazonaws.com"))
                 .inlinePolicies(Map.of(
                         "CloudTrailLogsPolicy",
@@ -259,8 +271,8 @@ class TapStack extends Stack {
                 ))
                 .build();
         
-        Trail.Builder.create(this, "SecureCloudTrail")
-                .trailName("secure-infrastructure-trail")
+        Trail.Builder.create(this, "SecureCloudTrail" + uniqueId)
+                .trailName("secure-infrastructure-trail-" + uniqueId)
                 .bucket(s3Bucket)
                 .s3KeyPrefix("cloudtrail-logs/")
                 .includeGlobalServiceEvents(true)
@@ -268,21 +280,23 @@ class TapStack extends Stack {
                 .enableFileValidation(true)
                 .encryptionKey(kmsKey)
                 .cloudWatchLogGroup(cloudTrailLogGroup)
+                .cloudWatchLogsRole(cloudTrailRole)
                 .sendToCloudWatchLogs(true)
                 .build();
     }
     
     private Function createSecureLambdaFunction(Vpc vpc, Key kmsKey, Bucket s3Bucket) {
         // Create CloudWatch Log Group for Lambda
-        LogGroup lambdaLogGroup = LogGroup.Builder.create(this, "LambdaLogGroup")
-                .logGroupName("/aws/lambda/secure-function")
+        LogGroup lambdaLogGroup = LogGroup.Builder.create(this, "LambdaLogGroup" + uniqueId)
+                .logGroupName("/aws/lambda/secure-function-" + uniqueId)
                 .retention(RetentionDays.ONE_MONTH)
                 .encryptionKey(kmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
         // Create IAM role for Lambda with least privilege
-        Role lambdaRole = Role.Builder.create(this, "SecureLambdaRole")
+        Role lambdaRole = Role.Builder.create(this, "SecureLambdaRole" + uniqueId)
+                .roleName("SecureLambdaRole-" + uniqueId)
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole")
@@ -322,9 +336,10 @@ class TapStack extends Stack {
                 .build();
         
         // Create security group for Lambda
-        SecurityGroup lambdaSecurityGroup = SecurityGroup.Builder.create(this, "LambdaSecurityGroup")
+        SecurityGroup lambdaSecurityGroup = SecurityGroup.Builder.create(this, "LambdaSecurityGroup" + uniqueId)
+                .securityGroupName("LambdaSecurityGroup-" + uniqueId)
                 .vpc(vpc)
-                .description("Security group for secure Lambda function")
+                .description("Security group for secure Lambda function - " + uniqueId)
                 .allowAllOutbound(false)
                 .build();
         
@@ -335,15 +350,15 @@ class TapStack extends Stack {
                 "Allow HTTPS outbound for AWS API calls"
         );
         
-        // Use Python runtime with inline code as an alternative, or use Code.fromAsset() for Java
-        return Function.Builder.create(this, "SecureFunction")
-                .functionName("secure-infrastructure-function")
-                .runtime(Runtime.PYTHON_3_9) // Changed from JAVA_11 to PYTHON_3_9
-                .handler("index.handler") // Changed handler
+        return Function.Builder.create(this, "SecureFunction" + uniqueId)
+                .functionName("secure-infrastructure-function-" + uniqueId)
+                .runtime(Runtime.PYTHON_3_9)
+                .handler("index.handler")
                 .code(Code.fromInline(
                         "import json\n" +
                         "import boto3\n" +
                         "import logging\n" +
+                        "import os\n" +
                         "\n" +
                         "logger = logging.getLogger()\n" +
                         "logger.setLevel(logging.INFO)\n" +
@@ -351,11 +366,17 @@ class TapStack extends Stack {
                         "def handler(event, context):\n" +
                         "    logger.info(f'Processing secure request: {json.dumps(event)}')\n" +
                         "    \n" +
+                        "    # Get environment variables\n" +
+                        "    bucket_name = os.environ.get('S3_BUCKET_NAME')\n" +
+                        "    kms_key_id = os.environ.get('KMS_KEY_ID')\n" +
+                        "    \n" +
                         "    # Example secure processing\n" +
                         "    response = {\n" +
                         "        'statusCode': 200,\n" +
                         "        'body': json.dumps({\n" +
                         "            'message': 'Processed securely',\n" +
+                        "            'bucket': bucket_name,\n" +
+                        "            'kms_key': kms_key_id,\n" +
                         "            'input': event\n" +
                         "        })\n" +
                         "    }\n" +
@@ -370,7 +391,8 @@ class TapStack extends Stack {
                 .securityGroups(Arrays.asList(lambdaSecurityGroup))
                 .environment(Map.of(
                         "S3_BUCKET_NAME", s3Bucket.getBucketName(),
-                        "KMS_KEY_ID", kmsKey.getKeyId()
+                        "KMS_KEY_ID", kmsKey.getKeyId(),
+                        "UNIQUE_ID", uniqueId
                 ))
                 .timeout(Duration.minutes(5))
                 .memorySize(512)
@@ -380,15 +402,17 @@ class TapStack extends Stack {
     
     private void createSecureRdsInstance(Vpc vpc, Key rdsKmsKey) {
         // Create security group for RDS
-        SecurityGroup rdsSecurityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup")
+        SecurityGroup rdsSecurityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup" + uniqueId)
+                .securityGroupName("RDSSecurityGroup-" + uniqueId)
                 .vpc(vpc)
-                .description("Security group for RDS instance")
+                .description("Security group for RDS instance - " + uniqueId)
                 .allowAllOutbound(false)
                 .build();
         
         // Create subnet group for RDS
-        SubnetGroup rdsSubnetGroup = SubnetGroup.Builder.create(this, "RDSSubnetGroup")
-                .description("Subnet group for RDS instance")
+        SubnetGroup rdsSubnetGroup = SubnetGroup.Builder.create(this, "RDSSubnetGroup" + uniqueId)
+                .subnetGroupName("rds-subnet-group-" + uniqueId)
+                .description("Subnet group for RDS instance - " + uniqueId)
                 .vpc(vpc)
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PRIVATE_ISOLATED)
@@ -396,11 +420,12 @@ class TapStack extends Stack {
                 .build();
         
         // Create parameter group with encryption settings
-        ParameterGroup rdsParameterGroup = ParameterGroup.Builder.create(this, "RDSParameterGroup")
+        ParameterGroup rdsParameterGroup = ParameterGroup.Builder.create(this, "RDSParameterGroup" + uniqueId)
+                .parameterGroupName("rds-param-group-" + uniqueId)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0_35)
                         .build()))
-                .description("Parameter group for secure RDS instance")
+                .description("Parameter group for secure RDS instance - " + uniqueId)
                 .parameters(Map.of(
                         "slow_query_log", "1",
                         "general_log", "1",
@@ -409,15 +434,24 @@ class TapStack extends Stack {
                 .build();
         
         // Create CloudWatch Log Group for RDS
-        LogGroup rdsLogGroup = LogGroup.Builder.create(this, "RDSLogGroup")
-                .logGroupName("/aws/rds/instance/secure-db/error")
+        LogGroup rdsLogGroup = LogGroup.Builder.create(this, "RDSLogGroup" + uniqueId)
+                .logGroupName("/aws/rds/instance/secure-db-" + uniqueId + "/error")
                 .retention(RetentionDays.ONE_MONTH)
                 .encryptionKey(rdsKmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
-        DatabaseInstance.Builder.create(this, "SecureRDSInstance")
-                .instanceIdentifier("secure-db-instance")
+        // Create monitoring role for RDS
+        Role rdsMonitoringRole = Role.Builder.create(this, "RDSMonitoringRole" + uniqueId)
+                .roleName("RDSMonitoringRole-" + uniqueId)
+                .assumedBy(new ServicePrincipal("monitoring.rds.amazonaws.com"))
+                .managedPolicies(Arrays.asList(
+                        ManagedPolicy.fromAwsManagedPolicyName("service-role/AmazonRDSEnhancedMonitoringRole")
+                ))
+                .build();
+        
+        DatabaseInstance.Builder.create(this, "SecureRDSInstance" + uniqueId)
+                .instanceIdentifier("secure-db-instance-" + uniqueId)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0_35)
                         .build()))
@@ -439,15 +473,17 @@ class TapStack extends Stack {
                 .performanceInsightRetention(PerformanceInsightRetention.DEFAULT)
                 .cloudwatchLogsExports(Arrays.asList("error", "general", "slow-query"))
                 .monitoringInterval(Duration.minutes(1))
+                .monitoringRole(rdsMonitoringRole)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
     
     private void createSecurityGroups(Vpc vpc) {
         // Web tier security group
-        SecurityGroup webSecurityGroup = SecurityGroup.Builder.create(this, "WebSecurityGroup")
+        SecurityGroup webSecurityGroup = SecurityGroup.Builder.create(this, "WebSecurityGroup" + uniqueId)
+                .securityGroupName("WebSecurityGroup-" + uniqueId)
                 .vpc(vpc)
-                .description("Security group for web tier")
+                .description("Security group for web tier - " + uniqueId)
                 .allowAllOutbound(false)
                 .build();
         
@@ -470,9 +506,10 @@ class TapStack extends Stack {
         );
         
         // Application tier security group
-        SecurityGroup appSecurityGroup = SecurityGroup.Builder.create(this, "AppSecurityGroup")
+        SecurityGroup appSecurityGroup = SecurityGroup.Builder.create(this, "AppSecurityGroup" + uniqueId)
+                .securityGroupName("AppSecurityGroup-" + uniqueId)
                 .vpc(vpc)
-                .description("Security group for application tier")
+                .description("Security group for application tier - " + uniqueId)
                 .allowAllOutbound(false)
                 .build();
         
@@ -489,9 +526,10 @@ class TapStack extends Stack {
         );
         
         // Database tier security group
-        SecurityGroup dbSecurityGroup = SecurityGroup.Builder.create(this, "DBSecurityGroup")
+        SecurityGroup dbSecurityGroup = SecurityGroup.Builder.create(this, "DBSecurityGroup" + uniqueId)
+                .securityGroupName("DBSecurityGroup-" + uniqueId)
                 .vpc(vpc)
-                .description("Security group for database tier")
+                .description("Security group for database tier - " + uniqueId)
                 .allowAllOutbound(false)
                 .build();
         
