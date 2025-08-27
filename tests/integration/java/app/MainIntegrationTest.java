@@ -31,12 +31,12 @@ public class MainIntegrationTest {
         String secondaryRegion = "us-west-2";
 
         // Create Primary Stack
-        Main.PrimaryStack primaryStack = new Main.PrimaryStack(app, "PrimaryStack-" + environmentName,
-            StackProps.builder().build(), environmentName, primaryRegion, secondaryRegion);
+        Main.MultiRegionStack primaryStack = new Main.MultiRegionStack(app, "PrimaryStack-" + environmentName,
+            StackProps.builder().build(), environmentName, primaryRegion, true);
 
         // Create Secondary Stack
-        Main.SecondaryStack secondaryStack = new Main.SecondaryStack(app, "SecondaryStack-" + environmentName,
-            StackProps.builder().build(), environmentName, secondaryRegion, primaryStack);
+        Main.MultiRegionStack secondaryStack = new Main.MultiRegionStack(app, "SecondaryStack-" + environmentName,
+            StackProps.builder().build(), environmentName, secondaryRegion, false);
 
         // Create templates for both stacks
         Template primaryTemplate = Template.fromStack(primaryStack);
@@ -56,6 +56,9 @@ public class MainIntegrationTest {
         assertThat(secondaryTemplate).isNotNull();
         // Check for key resources in the secondary stack
         secondaryTemplate.resourceCountIs("AWS::EC2::VPC", 1);
-        secondaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1); // Read replica
+        secondaryTemplate.resourceCountIs("AWS::DynamoDB::Table", 1);
+        secondaryTemplate.resourceCountIs("AWS::KMS::Key", 1);
+        secondaryTemplate.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
+        secondaryTemplate.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
     }
 }

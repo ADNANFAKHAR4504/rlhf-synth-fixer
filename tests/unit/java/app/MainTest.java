@@ -21,8 +21,8 @@ public class MainTest {
     @Test
     public void testPrimaryStackSynthesis() {
         App app = new App();
-        Main.PrimaryStack primaryStack = new Main.PrimaryStack(app, "PrimaryStack-test",
-            StackProps.builder().build(), "test", "us-east-1", "us-west-2");
+        Main.MultiRegionStack primaryStack = new Main.MultiRegionStack(app, "PrimaryStack-test",
+            StackProps.builder().build(), "test", "us-east-1", true);
 
         // Create a template from the stack
         Template template = Template.fromStack(primaryStack);
@@ -40,11 +40,8 @@ public class MainTest {
     @Test
     public void testSecondaryStackSynthesis() {
         App app = new App();
-        // The secondary stack depends on the primary, so we need to create it first.
-        Main.PrimaryStack primaryStack = new Main.PrimaryStack(app, "PrimaryStack-test",
-            StackProps.builder().build(), "test", "us-east-1", "us-west-2");
-        Main.SecondaryStack secondaryStack = new Main.SecondaryStack(app, "SecondaryStack-test",
-            StackProps.builder().build(), "test", "us-west-2", primaryStack);
+        Main.MultiRegionStack secondaryStack = new Main.MultiRegionStack(app, "SecondaryStack-test",
+            StackProps.builder().build(), "test", "us-west-2", false);
 
         // Create a template from the stack
         Template template = Template.fromStack(secondaryStack);
