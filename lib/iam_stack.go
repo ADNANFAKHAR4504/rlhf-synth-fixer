@@ -14,7 +14,7 @@ type IamStackProps struct {
 
 type IamStack struct {
 	awscdk.Stack
-	Ec2Role        awsiam.Role
+	Ec2Role         awsiam.Role
 	InstanceProfile awsiam.InstanceProfile
 }
 

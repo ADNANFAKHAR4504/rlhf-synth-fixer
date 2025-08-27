@@ -78,7 +78,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	}
 
 	// Create nested stacks for each resource type following dependency order
-	
+
 	// 1. VPC Stack - Foundation networking
 	vpcStack := NewVpcStack(stack, jsii.String("VpcStack"), &VpcStackProps{
 		StackProps:      &awscdk.StackProps{},

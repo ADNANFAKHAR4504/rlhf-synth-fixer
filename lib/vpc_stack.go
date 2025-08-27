@@ -42,7 +42,7 @@ func NewVpcStack(scope constructs.Construct, id *string, props *VpcStackProps) *
 				CidrMask:   jsii.Number(24),
 			},
 		},
-		NatGateways: jsii.Number(1), // Single NAT Gateway for cost optimization
+		NatGateways:        jsii.Number(1), // Single NAT Gateway for cost optimization
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 	})
@@ -54,10 +54,10 @@ func NewVpcStack(scope constructs.Construct, id *string, props *VpcStackProps) *
 	// Get first subnets for resource placement
 	privateSubnets := *vpc.PrivateSubnets()
 	publicSubnets := *vpc.PublicSubnets()
-	
+
 	var privateSubnet awsec2.ISubnet
 	var publicSubnet awsec2.ISubnet
-	
+
 	if len(privateSubnets) > 0 {
 		privateSubnet = privateSubnets[0]
 	}

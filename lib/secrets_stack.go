@@ -10,14 +10,14 @@ import (
 
 type SecretsStackProps struct {
 	*awscdk.StackProps
-	Vpc           awsec2.IVpc
+	Vpc             awsec2.IVpc
 	EnvironmentName string
 }
 
 type SecretsStack struct {
 	awscdk.Stack
-	DatabaseSecret     awssecretsmanager.Secret
-	AppConfigSecret    awssecretsmanager.Secret
+	DatabaseSecret            awssecretsmanager.Secret
+	AppConfigSecret           awssecretsmanager.Secret
 	SecretsManagerVpcEndpoint awsec2.IVpcEndpoint
 }
 
@@ -30,8 +30,8 @@ func NewSecretsStack(scope constructs.Construct, id *string, props *SecretsStack
 
 	// Create VPC Endpoint for Secrets Manager for enhanced security
 	vpcEndpoint := awsec2.NewInterfaceVpcEndpoint(stack, jsii.String("SecretsManagerVpcEndpoint"), &awsec2.InterfaceVpcEndpointProps{
-		Vpc:     props.Vpc,
-		Service: awsec2.InterfaceVpcEndpointAwsService_SECRETS_MANAGER(),
+		Vpc:               props.Vpc,
+		Service:           awsec2.InterfaceVpcEndpointAwsService_SECRETS_MANAGER(),
 		PrivateDnsEnabled: jsii.Bool(true),
 	})
 

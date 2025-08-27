@@ -19,8 +19,8 @@ type Ec2StackProps struct {
 
 type Ec2Stack struct {
 	awscdk.Stack
-	Instance       awsec2.Instance
-	SecurityGroup  awsec2.SecurityGroup
+	Instance      awsec2.Instance
+	SecurityGroup awsec2.SecurityGroup
 }
 
 func NewEc2Stack(scope constructs.Construct, id *string, props *Ec2StackProps) *Ec2Stack {
@@ -38,10 +38,10 @@ func NewEc2Stack(scope constructs.Construct, id *string, props *Ec2StackProps) *
 
 	// Create security group with minimal required access
 	securityGroup := awsec2.NewSecurityGroup(stack, jsii.String("ProductionEC2SecurityGroup"), &awsec2.SecurityGroupProps{
-		Vpc:         props.Vpc,
-		Description: jsii.String("Security group for production EC2 instance"),
+		Vpc:               props.Vpc,
+		Description:       jsii.String("Security group for production EC2 instance"),
 		SecurityGroupName: jsii.String("production-ec2-sg"),
-		AllowAllOutbound: jsii.Bool(true), // Allow outbound traffic for updates and Secrets Manager access
+		AllowAllOutbound:  jsii.Bool(true), // Allow outbound traffic for updates and Secrets Manager access
 	})
 
 	// Allow SSH access only from within VPC (more secure than public access)
@@ -99,7 +99,7 @@ func NewEc2Stack(scope constructs.Construct, id *string, props *Ec2StackProps) *
 	awscdk.Tags_Of(instance).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 	awscdk.Tags_Of(instance).Add(jsii.String("Component"), jsii.String("Application"), nil)
 	awscdk.Tags_Of(instance).Add(jsii.String("BackupRequired"), jsii.String("true"), nil)
-	
+
 	awscdk.Tags_Of(securityGroup).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 	awscdk.Tags_Of(securityGroup).Add(jsii.String("Component"), jsii.String("Security"), nil)
 
