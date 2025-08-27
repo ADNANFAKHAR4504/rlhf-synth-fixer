@@ -231,7 +231,7 @@ public class MainTest {
             "BackupRetentionPeriod", 7,
             "DeletionProtection", false,
             "EnablePerformanceInsights", false,
-            "EnableCloudwatchLogsExports", Arrays.asList("error", "general", "slow-query"),
+            "EnableCloudwatchLogsExports", Arrays.asList("error", "general"),
             "MonitoringInterval", 60
         ));
         

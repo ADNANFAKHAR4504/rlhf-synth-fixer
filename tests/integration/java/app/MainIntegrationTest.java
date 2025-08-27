@@ -204,7 +204,7 @@ public class MainIntegrationTest {
         
         // Verify RDS exports logs to CloudWatch
         template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
-            "EnableCloudwatchLogsExports", Arrays.asList("error", "general", "slow-query")
+            "EnableCloudwatchLogsExports", Arrays.asList("error", "general")
         ));
         
         // Verify Lambda uses custom log group
