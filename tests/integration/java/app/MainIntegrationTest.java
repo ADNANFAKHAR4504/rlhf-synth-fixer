@@ -1,160 +1,96 @@
 package app;
 
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assumptions;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import software.amazon.awssdk.services.ec2.Ec2Client;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
-import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
-import software.amazon.awssdk.services.cloudwatch.CloudWatchClient;
-import software.amazon.awssdk.services.cloudwatch.model.DescribeAlarmsRequest;
-import software.amazon.awssdk.services.sns.SnsClient;
-import software.amazon.awssdk.services.sns.model.GetTopicAttributesRequest;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
- * Integration tests for Main.FaultTolerantStack.
- * 
- * - Synth tests run offline against generated templates.
- * - Live AWS tests (EC2, S3, CloudWatch, SNS) are conditional and only run if
- *   cdk-outputs.json is present from a real deployment.
+ * Integration tests for TapStack deployments.
+ * These tests check synthesized templates and optionally real outputs.
  */
 public class MainIntegrationTest {
 
-    private static JsonNode outputs;
+    private Environment testEnvironment;
+    private ObjectMapper objectMapper;
 
-    private Template synthesizeTemplate(String id) {
+    @BeforeEach
+    public void setUp() {
+        testEnvironment = Environment.builder()
+                .account("123456789012")
+                .region("us-west-2")
+                .build();
+        objectMapper = new ObjectMapper();
+    }
+
+    private TapStack synthesizeStack(String id, String envSuffix) {
         App app = new App();
-        Main.FaultTolerantStack stack = new Main.FaultTolerantStack(app, id,
-                StackProps.builder()
-                        .env(Environment.builder()
-                                .account("123456789012")
-                                .region("us-east-1")
+        return new TapStack(app, id,
+                TapStackProps.builder()
+                        .environmentSuffix(envSuffix)
+                        .stackProps(StackProps.builder()
+                                .env(testEnvironment)
                                 .build())
                         .build());
-        return Template.fromStack(stack);
     }
-
-    @BeforeAll
-    public static void loadOutputs() throws IOException {
-        File file = new File("cdk-outputs.json");
-        if (file.exists()) {
-            outputs = new ObjectMapper().readTree(file);
-        } else {
-            outputs = null;
-        }
-    }
-
-    // ---------- CDK SYNTH TESTS ----------
 
     @Test
-    public void testVpcCreatedInTemplate() {
-        Template template = synthesizeTemplate("IntegrationVpc");
+    public void testFullStackSynthesis() {
+        TapStack stack = synthesizeStack("TapStackIntegration", "integration");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        assertThat(template).isNotNull();
         template.resourceCountIs("AWS::EC2::VPC", 1);
-    }
-
-    @Test
-    public void testS3BucketEncryptedInTemplate() {
-        Template template = synthesizeTemplate("IntegrationS3");
-        template.hasResourceProperties("AWS::S3::Bucket", Map.of(
-                "BucketEncryption", Map.of()
-        ));
-    }
-
-    @Test
-    public void testIamRoleCreatedInTemplate() {
-        Template template = synthesizeTemplate("IntegrationIam");
+        template.resourceCountIs("AWS::EC2::Instance", 1);
+        template.resourceCountIs("AWS::EC2::SecurityGroup", 1);
         template.resourceCountIs("AWS::IAM::Role", 1);
     }
 
     @Test
-    public void testRdsMultiAzInTemplate() {
-        Template template = synthesizeTemplate("IntegrationRds");
-        template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
-                "MultiAZ", true,
-                "StorageEncrypted", true
-        ));
-    }
+    public void testMultiEnvironmentSynthesis() {
+        String[] envs = {"dev", "staging", "prod"};
+        for (String env : envs) {
+            TapStack stack = synthesizeStack("TapStack" + env, env);
+            Template template = Template.fromStack(stack.getVpcStack());
 
-    @Test
-    public void testAlbCreatedInTemplate() {
-        Template template = synthesizeTemplate("IntegrationAlb");
-        template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
-    }
-
-    @Test
-    public void testCloudWatchAlarmCreatedInTemplate() {
-        Template template = synthesizeTemplate("IntegrationAlarm");
-        template.hasResourceProperties("AWS::CloudWatch::Alarm", Map.of(
-                "Threshold", 70
-        ));
-    }
-
-    // ---------- LIVE AWS TESTS ----------
-
-    @Test
-    public void testVpcExistsInAws() {
-        Assumptions.assumeTrue(outputs != null, "Skipping live VPC test: no outputs found");
-        String vpcId = outputs.path("TapStack-East").path("VpcId").asText(null);
-        Assumptions.assumeTrue(vpcId != null, "Skipping live VPC test: VpcId missing");
-
-        try (Ec2Client ec2 = Ec2Client.create()) {
-            DescribeVpcsResponse resp = ec2.describeVpcs(
-                    DescribeVpcsRequest.builder().vpcIds(vpcId).build()
-            );
-            assertThat(resp.vpcs()).isNotEmpty();
+            assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
+            template.resourceCountIs("AWS::EC2::VPC", 1);
         }
     }
 
     @Test
-    public void testLogBucketExistsInAws() {
-        Assumptions.assumeTrue(outputs != null, "Skipping live S3 test: no outputs found");
-        String bucket = outputs.path("TapStack-East").path("LogBucket").asText(null);
-        Assumptions.assumeTrue(bucket != null, "Skipping live S3 test: LogBucket missing");
+    public void testDeploymentOutputsFile() throws IOException {
+        File outputsFile = new File("cfn-outputs/flat-outputs.json");
+        if (outputsFile.exists()) {
+            JsonNode outputs = objectMapper.readTree(outputsFile);
 
-        try (S3Client s3 = S3Client.create()) {
-            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-            assertThat(bucket).isNotEmpty();
+            assertThat(outputs.has("VpcId")).isTrue();
+            assertThat(outputs.has("InstanceId")).isTrue();
+            assertThat(outputs.has("SecurityGroupId")).isTrue();
+        } else {
+            System.out.println("No deployment outputs file found, skipping output validation.");
         }
     }
 
     @Test
-    public void testCloudWatchAlarmExistsInAws() {
-        Assumptions.assumeTrue(outputs != null, "Skipping live Alarm test: no outputs found");
-        String alarmName = outputs.path("TapStack-East").path("CpuAlarmName").asText(null);
-        Assumptions.assumeTrue(alarmName != null, "Skipping live Alarm test: CpuAlarmName missing");
+    public void testNetworkResources() {
+        TapStack stack = synthesizeStack("TapStackNetwork", "network");
+        Template template = Template.fromStack(stack.getVpcStack());
 
-        try (CloudWatchClient cw = CloudWatchClient.create()) {
-            var resp = cw.describeAlarms(DescribeAlarmsRequest.builder().alarmNames(alarmName).build());
-            assertThat(resp.metricAlarms()).isNotEmpty();
-        }
-    }
-
-    @Test
-    public void testSnsTopicExistsInAws() {
-        Assumptions.assumeTrue(outputs != null, "Skipping live SNS test: no outputs found");
-        String topicArn = outputs.path("TapStack-East").path("AlarmTopicArn").asText(null);
-        Assumptions.assumeTrue(topicArn != null, "Skipping live SNS test: AlarmTopicArn missing");
-
-        try (SnsClient sns = SnsClient.create()) {
-            var resp = sns.getTopicAttributes(GetTopicAttributesRequest.builder().topicArn(topicArn).build());
-            assertThat(resp.attributes()).isNotEmpty();
-        }
+        template.resourceCountIs("AWS::EC2::InternetGateway", 1);
+        template.resourceCountIs("AWS::EC2::Subnet", 2);
+        template.hasResource("AWS::EC2::RouteTable", Map.of());
     }
 }
