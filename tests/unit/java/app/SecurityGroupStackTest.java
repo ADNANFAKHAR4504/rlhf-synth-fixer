@@ -13,6 +13,7 @@ import software.amazon.awscdk.services.ec2.Vpc;
 
 import java.util.Map;
 import java.util.List;
+import java.util.HashMap;
 
 /**
  * Unit tests for SecurityGroupStack.
@@ -56,20 +57,42 @@ public class SecurityGroupStackTest {
         SecurityGroupStack stack = new SecurityGroupStack(app, "SecurityGroupStackTest", props, vpc);
         Template template = Template.fromStack(stack);
 
-        // Verify HTTPS ingress rules for specific IP ranges
-        template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", Map.of(
-                "IpProtocol", "tcp",
-                "FromPort", 443,
-                "ToPort", 443,
-                "CidrIp", "10.0.0.0/16"
-        ));
-
-        template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", Map.of(
-                "IpProtocol", "tcp",
-                "FromPort", 443,
-                "ToPort", 443,
-                "CidrIp", "192.168.1.0/24"
-        ));
+        // Get the entire CloudFormation template
+        Map<String, Object> cfnTemplate = template.toJSON();
+        Map<String, Object> resources = (Map<String, Object>) cfnTemplate.get("Resources");
+        
+        // Find the web security group
+        boolean foundHttpsRule1 = false;
+        boolean foundHttpsRule2 = false;
+        
+        for (Map.Entry<String, Object> entry : resources.entrySet()) {
+            Map<String, Object> resource = (Map<String, Object>) entry.getValue();
+            if ("AWS::EC2::SecurityGroup".equals(resource.get("Type"))) {
+                Map<String, Object> properties = (Map<String, Object>) resource.get("Properties");
+                if ("app-sg-web".equals(properties.get("GroupName"))) {
+                    List<Map<String, Object>> ingressRules = (List<Map<String, Object>>) properties.get("SecurityGroupIngress");
+                    
+                    for (Map<String, Object> rule : ingressRules) {
+                        if ("tcp".equals(rule.get("IpProtocol")) && 
+                            Integer.valueOf(443).equals(rule.get("FromPort")) &&
+                            Integer.valueOf(443).equals(rule.get("ToPort"))) {
+                                
+                            if ("10.0.0.0/16".equals(rule.get("CidrIp"))) {
+                                foundHttpsRule1 = true;
+                            }
+                            
+                            if ("192.168.1.0/24".equals(rule.get("CidrIp"))) {
+                                foundHttpsRule2 = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Assert we found both HTTPS rules
+        assertThat(foundHttpsRule1).as("HTTPS rule for CIDR 10.0.0.0/16 was not found").isTrue();
+        assertThat(foundHttpsRule2).as("HTTPS rule for CIDR 192.168.1.0/24 was not found").isTrue();
     }
 
     @Test
@@ -77,12 +100,35 @@ public class SecurityGroupStackTest {
         SecurityGroupStack stack = new SecurityGroupStack(app, "SecurityGroupStackTest", props, vpc);
         Template template = Template.fromStack(stack);
 
-        // Verify MySQL port access from web security group
-        template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", Map.of(
-                "IpProtocol", "tcp",
-                "FromPort", 3306,
-                "ToPort", 3306
-        ));
+        // Get the entire CloudFormation template
+        Map<String, Object> cfnTemplate = template.toJSON();
+        Map<String, Object> resources = (Map<String, Object>) cfnTemplate.get("Resources");
+        
+        // Find the database security group
+        boolean foundMySqlRule = false;
+        
+        for (Map.Entry<String, Object> entry : resources.entrySet()) {
+            Map<String, Object> resource = (Map<String, Object>) entry.getValue();
+            if ("AWS::EC2::SecurityGroup".equals(resource.get("Type"))) {
+                Map<String, Object> properties = (Map<String, Object>) resource.get("Properties");
+                if ("app-sg-database".equals(properties.get("GroupName"))) {
+                    List<Map<String, Object>> ingressRules = (List<Map<String, Object>>) properties.get("SecurityGroupIngress");
+                    
+                    for (Map<String, Object> rule : ingressRules) {
+                        if ("tcp".equals(rule.get("IpProtocol")) && 
+                            Integer.valueOf(3306).equals(rule.get("FromPort")) &&
+                            Integer.valueOf(3306).equals(rule.get("ToPort"))) {
+                            
+                            foundMySqlRule = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Assert we found the MySQL rule
+        assertThat(foundMySqlRule).as("MySQL rule on port 3306 was not found").isTrue();
     }
 
     @Test
@@ -110,11 +156,16 @@ public class SecurityGroupStackTest {
             Map<String, Object> resources = (Map<String, Object>) cfnTemplate.get("Resources");
             for (Map.Entry<String, Object> entry : resources.entrySet()) {
                 Map<String, Object> resource = (Map<String, Object>) entry.getValue();
-                if ("AWS::EC2::SecurityGroupIngress".equals(resource.get("Type"))) {
+                if ("AWS::EC2::SecurityGroup".equals(resource.get("Type"))) {
                     Map<String, Object> properties = (Map<String, Object>) resource.get("Properties");
-                    if ("0.0.0.0/0".equals(properties.get("CidrIp"))) {
-                        hasUnrestrictedAccess = true;
-                        break;
+                    if (properties.containsKey("SecurityGroupIngress")) {
+                        List<Map<String, Object>> ingressRules = (List<Map<String, Object>>) properties.get("SecurityGroupIngress");
+                        for (Map<String, Object> rule : ingressRules) {
+                            if ("0.0.0.0/0".equals(rule.get("CidrIp"))) {
+                                hasUnrestrictedAccess = true;
+                                break;
+                            }
+                        }
                     }
                 }
             }
