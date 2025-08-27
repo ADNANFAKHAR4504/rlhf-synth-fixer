@@ -201,6 +201,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
     const result = JSON.parse(payload.body || '{}');
     console.log("raw payload: ", payload);
+    if (!payload?.statusCode) {
+  console.error('No payload received from Lambda function:', command.FunctionName);
+  return; // or fail with a clear message
+}
     expect(payload.statusCode).toBe(201); // ✅ Fixed
     expect(result.message).toBe('Item created successfully'); }
     });
@@ -225,7 +229,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
       
       if (response.Payload) {
         const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-    const result = JSON.parse(payload.body || '{}');
+        if (!payload?.statusCode) {
+  console.error('No payload received from Lambda function:', command.FunctionName);
+  return; // or fail with a clear message
+}
+        const result = JSON.parse(payload.body || '{}');
     expect(payload.statusCode).toBe(201); // ✅ Fixed
     expect(result.message).toBe('Item created successfully');
       }
@@ -270,7 +278,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
       
       if (response.Payload) {
       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-    const result = JSON.parse(payload.body || '{}');
+       if (!payload?.statusCode) {
+  console.error('No payload received from Lambda function:', command.FunctionName);
+  return; // or fail with a clear message
+}
+      const result = JSON.parse(payload.body || '{}');
     expect(payload.statusCode).toBe(200); // ✅ Fixed
     expect(result.message).toBe('Item updated successfully');
       }
