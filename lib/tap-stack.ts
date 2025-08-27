@@ -230,14 +230,14 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Fixed: Remove 'description' from credentials
+    // Fixed: Use a valid MySQL version
     const database = new rds.DatabaseInstance(this, 'SecureDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_39, // Updated to valid version
       }),
       instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
+        ec2.InstanceClass.M5,
+        ec2.InstanceSize.LARGE
       ),
       vpc,
       subnetGroup: dbSubnetGroup,
