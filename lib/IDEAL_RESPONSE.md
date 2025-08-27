@@ -2,7 +2,7 @@
 
 This document provides the ideal implementation for a comprehensive, production-grade AWS infrastructure stack using CDK Go. The implementation follows AWS best practices for security, monitoring, and compliance.
 
-## 🏗️ Architecture Overview
+##  Architecture Overview
 
 The TapStack creates a secure, scalable infrastructure with:
 - **VPC** with public/private subnets across multiple AZs
@@ -13,7 +13,7 @@ The TapStack creates a secure, scalable infrastructure with:
 - **CloudWatch alarms** for proactive monitoring
 - **SNS** for alerting
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 iac-test-automations/
@@ -36,7 +36,7 @@ iac-test-automations/
 └── go.mod                         # Go dependencies
 ```
 
-## 🚀 Complete Implementation
+##  Complete Implementation
 
 ### 1. Go Module Configuration (`go.mod`)
 
@@ -314,7 +314,7 @@ def process_s3_record(record: Dict[str, Any], table, context) -> int:
         raise
 ```
 
-## 🧪 Testing Infrastructure
+## Testing Infrastructure
 
 ### Unit Tests (`tests/unit/tap_stack_unit_test.go`)
 
@@ -337,7 +337,7 @@ Real AWS infrastructure validation tests:
 - **Lambda function** configuration and invocation
 - **SNS topic** functionality testing
 
-## 🚀 Deployment Commands
+## Deployment Commands
 
 ```bash
 # Synthesize CDK template
@@ -356,7 +356,7 @@ go test -tags=integration ./tests/integration/... -v
 ./scripts/lint.sh
 ```
 
-## 🔐 Security Features
+## Security Features
 
 - **Encryption at Rest**: All data encrypted (S3, DynamoDB)
 - **Encryption in Transit**: SSL/TLS enforced for all communications
@@ -365,14 +365,14 @@ go test -tags=integration ./tests/integration/... -v
 - **Audit Logging**: CloudTrail with file validation
 - **Monitoring**: CloudWatch alarms for all critical metrics
 
-## 📊 Monitoring & Alerting
+## Monitoring & Alerting
 
 - **Lambda Metrics**: Error rate, duration, throttling
 - **DynamoDB Metrics**: Read/write throttling, capacity utilization
 - **S3 Metrics**: Access patterns and security events
 - **Infrastructure Alerts**: SNS topic for critical notifications
 
-## 🏷️ Resource Naming Convention
+## Resource Naming Convention
 
 All resources follow the pattern: `proj-<resource>-<environment>`
 
