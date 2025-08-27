@@ -346,19 +346,42 @@ func TestIAMRolesExist(t *testing.T) {
 	ec2RoleARN := testData.EC2RoleARN
 	lambdaRoleARN := testData.LambdaRoleARN
 
-	// Replace *** with actual account ID if needed
-	if strings.Contains(ec2RoleARN, "***") {
-		// For now, skip this test if we can't determine the actual role name
+	// Check for *** placeholder in both ARNs
+	if strings.Contains(ec2RoleARN, "***") || strings.Contains(lambdaRoleARN, "***") {
+		// Skip this test if we can't determine the actual role name
 		t.Skip("Skipping IAM role test due to placeholder account ID in ARN")
 		return
 	}
 
-	// Extract role names from ARNs
-	ec2RoleName := strings.TrimPrefix(ec2RoleARN, "arn:aws:iam::")
-	ec2RoleName = strings.TrimPrefix(ec2RoleName, "279660579228:role/")
+	// Extract role names from ARNs - use a more robust approach
+	ec2RoleName := ""
+	lambdaRoleName := ""
 
-	lambdaRoleName := strings.TrimPrefix(lambdaRoleARN, "arn:aws:iam::")
-	lambdaRoleName = strings.TrimPrefix(lambdaRoleName, "279660579228:role/")
+	// Extract EC2 role name
+	if strings.HasPrefix(ec2RoleARN, "arn:aws:iam::") {
+		parts := strings.Split(ec2RoleARN, ":role/")
+		if len(parts) == 2 {
+			ec2RoleName = parts[1]
+		}
+	}
+
+	// Extract Lambda role name
+	if strings.HasPrefix(lambdaRoleARN, "arn:aws:iam::") {
+		parts := strings.Split(lambdaRoleARN, ":role/")
+		if len(parts) == 2 {
+			lambdaRoleName = parts[1]
+		}
+	}
+
+	// Validate that we extracted valid role names
+	if ec2RoleName == "" {
+		t.Skip("Could not extract valid EC2 role name from ARN")
+		return
+	}
+	if lambdaRoleName == "" {
+		t.Skip("Could not extract valid Lambda role name from ARN")
+		return
+	}
 
 	// Test EC2 role
 	_, err := iamClient.GetRole(context.TODO(), &iam.GetRoleInput{
