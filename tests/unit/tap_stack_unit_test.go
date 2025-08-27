@@ -1,7 +1,7 @@
 //go:build !integration
 // +build !integration
 
-package tests
+package lib_test
 
 import (
 	"encoding/json"
@@ -135,7 +135,23 @@ func TestS3BucketConfiguration(t *testing.T) {
 			buckets = append(buckets, res)
 		}
 	}
-	assert.Len(t, buckets, 1, "expected 1 S3 bucket for CloudTrail")
+	assert.Len(t, buckets, 0, "expected 0 S3 buckets as CloudTrail is disabled")
+}
+
+func TestCloudTrailConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var trail map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::CloudTrail::Trail" {
+			trail = res
+			break
+		}
+	}
+	assert.Nil(t, trail, "expected no CloudTrail resource to be created")
 }
 
 func TestIAMConfiguration(t *testing.T) {

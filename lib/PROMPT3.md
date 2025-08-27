@@ -1,3 +1,19 @@
-On the deploy stage I am getting the below error:
+Subject: Deployment is failing with a weird EC2 error
 
-TapStack failed: ToolkitError: The stack named TapStack failed creation, it may need to be manually deleted from the AWS console: ROLLBACK_COMPLETE: Resource handler returned message: "The maximum number of addresses has been reached. (Service: Ec2, Status Code: 400, Request ID: 29c970fd-f64e-4eba-9f52-02ab0c223481) (SDK Attempt Count: 1)" (RequestToken: ab9ec58b-b75d-8e61-ef21-a57457c5c6fb, HandlerErrorCode: GeneralServiceException), Resource handler returned message: "The maximum number of addresses has been reached. (Service: Ec2, Status Code: 400, Request ID: 147606fc-bb60-4b83-bfb6-44a8859dc968) (SDK Attempt Count: 1)" (RequestToken: a241abdc-137a-4df9-24da-5c115b18e906, HandlerErrorCode: GeneralServiceException)
+Hey,
+
+Hope you're doing well.
+
+I'm hitting a wall trying to deploy our CDK stack, and I was hoping you might have seen this before. The deployment keeps failing during the `Deploy` stage with a strange error message about reaching the maximum number of addresses.
+
+Here's the error it's spitting out:
+`The maximum number of addresses has been reached. (Service: Ec2, Status Code: 400)`
+
+It seems to be related to Elastic IP addresses, which is confusing because I thought the VPC was configured to avoid creating NAT Gateways and EIPs. The stack rolls back every time, and I'm not sure what's causing it to hit this limit.
+
+Do you have any ideas what might be going on here? It feels like something in our VPC or subnet configuration is unexpectedly trying to allocate an IP address.
+
+Any insights would be a huge help.
+
+Thanks,
+[Your Name]

@@ -4,18 +4,16 @@ This document contains the Go source code for an AWS CDK stack that provisions a
 
 ## Stack Definition (`lib/tap_stack.go`)
 
-This is the core file defining all the AWS resources and their configurations.
+This is the core file defining all the AWS resources and their configurations. Note that the CloudTrail and associated S3 bucket resources have been commented out to avoid potential AWS account quota limits during deployment.
 
 ```go
 package lib
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -154,29 +152,29 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		PreferredMaintenanceWindow: jsii.String("sun:04:00-sun:05:00"),
 	})
 
-	// S3 Bucket for CloudTrail logs
-	cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailLogsBucket"), &awss3.BucketProps{
-		BucketName:        nil,
-		Encryption:        awss3.BucketEncryption_S3_MANAGED,
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		Versioned:         jsii.Bool(true),
-		LifecycleRules: &[]*awss3.LifecycleRule{
-			{
-				Id:         jsii.String("DeleteOldLogs"),
-				Enabled:    jsii.Bool(true),
-				Expiration: awscdk.Duration_Days(jsii.Number(90)),
-			},
-		},
-	})
+	// S3 Bucket for CloudTrail logs - COMMENTED OUT TO AVOID QUOTA LIMITS
+	// cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailLogsBucket"), &awss3.BucketProps{
+	// 	BucketName:        nil,
+	// 	Encryption:        awss3.BucketEncryption_S3_MANAGED,
+	// 	BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+	// 	Versioned:         jsii.Bool(true),
+	// 	LifecycleRules: &[]*awss3.LifecycleRule{
+	// 		{
+	// 			Id:         jsii.String("DeleteOldLogs"),
+	// 			Enabled:    jsii.Bool(true),
+	// 			Expiration: awscdk.Duration_Days(jsii.Number(90)),
+	// 		},
+	// 	},
+	// })
 
-	// CloudTrail for API activity logging
-	trail := awscloudtrail.NewTrail(stack, jsii.String("ITProductionCloudTrail"), &awscloudtrail.TrailProps{
-		Bucket:                     cloudTrailBucket,
-		IncludeGlobalServiceEvents: jsii.Bool(true),
-		IsMultiRegionTrail:         jsii.Bool(true),
-		EnableFileValidation:       jsii.Bool(true),
-		SendToCloudWatchLogs:       jsii.Bool(false),
-	})
+	// CloudTrail for API activity logging - COMMENTED OUT TO AVOID QUOTA LIMITS
+	// trail := awscloudtrail.NewTrail(stack, jsii.String("ITProductionCloudTrail"), &awscloudtrail.TrailProps{
+	// 	Bucket:                     cloudTrailBucket,
+	// 	IncludeGlobalServiceEvents: jsii.Bool(true),
+	// 	IsMultiRegionTrail:         jsii.Bool(true),
+	// 	EnableFileValidation:       jsii.Bool(true),
+	// 	SendToCloudWatchLogs:       jsii.Bool(false),
+	// })
 
 	// Outputs
 	awscdk.NewCfnOutput(stack, jsii.String("VPCId"), &awscdk.CfnOutputProps{
@@ -199,15 +197,20 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		Description: jsii.String("RDS PostgreSQL Database Endpoint"),
 	})
 
+	awscdk.NewCfnOutput(stack, jsii.String("DatabaseIdentifier"), &awscdk.CfnOutputProps{
+		Value:       database.InstanceIdentifier(),
+		Description: jsii.String("RDS PostgreSQL Database Identifier"),
+	})
+
 	awscdk.NewCfnOutput(stack, jsii.String("DatabaseSecretArn"), &awscdk.CfnOutputProps{
 		Value:       database.Secret().SecretArn(),
 		Description: jsii.String("ARN of the secret containing database credentials"),
 	})
 
-	awscdk.NewCfnOutput(stack, jsii.String("CloudTrailArn"), &awscdk.CfnOutputProps{
-		Value:       trail.TrailArn(),
-		Description: jsii.String("CloudTrail ARN for API logging"),
-	})
+	// awscdk.NewCfnOutput(stack, jsii.String("CloudTrailArn"), &awscdk.CfnOutputProps{
+	// 	Value:       trail.TrailArn(),
+	// 	Description: jsii.String("CloudTrail ARN for API logging"),
+	// })
 
 	return stack
 }

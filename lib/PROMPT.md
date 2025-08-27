@@ -1,21 +1,28 @@
-Hey there,
+Subject: Quick question about a new AWS setup (CDK Go)
 
-I need your help setting up a new AWS environment for our IT department's production workload. We're using AWS CDK with Go, and the goal is to build a secure and well-organized foundation for our applications.
+Hey,
 
-Here’s what I have in mind:
+Hope you're having a good week.
 
-First off, everything should be deployed in the `us-east-1` region. It's also really important that we keep our resources organized, so please make sure everything is tagged with `Environment: Production` and `Department: IT`.
+I'm mapping out the infrastructure for a new project and was hoping to get your expertise. We're planning to use the Go CDK to stand up a new production environment, and the goal is to get a secure and scalable foundation in place from day one.
 
-For the core setup, I'm thinking of a standard VPC with public and private subnets spread across a couple of availability zones for resilience.
+Here are the key things we need:
 
-Inside this VPC, we'll need an EC2 instance in a public subnet that will serve as our web server. Could you lock it down with a security group that only allows HTTPS traffic from the internet? We'll also need a basic IAM role for it, just to follow best practices, though it doesn't need any specific permissions right now.
+- **Region & Tagging:** Everything needs to be in `us-east-1`. Also, can we make sure every single resource gets tagged with `Environment: Production` and `Department: IT`? This is a huge help for our cost allocation.
 
-For our data, I'd like to set up an RDS database instance—PostgreSQL would be great. To keep it secure, it should live in the private subnets. A critical requirement here is that the database **must have encryption at rest enabled**.
+- **Networking:** A standard VPC with public and private subnets across two AZs should be perfect. No need for anything overly complex right now.
 
-The most important part is making sure the EC2 instance and the RDS database can talk to each other securely. Could you configure the security groups so that the EC2 instance is the _only_ thing that can connect to the database on its port? All other connections to the database should be blocked.
+- **Web Server:** We'll need an EC2 instance (a `t3.micro` is fine to start) in one of the public subnets. The big thing here is locking it down. Can you make sure its security group only allows inbound HTTPS traffic from the internet? It should also have a basic IAM role attached, just so we're following best practices from the get-go.
 
-Finally, for compliance and auditing, we need to have CloudTrail enabled to log all API activity in the account.
+- **Database:** For the database, let's go with a PostgreSQL RDS instance. It absolutely needs to be in the private subnets, and it's critical that **encryption at rest is enabled**. This is a hard requirement for us.
 
-The ideal outcome would be a clean, ready-to-deploy CDK Go project. If you could put all the stack logic into a single `main.go` file, that would be perfect. I'm looking for code that's easy to read, with comments explaining the important parts.
+- **Connectivity:** This is the most important part. The web server needs to be the _only_ thing that can talk to the database. Could you wire up the security groups so the RDS instance only allows traffic from the EC2's security group on the PostgreSQL port?
 
-Thanks for your help with this!
+- **Auditing:** Lastly, we need CloudTrail enabled to keep an eye on all API activity.
+
+The ideal deliverable would be a single, clean `main.go` file that defines the whole stack. If you could add some comments to explain the key parts, that would be amazing for the rest of the team.
+
+Thanks a bunch for your help on this!
+
+Cheers,
+[Your Name]

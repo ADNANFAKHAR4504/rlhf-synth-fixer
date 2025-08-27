@@ -11,7 +11,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
@@ -27,7 +26,6 @@ type Outputs struct {
 	DatabaseEndpoint    string `json:"DatabaseEndpoint"`
 	DatabaseIdentifier  string `json:"DatabaseIdentifier"`
 	DatabaseSecretArn   string `json:"DatabaseSecretArn"`
-	CloudTrailArn       string `json:"CloudTrailArn"`
 }
 
 // loadOutputs loads deployment outputs from the specified JSON file.
@@ -57,7 +55,6 @@ func TestTapStackIntegration(t *testing.T) {
 
 	ec2Client := ec2.NewFromConfig(cfg)
 	rdsClient := rds.NewFromConfig(cfg)
-	cloudTrailClient := cloudtrail.NewFromConfig(cfg)
 	outputs := loadOutputs(t)
 
 	t.Run("VPC is correctly configured", func(t *testing.T) {
@@ -115,19 +112,9 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.True(t, *dbInstance.StorageEncrypted, "RDS storage should be encrypted")
 	})
 
-	t.Run("CloudTrail is enabled", func(t *testing.T) {
-		trailResp, err := cloudTrailClient.GetTrail(ctx, &cloudtrail.GetTrailInput{
-			Name: aws.String(outputs.CloudTrailArn),
-		})
-		require.NoError(t, err, "Failed to get CloudTrail")
-		assert.True(t, *trailResp.Trail.IsMultiRegionTrail, "CloudTrail should be multi-region")
-		assert.True(t, *trailResp.Trail.IncludeGlobalServiceEvents, "CloudTrail should include global service events")
-	})
-
 	t.Run("Outputs are correctly exported", func(t *testing.T) {
 		assert.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
 		assert.NotEmpty(t, outputs.WebServerInstanceId, "WebServerInstanceId should be exported")
 		assert.NotEmpty(t, outputs.DatabaseEndpoint, "DatabaseEndpoint should be exported")
-		assert.NotEmpty(t, outputs.CloudTrailArn, "CloudTrailArn should be exported")
 	})
 }

@@ -1,46 +1,24 @@
-Hi, The model response fails to pass te CI/CD pipeline with the below stages with the errors below:
+Subject: Help needed with CI/CD pipeline failures for our CDK Go project
 
-Synth:
-Error: bin/tap.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
+Hey,
 
-NOTICES (What's this? https://github.com/aws/aws-cdk/wiki/CLI-Notices)
+Hope you're having a good day.
 
-34892 CDK CLI will collect telemetry data on command usage starting at version 2.1100.0 (unless opted out)
+I'm running into some frustrating issues with our CI/CD pipeline for the new CDK Go stack, and I was hoping you might have some ideas. The model's response is failing at both the `Synth` and `Lint` stages, and I'm a bit stuck.
 
-    Overview: We do not collect customer content and we anonymize the
-              telemetry we do collect. See the attached issue for more
-              information on what data is collected, why, and how to
-              opt-out. Telemetry will NOT be collected for any CDK CLI
-              version prior to version 2.1100.0 - regardless of
-              opt-in/out. You can also preview the telemetry we will start
-              collecting by logging it to a local file, by adding
-              `--unstable=telemetry --telemetry-file=my/local/file` to any
-              `cdk` command.
+During the `Synth` stage, it's complaining that our `lib` package isn't importable:
+`Error: bin/tap.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package`
 
-    Affected versions: cli: ^2.0.0
+It seems like Go thinks the `lib` directory is a `main` package, which is preventing the build from succeeding.
 
-    More information at: https://github.com/aws/aws-cdk/issues/34892
+Then, in the `Lint` stage, it's throwing a whole bunch of the same "not an importable package" errors across multiple files, including our unit tests. It's also flagging an issue in the stack itself:
+`Error: vet: lib/tap_stack.go:101:3: unknown field Generation in struct literal of type awsec2.AmazonLinux2ImageSsmParameterProps`
 
-If you don’t want to see a notice anymore, use "cdk acknowledge <id>". For example, "cdk acknowledge 34892".
-Error: go run bin/tap.go: Subprocess exited with error 1
-Error: Process completed with exit code 1.
+This one looks like we're trying to use a field called `Generation` when setting up the Amazon Linux AMI, but it doesn't seem to exist in the version of the CDK we're using.
 
-Lint:
-Error: main.go:5:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
-Error: archive/cdk-go/Pr2204/bin/tap.go:4:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
-Error: archive/cdk-go/Pr2270/bin/tap.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
-Error: bin/tap.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
-package github.com/TuringGpt/iac-test-automations/node_modules/aws-cdk/lib/init-templates/app/go: invalid input file name "%name%.template.go"
-package github.com/TuringGpt/iac-test-automations/node_modules/aws-cdk/lib/init-templates/sample-app/go: invalid input file name "%name%.template.go"
-Error: templates/cdk-go/bin/tap.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
-go: downloading github.com/stretchr/testify v1.11.0
-go: downloading github.com/pmezard/go-difflib v1.0.0
-go: downloading github.com/davecgh/go-spew v1.1.1
-Error: tests/unit/tap_stack_unit_test.go:6:2: import "github.com/TuringGpt/iac-test-automations/lib" is a program, not an importable package
+Could you take a look at the code and see if you can figure out what's going on? It feels like there might be a structural issue with our Go packages and a small bug in the stack definition.
 
-# github.com/TuringGpt/iac-test-automations/lib
+Any help would be hugely appreciated!
 
-# [github.com/TuringGpt/iac-test-automations/lib]
-
-Error: vet: lib/tap_stack.go:101:3: unknown field Generation in struct literal of type awsec2.AmazonLinux2ImageSsmParameterProps
-Error: Process completed with exit code 123.
+Thanks,
+[Your Name]
