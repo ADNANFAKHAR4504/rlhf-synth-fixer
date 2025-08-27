@@ -537,6 +537,31 @@ func TestResourceTagging(t *testing.T) {
 	t.Log("Resource tagging verified")
 }
 
+func checkRequiredTags(t *testing.T, tags []*ec2.Tag, resourceType string) {
+	t.Helper()
+
+	requiredTags := map[string]string{
+		"Environment": "Development",
+		"Project":     "MyProject",
+		"Owner":       "devops-team",
+		"CostCenter":  "CC123",
+		"ManagedBy":   "cdktf",
+	}
+
+	for requiredKey, expectedValue := range requiredTags {
+		found := false
+		for _, tag := range tags {
+			if *tag.Key == requiredKey && *tag.Value == expectedValue {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s missing required tag %s=%s", resourceType, requiredKey, expectedValue)
+		}
+	}
+}
+
 func TestStackOutputs(t *testing.T) {
 	outputs := loadDeploymentOutputs(t)
 
