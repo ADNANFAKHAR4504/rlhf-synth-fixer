@@ -50,6 +50,24 @@ resource "random_string" "iam_suffix" {
   upper   = false
 }
 
+resource "random_string" "alb_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
+resource "random_string" "tg_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
+resource "random_string" "kms_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
 # Locals
 locals {
   project_name        = "iac-aws-nova"
@@ -327,7 +345,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${replace(local.unique_project_name, "-", "_")}_${random_string.unique_suffix.result}_key"
+  name          = "alias/iac-nova-${random_string.kms_suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -401,7 +419,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Load Balancer
 resource "aws_lb" "main" {
-  name                   = "${local.unique_project_name}-alb-${random_string.unique_suffix.result}"
+  name                   = "${local.unique_project_name}-alb-${random_string.alb_suffix.result}"
   internal               = false
   load_balancer_type     = "application"
   security_groups        = [aws_security_group.alb.id]
@@ -411,7 +429,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name       = "${local.unique_project_name}-tg-${random_string.unique_suffix.result}"
+  name       = "${local.unique_project_name}-tg-${random_string.tg_suffix.result}"
   port       = 80
   protocol   = "HTTP"
   vpc_id     = aws_vpc.main.id
