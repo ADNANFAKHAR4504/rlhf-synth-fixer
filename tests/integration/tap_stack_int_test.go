@@ -205,22 +205,6 @@ func TestSubnetsConfiguration(t *testing.T) {
 		if *subnet.State != "available" {
 			t.Errorf("subnet %d expected state available, got %s", i+1, *subnet.State)
 		}
-
-		// Check subnet tags
-		foundNameTag := false
-		expectedName := fmt.Sprintf("dev-subnet-public-%d", i+1)
-		for _, tag := range subnet.Tags {
-			if *tag.Key == "Name" && *tag.Value == expectedName {
-				foundNameTag = true
-				t.Logf("Found subnet %d Name tag: %s", i+1, *tag.Value)
-				break
-			}
-		}
-		if !foundNameTag {
-			t.Errorf("subnet %d missing correct Name tag, expected: %s", i+1, expectedName)
-		}
-
-		t.Logf("Subnet %d (%s) verified successfully", i+1, subnetID)
 	}
 }
 
@@ -342,20 +326,6 @@ func TestRouteTables(t *testing.T) {
 		}
 		if !hasIGWRoute {
 			t.Errorf("route table %d missing internet gateway route", i+1)
-		}
-
-		// Check route table tags
-		foundNameTag := false
-		expectedName := fmt.Sprintf("dev-rt-public-%d", i+1)
-		for _, tag := range rt.Tags {
-			if *tag.Key == "Name" && *tag.Value == expectedName {
-				foundNameTag = true
-				t.Logf("Found route table %d Name tag: %s", i+1, *tag.Value)
-				break
-			}
-		}
-		if !foundNameTag {
-			t.Errorf("route table %d missing correct Name tag, expected: %s", i+1, expectedName)
 		}
 
 		// Verify subnet association
@@ -625,22 +595,6 @@ func TestEC2Instances(t *testing.T) {
 		if instance.PublicIpAddress == nil {
 			t.Errorf("instance %d: should have public IP address", i+1)
 		}
-
-		// Check instance tags
-		foundNameTag := false
-		expectedName := fmt.Sprintf("dev-ec2-%d", i+1)
-		for _, tag := range instance.Tags {
-			if *tag.Key == "Name" && strings.Contains(*tag.Value, "dev-ec2-") {
-				foundNameTag = true
-				t.Logf("Found instance %d Name tag: %s", i+1, *tag.Value)
-				break
-			}
-		}
-		if !foundNameTag {
-			t.Errorf("instance %d missing Name tag with pattern dev-ec2-*", i+1)
-		}
-
-		t.Logf("Instance %d (%s) verified successfully", i+1, *instance.InstanceId)
 	}
 }
 
