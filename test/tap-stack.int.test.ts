@@ -270,7 +270,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       } catch (error) {
         console.warn('Could not verify RDS instance details, may need proper IAM permissions');
         // At least verify endpoint is accessible format
-        expect(dbEndpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.rds\.(amazonaws\.com|aws\.com)$/);
+        expect(dbEndpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/); 
       }
     });
 
@@ -493,7 +493,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       
       if (loadBalancerDNS) {
         // Basic DNS format validation
-        expect(loadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.elb\.[a-z0-9-]+\.(amazonaws\.com|aws\.com)$/);
+        expect(loadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+-[0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
         
         // In a real scenario, you might want to make HTTP requests to test connectivity
         // For now, we'll just validate the DNS format and assume the ALB is working
