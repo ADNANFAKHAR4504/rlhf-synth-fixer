@@ -6,9 +6,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/alb"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/autoscaling"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sns"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/wafv2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -28,6 +36,10 @@ type EnvironmentConfig struct {
 	ReplicationBucket string
 	// IAM
 	RolePrefix string
+	// Application
+	DomainName     string
+	CertificateARN string
+	TrustedCIDRs   []string
 	// Tags
 	CommonTags map[string]string
 }
@@ -53,12 +65,52 @@ type S3Component struct {
 	ReplicationBucket *s3.BucketV2
 }
 
+// KMSComponent represents KMS keys for encryption
+type KMSComponent struct {
+	DataKey *kms.Key
+	LogsKey *kms.Key
+}
+
+// SecurityComponent represents security groups
+type SecurityComponent struct {
+	ALBSecurityGroup *ec2.SecurityGroup
+	AppSecurityGroup *ec2.SecurityGroup
+	DBSecurityGroup  *ec2.SecurityGroup
+}
+
+// ApplicationComponent represents application infrastructure
+type ApplicationComponent struct {
+	LoadBalancer     *alb.LoadBalancer
+	TargetGroup      *alb.TargetGroup
+	AutoScalingGroup *autoscaling.Group
+	LaunchTemplate   *ec2.LaunchTemplate
+}
+
+// DatabaseComponent represents RDS database
+type DatabaseComponent struct {
+	SubnetGroup *rds.SubnetGroup
+	Instance    *rds.Instance
+	Secret      *secretsmanager.Secret
+}
+
+// MonitoringComponent represents monitoring infrastructure
+type MonitoringComponent struct {
+	SNSTopic           *sns.Topic
+	CloudWatchLogGroup *cloudwatch.LogGroup
+	WAFWebACL          *wafv2.WebAcl
+}
+
 // InfrastructureStack represents the main infrastructure stack
 type InfrastructureStack struct {
-	Config  *EnvironmentConfig
-	VPC     *VPCComponent
-	IAM     *IAMComponent
-	Storage *S3Component
+	Config      *EnvironmentConfig
+	VPC         *VPCComponent
+	IAM         *IAMComponent
+	Storage     *S3Component
+	KMS         *KMSComponent
+	Security    *SecurityComponent
+	Application *ApplicationComponent
+	Database    *DatabaseComponent
+	Monitoring  *MonitoringComponent
 }
 
 // generateRandomSuffix creates a random 6-character suffix for resource naming
@@ -84,17 +136,8 @@ func getEnvironmentSuffix(environment string) string {
 func getAccountID(environment string) string {
 	accountID := os.Getenv("AWS_ACCOUNT_ID")
 	if accountID == "" {
-		// Use environment-specific placeholder if no account ID is provided
-		switch environment {
-		case "dev":
-			return "123456789012" // Replace with your dev account ID
-		case "staging":
-			return "123456789013" // Replace with your staging account ID
-		case "prod":
-			return "123456789014" // Replace with your prod account ID
-		default:
-			return "123456789012" // Default fallback
-		}
+		// Only support dev environment
+		return "123456789012" // Replace with your dev account ID
 	}
 	return accountID
 }
@@ -133,6 +176,9 @@ func getDevConfig() *EnvironmentConfig {
 		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
 		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
 		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		DomainName:         "dev.example.com",                       // TODO: Replace with actual domain
+		CertificateARN:     "",                                      // TODO: Add ACM certificate ARN
+		TrustedCIDRs:       []string{"10.0.0.0/8", "172.16.0.0/12"}, // TODO: Add office IPs
 		CommonTags: map[string]string{
 			"Environment": environment,
 			"Project":     "infrastructure",
@@ -160,6 +206,9 @@ func getStagingConfig() *EnvironmentConfig {
 		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
 		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
 		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		DomainName:         "staging.example.com",                   // TODO: Replace with actual domain
+		CertificateARN:     "",                                      // TODO: Add ACM certificate ARN
+		TrustedCIDRs:       []string{"10.0.0.0/8", "172.16.0.0/12"}, // TODO: Add office IPs
 		CommonTags: map[string]string{
 			"Environment": environment,
 			"Project":     "infrastructure",
@@ -187,6 +236,9 @@ func getProdConfig() *EnvironmentConfig {
 		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
 		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
 		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		DomainName:         "example.com",                           // TODO: Replace with actual domain
+		CertificateARN:     "",                                      // TODO: Add ACM certificate ARN
+		TrustedCIDRs:       []string{"10.0.0.0/8", "172.16.0.0/12"}, // TODO: Add office IPs
 		CommonTags: map[string]string{
 			"Environment": environment,
 			"Project":     "infrastructure",
@@ -216,6 +268,12 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 		return nil, fmt.Errorf("error building S3 component: %v", err)
 	}
 
+	// Build KMS component
+	kmsComponent, err := buildKMSComponent(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error building KMS component: %v", err)
+	}
+
 	// Outputs
 	ctx.Export("vpc_id", vpcComponent.VPC.ID())
 
@@ -229,12 +287,15 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 	ctx.Export("replication_bucket_name", s3Component.ReplicationBucket.ID())
 	ctx.Export("ec2_role_arn", iamComponent.EC2Role.Arn)
 	ctx.Export("lambda_role_arn", iamComponent.LambdaRole.Arn)
+	ctx.Export("data_kms_key_arn", kmsComponent.DataKey.Arn)
+	ctx.Export("logs_kms_key_arn", kmsComponent.LogsKey.Arn)
 
 	return &InfrastructureStack{
 		Config:  cfg,
 		VPC:     vpcComponent,
 		IAM:     iamComponent,
 		Storage: s3Component,
+		KMS:     kmsComponent,
 	}, nil
 }
 
@@ -719,5 +780,65 @@ func buildS3Component(ctx *pulumi.Context, cfg *EnvironmentConfig) (*S3Component
 	return &S3Component{
 		LoggingBucket:     loggingBucket,
 		ReplicationBucket: replicationBucket,
+	}, nil
+}
+
+// buildKMSComponent creates KMS keys for encryption
+func buildKMSComponent(ctx *pulumi.Context, cfg *EnvironmentConfig) (*KMSComponent, error) {
+	// KMS Key for data encryption (S3, RDS, Secrets Manager)
+	dataKey, err := kms.NewKey(ctx, "DataKMSKey", &kms.KeyArgs{
+		Description:          pulumi.String(fmt.Sprintf("%s Data Encryption Key", cfg.Environment)),
+		DeletionWindowInDays: pulumi.Int(30),
+		EnableKeyRotation:    pulumi.Bool(true),
+		MultiRegion:          pulumi.Bool(false),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-data-kms-key", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating data KMS key: %v", err)
+	}
+
+	// KMS Key alias for data
+	_, err = kms.NewAlias(ctx, "DataKMSAlias", &kms.AliasArgs{
+		Name:        pulumi.String(fmt.Sprintf("alias/%s-data", cfg.Environment)),
+		TargetKeyId: dataKey.KeyId,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating data KMS alias: %v", err)
+	}
+
+	// KMS Key for logs encryption (CloudWatch, WAF)
+	logsKey, err := kms.NewKey(ctx, "LogsKMSKey", &kms.KeyArgs{
+		Description:          pulumi.String(fmt.Sprintf("%s Logs Encryption Key", cfg.Environment)),
+		DeletionWindowInDays: pulumi.Int(30),
+		EnableKeyRotation:    pulumi.Bool(true),
+		MultiRegion:          pulumi.Bool(false),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-logs-kms-key", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating logs KMS key: %v", err)
+	}
+
+	// KMS Key alias for logs
+	_, err = kms.NewAlias(ctx, "LogsKMSAlias", &kms.AliasArgs{
+		Name:        pulumi.String(fmt.Sprintf("alias/%s-logs", cfg.Environment)),
+		TargetKeyId: logsKey.KeyId,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating logs KMS alias: %v", err)
+	}
+
+	return &KMSComponent{
+		DataKey: dataKey,
+		LogsKey: logsKey,
 	}, nil
 }

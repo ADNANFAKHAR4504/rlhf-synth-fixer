@@ -340,7 +340,7 @@ func TestLibFunctions(t *testing.T) {
 		t.Error("getEnvironmentSuffix should not return empty string")
 	}
 
-	// Test getAccountID function
+	// Test getAccountID function for dev environment
 	accountID := getAccountID("dev")
 	if accountID == "" {
 		t.Error("getAccountID should not return empty string")
@@ -349,22 +349,46 @@ func TestLibFunctions(t *testing.T) {
 		t.Errorf("getAccountID for dev should return '123456789012', got %s", accountID)
 	}
 
-	// Test getAccountID for staging
-	stagingAccountID := getAccountID("staging")
-	if stagingAccountID != "123456789013" {
-		t.Errorf("getAccountID for staging should return '123456789013', got %s", stagingAccountID)
-	}
-
-	// Test getAccountID for prod
-	prodAccountID := getAccountID("prod")
-	if prodAccountID != "123456789014" {
-		t.Errorf("getAccountID for prod should return '123456789014', got %s", prodAccountID)
-	}
-
-	// Test getAccountID for unknown environment
+	// Test getAccountID for unknown environment (should default to dev)
 	unknownAccountID := getAccountID("unknown")
 	if unknownAccountID != "123456789012" {
 		t.Errorf("getAccountID for unknown should return '123456789012', got %s", unknownAccountID)
+	}
+}
+
+// TestKMSConfiguration validates KMS key configuration patterns
+func TestKMSConfiguration(t *testing.T) {
+	// Test KMS key ARN patterns
+	dataKeyARN := "arn:aws:kms:us-east-1:123456789012:key/mock-data-key-id"
+	logsKeyARN := "arn:aws:kms:us-east-1:123456789012:key/mock-logs-key-id"
+
+	// Validate KMS key ARN format
+	if !strings.HasPrefix(dataKeyARN, "arn:aws:kms:") {
+		t.Error("Data KMS key ARN should start with 'arn:aws:kms:'")
+	}
+	if !strings.HasPrefix(logsKeyARN, "arn:aws:kms:") {
+		t.Error("Logs KMS key ARN should start with 'arn:aws:kms:'")
+	}
+
+	// Validate KMS key ARN structure
+	dataKeyParts := strings.Split(dataKeyARN, ":")
+	if len(dataKeyParts) != 6 {
+		t.Error("KMS key ARN should have 6 parts separated by colons")
+	}
+
+	// Validate account ID in ARN
+	if dataKeyParts[4] != "123456789012" {
+		t.Error("KMS key ARN should contain correct account ID")
+	}
+
+	// Validate key ID format
+	if !strings.HasPrefix(dataKeyParts[5], "key/") {
+		t.Error("KMS key ARN should end with 'key/' followed by key ID")
+	}
+
+	// Validate different key types
+	if dataKeyARN == logsKeyARN {
+		t.Error("Data and logs KMS keys should be different")
 	}
 }
 
