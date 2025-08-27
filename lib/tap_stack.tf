@@ -452,6 +452,11 @@ output "aws_region" {
   value       = var.aws_region
 }
 
+output "s3_bucket_name" {
+  value       = aws_s3_bucket.my_bucket.bucket
+  description = "Primary S3 bucket name for this stack"
+}
+
 output "availability_zones" {
   description = "List of availability zones"
   value       = data.aws_availability_zones.available.names
