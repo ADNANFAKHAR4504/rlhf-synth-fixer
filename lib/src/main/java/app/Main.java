@@ -9,7 +9,7 @@ import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.kms.*;
 import software.amazon.awscdk.services.lambda.*;
 import software.amazon.awscdk.services.lambda.Runtime;
-import software.amazon.awscdk.services.logs.*;
+import software.awscdk.services.logs.*;
 import software.amazon.awscdk.services.s3.*;
 import software.amazon.awscdk.services.cloudtrail.*;
 import software.amazon.awscdk.services.rds.*;
@@ -409,7 +409,7 @@ class SecureInfrastructureStack extends Stack {
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0_35)
                         .build()))
-                .instanceType(software.amazon.awscdk.services.rds.InstanceType.T3_MICRO)
+                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of("t3.micro"))
                 .vpc(vpc)
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PRIVATE_ISOLATED)
