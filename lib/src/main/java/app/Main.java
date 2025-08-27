@@ -226,7 +226,7 @@ class TapStack extends Stack {
                 .generateSecretString(SecretStringGenerator.builder()
                         .secretStringTemplate("{\"username\": \"dbadmin\"}")
                         .generateStringKey("password")
-                        .excludeCharacters(" %+~`#$&*()|[]{}:;<>?!'/\"\\")
+                        .excludeCharacters(" /@\"'\\")
                         .passwordLength(32)
                         .build())
                 .build();
