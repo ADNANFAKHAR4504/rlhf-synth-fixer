@@ -258,6 +258,7 @@ class TapStack extends Stack {
         .build());
 
     // Allow Config service to put objects with proper ACL
+    // AWS Config will write to AWSLogs/{accountId}/Config/* path automatically
     configBucket.addToResourcePolicy(PolicyStatement.Builder.create()
         .effect(Effect.ALLOW)
         .principals(List.of(new ServicePrincipal("config.amazonaws.com")))
@@ -459,11 +460,12 @@ class TapStack extends Stack {
                     .build())
             .build());
 
-    // AWS Config Delivery Channel using CFN construct with proper S3 key prefix
+    // AWS Config Delivery Channel using CFN construct
+    // Removing S3 key prefix to avoid validation issues - AWS Config will use
+    // default path
     CfnDeliveryChannel configDelivery = new CfnDeliveryChannel(this, "ConfigDelivery",
         software.amazon.awscdk.services.config.CfnDeliveryChannelProps.builder()
             .s3BucketName(configBucket.getBucketName())
-            .s3KeyPrefix("AWSLogs/" + this.getAccount() + "/Config")
             .build());
 
     commonTags.forEach((key, value) -> Tags.of(configRole).add(key, value));
