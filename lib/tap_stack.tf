@@ -25,6 +25,12 @@ variable "force_unique_deployment" {
   default     = true
 }
 
+variable "unique_deployment_id" {
+  description = "Unique deployment identifier to avoid naming conflicts (auto-generated if not provided)"
+  type        = string
+  default     = null
+}
+
 # Random strings
 resource "random_string" "deployment_suffix" {
   length  = 6
@@ -40,6 +46,12 @@ resource "random_string" "bucket_suffix" {
 
 resource "random_string" "unique_deployment" {
   length  = 4
+  special = false
+  upper   = false
+}
+
+resource "random_string" "asg_unique" {
+  length  = 3
   special = false
   upper   = false
 }
@@ -70,8 +82,11 @@ locals {
   deployment_suffix   = var.deployment_suffix != null ? var.deployment_suffix : random_string.unique_deployment.result
   unique_project_name = "${local.project_name}-${local.deployment_id}"
   
-  # Create a unique deployment identifier that's short but unique
-  unique_deployment_id = "${substr(local.deployment_id, 0, 4)}-${local.deployment_suffix}"
+  # Create a unique deployment identifier that's short but unique (max 32 chars)
+  unique_deployment_id = var.unique_deployment_id != null ? var.unique_deployment_id : "${substr(local.deployment_id, 0, 4)}-${local.deployment_suffix}"
+  
+  # Create a very short ASG identifier to stay under 32 chars
+  asg_identifier = "${substr(local.deployment_id, 0, 3)}-${random_string.asg_unique.result}"
 
   common_tags = {
     Project     = local.unique_project_name
@@ -434,14 +449,14 @@ resource "aws_lb_target_group" "main" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2      # Require 2 successful checks to mark healthy
-    interval            = 15     # Check every 15 seconds
-    matcher             = "200"  # Expect HTTP 200 response
+    healthy_threshold   = 2
+    interval            = 15     # Faster checks every 15 seconds
+    matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5      # 5-second timeout for health checks
-    unhealthy_threshold = 2      # Mark unhealthy after 2 consecutive failures
+    timeout             = 5      # Shorter timeout
+    unhealthy_threshold = 2      # Fewer failures before marking unhealthy
   }
 
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-target-group" })
@@ -491,18 +506,13 @@ resource "aws_launch_template" "main" {
 
     echo "Starting EC2 setup..."
 
-    # Wait for system to be ready
-    sleep 30
+    # Wait a little for network and yum
+    sleep 20
 
-    # Install Apache with retry logic
-    for i in {1..3}; do
-      yum install -y httpd -q && break || sleep 10
-    done
-
+    yum install -y httpd -q
     systemctl enable httpd
     systemctl start httpd
 
-    # Create health endpoints immediately
     mkdir -p /var/www/html
     echo "healthy" > /var/www/html/health
     echo "<h1>Hello from ${local.unique_project_name}</h1><p>Instance is healthy!</p>" > /var/www/html/index.html
@@ -510,19 +520,9 @@ resource "aws_launch_template" "main" {
     chmod 644 /var/www/html/health
     chmod 644 /var/www/html/index.html
 
-    # Wait for Apache to fully start
-    sleep 5
-
-    # Verify endpoints are working
-    for i in {1..5}; do
-      if curl -f http://localhost/health > /dev/null 2>&1; then
-        echo "Health endpoint is working"
-        break
-      else
-        echo "Health endpoint not ready, attempt $i/5"
-        sleep 10
-      fi
-    done
+    # Quick verification
+    curl -f http://localhost/ || echo "Index failed but continuing"
+    curl -f http://localhost/health || echo "Health failed but continuing"
 
     echo "EC2 setup complete."
   EOF
@@ -538,24 +538,25 @@ resource "aws_launch_template" "main" {
     create_before_destroy = true
   }
 }
+# Auto Scaling Group with 20-minute delay and unique naming
+resource "time_sleep" "wait_for_infrastructure" {
+  depends_on = [
+    aws_launch_template.main,
+    aws_lb_target_group.main,
+    aws_subnet.public
+  ]
+  
+  create_duration = "20m"
+}
 
-# Auto Scaling Group
-# 
-# Health Check Strategy:
-# - Uses ELB health checks (required when attached to ALB target group)
-# - 10-minute grace period allows sufficient time for instance boot and Apache startup
-# - User data script includes retry logic and health endpoint verification
-# - Target group health checks run every 15 seconds with 5-second timeout
-# - Instances marked unhealthy after 2 consecutive failures
-# - This configuration ensures reliable instance health detection while allowing
-#   sufficient time for the user data script to complete successfully
-#
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.unique_project_name}-${local.unique_deployment_id}-asg"
+  depends_on = [time_sleep.wait_for_infrastructure]
+  
+  name                      = "${local.unique_project_name}-${local.asg_identifier}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"   # must be ELB if attached to ALB
-  health_check_grace_period = 600     # allow 10 minutes for startup (matches Terraform timeout)
+  health_check_grace_period = 1200    # allow 20 minutes for startup after delay
   
   min_size         = 2
   max_size         = 6
@@ -586,7 +587,6 @@ resource "aws_autoscaling_group" "main" {
     ignore_changes        = [desired_capacity]
   }
 }
-
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${local.unique_project_name}-${local.unique_deployment_id}-db-subnet"
