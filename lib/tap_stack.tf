@@ -84,6 +84,8 @@ module "cloudtrail" {
   environment     = var.environment
   s3_bucket_name  = module.s3_cloudtrail_bucket.s3_bucket_id
   kms_key_id = module.kms.kms_key_arn
+  cw_logs_role_arn = module.iam_cloudtrail.role_arn
+  cw_logs_group_arn = module.cloudwatch_cloudtrail.log_group_arn
 }
 
 # GuardDuty
@@ -95,15 +97,15 @@ module "iam_cloudtrail" {
   source = "./modules/iam"
   role_name= "${var.project}-cloudtrail-cw-role"
   policy_name = "${var.project}-cloudtrail-cw-policy"
-  assume_policy = data.aws_iam_policy_document.assume_policy
+  assume_policy = data.aws_iam_policy_document.cloudtrail_assume
   iam_policy = data.aws_iam_policy_document.cloudtrail_cw_policy
   policy_arn = ""
 }
 
 module "iam_config" {
   source = "./modules/iam"
-  role_name= "${var.project}-cloudtrail-cw-role"
-  policy_name = "${var.project}-cloudtrail-cw-policy"
+  role_name= "${var.project}-config-role"
+  policy_name = "${var.project}-config-policy"
   assume_policy = data.aws_iam_policy_document.config_assume
   iam_policy = data.aws_iam_policy_document.config_policy
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
