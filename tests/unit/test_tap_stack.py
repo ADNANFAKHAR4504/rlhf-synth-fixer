@@ -199,21 +199,23 @@ class TestTapStackCreation:
         # Verify module imported successfully
         assert tap_stack is not None
     
+    @patch('lib.tap_stack.pulumi.export')
     @patch('pulumi.Config')
-    @patch('pulumi.export')
-    def test_stack_exports(self, mock_export, mock_config_class, setup_pulumi_mocks):
+    def test_stack_exports(self, mock_config_class, mock_export, setup_pulumi_mocks):
         """Test that stack exports required outputs"""
         mock_config_class.return_value = MockConfig()
         
-        # Import module
+        # Reload the module to trigger exports with our mock
+        import importlib
         from lib import tap_stack
+        importlib.reload(tap_stack)
         
         # Check that exports were called
-        assert mock_export.called
+        assert mock_export.called, "pulumi.export should have been called"
         
         # Get export calls
         export_calls = mock_export.call_args_list
-        exported_keys = [call[0][0] for call in export_calls]
+        exported_keys = [call[0][0] for call in export_calls if call[0]]
         
         # Verify required exports
         expected_exports = ['vpc_id', 'alb_dns_name', 'db_endpoint']
