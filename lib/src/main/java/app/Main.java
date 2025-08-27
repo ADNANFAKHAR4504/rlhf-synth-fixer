@@ -106,9 +106,12 @@ class TapStack extends Stack {
         // Create RDS PostgreSQL instance
         DatabaseInstance database = createPostgreSQLDatabase(vpc, dbSecurityGroup, dbSecret);
         
+        // Create IAM role for EC2 instances (shared between web and app servers)
+        Role ec2Role = createEC2Role();
+        
         // Create EC2 instances
-        Instance webServer = createWebServerInstance(vpc, ec2SecurityGroup);
-        Instance appServer = createAppServerInstance(vpc, ec2SecurityGroup);
+        Instance webServer = createWebServerInstance(vpc, ec2SecurityGroup, ec2Role);
+        Instance appServer = createAppServerInstance(vpc, ec2SecurityGroup, ec2Role);
         
         // Create outputs for important resource identifiers
         createOutputs(vpc, database, webServer, appServer);
@@ -269,10 +272,7 @@ class TapStack extends Stack {
     /**
      * Creates web server instance in public subnet.
      */
-    private Instance createWebServerInstance(Vpc vpc, SecurityGroup securityGroup) {
-        // Create IAM role for EC2 instance
-        Role ec2Role = createEC2Role();
-
+    private Instance createWebServerInstance(Vpc vpc, SecurityGroup securityGroup, Role ec2Role) {
         Instance webServer = Instance.Builder.create(this, "WebServerInstance")
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
                 .machineImage(MachineImage.latestAmazonLinux2023())
@@ -296,10 +296,7 @@ class TapStack extends Stack {
     /**
      * Creates application server instance in private subnet.
      */
-    private Instance createAppServerInstance(Vpc vpc, SecurityGroup securityGroup) {
-        // Create IAM role for EC2 instance
-        Role ec2Role = createEC2Role();
-
+    private Instance createAppServerInstance(Vpc vpc, SecurityGroup securityGroup, Role ec2Role) {
         Instance appServer = Instance.Builder.create(this, "AppServerInstance")
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
                 .machineImage(MachineImage.latestAmazonLinux2023())
