@@ -1,32 +1,22 @@
-```yaml AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure multi-region infrastructure with production-ready security controls'
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure multi-region infrastructure with production-ready security controls and Customer Managed KMS Keys'
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: Production
     Description: Environment name for resource tagging
-
-  KMSKeyIdUSEast1:
-    Type: String
-    Description: KMS Customer Managed Key ID for us-east-1
-    AllowedPattern: '^arn:aws:kms:us-east-1:[0-9]{12}:key/[a-f0-9-]{36}$'
-
-  KMSKeyIdEUCentral1:
-    Type: String
-    Description: KMS Customer Managed Key ID for eu-central-1
-    AllowedPattern: '^arn:aws:kms:eu-central-1:[0-9]{12}:key/[a-f0-9-]{36}$'
-
+  
   VPCCidrUSEast1:
     Type: String
     Default: '10.0.0.0/16'
     Description: CIDR block for VPC in us-east-1
-
+  
   VPCCidrEUCentral1:
     Type: String
     Default: '10.1.0.0/16'
     Description: CIDR block for VPC in eu-central-1
-
+  
   RDSInstanceType:
     Type: String
     Default: db.m5.large
@@ -34,11 +24,17 @@ Parameters:
       - db.m5.large
       - db.m5.xlarge
     Description: RDS instance type
-
+  
   EC2InstanceType:
     Type: String
     Default: t3.medium
     Description: EC2 instance type
+  
+  KeyRotationEnabled:
+    Type: String
+    Default: true
+    AllowedValues: [true, false]
+    Description: Enable automatic key rotation for KMS keys
 
 Mappings:
   RegionMap:
@@ -55,11 +51,145 @@ Conditions:
   IsUSEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
 
 Resources:
+  # Customer Managed KMS Key for Infrastructure
+  InfrastructureKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'Customer Managed KMS Key for ${EnvironmentName} Infrastructure - ${AWS::Region}'
+      KeyUsage: ENCRYPT_DECRYPT
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyRotationEnabled: !Ref KeyRotationEnabled
+      MultiRegion: false
+      Origin: AWS_KMS
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          # Root access for account administration
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          
+          # CloudFormation service access
+          - Sid: Allow CloudFormation Service
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+          
+          # RDS service access for database encryption
+          - Sid: Allow RDS Service
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'rds.${AWS::Region}.amazonaws.com'
+          
+          # S3 service access for bucket encryption
+          - Sid: Allow S3 Service
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+          
+          # EBS service access for volume encryption
+          - Sid: Allow EBS Service
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          
+          # CloudWatch Logs service access
+          - Sid: Allow CloudWatch Logs Service
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+          
+          # Application Auto Scaling service access
+          - Sid: Allow Application Auto Scaling Service
+            Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: '*'
+      
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-infrastructure-kms-key-${AWS::Region}'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Project
+          Value: IaC-AWS-Nova-Model
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Region
+          Value: !Ref 'AWS::Region'
+        - Key: KeyType
+          Value: CustomerManaged
+        - Key: Purpose
+          Value: Infrastructure-Encryption
+
+  # KMS Key Alias
+  InfrastructureKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentName}-infrastructure-key-${AWS::Region}'
+      TargetKeyId: !Ref InfrastructureKMSKey
+
   # VPC Configuration
   VPCProd:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !If
+      CidrBlock: !If 
         - IsUSEast1
         - !Ref VPCCidrUSEast1
         - !Ref VPCCidrEUCentral1
@@ -471,6 +601,18 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub '${ApplicationBucket}/*'
+        - PolicyName: KMSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*
+                Resource: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -500,6 +642,16 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: KMSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -532,6 +684,18 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: '*'
+        - PolicyName: KMSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*
+                Resource: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -587,6 +751,18 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
+        - PolicyName: KMSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey*
+                  - kms:ReEncrypt*
+                Resource: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -607,7 +783,9 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -636,7 +814,9 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -665,7 +845,9 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref InfrastructureKMSKey
+            BucketKeyEnabled: true
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -707,7 +889,18 @@ Resources:
             Resource: !Sub '${LoggingBucket}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
+                's3:x-amz-acl': bucket-owner-full-control
+          - Sid: AWSCloudTrailKMSAccess
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: !GetAtt InfrastructureKMSKey.Arn
 
   # RDS Subnet Group
   DBSubnetGroup:
@@ -742,10 +935,7 @@ Resources:
       AllocatedStorage: 100
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !If
-        - IsUSEast1
-        - !Ref KMSKeyIdUSEast1
-        - !Ref KMSKeyIdEUCentral1
+      KmsKeyId: !Ref InfrastructureKMSKey
       MasterUsername: admin
       ManageMasterUserPassword: true
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -968,11 +1158,20 @@ Resources:
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       SubnetId: !Ref PrivateSubnet1
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !Ref InfrastructureKMSKey
+            DeleteOnTermination: true
       UserData:
-        #!/bin/bash
-        yum update -y
-        yum install -y amazon-cloudwatch-agent
-        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y amazon-cloudwatch-agent
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default
       Tags:
         - Key: Name
           Value: !Sub 'web-server-${AWS::Region}'
@@ -991,6 +1190,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/ecs/prod-task-${AWS::Region}'
       RetentionInDays: 30
+      KmsKeyId: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub 'ecs-logs-${AWS::Region}'
@@ -1008,6 +1208,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/prod-trail-${AWS::Region}'
       RetentionInDays: 90
+      KmsKeyId: !GetAtt InfrastructureKMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub 'cloudtrail-logs-${AWS::Region}'
@@ -1028,6 +1229,7 @@ Resources:
       TrailName: !Sub 'prod-trail-${AWS::Region}'
       S3BucketName: !Ref LoggingBucket
       S3KeyPrefix: !Sub 'cloudtrail-logs/${AWS::Region}'
+      KMSKeyId: !GetAtt InfrastructureKMSKey.Arn
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: false
@@ -1187,6 +1389,24 @@ Resources:
           Value: !Ref 'AWS::Region'
 
 Outputs:
+  InfrastructureKMSKeyId:
+    Description: Infrastructure KMS Key ID
+    Value: !Ref InfrastructureKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
+
+  InfrastructureKMSKeyArn:
+    Description: Infrastructure KMS Key ARN
+    Value: !GetAtt InfrastructureKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
+
+  InfrastructureKMSKeyAlias:
+    Description: Infrastructure KMS Key Alias
+    Value: !Ref InfrastructureKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-Alias'
+
   VPCId:
     Description: VPC ID
     Value: !Ref VPCProd
@@ -1276,4 +1496,3 @@ Outputs:
     Value: !Ref WebServerInstance
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
-```
