@@ -538,55 +538,54 @@ resource "aws_launch_template" "main" {
     create_before_destroy = true
   }
 }
-# Auto Scaling Group with 20-minute delay and unique naming
-resource "time_sleep" "wait_for_infrastructure" {
-  depends_on = [
-    aws_launch_template.main,
-    aws_lb_target_group.main,
-    aws_subnet.public
-  ]
-  
-  create_duration = "20m"
-}
-
-resource "aws_autoscaling_group" "main" {
-  depends_on = [time_sleep.wait_for_infrastructure]
-  
-  name                      = "${local.unique_project_name}-${local.asg_identifier}-asg"
-  vpc_zone_identifier       = aws_subnet.public[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"   # must be ELB if attached to ALB
-  health_check_grace_period = 1200    # allow 20 minutes for startup after delay
-  
-  min_size         = 2
-  max_size         = 6
-  desired_capacity = 2
-  
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
-  }
-  
-  tag {
-    key                 = "Name"
-    value               = "${local.unique_project_name}-asg-instance"
-    propagate_at_launch = true
-  }
-  
-  dynamic "tag" {
-    for_each = local.common_tags
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = true
-    }
-  }
-  
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes        = [desired_capacity]
-  }
-}
+# Auto Scaling Group - DISABLED
+# resource "time_sleep" "wait_for_infrastructure" {
+#   depends_on = [
+#     aws_launch_template.main,
+#     aws_lb_target_group.main,
+#     aws_subnet.public
+#   ]
+#   
+#   create_duration = "20m"
+# }
+# resource "aws_autoscaling_group" "main" {
+#   depends_on = [time_sleep.wait_for_infrastructure]
+#   
+#   name                      = "${local.unique_project_name}-${local.asg_identifier}-asg"
+#   vpc_zone_identifier       = aws_subnet.public[*].id
+#   target_group_arns         = [aws_lb_target_group.main.arn]
+#   health_check_type         = "ELB"   # must be ELB if attached to ALB
+#   health_check_grace_period = 1200    # allow 20 minutes for startup after delay
+#   
+#   min_size         = 2
+#   max_size         = 6
+#   desired_capacity = 2
+#   
+#   launch_template {
+#     id      = aws_launch_template.main.id
+#     version = "$Latest"
+#   }
+#   
+#   tag {
+#     key                 = "Name"
+#     value               = "${local.unique_project_name}-asg-instance"
+#     propagate_at_launch = true
+#   }
+#   
+#   dynamic "tag" {
+#     for_each = local.common_tags
+#     content {
+#       key                 = tag.key
+#       value               = tag.value
+#       propagate_at_launch = true
+#     }
+#   }
+#   
+#   lifecycle {
+#     create_before_destroy = true
+#     ignore_changes        = [desired_capacity]
+#   }
+# }
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${local.unique_project_name}-${local.unique_deployment_id}-db-subnet"
@@ -690,7 +689,7 @@ output "kms_key_id" {
   value       = aws_kms_key.main.key_id
 }
 
-output "autoscaling_group_name" {
-  description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.main.name
-}
+# output "autoscaling_group_name" {
+#   description = "Name of the Auto Scaling Group"
+#   value       = aws_autoscaling_group.main.name
+# }
