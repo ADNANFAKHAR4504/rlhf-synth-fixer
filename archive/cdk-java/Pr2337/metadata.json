@@ -10,7 +10,7 @@
   "subject_labels": [
     "Security Configuration",
     "Access Control",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "General Infrastructure Tooling QA",
     "Monitoring Setup"
@@ -21,9 +21,15 @@
     "S3",
     "Lambda",
     "RDS",
-    "EventBridge", 
+    "EventBridge",
     "KMS",
     "Secrets Manager",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
