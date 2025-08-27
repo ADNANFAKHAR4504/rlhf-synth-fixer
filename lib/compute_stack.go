@@ -55,7 +55,7 @@ func NewComputeStack(scope constructs.Construct, id *string, props *ComputeStack
 		Port:       jsii.Number(80),
 		Vpc:        props.Vpc,
 		Protocol:   awselasticloadbalancingv2.ApplicationProtocol_HTTP,
-		TargetType: awselasticloadbalancingv2.TargetType_IP,
+		TargetType: awselasticloadbalancingv2.TargetType_INSTANCE,
 		HealthCheck: &awselasticloadbalancingv2.HealthCheck{
 			Path:             jsii.String("/health"),
 			HealthyHttpCodes: jsii.String("200"),
