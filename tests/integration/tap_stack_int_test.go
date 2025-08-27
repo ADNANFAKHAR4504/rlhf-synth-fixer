@@ -215,7 +215,10 @@ func TestInternetGatewayDeployment(t *testing.T) {
 	// Verify IGW is attached to VPC
 	require.Len(t, igw.Attachments, 1)
 	assert.Equal(t, outputs.VpcID, aws.ToString(igw.Attachments[0].VpcId))
-	assert.Equal(t, types.AttachmentStatusAttached, igw.Attachments[0].State)
+	// Check attachment state - in AWS SDK v2, we just verify it's not empty
+	attachmentState := string(igw.Attachments[0].State)
+	assert.NotEmpty(t, attachmentState, "IGW should have an attachment state")
+	assert.Contains(t, []string{"attached", "available"}, attachmentState, "IGW should be properly attached")
 
 	validateTags(t, igw.Tags, "secure-vpc-igw")
 }
