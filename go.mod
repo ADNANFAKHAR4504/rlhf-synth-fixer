@@ -49,4 +49,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-require github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.0 // indirect
+require (
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.57.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.77.0 // indirect
+)
