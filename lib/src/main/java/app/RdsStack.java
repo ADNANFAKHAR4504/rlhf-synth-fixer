@@ -47,7 +47,8 @@ public class RdsStack extends Stack {
                 .databaseName("app_db")
                 .instanceIdentifier("app-rds-" + environmentSuffix)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-                        .version(MysqlEngineVersion.VER_8_0_35)
+                        .version(MysqlEngineVersion.VER_8_0_33)  // Using a supported MySQL version available in AWS RDS
+                        // Version 8.0.35 was not available in AWS RDS, causing deployment failures
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
                 .vpc(vpc)
