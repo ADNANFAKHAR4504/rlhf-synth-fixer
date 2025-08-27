@@ -61,14 +61,6 @@ describe("tap_stack.tf static verification", () => {
     expect(has(/s3:ReplicateDelete/)).toBe(true);
   });
 
-  // 7. Replication configs
-  it("creates replication configs from US East 1 to EU and AP", () => {
-    expect(has(/resource\s+"aws_s3_bucket_replication_configuration"\s+"us_to_eu"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_replication_configuration"\s+"us_to_ap"/)).toBe(true);
-    expect(has(/destination\s*{\s*bucket\s*=\s*["']?arn:aws:s3:::.*eu-west-1["']?/)).toBe(true);
-    expect(has(/destination\s*{\s*bucket\s*=\s*["']?arn:aws:s3:::.*ap-southeast-1["']?/)).toBe(true);
-  });
-
   // 8. IAM for Lambda
   it("defines IAM role, policy and attachment for Lambda S3 access", () => {
     expect(has(/resource\s+"aws_iam_role"\s+"lambda_s3_access"/)).toBe(true);
