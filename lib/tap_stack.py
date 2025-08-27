@@ -369,7 +369,7 @@ systemctl enable nginx
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
         self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-db",
-            name=f"{self.args.environment}-{self.args.project}-db-{self.args.owner}")
+            name=f"{self.args.environment}-{self.args.project}-db")
 
         self.db_instance = aws.rds.Instance(
             f"{self.args.environment}-{self.args.project}-{self.args.owner}-db",
