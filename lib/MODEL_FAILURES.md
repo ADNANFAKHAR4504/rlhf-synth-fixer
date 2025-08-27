@@ -81,6 +81,17 @@ if (isPrimary && logsBucket != null) {
 
 **Fix**: Implemented unified `MultiRegionStack` class with `isPrimary` flag to handle both primary and secondary stack logic conditionally.
 
+### 11. VPC Subnet Configuration for RDS
+**Problem**: RDS requires private subnets but the original VPC lookup/creation only provided public subnets, causing "There are no 'Private' subnet groups in this VPC" error.
+
+**Fix**: Changed VPC creation to explicitly create both public and private subnets with NAT gateway:
+```java
+IVpc vpc = Vpc.Builder.create(this, "CustomVpc")
+    .maxAzs(2)
+    .natGateways(1)
+    .build();
+```
+
 ## Summary
 
-The final implementation successfully addresses all cross-environment issues, compilation errors, and Checkstyle violations while maintaining the multi-region architecture requirements. All unit and integration tests now pass, and the code follows Java best practices and security guidelines.
+The final implementation successfully addresses all cross-environment issues, compilation errors, Checkstyle violations, and VPC subnet configuration issues while maintaining the multi-region architecture requirements. All unit and integration tests now pass, and the code follows Java best practices and security guidelines.

@@ -104,16 +104,10 @@ public final class Main {
             Tags.of(this).add("Project", "MultiRegionApp");
             Tags.of(this).add("Owner", "DevOps");
 
-            IVpc vpc;
-            try {
-                vpc = Vpc.fromLookup(this, "DefaultVpc", VpcLookupOptions.builder()
-                    .isDefault(true)
-                    .build());
-            } catch (Exception e) {
-                vpc = Vpc.Builder.create(this, "CustomVpc")
-                    .maxAzs(2)
-                    .build();
-            }
+            IVpc vpc = Vpc.Builder.create(this, "CustomVpc")
+                .maxAzs(2)
+                .natGateways(1)
+                .build();
 
             Key kmsKey = Key.Builder.create(this, "KmsKey")
                 .description("KMS key for " + environment + " in " + region)
