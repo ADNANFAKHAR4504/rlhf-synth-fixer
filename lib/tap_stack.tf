@@ -107,3 +107,9 @@ module "iam_config" {
   iam_policy = data.aws_iam_policy_document.config_policy.json
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
+
+module "config" {
+  source = "./modules/config"
+  config_bucket = module.s3_config_bucket.s3_bucket_id
+  config_role_arn = module.iam_config.role_arn
+}

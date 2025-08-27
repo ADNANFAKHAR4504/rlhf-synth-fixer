@@ -1,32 +1,3 @@
-# IAM Role for AWS Config
-resource "aws_iam_role" "config_role" {
-  name = "SecConfig-ConfigRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name    = "SecConfig-Config-Role"
-    Project = "SecurityConfiguration"
-  }
-}
-
-# Correct AWS Config service role policy
-resource "aws_iam_role_policy_attachment" "config_role_policy" {
-  role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
   name           = "SecConfig-Delivery-Channel"
@@ -39,7 +10,7 @@ resource "aws_config_delivery_channel" "main" {
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
   name     = "SecConfig-Recorder"
-  role_arn = aws_iam_role.config_role.arn
+  role_arn = var.config_role_arn
 
   recording_group {
     all_supported                 = true

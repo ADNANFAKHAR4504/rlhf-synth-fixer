@@ -52,7 +52,12 @@ output "scurity_group_id_bastion" {
   value       = module.sg.bastion_sg_id
 }
 
-output "private_sg_id_private_instance" {
+output "security_group_id_private_instance" {
   description = "ID of the private instance security group"
   value       = module.sg.private_sg_id
+}
+
+output "config_delivery_channel" {
+  description = "Config delivery channel name"
+  value       = module.config.config_delivery_channel
 }
