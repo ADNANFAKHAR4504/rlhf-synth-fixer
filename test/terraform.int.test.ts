@@ -18,8 +18,9 @@ interface Outputs {
 
 describe("tap_stack Terraform live integration tests", () => {
   let outputs: Outputs;
-  let bucketRegions: Record<string, string>;
-  let bucketArns: Record<string, string>;
+  let bucketRegions!: Record<string, string>;
+  let bucketArns!: Record<string, string>;
+ 
 
   beforeAll(() => {
     const raw = fs.readFileSync(OUTPUTS_PATH, "utf-8");
