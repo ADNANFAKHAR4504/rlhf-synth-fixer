@@ -5,5 +5,26 @@
   "turn_type": "multi",
   "po_id": "346090",
   "team": "4",
-  "startedAt": "2025-08-26T17:58:22.400Z"
+  "startedAt": "2025-08-26T17:58:22.400Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "CloudTrail",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "VPC",
+    "EC2",
+    "IAM",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ]
 }
