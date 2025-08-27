@@ -1,6 +1,0 @@
-{
-  "TestTapStack:Instance1Id": "i-0abcd1234ef567890",
-  "TestTapStack:Instance1PrivateIP": "10.0.1.25",
-  "TestTapStack:SecurityGroupId": "sg-0123abcd4567efgh8",
-  "TestTapStack:LogGroupName": "/aws/ec2/secure-webapp"
-}
