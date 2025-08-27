@@ -118,8 +118,22 @@ public class SecurityStack extends Stack {
 
         Role flowLogRole = Role.Builder.create(this, "FlowLogRole-" + environmentSuffix)
                 .assumedBy(new ServicePrincipal("vpc-flow-logs.amazonaws.com"))
-                .managedPolicies(List.of(
-                        ManagedPolicy.fromAwsManagedPolicyName("service-role/VPCFlowLogsDeliveryRolePolicy")
+                .inlinePolicies(Map.of(
+                    "FlowLogsDeliveryPolicy", PolicyDocument.Builder.create()
+                        .statements(List.of(
+                            PolicyStatement.Builder.create()
+                                .effect(Effect.ALLOW)
+                                .actions(List.of(
+                                    "logs:CreateLogGroup",
+                                    "logs:CreateLogStream",
+                                    "logs:PutLogEvents",
+                                    "logs:DescribeLogGroups",
+                                    "logs:DescribeLogStreams"
+                                ))
+                                .resources(List.of("*"))
+                                .build()
+                        ))
+                        .build()
                 ))
                 .build();
 
