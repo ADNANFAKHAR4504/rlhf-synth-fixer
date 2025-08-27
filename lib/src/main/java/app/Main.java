@@ -335,20 +335,32 @@ class TapStack extends Stack {
                 "Allow HTTPS outbound for AWS API calls"
         );
         
+        // Use Python runtime with inline code as an alternative, or use Code.fromAsset() for Java
         return Function.Builder.create(this, "SecureFunction")
                 .functionName("secure-infrastructure-function")
-                .runtime(Runtime.JAVA_11)
-                .handler("com.example.Handler::handleRequest")
+                .runtime(Runtime.PYTHON_3_9) // Changed from JAVA_11 to PYTHON_3_9
+                .handler("index.handler") // Changed handler
                 .code(Code.fromInline(
-                        "package com.example;\n" +
-                        "import com.amazonaws.services.lambda.runtime.Context;\n" +
-                        "import com.amazonaws.services.lambda.runtime.RequestHandler;\n" +
-                        "public class Handler implements RequestHandler<String, String> {\n" +
-                        "    public String handleRequest(String input, Context context) {\n" +
-                        "        context.getLogger().log(\"Processing secure request: \" + input);\n" +
-                        "        return \"Processed: \" + input;\n" +
+                        "import json\n" +
+                        "import boto3\n" +
+                        "import logging\n" +
+                        "\n" +
+                        "logger = logging.getLogger()\n" +
+                        "logger.setLevel(logging.INFO)\n" +
+                        "\n" +
+                        "def handler(event, context):\n" +
+                        "    logger.info(f'Processing secure request: {json.dumps(event)}')\n" +
+                        "    \n" +
+                        "    # Example secure processing\n" +
+                        "    response = {\n" +
+                        "        'statusCode': 200,\n" +
+                        "        'body': json.dumps({\n" +
+                        "            'message': 'Processed securely',\n" +
+                        "            'input': event\n" +
+                        "        })\n" +
                         "    }\n" +
-                        "}"
+                        "    \n" +
+                        "    return response\n"
                 ))
                 .role(lambdaRole)
                 .vpc(vpc)
