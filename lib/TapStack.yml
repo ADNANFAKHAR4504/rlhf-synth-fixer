@@ -141,6 +141,11 @@ Parameters:
     Description: 'If provided, use this KMS Key ARN instead of creating a new one.'
     Default: ''
 
+  ExistingDBSubnetGroupName:
+    Type: String
+    Description: 'If provided, use this DB Subnet Group name instead of creating a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -152,6 +157,7 @@ Conditions:
   EnableGuardDutyCondition:
     !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
   CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
+  CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
 
 Resources:
   # VPC and Networking Resources
@@ -988,6 +994,7 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateDBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS instances'
@@ -1038,7 +1045,12 @@ Resources:
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref ProdDatabaseSecurityGroup
-      DBSubnetGroupName: !Ref ProdDBSubnetGroup
+      DBSubnetGroupName:
+        !If [
+          CreateDBSubnetGroup,
+          !Ref ProdDBSubnetGroup,
+          !Ref ExistingDBSubnetGroupName,
+        ]
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
