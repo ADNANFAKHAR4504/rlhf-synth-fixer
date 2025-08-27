@@ -274,7 +274,7 @@ final class TapStack extends Stack {
     return Secret.Builder.create(this, "DatabaseSecret")
         .description("Database credentials")
         .generateSecretString(SecretStringGenerator.builder()
-            .secretStringTemplate("{\"username\":\"admin\"}")
+            .secretStringTemplate("{\"username\":\"dbuser\"}")
             .generateStringKey("password")
             .passwordLength(16)
             .excludeCharacters("\"@/\\")
