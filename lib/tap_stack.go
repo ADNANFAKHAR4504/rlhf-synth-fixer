@@ -226,8 +226,6 @@ func main() {
 			return err
 		}
 
-
-
 		// Create VPC endpoints
 		s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "s3", &ec2.VpcEndpointArgs{
 			VpcId:           vpc.ID(),
@@ -484,7 +482,7 @@ func main() {
 			"logs":       logsEndpoint.ID(),
 		})
 		ctx.Export("cloudwatch_log_groups", pulumi.Map{
-			"cloudtrail": cloudtrailLogGroup.Name,
+			"cloudtrail":  cloudtrailLogGroup.Name,
 			"application": applicationLogGroup.Name,
 		})
 
