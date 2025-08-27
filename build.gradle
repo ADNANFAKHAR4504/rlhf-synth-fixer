@@ -75,7 +75,7 @@ tasks.named('run') {
     standardInput = System.in
     workingDir = projectDir
     systemProperties = System.getProperties()
-    environment = System.getenv()
+    environment = System.getenv() + ['PATH': "/Users/django/.nvm/versions/node/v22.17.0/bin:" + System.getenv('PATH')]
 }
 
 // Configure source directories
