@@ -14,7 +14,7 @@
   "typescript.updateImportsOnFileMove.enabled": "always",
 
   "[javascript]": {
-    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.tabSize": 2,
     "editor.rulers": [120]
   },
