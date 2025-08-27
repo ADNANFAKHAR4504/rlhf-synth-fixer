@@ -23,12 +23,12 @@ import (
 
 // Outputs represents the structure of cfn-outputs/flat-outputs.json
 type Outputs struct {
-	VPCId             string `json:"VPCId"`
-	LoadBalancerDNS   string `json:"LoadBalancerDNS"`
-	CloudFrontURL     string `json:"CloudFrontURL"`
-	S3BucketName      string `json:"S3BucketName"`
-	RDSEndpoint       string `json:"RDSEndpoint"`
-	DynamoDBTableName string `json:"DynamoDBTableName"`
+	VPCId                  string `json:"VpcId"`
+	LoadBalancerDNS        string `json:"LoadBalancerDNS"`
+	CloudFrontDomainName   string `json:"CloudFrontDomainName"`
+	S3BucketName           string `json:"S3BucketName"`
+	DatabaseEndpoint       string `json:"DatabaseEndpoint"`
+	DynamoDBTableName      string `json:"DynamoDBTableName"`
 }
 
 // loadOutputs loads deployment outputs from cfn-outputs/flat-outputs.json
@@ -64,7 +64,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Describe VPC
 		vpcResp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.VPCId},
+			VpcIds: []string{outputs.VpcId},
 		})
 		require.NoError(t, err, "Failed to describe VPC")
 		require.Len(t, vpcResp.Vpcs, 1, "Expected exactly one VPC")
@@ -76,14 +76,14 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// Check DNS attributes separately using DescribeVpcAttribute
 		dnsSupport, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
-			VpcId:     &outputs.VPCId,
+			VpcId:     &outputs.VpcId,
 			Attribute: ec2types.VpcAttributeNameEnableDnsSupport,
 		})
 		require.NoError(t, err, "Failed to get DNS support attribute")
 		assert.True(t, *dnsSupport.EnableDnsSupport.Value, "VPC should have DNS support enabled")
 
 		dnsHostnames, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
-			VpcId:     &outputs.VPCId,
+			VpcId:     &outputs.VpcId,
 			Attribute: ec2types.VpcAttributeNameEnableDnsHostnames,
 		})
 		require.NoError(t, err, "Failed to get DNS hostnames attribute")
@@ -106,7 +106,7 @@ func TestTapStackIntegration(t *testing.T) {
 			Filters: []ec2types.Filter{
 				{
 					Name:   aws.String("vpc-id"),
-					Values: []string{outputs.VPCId},
+					Values: []string{outputs.VpcId},
 				},
 			},
 		})
@@ -120,7 +120,7 @@ func TestTapStackIntegration(t *testing.T) {
 			Filters: []ec2types.Filter{
 				{
 					Name:   aws.String("attachment.vpc-id"),
-					Values: []string{outputs.VPCId},
+					Values: []string{outputs.VpcId},
 				},
 			},
 		})
@@ -129,7 +129,7 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT - Should have one Internet Gateway attached
 		assert.Len(t, igwResp.InternetGateways, 1, "VPC should have exactly one Internet Gateway")
 		assert.Len(t, igwResp.InternetGateways[0].Attachments, 1, "Internet Gateway should be attached to VPC")
-		assert.Equal(t, outputs.VPCId, *igwResp.InternetGateways[0].Attachments[0].VpcId, "Internet Gateway should be attached to correct VPC")
+		assert.Equal(t, outputs.VpcId, *igwResp.InternetGateways[0].Attachments[0].VpcId, "Internet Gateway should be attached to correct VPC")
 	})
 
 	t.Run("Application Load Balancer is accessible", func(t *testing.T) {
@@ -214,7 +214,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// Extract DB instance identifier from endpoint
 		// Format: tap-mysql-db.abc123.us-west-2.rds.amazonaws.com:3306
-		endpoint := outputs.RDSEndpoint
+		endpoint := outputs.DatabaseEndpoint
 		dbIdentifier := "tap-mysql-db" // Based on our stack definition
 
 		// ACT - Describe RDS instance
@@ -238,19 +238,19 @@ func TestTapStackIntegration(t *testing.T) {
 		outputs := loadOutputs(t)
 
 		// ASSERT - All required outputs should be present
-		assert.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
+		assert.NotEmpty(t, outputs.VpcId, "VPCId should be exported")
 		assert.NotEmpty(t, outputs.LoadBalancerDNS, "LoadBalancerDNS should be exported")
-		assert.NotEmpty(t, outputs.CloudFrontURL, "CloudFrontURL should be exported")
+		assert.NotEmpty(t, outputs.CloudFrontDomainName, "CloudFrontDomainName should be exported")
 		assert.NotEmpty(t, outputs.S3BucketName, "S3BucketName should be exported")
-		assert.NotEmpty(t, outputs.RDSEndpoint, "RDSEndpoint should be exported")
+		assert.NotEmpty(t, outputs.DatabaseEndpoint, "DatabaseEndpoint should be exported")
 		assert.NotEmpty(t, outputs.DynamoDBTableName, "DynamoDBTableName should be exported")
 
 		// ASSERT - IDs should follow AWS format
-		assert.Regexp(t, "^vpc-[a-f0-9]+$", outputs.VPCId, "VPCId should follow AWS VPC ID format")
+		assert.Regexp(t, "^vpc-[a-f0-9]+$", outputs.VpcId, "VPCId should follow AWS VPC ID format")
 		assert.Contains(t, outputs.LoadBalancerDNS, ".elb.", "LoadBalancerDNS should be ELB DNS format")
-		assert.Contains(t, outputs.CloudFrontURL, "cloudfront.net", "CloudFrontURL should be CloudFront format")
+		assert.Contains(t, outputs.CloudFrontDomainName, "cloudfront.net", "CloudFrontDomainName should be CloudFront format")
 		assert.Contains(t, outputs.S3BucketName, "tap-storage-bucket", "S3BucketName should contain expected prefix")
-		assert.Contains(t, outputs.RDSEndpoint, "rds.amazonaws.com", "RDSEndpoint should be RDS format")
+		assert.Contains(t, outputs.DatabaseEndpoint, "rds.amazonaws.com", "DatabaseEndpoint should be RDS format")
 		assert.Equal(t, "tap-dynamodb-table", outputs.DynamoDBTableName, "DynamoDBTableName should match expected name")
 	})
 }
