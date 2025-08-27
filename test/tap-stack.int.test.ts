@@ -232,10 +232,22 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const securityGroups = response.SecurityGroups || [];
       expect(securityGroups.length).toBeGreaterThan(3); // At least default + our security groups
       
-      // Check for specific security groups (matching CloudFormation resource names)
-      const webSG = securityGroups.find(sg => sg.GroupName?.includes('WebServerSecurityGroup'));
-      const dbSG = securityGroups.find(sg => sg.GroupName?.includes('DatabaseSecurityGroup'));
-      const albSG = securityGroups.find(sg => sg.GroupName?.includes('LoadBalancerSecurityGroup'));
+      // Debug: Log all security group names to understand the actual naming pattern
+      console.log('Available security groups:', securityGroups.map(sg => sg.GroupName));
+      
+      // Check for specific security groups (using more flexible matching)
+      const webSG = securityGroups.find(sg => 
+        sg.GroupName?.toLowerCase().includes('web') && 
+        sg.GroupName?.includes(stackName)
+      );
+      const dbSG = securityGroups.find(sg => 
+        sg.GroupName?.toLowerCase().includes('database') && 
+        sg.GroupName?.includes(stackName)
+      );
+      const albSG = securityGroups.find(sg => 
+        sg.GroupName?.toLowerCase().includes('load') && 
+        sg.GroupName?.includes(stackName)
+      );
       
       expect(webSG).toBeDefined();
       expect(dbSG).toBeDefined();
