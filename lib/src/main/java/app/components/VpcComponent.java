@@ -85,7 +85,7 @@ public class VpcComponent extends Construct {
 
         // Add route to NAT Gateway for private subnet
         CfnRoute.Builder.create(this, "PrivateRoute")
-                .routeTableId(publicRouteTable.getAttrRouteTableId())
+                .routeTableId(privateRouteTable.getAttrRouteTableId())
                 .destinationCidrBlock("0.0.0.0/0")
                 .natGatewayId(natGateway.getAttrNatGatewayId())
                 .build();
