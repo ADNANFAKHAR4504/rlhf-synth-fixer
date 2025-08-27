@@ -4,370 +4,610 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// Integration tests for Pulumi AWS infrastructure
-// These tests validate that infrastructure configuration matches expected values
-// and that the deployment would create the correct resources
-
-func TestInfrastructureDeployment(t *testing.T) {
-	// Test that infrastructure deployment configuration is correct
-	// In integration environment, this validates deployment succeeded
-	deploymentConfig := getDeploymentConfig()
-
-	assert.Equal(t, "us-east-1", deploymentConfig.Region)
-	assert.Equal(t, "secure-vpc", deploymentConfig.ProjectName)
-	assert.Equal(t, "production", deploymentConfig.Environment)
+// PulumiOutputs represents the structure of Pulumi stack outputs
+type PulumiOutputs struct {
+	VpcID                   string `json:"vpcId"`
+	InternetGatewayID       string `json:"internetGatewayId"`
+	PublicSubnetAID         string `json:"publicSubnetAId"`
+	PublicSubnetBID         string `json:"publicSubnetBId"`
+	PrivateSubnetAID        string `json:"privateSubnetAId"`
+	PrivateSubnetBID        string `json:"privateSubnetBId"`
+	NatGatewayAID           string `json:"natGatewayAId"`
+	NatGatewayBID           string `json:"natGatewayBId"`
+	ElasticIPAAddress       string `json:"elasticIpAAddress"`
+	ElasticIPBAddress       string `json:"elasticIpBAddress"`
+	WebSecurityGroupID      string `json:"webSecurityGroupId"`
+	SSHSecurityGroupID      string `json:"sshSecurityGroupId"`
+	DatabaseSecurityGroupID string `json:"databaseSecurityGroupId"`
+	Subnets                 struct {
+		Public struct {
+			SubnetA struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+				AZ   string `json:"az"`
+				CIDR string `json:"cidr"`
+			} `json:"subnetA"`
+			SubnetB struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+				AZ   string `json:"az"`
+				CIDR string `json:"cidr"`
+			} `json:"subnetB"`
+		} `json:"public"`
+		Private struct {
+			SubnetA struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+				AZ   string `json:"az"`
+				CIDR string `json:"cidr"`
+			} `json:"subnetA"`
+			SubnetB struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+				AZ   string `json:"az"`
+				CIDR string `json:"cidr"`
+			} `json:"subnetB"`
+		} `json:"private"`
+	} `json:"subnets"`
 }
 
-func TestInfrastructureCompliance(t *testing.T) {
-	// Test that infrastructure meets compliance requirements
-	compliance := checkInfrastructureCompliance()
+var (
+	awsConfig    aws.Config
+	ec2Client    *ec2.Client
+	outputs      *PulumiOutputs
+	stackName    string
+	outputsCache *PulumiOutputs
+)
 
-	assert.True(t, compliance.HasVPCFlowLogs, "VPC Flow Logs should be enabled")
-	assert.True(t, compliance.HasNetworkACLs, "Network ACLs should be configured")
-	assert.True(t, compliance.HasRestrictedSSHAccess, "SSH access should be restricted")
-	assert.True(t, compliance.HasMultiAZSetup, "Multi-AZ setup should be configured")
-}
+// Setup function to initialize AWS clients and read Pulumi outputs
+func setup(t *testing.T) {
+	t.Helper()
 
-func TestVPCConfiguration(t *testing.T) {
-	// Test VPC configuration parameters
-	vpcCIDR := "10.0.0.0/16"
-	region := "us-east-1"
-
-	assert.Equal(t, "10.0.0.0/16", vpcCIDR)
-	assert.Equal(t, "us-east-1", region)
-}
-
-func TestSubnetConfiguration(t *testing.T) {
-	// Test subnet configurations
-	publicSubnetA := "10.0.1.0/24"
-	publicSubnetB := "10.0.2.0/24"
-	privateSubnetA := "10.0.11.0/24"
-	privateSubnetB := "10.0.12.0/24"
-
-	assert.Equal(t, "10.0.1.0/24", publicSubnetA)
-	assert.Equal(t, "10.0.2.0/24", publicSubnetB)
-	assert.Equal(t, "10.0.11.0/24", privateSubnetA)
-	assert.Equal(t, "10.0.12.0/24", privateSubnetB)
-}
-
-func TestAvailabilityZones(t *testing.T) {
-	// Test availability zone configuration
-	azA := "us-east-1a"
-	azB := "us-east-1b"
-
-	assert.Equal(t, "us-east-1a", azA)
-	assert.Equal(t, "us-east-1b", azB)
-}
-
-func TestSecurityGroupPorts(t *testing.T) {
-	// Test security group port configurations
-	httpPort := 80
-	httpsPort := 443
-	sshPort := 22
-	mysqlPort := 3306
-
-	assert.Equal(t, 80, httpPort)
-	assert.Equal(t, 443, httpsPort)
-	assert.Equal(t, 22, sshPort)
-	assert.Equal(t, 3306, mysqlPort)
-}
-
-func TestCIDRBlocks(t *testing.T) {
-	// Test restricted CIDR blocks for SSH
-	sshCIDR1 := "203.0.113.0/24"
-	sshCIDR2 := "198.51.100.0/24"
-
-	assert.Equal(t, "203.0.113.0/24", sshCIDR1)
-	assert.Equal(t, "198.51.100.0/24", sshCIDR2)
-}
-
-func TestResourceTags(t *testing.T) {
-	// Test resource tag configuration
-	tags := map[string]string{
-		"Environment": "production",
-		"Project":     "secure-vpc",
-		"ManagedBy":   "pulumi",
+	// Skip if running in CI without deployment
+	if os.Getenv("SKIP_INTEGRATION_TESTS") == "true" {
+		t.Skip("Skipping integration tests as SKIP_INTEGRATION_TESTS is set")
 	}
 
-	assert.Equal(t, "production", tags["Environment"])
-	assert.Equal(t, "secure-vpc", tags["Project"])
-	assert.Equal(t, "pulumi", tags["ManagedBy"])
+	// Load AWS configuration
+	var err error
+	awsConfig, err = config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion("us-east-1"),
+	)
+	if err != nil {
+		t.Skip("AWS config not available, skipping integration tests")
+	}
+
+	// Initialize EC2 client
+	ec2Client = ec2.NewFromConfig(awsConfig)
+
+	// Read Pulumi outputs
+	outputs = readPulumiOutputs(t)
 }
 
-func TestDomainConfiguration(t *testing.T) {
-	// Test DHCP domain configuration
-	domain := "internal.company.com"
-	assert.Equal(t, "internal.company.com", domain)
+// readPulumiOutputs reads the outputs from the Pulumi stack
+func readPulumiOutputs(t *testing.T) *PulumiOutputs {
+	t.Helper()
+
+	// Return cached outputs if already loaded
+	if outputsCache != nil {
+		return outputsCache
+	}
+
+	// Get stack name from environment or use default
+	stackName = os.Getenv("PULUMI_STACK")
+	if stackName == "" {
+		stackName = "TapStackpr" + os.Getenv("ENVIRONMENT_SUFFIX")
+		if stackName == "TapStackpr" {
+			stackName = "TapStack" // fallback to default
+		}
+	}
+
+	// Try to read from output file first (if exists)
+	outputFile := "outputs.json"
+	if data, err := os.ReadFile(outputFile); err == nil {
+		var outputs PulumiOutputs
+		if err := json.Unmarshal(data, &outputs); err == nil {
+			outputsCache = &outputs
+			return &outputs
+		}
+	}
+
+	// If output file doesn't exist, try to get from Pulumi CLI
+	cmd := exec.Command("pulumi", "stack", "output", "--json", "--stack", stackName)
+	output, err := cmd.Output()
+	if err != nil {
+		// If Pulumi command fails, return empty outputs (tests will be skipped)
+		t.Logf("Warning: Could not read Pulumi outputs: %v", err)
+		return &PulumiOutputs{}
+	}
+
+	// Parse the raw outputs
+	var rawOutputs map[string]interface{}
+	if err := json.Unmarshal(output, &rawOutputs); err != nil {
+		t.Fatalf("Failed to parse Pulumi outputs: %v", err)
+	}
+
+	// Convert to structured outputs
+	outputsJSON, _ := json.Marshal(rawOutputs)
+	var outputs PulumiOutputs
+	json.Unmarshal(outputsJSON, &outputs)
+
+	outputsCache = &outputs
+	return &outputs
 }
 
-func TestLogGroupConfiguration(t *testing.T) {
-	// Test CloudWatch log group configuration
-	logGroupName := "/aws/vpc/secure-vpc-flowlogs"
-	assert.Equal(t, "/aws/vpc/secure-vpc-flowlogs", logGroupName)
+// Test VPC configuration by verifying actual deployed VPC
+func TestVPCDeployment(t *testing.T) {
+	setup(t)
+
+	// Skip if no VPC ID in outputs
+	if outputs.VpcID == "" {
+		t.Skip("No VPC ID found in outputs, infrastructure may not be deployed")
+	}
+
+	// Describe the actual VPC
+	ctx := context.TODO()
+	result, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		VpcIds: []string{outputs.VpcID},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Vpcs, 1)
+
+	vpc := result.Vpcs[0]
+
+	// Verify VPC configuration
+	assert.Equal(t, "10.0.0.0/16", aws.ToString(vpc.CidrBlock))
+	assert.Equal(t, types.VpcStateAvailable, vpc.State)
+	assert.True(t, aws.ToBool(vpc.EnableDnsHostnames))
+	assert.True(t, aws.ToBool(vpc.EnableDnsSupport))
+
+	// Verify VPC tags
+	validateTags(t, vpc.Tags, "secure-vpc-main")
 }
 
+// Test Internet Gateway configuration
+func TestInternetGatewayDeployment(t *testing.T) {
+	setup(t)
+
+	if outputs.InternetGatewayID == "" {
+		t.Skip("No Internet Gateway ID found in outputs")
+	}
+
+	ctx := context.TODO()
+	result, err := ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
+		InternetGatewayIds: []string{outputs.InternetGatewayID},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.InternetGateways, 1)
+
+	igw := result.InternetGateways[0]
+
+	// Verify IGW is attached to VPC
+	require.Len(t, igw.Attachments, 1)
+	assert.Equal(t, outputs.VpcID, aws.ToString(igw.Attachments[0].VpcId))
+	assert.Equal(t, types.AttachmentStatusAttached, igw.Attachments[0].State)
+
+	validateTags(t, igw.Tags, "secure-vpc-igw")
+}
+
+// Test Subnet configurations
+func TestSubnetDeployments(t *testing.T) {
+	setup(t)
+
+	testCases := []struct {
+		name     string
+		subnetID string
+		expected struct {
+			cidr        string
+			az          string
+			mapPublicIP bool
+			isPublic    bool
+		}
+	}{
+		{
+			name:     "Public Subnet A",
+			subnetID: outputs.PublicSubnetAID,
+			expected: struct {
+				cidr        string
+				az          string
+				mapPublicIP bool
+				isPublic    bool
+			}{
+				cidr:        "10.0.1.0/24",
+				az:          "us-east-1a",
+				mapPublicIP: true,
+				isPublic:    true,
+			},
+		},
+		{
+			name:     "Public Subnet B",
+			subnetID: outputs.PublicSubnetBID,
+			expected: struct {
+				cidr        string
+				az          string
+				mapPublicIP bool
+				isPublic    bool
+			}{
+				cidr:        "10.0.2.0/24",
+				az:          "us-east-1b",
+				mapPublicIP: true,
+				isPublic:    true,
+			},
+		},
+		{
+			name:     "Private Subnet A",
+			subnetID: outputs.PrivateSubnetAID,
+			expected: struct {
+				cidr        string
+				az          string
+				mapPublicIP bool
+				isPublic    bool
+			}{
+				cidr:        "10.0.11.0/24",
+				az:          "us-east-1a",
+				mapPublicIP: false,
+				isPublic:    false,
+			},
+		},
+		{
+			name:     "Private Subnet B",
+			subnetID: outputs.PrivateSubnetBID,
+			expected: struct {
+				cidr        string
+				az          string
+				mapPublicIP bool
+				isPublic    bool
+			}{
+				cidr:        "10.0.12.0/24",
+				az:          "us-east-1b",
+				mapPublicIP: false,
+				isPublic:    false,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.subnetID == "" {
+				t.Skip("Subnet ID not found in outputs")
+			}
+
+			ctx := context.TODO()
+			result, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
+				SubnetIds: []string{tc.subnetID},
+			})
+			require.NoError(t, err)
+			require.Len(t, result.Subnets, 1)
+
+			subnet := result.Subnets[0]
+
+			assert.Equal(t, tc.expected.cidr, aws.ToString(subnet.CidrBlock))
+			assert.Equal(t, tc.expected.az, aws.ToString(subnet.AvailabilityZone))
+			assert.Equal(t, tc.expected.mapPublicIP, aws.ToBool(subnet.MapPublicIpOnLaunch))
+			assert.Equal(t, outputs.VpcID, aws.ToString(subnet.VpcId))
+		})
+	}
+}
+
+// Test NAT Gateway configurations
+func TestNATGatewayDeployments(t *testing.T) {
+	setup(t)
+
+	natGateways := []struct {
+		name      string
+		gatewayID string
+		subnetID  string
+		eipAddr   string
+	}{
+		{
+			name:      "NAT Gateway A",
+			gatewayID: outputs.NatGatewayAID,
+			subnetID:  outputs.PublicSubnetAID,
+			eipAddr:   outputs.ElasticIPAAddress,
+		},
+		{
+			name:      "NAT Gateway B",
+			gatewayID: outputs.NatGatewayBID,
+			subnetID:  outputs.PublicSubnetBID,
+			eipAddr:   outputs.ElasticIPBAddress,
+		},
+	}
+
+	for _, ng := range natGateways {
+		t.Run(ng.name, func(t *testing.T) {
+			if ng.gatewayID == "" {
+				t.Skip("NAT Gateway ID not found in outputs")
+			}
+
+			ctx := context.TODO()
+			result, err := ec2Client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{
+				NatGatewayIds: []string{ng.gatewayID},
+			})
+			require.NoError(t, err)
+			require.Len(t, result.NatGateways, 1)
+
+			natGateway := result.NatGateways[0]
+
+			assert.Equal(t, types.NatGatewayStateAvailable, natGateway.State)
+			assert.Equal(t, ng.subnetID, aws.ToString(natGateway.SubnetId))
+			assert.Equal(t, outputs.VpcID, aws.ToString(natGateway.VpcId))
+
+			// Verify NAT Gateway has an Elastic IP
+			require.Greater(t, len(natGateway.NatGatewayAddresses), 0)
+		})
+	}
+}
+
+// Test Security Group configurations
+func TestSecurityGroupDeployments(t *testing.T) {
+	setup(t)
+
+	testCases := []struct {
+		name        string
+		groupID     string
+		description string
+		validateFn  func(*testing.T, types.SecurityGroup)
+	}{
+		{
+			name:        "Web Security Group",
+			groupID:     outputs.WebSecurityGroupID,
+			description: "Security group for web servers",
+			validateFn: func(t *testing.T, sg types.SecurityGroup) {
+				// Check for HTTP and HTTPS ingress rules
+				hasHTTP := false
+				hasHTTPS := false
+				for _, rule := range sg.IpPermissions {
+					if aws.ToInt32(rule.FromPort) == 80 && aws.ToInt32(rule.ToPort) == 80 {
+						hasHTTP = true
+					}
+					if aws.ToInt32(rule.FromPort) == 443 && aws.ToInt32(rule.ToPort) == 443 {
+						hasHTTPS = true
+					}
+				}
+				assert.True(t, hasHTTP, "Web security group should allow HTTP")
+				assert.True(t, hasHTTPS, "Web security group should allow HTTPS")
+			},
+		},
+		{
+			name:        "SSH Security Group",
+			groupID:     outputs.SSHSecurityGroupID,
+			description: "Security group for SSH access",
+			validateFn: func(t *testing.T, sg types.SecurityGroup) {
+				// Check for SSH rule with restricted access
+				hasSSH := false
+				hasRestrictedAccess := false
+				for _, rule := range sg.IpPermissions {
+					if aws.ToInt32(rule.FromPort) == 22 && aws.ToInt32(rule.ToPort) == 22 {
+						hasSSH = true
+						// Check if access is restricted (not 0.0.0.0/0)
+						for _, ipRange := range rule.IpRanges {
+							if aws.ToString(ipRange.CidrIp) != "0.0.0.0/0" {
+								hasRestrictedAccess = true
+							}
+						}
+					}
+				}
+				assert.True(t, hasSSH, "SSH security group should allow SSH")
+				assert.True(t, hasRestrictedAccess, "SSH access should be restricted")
+			},
+		},
+		{
+			name:        "Database Security Group",
+			groupID:     outputs.DatabaseSecurityGroupID,
+			description: "Security group for database servers",
+			validateFn: func(t *testing.T, sg types.SecurityGroup) {
+				// Check for MySQL rule from web security group
+				hasMySQL := false
+				hasSourceSG := false
+				for _, rule := range sg.IpPermissions {
+					if aws.ToInt32(rule.FromPort) == 3306 && aws.ToInt32(rule.ToPort) == 3306 {
+						hasMySQL = true
+						// Check if source is web security group
+						for _, userIdGroup := range rule.UserIdGroupPairs {
+							if aws.ToString(userIdGroup.GroupId) == outputs.WebSecurityGroupID {
+								hasSourceSG = true
+							}
+						}
+					}
+				}
+				assert.True(t, hasMySQL, "Database security group should allow MySQL")
+				assert.True(t, hasSourceSG, "MySQL access should be from web security group only")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.groupID == "" {
+				t.Skip("Security Group ID not found in outputs")
+			}
+
+			ctx := context.TODO()
+			result, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+				GroupIds: []string{tc.groupID},
+			})
+			require.NoError(t, err)
+			require.Len(t, result.SecurityGroups, 1)
+
+			sg := result.SecurityGroups[0]
+
+			assert.Equal(t, tc.description, aws.ToString(sg.Description))
+			assert.Equal(t, outputs.VpcID, aws.ToString(sg.VpcId))
+
+			// Run specific validation for this security group
+			tc.validateFn(t, sg)
+		})
+	}
+}
+
+// Test Route Table configurations
+func TestRouteTableDeployments(t *testing.T) {
+	setup(t)
+
+	if outputs.VpcID == "" {
+		t.Skip("VPC ID not found in outputs")
+	}
+
+	ctx := context.TODO()
+
+	// Get all route tables for the VPC
+	result, err := ec2Client.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{outputs.VpcID},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	publicRouteTables := 0
+	privateRouteTables := 0
+
+	for _, rt := range result.RouteTables {
+		hasInternetRoute := false
+		hasNATRoute := false
+
+		for _, route := range rt.Routes {
+			if aws.ToString(route.DestinationCidrBlock) == "0.0.0.0/0" {
+				if route.GatewayId != nil && aws.ToString(route.GatewayId) != "local" {
+					hasInternetRoute = true
+				}
+				if route.NatGatewayId != nil {
+					hasNATRoute = true
+				}
+			}
+		}
+
+		if hasInternetRoute {
+			publicRouteTables++
+		} else if hasNATRoute {
+			privateRouteTables++
+		}
+	}
+
+	// Should have at least 1 public and 2 private route tables
+	assert.GreaterOrEqual(t, publicRouteTables, 1, "Should have at least 1 public route table")
+	assert.GreaterOrEqual(t, privateRouteTables, 2, "Should have at least 2 private route tables")
+}
+
+// Test Network ACL configurations
+func TestNetworkACLDeployments(t *testing.T) {
+	setup(t)
+
+	if outputs.VpcID == "" {
+		t.Skip("VPC ID not found in outputs")
+	}
+
+	ctx := context.TODO()
+
+	// Get all NACLs for the VPC
+	result, err := ec2Client.DescribeNetworkAcls(ctx, &ec2.DescribeNetworkAclsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{outputs.VpcID},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Should have at least 3 NACLs (1 default + 2 custom)
+	assert.GreaterOrEqual(t, len(result.NetworkAcls), 3, "Should have at least 3 Network ACLs")
+
+	// Check for custom NACLs (non-default)
+	customNACLs := 0
+	for _, nacl := range result.NetworkAcls {
+		if !aws.ToBool(nacl.IsDefault) {
+			customNACLs++
+
+			// Verify NACL has rules
+			assert.Greater(t, len(nacl.Entries), 0, "Network ACL should have rules")
+		}
+	}
+
+	assert.GreaterOrEqual(t, customNACLs, 2, "Should have at least 2 custom Network ACLs")
+}
+
+// Test VPC Flow Logs configuration
+func TestVPCFlowLogsDeployment(t *testing.T) {
+	setup(t)
+
+	if outputs.VpcID == "" {
+		t.Skip("VPC ID not found in outputs")
+	}
+
+	ctx := context.TODO()
+
+	// Get flow logs for the VPC
+	result, err := ec2Client.DescribeFlowLogs(ctx, &ec2.DescribeFlowLogsInput{
+		Filter: []types.Filter{
+			{
+				Name:   aws.String("resource-id"),
+				Values: []string{outputs.VpcID},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Should have at least 1 flow log
+	assert.GreaterOrEqual(t, len(result.FlowLogs), 1, "VPC should have at least 1 flow log")
+
+	if len(result.FlowLogs) > 0 {
+		flowLog := result.FlowLogs[0]
+
+		assert.Equal(t, types.FlowLogsResourceTypeVpc, flowLog.ResourceType)
+		assert.Equal(t, "ALL", aws.ToString(flowLog.TrafficType))
+		assert.NotEmpty(t, aws.ToString(flowLog.LogGroupName), "Flow log should have a log group")
+	}
+}
+
+// Test high availability configuration
 func TestHighAvailabilityConfiguration(t *testing.T) {
-	// Test that infrastructure is configured for high availability
-	haConfig := getHighAvailabilityConfig()
+	setup(t)
 
-	assert.Equal(t, 2, haConfig.AvailabilityZoneCount, "Should use 2 availability zones")
-	assert.Equal(t, 2, haConfig.NATGatewayCount, "Should have 2 NAT gateways for redundancy")
-	assert.Equal(t, 4, haConfig.SubnetCount, "Should have 4 subnets total")
-	assert.Equal(t, 2, haConfig.PublicSubnetCount, "Should have 2 public subnets")
-	assert.Equal(t, 2, haConfig.PrivateSubnetCount, "Should have 2 private subnets")
+	// Verify resources are deployed across multiple AZs
+	assert.NotEmpty(t, outputs.PublicSubnetAID, "Public Subnet A should exist")
+	assert.NotEmpty(t, outputs.PublicSubnetBID, "Public Subnet B should exist")
+	assert.NotEmpty(t, outputs.PrivateSubnetAID, "Private Subnet A should exist")
+	assert.NotEmpty(t, outputs.PrivateSubnetBID, "Private Subnet B should exist")
+
+	// Verify dual NAT Gateways for redundancy
+	assert.NotEmpty(t, outputs.NatGatewayAID, "NAT Gateway A should exist")
+	assert.NotEmpty(t, outputs.NatGatewayBID, "NAT Gateway B should exist")
+
+	// Verify subnet AZ distribution from outputs
+	assert.Equal(t, "us-east-1a", outputs.Subnets.Public.SubnetA.AZ)
+	assert.Equal(t, "us-east-1b", outputs.Subnets.Public.SubnetB.AZ)
+	assert.Equal(t, "us-east-1a", outputs.Subnets.Private.SubnetA.AZ)
+	assert.Equal(t, "us-east-1b", outputs.Subnets.Private.SubnetB.AZ)
 }
 
-func TestSecurityConfiguration(t *testing.T) {
-	// Test security configuration compliance
-	secConfig := getSecurityConfiguration()
+// Helper function to validate resource tags
+func validateTags(t *testing.T, tags []types.Tag, expectedName string) {
+	t.Helper()
 
-	assert.True(t, secConfig.VPCFlowLogsEnabled, "VPC Flow Logs should be enabled")
-	assert.True(t, secConfig.NetworkACLsConfigured, "Network ACLs should be configured")
-	assert.Equal(t, 3, secConfig.SecurityGroupCount, "Should have 3 security groups")
-	assert.True(t, secConfig.SSHAccessRestricted, "SSH access should be restricted")
-	assert.True(t, secConfig.DatabaseAccessRestricted, "Database access should be restricted to web tier")
-}
-
-func TestNetworkingConfiguration(t *testing.T) {
-	// Test networking configuration
-	netConfig := getNetworkingConfiguration()
-
-	assert.Equal(t, "10.0.0.0/16", netConfig.VPCCidr, "VPC should use 10.0.0.0/16 CIDR")
-	assert.True(t, netConfig.DNSResolutionEnabled, "DNS resolution should be enabled")
-	assert.True(t, netConfig.DNSHostnamesEnabled, "DNS hostnames should be enabled")
-	assert.Equal(t, "internal.company.com", netConfig.InternalDomain, "Should use internal.company.com domain")
-}
-
-func TestResourceTagging(t *testing.T) {
-	// Test that all resources are properly tagged
-	tagging := getResourceTagging()
-
-	assert.Equal(t, "production", tagging.Environment, "Environment tag should be production")
-	assert.Equal(t, "secure-vpc", tagging.Project, "Project tag should be secure-vpc")
-	assert.Equal(t, "pulumi", tagging.ManagedBy, "ManagedBy tag should be pulumi")
-	assert.True(t, tagging.AllResourcesTagged, "All resources should be tagged")
-}
-
-func TestCostOptimization(t *testing.T) {
-	// Test cost optimization measures
-	costConfig := getCostOptimizationConfig()
-
-	assert.True(t, costConfig.NATGatewaysOptimized, "NAT Gateways should be optimized for cost")
-	assert.True(t, costConfig.EIPsMinimized, "Elastic IPs should be minimized")
-	assert.False(t, costConfig.ExcessiveResourcesDetected, "No excessive resources should be detected")
-}
-
-func TestComplianceRequirements(t *testing.T) {
-	// Test compliance with security and governance requirements
-	compliance := getComplianceStatus()
-
-	assert.True(t, compliance.LoggingEnabled, "Logging should be enabled")
-	assert.True(t, compliance.NetworkSegmentationImplemented, "Network segmentation should be implemented")
-	assert.True(t, compliance.AccessControlImplemented, "Access control should be implemented")
-	assert.True(t, compliance.EncryptionInTransit, "Encryption in transit should be enabled")
-}
-
-func TestDisasterRecoveryReadiness(t *testing.T) {
-	// Test disaster recovery and backup readiness
-	drConfig := getDisasterRecoveryConfig()
-
-	assert.True(t, drConfig.MultiAZDeployment, "Should be deployed across multiple AZs")
-	assert.True(t, drConfig.BackupConfigured, "Backup should be configured")
-	assert.True(t, drConfig.MonitoringEnabled, "Monitoring should be enabled")
-}
-
-func TestPerformanceConfiguration(t *testing.T) {
-	// Test performance configuration
-	perfConfig := getPerformanceConfiguration()
-
-	assert.True(t, perfConfig.OptimalRouting, "Routing should be optimized")
-	assert.True(t, perfConfig.NetworkLatencyOptimized, "Network latency should be optimized")
-	assert.Equal(t, 2, perfConfig.NATGatewayCount, "Should have 2 NAT gateways for performance")
-}
-
-func TestScalabilityConfiguration(t *testing.T) {
-	// Test scalability configuration
-	scaleConfig := getScalabilityConfiguration()
-
-	assert.True(t, scaleConfig.AutoScalingReady, "Should be ready for auto-scaling")
-	assert.True(t, scaleConfig.LoadBalancerReady, "Should be ready for load balancers")
-	assert.Equal(t, 4, scaleConfig.AvailableSubnets, "Should have subnets for scaling")
-}
-
-// Helper functions that return configuration data
-// These would typically read from deployed infrastructure or configuration files
-
-type DeploymentConfig struct {
-	Region      string
-	ProjectName string
-	Environment string
-}
-
-type ComplianceConfig struct {
-	HasVPCFlowLogs         bool
-	HasNetworkACLs         bool
-	HasRestrictedSSHAccess bool
-	HasMultiAZSetup        bool
-}
-
-type HighAvailabilityConfig struct {
-	AvailabilityZoneCount int
-	NATGatewayCount       int
-	SubnetCount           int
-	PublicSubnetCount     int
-	PrivateSubnetCount    int
-}
-
-type SecurityConfiguration struct {
-	VPCFlowLogsEnabled       bool
-	NetworkACLsConfigured    bool
-	SecurityGroupCount       int
-	SSHAccessRestricted      bool
-	DatabaseAccessRestricted bool
-}
-
-type NetworkingConfiguration struct {
-	VPCCidr              string
-	DNSResolutionEnabled bool
-	DNSHostnamesEnabled  bool
-	InternalDomain       string
-}
-
-type ResourceTagging struct {
-	Environment        string
-	Project            string
-	ManagedBy          string
-	AllResourcesTagged bool
-}
-
-type CostOptimizationConfig struct {
-	NATGatewaysOptimized       bool
-	EIPsMinimized              bool
-	ExcessiveResourcesDetected bool
-}
-
-type ComplianceStatus struct {
-	LoggingEnabled                 bool
-	NetworkSegmentationImplemented bool
-	AccessControlImplemented       bool
-	EncryptionInTransit            bool
-}
-
-type DisasterRecoveryConfig struct {
-	MultiAZDeployment bool
-	BackupConfigured  bool
-	MonitoringEnabled bool
-}
-
-type PerformanceConfiguration struct {
-	OptimalRouting          bool
-	NetworkLatencyOptimized bool
-	NATGatewayCount         int
-}
-
-type ScalabilityConfiguration struct {
-	AutoScalingReady  bool
-	LoadBalancerReady bool
-	AvailableSubnets  int
-}
-
-func getDeploymentConfig() DeploymentConfig {
-	return DeploymentConfig{
-		Region:      "us-east-1",
-		ProjectName: "secure-vpc",
-		Environment: "production",
+	tagMap := make(map[string]string)
+	for _, tag := range tags {
+		tagMap[aws.ToString(tag.Key)] = aws.ToString(tag.Value)
 	}
-}
 
-func checkInfrastructureCompliance() ComplianceConfig {
-	return ComplianceConfig{
-		HasVPCFlowLogs:         true,
-		HasNetworkACLs:         true,
-		HasRestrictedSSHAccess: true,
-		HasMultiAZSetup:        true,
-	}
-}
-
-func getHighAvailabilityConfig() HighAvailabilityConfig {
-	return HighAvailabilityConfig{
-		AvailabilityZoneCount: 2,
-		NATGatewayCount:       2,
-		SubnetCount:           4,
-		PublicSubnetCount:     2,
-		PrivateSubnetCount:    2,
-	}
-}
-
-func getSecurityConfiguration() SecurityConfiguration {
-	return SecurityConfiguration{
-		VPCFlowLogsEnabled:       true,
-		NetworkACLsConfigured:    true,
-		SecurityGroupCount:       3,
-		SSHAccessRestricted:      true,
-		DatabaseAccessRestricted: true,
-	}
-}
-
-func getNetworkingConfiguration() NetworkingConfiguration {
-	return NetworkingConfiguration{
-		VPCCidr:              "10.0.0.0/16",
-		DNSResolutionEnabled: true,
-		DNSHostnamesEnabled:  true,
-		InternalDomain:       "internal.company.com",
-	}
-}
-
-func getResourceTagging() ResourceTagging {
-	return ResourceTagging{
-		Environment:        "production",
-		Project:            "secure-vpc",
-		ManagedBy:          "pulumi",
-		AllResourcesTagged: true,
-	}
-}
-
-func getCostOptimizationConfig() CostOptimizationConfig {
-	return CostOptimizationConfig{
-		NATGatewaysOptimized:       true,
-		EIPsMinimized:              true,
-		ExcessiveResourcesDetected: false,
-	}
-}
-
-func getComplianceStatus() ComplianceStatus {
-	return ComplianceStatus{
-		LoggingEnabled:                 true,
-		NetworkSegmentationImplemented: true,
-		AccessControlImplemented:       true,
-		EncryptionInTransit:            true,
-	}
-}
-
-func getDisasterRecoveryConfig() DisasterRecoveryConfig {
-	return DisasterRecoveryConfig{
-		MultiAZDeployment: true,
-		BackupConfigured:  true,
-		MonitoringEnabled: true,
-	}
-}
-
-func getPerformanceConfiguration() PerformanceConfiguration {
-	return PerformanceConfiguration{
-		OptimalRouting:          true,
-		NetworkLatencyOptimized: true,
-		NATGatewayCount:         2,
-	}
-}
-
-func getScalabilityConfiguration() ScalabilityConfiguration {
-	return ScalabilityConfiguration{
-		AutoScalingReady:  true,
-		LoadBalancerReady: true,
-		AvailableSubnets:  4,
-	}
+	assert.Equal(t, expectedName, tagMap["Name"])
+	assert.Equal(t, "production", tagMap["Environment"])
+	assert.Equal(t, "secure-vpc", tagMap["Project"])
+	assert.Equal(t, "pulumi", tagMap["ManagedBy"])
 }
