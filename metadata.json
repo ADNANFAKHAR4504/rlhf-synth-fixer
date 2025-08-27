@@ -1,0 +1,12 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "turn_type": "single",
+  "po_id": "trainr973",
+  "team": "synth",
+  "startedAt": "2025-08-27T11:09:44.021Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": "Cloud Environment Setup",
+  "training_quality": "high",
+  "aws_services": ["VPC", "EC2", "IAM", "Secrets Manager", "CloudFormation"]
+}
