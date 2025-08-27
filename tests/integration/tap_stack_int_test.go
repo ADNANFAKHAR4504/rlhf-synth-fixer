@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -118,68 +116,29 @@ func readPulumiOutputs(t *testing.T) *PulumiOutputs {
 		}
 	}
 
-	// DEBUG: Show current working directory
-	cwd, _ := os.Getwd()
-	t.Logf("DEBUG: Current working directory: %s", cwd)
-
-	// DEBUG: List all files in current directory
-	t.Logf("DEBUG: Listing files in current directory...")
-	entries, _ := os.ReadDir(".")
-	for _, entry := range entries {
-		if entry.IsDir() {
-			t.Logf("DEBUG: Directory: %s/", entry.Name())
-			// List files in subdirectory if it might contain outputs
-			if strings.Contains(entry.Name(), "output") || strings.Contains(entry.Name(), "cfn") {
-				subEntries, _ := os.ReadDir(entry.Name())
-				for _, subEntry := range subEntries {
-					t.Logf("DEBUG:   -> %s", subEntry.Name())
-				}
-			}
-		} else {
-			t.Logf("DEBUG: File: %s", entry.Name())
-		}
-	}
-
-	// DEBUG: Search for any JSON files that might be outputs
-	matches, _ := filepath.Glob("**/*.json")
-	t.Logf("DEBUG: Found JSON files: %v", matches)
-
 	// Try to read from various output files (if exists)
+	// Note: Integration tests run in lib/ directory, so we need to check parent directory too
 	outputFiles := []string{
 		"outputs.json",
+		"../outputs.json",
 		"cfn-outputs/flat-outputs.json",
+		"../cfn-outputs/flat-outputs.json",
+		"../cfn-outputs.json",
 		"lib/cfn-outputs/flat-outputs.json",
 		"flat-outputs.json",
-		"cfn-outputs.json",
+		"../flat-outputs.json",
 		"stack-outputs.json",
+		"../stack-outputs.json",
 	}
 
 	for _, outputFile := range outputFiles {
-		t.Logf("DEBUG: Checking if %s exists...", outputFile)
-		if _, err := os.Stat(outputFile); err == nil {
-			t.Logf("DEBUG: File %s exists, trying to read...", outputFile)
-			if data, err := os.ReadFile(outputFile); err == nil {
-				t.Logf("DEBUG: Successfully read %s, size: %d bytes", outputFile, len(data))
-				// Show first 200 characters of the file content
-				content := string(data)
-				if len(content) > 200 {
-					content = content[:200] + "..."
-				}
-				t.Logf("DEBUG: Content preview: %s", content)
-
-				var outputs PulumiOutputs
-				if err := json.Unmarshal(data, &outputs); err == nil {
-					t.Logf("Successfully parsed outputs from %s", outputFile)
-					outputsCache = &outputs
-					return &outputs
-				} else {
-					t.Logf("DEBUG: Failed to parse JSON from %s: %v", outputFile, err)
-				}
-			} else {
-				t.Logf("DEBUG: Failed to read %s: %v", outputFile, err)
+		if data, err := os.ReadFile(outputFile); err == nil {
+			var outputs PulumiOutputs
+			if err := json.Unmarshal(data, &outputs); err == nil {
+				t.Logf("Successfully read outputs from %s", outputFile)
+				outputsCache = &outputs
+				return &outputs
 			}
-		} else {
-			t.Logf("DEBUG: File %s does not exist", outputFile)
 		}
 	}
 
