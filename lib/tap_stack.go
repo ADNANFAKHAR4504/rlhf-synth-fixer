@@ -166,7 +166,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 			Ami:                      ami.Id(),
 			InstanceType:             jsii.String("t2.micro"),
 			SubnetId:                 subnetResource.Id(),
-			KeyName:                  jsii.String("my-key-pair"),
+			KeyName:                  jsii.String("rlhf-iac-team2-key"),
 			Monitoring:               jsii.Bool(true),
 			VpcSecurityGroupIds:      &[]*string{sg.Id()},
 			AssociatePublicIpAddress: jsii.Bool(true),
