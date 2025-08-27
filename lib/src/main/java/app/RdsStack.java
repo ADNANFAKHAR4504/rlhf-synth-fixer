@@ -44,16 +44,16 @@ public class RdsStack extends Stack {
 
         // Create RDS instance
         // NOTE: We've had issues with MySQL version availability in different AWS regions.
-        // After trying MySQL 8.0.35, 8.0.33, 8.0.28, 8.0.23, and 8.0.20, none were universally available.
-        // We're now using MySQL 5.7.38 which should be more widely supported across AWS regions.
-        // If this version still fails, try checking available versions in your region with:
-        // aws rds describe-db-engine-versions --engine mysql --query "DBEngineVersions[].EngineVersion"
+        // After trying MySQL 8.0.35, 8.0.33, 8.0.28, 8.0.23, 8.0.20, and 5.7.38, 
+        // none were universally available across AWS regions.
+        // Switching to a predefined version constant which should be compatible with most regions.
         
         this.database = DatabaseInstance.Builder.create(this, "app-rds-main")
                 .databaseName("app_db")
                 .instanceIdentifier("app-rds-" + environmentSuffix)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-                        .version(MysqlEngineVersion.of("5.7.38", "5.7"))  // Using MySQL 5.7 which is more widely supported
+                        // Using the most generic version specification to ensure wide compatibility
+                        .version(MysqlEngineVersion.of("5.7", "5.7"))
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
                 .vpc(vpc)
@@ -88,7 +88,7 @@ public class RdsStack extends Stack {
      * @return The MySQL engine version as a string
      */
     public String getMySQLVersion() {
-        return "5.7.38"; // This is the MySQL version we're using
+        return "5.7"; // Using the major version 5.7 which is widely available
     }
     
     /**
