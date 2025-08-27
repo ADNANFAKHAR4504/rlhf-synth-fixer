@@ -150,6 +150,65 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
+  // NEW TEST: Cover the region fallback logic when override is disabled
+  test("should use props.awsRegion when region override is disabled", () => {
+    const app = new App();
+    new TapStack(app, "TestStackRegionFallback", {
+      awsRegion: 'us-east-1',
+      _regionOverrideForTesting: null, // Disable the override
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-east-1', // Should use props.awsRegion
+      })
+    );
+
+    expect(VpcModule).toHaveBeenCalledWith(
+      expect.anything(),
+      "vpc",
+      expect.objectContaining({
+        availabilityZones: ["us-east-1a", "us-east-1b"], // Based on resolved region
+      })
+    );
+  });
+
+  // NEW TEST: Cover the final fallback to default us-east-1
+  test("should use default us-east-1 when no override and no props.awsRegion", () => {
+    const app = new App();
+    new TapStack(app, "TestStackDefaultFallback", {
+      _regionOverrideForTesting: null, // Disable the override
+      // No awsRegion prop provided
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-east-1', // Should fallback to default us-east-1
+      })
+    );
+  });
+
+  // NEW TEST: Cover when override is empty string (falsy)
+  test("should use props.awsRegion when region override is empty string", () => {
+    const app = new App();
+    new TapStack(app, "TestStackEmptyOverride", {
+      awsRegion: 'us-east-1',
+      _regionOverrideForTesting: '', // Empty string (falsy)
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-east-1', // Should use props.awsRegion
+      })
+    );
+  });
+
   test("should create AWS Provider with custom props", () => {
     const app = new App();
     const customTags = {
@@ -170,7 +229,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-east-1', // FIX: Changed from 'us-west-2' to match override
+        region: 'us-east-1', // Override is set to us-east-1
         defaultTags: [customTags],
       })
     );
@@ -464,7 +523,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-east-1', // FIX: Changed from 'us-west-2' to match override
+        region: 'us-east-1', // Override is set to us-east-1
       })
     );
 
@@ -472,7 +531,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "vpc",
       expect.objectContaining({
-        availabilityZones: ["us-east-1a", "us-east-1b"], // FIX: Changed from 'us-west-2'
+        availabilityZones: ["us-east-1a", "us-east-1b"], // Based on override
       })
     );
   });
@@ -548,7 +607,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-east-1', // FIX: Changed from 'eu-west-1' to match override
+        region: 'us-east-1', // Override is set to us-east-1
         defaultTags: [customTags],
       })
     );
@@ -569,7 +628,7 @@ describe("TapStack Unit Tests", () => {
       expect.objectContaining({
         project: "tap-project",
         environment: "production",
-        availabilityZones: ["us-east-1a", "us-east-1b"], // FIX: Changed from 'eu-west-1'
+        availabilityZones: ["us-east-1a", "us-east-1b"], // Based on override
       })
     );
   });
