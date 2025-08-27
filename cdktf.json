@@ -2,5 +2,9 @@
   "language": "typescript",
   "app": "npx ts-node bin/tap.ts",
   "projectId": "tap-stack",
+  "terraformProviders": [
+    "@cdktf/provider-aws@21.3.0"
+  ],
+  "terraformModules": [],
   "codeMakerOutput": ".gen"
 }
