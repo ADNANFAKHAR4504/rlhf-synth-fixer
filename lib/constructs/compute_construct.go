@@ -1,16 +1,28 @@
 package constructs
 
 import (
+	"fmt"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
 
 type ComputeConstructProps struct {
-	EnvironmentSuffix *string
+	Environment      string
+	Region           string
+	Vpc              awsec2.Vpc
+	SecurityGroup    awsec2.SecurityGroup
+	ExecutionRole    awsiam.Role
+	DeadLetterQueue  awssqs.Queue
+	CrossRegionTopic awssns.Topic
 }
 
 type ComputeConstruct struct {
@@ -25,57 +37,70 @@ type ComputeConstruct struct {
 func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeConstructProps) *ComputeConstruct {
 	construct := constructs.NewConstruct(scope, id)
 
-	// Get environment suffix from props or default to empty
-	var environmentSuffix string
-	if props != nil && props.EnvironmentSuffix != nil {
-		environmentSuffix = *props.EnvironmentSuffix
-	}
+	envSuffix := fmt.Sprintf("-%s-%s", props.Environment, props.Region)
 
 	// Create CloudWatch Log Group
 	logGroup := awslogs.NewLogGroup(construct, jsii.String("LambdaLogGroup"), &awslogs.LogGroupProps{
-		LogGroupName:  jsii.String("/aws/lambda/tap-handler"),
+		LogGroupName:  jsii.String(fmt.Sprintf("/aws/lambda/tap-handler%s", envSuffix)),
 		Retention:     awslogs.RetentionDays_TWO_WEEKS,
 		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 	})
 
-	// Create function name with environment suffix
-	functionName := "tap-handler"
-	if environmentSuffix != "" {
-		functionName = "tap-handler-" + environmentSuffix
-	}
-
-	// Create Lambda function
+	// Create Lambda function with enhanced configuration
 	lambdaFunction := awslambda.NewFunction(construct, jsii.String("TapHandler"), &awslambda.FunctionProps{
 		Runtime:      awslambda.Runtime_PYTHON_3_9(),
 		Handler:      jsii.String("handler.lambda_handler"),
 		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda"), nil),
-		FunctionName: jsii.String(functionName),
+		FunctionName: jsii.String(fmt.Sprintf("tap-handler%s", envSuffix)),
 		MemorySize:   jsii.Number(256), // ≤256MB as required
 		Timeout:      awscdk.Duration_Seconds(jsii.Number(30)),
 		LogGroup:     logGroup,
-		Environment: &map[string]*string{
-			"LOG_LEVEL": jsii.String("INFO"),
+		Role:         props.ExecutionRole,
+		Vpc:          props.Vpc,
+		VpcSubnets: &awsec2.SubnetSelection{
+			SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
 		},
+		SecurityGroups:  &[]awsec2.ISecurityGroup{props.SecurityGroup},
+		Tracing:         awslambda.Tracing_ACTIVE, // X-Ray tracing
+		RetryAttempts:   jsii.Number(2),
+		DeadLetterQueue: props.DeadLetterQueue,
+		Environment: &map[string]*string{
+			"LOG_LEVEL":              jsii.String("INFO"),
+			"ENVIRONMENT":            jsii.String(props.Environment),
+			"REGION":                 jsii.String(props.Region),
+			"CROSS_REGION_TOPIC_ARN": props.CrossRegionTopic.TopicArn(),
+			"DLQ_URL":                props.DeadLetterQueue.QueueUrl(),
+		},
+		ReservedConcurrentExecutions: jsii.Number(100), // Prevent runaway costs
 	})
 
-	// CloudWatch Alarms
-	// Error alarm
+	// Enhanced CloudWatch Alarms
+	// Error alarm with composite metric
 	errorAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaErrorAlarm"), &awscloudwatch.AlarmProps{
-		AlarmName:        jsii.String("tap-lambda-errors"),
-		AlarmDescription: jsii.String("Lambda function error rate"),
-		Metric: lambdaFunction.MetricErrors(&awscloudwatch.MetricOptions{
-			Period: awscdk.Duration_Minutes(jsii.Number(5)),
+		AlarmName:        jsii.String(fmt.Sprintf("tap-lambda-errors%s", envSuffix)),
+		AlarmDescription: jsii.String("Lambda function error rate exceeds threshold"),
+		Metric: awscloudwatch.NewMathExpression(&awscloudwatch.MathExpressionProps{
+			Expression: jsii.String("(errors / invocations) * 100"),
+			UsingMetrics: &map[string]awscloudwatch.IMetric{
+				"errors": lambdaFunction.MetricErrors(&awscloudwatch.MetricOptions{
+					Period: awscdk.Duration_Minutes(jsii.Number(5)),
+				}),
+				"invocations": lambdaFunction.MetricInvocations(&awscloudwatch.MetricOptions{
+					Period: awscdk.Duration_Minutes(jsii.Number(5)),
+				}),
+			},
 		}),
-		Threshold:          jsii.Number(1),
+		Threshold:          jsii.Number(5), // 5% error rate
 		EvaluationPeriods:  jsii.Number(2),
-		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+		DatapointsToAlarm:  jsii.Number(2),
+		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_THRESHOLD,
 		TreatMissingData:   awscloudwatch.TreatMissingData_NOT_BREACHING,
 	})
 
 	// Duration alarm
 	durationAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaDurationAlarm"), &awscloudwatch.AlarmProps{
-		AlarmName:        jsii.String("tap-lambda-duration"),
-		AlarmDescription: jsii.String("Lambda function duration"),
+		AlarmName:        jsii.String(fmt.Sprintf("tap-lambda-duration%s", envSuffix)),
+		AlarmDescription: jsii.String("Lambda function duration exceeds threshold"),
 		Metric: lambdaFunction.MetricDuration(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
@@ -87,8 +112,8 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 
 	// Throttle alarm
 	throttleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaThrottleAlarm"), &awscloudwatch.AlarmProps{
-		AlarmName:        jsii.String("tap-lambda-throttles"),
-		AlarmDescription: jsii.String("Lambda function throttles"),
+		AlarmName:        jsii.String(fmt.Sprintf("tap-lambda-throttles%s", envSuffix)),
+		AlarmDescription: jsii.String("Lambda function throttles detected"),
 		Metric: lambdaFunction.MetricThrottles(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),

@@ -49,14 +49,15 @@ func main() {
 	}
 
 	props := &lib.TapStackProps{
-		StackProps: &awscdk.StackProps{
+		StackProps: awscdk.StackProps{
 			Env: env,
 		},
-		EnvironmentSuffix: jsii.String(environmentSuffix),
+		Environment: environmentSuffix,
+		Region:      region,
 	}
 
 	// Initialize the stack with proper parameters
-	lib.NewTapStack(app, jsii.String(stackName), props)
+	lib.NewTapStack(app, stackName, props)
 
 	app.Synth(nil)
 }
