@@ -46,11 +46,11 @@ public class TapStackProdTest {
         Template template = Template.fromStack(stack);
         
         // Verify Lambda function exists with correct runtime
-        template.hasResourceProperties("AWS::Lambda::Function", Map.of(
+        template.hasResourceProperties("AWS::Lambda::Function", Match.objectLike(Map.of(
             "Runtime", "python3.13",
             "Handler", "index.handler",
-            "FunctionName", "file-processor-test-primary-3"
-        ));
+            "FunctionName", Match.stringLikeRegexp("file-processor-test-primary-3-[0-9]+")
+        )));
     }
 
     /**

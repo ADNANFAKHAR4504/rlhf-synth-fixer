@@ -31,6 +31,7 @@ import software.amazon.awscdk.services.iam.Effect;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.time.Instant;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
@@ -98,6 +99,9 @@ class TapStackProd extends Stack {
                         .map(Object::toString))
                 .orElse("Prod");
 
+        // Add timestamp to make function names unique and avoid conflicts
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+
         // Create SQS Dead Letter Queue for Lambda failures
         Queue deadLetterQueue = Queue.Builder.create(this, "FileProcessorDLQ" + environmentSuffix + "Primary3")
                 .queueName("file-processor-dlq-" + environmentSuffix.toLowerCase() + "-primary-3")
@@ -121,7 +125,7 @@ class TapStackProd extends Stack {
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                 ))
-                .resources(List.of("arn:aws:logs:" + this.getRegion() + ":" + this.getAccount() + ":log-group:/aws/lambda/file-processor-" + environmentSuffix.toLowerCase() + "-primary-3*"))
+                .resources(List.of("arn:aws:logs:" + this.getRegion() + ":" + this.getAccount() + ":log-group:/aws/lambda/file-processor-" + environmentSuffix.toLowerCase() + "-primary-3-" + timestamp + "*"))
                 .build());
 
         // Add S3 permissions
@@ -150,7 +154,7 @@ class TapStackProd extends Stack {
 
         // Create Lambda function
         Function fileProcessorFunction = Function.Builder.create(this, "FileProcessorFunction" + environmentSuffix + "Primary3")
-                .functionName("file-processor-" + environmentSuffix.toLowerCase() + "-primary-3")
+                .functionName("file-processor-" + environmentSuffix.toLowerCase() + "-primary-3-" + timestamp)
                 .runtime(Runtime.PYTHON_3_13)
                 .handler("index.handler")
                 .code(Code.fromInline(
