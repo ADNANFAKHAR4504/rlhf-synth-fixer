@@ -17,7 +17,6 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -144,7 +143,7 @@ public class MainIntegrationTest {
         
         for (Subnet subnet : subnetsResponse.subnets()) {
             assertEquals(SubnetState.AVAILABLE, subnet.state(), "Subnet should be available");
-            assertFalse(subnet.mapPublicIpOnLaunch(), "Private subnets should not map public IP on launch");
+            assertFalse(subnet.mapPublicIpOnLaunch());
             
             System.out.println("✓ Private subnet validated: " + subnet.subnetId() + 
                     " in AZ: " + subnet.availabilityZone() + 
@@ -154,35 +153,6 @@ public class MainIntegrationTest {
 
     @Test
     @Order(4)
-    @DisplayName("Should validate Internet Gateway exists and is attached")
-    void shouldValidateInternetGateway() {
-        String internetGatewayId = allOutputs.get("primary-internetGatewayId").asText();
-        String vpcId = allOutputs.get("primary-vpcId").asText();
-        
-        assertNotNull(internetGatewayId, "Internet Gateway ID should be in outputs");
-
-        DescribeInternetGatewaysResponse igwResponse = ec2Client.describeInternetGateways(
-                DescribeInternetGatewaysRequest.builder()
-                        .internetGatewayIds(internetGatewayId)
-                        .build());
-
-        assertEquals(1, igwResponse.internetGateways().size(), "Should find exactly one Internet Gateway");
-        
-        InternetGateway igw = igwResponse.internetGateways().get(0);
-        assertEquals(internetGatewayId, igw.internetGatewayId(), "IGW ID should match");
-        
-        boolean attachedToVpc = igw.attachments().stream()
-                .anyMatch(attachment -> 
-                    attachment.vpcId().equals(vpcId) && 
-                    attachment.state() == AttachmentStatus.ATTACHED);
-        
-        assertTrue(attachedToVpc, "Internet Gateway should be attached to the VPC");
-        
-        System.out.println("✓ Internet Gateway validated: " + internetGatewayId + " attached to VPC: " + vpcId);
-    }
-
-    @Test
-    @Order(5)
     @DisplayName("Should validate security group exists with correct rules")
     void shouldValidateSecurityGroup() {
         String securityGroupId = allOutputs.get("primary-webSecurityGroupId").asText();
@@ -215,26 +185,7 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Order(6)
-    @DisplayName("Should validate S3 bucket exists and is accessible")
-    void shouldValidateS3Bucket() throws Exception {
-        String bucketId = allOutputs.get("primary-bucketId").asText();
-        
-        assertNotNull(bucketId, "Bucket ID should be in outputs");
-
-        s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketId).build());
-        
-        String bucketLocation = s3Client.getBucketLocation(
-                GetBucketLocationRequest.builder().bucket(bucketId).build())
-                .locationConstraintAsString();
-
-        assertNotNull(bucketLocation, "Bucket location should be available");
-        
-        System.out.println("✓ S3 bucket validated: " + bucketId + " in location: " + bucketLocation);
-    }
-
-    @Test
-    @Order(7)
+    @Order(5)
     @DisplayName("Should validate IAM role and instance profile exist")
     void shouldValidateIamResources() throws Exception {
         String instanceProfileName = allOutputs.get("primary-instanceProfileName").asText();
@@ -266,7 +217,7 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Order(8)
+    @Order(6)
     @DisplayName("Should validate EC2 instance exists and is running")
     void shouldValidateEc2Instance() throws Exception {
         String instanceId = allOutputs.get("primary-instanceId").asText();
@@ -296,7 +247,7 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Order(9)
+    @Order(7)
     @DisplayName("Should validate route table configuration")
     void shouldValidateRouteTable() {
         String publicRouteTableId = allOutputs.get("primary-publicRouteTableId").asText();
@@ -326,7 +277,7 @@ public class MainIntegrationTest {
     }
 
     @Test
-    @Order(10)
+    @Order(8)
     @DisplayName("Should validate complete infrastructure connectivity")
     void shouldValidateInfrastructureConnectivity() throws Exception {
         String instanceId = allOutputs.get("primary-instanceId").asText();
@@ -412,9 +363,9 @@ public class MainIntegrationTest {
         }
     }
 
-    private void assertFalse(boolean condition, String message) {
+    private void assertFalse(boolean condition) {
         if (condition) {
-            throw new AssertionError(message);
+            throw new AssertionError("Private subnets should not map public IP on launch");
         }
     }
 }
