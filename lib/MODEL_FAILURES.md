@@ -12,11 +12,11 @@
 
 ## IDEAL_RESPONSE Fixes
 
-- ✅ **ASG-TG**: Uses `TargetGroupARNs` on single ASG
-- ✅ **WAFv2**: Adds `VisibilityConfig` + `ManagedRuleGroupStatement`
-- ✅ **SGs**: Removes `GroupName`, uses tags
-- ✅ **Outputs**: Comprehensive resource exposure
-- ✅ **TG**: Sets `TargetType: instance`
+- **ASG-TG**: Uses `TargetGroupARNs` on single ASG
+- **WAFv2**: Adds `VisibilityConfig` + `ManagedRuleGroupStatement`
+- **SGs**: Removes `GroupName`, uses tags
+- **Outputs**: Comprehensive resource exposure
+- **TG**: Sets `TargetType: instance`
 
 ## Summary
 
