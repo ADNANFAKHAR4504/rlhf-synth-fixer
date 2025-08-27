@@ -166,8 +166,9 @@ func TestInternetGateway(t *testing.T) {
 	igw := result.InternetGateways[0]
 	require.Len(t, igw.Attachments, 1, "IGW should have one attachment")
 	assert.Equal(t, outputs.VpcId, *igw.Attachments[0].VpcId, "IGW should be attached to correct VPC")
-	// IGW attachment state should be "attached"
-	assert.Equal(t, types.AttachmentStatusAttached, igw.Attachments[0].State, "IGW should be attached")
+	// IGW attachment state can be "attached" or "available" when properly attached
+	validStates := []types.AttachmentStatus{types.AttachmentStatusAttached, "available"}
+	assert.Contains(t, validStates, igw.Attachments[0].State, "IGW should be attached (state: %s)", igw.Attachments[0].State)
 }
 
 // TestPublicRouteTable tests public route table configuration per PROMPT.md
