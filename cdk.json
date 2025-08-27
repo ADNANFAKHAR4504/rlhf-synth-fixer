@@ -1,0 +1,7 @@
+{
+  "app": "go run tap.go",
+  "context": {
+    "environmentSuffix": "${ENVIRONMENT_SUFFIX:-dev}"
+  }
+}
+
