@@ -189,7 +189,7 @@ class TapStack extends Stack {
 
   private Bucket createCloudTrailBucket(Key kmsKey) {
     return Bucket.Builder.create(this, getResourceName("cloudtrail-bucket"))
-        .bucketName(getResourceName("cloudtrail-logs"))
+        .bucketName(getResourceName("cloudtrail-logs-1"))
         .encryption(BucketEncryption.KMS)
         .encryptionKey(kmsKey)
         .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -314,7 +314,7 @@ class TapStack extends Stack {
 
     // Create RDS instance
     DatabaseInstance dbInstance = DatabaseInstance.Builder.create(this, getResourceName("rds-instance"))
-        .instanceIdentifier(getResourceName("mysql-db"))
+        .instanceIdentifier(getResourceName("mysql-db-1"))
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
             .version(MysqlEngineVersion.VER_8_0)
             .build()))
