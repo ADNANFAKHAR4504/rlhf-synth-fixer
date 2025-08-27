@@ -6,6 +6,7 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.ec2.CfnKeyPair;
 import software.amazon.awscdk.services.ec2.Instance;
 import software.amazon.awscdk.services.ec2.MachineImage;
 import software.amazon.awscdk.services.ec2.Peer;
@@ -129,9 +130,11 @@ class TapStack extends Stack {
         .deleteAutomatedBackups(false)
         .build();
 
-    // Create Key Pair (you'll need to create this manually or import existing one)
-    // For this example, we'll reference an existing key pair
-    String keyPairName = getContextOrEnv("keyPairName", "my-key-pair");
+    // Create Key Pair
+    String keyPairName = getContextOrEnv("keyPairName", "tap-key-pair-" + this.getStackName().toLowerCase());
+    CfnKeyPair keyPair = CfnKeyPair.Builder.create(this, "TapKeyPair")
+        .keyName(keyPairName)
+        .build();
 
     // Create EC2 Instance
     Instance ec2Instance = Instance.Builder.create(this, "TapEC2Instance")
@@ -179,6 +182,17 @@ class TapStack extends Stack {
     software.amazon.awscdk.CfnOutput.Builder.create(this, "DatabasePort")
         .value(database.getInstanceEndpoint().getPort().toString())
         .description("RDS Database Port")
+        .build();
+
+    // Output key pair information
+    software.amazon.awscdk.CfnOutput.Builder.create(this, "KeyPairName")
+        .value(keyPair.getKeyName())
+        .description("EC2 Key Pair Name")
+        .build();
+
+    software.amazon.awscdk.CfnOutput.Builder.create(this, "KeyPairPrivateKey")
+        .value(keyPair.getRef())
+        .description("EC2 Key Pair Reference")
         .build();
   }
 
