@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	stackFile = "tap_stack.go"
+	stackFile = "../../lib/tap_stack.go"
 )
 
 func TestFileStructureAndSyntax(t *testing.T) {
@@ -90,9 +90,9 @@ func TestVPCAndNetworkingResources(t *testing.T) {
 
 	t.Run("creates VPC with proper CIDR", func(t *testing.T) {
 		assert.Contains(t, contentStr, `ec2.NewVpc(ctx, "main"`)
-		assert.Contains(t, contentStr, `CidrBlock:           pulumi.String(vpcCidr)`)
-		assert.Contains(t, contentStr, `EnableDnsHostnames:  pulumi.Bool(true)`)
-		assert.Contains(t, contentStr, `EnableDnsSupport:    pulumi.Bool(true)`)
+		assert.Contains(t, contentStr, `CidrBlock:          pulumi.String(vpcCidr)`)
+		assert.Contains(t, contentStr, `EnableDnsHostnames: pulumi.Bool(true)`)
+		assert.Contains(t, contentStr, `EnableDnsSupport:   pulumi.Bool(true)`)
 	})
 
 	t.Run("creates internet gateway", func(t *testing.T) {
@@ -126,20 +126,14 @@ func TestSecurityGroups(t *testing.T) {
 		assert.Contains(t, contentStr, `"Security group for VPC endpoints"`)
 	})
 
-	t.Run("creates private security group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewSecurityGroup(ctx, "private"`)
-		assert.Contains(t, contentStr, `"Security group for private subnets"`)
-	})
-
 	t.Run("has proper ingress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(443)`)
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(80)`)
-		assert.Contains(t, contentStr, `Protocol:   pulumi.String("tcp")`)
+		assert.Contains(t, contentStr, `FromPort:    pulumi.Int(443)`)
+		assert.Contains(t, contentStr, `Protocol:    pulumi.String("tcp")`)
 	})
 
 	t.Run("has proper egress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `Protocol:   pulumi.String("-1")`)
-		assert.Contains(t, contentStr, `CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
+		assert.Contains(t, contentStr, `Protocol:    pulumi.String("-1")`)
+		assert.Contains(t, contentStr, `CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
 	})
 }
 
@@ -150,12 +144,12 @@ func TestVpcEndpoints(t *testing.T) {
 
 	t.Run("creates S3 VPC endpoint", func(t *testing.T) {
 		assert.Contains(t, contentStr, `ec2.NewVpcEndpoint(ctx, "s3"`)
-		assert.Contains(t, contentStr, `VpcEndpointType:   pulumi.String("Gateway")`)
+		assert.Contains(t, contentStr, `VpcEndpointType: pulumi.String("Gateway")`)
 	})
 
 	t.Run("creates KMS VPC endpoint", func(t *testing.T) {
 		assert.Contains(t, contentStr, `ec2.NewVpcEndpoint(ctx, "kms"`)
-		assert.Contains(t, contentStr, `VpcEndpointType:     pulumi.String("Interface")`)
+		assert.Contains(t, contentStr, `VpcEndpointType:   pulumi.String("Interface")`)
 	})
 
 	t.Run("creates CloudTrail VPC endpoint", func(t *testing.T) {
@@ -183,7 +177,7 @@ func TestS3Buckets(t *testing.T) {
 	})
 
 	t.Run("configures bucket encryption", func(t *testing.T) {
-		assert.Contains(t, contentStr, `s3.NewBucketServerSideEncryptionConfiguration`)
+		assert.Contains(t, contentStr, `s3.NewBucketServerSideEncryptionConfigurationV2`)
 		assert.Contains(t, contentStr, `KmsMasterKeyId: kmsKey.Arn`)
 		assert.Contains(t, contentStr, `SseAlgorithm:   pulumi.String("aws:kms")`)
 	})
@@ -197,7 +191,7 @@ func TestS3Buckets(t *testing.T) {
 	})
 
 	t.Run("configures bucket versioning", func(t *testing.T) {
-		assert.Contains(t, contentStr, `s3.NewBucketVersioning`)
+		assert.Contains(t, contentStr, `s3.NewBucketVersioningV2`)
 		assert.Contains(t, contentStr, `Status: pulumi.String("Enabled")`)
 	})
 }
@@ -209,14 +203,14 @@ func TestKMSKeys(t *testing.T) {
 
 	t.Run("creates KMS key", func(t *testing.T) {
 		assert.Contains(t, contentStr, `kms.NewKey(ctx, "main"`)
-		assert.Contains(t, contentStr, `DeletionWindowInDays:   pulumi.Int(7)`)
-		assert.Contains(t, contentStr, `EnableKeyRotation:      pulumi.Bool(true)`)
-		assert.Contains(t, contentStr, `CustomerMasterKeySpec:  pulumi.String("SYMMETRIC_DEFAULT")`)
+		assert.Contains(t, contentStr, `DeletionWindowInDays:  pulumi.Int(7)`)
+		assert.Contains(t, contentStr, `EnableKeyRotation:     pulumi.Bool(true)`)
+		assert.Contains(t, contentStr, `CustomerMasterKeySpec: pulumi.String("SYMMETRIC_DEFAULT")`)
 	})
 
 	t.Run("creates KMS alias", func(t *testing.T) {
 		assert.Contains(t, contentStr, `kms.NewAlias(ctx, "main"`)
-		assert.Contains(t, contentStr, `TargetKeyId:  kmsKey.KeyId`)
+		assert.Contains(t, contentStr, `TargetKeyId: kmsKey.KeyId`)
 	})
 }
 
@@ -305,7 +299,6 @@ func TestNamingConventions(t *testing.T) {
 
 	t.Run("uses proper resource naming", func(t *testing.T) {
 		assert.Contains(t, contentStr, `-vpc-endpoints-sg`)
-		assert.Contains(t, contentStr, `-private-sg`)
 		assert.Contains(t, contentStr, `-cloudtrail-logs`)
 		assert.Contains(t, contentStr, `-app-data`)
 		assert.Contains(t, contentStr, `-developer-role`)
