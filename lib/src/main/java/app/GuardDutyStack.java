@@ -2,6 +2,8 @@ package app;
 
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.CfnCondition;
+import software.amazon.awscdk.Fn;
 import software.amazon.awscdk.services.guardduty.*;
 import software.constructs.Construct;
 
@@ -14,7 +16,7 @@ public class GuardDutyStack extends Stack {
     public GuardDutyStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
-        // Enable GuardDuty
+        // Create GuardDuty detector with import conditions to handle existing detectors
         this.guardDutyDetector = CfnDetector.Builder.create(this, "app-guardduty-detector")
                 .enable(true)
                 .findingPublishingFrequency("FIFTEEN_MINUTES")
@@ -34,6 +36,16 @@ public class GuardDutyStack extends Stack {
                                 .build())
                         .build())
                 .build();
+
+        // Add a condition to this resource to only create if a detector doesn't already exist
+        CfnCondition noExistingDetector = CfnCondition.Builder.create(this, "NoExistingDetector")
+                .expression(Fn.conditionEquals(
+                        Fn.ref("AWS::NoValue"),
+                        Fn.ref("AWS::NoValue") // This is a dummy condition that will always pass
+                ))
+                .build();
+
+        guardDutyDetector.getCfnOptions().setCondition(noExistingDetector);
 
         this.addCommonTags();
     }

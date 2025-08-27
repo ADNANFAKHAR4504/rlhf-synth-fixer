@@ -8,6 +8,7 @@ import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.customresources.AwsCustomResource;
 
 import java.util.Map;
 
@@ -30,8 +31,8 @@ public class GuardDutyStackTest {
         
         GuardDutyStack stack = new GuardDutyStack(app, "GuardDutyStackTest", props);
         Template template = Template.fromStack(stack);
-
-        // Verify GuardDuty detector is created and enabled
+        
+        // Verify GuardDuty detector properties
         template.hasResourceProperties("AWS::GuardDuty::Detector", Map.of(
                 "Enable", true,
                 "FindingPublishingFrequency", "FIFTEEN_MINUTES"
