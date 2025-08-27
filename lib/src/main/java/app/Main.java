@@ -32,9 +32,11 @@ import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationLis
 import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.AccountRootPrincipal;
 import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
@@ -157,6 +159,36 @@ public final class Main {
 
             kmsKey = Key.Builder.create(this, "KmsKey")
                 .description("KMS key for " + environment + " in " + region + " (" + uniqueSuffix + ")")
+                .policy(PolicyDocument.Builder.create()
+                    .statements(Arrays.asList(
+                        // Allow root account full access
+                        PolicyStatement.Builder.create()
+                            .effect(Effect.ALLOW)
+                            .principals(Arrays.asList(new AccountRootPrincipal()))
+                            .actions(Arrays.asList("kms:*"))
+                            .resources(Arrays.asList("*"))
+                            .build(),
+                        // Allow CloudWatch Logs to use the key
+                        PolicyStatement.Builder.create()
+                            .effect(Effect.ALLOW)
+                            .principals(Arrays.asList(new ServicePrincipal("logs." + region + ".amazonaws.com")))
+                            .actions(Arrays.asList(
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ))
+                            .resources(Arrays.asList("*"))
+                            .conditions(java.util.Map.of(
+                                "ArnEquals", java.util.Map.of(
+                                    "kms:EncryptionContext:aws:logs:arn", 
+                                    "arn:aws:logs:" + region + ":" + this.getAccount() + ":log-group:/aws/ec2/" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix
+                                )
+                            ))
+                            .build()
+                    ))
+                    .build())
                 .build();
 
             if (isPrimary) {
