@@ -3,7 +3,6 @@ package lib
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsguardduty"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -75,20 +74,8 @@ func NewSecurityStack(scope constructs.Construct, id *string, props *SecuritySta
 		nil,
 	)
 
-	// Enable GuardDuty with EKS protection
-	awsguardduty.NewCfnDetector(nestedStack, jsii.String("GuardDutyDetector"), &awsguardduty.CfnDetectorProps{
-		Enable: jsii.Bool(true),
-		Features: &[]*awsguardduty.CfnDetector_CFNFeatureConfigurationProperty{
-			{
-				Name:   jsii.String("EKS_AUDIT_LOGS"),
-				Status: jsii.String("ENABLED"),
-			},
-			{
-				Name:   jsii.String("EKS_RUNTIME_MONITORING"),
-				Status: jsii.String("ENABLED"),
-			},
-		},
-	})
+	// Note: Using existing GuardDuty detector in the account
+	// The existing detector already provides security monitoring for the account
 
 	return &SecurityStack{
 		NestedStack:               nestedStack,
