@@ -38,6 +38,7 @@ require (
 
 require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
+	github.com/spf13/cast v1.4.1 // indirect
 	github.com/yuin/goldmark v1.5.2 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.26.0 // indirect
@@ -45,6 +46,32 @@ require (
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/tools v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	lukechampine.com/frand v1.4.2 // indirect
+)
+
+require (
+	github.com/aws/aws-sdk-go v1.55.8
+	github.com/aws/aws-sdk-go-v2/service/accessanalyzer v1.44.0
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.58.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.49.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/configservice v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.49.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.247.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.50.0
+	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.44.2
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.77.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.0
+	github.com/aws/aws-sdk-go-v2/service/securityhub v1.63.0
+	github.com/aws/aws-sdk-go-v2/service/sns v1.37.2
+	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
+	github.com/pulumi/pulumi/sdk/v3 v3.191.0
 )
 
 require (
@@ -64,6 +91,9 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
@@ -90,6 +120,8 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
@@ -133,4 +165,5 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	lukechampine.com/frand v1.4.2 // indirect
+	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
