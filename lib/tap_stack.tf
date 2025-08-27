@@ -45,11 +45,11 @@ module "s3_cloudtrail_bucket" {
 }
 
 # S3_cloudtrail
-module "s3_cloudtrail_bucket" {
+module "s3_config_bucket" {
   source      = "./modules/s3"
   project     = var.project
   kms_key_id = module.kms.kms_key_arn
-  bucket_name = "secconfig-cloudtrail-bucket-pr2219"
+  bucket_name = "secconfig-config-bucket-pr2219"
   versioning_enabled = true
   bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
 }
