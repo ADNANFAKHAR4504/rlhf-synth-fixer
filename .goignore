@@ -1,0 +1,4 @@
+archive/
+templates/
+node_modules/
+.gen/
