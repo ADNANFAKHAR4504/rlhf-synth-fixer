@@ -145,7 +145,7 @@ class NetworkStack extends Stack {
         new CfnOutput(this, "VpcId", CfnOutputProps.builder()
             .value(vpc.getVpcId())
             .description("VPC ID")
-            .exportName("VpcId-" + envSuffix)
+            .exportName("NetworkStack-VpcId-" + envSuffix)
             .build());
     }
 
@@ -291,19 +291,19 @@ class WebTierStack extends Stack {
         new CfnOutput(this, "AlbDns", CfnOutputProps.builder()
             .value(alb.getLoadBalancerDnsName())
             .description("DNS name of the Application Load Balancer")
-            .exportName("AlbDns-" + envSuffix)
+            .exportName("WebTierStack-AlbDns-" + envSuffix)
             .build());
             
         new CfnOutput(this, "AlbUrl", CfnOutputProps.builder()
             .value("http://" + alb.getLoadBalancerDnsName())
             .description("URL to access the web application")
-            .exportName("AlbUrl-" + envSuffix)
+            .exportName("WebTierStack-AlbUrl-" + envSuffix)
             .build());
             
         new CfnOutput(this, "AsgName", CfnOutputProps.builder()
             .value(asg.getAutoScalingGroupName())
             .description("Auto Scaling Group Name")
-            .exportName("AsgName-" + envSuffix)
+            .exportName("WebTierStack-AsgName-" + envSuffix)
             .build());
             
         // CloudWatch Dashboard for monitoring
