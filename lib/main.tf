@@ -426,7 +426,7 @@ resource "aws_iam_role_policy" "lambda" {
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${var.lambda_function_name}"
+  name              = "/aws/lambda/${var.lambda_function_name}-${random_string.db_suffix.result}"
   retention_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -466,7 +466,7 @@ EOF
 
 # Lambda Function
 resource "aws_lambda_function" "main" {
-  function_name = var.lambda_function_name
+  function_name = "${var.lambda_function_name}-${random_string.db_suffix.result}"
   role          = aws_iam_role.lambda.arn
   handler       = "index.handler"
   runtime       = "python3.11"
