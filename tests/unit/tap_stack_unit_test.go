@@ -18,7 +18,11 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 	assert.Equal(t, "us-east-1", getEnvOrDefault("AWS_REGION", "us-east-1"))
 	assert.Equal(t, "production", getEnvOrDefault("ENVIRONMENT", "production"))
 	assert.Equal(t, "secure-webapp", getEnvOrDefault("PROJECT_NAME", "secure-webapp"))
-	assert.Equal(t, "prod", getEnvOrDefault("ENVIRONMENT_SUFFIX", "prod"))
+
+	// Test ENVIRONMENT_SUFFIX - it could be "prod" or "pr{number}" in CI/CD
+	envSuffix := getEnvOrDefault("ENVIRONMENT_SUFFIX", "prod")
+	assert.True(t, envSuffix == "prod" || strings.HasPrefix(envSuffix, "pr"),
+		"ENVIRONMENT_SUFFIX should be 'prod' or start with 'pr', got: %s", envSuffix)
 
 	// Test with environment variables set
 	os.Setenv("TEST_VAR", "test-value")
