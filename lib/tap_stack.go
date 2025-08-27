@@ -37,21 +37,45 @@ func sanitizeBucketName(name string) string {
 }
 
 func generateRandomString(length int, includeSpecial bool) (string, error) {
+	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits := "0123456789"
+	specials := "!@#$%^&*"
 	var charset string
+
 	if includeSpecial {
-		charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+		charset = letters + digits + specials
 	} else {
-		charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		charset = letters + digits
 	}
 
 	result := make([]byte, length)
-	for i := range result {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+
+	// ✅ Ensure first character is always a letter for DB usernames
+	if !includeSpecial {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
 			return "", err
 		}
-		result[i] = charset[num.Int64()]
+		result[0] = letters[num.Int64()]
+		// fill the rest
+		for i := 1; i < length; i++ {
+			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+			if err != nil {
+				return "", err
+			}
+			result[i] = charset[num.Int64()]
+		}
+	} else {
+		// Passwords can start with anything
+		for i := 0; i < length; i++ {
+			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+			if err != nil {
+				return "", err
+			}
+			result[i] = charset[num.Int64()]
+		}
 	}
+
 	return string(result), nil
 }
 
