@@ -72,7 +72,7 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotNil(t, stack.ConfigRecorder, "Config Recorder should be created")
 		assert.NotNil(t, stack.SNSAlerts, "SNS Topic should be created")
 		assert.NotNil(t, stack.SecretsManager, "Secrets Manager should be created")
-		
+
 		// Verify security groups
 		assert.Contains(t, stack.SecurityGroups, "lambda", "Lambda security group should exist")
 		assert.Contains(t, stack.SecurityGroups, "ec2", "EC2 security group should exist")
@@ -99,11 +99,11 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotNil(t, stack.Vpc)
 		assert.NotNil(t, stack.PublicSubnets)
 		assert.NotNil(t, stack.PrivateSubnets)
-		
+
 		// Check subnet counts (should have public and private subnets across 2 AZs)
 		assert.NotEmpty(t, *stack.PublicSubnets, "Should have public subnets")
 		assert.NotEmpty(t, *stack.PrivateSubnets, "Should have private subnets")
-		
+
 		t.Log("VPC configuration validated successfully")
 	})
 
@@ -118,20 +118,20 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT
 		// Verify KMS key is configured
 		assert.NotNil(t, stack.KmsKey)
-		
+
 		// Verify S3 buckets use KMS encryption
 		assert.NotNil(t, stack.S3Bucket)
 		assert.NotNil(t, stack.LoggingBucket)
-		
+
 		// Verify security groups exist with proper configuration
 		assert.Len(t, stack.SecurityGroups, 3, "Should have 3 security groups")
-		
+
 		// Verify Lambda function has security configuration
 		assert.NotNil(t, stack.LambdaFunction)
-		
+
 		// Verify WAF is configured
 		assert.NotNil(t, stack.WAF)
-		
+
 		t.Log("Security configuration validated successfully")
 	})
 
@@ -147,7 +147,7 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotNil(t, stack.CloudTrail, "CloudTrail should be configured")
 		assert.NotNil(t, stack.ConfigRecorder, "Config Recorder should be configured")
 		assert.NotNil(t, stack.SNSAlerts, "SNS alerts should be configured")
-		
+
 		t.Log("Monitoring and compliance setup validated successfully")
 	})
 
@@ -162,13 +162,13 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT
 		// Verify Lambda function
 		assert.NotNil(t, stack.LambdaFunction)
-		
+
 		// Verify Auto Scaling Group
 		assert.NotNil(t, stack.AutoScalingGroup)
-		
+
 		// Verify Bastion Host
 		assert.NotNil(t, stack.BastionHost)
-		
+
 		t.Log("Compute resources validated successfully")
 	})
 
@@ -184,11 +184,11 @@ func TestTapStackIntegration(t *testing.T) {
 		// Verify S3 buckets
 		assert.NotNil(t, stack.S3Bucket)
 		assert.NotNil(t, stack.LoggingBucket)
-		
+
 		// Verify CloudFront
 		assert.NotNil(t, stack.CloudFrontDist)
 		assert.NotNil(t, stack.CloudFrontOAI)
-		
+
 		t.Log("CDN and storage configuration validated successfully")
 	})
 
@@ -203,14 +203,14 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT
 		// Verify Secrets Manager
 		assert.NotNil(t, stack.SecretsManager)
-		
+
 		// Verify SSM Parameters
 		assert.NotEmpty(t, stack.SSMParameters)
 		expectedParams := []string{"app-environment", "app-version", "log-level", "max-connections"}
 		for _, param := range expectedParams {
 			assert.Contains(t, stack.SSMParameters, param, "Expected SSM parameter %s should exist", param)
 		}
-		
+
 		t.Log("Configuration management resources validated successfully")
 	})
 
@@ -226,10 +226,10 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT
 		assert.NotNil(t, stack)
 		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
-		
+
 		// Note: Actual resource name validation would require synthesizing the CDK template
 		// and checking the generated CloudFormation resource names
-		
+
 		t.Log("Resource naming convention validated successfully")
 	})
 
@@ -249,7 +249,7 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT
 		assert.Equal(t, "custom", *stackWithSuffix.EnvironmentSuffix)
 		assert.Equal(t, "dev", *stackWithoutSuffix.EnvironmentSuffix)
-		
+
 		t.Log("Environment suffix handling validated successfully")
 	})
 }
@@ -265,7 +265,7 @@ func waitForStackCompletion(ctx context.Context, cfnClient *cloudformation.Clien
 // Helper function to verify VPC resources exist in AWS
 func verifyVPCResources(ctx context.Context, cfg aws.Config, vpcId string) error {
 	ec2Client := ec2.NewFromConfig(cfg)
-	
+
 	// Verify VPC exists
 	_, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
 		VpcIds: []string{vpcId},
@@ -276,7 +276,7 @@ func verifyVPCResources(ctx context.Context, cfg aws.Config, vpcId string) error
 // Helper function to verify S3 bucket exists
 func verifyS3Bucket(ctx context.Context, cfg aws.Config, bucketName string) error {
 	s3Client := s3.NewFromConfig(cfg)
-	
+
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
@@ -286,7 +286,7 @@ func verifyS3Bucket(ctx context.Context, cfg aws.Config, bucketName string) erro
 // Helper function to verify Lambda function exists
 func verifyLambdaFunction(ctx context.Context, cfg aws.Config, functionName string) error {
 	lambdaClient := lambda.NewFromConfig(cfg)
-	
+
 	_, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: aws.String(functionName),
 	})

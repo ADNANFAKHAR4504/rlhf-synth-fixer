@@ -50,9 +50,9 @@ type TapStack struct {
 	LambdaFunction   awslambda.Function
 	AutoScalingGroup awsautoscaling.AutoScalingGroup
 	// Monitoring and compliance
-	CloudTrail     awscloudtrail.Trail
-	SNSAlerts      awssns.Topic
-	WAF            awswafv2.CfnWebACL
+	CloudTrail awscloudtrail.Trail
+	SNSAlerts  awssns.Topic
+	WAF        awswafv2.CfnWebACL
 	// Configuration management
 	SSMParameters  map[string]awsssm.StringParameter
 	SecretsManager awssecretsmanager.Secret
@@ -602,9 +602,9 @@ func (t *TapStack) createMonitoring() {
 
 	// Create CloudWatch Alarms for monitoring
 	awscloudwatch.NewAlarm(t.Stack, jsii.String("LambdaErrorAlarm"), &awscloudwatch.AlarmProps{
-		AlarmName:        jsii.String(fmt.Sprintf("prod-%s-lambda-errors", *t.EnvironmentSuffix)),
-		AlarmDescription: jsii.String("Lambda function error rate"),
-		Metric: t.LambdaFunction.MetricErrors(nil),
+		AlarmName:         jsii.String(fmt.Sprintf("prod-%s-lambda-errors", *t.EnvironmentSuffix)),
+		AlarmDescription:  jsii.String("Lambda function error rate"),
+		Metric:            t.LambdaFunction.MetricErrors(nil),
 		Threshold:         jsii.Number(1),
 		EvaluationPeriods: jsii.Number(2),
 		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
