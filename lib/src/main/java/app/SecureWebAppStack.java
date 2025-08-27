@@ -212,6 +212,7 @@ public class SecureWebAppStack extends Stack {
         LogGroup cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
             .logGroupName("/aws/cloudtrail/webapp-" + environmentSuffix)
             .retention(RetentionDays.ONE_YEAR)
+            .removalPolicy(RemovalPolicy.DESTROY) // Add removal policy to clean up during testing
             .build();
         
         // Create CloudTrail with enhanced features
@@ -222,8 +223,8 @@ public class SecureWebAppStack extends Stack {
             .includeGlobalServiceEvents(true)
             .isMultiRegionTrail(true)
             .enableFileValidation(true)
-            .sendToCloudWatchLogs(true)
-            .cloudWatchLogGroup(cloudTrailLogGroup)
+            .sendToCloudWatchLogs(true) // This automatically sends logs to CloudWatch
+            .cloudWatchLogGroup(cloudTrailLogGroup) // Explicitly set the log group
             .cloudWatchLogsRetention(RetentionDays.ONE_YEAR)
             .build();
         
@@ -242,10 +243,12 @@ public class SecureWebAppStack extends Stack {
      * Creates CloudWatch alarms for detecting unauthorized API calls
      */
     private void createSecurityAlarms(Trail cloudTrail) {
+        // Get the CloudWatch log group used by CloudTrail
+        ILogGroup cloudTrailLogGroup = cloudTrail.getLogGroup();
+        
         // Metric filter for detecting unauthorized API calls
         MetricFilter unauthorizedCallsFilter = MetricFilter.Builder.create(this, "UnauthorizedCallsFilter")
-            .logGroup(LogGroup.fromLogGroupName(this, "ImportedCloudTrailLogGroup", 
-                "/aws/cloudtrail/webapp-" + environmentSuffix))
+            .logGroup(cloudTrailLogGroup) // Use the actual log group from CloudTrail
             .metricName("UnauthorizedAPICalls")
             .metricNamespace("Security/WebApp")
             .filterPattern(FilterPattern.any(
@@ -272,8 +275,7 @@ public class SecureWebAppStack extends Stack {
         
         // Root account usage alarm
         MetricFilter rootUsageFilter = MetricFilter.Builder.create(this, "RootUsageFilter")
-            .logGroup(LogGroup.fromLogGroupName(this, "CloudTrailLogGroupForRoot", 
-                "/aws/cloudtrail/webapp-" + environmentSuffix))
+            .logGroup(cloudTrailLogGroup) // Use the same log group as above
             .metricName("RootAccountUsage")
             .metricNamespace("Security/WebApp")
             .filterPattern(FilterPattern.stringValue("$.userIdentity.type", "=", "Root"))
@@ -327,7 +329,7 @@ public class SecureWebAppStack extends Stack {
             .configRuleName("root-access-key-check-" + environmentSuffix)
             .source(CfnConfigRule.SourceProperty.builder()
                 .owner("AWS")
-                .sourceIdentifier("ROOT_ACCESS_KEY_CHECK")
+                .sourceIdentifier("IAM_ROOT_ACCESS_KEY_CHECK") // Fixed the source identifier
                 .build())
             .build();
         

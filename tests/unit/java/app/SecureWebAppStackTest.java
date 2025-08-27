@@ -241,11 +241,11 @@ public class SecureWebAppStackTest {
             )
         ));
         
-        // Verify root access key config rule
+        // Verify root access key config rule - using correct identifier
         template.hasResourceProperties("AWS::Config::ConfigRule", Map.of(
             "Source", Map.of(
                 "Owner", "AWS",
-                "SourceIdentifier", "ROOT_ACCESS_KEY_CHECK"
+                "SourceIdentifier", "IAM_ROOT_ACCESS_KEY_CHECK"
             )
         ));
     }
