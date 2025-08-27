@@ -15,10 +15,6 @@ output "kms_key_arn" {
   value = module.kms.kms_key_arn
 }
 
-output "cloudtrail_bucket_name" {
-  value = module.s3_cloudtrail_bucket.s3_bucket_id
-}
-
 output "sns_topic_arn" {
   value = module.sns.sns_topic_arn
 }
@@ -31,11 +27,32 @@ output "cloudtrail_log_group_name" {
   value = module.cloudwatch_cloudtrail.log_group_arn
 }
 
-#output "guardduty_detector_id" {
-#  value = module.guardduty.guardduty_detector_id
-#}
-
-
-output "role_arn" {
+output "role_arn_cloudtrail" {
   value = module.iam_cloudtrail.role_arn
+}
+
+output "role_arn_config" {
+  value = module.iam_config.role_arn
+}
+
+output "s3_secure_bucket" {
+  value = module.s3_secure_bucket.s3_bucket_id
+}
+
+output "s3_cloudtrail_bucket" {
+  value = module.s3_cloudtrail_bucket.s3_bucket_id
+}
+
+output "s3_config_bucket" {
+  value = module.s3_config_bucket.s3_bucket_id
+}
+
+output "bastion_sg_id" {
+  description = "ID of the bastion security group"
+  value       = module.sg.bastion.id
+}
+
+output "private_sg_id" {
+  description = "ID of the private instance security group"
+  value       = module.sg.private_instance.id
 }

@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
+variable "secondary_region" {
+  description = "Secondary AWS region for cross-region deployments"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
