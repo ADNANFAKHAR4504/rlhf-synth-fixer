@@ -406,8 +406,8 @@ func createLambdaFunction(stack awscdk.Stack, config *LambdaConfig) *LambdaFunct
 		Description:  jsii.String(config.Description + " (" + config.EnvironmentSuffix + ")"),
 
 		// Production optimizations
-		DeadLetterQueueEnabled:       jsii.Bool(true),
-		RetryAttempts:                jsii.Number(2),
+		DeadLetterQueueEnabled: jsii.Bool(true),
+		RetryAttempts:          jsii.Number(2),
 
 		// Enable X-Ray tracing for better observability
 		Tracing: awslambda.Tracing_ACTIVE,
