@@ -1,0 +1,11 @@
+name: TapStack
+runtime: java
+description: Enterprise AWS infrastructure migration solution with multi-environment support, security hardening, and compliance features using Pulumi Java
+
+config:
+  aws:region:
+    description: AWS region for deployment
+    value: us-east-1
+  environment:
+    description: Target environment (development, testing, staging, production)
+    default: development

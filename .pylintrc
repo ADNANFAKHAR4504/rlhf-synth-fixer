@@ -1,5 +1,8 @@
+[MAIN]
+# Configuration for pylint
+
 [MESSAGES CONTROL]
-# Disable specific messages
+# Disable specific warning messages
 disable=
     C0111, # missing-docstring
     C0103, # invalid-name
@@ -23,7 +26,7 @@ disable=
 # Maximum number of characters on a single line
 max-line-length=120
 
-# Expected format of line ending, e.g. empty (any line ending), LF or CRLF
+# Expected format of line ending, e.g. empty (any line ending), LF or CRLF.
 expected-line-ending-format=LF
 
 # Indentation preference

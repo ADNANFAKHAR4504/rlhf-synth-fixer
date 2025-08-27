@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291546",
+  "team": "1",
+  "startedAt": "2025-08-22T16:50:58.845Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "Web Application Deployment",
+    "IaC Optimization",
+    "Security Configuration",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
+}
