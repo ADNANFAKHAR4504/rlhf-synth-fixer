@@ -31,7 +31,7 @@ module "s3_secure_bucket" {
   kms_key_id = module.kms.kms_key_arn
   bucket_name = "secconfig-secure-bucket-pr2219"
   versioning_enabled = true
-  bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
+  bucket_policy = data.aws_iam_policy_document.secure_bucket.json
 }
 
 # S3_cloudtrail
@@ -51,7 +51,7 @@ module "s3_config_bucket" {
   kms_key_id = module.kms.kms_key_arn
   bucket_name = "secconfig-config-bucket-pr2219"
   versioning_enabled = true
-  bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
+  bucket_policy = data.aws_iam_policy_document.config_s3.json
 }
 
 # SNS

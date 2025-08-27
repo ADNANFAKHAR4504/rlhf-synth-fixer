@@ -3,11 +3,6 @@ variable "project" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "kms_key_id" {
   description = "KMS Key id"
   type        = string
