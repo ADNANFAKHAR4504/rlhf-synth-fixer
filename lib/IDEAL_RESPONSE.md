@@ -2,6 +2,56 @@
 
 Here's the Go code for our AWS CDK stack. It sets up a secure and resilient environment in `us-east-1` with a VPC, a public EC2 instance, and a private RDS database.
 
+## The Application Entrypoint (`bin/tap.go`)
+
+This is the main entry point for our CDK application. It correctly sets up the AWS environment, ensuring that the stack can be synthesized even if the `CDK_DEFAULT_ACCOUNT` environment variable isn't set.
+
+```go
+package main
+
+import (
+	"os"
+
+	"github.com/TuringGpt/iac-test-automations/lib"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/jsii-runtime-go"
+)
+
+func main() {
+	defer jsii.Close()
+
+	app := awscdk.NewApp(nil)
+
+	lib.NewTapStack(app, "TapStack", &lib.TapStackProps{
+		awscdk.StackProps{
+			Env: env(),
+		},
+	})
+
+	app.Synth(nil)
+}
+
+// env determines the AWS environment (account+region) in which our stack is to be deployed.
+func env() *awscdk.Environment {
+	account := os.Getenv("CDK_DEFAULT_ACCOUNT")
+	region := os.Getenv("CDK_DEFAULT_REGION")
+
+	if region == "" {
+		region = "us-east-1" // Default to us-east-1 as requested
+	}
+
+	var accountPtr *string
+	if account != "" {
+		accountPtr = jsii.String(account)
+	}
+
+	return &awscdk.Environment{
+		Account: accountPtr,
+		Region:  jsii.String(region),
+	}
+}
+```
+
 ## The Stack Code (`lib/tap_stack.go`)
 
 This file has everything needed to define our infrastructure. I've commented out the CloudTrail bits for now to make sure we don't hit any AWS account limits when deploying.
@@ -27,7 +77,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	if props != nil {
 		sprops = props.StackProps
 	}
-	stack := awscdk.NewStack(scope, &id, &sprops)
+	stack := awscdk.NewStack(scope, jsii.String(id), &sprops)
 
 	// Tag everything so we know what's what
 	awscdk.Tags_Of(stack).Add(jsii.String("Environment"), jsii.String("Production"), nil)
@@ -92,8 +142,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	})
 
 	// Use the latest and greatest Amazon Linux 2 AMI
-	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{
-		CpuType: awsec2.AmazonLinuxCpuType_X86_64,
+	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux(&awsec2.AmazonLinuxImageProps{
+		Generation: awsec2.AmazonLinuxGeneration_AMAZON_LINUX_2,
+		CpuType:    awsec2.AmazonLinuxCpuType_X86_64,
 	})
 
 	// Create the EC2 instance itself

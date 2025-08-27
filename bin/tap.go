@@ -31,8 +31,13 @@ func env() *awscdk.Environment {
 		region = "us-east-1" // Default to us-east-1 as requested
 	}
 
+	var accountPtr *string
+	if account != "" {
+		accountPtr = jsii.String(account)
+	}
+
 	return &awscdk.Environment{
-		Account: jsii.String(account),
+		Account: accountPtr,
 		Region:  jsii.String(region),
 	}
 }

@@ -18,7 +18,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	if props != nil {
 		sprops = props.StackProps
 	}
-	stack := awscdk.NewStack(scope, &id, &sprops)
+	stack := awscdk.NewStack(scope, jsii.String(id), &sprops)
 
 	// Apply tags to the stack
 	awscdk.Tags_Of(stack).Add(jsii.String("Environment"), jsii.String("Production"), nil)
