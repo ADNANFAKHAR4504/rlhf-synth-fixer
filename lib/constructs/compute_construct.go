@@ -2,6 +2,7 @@ package constructs
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
@@ -47,10 +48,16 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 	})
 
 	// Create Lambda function with enhanced configuration
+	// Use path that works both from root and when tests are copied to lib/
+	lambdaPath := "lib/lambda"
+	if _, err := os.Stat("lambda"); err == nil {
+		lambdaPath = "lambda"
+	}
+
 	lambdaFunction := awslambda.NewFunction(construct, jsii.String("TapHandler"), &awslambda.FunctionProps{
 		Runtime:      awslambda.Runtime_PYTHON_3_9(),
 		Handler:      jsii.String("handler.lambda_handler"),
-		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda"), nil),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaPath), nil),
 		FunctionName: jsii.String(fmt.Sprintf("tap-handler%s", envSuffix)),
 		MemorySize:   jsii.Number(256), // ≤256MB as required
 		Timeout:      awscdk.Duration_Seconds(jsii.Number(30)),
