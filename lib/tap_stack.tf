@@ -496,25 +496,23 @@ resource "aws_launch_template" "main" {
 
     echo "Starting EC2 setup..."
 
-    # Create web directory and health endpoint immediately
-    mkdir -p /var/www/html
-    echo "OK" > /var/www/html/health
-    chmod 644 /var/www/html/health
+    # Wait a little for network and yum
+    sleep 20
 
-    # Create simple index page
-    echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
-    echo "<p>Instance is healthy!</p>" >> /var/www/html/index.html
-
-    # Install Apache quickly without updates
-    yum install -y httpd --quiet
-
-    # Start Apache immediately
+    yum install -y httpd -q
     systemctl enable httpd
     systemctl start httpd
 
+    mkdir -p /var/www/html
+    echo "healthy" > /var/www/html/health
+    echo "<h1>Hello from ${local.unique_project_name}</h1><p>Instance is healthy!</p>" > /var/www/html/index.html
+
+    chmod 644 /var/www/html/health
+    chmod 644 /var/www/html/index.html
+
     # Quick verification
-    sleep 2
-    curl -f http://localhost/health || echo "Health check failed but continuing"
+    curl -f http://localhost/ || echo "Index failed but continuing"
+    curl -f http://localhost/health || echo "Health failed but continuing"
 
     echo "EC2 setup complete."
   EOF
@@ -536,8 +534,8 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-${random_string.asg_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "EC2"  # Use EC2 health checks for faster startup
-  health_check_grace_period = 180    # 3 minutes grace period for EC2 checks
+  health_check_type         = "ELB"   # must be ELB if attached to ALB
+  health_check_grace_period = 600     # allow 5 minutes for startup
   
   min_size         = 2
   max_size         = 6
