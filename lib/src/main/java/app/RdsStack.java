@@ -47,8 +47,8 @@ public class RdsStack extends Stack {
                 .databaseName("app_db")
                 .instanceIdentifier("app-rds-" + environmentSuffix)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-                        .version(MysqlEngineVersion.VER_8_0_28)  // Using a widely supported MySQL version available across all AWS regions
-                        // Previous versions 8.0.35 and 8.0.33 were not available in the target AWS region
+                        .version(MysqlEngineVersion.VER_8_0_23)  // Using an older, more widely available MySQL version
+                        // Previous versions 8.0.35, 8.0.33, and 8.0.28 were not available in the target AWS region
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
                 .vpc(vpc)
@@ -83,7 +83,7 @@ public class RdsStack extends Stack {
      * @return The MySQL engine version as a string
      */
     public String getMySQLVersion() {
-        return "8.0.28"; // This is the MySQL version we're using
+        return "8.0.23"; // This is the MySQL version we're using
     }
     
     /**

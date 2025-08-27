@@ -112,9 +112,9 @@ public class RdsStackTest {
         RdsStack stack = new RdsStack(app, "RdsStackTest", props, vpc, dbSecurityGroup);
         Template template = Template.fromStack(stack);
 
-        // Verify MySQL version is 8.0.28 (a widely supported version across all AWS regions)
+        // Verify MySQL version is 8.0.23 (an older, more widely available version)
         template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
-                "EngineVersion", "8.0.28"
+                "EngineVersion", "8.0.23"
         ));
     }
 }
