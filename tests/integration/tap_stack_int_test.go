@@ -35,7 +35,7 @@ func loadFlatOutputs() (FlatOutputs, error) {
 
 	// When tests are copied to lib/, we need to go up one level to project root
 	flatOutputsPath := filepath.Join(currentDir, "..", "cfn-outputs", "flat-outputs.json")
-	
+
 	// Try alternative path if first doesn't exist
 	if _, err := os.Stat(flatOutputsPath); os.IsNotExist(err) {
 		// Try from current directory (if running from project root)
