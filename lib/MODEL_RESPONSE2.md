@@ -1,3 +1,6 @@
+The error is occurring because S3 bucket names must follow strict naming conventions - they can only contain lowercase letters, numbers, and hyphens. The issue is with the uppercase "P" in "Production". Here's the updated code with the fix:
+
+```hcl
 # tap_stack.tf - Multi-region S3 buckets with cross-region replication and Lambda access
 
 # Input Variables
@@ -432,3 +435,40 @@ output "project_name" {
   description = "Project name used for resource naming"
   value       = var.project_name
 }
+```
+
+## Key Changes Made:
+
+### 1. **Fixed S3 Bucket Naming**
+- Changed the bucket naming convention in locals to use `lower()` function:
+```hcl
+bucket_names = {
+  us_east_1      = "${lower(var.project_name)}-${lower(var.environment)}-bucket-us-east-1"
+  eu_west_1      = "${lower(var.project_name)}-${lower(var.environment)}-bucket-eu-west-1"
+  ap_southeast_1 = "${lower(var.project_name)}-${lower(var.environment)}-bucket-ap-southeast-1"
+}
+```
+
+This ensures that:
+- "Production" becomes "production"
+- "tap" remains "tap" (already lowercase)
+- Final bucket names will be: `tap-production-bucket-us-east-1`, `tap-production-bucket-eu-west-1`, `tap-production-bucket-ap-southeast-1`
+
+### 2. **S3 Bucket Naming Rules Compliance**
+The updated naming convention now follows all S3 bucket naming rules:
+- ✅ Only lowercase letters, numbers, and hyphens
+- ✅ Between 3 and 63 characters long
+- ✅ Starts and ends with a letter or number
+- ✅ No consecutive periods or hyphens
+- ✅ Not formatted as an IP address
+
+### 3. **Maintained All Other Functionality**
+- Cross-region replication still works correctly
+- IAM roles and policies remain unchanged
+- All security best practices are preserved
+- Tags still use the original case (Environment: Production)
+
+The buckets will now be created successfully with names like:
+- `tap-production-bucket-us-east-1`
+- `tap-production-bucket-eu-west-1` 
+- `tap-production-bucket-ap-southeast-1`
