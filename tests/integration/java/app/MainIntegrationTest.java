@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -80,8 +81,8 @@ public class MainIntegrationTest {
     @Order(1)
     @DisplayName("Should validate VPC exists and has correct configuration")
     void shouldValidateVpcConfiguration() {
-        String vpcId = allOutputs.get("vpcId").asText();
-        assertNotNull(vpcId, "VPC ID should be in outputs");
+        String vpcId = allOutputs.get("primary-vpcId").asText();
+        assertNotNull(vpcId, "Primary VPC ID should be in outputs");
 
         DescribeVpcsResponse vpcsResponse = ec2Client.describeVpcs(
                 DescribeVpcsRequest.builder()
@@ -101,8 +102,8 @@ public class MainIntegrationTest {
     @Order(2)
     @DisplayName("Should validate public subnets exist and are correctly configured")
     void shouldValidatePublicSubnets() {
-        String publicSubnetPrimaryId = allOutputs.get("publicSubnetPrimaryId").asText();
-        String publicSubnetSecondaryId = allOutputs.get("publicSubnetSecondaryId").asText();
+        String publicSubnetPrimaryId = allOutputs.get("primary-publicSubnetPrimaryId").asText();
+        String publicSubnetSecondaryId = allOutputs.get("primary-publicSubnetSecondaryId").asText();
         
         assertNotNull(publicSubnetPrimaryId, "Primary public subnet ID should be in outputs");
         assertNotNull(publicSubnetSecondaryId, "Secondary public subnet ID should be in outputs");
@@ -128,8 +129,8 @@ public class MainIntegrationTest {
     @Order(3)
     @DisplayName("Should validate private subnets exist and are correctly configured")
     void shouldValidatePrivateSubnets() {
-        String privateSubnetPrimaryId = allOutputs.get("privateSubnetPrimaryId").asText();
-        String privateSubnetSecondaryId = allOutputs.get("privateSubnetSecondaryId").asText();
+        String privateSubnetPrimaryId = allOutputs.get("primary-privateSubnetPrimaryId").asText();
+        String privateSubnetSecondaryId = allOutputs.get("primary-privateSubnetSecondaryId").asText();
         
         assertNotNull(privateSubnetPrimaryId, "Primary private subnet ID should be in outputs");
         assertNotNull(privateSubnetSecondaryId, "Secondary private subnet ID should be in outputs");
@@ -155,8 +156,8 @@ public class MainIntegrationTest {
     @Order(4)
     @DisplayName("Should validate Internet Gateway exists and is attached")
     void shouldValidateInternetGateway() {
-        String internetGatewayId = allOutputs.get("internetGatewayId").asText();
-        String vpcId = allOutputs.get("vpcId").asText();
+        String internetGatewayId = allOutputs.get("primary-internetGatewayId").asText();
+        String vpcId = allOutputs.get("primary-vpcId").asText();
         
         assertNotNull(internetGatewayId, "Internet Gateway ID should be in outputs");
 
@@ -184,7 +185,7 @@ public class MainIntegrationTest {
     @Order(5)
     @DisplayName("Should validate security group exists with correct rules")
     void shouldValidateSecurityGroup() {
-        String securityGroupId = allOutputs.get("webSecurityGroupId").asText();
+        String securityGroupId = allOutputs.get("primary-webSecurityGroupId").asText();
         
         assertNotNull(securityGroupId, "Security Group ID should be in outputs");
 
@@ -217,7 +218,7 @@ public class MainIntegrationTest {
     @Order(6)
     @DisplayName("Should validate S3 bucket exists and is accessible")
     void shouldValidateS3Bucket() throws Exception {
-        String bucketId = allOutputs.get("bucketId").asText();
+        String bucketId = allOutputs.get("primary-bucketId").asText();
         
         assertNotNull(bucketId, "Bucket ID should be in outputs");
 
@@ -236,8 +237,8 @@ public class MainIntegrationTest {
     @Order(7)
     @DisplayName("Should validate IAM role and instance profile exist")
     void shouldValidateIamResources() throws Exception {
-        String instanceProfileName = allOutputs.get("instanceProfileName").asText();
-        String iamRoleArn = allOutputs.get("iamRoleArn").asText();
+        String instanceProfileName = allOutputs.get("primary-instanceProfileName").asText();
+        String iamRoleArn = allOutputs.get("primary-iamRoleArn").asText();
         
         assertNotNull(instanceProfileName, "Instance Profile name should be in outputs");
         assertNotNull(iamRoleArn, "IAM Role ARN should be in outputs");
@@ -268,8 +269,8 @@ public class MainIntegrationTest {
     @Order(8)
     @DisplayName("Should validate EC2 instance exists and is running")
     void shouldValidateEc2Instance() throws Exception {
-        String instanceId = allOutputs.get("instanceId").asText();
-        String publicIp = allOutputs.get("publicIp").asText();
+        String instanceId = allOutputs.get("primary-instanceId").asText();
+        String publicIp = allOutputs.get("primary-publicIp").asText();
         
         assertNotNull(instanceId, "Instance ID should be in outputs");
         assertNotNull(publicIp, "Public IP should be in outputs");
@@ -298,8 +299,8 @@ public class MainIntegrationTest {
     @Order(9)
     @DisplayName("Should validate route table configuration")
     void shouldValidateRouteTable() {
-        String publicRouteTableId = allOutputs.get("publicRouteTableId").asText();
-        String internetGatewayId = allOutputs.get("internetGatewayId").asText();
+        String publicRouteTableId = allOutputs.get("primary-publicRouteTableId").asText();
+        String internetGatewayId = allOutputs.get("primary-internetGatewayId").asText();
         
         assertNotNull(publicRouteTableId, "Public Route Table ID should be in outputs");
 
@@ -328,9 +329,9 @@ public class MainIntegrationTest {
     @Order(10)
     @DisplayName("Should validate complete infrastructure connectivity")
     void shouldValidateInfrastructureConnectivity() throws Exception {
-        String instanceId = allOutputs.get("instanceId").asText();
-        String publicIp = allOutputs.get("publicIp").asText();
-        String bucketId = allOutputs.get("bucketId").asText();
+        String instanceId = allOutputs.get("primary-instanceId").asText();
+        String publicIp = allOutputs.get("primary-publicIp").asText();
+        String bucketId = allOutputs.get("primary-bucketId").asText();
 
         System.out.println("Waiting for EC2 instance to be fully available...");
         

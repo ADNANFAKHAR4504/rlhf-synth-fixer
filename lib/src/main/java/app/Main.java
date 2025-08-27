@@ -96,10 +96,19 @@ public final class Main {
 
             // Export outputs
             ctx.export(region + "-vpcId", networkStack.vpcId);
+            ctx.export(region + "-publicSubnetPrimaryId", networkStack.publicSubnetPrimaryId);
+            ctx.export(region + "-publicSubnetSecondaryId", networkStack.publicSubnetSecondaryId);
+            ctx.export(region + "-privateSubnetPrimaryId", networkStack.privateSubnetPrimaryId);
+            ctx.export(region + "-privateSubnetSecondaryId", networkStack.privateSubnetSecondaryId);
+            ctx.export(region + "-internetGatewayId", networkStack.internetGatewayId);
+            ctx.export(region + "-publicRouteTableId", networkStack.publicRouteTableId);
+            ctx.export(region + "-webSecurityGroupId", securityStack.webSecurityGroupId);
             ctx.export(region + "-bucketId", storageStack.bucketId);
+            ctx.export(region + "-bucketArn", storageStack.bucketArn);
+            ctx.export(region + "-iamRoleArn", storageStack.iamRoleArn);
+            ctx.export(region + "-instanceProfileName", storageStack.instanceProfileName);
             ctx.export(region + "-instanceId", computeStack.instanceId);
             ctx.export(region + "-publicIp", computeStack.publicIp);
-            ctx.export(region + "-bucketArn", storageStack.bucketArn);
         });
     }
 }
