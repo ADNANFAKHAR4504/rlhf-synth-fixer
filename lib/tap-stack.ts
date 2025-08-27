@@ -252,7 +252,7 @@ export class TapStack extends cdk.Stack {
           TABLE_NAME: table.tableName,
           EVENT_BUS_NAME: eventBus.eventBusName,
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-          _X_AMZN_TRACE_ID: 'Root=1-5e1b4151-5ac6c58b5fcf0c2946f5e4d2',
+          //_X_AMZN_TRACE_ID: 'Root=1-5e1b4151-5ac6c58b5fcf0c2946f5e4d2',
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
@@ -267,11 +267,11 @@ export class TapStack extends cdk.Stack {
         exports.handler = async (event) => {
           const segment = AWSXRay.getSegment();
           const subsegment = segment.addNewSubsegment('CreateItemHandler');
-          
+
           try {
             subsegment.addAnnotation('operation', 'create');
             subsegment.addMetadata('requestId', event.requestContext?.requestId);
-            
+
             const body = JSON.parse(event.body);
             const item = {
               id: body.id || require('crypto').randomUUID(),
@@ -316,7 +316,7 @@ export class TapStack extends cdk.Stack {
             subsegment.close();
             return {
               statusCode: 201,
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'X-Trace-Id': process.env._X_AMZN_TRACE_ID
               },
@@ -361,17 +361,17 @@ export class TapStack extends cdk.Stack {
         exports.handler = async (event) => {
           const segment = AWSXRay.getSegment();
           const subsegment = segment.addNewSubsegment('ReadItemHandler');
-          
+
           try {
             subsegment.addAnnotation('operation', 'read');
             subsegment.addMetadata('requestId', event.requestContext?.requestId);
-            
+
             const id = event.pathParameters?.id;
-            
+
             if (id) {
               subsegment.addMetadata('itemId', id);
               const getSubsegment = subsegment.addNewSubsegment('DynamoDB-Get');
-              
+
               try {
                 const result = await dynamodb.get({
                   TableName: process.env.TABLE_NAME,
@@ -401,7 +401,7 @@ export class TapStack extends cdk.Stack {
               }
             } else {
               const scanSubsegment = subsegment.addNewSubsegment('DynamoDB-Scan');
-              
+
               try {
                 const result = await dynamodb.scan({
                   TableName: process.env.TABLE_NAME
@@ -463,14 +463,14 @@ export class TapStack extends cdk.Stack {
         exports.handler = async (event) => {
           const segment = AWSXRay.getSegment();
           const subsegment = segment.addNewSubsegment('UpdateItemHandler');
-          
+
           try {
             subsegment.addAnnotation('operation', 'update');
             subsegment.addMetadata('requestId', event.requestContext?.requestId);
-            
+
             const id = event.pathParameters.id;
             const body = JSON.parse(event.body);
-            
+
             subsegment.addMetadata('itemId', id);
 
             const updateSubsegment = subsegment.addNewSubsegment('DynamoDB-Update');
@@ -564,11 +564,11 @@ export class TapStack extends cdk.Stack {
         exports.handler = async (event) => {
           const segment = AWSXRay.getSegment();
           const subsegment = segment.addNewSubsegment('DeleteItemHandler');
-          
+
           try {
             subsegment.addAnnotation('operation', 'delete');
             subsegment.addMetadata('requestId', event.requestContext?.requestId);
-            
+
             const id = event.pathParameters.id;
             subsegment.addMetadata('itemId', id);
 
@@ -657,23 +657,23 @@ export class TapStack extends cdk.Stack {
         exports.handler = async (event) => {
           const segment = AWSXRay.getSegment();
           const subsegment = segment.addNewSubsegment('EventProcessor');
-          
+
           try {
             subsegment.addAnnotation('eventSource', 'sqs');
             console.log('Event received:', JSON.stringify(event, null, 2));
-            
+
             for (const record of event.Records) {
               const eventDetail = JSON.parse(record.body);
               console.log('Processing event:', eventDetail['detail-type']);
               console.log('Event source:', eventDetail.source);
               console.log('Event details:', eventDetail.detail);
-              
+
               subsegment.addMetadata('processedEvent', {
                 detailType: eventDetail['detail-type'],
                 source: eventDetail.source
               });
             }
-            
+
             subsegment.close();
             return { statusCode: 200, body: 'Events processed successfully' };
           } catch (error) {
