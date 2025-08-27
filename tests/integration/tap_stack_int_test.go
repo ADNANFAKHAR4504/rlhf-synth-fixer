@@ -115,7 +115,7 @@ func TestVPCExists(t *testing.T) {
 	foundProjectTag := false
 	foundOwnerTag := false
 	foundManagedByTag := false
-	
+
 	for _, tag := range vpc.Tags {
 		switch *tag.Key {
 		case "Environment":
