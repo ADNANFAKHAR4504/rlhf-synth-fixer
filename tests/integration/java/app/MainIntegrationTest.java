@@ -1,95 +1,61 @@
 package app;
 
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.assertThat;
-
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration tests for the Main CDK application.
  *
- * These tests verify the integration between different components of the TapStack
- * and may involve more complex scenarios than unit tests.
- *
- * Note: These tests still use synthetic AWS resources and do not require
- * actual AWS credentials or resources to be created.
+ * These tests verify the integration between the PrimaryStack and SecondaryStack
+ * and ensure they can be synthesized together correctly.
  */
 public class MainIntegrationTest {
 
     /**
-     * Integration test for full stack deployment simulation.
+     * Integration test for a full multi-region deployment simulation.
      *
-     * This test verifies that the complete stack can be synthesized
-     * with all its components working together.
+     * This test verifies that both the PrimaryStack and SecondaryStack can be
+     * synthesized together with all their components.
      */
     @Test
-    public void testFullStackDeployment() {
+    public void testMultiRegionDeployment() {
         App app = new App();
 
-        // Create stack with production-like configuration
-        TapStack stack = new TapStack(app, "TapStackProd", TapStackProps.builder()
-                .environmentSuffix("prod")
-                .build());
+        // Define test parameters
+        String environmentName = "test";
+        String primaryRegion = "us-east-1";
+        String secondaryRegion = "us-west-2";
 
-        // Create template and verify it can be synthesized
-        Template template = Template.fromStack(stack);
+        // Create Primary Stack
+        Main.PrimaryStack primaryStack = new Main.PrimaryStack(app, "PrimaryStack-" + environmentName,
+            StackProps.builder().build(), environmentName, primaryRegion, secondaryRegion);
 
-        // Verify stack configuration
-        assertThat(stack).isNotNull();
-        assertThat(stack.getEnvironmentSuffix()).isEqualTo("prod");
-        assertThat(template).isNotNull();
-    }
+        // Create Secondary Stack
+        Main.SecondaryStack secondaryStack = new Main.SecondaryStack(app, "SecondaryStack-" + environmentName,
+            StackProps.builder().build(), environmentName, secondaryRegion, primaryStack);
 
-    /**
-     * Integration test for multiple environment configurations.
-     *
-     * This test verifies that the stack can be configured for different
-     * environments (dev, staging, prod) with appropriate settings.
-     */
-    @Test
-    public void testMultiEnvironmentConfiguration() {
-        // Test different environment configurations
-        String[] environments = {"dev", "staging", "prod"};
+        // Create templates for both stacks
+        Template primaryTemplate = Template.fromStack(primaryStack);
+        Template secondaryTemplate = Template.fromStack(secondaryStack);
 
-        for (String env : environments) {
-            // Create a new app for each environment to avoid synthesis conflicts
-            App app = new App();
-            TapStack stack = new TapStack(app, "TapStack" + env, TapStackProps.builder()
-                    .environmentSuffix(env)
-                    .build());
+        // --- Assertions for Primary Stack ---
+        assertThat(primaryTemplate).isNotNull();
+        // Check for key resources in the primary stack
+        primaryTemplate.resourceCountIs("AWS::EC2::VPC", 1);
+        primaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1);
+        primaryTemplate.resourceCountIs("AWS::DynamoDB::Table", 1);
+        primaryTemplate.resourceCountIs("AWS::KMS::Key", 1);
+        primaryTemplate.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
+        primaryTemplate.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
 
-            // Verify each environment configuration
-            assertThat(stack.getEnvironmentSuffix()).isEqualTo(env);
-
-            // Verify template can be created for each environment
-            Template template = Template.fromStack(stack);
-            assertThat(template).isNotNull();
-        }
-    }
-
-    /**
-     * Integration test for stack with nested components.
-     *
-     * This test would verify the integration between the main stack
-     * and any nested stacks or components that might be added in the future.
-     */
-    @Test
-    public void testStackWithNestedComponents() {
-        App app = new App();
-
-        TapStack stack = new TapStack(app, "TapStackIntegration", TapStackProps.builder()
-                .environmentSuffix("integration")
-                .build());
-
-        Template template = Template.fromStack(stack);
-
-        // Verify basic stack structure
-        assertThat(stack).isNotNull();
-        assertThat(template).isNotNull();
-
-        // When nested stacks are added, additional assertions would go here
-        // For example:
-        // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
+        // --- Assertions for Secondary Stack ---
+        assertThat(secondaryTemplate).isNotNull();
+        // Check for key resources in the secondary stack
+        secondaryTemplate.resourceCountIs("AWS::EC2::VPC", 1);
+        secondaryTemplate.resourceCountIs("AWS::RDS::DBInstance", 1); // Read replica
     }
 }
