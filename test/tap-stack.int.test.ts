@@ -232,22 +232,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const securityGroups = response.SecurityGroups || [];
       expect(securityGroups.length).toBeGreaterThan(3); // At least default + our security groups
       
-      // Debug: Log all security group names to understand the actual naming pattern
-      console.log('Available security groups:', securityGroups.map(sg => sg.GroupName));
-      
-      // Check for specific security groups (using more flexible matching)
-      const webSG = securityGroups.find(sg => 
-        sg.GroupName?.toLowerCase().includes('web') && 
-        sg.GroupName?.includes(stackName)
-      );
-      const dbSG = securityGroups.find(sg => 
-        sg.GroupName?.toLowerCase().includes('database') && 
-        sg.GroupName?.includes(stackName)
-      );
-      const albSG = securityGroups.find(sg => 
-        sg.GroupName?.toLowerCase().includes('load') && 
-        sg.GroupName?.includes(stackName)
-      );
+      // Check for specific security groups (matching actual naming pattern)
+      const webSG = securityGroups.find(sg => sg.GroupName?.includes('web-sg'));
+      const dbSG = securityGroups.find(sg => sg.GroupName?.includes('db-sg'));
+      const albSG = securityGroups.find(sg => sg.GroupName?.includes('alb-sg'));
       
       expect(webSG).toBeDefined();
       expect(dbSG).toBeDefined();
