@@ -293,8 +293,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('IAM Resources Tests', () => {
     test('should verify RDS monitoring role exists', async () => {
-      const vpcId = outputs.vpc_id?.value;
-      
       // List roles with prod-rds-monitoring-role prefix
       const rolesResult = await iam.listRoles().promise();
       const rdsMonitoringRole = rolesResult.Roles.find(role => 
@@ -312,6 +310,23 @@ describe('Terraform Infrastructure Integration Tests', () => {
         policy.PolicyArn === 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
       );
       expect(rdsMonitoringPolicy).toBeDefined();
+    });
+
+    test('should verify Lambda execution role exists', async () => {
+      const iamRoleArn = outputs.iam_role_arn?.value;
+      expect(iamRoleArn).toBeDefined();
+      
+      // Extract role name from ARN
+      const roleName = iamRoleArn.split('/').pop();
+      expect(roleName).toMatch(/^prod-lambda-execution-role-/);
+      
+      // Verify role exists
+      const iamResult = await iam.getRole({ RoleName: roleName }).promise();
+      expect(iamResult.Role).toBeDefined();
+      
+      // Check inline policies
+      const policiesResult = await iam.listRolePolicies({ RoleName: roleName }).promise();
+      expect(policiesResult.PolicyNames).toContain('prod-lambda-policy');
     });
   });
 

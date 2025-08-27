@@ -51,6 +51,11 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(terraformConfig).toContain('name = "prod-lambda-execution-role-${random_string.db_suffix.result}"');
     });
 
+    test('should have Lambda function and log group names with suffix', () => {
+      expect(terraformConfig).toContain('function_name = "${var.lambda_function_name}-${random_string.db_suffix.result}"');
+      expect(terraformConfig).toContain('name              = "/aws/lambda/${var.lambda_function_name}-${random_string.db_suffix.result}"');
+    });
+
     test('should have consistent tagging', () => {
       expect(terraformConfig).toContain('Environment = "Production"');
       expect(terraformConfig).toContain('Project     = "Production-Infrastructure"');
