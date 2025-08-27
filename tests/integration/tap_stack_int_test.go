@@ -4,6 +4,8 @@ package lib_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -30,13 +32,17 @@ type Outputs struct {
 // loadOutputs dynamically fetches outputs from the deployed CloudFormation stack.
 func loadOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *Outputs {
 	cfnClient := cloudformation.NewFromConfig(cfg)
-	stackName := "TapStackdev"
+	environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if environmentSuffix == "" {
+		environmentSuffix = "dev"
+	}
+	stackName := fmt.Sprintf("TapStack%s", environmentSuffix)
 
 	resp, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
 	require.NoError(t, err, "Failed to describe CloudFormation stack")
-	require.Len(t, resp.Stacks, 1, "Expected exactly one stack named TapStack")
+	require.Len(t, resp.Stacks, 1, fmt.Sprintf("Expected exactly one stack named %s", stackName))
 
 	outputsMap := make(map[string]string)
 	for _, output := range resp.Stacks[0].Outputs {
