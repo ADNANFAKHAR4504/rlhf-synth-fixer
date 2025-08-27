@@ -1239,7 +1239,7 @@ func buildMonitoringComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *
 	logGroup, err := cloudwatch.NewLogGroup(ctx, "AppLogGroup", &cloudwatch.LogGroupArgs{
 		Name:            pulumi.String(fmt.Sprintf("/aws/ec2/%s-app", cfg.Environment)),
 		RetentionInDays: pulumi.Int(30),
-		KmsKeyId:        kms.LogsKey.KeyId,
+		// KmsKeyId:        kms.LogsKey.KeyId, // TODO: Enable KMS encryption after initial deployment
 		Tags: pulumi.StringMap{
 			"Name":        pulumi.String(fmt.Sprintf("%s-app-logs", cfg.Environment)),
 			"Environment": pulumi.String(cfg.Environment),
