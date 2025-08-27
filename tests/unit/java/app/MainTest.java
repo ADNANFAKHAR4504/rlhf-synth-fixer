@@ -23,11 +23,11 @@ public class MainTest {
   @Test
   public void testPrimaryStackCreation() {
     App app = new App();
-    TapStack stack = new TapStack(app, "TestStackPrimary",
+    TapStack stack = new TapStack(app, "TapStacktest-Primary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build(),
         true, // isPrimary
@@ -35,7 +35,7 @@ public class MainTest {
 
     // Verify stack was created
     assertThat(stack).isNotNull();
-    assertThat(stack.getStackName()).isEqualTo("TestStackPrimary");
+    assertThat(stack.getStackName()).isEqualTo("TapStacktest-Primary");
   }
 
   /**
@@ -44,7 +44,7 @@ public class MainTest {
   @Test
   public void testSecondaryStackCreation() {
     App app = new App();
-    TapStack stack = new TapStack(app, "TestStackSecondary",
+    TapStack stack = new TapStack(app, "TapStacktest-Secondary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
@@ -52,11 +52,11 @@ public class MainTest {
                 .build())
             .build(),
         false, // isPrimary
-        "us-east-1"); // otherRegion
+        "us-east-2"); // otherRegion
 
     // Verify stack was created
     assertThat(stack).isNotNull();
-    assertThat(stack.getStackName()).isEqualTo("TestStackSecondary");
+    assertThat(stack.getStackName()).isEqualTo("TapStacktest-Secondary");
   }
 
   /**
@@ -65,11 +65,11 @@ public class MainTest {
   @Test
   public void testPrimaryStackSynthesis() {
     App app = new App();
-    TapStack stack = new TapStack(app, "TestStackPrimary",
+    TapStack stack = new TapStack(app, "TapStacktest-Primary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build(),
         true, // isPrimary
@@ -103,7 +103,7 @@ public class MainTest {
   @Test
   public void testSecondaryStackSynthesis() {
     App app = new App();
-    TapStack stack = new TapStack(app, "TestStackSecondary",
+    TapStack stack = new TapStack(app, "TapStacktest-Secondary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
@@ -111,7 +111,7 @@ public class MainTest {
                 .build())
             .build(),
         false, // isPrimary
-        "us-east-1"); // otherRegion
+        "us-east-2"); // otherRegion
 
     // Create template from the stack
     Template template = Template.fromStack(stack);

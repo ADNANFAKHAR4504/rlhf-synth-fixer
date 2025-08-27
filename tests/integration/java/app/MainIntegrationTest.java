@@ -32,11 +32,11 @@ public class MainIntegrationTest {
     App app = new App();
 
     // Create stack with production-like configuration
-    TapStack stack = new TapStack(app, "TapStackProd",
+    TapStack stack = new TapStack(app, "TapStackprod-Primary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build(),
         true, // isPrimary
@@ -47,7 +47,7 @@ public class MainIntegrationTest {
 
     // Verify stack configuration
     assertThat(stack).isNotNull();
-    assertThat(stack.getStackName()).isEqualTo("TapStackProd");
+    assertThat(stack.getStackName()).isEqualTo("TapStackprod-Primary");
     assertThat(template).isNotNull();
 
     // Verify that the template contains expected resources for primary stack
@@ -65,11 +65,11 @@ public class MainIntegrationTest {
   public void testMultiRegionConfiguration() {
     // Test primary region configuration
     App app1 = new App();
-    TapStack primaryStack = new TapStack(app1, "TapStackPrimary",
+    TapStack primaryStack = new TapStack(app1, "TapStacktest-Primary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build(),
         true, // isPrimary
@@ -77,7 +77,7 @@ public class MainIntegrationTest {
 
     // Test secondary region configuration
     App app2 = new App();
-    TapStack secondaryStack = new TapStack(app2, "TapStackSecondary",
+    TapStack secondaryStack = new TapStack(app2, "TapStacktest-Secondary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
@@ -85,11 +85,11 @@ public class MainIntegrationTest {
                 .build())
             .build(),
         false, // isPrimary
-        "us-east-1"); // otherRegion
+        "us-east-2"); // otherRegion
 
     // Verify both stacks can be created and synthesized
-    assertThat(primaryStack.getStackName()).isEqualTo("TapStackPrimary");
-    assertThat(secondaryStack.getStackName()).isEqualTo("TapStackSecondary");
+    assertThat(primaryStack.getStackName()).isEqualTo("TapStacktest-Primary");
+    assertThat(secondaryStack.getStackName()).isEqualTo("TapStacktest-Secondary");
 
     Template primaryTemplate = Template.fromStack(primaryStack);
     Template secondaryTemplate = Template.fromStack(secondaryStack);
@@ -108,11 +108,11 @@ public class MainIntegrationTest {
   public void testStackWithAllComponents() {
     App app = new App();
 
-    TapStack stack = new TapStack(app, "TapStackIntegration",
+    TapStack stack = new TapStack(app, "TapStackintegration-Primary",
         StackProps.builder()
             .env(Environment.builder()
                 .account("123456789012")
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build(),
         true, // isPrimary

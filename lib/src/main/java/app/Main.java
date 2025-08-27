@@ -586,7 +586,7 @@ public final class Main {
       environmentSuffix = "dev";
     }
 
-    new TapStack(app, "TapStack-Primary" + environmentSuffix, StackProps.builder()
+    new TapStack(app, "TapStack" + environmentSuffix + "-Primary", StackProps.builder()
         .env(Environment.builder()
             .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
             .region("us-east-2")
@@ -594,7 +594,7 @@ public final class Main {
         .build(), true, "us-west-2");
 
     // Secondary region stack (us-west-2)
-    new TapStack(app, "TapStack-Secondary", StackProps.builder()
+    new TapStack(app, "TapStack" + environmentSuffix + "-Secondary", StackProps.builder()
         .env(Environment.builder()
             .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
             .region("us-west-2")
