@@ -502,50 +502,50 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 	s3bucketpolicy.NewS3BucketPolicy(stack, jsii.String("cloudtrail-bucket-policy"), &s3bucketpolicy.S3BucketPolicyConfig{
 		Bucket: cloudtrailBucket.Id(),
 		Policy: jsii.String(fmt.Sprintf(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Sid": "AWSCloudTrailAclCheck",
-					"Effect": "Allow",
-					"Principal": {"Service": "cloudtrail.amazonaws.com"},
-					"Action": "s3:GetBucketAcl",
-					"Resource": "arn:aws:s3:::tap-cloudtrail-logs-%s-*"
-				},
-				{
-					"Sid": "AWSCloudTrailWrite",
-					"Effect": "Allow",
-					"Principal": {"Service": "cloudtrail.amazonaws.com"},
-					"Action": "s3:PutObject",
-					"Resource": "arn:aws:s3:::tap-cloudtrail-logs-%s-*/*",
-					"Condition": {
-						"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}
-					}
-				},
-				{
-					"Sid": "DenyInsecureConnections",
-					"Effect": "Deny",
-					"Principal": "*",
-					"Action": "s3:*",
-					"Resource": [
-						"arn:aws:s3:::tap-cloudtrail-logs-%s-*",
-						"arn:aws:s3:::tap-cloudtrail-logs-%s-*/*"
-					],
-					"Condition": {
-						"Bool": {"aws:SecureTransport": "false"}
-					}
-				},
-				{
-					"Sid": "DenyUnencryptedObjectUploads",
-					"Effect": "Deny",
-					"Principal": "*",
-					"Action": "s3:PutObject",
-					"Resource": "arn:aws:s3:::tap-cloudtrail-logs-%s-*/*",
-					"Condition": {
-						"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
-					}
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "AWSCloudTrailAclCheck",
+				"Effect": "Allow",
+				"Principal": {"Service": "cloudtrail.amazonaws.com"},
+				"Action": "s3:GetBucketAcl",
+				"Resource": "%s"
+			},
+			{
+				"Sid": "AWSCloudTrailWrite",
+				"Effect": "Allow",
+				"Principal": {"Service": "cloudtrail.amazonaws.com"},
+				"Action": "s3:PutObject",
+				"Resource": "%s/*",
+				"Condition": {
+					"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}
 				}
-			]
-		}`, *config.Environment, *config.Environment, *config.Environment, *config.Environment, *config.Environment)),
+			},
+			{
+				"Sid": "DenyInsecureConnections",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:*",
+				"Resource": [
+					"%s",
+					"%s/*"
+				],
+				"Condition": {
+					"Bool": {"aws:SecureTransport": "false"}
+				}
+			},
+			{
+				"Sid": "DenyUnencryptedObjectUploads",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:PutObject",
+				"Resource": "%s/*",
+				"Condition": {
+					"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
+				}
+			}
+		]
+	}`, *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn(), *cloudtrailBucket.Arn())),
 	})
 
 	// Application Data S3 Bucket
@@ -581,33 +581,33 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 	s3bucketpolicy.NewS3BucketPolicy(stack, jsii.String("app-data-bucket-policy"), &s3bucketpolicy.S3BucketPolicyConfig{
 		Bucket: appDataBucket.Id(),
 		Policy: jsii.String(fmt.Sprintf(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Sid": "DenyInsecureConnections",
-					"Effect": "Deny",
-					"Principal": "*",
-					"Action": "s3:*",
-					"Resource": [
-						"arn:aws:s3:::tap-app-data-%s-*",
-						"arn:aws:s3:::tap-app-data-%s-*/*"
-					],
-					"Condition": {
-						"Bool": {"aws:SecureTransport": "false"}
-					}
-				},
-				{
-					"Sid": "DenyUnencryptedObjectUploads",
-					"Effect": "Deny",
-					"Principal": "*",
-					"Action": "s3:PutObject",
-					"Resource": "arn:aws:s3:::tap-app-data-%s-*/*",
-					"Condition": {
-						"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
-					}
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "DenyInsecureConnections",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:*",
+				"Resource": [
+					"%s",
+					"%s/*"
+				],
+				"Condition": {
+					"Bool": {"aws:SecureTransport": "false"}
 				}
-			]
-		}`, *config.Environment, *config.Environment, *config.Environment)),
+			},
+			{
+				"Sid": "DenyUnencryptedObjectUploads",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:PutObject",
+				"Resource": "%s/*",
+				"Condition": {
+					"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
+				}
+			}
+		]
+	}`, *appDataBucket.Arn(), *appDataBucket.Arn(), *appDataBucket.Arn())),
 	})
 
 	// CloudWatch Log Group for CloudTrail
@@ -706,7 +706,6 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 	rdsInstance := dbinstance.NewDbInstance(stack, jsii.String("rds-instance"), &dbinstance.DbInstanceConfig{
 		Identifier:          jsii.String(fmt.Sprintf("tap-postgres-%s", *config.Environment)),
 		Engine:              jsii.String("postgres"),
-		EngineVersion:       jsii.String("15.4"),
 		InstanceClass:       jsii.String("db.t3.micro"), // Use appropriate size for your workload
 		AllocatedStorage:    jsii.Number(20),
 		MaxAllocatedStorage: jsii.Number(100),
