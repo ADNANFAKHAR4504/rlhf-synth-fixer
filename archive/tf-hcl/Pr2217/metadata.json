@@ -26,5 +26,10 @@
     "NAT Gateway",
     "Route Tables",
     "Elastic IP"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
