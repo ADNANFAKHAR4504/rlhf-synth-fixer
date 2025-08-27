@@ -116,7 +116,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Apply tags to SQS queues
-    [eventDlq, eventQueue].forEach((queue) => {
+    [eventDlq, eventQueue].forEach(queue => {
       Object.entries(commonTags).forEach(([key, value]) => {
         cdk.Tags.of(queue).add(key, value);
       });
@@ -140,7 +140,7 @@ export class TapStack extends cdk.Stack {
           version: 1,
           resourceArn: '*',
         },
-      },
+      }
     );
 
     // Apply tags to X-Ray sampling rule
@@ -154,7 +154,7 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaVPCAccessExecutionRole',
+          'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
       ],
     });
@@ -180,7 +180,7 @@ export class TapStack extends cdk.Stack {
           'xray:GetSamplingTargets',
         ],
         resources: ['*'],
-      }),
+      })
     );
 
     // Create VPC Endpoint for DynamoDB
@@ -198,7 +198,7 @@ export class TapStack extends cdk.Stack {
         vpc,
         description: 'Security group for Lambda functions',
         allowAllOutbound: true,
-      },
+      }
     );
 
     // Create CloudWatch Log Groups for Lambda functions
@@ -233,7 +233,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/srvrless-event-processor-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-      },
+      }
     );
 
     // Create Lambda function for CREATE operation
@@ -333,7 +333,7 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      },
+      }
     );
 
     // Create Lambda function for READ operation
@@ -531,7 +531,7 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      },
+      }
     );
 
     // Create Lambda function for DELETE operation
@@ -625,11 +625,11 @@ export class TapStack extends cdk.Stack {
 
     // Apply tags to Lambda functions
     [createFunction, readFunction, updateFunction, deleteFunction].forEach(
-      (func) => {
+      func => {
         Object.entries(commonTags).forEach(([key, value]) => {
           cdk.Tags.of(func).add(key, value);
         });
-      },
+      }
     );
 
     // Create event processor Lambda for demonstrating EventBridge functionality
@@ -683,7 +683,7 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      },
+      }
     );
 
     // Add SQS event source to event processor function
@@ -691,7 +691,7 @@ export class TapStack extends cdk.Stack {
       new SqsEventSource(eventQueue, {
         batchSize: 10,
         maxBatchingWindow: cdk.Duration.seconds(10),
-      }),
+      })
     );
 
     // Apply tags to event processor function
@@ -740,7 +740,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Apply tags to EventBridge rules
-    [createEventRule, updateEventRule, deleteEventRule].forEach((rule) => {
+    [createEventRule, updateEventRule, deleteEventRule].forEach(rule => {
       Object.entries(commonTags).forEach(([key, value]) => {
         cdk.Tags.of(rule).add(key, value);
       });
