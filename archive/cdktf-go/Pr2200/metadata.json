@@ -20,7 +20,7 @@
   "subtask": "Serverless Architecture Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Performance Optimization",
     "Monitoring Setup",
@@ -31,7 +31,7 @@
   "aws_services": [
     "AWS Lambda",
     "Amazon API Gateway",
-    "Amazon DynamoDB", 
+    "Amazon DynamoDB",
     "Amazon S3",
     "Amazon VPC",
     "AWS IAM",
@@ -45,5 +45,11 @@
   "created_at": "2025-08-25",
   "status": "in_progress",
   "startedAt": "2025-08-25T07:51:45.706Z",
-  "complexity": "expert"
+  "complexity": "expert",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
