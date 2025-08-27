@@ -31,9 +31,9 @@ output "cloudtrail_log_group_name" {
   value = module.cloudwatch_cloudtrail.log_group_arn
 }
 
-output "guardduty_detector_id" {
-  value = module.guardduty.guardduty_detector_id
-}
+#output "guardduty_detector_id" {
+#  value = module.guardduty.guardduty_detector_id
+#}
 
 
 output "role_arn" {
