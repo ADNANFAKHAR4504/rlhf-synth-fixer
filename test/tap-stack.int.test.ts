@@ -202,7 +202,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
     const result = JSON.parse(payload.body || '{}');
     console.log("raw payload: ", payload);
     if (!payload?.statusCode) {
-  console.error('No payload received from Lambda function:', command.FunctionName);
+  console.error('No payload received from Lambda function: should invoke Create Lambda function successfully');
   return; // or fail with a clear message
 }
     expect(payload.statusCode).toBe(201); // ✅ Fixed
@@ -230,7 +230,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       if (response.Payload) {
         const payload = JSON.parse(new TextDecoder().decode(response.Payload));
         if (!payload?.statusCode) {
-  console.error('No payload received from Lambda function:', command.FunctionName);
+  console.error('No payload received from Lambda function:should invoke Read Lambda function successfully');
   return; // or fail with a clear message
 }
         const result = JSON.parse(payload.body || '{}');
@@ -279,7 +279,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       if (response.Payload) {
       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
        if (!payload?.statusCode) {
-  console.error('No payload received from Lambda function:', command.FunctionName);
+  console.error('No payload received from Lambda function: should invoke Update Lambda function successfully');
   return; // or fail with a clear message
 }
       const result = JSON.parse(payload.body || '{}');
