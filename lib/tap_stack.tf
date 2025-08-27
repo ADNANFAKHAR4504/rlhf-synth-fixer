@@ -82,7 +82,7 @@ module "cloudtrail" {
   source          = "./modules/cloudtrail"
   project         = var.project
   environment     = var.environment
-  s3_bucket_name  = module.s3_cloudtrail.s3_bucket_id
+  s3_bucket_name  = module.s3_cloudtrail_bucket.s3_bucket_id
   kms_key_id = module.kms.kms_key_arn
 }
 
@@ -95,10 +95,16 @@ module "iam_cloudtrail" {
   source = "./modules/iam"
   role_name= "${var.project}-cloudtrail-cw-role"
   policy_name = "${var.project}-cloudtrail-cw-policy"
+  assume_policy = data.aws_iam_policy_document.assume_policy
+  iam_policy = data.aws_iam_policy_document.cloudtrail_cw_policy
+  policy_arn = ""
 }
 
 module "iam_config" {
   source = "./modules/iam"
   role_name= "${var.project}-cloudtrail-cw-role"
   policy_name = "${var.project}-cloudtrail-cw-policy"
+  assume_policy = data.aws_iam_policy_document.config_assume
+  iam_policy = data.aws_iam_policy_document.config_policy
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }

@@ -25,8 +25,6 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_eip" "nat_eip" {
-  domain = "vpc"
-
   tags = {
     Name        = "${var.project}-${var.environment}-nat-eip"
     Project     = var.project
@@ -51,7 +49,7 @@ resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = element(data.aws_availability_zones.available.names[count.index])
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
   map_public_ip_on_launch = true
 
   tags = {
@@ -66,7 +64,7 @@ resource "aws_subnet" "private" {
   count                   = length(var.private_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_cidrs[count.index]
-  availability_zone       = element(data.aws_availability_zones.available.names[count.index])
+  availability_zone       = element(data.aws_availability_zones.available.names, count.index)
   map_public_ip_on_launch = false
 
   tags = {

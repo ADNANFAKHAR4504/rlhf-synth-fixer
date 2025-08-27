@@ -1,3 +1,9 @@
+# Data source for current AWS account
+data "aws_caller_identity" "current" {}
+
+# Data source for current region
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "cloudtrail_s3" {
   statement {
     sid = "AWSCloudTrailAclCheck"
@@ -89,7 +95,24 @@ data "aws_iam_policy_document" "cloudtrail_assume" {
 data "aws_iam_policy_document" "cloudtrail_cw_policy" {
   statement {
     actions   = ["logs:PutLogEvents", "logs:CreateLogStream"]
-    resources = ["arn:aws:logs:${region}:${data.aws_caller_identity.current.id}:log-group:/aws/cloudtrail/cloudtrail-logs-pr2219:*"]
+    resources = ["arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.id}:log-group:/aws/cloudtrail/cloudtrail-logs-pr2219:*"]
   }
 }
 
+data "aws_iam_policy_document" "config_assume" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["config.amazonaws.com"]
+    }
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+data "aws_iam_policy_document" "config_policy" {
+  statement {
+    actions   = ["logs:PutLogEvents", "logs:CreateLogStream"]
+    resources = ["*"]
+  }
+}
