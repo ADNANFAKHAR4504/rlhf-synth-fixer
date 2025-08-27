@@ -10,6 +10,7 @@ import (
 )
 
 type ComputeConstructProps struct {
+	EnvironmentSuffix *string
 }
 
 type ComputeConstruct struct {
@@ -24,6 +25,12 @@ type ComputeConstruct struct {
 func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeConstructProps) *ComputeConstruct {
 	construct := constructs.NewConstruct(scope, id)
 
+	// Get environment suffix from props or default to empty
+	var environmentSuffix string
+	if props != nil && props.EnvironmentSuffix != nil {
+		environmentSuffix = *props.EnvironmentSuffix
+	}
+
 	// Create CloudWatch Log Group
 	logGroup := awslogs.NewLogGroup(construct, jsii.String("LambdaLogGroup"), &awslogs.LogGroupProps{
 		LogGroupName:  jsii.String("/aws/lambda/tap-handler"),
@@ -31,12 +38,18 @@ func NewComputeConstruct(scope constructs.Construct, id *string, props *ComputeC
 		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 	})
 
+	// Create function name with environment suffix
+	functionName := "tap-handler"
+	if environmentSuffix != "" {
+		functionName = "tap-handler-" + environmentSuffix
+	}
+
 	// Create Lambda function
 	lambdaFunction := awslambda.NewFunction(construct, jsii.String("TapHandler"), &awslambda.FunctionProps{
 		Runtime:      awslambda.Runtime_PYTHON_3_9(),
 		Handler:      jsii.String("handler.lambda_handler"),
 		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda"), nil),
-		FunctionName: jsii.String("tap-handler"),
+		FunctionName: jsii.String(functionName),
 		MemorySize:   jsii.Number(256), // ≤256MB as required
 		Timeout:      awscdk.Duration_Seconds(jsii.Number(30)),
 		LogGroup:     logGroup,

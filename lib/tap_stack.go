@@ -9,29 +9,41 @@ import (
 )
 
 type TapStackProps struct {
-	awscdk.StackProps
+	StackProps        *awscdk.StackProps
+	EnvironmentSuffix *string
 }
 
 type TapStack struct {
 	awscdk.Stack
-	ApiEndpoint awscdk.CfnOutput
-	LambdaArn   awscdk.CfnOutput
-	LogGroups   awscdk.CfnOutput
+	ApiEndpoint       awscdk.CfnOutput
+	LambdaArn         awscdk.CfnOutput
+	LogGroups         awscdk.CfnOutput
+	EnvironmentSuffix *string
 }
 
-func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *TapStack {
+func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack {
 	var sprops awscdk.StackProps
-	if props != nil {
-		sprops = props.StackProps
+	if props != nil && props.StackProps != nil {
+		sprops = *props.StackProps
 	}
 
-	stack := awscdk.NewStack(scope, &id, &sprops)
+	stack := awscdk.NewStack(scope, id, &sprops)
+
+	// Get environment suffix from props or default to "dev"
+	var environmentSuffix string
+	if props != nil && props.EnvironmentSuffix != nil {
+		environmentSuffix = *props.EnvironmentSuffix
+	} else {
+		environmentSuffix = "dev"
+	}
 
 	// Global tags
 	awscdk.Tags_Of(stack).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 
 	// Create compute construct with Lambda functions
-	computeConstruct := myConstructs.NewComputeConstruct(stack, jsii.String("ComputeConstruct"), &myConstructs.ComputeConstructProps{})
+	computeConstruct := myConstructs.NewComputeConstruct(stack, jsii.String("ComputeConstruct"), &myConstructs.ComputeConstructProps{
+		EnvironmentSuffix: jsii.String(environmentSuffix),
+	})
 
 	// Create API Gateway
 	api := awsapigateway.NewRestApi(stack, jsii.String("TapApi"), &awsapigateway.RestApiProps{
@@ -74,9 +86,10 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 	})
 
 	return &TapStack{
-		Stack:       stack,
-		ApiEndpoint: apiEndpoint,
-		LambdaArn:   lambdaArn,
-		LogGroups:   logGroups,
+		Stack:             stack,
+		ApiEndpoint:       apiEndpoint,
+		LambdaArn:         lambdaArn,
+		LogGroups:         logGroups,
+		EnvironmentSuffix: jsii.String(environmentSuffix),
 	}
 }
