@@ -135,6 +135,7 @@ export class TapStack extends cdk.Stack {
       ],
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // QA-friendly for automated cleanup
+      autoDeleteObjects: true, // Critical for QA: Automatically delete objects on stack deletion
     });
 
     // Grant ELB service account permission for ALB access logs
