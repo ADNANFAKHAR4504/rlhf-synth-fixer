@@ -34,16 +34,24 @@ data "aws_iam_policy_document" "cloudtrail_s3" {
   }
 }
 
+# Secure bucket policy - allow all IAM roles/users in this account
 data "aws_iam_policy_document" "secure_bucket" {
   statement {
-    sid = "1"
+    sid     = "AllowAllAccountPrincipals"
     actions = [
-      "s3:List*",
-      "s3:GetBucketLocation",
+      "s3:ListBucket",
+      "s3:GetObject",
+      "s3:PutObject"
     ]
     resources = [
-      "arn:aws:s3:::*",
+      "arn:aws:s3:::secconfig-secure-bucket-pr2219",
+      "arn:aws:s3:::secconfig-secure-bucket-pr2219/*"
     ]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
   }
 }
 
