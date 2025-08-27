@@ -88,6 +88,12 @@ class TapStack extends Stack {
     Tags.of(this).add("ManagedBy", "CDK");
     Tags.of(this).add("CostCenter", "DevOps");
 
+    // Get CloudTrail flag from context, default to false (disabled)
+    Boolean enableCloudTrail = (Boolean) this.getNode().tryGetContext("enableCloudTrail");
+    if (enableCloudTrail == null) {
+      enableCloudTrail = false;
+    }
+
     // Create KMS key for encryption
     Key kmsKey = createKmsKey();
 
@@ -98,11 +104,14 @@ class TapStack extends Stack {
     SecurityGroup webSecurityGroup = createWebSecurityGroup(vpc);
     SecurityGroup rdsSecurityGroup = createRdsSecurityGroup(vpc, webSecurityGroup);
 
-    // Create S3 bucket for CloudTrail logs
-    Bucket cloudTrailBucket = createCloudTrailBucket(kmsKey);
+    // Create S3 bucket for CloudTrail logs (only if CloudTrail is enabled)
+    Bucket cloudTrailBucket = null;
+    if (enableCloudTrail) {
+      cloudTrailBucket = createCloudTrailBucket(kmsKey);
 
-    // Set up CloudTrail
-    createCloudTrail(cloudTrailBucket, kmsKey);
+      // Set up CloudTrail
+      createCloudTrail(cloudTrailBucket, kmsKey);
+    }
 
     // Create SNS topic for alerts
     Topic alertTopic = createAlertTopic();
@@ -120,7 +129,7 @@ class TapStack extends Stack {
     DatabaseInstance rdsInstance = createRdsInstance(vpc, rdsSecurityGroup, kmsKey);
 
     // Create outputs for testing and integration
-    createOutputs(vpc, cloudTrailBucket, alertTopic, ec2Instances, rdsInstance, kmsKey);
+    createOutputs(vpc, cloudTrailBucket, alertTopic, ec2Instances, rdsInstance, kmsKey, enableCloudTrail);
   }
 
   private Key createKmsKey() {
@@ -189,7 +198,7 @@ class TapStack extends Stack {
 
   private Bucket createCloudTrailBucket(Key kmsKey) {
     return Bucket.Builder.create(this, getResourceName("cloudtrail-bucket"))
-        .bucketName(getResourceName("cloudtrail-logs-1"))
+        .bucketName(getResourceName("cloudtrail-logs-2"))
         .encryption(BucketEncryption.KMS)
         .encryptionKey(kmsKey)
         .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
@@ -314,7 +323,7 @@ class TapStack extends Stack {
 
     // Create RDS instance
     DatabaseInstance dbInstance = DatabaseInstance.Builder.create(this, getResourceName("rds-instance"))
-        .instanceIdentifier(getResourceName("mysql-db-1"))
+        .instanceIdentifier(getResourceName("mysql-db-2"))
         .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
             .version(MysqlEngineVersion.VER_8_0)
             .build()))
@@ -344,8 +353,8 @@ class TapStack extends Stack {
     return String.format("%s-%s-%s", PROJECT_NAME, ENVIRONMENT, resource);
   }
 
-  private void createOutputs(Vpc vpc, Bucket cloudTrailBucket, Topic alertTopic, 
-                           List<Instance> ec2Instances, DatabaseInstance rdsInstance, Key kmsKey) {
+  private void createOutputs(Vpc vpc, Bucket cloudTrailBucket, Topic alertTopic,
+      List<Instance> ec2Instances, DatabaseInstance rdsInstance, Key kmsKey, Boolean enableCloudTrail) {
     // VPC outputs
     CfnOutput.Builder.create(this, "VpcId")
         .description("VPC ID for the infrastructure")
@@ -414,12 +423,14 @@ class TapStack extends Stack {
         .exportName(getResourceName("rds-port"))
         .build();
 
-    // S3 CloudTrail bucket output
-    CfnOutput.Builder.create(this, "CloudTrailBucketName")
-        .description("CloudTrail S3 bucket name")
-        .value(cloudTrailBucket.getBucketName())
-        .exportName(getResourceName("cloudtrail-bucket"))
-        .build();
+    // S3 CloudTrail bucket output (only if CloudTrail is enabled)
+    if (enableCloudTrail && cloudTrailBucket != null) {
+      CfnOutput.Builder.create(this, "CloudTrailBucketName")
+          .description("CloudTrail S3 bucket name")
+          .value(cloudTrailBucket.getBucketName())
+          .exportName(getResourceName("cloudtrail-bucket"))
+          .build();
+    }
 
     // SNS topic output
     CfnOutput.Builder.create(this, "AlertTopicArn")
@@ -439,6 +450,13 @@ class TapStack extends Stack {
         .description("KMS key ARN for encryption")
         .value(kmsKey.getKeyArn())
         .exportName(getResourceName("kms-key-arn"))
+        .build();
+
+    // CloudTrail status output
+    CfnOutput.Builder.create(this, "CloudTrailEnabled")
+        .description("Whether CloudTrail is enabled")
+        .value(enableCloudTrail.toString())
+        .exportName(getResourceName("cloudtrail-enabled"))
         .build();
 
     // Region and account information

@@ -102,6 +102,42 @@ public class MainIntegrationTest {
     assertThat(template).isNotNull();
 
     // Verify that critical resources are created and properly configured
+    // Note: CloudTrail is disabled by default, so S3 bucket and CloudTrail won't be
+    // created
+    template.hasResourceProperties("AWS::EC2::VPC", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::KMS::Key", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::SNS::Topic", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::EC2::Instance", new java.util.HashMap<>());
+    template.hasResourceProperties("AWS::RDS::DBInstance", new java.util.HashMap<>());
+  }
+
+  /**
+   * Integration test for stack with CloudTrail enabled.
+   *
+   * This test verifies that when CloudTrail is enabled, all related resources
+   * are properly created and configured.
+   */
+  @Test
+  public void testResourceIntegrationWithCloudTrail() {
+    App app = new App();
+
+    // Set context to enable CloudTrail
+    app.getNode().setContext("enableCloudTrail", true);
+
+    TapStack stack = new TapStack(app, "TapStackIntegrationCloudTrail", StackProps.builder()
+        .env(Environment.builder()
+            .region("us-east-2")
+            .account("123456789012") // Mock account
+            .build())
+        .build());
+
+    Template template = Template.fromStack(stack);
+
+    // Verify basic stack structure
+    assertThat(stack).isNotNull();
+    assertThat(template).isNotNull();
+
+    // Verify that all resources including CloudTrail are created when enabled
     template.hasResourceProperties("AWS::EC2::VPC", new java.util.HashMap<>());
     template.hasResourceProperties("AWS::KMS::Key", new java.util.HashMap<>());
     template.hasResourceProperties("AWS::S3::Bucket", new java.util.HashMap<>());
