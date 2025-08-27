@@ -242,8 +242,10 @@ class TapStack extends Stack {
   }
 
   private TableV2 createDynamoTable(final Map<String, String> commonTags) {
+    // Add timestamp to make table name unique and avoid conflicts
+    long timestamp = System.currentTimeMillis();
     TableV2 dynamoTable = new TableV2(this, "ApplicationDataTable", TablePropsV2.builder()
-        .tableName("tap-" + this.environmentSuffix.toLowerCase() + "-data")
+        .tableName(String.format("tap-%s-%d-data", this.environmentSuffix.toLowerCase(), timestamp))
         .removalPolicy(RemovalPolicy.DESTROY)
         .partitionKey(Attribute.builder()
             .name("id")
@@ -296,8 +298,10 @@ class TapStack extends Stack {
   }
 
   private LogGroup createLogGroup(final Map<String, String> commonTags) {
+    // Add timestamp to make log group name unique and avoid conflicts
+    long timestamp = System.currentTimeMillis();
     LogGroup lambdaLogGroup = new LogGroup(this, "LambdaLogGroup", LogGroupProps.builder()
-        .logGroupName("/aws/lambda/tap-" + this.environmentSuffix + "-backend")
+        .logGroupName(String.format("/aws/lambda/tap-%s-%d-backend", this.environmentSuffix, timestamp))
         .retention(RetentionDays.TWO_WEEKS)
         .build());
 
@@ -309,8 +313,10 @@ class TapStack extends Stack {
   private Function createLambdaFunction(final Vpc vpc, final SecurityGroup lambdaSecurityGroup,
       final TableV2 dynamoTable, final Role lambdaRole, final LogGroup lambdaLogGroup,
       final Map<String, String> commonTags) {
+    // Add timestamp to make function name unique and avoid conflicts
+    long timestamp = System.currentTimeMillis();
     Function backendFunction = new Function(this, "BackendFunction", FunctionProps.builder()
-        .functionName("tap-" + this.environmentSuffix + "-backend")
+        .functionName(String.format("tap-%s-%d-backend", this.environmentSuffix, timestamp))
         .runtime(Runtime.JAVA_21)
         .handler("com.serverless.Handler::handleRequest")
         .code(Code.fromAsset("lib/lambda"))
@@ -334,8 +340,10 @@ class TapStack extends Stack {
   }
 
   private RestApi createApiGateway(final Function backendFunction, final Map<String, String> commonTags) {
+    // Add timestamp to make API name unique and avoid conflicts
+    long timestamp = System.currentTimeMillis();
     RestApi api = new RestApi(this, "ServerlessApi", RestApiProps.builder()
-        .restApiName("tap-" + this.environmentSuffix + "-api")
+        .restApiName(String.format("tap-%s-%d-api", this.environmentSuffix, timestamp))
         .description("Serverless API Gateway for web application")
         .build());
 
@@ -495,7 +503,7 @@ public final class Main {
         .stackProps(StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-east-1")
+                .region("us-east-2")
                 .build())
             .build())
         .build());
