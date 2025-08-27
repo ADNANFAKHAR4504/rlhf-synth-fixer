@@ -9,7 +9,7 @@
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "Web Application Deployment",
-    "High Availability Architecture", 
+    "High Availability Architecture",
     "Auto Scaling Configuration",
     "Database Management",
     "Security Configuration",
@@ -27,5 +27,11 @@
     "Amazon CloudWatch",
     "AWS Systems Manager",
     "AWS IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
