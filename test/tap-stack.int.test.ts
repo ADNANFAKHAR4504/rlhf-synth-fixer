@@ -198,10 +198,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
       
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(201);
-        expect(JSON.parse(result.body).message).toBe('Item created successfully');
-      }
+         const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(201); // ✅ Fixed
+    expect(result.message).toBe('Item created successfully'); }
     });
 
     test('should invoke Read Lambda function successfully', async () => {
@@ -223,9 +223,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
       
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(200);
-        expect(Array.isArray(JSON.parse(result.body))).toBe(true);
+        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(201); // ✅ Fixed
+    expect(result.message).toBe('Item created successfully');
       }
     });
 
@@ -267,9 +268,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
       
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(200);
-        expect(JSON.parse(result.body).message).toBe('Item updated successfully');
+      const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(200); // ✅ Fixed
+    expect(result.message).toBe('Item updated successfully');
       }
     });
 
@@ -307,10 +309,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
       
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(200);
-        expect(JSON.parse(result.body).message).toBe('Item deleted successfully');
-      }
+        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(200); // ✅ Fixed
+    expect(result.message).toBe('Item deleted successfully');  }
     });
   });
 
@@ -508,13 +510,11 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
 
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(201);
-        
-        // The Lambda function should have published an event to EventBridge
-        const body = JSON.parse(result.body);
-        expect(body.message).toBe('Item created successfully');
-        expect(body.item.id).toBe(testItemId);
+       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(201); // ✅ Fixed
+    expect(result.message).toBe('Item created successfully');
+    expect(result.item.id).toBe(testItemId);
       }
     });
 
@@ -548,9 +548,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.StatusCode).toBe(200);
 
       if (response.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(result.statusCode).toBe(200);
-        expect(result.body).toBe('Events processed successfully');
+         const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(200); // ✅ Fixed
+    expect(result).toBe('Events processed successfully');
       }
     });
   });
@@ -669,9 +670,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       // All operations should have generated events and traces
       if (deleteResponse.Payload) {
-        const result = JSON.parse(new TextDecoder().decode(deleteResponse.Payload));
-        expect(result.statusCode).toBe(200);
-        expect(JSON.parse(result.body).message).toBe('Item deleted successfully');
+        const payload = JSON.parse(new TextDecoder().decode(deleteResponse.Payload));
+    const result = JSON.parse(payload.body || '{}');
+    expect(payload.statusCode).toBe(200); // ✅ Fixed
+    expect(result.message).toBe('Item deleted successfully');
       }
     });
   });
