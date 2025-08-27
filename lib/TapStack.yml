@@ -823,6 +823,7 @@ Resources:
   # ============================================================================
   WebServerLogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: KMSKey
     Properties:
       LogGroupName: !Sub '/aws/ec2/${AWS::StackName}/webserver-${EnvironmentSuffix}'
       RetentionInDays: 14
