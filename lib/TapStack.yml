@@ -20,10 +20,9 @@ Metadata:
         Parameters:
           [
             NotificationEmail,
-            KeyAdministratorArn,
-            EnableGuardDuty,
             EnableCloudTrail,
             EnableAWSConfig,
+            EnableGuardDuty,
           ]
       - Label: { default: 'Database Configuration' }
         Parameters: [DBUsername, DBPassword]
@@ -91,11 +90,6 @@ Parameters:
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     Default: 'security@example.com'
 
-  KeyAdministratorArn:
-    Type: String
-    Description: 'ARN of the IAM user/role that will administer KMS keys'
-    Default: 'arn:aws:iam::123456789012:root'
-
   DBUsername:
     Type: String
     Description: 'Database master username'
@@ -118,12 +112,6 @@ Parameters:
     Description: 'Domain name for SSL certificate'
     Default: 'example.com'
 
-  EnableGuardDuty:
-    Type: String
-    Description: 'Enable GuardDuty detector creation'
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
   EnableCloudTrail:
     Type: String
     Description: 'Enable CloudTrail creation'
@@ -142,15 +130,22 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+  EnableGuardDuty:
+    Type: String
+    Description: 'Enable GuardDuty detector creation'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
-  EnableGuardDutyCondition:
-    !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
+
   EnableCloudTrailCondition:
     !And [!Equals [!Ref EnableCloudTrail, 'true'], !Condition IsPrimaryRegion]
   EnableAWSConfigCondition:
     !And [!Equals [!Ref EnableAWSConfig, 'true'], !Condition IsPrimaryRegion]
   EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
+  EnableGuardDutyCondition:
+    !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
 
 Resources:
   # VPC and Networking Resources
@@ -326,7 +321,7 @@ Resources:
           - Sid: EnableIAMUserPermissions
             Effect: Allow
             Principal:
-              AWS: !Ref KeyAdministratorArn
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
           - Sid: AllowCloudTrail
@@ -712,10 +707,80 @@ Resources:
         - Arn: !Ref ProdSecurityNotificationsTopic
           Id: 'ConfigComplianceTarget'
 
-  # GuardDuty Detector
+  # Custom Resource to check for existing GuardDuty detectors
+  GuardDutyDetectorCheck:
+    Type: Custom::GuardDutyDetectorCheck
+    Condition: EnableGuardDutyCondition
+    Properties:
+      ServiceToken: !GetAtt GuardDutyDetectorCheckFunction.Arn
+
+  # Lambda function to check for existing GuardDuty detectors
+  GuardDutyDetectorCheckFunction:
+    Type: AWS::Lambda::Function
+    Condition: EnableGuardDutyCondition
+    Properties:
+      FunctionName: !Sub '${Environment}-guardduty-detector-check'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt GuardDutyDetectorCheckRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      guardduty = boto3.client('guardduty')
+                      response = guardduty.list_detectors()
+                      
+                      if response['DetectorIds']:
+                          # Detector already exists
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                         {'DetectorExists': 'true', 'DetectorId': response['DetectorIds'][0]})
+                      else:
+                          # No detector exists
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                         {'DetectorExists': 'false'})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  # IAM Role for Lambda function
+  GuardDutyDetectorCheckRole:
+    Type: AWS::IAM::Role
+    Condition: EnableGuardDutyCondition
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: GuardDutyCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - guardduty:ListDetectors
+                Resource: '*'
+
+  # GuardDuty Detector - Only created if no detector exists
   ProdGuardDutyDetector:
     Type: AWS::GuardDuty::Detector
     Condition: EnableGuardDutyCondition
+    DependsOn: GuardDutyDetectorCheck
     Properties:
       Enable: true
       FindingPublishingFrequency: 'FIFTEEN_MINUTES'
