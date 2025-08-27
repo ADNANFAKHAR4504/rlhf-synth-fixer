@@ -11,7 +11,7 @@ import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
+
 import java.util.Arrays;
 
 /**
@@ -26,6 +26,9 @@ public class MainTest {
     
     @BeforeEach
     public void setUp() {
+        // Clear environment variables that might interfere with tests
+        System.clearProperty("ENVIRONMENT_SUFFIX");
+        
         // Set environment variables for testing
         System.setProperty("CDK_DEFAULT_REGION", "us-west-2");
         System.setProperty("CDK_DEFAULT_ACCOUNT", "123456789012");
@@ -51,7 +54,9 @@ public class MainTest {
      */
     @Test
     public void testDefaultEnvironmentSuffix() {
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder().build());
+        // Create a new app to ensure clean context
+        App testApp = new App();
+        TapStack stack = new TapStack(testApp, "TestStack", TapStackProps.builder().build());
 
         // Verify default environment suffix
         assertThat(stack.getEnvironmentSuffix()).isEqualTo("dev");
@@ -62,9 +67,11 @@ public class MainTest {
      */
     @Test
     public void testEnvironmentSuffixFromContext() {
-        app.getNode().setContext("environmentSuffix", "staging");
+        // Create a new app to ensure clean context
+        App testApp = new App();
+        testApp.getNode().setContext("environmentSuffix", "staging");
         
-        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder().build());
+        TapStack stack = new TapStack(testApp, "TestStack", TapStackProps.builder().build());
 
         // Verify environment suffix from context is used
         assertThat(stack.getEnvironmentSuffix()).isEqualTo("staging");
