@@ -1,8 +1,8 @@
 # Environment Configuration
-environment   = "production"
-project_name  = "serverless-app"
-owner         = "DevOps Team"
-cost_center   = "Engineering"
+environment  = "production"
+project_name = "serverless-app"
+owner        = "DevOps Team"
+cost_center  = "Engineering"
 
 # Network Configuration
 vpc_cidr = "10.0.0.0/16"

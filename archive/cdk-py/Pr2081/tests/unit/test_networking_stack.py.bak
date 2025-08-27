@@ -1,0 +1,100 @@
+"""Unit tests for NetworkingStack"""
+
+import unittest
+import aws_cdk as cdk
+from aws_cdk.assertions import Template, Match
+from pytest import mark
+
+from lib.networking_stack import NetworkingStack
+
+
+@mark.describe("NetworkingStack")
+class TestNetworkingStack(unittest.TestCase):
+    """Test cases for the NetworkingStack"""
+
+    def setUp(self):
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.stack = cdk.Stack(self.app, "TestStack")
+
+    @mark.it("creates VPC with correct configuration")
+    def test_creates_vpc(self):
+        # ARRANGE
+        env_suffix = "test"
+        networking = NetworkingStack(self.stack, "TestNetworking", environment_suffix=env_suffix)
+        template = Template.from_stack(networking)
+
+        # ASSERT
+        template.resource_count_is("AWS::EC2::VPC", 1)
+        template.has_resource_properties("AWS::EC2::VPC", {
+            "CidrBlock": "10.0.0.0/16",
+            "EnableDnsHostnames": True,
+            "EnableDnsSupport": True
+        })
+
+    @mark.it("creates subnets in multiple availability zones")
+    def test_creates_subnets(self):
+        # ARRANGE
+        env_suffix = "test"
+        networking = NetworkingStack(self.stack, "TestNetworking", environment_suffix=env_suffix)
+        template = Template.from_stack(networking)
+
+        # ASSERT - Should have public, private, and database subnets
+        # The actual number depends on the number of available AZs in the region
+        # Let's check for at least 6 subnets (2 AZs minimum)
+        subnet_count = len(template.find_resources("AWS::EC2::Subnet"))
+        assert subnet_count >= 6, f"Expected at least 6 subnets, found {subnet_count}"
+
+    @mark.it("creates security groups with correct rules")
+    def test_creates_security_groups(self):
+        # ARRANGE
+        env_suffix = "test"
+        networking = NetworkingStack(self.stack, "TestNetworking", environment_suffix=env_suffix)
+        template = Template.from_stack(networking)
+
+        # ASSERT
+        template.resource_count_is("AWS::EC2::SecurityGroup", 3)  # ALB, Web, Database
+
+        # Check ALB security group allows HTTP and HTTPS
+        template.has_resource_properties("AWS::EC2::SecurityGroup", {
+            "GroupDescription": "Security group for Application Load Balancer",
+            "SecurityGroupIngress": Match.array_with([
+                Match.object_like({
+                    "IpProtocol": "tcp",
+                    "FromPort": 80,
+                    "ToPort": 80,
+                    "CidrIp": "0.0.0.0/0"
+                }),
+                Match.object_like({
+                    "IpProtocol": "tcp",
+                    "FromPort": 443,
+                    "ToPort": 443,
+                    "CidrIp": "0.0.0.0/0"
+                })
+            ])
+        })
+
+    @mark.it("creates VPC endpoint for S3")
+    def test_creates_vpc_endpoint(self):
+        # ARRANGE
+        env_suffix = "test"
+        networking = NetworkingStack(self.stack, "TestNetworking", environment_suffix=env_suffix)
+        template = Template.from_stack(networking)
+
+        # ASSERT
+        template.resource_count_is("AWS::EC2::VPCEndpoint", 1)
+        template.has_resource_properties("AWS::EC2::VPCEndpoint", {
+            "VpcEndpointType": "Gateway"
+        })
+
+    @mark.it("exposes required attributes")
+    def test_exposes_attributes(self):
+        # ARRANGE
+        env_suffix = "test"
+        networking = NetworkingStack(self.stack, "TestNetworking", environment_suffix=env_suffix)
+
+        # ASSERT
+        assert networking.vpc is not None
+        assert networking.alb_sg is not None
+        assert networking.web_sg is not None
+        assert networking.database_sg is not None

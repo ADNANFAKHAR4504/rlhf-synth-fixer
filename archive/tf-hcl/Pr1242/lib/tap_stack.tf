@@ -606,7 +606,7 @@ resource "aws_s3_bucket_policy" "main" {
         Principal = {
           AWS = aws_iam_role.ec2_role.arn
         }
-        Action = "s3:ListBucket"
+        Action   = "s3:ListBucket"
         Resource = aws_s3_bucket.main.arn
       }
     ]
@@ -699,10 +699,10 @@ resource "aws_db_instance" "main_east" {
   vpc_security_group_ids = [aws_security_group.rds_east.id]
   db_subnet_group_name   = aws_db_subnet_group.main_east.name
 
-  multi_az               = true
+  multi_az                = true
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -734,10 +734,10 @@ resource "aws_db_instance" "main_west" {
   vpc_security_group_ids = [aws_security_group.rds_west.id]
   db_subnet_group_name   = aws_db_subnet_group.main_west.name
 
-  multi_az               = true
+  multi_az                = true
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false

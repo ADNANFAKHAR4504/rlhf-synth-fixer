@@ -54,3 +54,11 @@ generates infrastructure described in the task description.
 **Note**: Code generation only - no build/test/lint in this phase
 
 - Important: Never remove the templates folder.
+
+#### Agent-Specific Reporting
+- Report start of requirements analysis with specific task being generated
+- Report configuration analysis completion and identified requirements
+- Report each file generation step with current file being created
+- Report any issues with template access, file writing, or requirement parsing
+- Report blocking conditions if unable to access required files or templates
+- Report final code generation summary with file count and locations

@@ -415,10 +415,10 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.project}-web-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
-  target_group_arns   = []
-  health_check_type   = "EC2"
+  name                      = "${var.project}-web-asg"
+  vpc_zone_identifier       = aws_subnet.public[*].id
+  target_group_arns         = []
+  health_check_type         = "EC2"
   health_check_grace_period = 300
 
   min_size         = 1
@@ -504,9 +504,9 @@ resource "aws_db_instance" "main" {
   port                   = local.db_config[var.db_engine].port
 
   # Backup and maintenance
-  backup_retention_period   = 7
-  backup_window            = "03:00-04:00"
-  maintenance_window       = "sun:04:00-sun:05:00"
+  backup_retention_period    = 7
+  backup_window              = "03:00-04:00"
+  maintenance_window         = "sun:04:00-sun:05:00"
   auto_minor_version_upgrade = true
 
   # Monitoring
@@ -667,8 +667,8 @@ resource "aws_cloudtrail" "main" {
 
   # Event selector for all read/write events
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {

@@ -182,8 +182,8 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
       Principal = {
         Service = "ec2.amazonaws.com"
       }
@@ -293,22 +293,22 @@ resource "aws_s3_bucket_policy" "alb_logs_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AWSLogDeliveryWrite"
-        Effect    = "Allow"
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.alb_logs.arn}/*"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
       },
       {
-        Sid       = "AWSLogDeliveryAclCheck"
-        Effect    = "Allow"
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.alb_logs.arn
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
       }
     ]
   })
@@ -399,11 +399,11 @@ resource "aws_launch_template" "app_lt" {
 }
 
 resource "aws_autoscaling_group" "app_asg" {
-  name                      = "${var.project}-${var.environment}-asg"
-  min_size                  = 2
-  max_size                  = 4
-  desired_capacity          = 2
-  vpc_zone_identifier       = aws_subnet.private[*].id
+  name                = "${var.project}-${var.environment}-asg"
+  min_size            = 2
+  max_size            = 4
+  desired_capacity    = 2
+  vpc_zone_identifier = aws_subnet.private[*].id
   launch_template {
     id      = aws_launch_template.app_lt.id
     version = "$Latest"
@@ -445,12 +445,12 @@ resource "random_password" "db_password" {
 }
 
 data "aws_secretsmanager_secret" "db_password" {
-  name = "${var.project}-${var.environment}-db-password"
+  name       = "${var.project}-${var.environment}-db-password"
   depends_on = [aws_secretsmanager_secret.db_password]
 }
 
 data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = data.aws_secretsmanager_secret.db_password.id
+  secret_id  = data.aws_secretsmanager_secret.db_password.id
   depends_on = [aws_secretsmanager_secret_version.db_password_value]
 }
 
@@ -459,21 +459,21 @@ resource "aws_db_instance" "mysql" {
     aws_secretsmanager_secret_version.db_password_value
   ]
 
-  identifier              = "a-${lower(var.project)}-${lower(var.environment)}-mysql"
-  allocated_storage       = 20
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = "db.t3.micro"
-  username                = var.db_username
-  password                = data.aws_secretsmanager_secret_version.db_password.secret_string
-  multi_az                = true
-  storage_encrypted       = true
-  publicly_accessible     = false
-  skip_final_snapshot     = true
-  db_subnet_group_name    = aws_db_subnet_group.rds_subnets.name
-  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
-  deletion_protection     = false
-  tags                    = local.common_tags
+  identifier             = "a-${lower(var.project)}-${lower(var.environment)}-mysql"
+  allocated_storage      = 20
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  username               = var.db_username
+  password               = data.aws_secretsmanager_secret_version.db_password.secret_string
+  multi_az               = true
+  storage_encrypted      = true
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnets.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  deletion_protection    = false
+  tags                   = local.common_tags
 }
 
 #########################

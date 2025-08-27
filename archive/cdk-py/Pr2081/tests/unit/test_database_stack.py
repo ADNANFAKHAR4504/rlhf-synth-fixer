@@ -1,0 +1,146 @@
+"""Unit tests for DatabaseStack"""
+
+import unittest
+import aws_cdk as cdk
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk.assertions import Template, Match
+from pytest import mark
+
+from lib.database_stack import DatabaseStack
+
+
+@mark.describe("DatabaseStack")
+class TestDatabaseStack(unittest.TestCase):
+    """Test cases for the DatabaseStack"""
+
+    def setUp(self):
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.stack = cdk.Stack(self.app, "TestStack")
+
+        # Create VPC and security group for testing
+        self.vpc = ec2.Vpc(self.stack, "TestVPC",
+                           subnet_configuration=[
+                               ec2.SubnetConfiguration(
+                                   name="isolated",
+                                   subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                                   cidr_mask=24
+                               )
+                           ])
+        self.db_sg = ec2.SecurityGroup(self.stack, "TestDBSG",
+                                       vpc=self.vpc,
+                                       description="Test DB SG")
+
+    @mark.it("creates RDS instance with correct configuration")
+    def test_creates_rds_instance(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT
+        template.resource_count_is("AWS::RDS::DBInstance", 1)
+        template.has_resource_properties("AWS::RDS::DBInstance", {
+            "Engine": "mysql",
+            "DBInstanceClass": "db.t3.micro",
+            "AllocatedStorage": "20",
+            "MaxAllocatedStorage": 100,
+            "StorageEncrypted": True,
+            "MultiAZ": False,
+            "BackupRetentionPeriod": 7,
+            "DeletionProtection": False
+        })
+
+    @mark.it("creates database subnet group")
+    def test_creates_subnet_group(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT
+        template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
+        template.has_resource_properties("AWS::RDS::DBSubnetGroup", {
+            "DBSubnetGroupDescription": "Subnet group for RDS database",
+            "DBSubnetGroupName": f"prod-db-subnet-group-{env_suffix}"
+        })
+
+    @mark.it("creates secrets for database credentials")
+    def test_creates_database_secret(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT
+        template.resource_count_is("AWS::SecretsManager::Secret", 1)
+        template.has_resource_properties("AWS::SecretsManager::Secret", {
+            "GenerateSecretString": Match.object_like({
+                "SecretStringTemplate": "{\"username\":\"admin\"}",
+                "GenerateStringKey": "password"
+            })
+        })
+
+    @mark.it("attaches secret to database")
+    def test_attaches_secret_to_database(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT
+        template.resource_count_is("AWS::SecretsManager::SecretTargetAttachment", 1)
+
+    @mark.it("outputs database credentials secret ARN")
+    def test_outputs_secret_arn(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT
+        outputs = template.find_outputs("*")
+        assert "DatabaseCredentialsSecretArn" in outputs
+
+    @mark.it("uses MySQL 8.0")
+    def test_uses_mysql_8(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+        template = Template.from_stack(database)
+
+        # ASSERT - Check RDS instance uses MySQL engine
+        template.has_resource_properties("AWS::RDS::DBInstance", {
+            "Engine": "mysql"
+        })
+
+    @mark.it("exposes database instance")
+    def test_exposes_database_instance(self):
+        # ARRANGE
+        env_suffix = "test"
+        database = DatabaseStack(self.stack, "TestDatabase",
+                               vpc=self.vpc,
+                               database_security_group=self.db_sg,
+                               environment_suffix=env_suffix)
+
+        # ASSERT
+        assert database.database is not None
+        assert hasattr(database.database, 'instance_endpoint')

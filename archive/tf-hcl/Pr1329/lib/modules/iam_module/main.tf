@@ -126,7 +126,7 @@ resource "aws_iam_role_policy" "developer_policy" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:RequestedRegion": ["us-east-1", "us-west-2", "eu-central-1"]
+            "aws:RequestedRegion" : ["us-east-1", "us-west-2", "eu-central-1"]
           }
         }
       }

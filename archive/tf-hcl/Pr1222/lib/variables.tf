@@ -13,7 +13,7 @@ variable "project_name" {
 variable "environments" {
   description = "List of environments"
   type        = list(string)
-  default     = ["dev"]  # Reduced to just dev to avoid VPC limits
+  default     = ["dev"] # Reduced to just dev to avoid VPC limits
 }
 
 variable "owner" {

@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr129",
+  "team": "synth",
+  "startedAt": "2025-08-22T22:08:22+05:30",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "IAM",
+    "CloudWatch",
+    "Bedrock",
+    "Textract"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

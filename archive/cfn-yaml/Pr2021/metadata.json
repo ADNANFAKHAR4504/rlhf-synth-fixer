@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr937",
+  "team": "synth",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Database Management"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "VPC",
+    "EventBridge",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

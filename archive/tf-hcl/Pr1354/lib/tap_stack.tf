@@ -479,7 +479,7 @@ resource "aws_autoscaling_group" "main" {
   min_size                  = local.current_config.min_size
   max_size                  = local.current_config.max_size
   desired_capacity          = local.current_config.desired_capacity
-  depends_on = [aws_lb_listener.main]        # ensure LB path is ready
+  depends_on                = [aws_lb_listener.main] # ensure LB path is ready
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
@@ -520,8 +520,8 @@ resource "aws_db_subnet_group" "main" {
 
 # Random password for RDS
 resource "random_password" "db" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%^&*()-_=+[]{}<>?:"
 }
 
@@ -561,9 +561,9 @@ resource "aws_db_instance" "main" {
 
 # Store DB password in SSM Parameter Store
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/${local.name_prefix}/db/password"
-  type  = "SecureString"
-  value = random_password.db.result
+  name      = "/${local.name_prefix}/db/password"
+  type      = "SecureString"
+  value     = random_password.db.result
   overwrite = true
 
   tags = merge(
