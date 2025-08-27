@@ -520,13 +520,9 @@ Resources:
   # CloudTrail Bucket Policy
   ProdCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudTrailBucket
     Properties:
-      Bucket:
-        !If [
-          CreateCloudTrailBucket,
-          !Ref ProdCloudTrailBucket,
-          !Ref ExistingCloudTrailBucketName,
-        ]
+      Bucket: !Ref ProdCloudTrailBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
