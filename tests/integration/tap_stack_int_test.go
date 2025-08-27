@@ -33,17 +33,27 @@ func loadFlatOutputs() (FlatOutputs, error) {
 		return nil, fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// Navigate up to project root and then to cfn-outputs
-	flatOutputsPath := filepath.Join(currentDir, "..", "..", "cfn-outputs", "flat-outputs.json")
+	// When tests are copied to lib/, we need to go up one level to project root
+	flatOutputsPath := filepath.Join(currentDir, "..", "cfn-outputs", "flat-outputs.json")
+	
+	// Try alternative path if first doesn't exist
+	if _, err := os.Stat(flatOutputsPath); os.IsNotExist(err) {
+		// Try from current directory (if running from project root)
+		flatOutputsPath = filepath.Join(currentDir, "cfn-outputs", "flat-outputs.json")
+	}
 
 	if _, err := os.Stat(flatOutputsPath); os.IsNotExist(err) {
+		fmt.Printf("DEBUG: flat-outputs.json not found at %s\n", flatOutputsPath)
 		return FlatOutputs{}, nil // Return empty map if file doesn't exist
 	}
 
+	fmt.Printf("DEBUG: Loading flat-outputs.json from %s\n", flatOutputsPath)
 	data, err := os.ReadFile(flatOutputsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read flat-outputs.json: %w", err)
 	}
+
+	fmt.Printf("DEBUG: Raw JSON data: %s\n", string(data))
 
 	// Parse nested structure first
 	var nestedOutputs map[string]map[string]interface{}
@@ -63,6 +73,7 @@ func loadFlatOutputs() (FlatOutputs, error) {
 		}
 	}
 
+	fmt.Printf("DEBUG: Flattened outputs: %+v\n", outputs)
 	return outputs, nil
 }
 
