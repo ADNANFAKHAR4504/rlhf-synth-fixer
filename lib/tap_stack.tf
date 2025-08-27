@@ -368,41 +368,69 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 }
 
 # Outputs
-output "s3_bucket_ids" {
-  description = "IDs of all S3 buckets created"
-  value = {
-    us_east_1      = aws_s3_bucket.us_east_1.id
-    eu_west_1      = aws_s3_bucket.eu_west_1.id
-    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.id
-  }
+# US East 1 outputs
+output "s3_bucket_id_us_east_1" {
+  description = "ID of S3 bucket in us-east-1"
+  value       = aws_s3_bucket.us_east_1.id
 }
 
-output "s3_bucket_arns" {
-  description = "ARNs of all S3 buckets created"
-  value = {
-    us_east_1      = aws_s3_bucket.us_east_1.arn
-    eu_west_1      = aws_s3_bucket.eu_west_1.arn
-    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.arn
-  }
+output "s3_bucket_arn_us_east_1" {
+  description = "ARN of S3 bucket in us-east-1"
+  value       = aws_s3_bucket.us_east_1.arn
 }
 
-output "s3_bucket_domain_names" {
-  description = "Domain names of all S3 buckets"
-  value = {
-    us_east_1      = aws_s3_bucket.us_east_1.bucket_domain_name
-    eu_west_1      = aws_s3_bucket.eu_west_1.bucket_domain_name
-    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.bucket_domain_name
-  }
+output "s3_bucket_domain_name_us_east_1" {
+  description = "Domain name of S3 bucket in us-east-1"
+  value       = aws_s3_bucket.us_east_1.bucket_domain_name
 }
 
-output "s3_bucket_regional_domain_names" {
-  description = "Regional domain names of all S3 buckets"
-  value = {
-    us_east_1      = aws_s3_bucket.us_east_1.bucket_regional_domain_name
-    eu_west_1      = aws_s3_bucket.eu_west_1.bucket_regional_domain_name
-    ap_southeast_1 = aws_s3_bucket.ap_southeast_1.bucket_regional_domain_name
-  }
+output "s3_bucket_regional_domain_name_us_east_1" {
+  description = "Regional domain name of S3 bucket in us-east-1"
+  value       = aws_s3_bucket.us_east_1.bucket_regional_domain_name
 }
+
+# EU West 1 outputs
+output "s3_bucket_id_eu_west_1" {
+  description = "ID of S3 bucket in eu-west-1"
+  value       = aws_s3_bucket.eu_west_1.id
+}
+
+output "s3_bucket_arn_eu_west_1" {
+  description = "ARN of S3 bucket in eu-west-1"
+  value       = aws_s3_bucket.eu_west_1.arn
+}
+
+output "s3_bucket_domain_name_eu_west_1" {
+  description = "Domain name of S3 bucket in eu-west-1"
+  value       = aws_s3_bucket.eu_west_1.bucket_domain_name
+}
+
+output "s3_bucket_regional_domain_name_eu_west_1" {
+  description = "Regional domain name of S3 bucket in eu-west-1"
+  value       = aws_s3_bucket.eu_west_1.bucket_regional_domain_name
+}
+
+# AP Southeast 1 outputs
+output "s3_bucket_id_ap_southeast_1" {
+  description = "ID of S3 bucket in ap-southeast-1"
+  value       = aws_s3_bucket.ap_southeast_1.id
+}
+
+output "s3_bucket_arn_ap_southeast_1" {
+  description = "ARN of S3 bucket in ap-southeast-1"
+  value       = aws_s3_bucket.ap_southeast_1.arn
+}
+
+output "s3_bucket_domain_name_ap_southeast_1" {
+  description = "Domain name of S3 bucket in ap-southeast-1"
+  value       = aws_s3_bucket.ap_southeast_1.bucket_domain_name
+}
+
+output "s3_bucket_regional_domain_name_ap_southeast_1" {
+  description = "Regional domain name of S3 bucket in ap-southeast-1"
+  value       = aws_s3_bucket.ap_southeast_1.bucket_regional_domain_name
+}
+
 
 output "lambda_iam_role_arn" {
   description = "ARN of the IAM role for Lambda functions to access S3 buckets"

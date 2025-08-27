@@ -10,97 +10,111 @@ import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 const OUTPUTS_PATH = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 
 interface Outputs {
-  bucket_regions: string; // JSON string, must parse again to object
-  s3_bucket_arns: string; // JSON string, must parse again to object
-  s3_replication_role_arn: string;
+  // S3 buckets per region
+  s3_bucket_id_us_east_1: string;
+  s3_bucket_arn_us_east_1: string;
+  s3_bucket_domain_name_us_east_1: string;
+  s3_bucket_regional_domain_name_us_east_1: string;
+
+  s3_bucket_id_eu_west_1: string;
+  s3_bucket_arn_eu_west_1: string;
+  s3_bucket_domain_name_eu_west_1: string;
+  s3_bucket_regional_domain_name_eu_west_1: string;
+
+  s3_bucket_id_ap_southeast_1: string;
+  s3_bucket_arn_ap_southeast_1: string;
+  s3_bucket_domain_name_ap_southeast_1: string;
+  s3_bucket_regional_domain_name_ap_southeast_1: string;
+
   lambda_iam_role_arn: string;
+  lambda_iam_role_name: string;
+  s3_replication_role_arn: string;
+  s3_replication_role_name: string;
+
+  environment: string;
+  project_name: string;
+  // Add other outputs if needed
 }
 
 describe("tap_stack Terraform live integration tests", () => {
   let outputs: Outputs;
-  let bucketRegions!: Record<string, string>;
-  let bucketArns!: Record<string, string>;
 
   beforeAll(() => {
     const raw = fs.readFileSync(OUTPUTS_PATH, "utf-8");
     outputs = JSON.parse(raw);
 
-    // Because bucket_regions and s3_bucket_arns are JSON strings (escaped in JSON),
-    // we parse them once more to convert them into JS objects
-    bucketRegions = parseJsonString(outputs.bucket_regions, "bucket_regions");
-    bucketArns = parseJsonString(outputs.s3_bucket_arns, "s3_bucket_arns");
-
-    if (!bucketRegions || Object.keys(bucketRegions).length === 0) {
-      throw new Error("Parsed bucket_regions is empty or invalid");
-    }
-    if (!bucketArns || Object.keys(bucketArns).length === 0) {
-      throw new Error("Parsed s3_bucket_arns is empty or invalid");
-    }
+    // Basic verification for presence of required outputs
+    expect(typeof outputs.s3_bucket_arn_us_east_1).toBe("string");
+    expect(typeof outputs.s3_bucket_arn_eu_west_1).toBe("string");
+    expect(typeof outputs.s3_bucket_arn_ap_southeast_1).toBe("string");
+    expect(typeof outputs.lambda_iam_role_arn).toBe("string");
+    expect(typeof outputs.s3_replication_role_arn).toBe("string");
   });
 
-  it("has all expected outputs keys", () => {
-    expect(outputs).toHaveProperty("bucket_regions");
-    expect(outputs).toHaveProperty("s3_bucket_arns");
-    expect(outputs).toHaveProperty("s3_replication_role_arn");
-    expect(outputs).toHaveProperty("lambda_iam_role_arn");
-  });
+  const buckets = [
+    {
+      region: "us-east-1",
+      bucketArn: "s3_bucket_arn_us_east_1",
+      bucketId: "s3_bucket_id_us_east_1",
+    },
+    {
+      region: "eu-west-1",
+      bucketArn: "s3_bucket_arn_eu_west_1",
+      bucketId: "s3_bucket_id_eu_west_1",
+    },
+    {
+      region: "ap-southeast-1",
+      bucketArn: "s3_bucket_arn_ap_southeast_1",
+      bucketId: "s3_bucket_id_ap_southeast_1",
+    },
+  ];
 
-  Object.keys(bucketArns).forEach((regionKey) => {
-    const s3Region = bucketRegions[regionKey];
-    const bucketArn = bucketArns[regionKey];
+  buckets.forEach(({ region, bucketArn, bucketId }) => {
+    describe(`S3 bucket in ${region}`, () => {
+      let s3Client: S3Client;
+      let bucketName: string;
 
-    const bucketName = bucketArn.split(":::")[1];
-    const s3Client = new S3Client({ region: s3Region });
+      beforeAll(() => {
+        s3Client = new S3Client({ region });
+        const arn = (outputs as any)[bucketArn];
+        bucketName = arn.split(":::")[1];
+      });
 
-    describe(`S3 bucket ${bucketName} in region ${s3Region}`, () => {
       it("should have versioning enabled", async () => {
-        const versioningResp = await s3Client.send(
+        const versioning = await s3Client.send(
           new GetBucketVersioningCommand({ Bucket: bucketName })
         );
-        expect(versioningResp.Status).toBe("Enabled");
+        expect(versioning.Status).toBe("Enabled");
       });
 
       it("should have AES256 encryption enabled", async () => {
-        const encryptionResp = await s3Client.send(
+        const encryption = await s3Client.send(
           new GetBucketEncryptionCommand({ Bucket: bucketName })
         );
-        const rules = encryptionResp.ServerSideEncryptionConfiguration?.Rules || [];
+        const rules = encryption.ServerSideEncryptionConfiguration?.Rules || [];
         const hasAES256 = rules.some(
-          (rule) =>
-            rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
+          rule => rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
         );
         expect(hasAES256).toBe(true);
       });
     });
   });
 
-  it("replication IAM role exists", async () => {
-    const iamClient = new IAMClient({ region: bucketRegions.us_east_1 }); // replication role is in us-east-1
+  it("should have the S3 replication IAM role existing", async () => {
+    const iamClient = new IAMClient({ region: "us-east-1" });
     const roleArn = outputs.s3_replication_role_arn;
     const roleName = roleArn.split("/").pop()!;
     const resp = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-
     expect(resp.Role).toBeDefined();
     expect(resp.Role?.Arn).toEqual(roleArn);
   });
 
-  it("lambda IAM role exists", async () => {
-    const iamClient = new IAMClient({ region: bucketRegions.us_east_1 }); // lambda role in us-east-1
+  it("should have the Lambda execution IAM role existing", async () => {
+    const iamClient = new IAMClient({ region: "us-east-1" });
     const roleArn = outputs.lambda_iam_role_arn;
     const roleName = roleArn.split("/").pop()!;
     const resp = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-
     expect(resp.Role).toBeDefined();
     expect(resp.Role?.Arn).toEqual(roleArn);
   });
 });
-
-// Helper function to parse a JSON string field safely
-function parseJsonString(input: string | undefined, fieldName: string): any {
-  if (!input) throw new Error(`Missing ${fieldName} output`);
-  try {
-    return JSON.parse(input);
-  } catch (err) {
-    throw new Error(`Failed to parse ${fieldName} JSON string: ${err}`);
-  }
-}
