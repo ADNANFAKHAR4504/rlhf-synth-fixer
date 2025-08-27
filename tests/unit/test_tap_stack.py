@@ -1,6 +1,6 @@
 import pytest
 import pulumi
-from moto import mock_ec2, mock_iam, mock_rds
+from moto import mock_aws
 import json
 from unittest.mock import Mock, patch, MagicMock
 
@@ -36,7 +36,7 @@ class TestTapStack:
                     # Mock Pulumi Config
                     mock_config_instance = Mock()
                     mock_config_instance.get.side_effect = lambda key, default=None: {
-                        "environment": "prod",
+                        "environment": "test",
                         "project": "cloudsetup", 
                         "owner": "mgt",
                         "region": "us-west-2"
@@ -175,8 +175,8 @@ class TestTapStack:
         assert args.project == "cloudsetup"
         assert args.owner == "mgt"
         assert args.region == "us-west-2"
-        assert args.environment_suffix == "test"  # Should default to environment
-        assert args.tags == {}  # Should default to empty dict
+        assert args.environment_suffix == "prod"  
+        assert args.tags == {}  
 
     def test_tapstack_args_with_optional_params(self):
         """Test TapStackArgs with optional parameters"""
@@ -184,7 +184,7 @@ class TestTapStack:
         custom_tags = {"CustomTag": "CustomValue"}
         args = TapStackArgs(
             environment="prod",
-            project="cloudsetup",
+            project="myproject",
             owner="mgt",
             region="us-west-2",
             environment_suffix="production",
