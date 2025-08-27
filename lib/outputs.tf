@@ -35,6 +35,10 @@ output "role_arn_config" {
   value = module.iam_config.role_arn
 }
 
+output "role_arn_mfa" {
+  value = module.iam_mfa_role.role_arn
+}
+
 output "s3_secure_bucket" {
   value = module.s3_secure_bucket.s3_bucket_id
 }

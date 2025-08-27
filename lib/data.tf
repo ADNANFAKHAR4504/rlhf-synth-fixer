@@ -124,3 +124,46 @@ data "aws_iam_policy_document" "config_policy" {
     resources = ["*"]
   }
 }
+
+data "aws_iam_policy_document" "mfa_role_assume" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions = ["sts:AssumeRole"]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+
+    condition {
+      test     = "NumericLessThan"
+      variable = "aws:MultiFactorAuthAge"
+      values   = ["3600"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "s3_readonly" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:ListBucket",
+      "s3:GetBucketLocation"
+    ]
+
+    resources = [
+      module.s3_secure_bucket.s3_bucket_arn,
+      "${module.s3_secure_bucket.s3_bucket_arn}/*"
+    ]
+  }
+}

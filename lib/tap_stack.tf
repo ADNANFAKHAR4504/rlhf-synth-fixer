@@ -108,6 +108,15 @@ module "iam_config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
+module "iam_config" {
+  source = "./modules/iam"
+  role_name= "${var.project}-MFA-Required-Role"
+  policy_name = "${var.project}-mfa-required-policy"
+  assume_policy = data.aws_iam_policy_document.mfa_role_assume.json
+  iam_policy = data.aws_iam_policy_document.s3_readonly.json
+  policy_arn = ""
+}
+
 module "config" {
   source = "./modules/config"
   config_bucket = module.s3_config_bucket.s3_bucket_id
