@@ -316,7 +316,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       } catch (error) {
         console.warn('Could not verify ALB details, may need proper IAM permissions');
         // At least verify DNS format
-        expect(loadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.elb\.(amazonaws\.com|aws\.com)$/);
+        expect(loadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+-[0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
       }
     });
 
@@ -440,8 +440,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
         expect(response.KeyMetadata?.Description).toBe('KMS Key for infrastructure encryption');
       } catch (error) {
         console.warn('Could not verify KMS key details, may need proper IAM permissions');
-        // At least verify key ID format
-        expect(kmsKeyId).toMatch(/^[a-f0-9-]{36}$/);
+        // At least verify key ID format (AWS KMS key IDs can be ARNs or key IDs)
+        expect(kmsKeyId).toMatch(/^(arn:aws:kms:[a-z0-9-]+:[0-9]+:key\/)?[a-f0-9-]{8,}$/);
       }
     });
   });
@@ -526,7 +526,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       if (dbEndpoint) {
         // Database endpoints should be private (not resolve to public IPs)
         // This is a basic check - in production you'd want more sophisticated tests
-        expect(dbEndpoint).toMatch(/\.rds\.(amazonaws\.com|aws\.com)$/);
+        expect(dbEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
         expect(dbEndpoint).not.toMatch(/^\d+\.\d+\.\d+\.\d+$/);
       }
     });
