@@ -182,17 +182,17 @@ public final class Main {
 
         String finalEnvironmentSuffix = environmentSuffix;
 
-        List.of(usEast1, usWest2).forEach((environment) -> {
-            new TapStack(app, "TapStack" + finalEnvironmentSuffix, TapStackProps.builder()
-                    .environmentSuffix(finalEnvironmentSuffix)
-                    .stackProps(StackProps.builder()
-                            .env(Environment.builder()
-                                    .account(environment.getAccount())
-                                    .region(environment.getRegion())
-                                    .build())
-                            .build())
-                    .build());
-        });
+        List.of(usEast1, usWest2).forEach((environment) -> new TapStack(
+                app, "TapStack-" + finalEnvironmentSuffix + "-" + environment.getRegion(),
+                TapStackProps.builder()
+                .environmentSuffix(finalEnvironmentSuffix)
+                .stackProps(StackProps.builder()
+                        .env(Environment.builder()
+                                .account(environment.getAccount())
+                                .region(environment.getRegion())
+                                .build())
+                        .build())
+                .build()));
 
         app.synth();
     }
