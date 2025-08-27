@@ -91,6 +91,7 @@ public final class Main {
         private final String environment;
         private final String region;
         private final boolean isPrimary;
+        private final String uniqueSuffix;
         private IVpc vpc;
         private Key kmsKey;
         private Bucket logsBucket;
@@ -102,6 +103,7 @@ public final class Main {
             this.environment = env;
             this.region = reg;
             this.isPrimary = primary;
+            this.uniqueSuffix = String.valueOf(System.currentTimeMillis()).substring(8);
 
             createBasicInfrastructure();
             createComputeInfrastructure();
@@ -113,6 +115,7 @@ public final class Main {
             Tags.of(this).add("Environment", environment);
             Tags.of(this).add("Project", "MultiRegionApp");
             Tags.of(this).add("Owner", "DevOps");
+            Tags.of(this).add("UniqueId", uniqueSuffix);
 
             vpc = Vpc.Builder.create(this, "CustomVpc")
                 .maxAzs(2)
@@ -120,11 +123,12 @@ public final class Main {
                 .build();
 
             kmsKey = Key.Builder.create(this, "KmsKey")
-                .description("KMS key for " + environment + " in " + region)
+                .description("KMS key for " + environment + " in " + region + " (" + uniqueSuffix + ")")
                 .build();
 
             if (isPrimary) {
                 logsBucket = Bucket.Builder.create(this, "LogsBucket")
+                    .bucketName("logs-bucket-" + environment + "-" + region + "-" + uniqueSuffix)
                     .encryption(BucketEncryption.KMS)
                     .encryptionKey(kmsKey)
                     .versioned(true)
@@ -134,7 +138,7 @@ public final class Main {
             }
 
             ec2Role = Role.Builder.create(this, "Ec2Role")
-                .roleName("Ec2Role-" + environment + "-" + region)
+                .roleName("Ec2Role-" + environment + "-" + region + "-" + uniqueSuffix)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy")
@@ -152,24 +156,24 @@ public final class Main {
 
         private void createComputeInfrastructure() {
             SecurityGroup albSg = SecurityGroup.Builder.create(this, "AlbSg")
-                .securityGroupName("AlbSg-" + environment + "-" + region)
+                .securityGroupName("AlbSg-" + environment + "-" + region + "-" + uniqueSuffix)
                 .vpc(vpc)
-                .description("ALB Security Group")
+                .description("ALB Security Group (" + uniqueSuffix + ")")
                 .build();
 
             albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "HTTP");
             albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), "HTTPS");
 
             SecurityGroup ec2Sg = SecurityGroup.Builder.create(this, "Ec2Sg")
-                .securityGroupName("Ec2Sg-" + environment + "-" + region)
+                .securityGroupName("Ec2Sg-" + environment + "-" + region + "-" + uniqueSuffix)
                 .vpc(vpc)
-                .description("EC2 Security Group")
+                .description("EC2 Security Group (" + uniqueSuffix + ")")
                 .build();
 
             ec2Sg.addIngressRule(albSg, Port.tcp(80), "HTTP from ALB");
 
             ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "Alb")
-                .loadBalancerName("Alb-" + environment + "-" + region)
+                .loadBalancerName("Alb-" + environment + "-" + region + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .internetFacing(true)
                 .securityGroup(albSg)
@@ -186,7 +190,7 @@ public final class Main {
             }
 
             ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(this, "TargetGroup")
-                .targetGroupName("TargetGroup-" + environment + "-" + region)
+                .targetGroupName("TargetGroup-" + environment + "-" + region + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .port(80)
                 .protocol(ApplicationProtocol.HTTP)
@@ -202,7 +206,7 @@ public final class Main {
                 .build());
 
             AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "Asg")
-                .autoScalingGroupName("Asg-" + environment + "-" + region)
+                .autoScalingGroupName("Asg-" + environment + "-" + region + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .instanceType(environment.equals("production")
                     ? InstanceType.of(InstanceClass.M5, InstanceSize.LARGE)
@@ -221,7 +225,7 @@ public final class Main {
         private void createDatabaseResources() {
             if (isPrimary) {
                 DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds")
-                    .instanceIdentifier("Rds-" + environment + "-" + region)
+                    .instanceIdentifier("Rds-" + environment + "-" + region + "-" + uniqueSuffix)
                     .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0)
                         .build()))
@@ -237,7 +241,7 @@ public final class Main {
                     .build();
 
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
-                    .tableName("AppTable-" + environment + "-" + region)
+                    .tableName("AppTable-" + environment + "-" + region + "-" + uniqueSuffix)
                     .partitionKey(Attribute.builder()
                         .name("id")
                         .type(AttributeType.STRING)
@@ -251,7 +255,7 @@ public final class Main {
                     .build();
             } else {
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
-                    .tableName("AppTable-" + environment + "-" + region)
+                    .tableName("AppTable-" + environment + "-" + region + "-" + uniqueSuffix)
                     .partitionKey(Attribute.builder()
                         .name("id")
                         .type(AttributeType.STRING)
@@ -267,7 +271,7 @@ public final class Main {
 
         private void createLoggingResources() {
             LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
-                .logGroupName("/aws/ec2/" + environment + "-" + region)
+                .logGroupName("/aws/ec2/" + environment + "-" + region + "-" + uniqueSuffix)
                 .retention(RetentionDays.ONE_WEEK)
                 .build();
         }
