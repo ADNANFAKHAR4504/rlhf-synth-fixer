@@ -249,7 +249,7 @@ class TapStack(TerraformStack):
             engine_version="15",
             instance_class="db.t3.micro",
             db_name="webappdb",
-            username="admin",
+            username="adminUser",
             password="MustBeChangedInSecretsManager1",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[db_sg.id],
