@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "Single",
+  "po_id": "291798",
+  "team": "1",
+  "startedAt": "2025-08-25T02:11:39.203Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "amitk6-ctu",
+  "dockerS3Location": ""
+}
