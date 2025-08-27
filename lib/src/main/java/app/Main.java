@@ -85,6 +85,7 @@ class TapStack extends Stack {
     // Configuration constants
     private static final String ALLOWED_SSH_CIDR = "203.0.113.0/24"; // Replace with your IP range
     private static final String APPLICATION_NAME = "secure-app";
+    private static final String EC2_KEY_PAIR_NAME = "my-key-pair"; // Must exist in us-west-2 region
 
     /**
      * Constructs a new TapStack.
@@ -399,7 +400,7 @@ class TapStack extends Stack {
             .securityGroup(securityGroup)
             .role(ec2Role) // REQUIREMENT: IAM role properly attached
             .userData(userData)
-            .keyName("my-key-pair") // Replace with your key pair name
+            .keyName(EC2_KEY_PAIR_NAME) // Hardcoded key pair name for us-west-2 region
             // Additional security configurations
             .detailedMonitoring(true) // Enable detailed monitoring
             .build();
