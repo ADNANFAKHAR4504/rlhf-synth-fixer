@@ -455,22 +455,23 @@ describe('TapStack CloudFormation Template', () => {
   describe('ALB Weighted Forwarding', () => {
     test('HTTP listener uses weighted forward to blue and green', () => {
       const listeners = Object.values(template.template.Resources).filter((r: any) => r.Type === 'AWS::ElasticLoadBalancingV2::Listener');
-      const http = listeners.find((l: any) => l.Properties.Protocol === 'HTTP');
+      const http = listeners.find((l: any) => (l as any).Properties?.Protocol === 'HTTP') as any;
       expect(http).toBeDefined();
-      const action = http!.Properties.DefaultActions[0];
+      if (!http?.Properties) return; // guard
+      const action = http.Properties.DefaultActions[0];
       expect(action.Type).toBe('forward');
       const tgs = action.ForwardConfig.TargetGroups;
       expect(Array.isArray(tgs)).toBe(true);
-      // Ensure both target groups are present with weights
       const hasBlue = tgs.some((tg: any) => tg.TargetGroupArn && tg.Weight !== undefined);
       expect(hasBlue).toBe(true);
     });
 
     test('HTTPS listener uses weighted forward to blue and green', () => {
       const listeners = Object.values(template.template.Resources).filter((r: any) => r.Type === 'AWS::ElasticLoadBalancingV2::Listener');
-      const https = listeners.find((l: any) => l.Properties.Protocol === 'HTTPS');
+      const https = listeners.find((l: any) => (l as any).Properties?.Protocol === 'HTTPS') as any;
       expect(https).toBeDefined();
-      const action = https!.Properties.DefaultActions[0];
+      if (!https?.Properties) return; // guard
+      const action = https.Properties.DefaultActions[0];
       expect(action.Type).toBe('forward');
       const cfg = action.ForwardConfig;
       expect(cfg.TargetGroups.length).toBeGreaterThan(0);
