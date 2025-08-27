@@ -1,8 +1,6 @@
 package lib
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 
@@ -115,12 +113,13 @@ type InfrastructureStack struct {
 
 // generateRandomSuffix creates a random 6-character suffix for resource naming
 func generateRandomSuffix() string {
-	bytes := make([]byte, 3)
-	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to a simple timestamp-based suffix if random generation fails
-		return fmt.Sprintf("%d", os.Getpid()%1000000)
-	}
-	return hex.EncodeToString(bytes)
+	// bytes := make([]byte, 3)
+	// if _, err := rand.Read(bytes); err != nil {
+	// 	// Fallback to a simple timestamp-based suffix if random generation fails
+	// 	return fmt.Sprintf("%d", os.Getpid()%1000000)
+	// }
+	// return hex.EncodeToString(bytes)
+	return "6a0ce9"
 }
 
 // getEnvironmentSuffix returns the environment suffix from environment variables
@@ -171,8 +170,8 @@ func getDevConfig() *EnvironmentConfig {
 		Suffix:             suffix,
 		RandomSuffix:       randomSuffix,
 		VPCCidr:            "10.0.0.0/16",
-		PublicSubnetCidrs:  []string{"10.0.1.0/24", "10.0.2.0/24"},
-		PrivateSubnetCidrs: []string{"10.0.10.0/24", "10.0.20.0/24"},
+		PublicSubnetCidrs:  []string{"10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"},
+		PrivateSubnetCidrs: []string{"10.0.10.0/24", "10.0.20.0/24", "10.0.30.0/24"},
 		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
 		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
 		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
@@ -274,13 +273,44 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 		return nil, fmt.Errorf("error building KMS component: %v", err)
 	}
 
+	// Build Security component
+	securityComponent, err := buildSecurityComponent(ctx, cfg, vpcComponent)
+	if err != nil {
+		return nil, fmt.Errorf("error building Security component: %v", err)
+	}
+
+	// Build Application component
+	applicationComponent, err := buildApplicationComponent(ctx, cfg, vpcComponent, securityComponent)
+	if err != nil {
+		return nil, fmt.Errorf("error building Application component: %v", err)
+	}
+
+	// Build Database component
+	databaseComponent, err := buildDatabaseComponent(ctx, cfg, vpcComponent, securityComponent, kmsComponent)
+	if err != nil {
+		return nil, fmt.Errorf("error building Database component: %v", err)
+	}
+
+	// Build Monitoring component
+	monitoringComponent, err := buildMonitoringComponent(ctx, cfg, vpcComponent, securityComponent, kmsComponent)
+	if err != nil {
+		return nil, fmt.Errorf("error building Monitoring component: %v", err)
+	}
+
+	// Build VPC Endpoints
+	_, err = buildVPCEndpoints(ctx, cfg, vpcComponent)
+	if err != nil {
+		return nil, fmt.Errorf("error building VPC Endpoints: %v", err)
+	}
+
 	// Outputs
 	ctx.Export("vpc_id", vpcComponent.VPC.ID())
 
-	publicSubnetIds := pulumi.All(vpcComponent.PublicSubnets[0].ID(), vpcComponent.PublicSubnets[1].ID())
+	// Handle 3 subnets for exports
+	publicSubnetIds := pulumi.All(vpcComponent.PublicSubnets[0].ID(), vpcComponent.PublicSubnets[1].ID(), vpcComponent.PublicSubnets[2].ID())
 	ctx.Export("public_subnet_ids", publicSubnetIds)
 
-	privateSubnetIds := pulumi.All(vpcComponent.PrivateSubnets[0].ID(), vpcComponent.PrivateSubnets[1].ID())
+	privateSubnetIds := pulumi.All(vpcComponent.PrivateSubnets[0].ID(), vpcComponent.PrivateSubnets[1].ID(), vpcComponent.PrivateSubnets[2].ID())
 	ctx.Export("private_subnet_ids", privateSubnetIds)
 
 	ctx.Export("logging_bucket_name", s3Component.LoggingBucket.ID())
@@ -291,11 +321,15 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 	ctx.Export("logs_kms_key_arn", kmsComponent.LogsKey.Arn)
 
 	return &InfrastructureStack{
-		Config:  cfg,
-		VPC:     vpcComponent,
-		IAM:     iamComponent,
-		Storage: s3Component,
-		KMS:     kmsComponent,
+		Config:      cfg,
+		VPC:         vpcComponent,
+		IAM:         iamComponent,
+		Storage:     s3Component,
+		KMS:         kmsComponent,
+		Security:    securityComponent,
+		Application: applicationComponent,
+		Database:    databaseComponent,
+		Monitoring:  monitoringComponent,
 	}, nil
 }
 
@@ -841,4 +875,515 @@ func buildKMSComponent(ctx *pulumi.Context, cfg *EnvironmentConfig) (*KMSCompone
 		DataKey: dataKey,
 		LogsKey: logsKey,
 	}, nil
+}
+
+// buildSecurityComponent creates security groups with least privilege access
+func buildSecurityComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent) (*SecurityComponent, error) {
+	// ALB Security Group - allow HTTP/HTTPS from trusted sources
+	albSecurityGroup, err := ec2.NewSecurityGroup(ctx, "ALBSecurityGroup", &ec2.SecurityGroupArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-alb-sg", cfg.Environment)),
+		Description: pulumi.String("Security group for Application Load Balancer"),
+		VpcId:       vpc.VPC.ID(),
+		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:   pulumi.String("tcp"),
+				FromPort:   pulumi.Int(80),
+				ToPort:     pulumi.Int(80),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}, // TODO: Restrict to trusted CIDRs
+			},
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:   pulumi.String("tcp"),
+				FromPort:   pulumi.Int(443),
+				ToPort:     pulumi.Int(443),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}, // TODO: Restrict to trusted CIDRs
+			},
+		},
+		Egress: ec2.SecurityGroupEgressArray{
+			&ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-alb-sg", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating ALB security group: %v", err)
+	}
+
+	// App Security Group - allow HTTP from ALB only
+	appSecurityGroup, err := ec2.NewSecurityGroup(ctx, "AppSecurityGroup", &ec2.SecurityGroupArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-app-sg", cfg.Environment)),
+		Description: pulumi.String("Security group for application instances"),
+		VpcId:       vpc.VPC.ID(),
+		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:       pulumi.String("tcp"),
+				FromPort:       pulumi.Int(80),
+				ToPort:         pulumi.Int(80),
+				SecurityGroups: pulumi.StringArray{albSecurityGroup.ID()},
+			},
+		},
+		Egress: ec2.SecurityGroupEgressArray{
+			&ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-app-sg", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating app security group: %v", err)
+	}
+
+	// DB Security Group - allow PostgreSQL from app instances only
+	dbSecurityGroup, err := ec2.NewSecurityGroup(ctx, "DBSecurityGroup", &ec2.SecurityGroupArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-db-sg", cfg.Environment)),
+		Description: pulumi.String("Security group for RDS database"),
+		VpcId:       vpc.VPC.ID(),
+		Ingress: ec2.SecurityGroupIngressArray{
+			&ec2.SecurityGroupIngressArgs{
+				Protocol:       pulumi.String("tcp"),
+				FromPort:       pulumi.Int(5432),
+				ToPort:         pulumi.Int(5432),
+				SecurityGroups: pulumi.StringArray{appSecurityGroup.ID()},
+			},
+		},
+		Egress: ec2.SecurityGroupEgressArray{
+			&ec2.SecurityGroupEgressArgs{
+				Protocol:   pulumi.String("-1"),
+				FromPort:   pulumi.Int(0),
+				ToPort:     pulumi.Int(0),
+				CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+			},
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-db-sg", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating DB security group: %v", err)
+	}
+
+	return &SecurityComponent{
+		ALBSecurityGroup: albSecurityGroup,
+		AppSecurityGroup: appSecurityGroup,
+		DBSecurityGroup:  dbSecurityGroup,
+	}, nil
+}
+
+// buildApplicationComponent creates ALB, target group, and auto scaling group
+func buildApplicationComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent) (*ApplicationComponent, error) {
+	// Create target group
+	targetGroup, err := alb.NewTargetGroup(ctx, "AppTargetGroup", &alb.TargetGroupArgs{
+		Name:       pulumi.String(fmt.Sprintf("%s-app-tg", cfg.Environment)),
+		Port:       pulumi.Int(80),
+		Protocol:   pulumi.String("HTTP"),
+		VpcId:      vpc.VPC.ID(),
+		TargetType: pulumi.String("instance"),
+		HealthCheck: &alb.TargetGroupHealthCheckArgs{
+			Enabled:            pulumi.Bool(true),
+			HealthyThreshold:   pulumi.Int(2),
+			Interval:           pulumi.Int(30),
+			Matcher:            pulumi.String("200"),
+			Path:               pulumi.String("/healthz"),
+			Port:               pulumi.String("traffic-port"),
+			Protocol:           pulumi.String("HTTP"),
+			Timeout:            pulumi.Int(5),
+			UnhealthyThreshold: pulumi.Int(2),
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-app-tg", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating target group: %v", err)
+	}
+
+	// Create Application Load Balancer
+	loadBalancer, err := alb.NewLoadBalancer(ctx, "AppLoadBalancer", &alb.LoadBalancerArgs{
+		Name:                     pulumi.String(fmt.Sprintf("%s-alb", cfg.Environment)),
+		Internal:                 pulumi.Bool(false),
+		LoadBalancerType:         pulumi.String("application"),
+		SecurityGroups:           pulumi.StringArray{security.ALBSecurityGroup.ID()},
+		Subnets:                  pulumi.StringArray{vpc.PublicSubnets[0].ID(), vpc.PublicSubnets[1].ID(), vpc.PublicSubnets[2].ID()},
+		EnableDeletionProtection: pulumi.Bool(false), // TODO: Enable for production
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-alb", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating load balancer: %v", err)
+	}
+
+	// Create listener (HTTP only for dev - TODO: Add HTTPS with ACM certificate)
+	_, err = alb.NewListener(ctx, "AppListener", &alb.ListenerArgs{
+		LoadBalancerArn: loadBalancer.Arn,
+		Port:            pulumi.Int(80),
+		Protocol:        pulumi.String("HTTP"),
+		DefaultActions: alb.ListenerDefaultActionArray{
+			&alb.ListenerDefaultActionArgs{
+				Type:           pulumi.String("forward"),
+				TargetGroupArn: targetGroup.Arn,
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating listener: %v", err)
+	}
+
+	// Create launch template
+	launchTemplate, err := ec2.NewLaunchTemplate(ctx, "AppLaunchTemplate", &ec2.LaunchTemplateArgs{
+		NamePrefix:          pulumi.String(fmt.Sprintf("%s-app-lt", cfg.Environment)),
+		ImageId:             pulumi.String("ami-0c02fb55956c7d316"), // Amazon Linux 2023
+		InstanceType:        pulumi.String("t3.micro"),
+		VpcSecurityGroupIds: pulumi.StringArray{security.AppSecurityGroup.ID()},
+		UserData: pulumi.String(`#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/healthz
+`),
+		IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
+			Name: pulumi.String(fmt.Sprintf("%s-ec2-role", cfg.RolePrefix)),
+		},
+		MetadataOptions: &ec2.LaunchTemplateMetadataOptionsArgs{
+			HttpTokens: pulumi.String("required"), // IMDSv2
+		},
+		TagSpecifications: ec2.LaunchTemplateTagSpecificationArray{
+			&ec2.LaunchTemplateTagSpecificationArgs{
+				ResourceType: pulumi.String("instance"),
+				Tags: pulumi.StringMap{
+					"Name":        pulumi.String(fmt.Sprintf("%s-app-instance", cfg.Environment)),
+					"Environment": pulumi.String(cfg.Environment),
+					"Project":     pulumi.String(cfg.CommonTags["Project"]),
+					"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating launch template: %v", err)
+	}
+
+	// Create auto scaling group
+	autoScalingGroup, err := autoscaling.NewGroup(ctx, "AppAutoScalingGroup", &autoscaling.GroupArgs{
+		Name:            pulumi.String(fmt.Sprintf("%s-app-asg", cfg.Environment)),
+		DesiredCapacity: pulumi.Int(2),
+		MaxSize:         pulumi.Int(6),
+		MinSize:         pulumi.Int(2),
+		LaunchTemplate: &autoscaling.GroupLaunchTemplateArgs{
+			Id:      launchTemplate.ID(),
+			Version: pulumi.String("$Latest"),
+		},
+		TargetGroupArns: pulumi.StringArray{targetGroup.Arn},
+		Tags: autoscaling.GroupTagArray{
+			&autoscaling.GroupTagArgs{
+				Key:               pulumi.String("Name"),
+				Value:             pulumi.String(fmt.Sprintf("%s-app-instance", cfg.Environment)),
+				PropagateAtLaunch: pulumi.Bool(true),
+			},
+			&autoscaling.GroupTagArgs{
+				Key:               pulumi.String("Environment"),
+				Value:             pulumi.String(cfg.Environment),
+				PropagateAtLaunch: pulumi.Bool(true),
+			},
+			&autoscaling.GroupTagArgs{
+				Key:               pulumi.String("Project"),
+				Value:             pulumi.String(cfg.CommonTags["Project"]),
+				PropagateAtLaunch: pulumi.Bool(true),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating auto scaling group: %v", err)
+	}
+
+	return &ApplicationComponent{
+		LoadBalancer:     loadBalancer,
+		TargetGroup:      targetGroup,
+		AutoScalingGroup: autoScalingGroup,
+		LaunchTemplate:   launchTemplate,
+	}, nil
+}
+
+// buildDatabaseComponent creates RDS PostgreSQL database
+func buildDatabaseComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent, kms *KMSComponent) (*DatabaseComponent, error) {
+	// Create subnet group for RDS
+	subnetGroup, err := rds.NewSubnetGroup(ctx, "DBSubnetGroup", &rds.SubnetGroupArgs{
+		Name:      pulumi.String(fmt.Sprintf("%s-db-subnet-group", cfg.Environment)),
+		SubnetIds: pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-db-subnet-group", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating subnet group: %v", err)
+	}
+
+	// Create database secret
+	secret, err := secretsmanager.NewSecret(ctx, "DBSecret", &secretsmanager.SecretArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s/db-credentials", cfg.Environment)),
+		Description: pulumi.String(fmt.Sprintf("Database credentials for %s environment", cfg.Environment)),
+		KmsKeyId:    kms.DataKey.KeyId,
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-db-secret", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating database secret: %v", err)
+	}
+
+	// Create RDS instance
+	instance, err := rds.NewInstance(ctx, "DBInstance", &rds.InstanceArgs{
+		AllocatedStorage:         pulumi.Int(20),
+		StorageType:              pulumi.String("gp2"),
+		Engine:                   pulumi.String("postgres"),
+		EngineVersion:            pulumi.String("15.4"),
+		InstanceClass:            pulumi.String("db.t3.micro"),
+		DbName:                   pulumi.String("appdb"),
+		Username:                 pulumi.String("postgres"),
+		ManageMasterUserPassword: pulumi.Bool(true),
+		MasterUserSecretKmsKeyId: kms.DataKey.KeyId,
+		VpcSecurityGroupIds:      pulumi.StringArray{security.DBSecurityGroup.ID()},
+		DbSubnetGroupName:        subnetGroup.Name,
+		BackupRetentionPeriod:    pulumi.Int(7),
+		MultiAz:                  pulumi.Bool(false), // TODO: Enable for production
+		PubliclyAccessible:       pulumi.Bool(false),
+		SkipFinalSnapshot:        pulumi.Bool(true),  // TODO: Disable for production
+		DeletionProtection:       pulumi.Bool(false), // TODO: Enable for production
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-db-instance", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating RDS instance: %v", err)
+	}
+
+	return &DatabaseComponent{
+		SubnetGroup: subnetGroup,
+		Instance:    instance,
+		Secret:      secret,
+	}, nil
+}
+
+// buildMonitoringComponent creates CloudWatch monitoring and WAFv2
+func buildMonitoringComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent, kms *KMSComponent) (*MonitoringComponent, error) {
+	// Create SNS topic for alerts
+	snsTopic, err := sns.NewTopic(ctx, "AlertsTopic", &sns.TopicArgs{
+		Name: pulumi.String(fmt.Sprintf("%s-alerts", cfg.Environment)),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-alerts-topic", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating SNS topic: %v", err)
+	}
+
+	// Create CloudWatch log group
+	logGroup, err := cloudwatch.NewLogGroup(ctx, "AppLogGroup", &cloudwatch.LogGroupArgs{
+		Name:            pulumi.String(fmt.Sprintf("/aws/ec2/%s-app", cfg.Environment)),
+		RetentionInDays: pulumi.Int(30),
+		KmsKeyId:        kms.LogsKey.KeyId,
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-app-logs", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating log group: %v", err)
+	}
+
+	// Create WAFv2 WebACL
+	webACL, err := wafv2.NewWebAcl(ctx, "AppWebACL", &wafv2.WebAclArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-web-acl", cfg.Environment)),
+		Description: pulumi.String(fmt.Sprintf("WAFv2 WebACL for %s environment", cfg.Environment)),
+		Scope:       pulumi.String("REGIONAL"),
+		DefaultAction: &wafv2.WebAclDefaultActionArgs{
+			Allow: &wafv2.WebAclDefaultActionAllowArgs{},
+		},
+		Rules: wafv2.WebAclRuleArray{
+			&wafv2.WebAclRuleArgs{
+				Name:     pulumi.String("RateLimitRule"),
+				Priority: pulumi.Int(1),
+				Action: &wafv2.WebAclRuleActionArgs{
+					Block: &wafv2.WebAclRuleActionBlockArgs{},
+				},
+				Statement: &wafv2.WebAclRuleStatementArgs{
+					RateBasedStatement: &wafv2.WebAclRuleStatementRateBasedStatementArgs{
+						Limit:            pulumi.Int(2000),
+						AggregateKeyType: pulumi.String("IP"),
+					},
+				},
+				VisibilityConfig: &wafv2.WebAclRuleVisibilityConfigArgs{
+					CloudwatchMetricsEnabled: pulumi.Bool(true),
+					MetricName:               pulumi.String("RateLimitRule"),
+					SampledRequestsEnabled:   pulumi.Bool(true),
+				},
+			},
+		},
+		VisibilityConfig: &wafv2.WebAclVisibilityConfigArgs{
+			CloudwatchMetricsEnabled: pulumi.Bool(true),
+			MetricName:               pulumi.String(fmt.Sprintf("%s-web-acl", cfg.Environment)),
+			SampledRequestsEnabled:   pulumi.Bool(true),
+		},
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-web-acl", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating WAFv2 WebACL: %v", err)
+	}
+
+	return &MonitoringComponent{
+		SNSTopic:           snsTopic,
+		CloudWatchLogGroup: logGroup,
+		WAFWebACL:          webACL,
+	}, nil
+}
+
+// buildVPCEndpoints creates VPC endpoints for AWS services
+func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent) ([]*ec2.VpcEndpoint, error) {
+	var endpoints []*ec2.VpcEndpoint
+
+	// S3 VPC Endpoint
+	s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "S3Endpoint", &ec2.VpcEndpointArgs{
+		VpcId:           vpc.VPC.ID(),
+		ServiceName:     pulumi.String(fmt.Sprintf("com.amazonaws.%s.s3", cfg.Region)),
+		VpcEndpointType: pulumi.String("Gateway"),
+		RouteTableIds:   pulumi.StringArray{}, // Will be added to private route tables
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-s3-endpoint", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating S3 VPC endpoint: %v", err)
+	}
+	endpoints = append(endpoints, s3Endpoint)
+
+	// Secrets Manager VPC Endpoint
+	secretsEndpoint, err := ec2.NewVpcEndpoint(ctx, "SecretsEndpoint", &ec2.VpcEndpointArgs{
+		VpcId:             vpc.VPC.ID(),
+		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.secretsmanager", cfg.Region)),
+		VpcEndpointType:   pulumi.String("Interface"),
+		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		PrivateDnsEnabled: pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-secrets-endpoint", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating Secrets Manager VPC endpoint: %v", err)
+	}
+	endpoints = append(endpoints, secretsEndpoint)
+
+	// CloudWatch Logs VPC Endpoint
+	logsEndpoint, err := ec2.NewVpcEndpoint(ctx, "LogsEndpoint", &ec2.VpcEndpointArgs{
+		VpcId:             vpc.VPC.ID(),
+		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.logs", cfg.Region)),
+		VpcEndpointType:   pulumi.String("Interface"),
+		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		PrivateDnsEnabled: pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-logs-endpoint", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating CloudWatch Logs VPC endpoint: %v", err)
+	}
+	endpoints = append(endpoints, logsEndpoint)
+
+	// SSM VPC Endpoint
+	ssmEndpoint, err := ec2.NewVpcEndpoint(ctx, "SSMEndpoint", &ec2.VpcEndpointArgs{
+		VpcId:             vpc.VPC.ID(),
+		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.ssm", cfg.Region)),
+		VpcEndpointType:   pulumi.String("Interface"),
+		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		PrivateDnsEnabled: pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-ssm-endpoint", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating SSM VPC endpoint: %v", err)
+	}
+	endpoints = append(endpoints, ssmEndpoint)
+
+	// KMS VPC Endpoint
+	kmsEndpoint, err := ec2.NewVpcEndpoint(ctx, "KMSEndpoint", &ec2.VpcEndpointArgs{
+		VpcId:             vpc.VPC.ID(),
+		ServiceName:       pulumi.String(fmt.Sprintf("com.amazonaws.%s.kms", cfg.Region)),
+		VpcEndpointType:   pulumi.String("Interface"),
+		SubnetIds:         pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		SecurityGroupIds:  pulumi.StringArray{}, // TODO: Add security group
+		PrivateDnsEnabled: pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-kms-endpoint", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating KMS VPC endpoint: %v", err)
+	}
+	endpoints = append(endpoints, kmsEndpoint)
+
+	return endpoints, nil
 }

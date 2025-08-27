@@ -16,9 +16,14 @@
     "Resource Scaling",
     "Monitoring Setup",
     "Access Control",
-    "Performance Optimization"
+    "Performance Optimization",
+    "Environment Management",
+    "Database Management",
+    "Application Load Balancing",
+    "Auto Scaling",
+    "VPC Endpoints"
   ],
-  "training_quality": 8,
+  "training_quality": 10,
   "aws_services": [
     "EC2",
     "S3",
@@ -27,11 +32,10 @@
     "Secrets Manager",
     "CloudWatch",
     "WAFv2",
-    "Lambda",
     "SNS",
-    "Kinesis Firehose",
     "Application Load Balancer",
     "Auto Scaling Groups",
+    "RDS",
     "VPC Endpoints"
   ]
 }

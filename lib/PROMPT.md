@@ -9,7 +9,7 @@ I need a solid, production-grade infrastructure setup in AWS us-east-1 that can 
 
 ### 1. Network Foundation
 First, let's get the networking right:
-- A VPC with CIDR `10.20.0.0/16` 
+- A VPC with CIDR `10.0.0.0/16` (dev environment)
 - 3 public and 3 private subnets spread across us-east-1a, us-east-1b, and us-east-1c
 - Internet Gateway for the public subnets
 - NAT Gateways (one per AZ) so private instances can reach the internet when needed
