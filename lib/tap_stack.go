@@ -1078,14 +1078,7 @@ func buildApplicationComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc 
 		ImageId:             pulumi.String("ami-0c02fb55956c7d316"), // Amazon Linux 2023
 		InstanceType:        pulumi.String("t3.micro"),
 		VpcSecurityGroupIds: pulumi.StringArray{security.AppSecurityGroup.ID()},
-		UserData: pulumi.String(`#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-echo "OK" > /var/www/html/healthz
-`),
+		UserData:            pulumi.String("IyEvYmluL2Jhc2gKeXVtIHVwZGF0ZSAteQp5dW0gaW5zdGFsbCAteSBodHRwZAogc3lzdGVtY3RsIHN0YXJ0IGh0dHBkCnN5c3RlbWN0bCBlbmFibGUgaHR0cGQKZWNobyAiPGgxPkhlbGxvIGZyb20gJCho b3N0bmFtZSAtZik8L2gxPiIgPiAvdmFyL3d3dy9odG1sL2luZGV4Lmh0bWwKZWNobyAiT0siID4gL3Zhci93d3cvaHRtbC9oZWFsdGg6"),
 		IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
 			Name: iam.EC2InstanceProfile.Name,
 		},
