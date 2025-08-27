@@ -1,28 +1,24 @@
-Subject: Quick question about a new AWS setup (CDK Go)
+Alright, here's a brain dump for the new AWS setup using the Go CDK. We need a solid, prod-ready template for our basic infrastructure. Security is a big deal here, so let's get that right.
 
-Hey,
+We're just setting up a standard environment in us-east-1. It'll have the usual stuff: a VPC, public/private subnets, a database, an EC2 instance, plus monitoring and storage. The idea is to keep it all in one Go CDK template so it's easy to handle.
 
-Hope you're having a good week.
+Here are the specifics:
 
-I'm mapping out the infrastructure for a new project and was hoping to get your expertise. We're planning to use the Go CDK to stand up a new production environment, and the goal is to get a secure and scalable foundation in place from day one.
+For the VPC, let's use 10.0.0.0/16. We'll need two public and two private subnets across different AZs for HA. It needs an Internet Gateway, and a NAT Gateway in a public subnet so the private instances can get updates.
 
-Here are the key things we need:
+The database will be a multi-AZ RDS for MySQL, sitting in the private subnets so it's not on the public internet. We should also set up a CloudWatch alarm for CPU usage - maybe alert us if it's over 75% for a bit.
 
-- **Region & Tagging:** Everything needs to be in `us-east-1`. Also, can we make sure every single resource gets tagged with `Environment: Production` and `Department: IT`? This is a huge help for our cost allocation.
+The EC2 instance can go in a public subnet. It'll be our web server or bastion. It needs an IAM role that can read from our S3 bucket (s3:GetObject).
 
-- **Networking:** A standard VPC with public and private subnets across two AZs should be perfect. No need for anything overly complex right now.
+For storage, just a standard S3 bucket for assets and logs. We should lock it down with a bucket policy so it's only accessible from our VPC, and turn on server access logging.
 
-- **Web Server:** We'll need an EC2 instance (a `t3.micro` is fine to start) in one of the public subnets. The big thing here is locking it down. Can you make sure its security group only allows inbound HTTPS traffic from the internet? It should also have a basic IAM role attached, just so we're following best practices from the get-go.
+Security is key. The RDS security group should only allow MySQL traffic (port 3306) from the EC2 instance's security group. The EC2 instance's security group should allow HTTP/HTTPS from anywhere, but SSH should be locked down to a specific IP we can pass in. Also, let's use a VPC Gateway Endpoint for S3 so the EC2 instance doesn't have to hit the public internet to talk to S3.
 
-- **Database:** For the database, let's go with a PostgreSQL RDS instance. It absolutely needs to be in the private subnets, and it's critical that **encryption at rest is enabled**. This is a hard requirement for us.
+A few other things:
 
-- **Connectivity:** This is the most important part. The web server needs to be the _only_ thing that can talk to the database. Could you wire up the security groups so the RDS instance only allows traffic from the EC2's security group on the PostgreSQL port?
+- Tag everything with Environment: Production and Project: CDKSetup.
+- Don't hardcode stuff like the SSH IP, instance types, or DB creds. Use parameters.
+- Let's try to name things consistently, like cf-vpc, cf-rds-sg, etc.
+- The final code should be clean and commented.
 
-- **Auditing:** Lastly, we need CloudTrail enabled to keep an eye on all API activity.
-
-The ideal deliverable would be a single, clean `main.go` file that defines the whole stack. If you could add some comments to explain the key parts, that would be amazing for the rest of the team.
-
-Thanks a bunch for your help on this!
-
-Cheers,
-[Your Name]
+Let me know what you think.

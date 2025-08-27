@@ -1,10 +1,10 @@
-# AWS CDK Go Stack for a Secure Production Environment
+# Our Secure AWS CDK Go Stack
 
-This document contains the Go source code for an AWS CDK stack that provisions a secure, multi-AZ environment in `us-east-1`. The stack includes a VPC, a public-facing EC2 instance, a private RDS database, and necessary security configurations.
+Here's the Go code for our AWS CDK stack. It sets up a secure and resilient environment in `us-east-1` with a VPC, a public EC2 instance, and a private RDS database.
 
-## Stack Definition (`lib/tap_stack.go`)
+## The Stack Code (`lib/tap_stack.go`)
 
-This is the core file defining all the AWS resources and their configurations. Note that the CloudTrail and associated S3 bucket resources have been commented out to avoid potential AWS account quota limits during deployment.
+This file has everything needed to define our infrastructure. I've commented out the CloudTrail bits for now to make sure we don't hit any AWS account limits when deploying.
 
 ```go
 package lib
@@ -29,13 +29,13 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
-	// Apply tags to the stack
+	// Tag everything so we know what's what
 	awscdk.Tags_Of(stack).Add(jsii.String("Environment"), jsii.String("Production"), nil)
 	awscdk.Tags_Of(stack).Add(jsii.String("Department"), jsii.String("IT"), nil)
 
-	// Create VPC with public and isolated private subnets (no NAT Gateway needed)
+	// Set up the VPC with public and private subnets, but no NAT Gateways to save on costs
 	vpc := awsec2.NewVpc(stack, jsii.String("ITProductionVPC"), &awsec2.VpcProps{
-		MaxAzs: jsii.Number(2), // Deploy across 2 availability zones for resilience
+		MaxAzs: jsii.Number(2),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
 				Name:       jsii.String("PublicSubnet"),
@@ -44,23 +44,22 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			},
 			{
 				Name:       jsii.String("PrivateSubnet"),
-				SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED, // No internet access needed
+				SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
 				CidrMask:   jsii.Number(24),
 			},
 		},
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
-		NatGateways:        jsii.Number(0), // No NAT Gateways = No EIPs needed
+		NatGateways:        jsii.Number(0),
 	})
 
-	// Security Group for Web Server (EC2) - Only allows HTTPS from internet
+	// A security group for our web server to only allow HTTPS traffic
 	webServerSG := awsec2.NewSecurityGroup(stack, jsii.String("WebServerSecurityGroup"), &awsec2.SecurityGroupProps{
 		Vpc:              vpc,
 		Description:      jsii.String("Security group for web server - HTTPS only"),
 		AllowAllOutbound: jsii.Bool(true),
 	})
 
-	// Allow HTTPS traffic from anywhere on the internet
 	webServerSG.AddIngressRule(
 		awsec2.Peer_AnyIpv4(),
 		awsec2.Port_Tcp(jsii.Number(443)),
@@ -68,14 +67,14 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		jsii.Bool(false),
 	)
 
-	// Security Group for RDS Database - Only allows connections from web server
+	// A security group for the database to keep it locked down
 	databaseSG := awsec2.NewSecurityGroup(stack, jsii.String("DatabaseSecurityGroup"), &awsec2.SecurityGroupProps{
 		Vpc:              vpc,
 		Description:      jsii.String("Security group for RDS database - Web server access only"),
 		AllowAllOutbound: jsii.Bool(false),
 	})
 
-	// Allow PostgreSQL connections only from the web server security group
+	// Only let the web server talk to the database
 	databaseSG.AddIngressRule(
 		webServerSG,
 		awsec2.Port_Tcp(jsii.Number(5432)),
@@ -83,7 +82,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		jsii.Bool(false),
 	)
 
-	// IAM Role for EC2 instance
+	// A basic IAM role for our EC2 instance
 	ec2Role := awsiam.NewRole(stack, jsii.String("WebServerRole"), &awsiam.RoleProps{
 		AssumedBy:   awsiam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), nil),
 		Description: jsii.String("Basic IAM role for web server EC2 instance"),
@@ -92,12 +91,12 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		},
 	})
 
-	// Get the latest Amazon Linux 2 AMI
+	// Use the latest and greatest Amazon Linux 2 AMI
 	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{
 		CpuType: awsec2.AmazonLinuxCpuType_X86_64,
 	})
 
-	// EC2 Instance in public subnet for web server
+	// Create the EC2 instance itself
 	webServer := awsec2.NewInstance(stack, jsii.String("WebServerInstance"), &awsec2.InstanceProps{
 		InstanceType: awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
 		MachineImage: amazonLinuxAmi,
@@ -112,23 +111,23 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		}),
 	})
 
-	// Add basic setup commands to user data
+	// Add some startup commands to the EC2 instance
 	webServer.UserData().AddCommands(
 		jsii.String("yum update -y"),
 		jsii.String("yum install -y amazon-cloudwatch-agent"),
 		jsii.String("# Add your application setup commands here"),
 	)
 
-	// Subnet Group for RDS in isolated private subnets
+	// A subnet group for our RDS instance
 	dbSubnetGroup := awsrds.NewSubnetGroup(stack, jsii.String("DatabaseSubnetGroup"), &awsrds.SubnetGroupProps{
 		Description: jsii.String("Subnet group for RDS database in private subnets"),
 		Vpc:         vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
-			SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED, // Updated to use isolated subnets
+			SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
 		},
 	})
 
-	// RDS PostgreSQL Database with encryption at rest
+	// And finally, the RDS PostgreSQL database, with encryption enabled
 	database := awsrds.NewDatabaseInstance(stack, jsii.String("PostgreSQLDatabase"), &awsrds.DatabaseInstanceProps{
 		Engine: awsrds.DatabaseInstanceEngine_Postgres(&awsrds.PostgresInstanceEngineProps{
 			Version: awsrds.PostgresEngineVersion_VER_15(),
@@ -139,7 +138,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		SecurityGroups: &[]awsec2.ISecurityGroup{
 			databaseSG,
 		},
-		StorageEncrypted:           jsii.Bool(true), // Encryption at rest enabled
+		StorageEncrypted:           jsii.Bool(true),
 		DatabaseName:               jsii.String("production_db"),
 		Credentials:                awsrds.Credentials_FromGeneratedSecret(jsii.String("dbadmin"), &awsrds.CredentialsBaseOptions{}),
 		AllocatedStorage:           jsii.Number(20),
@@ -152,7 +151,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		PreferredMaintenanceWindow: jsii.String("sun:04:00-sun:05:00"),
 	})
 
-	// S3 Bucket for CloudTrail logs - COMMENTED OUT TO AVOID QUOTA LIMITS
+	// --- CloudTrail has been temporarily disabled to avoid deployment issues ---
+	//
+	// // S3 Bucket for CloudTrail logs
 	// cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailLogsBucket"), &awss3.BucketProps{
 	// 	BucketName:        nil,
 	// 	Encryption:        awss3.BucketEncryption_S3_MANAGED,
@@ -166,8 +167,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	// 		},
 	// 	},
 	// })
-
-	// CloudTrail for API activity logging - COMMENTED OUT TO AVOID QUOTA LIMITS
+	//
+	// // CloudTrail for API activity logging
 	// trail := awscloudtrail.NewTrail(stack, jsii.String("ITProductionCloudTrail"), &awscloudtrail.TrailProps{
 	// 	Bucket:                     cloudTrailBucket,
 	// 	IncludeGlobalServiceEvents: jsii.Bool(true),
@@ -176,7 +177,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	// 	SendToCloudWatchLogs:       jsii.Bool(false),
 	// })
 
-	// Outputs
+	// A few outputs to make our lives easier
 	awscdk.NewCfnOutput(stack, jsii.String("VPCId"), &awscdk.CfnOutputProps{
 		Value:       vpc.VpcId(),
 		Description: jsii.String("VPC ID for the IT Production environment"),
