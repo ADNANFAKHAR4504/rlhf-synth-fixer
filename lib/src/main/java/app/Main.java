@@ -24,7 +24,7 @@ public class Main {
     public static void main(final String[] args) {
         App app = new App();
         
-        new SecureInfrastructureStack(app, "SecureInfrastructureStack", StackProps.builder()
+        new TapStack(app, "TapStack", StackProps.builder()
                 .env(Environment.builder()
                         .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                         .region(System.getenv("CDK_DEFAULT_REGION"))
@@ -35,9 +35,9 @@ public class Main {
     }
 }
 
-class SecureInfrastructureStack extends Stack {
+class TapStack extends Stack {
     
-    public SecureInfrastructureStack(final App scope, final String id, final StackProps props) {
+    public TapStack(final App scope, final String id, final StackProps props) {
         super(scope, id, props);
         
         // 1. Create KMS Keys for encryption
