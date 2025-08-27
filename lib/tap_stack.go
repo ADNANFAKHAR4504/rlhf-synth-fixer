@@ -47,11 +47,9 @@ func generateRandomString(length int, includeSpecial bool) (string, error) {
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Get project and stack names directly from context
 		projectName := ctx.Project()
 		stackName := ctx.Stack()
 
-		// Generate random credentials for RDS
 		dbUsername, err := generateRandomString(8, false)
 		if err != nil {
 			return fmt.Errorf("failed to generate DB username: %w", err)
@@ -62,7 +60,6 @@ func main() {
 			return fmt.Errorf("failed to generate DB password: %w", err)
 		}
 
-		// Create VPC
 		vpc, err := ec2.NewVpc(ctx, "hipaa-vpc", &ec2.VpcArgs{
 			CidrBlock:          pulumi.String(vpcCIDR),
 			EnableDnsHostnames: pulumi.Bool(true),
@@ -77,7 +74,6 @@ func main() {
 			return err
 		}
 
-		// Create Internet Gateway
 		igw, err := ec2.NewInternetGateway(ctx, "hipaa-igw", &ec2.InternetGatewayArgs{
 			VpcId: vpc.ID(),
 			Tags: pulumi.StringMap{
@@ -89,7 +85,6 @@ func main() {
 			return err
 		}
 
-		// Create Public Subnets
 		publicSubnet1, err := ec2.NewSubnet(ctx, "public-subnet-1", &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String(publicCIDR1),
@@ -120,7 +115,6 @@ func main() {
 			return err
 		}
 
-		// Create Private Subnets
 		privateSubnet1, err := ec2.NewSubnet(ctx, "private-subnet-1", &ec2.SubnetArgs{
 			VpcId:            vpc.ID(),
 			CidrBlock:        pulumi.String(privateCIDR1),
@@ -149,7 +143,6 @@ func main() {
 			return err
 		}
 
-		// Create NAT Gateway EIPs
 		natEip1, err := ec2.NewEip(ctx, "nat-eip-1", &ec2.EipArgs{
 			Domain: pulumi.String("vpc"),
 			Tags: pulumi.StringMap{
@@ -172,7 +165,6 @@ func main() {
 			return err
 		}
 
-		// Create NAT Gateways
 		natGw1, err := ec2.NewNatGateway(ctx, "nat-gw-1", &ec2.NatGatewayArgs{
 			AllocationId: natEip1.ID(),
 			SubnetId:     publicSubnet1.ID(),
@@ -197,7 +189,6 @@ func main() {
 			return err
 		}
 
-		// Create Route Tables
 		publicRouteTable, err := ec2.NewRouteTable(ctx, "public-rt", &ec2.RouteTableArgs{
 			VpcId: vpc.ID(),
 			Tags: pulumi.StringMap{
@@ -231,7 +222,6 @@ func main() {
 			return err
 		}
 
-		// Create Routes
 		_, err = ec2.NewRoute(ctx, "public-route", &ec2.RouteArgs{
 			RouteTableId:         publicRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
@@ -259,7 +249,6 @@ func main() {
 			return err
 		}
 
-		// Associate Route Tables with Subnets
 		_, err = ec2.NewRouteTableAssociation(ctx, "public-rta-1", &ec2.RouteTableAssociationArgs{
 			SubnetId:     publicSubnet1.ID(),
 			RouteTableId: publicRouteTable.ID(),
@@ -292,7 +281,6 @@ func main() {
 			return err
 		}
 
-		// Create Security Groups
 		webSecurityGroup, err := ec2.NewSecurityGroup(ctx, "web-sg", &ec2.SecurityGroupArgs{
 			Name:        pulumi.String(fmt.Sprintf("%s-%s-web-sg", projectName, stackName)),
 			Description: pulumi.String("Security group for web servers"),
@@ -355,7 +343,6 @@ func main() {
 			return err
 		}
 
-		// Create DB Subnet Group
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "db-subnet-group", &rds.SubnetGroupArgs{
 			Name:      pulumi.String(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName)),
 			SubnetIds: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
@@ -368,7 +355,6 @@ func main() {
 			return err
 		}
 
-		// Create RDS Instance with Multi-AZ
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db", &rds.InstanceArgs{
 			AllocatedStorage:        pulumi.Int(20),
 			StorageType:             pulumi.String("gp2"),
@@ -398,7 +384,6 @@ func main() {
 			return err
 		}
 
-		// Create IAM Role for EC2 instances
 		ec2Role, err := iam.NewRole(ctx, "ec2-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
 				"Version": "2012-10-17",
@@ -422,19 +407,14 @@ func main() {
 			return err
 		}
 
-		// Create S3 Bucket with versioning and encryption
 		s3Bucket, err := s3.NewBucket(ctx, "hipaa-bucket", &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
 			Versioning: &s3.BucketVersioningArgs{
 				Enabled: pulumi.Bool(true),
 			},
 			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationArgs{
-				Rules: s3.BucketServerSideEncryptionConfigurationRuleArray{
-					&s3.BucketServerSideEncryptionConfigurationRuleArgs{
-						ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
-							SseAlgorithm: pulumi.String("AES256"),
-						},
-					},
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm: pulumi.String("AES256"),
 				},
 			},
 			Tags: pulumi.StringMap{
@@ -447,7 +427,6 @@ func main() {
 			return err
 		}
 
-		// Block public access to S3 bucket
 		_, err = s3.NewBucketPublicAccessBlock(ctx, "bucket-pab", &s3.BucketPublicAccessBlockArgs{
 			Bucket:                s3Bucket.ID(),
 			BlockPublicAcls:       pulumi.Bool(true),
@@ -459,7 +438,6 @@ func main() {
 			return err
 		}
 
-		// Create IAM Policy for least privilege access
 		ec2Policy, err := iam.NewPolicy(ctx, "ec2-policy", &iam.PolicyArgs{
 			Description: pulumi.String("Least privilege policy for EC2 instances"),
 			Policy: s3Bucket.Arn.ApplyT(func(bucketArn string) string {
@@ -492,7 +470,6 @@ func main() {
 			return err
 		}
 
-		// Attach policy to role
 		_, err = iam.NewRolePolicyAttachment(ctx, "ec2-policy-attachment", &iam.RolePolicyAttachmentArgs{
 			Role:      ec2Role.Name,
 			PolicyArn: ec2Policy.Arn,
@@ -501,7 +478,6 @@ func main() {
 			return err
 		}
 
-		// Create Instance Profile
 		instanceProfile, err := iam.NewInstanceProfile(ctx, "ec2-instance-profile", &iam.InstanceProfileArgs{
 			Role: ec2Role.Name,
 		})
@@ -509,7 +485,6 @@ func main() {
 			return err
 		}
 
-		// Get latest Amazon Linux 2 AMI
 		amiResult, err := ec2.LookupAmi(ctx, &ec2.LookupAmiArgs{
 			MostRecent: pulumi.BoolRef(true),
 			Owners:     []string{"amazon"},
@@ -524,7 +499,6 @@ func main() {
 			return err
 		}
 
-		// Create Launch Template
 		launchTemplate, err := ec2.NewLaunchTemplate(ctx, "web-launch-template", &ec2.LaunchTemplateArgs{
 			Name:         pulumi.String(fmt.Sprintf("%s-%s-web-lt", projectName, stackName)),
 			ImageId:      pulumi.String(amiResult.Id),
@@ -556,7 +530,6 @@ systemctl start amazon-cloudwatch-agent
 			return err
 		}
 
-		// Create Auto Scaling Group
 		asg, err := autoscaling.NewGroup(ctx, "web-asg", &autoscaling.GroupArgs{
 			VpcZoneIdentifiers: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 			TargetGroupArns:    pulumi.StringArray{},
@@ -585,7 +558,6 @@ systemctl start amazon-cloudwatch-agent
 			return err
 		}
 
-		// Create CloudWatch Log Group
 		logGroup, err := cloudwatch.NewLogGroup(ctx, "hipaa-log-group", &cloudwatch.LogGroupArgs{
 			Name:            pulumi.String(fmt.Sprintf("/aws/ec2/%s-%s", projectName, stackName)),
 			RetentionInDays: pulumi.Int(30),
@@ -599,7 +571,6 @@ systemctl start amazon-cloudwatch-agent
 			return err
 		}
 
-		// Export outputs
 		ctx.Export("vpcId", vpc.ID())
 		ctx.Export("vpcCidr", vpc.CidrBlock)
 		ctx.Export("publicSubnet1Id", publicSubnet1.ID())
