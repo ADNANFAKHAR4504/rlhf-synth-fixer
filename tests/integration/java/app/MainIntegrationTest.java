@@ -130,12 +130,11 @@ public class MainIntegrationTest {
 
     @Test
     public void testOutputsAreDefined() {
-        TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
-        Template template = Template.fromStack(stack.getVpcStack());
+    TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
+    Template template = Template.fromStack(stack.getVpcStack());
 
-        Map<String, Object> outputs = template.getOutputs();
-        assertThat(outputs).isNotEmpty();
-    }
+    assertThat(template.findOutputs(Map.of())).isNotEmpty();
+}
 
     @Test
     public void testRouteTableCreated() {
