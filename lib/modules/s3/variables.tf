@@ -13,11 +13,6 @@ variable "bucket_name" {
   type        = string
 }
 
-variable "versioning_enabled" {
-  description = "Bucket versioning"
-  type = bool
-}
-
 variable "bucket_policy" {
   description = "S3 bucket policy"
   type = string

@@ -30,7 +30,6 @@ module "s3_secure_bucket" {
   project     = var.project
   kms_key_id = module.kms.kms_key_arn
   bucket_name = "secconfig-secure-bucket-pr2219"
-  versioning_enabled = true
   bucket_policy = data.aws_iam_policy_document.secure_bucket.json
 }
 
@@ -40,7 +39,6 @@ module "s3_cloudtrail_bucket" {
   project     = var.project
   kms_key_id = module.kms.kms_key_arn
   bucket_name = "secconfig-cloudtrail-bucket-pr2219"
-  versioning_enabled = true
   bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
 }
 
@@ -50,7 +48,6 @@ module "s3_config_bucket" {
   project     = var.project
   kms_key_id = module.kms.kms_key_arn
   bucket_name = "secconfig-config-bucket-pr2219"
-  versioning_enabled = true
   bucket_policy = data.aws_iam_policy_document.config_s3.json
 }
 
@@ -97,8 +94,8 @@ module "iam_cloudtrail" {
   source = "./modules/iam"
   role_name= "${var.project}-cloudtrail-cw-role"
   policy_name = "${var.project}-cloudtrail-cw-policy"
-  assume_policy = data.aws_iam_policy_document.cloudtrail_assume
-  iam_policy = data.aws_iam_policy_document.cloudtrail_cw_policy
+  assume_policy = data.aws_iam_policy_document.cloudtrail_assume.json
+  iam_policy = data.aws_iam_policy_document.cloudtrail_cw_policy.json
   policy_arn = ""
 }
 
@@ -106,7 +103,7 @@ module "iam_config" {
   source = "./modules/iam"
   role_name= "${var.project}-config-role"
   policy_name = "${var.project}-config-policy"
-  assume_policy = data.aws_iam_policy_document.config_assume
-  iam_policy = data.aws_iam_policy_document.config_policy
+  assume_policy = data.aws_iam_policy_document.config_assume.json
+  iam_policy = data.aws_iam_policy_document.config_policy.json
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
