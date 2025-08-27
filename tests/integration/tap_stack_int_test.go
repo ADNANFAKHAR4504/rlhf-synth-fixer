@@ -30,7 +30,7 @@ type Outputs struct {
 // loadOutputs dynamically fetches outputs from the deployed CloudFormation stack.
 func loadOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *Outputs {
 	cfnClient := cloudformation.NewFromConfig(cfg)
-	stackName := "TapStack"
+	stackName := "TapStackdev"
 
 	resp, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),

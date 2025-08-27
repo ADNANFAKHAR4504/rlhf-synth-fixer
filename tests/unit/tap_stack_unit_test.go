@@ -33,7 +33,9 @@ func synthStack(t *testing.T, stackId string) string {
 		},
 	})
 	assembly := app.Synth(nil)
-	stack := assembly.GetStackByName(&stackId)
+	stacks := *assembly.Stacks()
+	require.Len(t, stacks, 1, "expected exactly one stack to be synthesized")
+	stack := stacks[0]
 	template := stack.Template()
 	templateJson, err := json.Marshal(template)
 	require.NoError(t, err, "failed to marshal template to json")
