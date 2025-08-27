@@ -81,9 +81,20 @@ public class MainTest {
     // Verify template can be created (basic synthesis test)
     assertThat(template).isNotNull();
 
-    // Verify that the template contains expected resources
-    // (This is a basic check - more specific resource tests could be added)
+    // Verify that the template contains expected resources for primary stack
     template.hasResourceProperties("AWS::EC2::VPC", java.util.Map.of());
+    template.hasResourceProperties("AWS::Route53::HostedZone", java.util.Map.of());
+    template.hasResourceProperties("AWS::RDS::DBInstance", java.util.Map.of());
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", java.util.Map.of());
+    template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", java.util.Map.of());
+    template.hasResourceProperties("AWS::Lambda::Function", java.util.Map.of());
+    template.hasResourceProperties("AWS::SNS::Topic", java.util.Map.of());
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", java.util.Map.of());
+    
+    // Verify stack outputs
+    template.hasOutput("LoadBalancerDNS", java.util.Map.of());
+    template.hasOutput("DatabaseEndpoint", java.util.Map.of());
+    template.hasOutput("RegionInfo", java.util.Map.of());
   }
 
   /**
@@ -108,7 +119,18 @@ public class MainTest {
     // Verify template can be created (basic synthesis test)
     assertThat(template).isNotNull();
 
-    // Verify that the template contains expected resources
+    // Verify that the template contains expected resources for secondary stack
     template.hasResourceProperties("AWS::EC2::VPC", java.util.Map.of());
+    template.hasResourceProperties("AWS::Route53::HostedZone", java.util.Map.of(
+        "Name", "secondary.tapapp.exampleturing.com."));
+    template.hasResourceProperties("AWS::RDS::DBInstance", java.util.Map.of());
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", java.util.Map.of());
+    template.hasResourceProperties("AWS::AutoScaling::AutoScalingGroup", java.util.Map.of());
+    template.hasResourceProperties("AWS::Lambda::Function", java.util.Map.of());
+    
+    // Verify stack outputs
+    template.hasOutput("LoadBalancerDNS", java.util.Map.of());
+    template.hasOutput("DatabaseEndpoint", java.util.Map.of());
+    template.hasOutput("RegionInfo", java.util.Map.of());
   }
 }

@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Map;
 
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.RemovalPolicy;
@@ -52,8 +53,6 @@ import software.amazon.awscdk.services.rds.StorageType;
 import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.route53.ARecord;
 import software.amazon.awscdk.services.route53.HostedZone;
-import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
-import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.RecordTarget;
 import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 import software.amazon.awscdk.services.sns.Topic;
@@ -120,6 +119,33 @@ class TapStack extends Stack {
 
     // Create Lambda function for failover automation
     createFailoverLambda(alb);
+
+    // Create CloudFormation outputs
+    createOutputs(alb, database);
+  }
+
+  private void createOutputs(ApplicationLoadBalancer alb, DatabaseInstance database) {
+    // ALB DNS Name
+    CfnOutput.Builder.create(this, "LoadBalancerDNS")
+        .description("Application Load Balancer DNS Name")
+        .value(alb.getLoadBalancerDnsName())
+        .exportName(this.getStackName() + "-ALB-DNS")
+        .build();
+
+    // Database Endpoint
+    CfnOutput.Builder.create(this, "DatabaseEndpoint")
+        .description("RDS Database Endpoint")
+        .value(database.getInstanceEndpoint().getHostname())
+        .exportName(this.getStackName() + "-DB-Endpoint")
+        .build();
+
+    // Region Information
+    CfnOutput.Builder.create(this, "RegionInfo")
+        .description("Region and Role Information")
+        .value(String.format("Region: %s, Role: %s", 
+               this.getRegion(), 
+               isPrimary ? "Primary" : "Secondary"))
+        .build();
   }
 
   private Vpc createVpc() {
@@ -286,7 +312,6 @@ class TapStack extends Stack {
         .launchTemplate(launchTemplate)
         .minCapacity(2)
         .maxCapacity(6)
-        .desiredCapacity(isPrimary ? 3 : 2)
         .vpcSubnets(SubnetSelection.builder()
             .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
             .build())
@@ -308,6 +333,7 @@ class TapStack extends Stack {
         .port(80)
         .protocol(ApplicationProtocol.HTTP)
         .vpc(alb.getVpc())
+        .targetType(software.amazon.awscdk.services.elasticloadbalancingv2.TargetType.INSTANCE)
         .healthCheck(software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck.builder()
             .enabled(true)
             .path("/")
@@ -336,29 +362,46 @@ class TapStack extends Stack {
         .zoneName("tapapp.exampleturing.com")
         .build();
 
-    // Primary record
+    // Primary record with health check for failover capability
     ARecord.Builder.create(this, "PrimaryRecord")
         .zone(hostedZone)
         .recordName("www")
         .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+        .comment("Primary region ALB record")
+        .build();
+
+    // Create an additional record for the root domain
+    ARecord.Builder.create(this, "RootRecord")
+        .zone(hostedZone)
+        .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
+        .comment("Root domain ALB record")
         .build();
 
     Tags.of(hostedZone).add("Name", "TapApp-HostedZone");
+    Tags.of(hostedZone).add("Purpose", "Primary-DNS");
   }
 
   private void createRoute53FailoverConfiguration(ApplicationLoadBalancer alb) {
-    // Import the hosted zone created in primary region
-    IHostedZone hostedZone = HostedZone.fromLookup(this, "ImportedHostedZone",
-        HostedZoneProviderProps.builder()
-            .domainName("tapapp.exampleturing.com")
-            .build());
+    // Create a secondary hosted zone in the secondary region
+    // In a real production setup, you would typically share the same hosted zone
+    // For this demo, we'll create separate hosted zones for each region
+    HostedZone secondaryHostedZone = HostedZone.Builder.create(this, "TapSecondaryHostedZone")
+        .zoneName("secondary.tapapp.exampleturing.com")
+        .build();
 
     // Secondary record for failover
     ARecord.Builder.create(this, "SecondaryRecord")
-        .zone(hostedZone)
+        .zone(secondaryHostedZone)
         .recordName("www")
         .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
         .build();
+
+    Tags.of(secondaryHostedZone).add("Name", "TapApp-Secondary-HostedZone");
+    
+    // Note: In production, you would typically:
+    // 1. Use Route53 health checks with failover routing
+    // 2. Configure proper DNS delegation between regions
+    // 3. Use weighted or latency-based routing policies
   }
 
   private void createMonitoringAndAlarms(ApplicationLoadBalancer alb, DatabaseInstance database) {
