@@ -100,7 +100,7 @@ public class MainIntegrationTest {
         Template template = Template.fromStack(stack.getVpcStack());
 
         template.hasResourceProperties("AWS::EC2::SecurityGroup", Map.of(
-                "GroupDescription", "Allow SSH and HTTP access"
+                "GroupDescription", "Security group for SSH access to EC2 instances"
         ));
     }
 
@@ -134,8 +134,8 @@ public class MainIntegrationTest {
         TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
         Template template = Template.fromStack(stack.getVpcStack());
 
-        // Use an explicit empty map with correct typing
-        assertThat(template.findOutputs(Collections.emptyMap())).isNotEmpty();
+        // Fix: explicitly type the emptyMap so it matches Map<String, Object>
+        assertThat(template.findOutputs(Collections.<String, Object>emptyMap())).isNotEmpty();
     }
 
     @Test
@@ -152,8 +152,9 @@ public class MainIntegrationTest {
         Template template = Template.fromStack(stack.getVpcStack());
 
         template.hasResourceProperties("AWS::EC2::VPC", Map.of(
-                "Tags", new Object[] {
-                        Map.of("Key", "Environment", "Value", "tags")
+                "Tags", new Object[]{
+                        Map.of("Key", "Environment", "Value", "tags"),
+                        Map.of("Key", "Project", "Value", "VpcInfrastructure")
                 }
         ));
     }
