@@ -17,7 +17,7 @@ import software.amazon.awscdk.services.apigateway.LambdaIntegration;
 // Removed unused VpcConfig import
 import software.amazon.awscdk.services.apigateway.RestApi;
 import software.amazon.awscdk.services.apigateway.RestApiProps;
-import software.amazon.awscdk.services.applicationinsights.CfnApplication;
+// import software.amazon.awscdk.services.applicationinsights.CfnApplication;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Metric;
@@ -178,7 +178,9 @@ class TapStack extends Stack {
     Alarm lambdaErrorAlarm = createCloudWatchAlarm(backendFunction, commonTags);
 
     // AWS Application Insights for enhanced monitoring (latest feature)
-    CfnApplication appInsights = createApplicationInsights(commonTags);
+    // Note: Commented out due to Resource Group dependency issues in automated
+    // deployments
+    // CfnApplication appInsights = createApplicationInsights(commonTags);
 
     // AWS Config for compliance monitoring (latest feature)
     createAwsConfig(configBucket, commonTags);
@@ -379,19 +381,22 @@ class TapStack extends Stack {
     return lambdaErrorAlarm;
   }
 
-  private CfnApplication createApplicationInsights(final Map<String, String> commonTags) {
-    CfnApplication appInsights = new CfnApplication(this, "AppInsights",
-        software.amazon.awscdk.services.applicationinsights.CfnApplicationProps.builder()
-            .resourceGroupName("ServerlessApp-" + this.environmentSuffix)
-            .autoConfigurationEnabled(true)
-            .cweMonitorEnabled(true)
-            .opsCenterEnabled(true)
-            .build());
+  // Temporarily commented out due to Resource Group dependency issues in
+  // automated deployments
+  // private CfnApplication createApplicationInsights(final Map<String, String>
+  // commonTags) {
+  // CfnApplication appInsights = new CfnApplication(this, "AppInsights",
+  // software.amazon.awscdk.services.applicationinsights.CfnApplicationProps.builder()
+  // .resourceGroupName("ServerlessApp-" + this.environmentSuffix)
+  // .autoConfigurationEnabled(true)
+  // .cweMonitorEnabled(true)
+  // .opsCenterEnabled(true)
+  // .build());
 
-    commonTags.forEach((key, value) -> Tags.of(appInsights).add(key, value));
+  // commonTags.forEach((key, value) -> Tags.of(appInsights).add(key, value));
 
-    return appInsights;
-  }
+  // return appInsights;
+  // }
 
   private void createAwsConfig(final Bucket configBucket, final Map<String, String> commonTags) {
     Role configRole = new Role(this, "ConfigRole",
