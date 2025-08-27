@@ -1,76 +1,76 @@
 // __tests__/tap-stack.unit.test.ts
-import { App } from "cdktf";
-import "cdktf/lib/testing/adapters/jest";
-import { TapStack } from "../lib/tap-stack";
+import { App } from 'cdktf';
+import 'cdktf/lib/testing/adapters/jest';
+import { TapStack } from '../lib/tap-stack';
 
 // Mock all the modules used in TapStack
-jest.mock("../lib/modules", () => ({
+jest.mock('../lib/modules', () => ({
   NetworkingModule: jest.fn((_, id, config) => ({
-    vpc: { 
+    vpc: {
       id: `${id}-vpc-id`,
-      arn: `arn:aws:ec2:us-west-1:123456789012:vpc/${id}-vpc-id`
+      arn: `arn:aws:ec2:us-west-1:123456789012:vpc/${id}-vpc-id`,
     },
     publicSubnets: [
-      { 
-        id: `${id}-public-subnet-1-id`, 
-        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-public-subnet-1-id` 
+      {
+        id: `${id}-public-subnet-1-id`,
+        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-public-subnet-1-id`,
       },
-      { 
-        id: `${id}-public-subnet-2-id`, 
-        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-public-subnet-2-id` 
-      }
+      {
+        id: `${id}-public-subnet-2-id`,
+        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-public-subnet-2-id`,
+      },
     ],
     privateSubnets: [
-      { 
-        id: `${id}-private-subnet-1-id`, 
-        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-private-subnet-1-id` 
+      {
+        id: `${id}-private-subnet-1-id`,
+        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-private-subnet-1-id`,
       },
-      { 
-        id: `${id}-private-subnet-2-id`, 
-        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-private-subnet-2-id` 
-      }
+      {
+        id: `${id}-private-subnet-2-id`,
+        arn: `arn:aws:ec2:us-west-1:123456789012:subnet/${id}-private-subnet-2-id`,
+      },
     ],
     internetGateway: {
       id: `${id}-igw-id`,
-      arn: `arn:aws:ec2:us-west-1:123456789012:internet-gateway/${id}-igw-id`
+      arn: `arn:aws:ec2:us-west-1:123456789012:internet-gateway/${id}-igw-id`,
     },
     natGateway: {
       id: `${id}-nat-id`,
-      arn: `arn:aws:ec2:us-west-1:123456789012:natgateway/${id}-nat-id`
+      arn: `arn:aws:ec2:us-west-1:123456789012:natgateway/${id}-nat-id`,
     },
     config,
   })),
   SecurityModule: jest.fn((_, id, config) => ({
-    ec2SecurityGroup: { 
+    ec2SecurityGroup: {
       id: `${id}-sg-id`,
-      arn: `arn:aws:ec2:us-west-1:123456789012:security-group/${id}-sg-id`
+      arn: `arn:aws:ec2:us-west-1:123456789012:security-group/${id}-sg-id`,
     },
     config,
   })),
   StorageModule: jest.fn((_, id, config) => ({
-    s3Bucket: { 
+    s3Bucket: {
       bucket: `${id}-bucket-name`,
-      arn: `arn:aws:s3:::${id}-bucket-name`
+      arn: `arn:aws:s3:::${id}-bucket-name`,
     },
     config,
   })),
   ComputeModule: jest.fn((_, id, config) => ({
-    ec2Instance: { 
+    ec2Instance: {
       id: `${id}-instance-id`,
-      privateIp: "10.0.1.10",
-      publicIp: "54.123.45.67",
-      arn: `arn:aws:ec2:us-west-1:123456789012:instance/${id}-instance-id`
+      privateIp: '10.0.1.10',
+      publicIp: '54.123.45.67',
+      arn: `arn:aws:ec2:us-west-1:123456789012:instance/${id}-instance-id`,
     },
     iamRole: {
-      arn: `arn:aws:iam::123456789012:role/${id}-role`
+      arn: `arn:aws:iam::123456789012:role/${id}-role`,
     },
     config,
   })),
 }));
 
 // Mock TerraformOutput and S3Backend to prevent duplicate construct errors
-jest.mock("cdktf", () => {
-  const actual = jest.requireActual("cdktf");
+jest.mock('cdktf', () => {
+  const actual = jest.requireActual('cdktf');
   return {
     ...actual,
     TerraformOutput: jest.fn(),
@@ -79,34 +79,34 @@ jest.mock("cdktf", () => {
 });
 
 // Mock AWS Provider
-jest.mock("@cdktf/provider-aws/lib/provider", () => ({
+jest.mock('@cdktf/provider-aws/lib/provider', () => ({
   AwsProvider: jest.fn(),
 }));
 
-describe("TapStack Unit Tests", () => {
-  const { 
+describe('TapStack Unit Tests', () => {
+  const {
     NetworkingModule,
-    SecurityModule, 
-    StorageModule, 
-    ComputeModule 
-  } = require("../lib/modules");
-  const { TerraformOutput, S3Backend } = require("cdktf");
-  const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
+    SecurityModule,
+    StorageModule,
+    ComputeModule,
+  } = require('../lib/modules');
+  const { TerraformOutput, S3Backend } = require('cdktf');
+  const { AwsProvider } = require('@cdktf/provider-aws/lib/provider');
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test("should create TapStack with default props", () => {
+  test('should create TapStack with default props', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestStack");
+    const stack = new TapStack(app, 'TestStack');
 
     expect(stack).toBeDefined();
   });
 
-  test("should create AWS Provider with correct default configuration", () => {
+  test('should create AWS Provider with correct default configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackProvider");
+    new TapStack(app, 'TestStackProvider');
 
     expect(AwsProvider).toHaveBeenCalledTimes(1);
     expect(AwsProvider).toHaveBeenCalledWith(
@@ -119,7 +119,7 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create AWS Provider with custom props", () => {
+  test('should create AWS Provider with custom props', () => {
     const app = new App();
     const customTags = {
       tags: {
@@ -129,7 +129,7 @@ describe("TapStack Unit Tests", () => {
       },
     };
 
-    new TapStack(app, "TestStackCustom", {
+    new TapStack(app, 'TestStackCustom', {
       environmentSuffix: 'prod',
       awsRegion: 'eu-west-1',
       defaultTags: customTags,
@@ -145,9 +145,9 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create S3Backend with correct default configuration", () => {
+  test('should create S3Backend with correct default configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackBackend");
+    new TapStack(app, 'TestStackBackend');
 
     expect(S3Backend).toHaveBeenCalledWith(
       expect.anything(),
@@ -160,9 +160,9 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create S3Backend with custom configuration", () => {
+  test('should create S3Backend with custom configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackBackendCustom", {
+    new TapStack(app, 'TestStackBackendCustom', {
       environmentSuffix: 'staging',
       stateBucket: 'custom-tf-states',
       stateBucketRegion: 'us-west-1',
@@ -179,14 +179,14 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create NetworkingModule with correct configuration", () => {
+  test('should create NetworkingModule with correct configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackNetworking");
+    new TapStack(app, 'TestStackNetworking');
 
     expect(NetworkingModule).toHaveBeenCalledTimes(1);
     expect(NetworkingModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-networking-stack",
+      'tap-networking-stack',
       expect.objectContaining({
         vpcCidr: '10.0.0.0/16',
         publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
@@ -196,70 +196,70 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create NetworkingModule with custom environment suffix", () => {
+  test('should create NetworkingModule with custom environment suffix', () => {
     const app = new App();
-    new TapStack(app, "TestStackNetworkingCustom", {
+    new TapStack(app, 'TestStackNetworkingCustom', {
       environmentSuffix: 'prod',
     });
 
     expect(NetworkingModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-networking-stack",
+      'tap-networking-stack',
       expect.objectContaining({
         projectName: 'tap-prod',
       })
     );
   });
 
-  test("should create SecurityModule with correct configuration", () => {
+  test('should create SecurityModule with correct configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackSecurity");
+    new TapStack(app, 'TestStackSecurity');
 
     expect(SecurityModule).toHaveBeenCalledTimes(1);
     expect(SecurityModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-security-stack",
+      'tap-security-stack',
       expect.objectContaining({
-        vpcId: "tap-networking-stack-vpc-id",
+        vpcId: 'tap-networking-stack-vpc-id',
         projectName: 'tap-dev',
       })
     );
   });
 
-  test("should create StorageModule with correct configuration", () => {
+  test('should create StorageModule with correct configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackStorage");
+    new TapStack(app, 'TestStackStorage');
 
     expect(StorageModule).toHaveBeenCalledTimes(1);
     expect(StorageModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-storage-stack",
+      'tap-storage-stack',
       expect.objectContaining({
         projectName: 'tap-dev',
       })
     );
   });
 
-  test("should create ComputeModule with correct configuration", () => {
+  test('should create ComputeModule with correct configuration', () => {
     const app = new App();
-    new TapStack(app, "TestStackCompute");
+    new TapStack(app, 'TestStackCompute');
 
     expect(ComputeModule).toHaveBeenCalledTimes(1);
     expect(ComputeModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-compute-stack",
+      'tap-compute-stack',
       expect.objectContaining({
-        subnetId: "tap-networking-stack-public-subnet-1-id", // First public subnet
-        securityGroupIds: ["tap-security-stack-sg-id"],
-        s3BucketArn: "arn:aws:s3:::tap-storage-stack-bucket-name",
+        subnetId: 'tap-networking-stack-public-subnet-1-id', // First public subnet
+        securityGroupIds: ['tap-security-stack-sg-id'],
+        s3BucketArn: 'arn:aws:s3:::tap-storage-stack-bucket-name',
         projectName: 'tap-dev',
       })
     );
   });
 
-  test("should create all terraform outputs", () => {
+  test('should create all terraform outputs', () => {
     const app = new App();
-    new TapStack(app, "TestStackOutputs");
+    new TapStack(app, 'TestStackOutputs');
 
     expect(TerraformOutput).toHaveBeenCalledTimes(12);
 
@@ -268,7 +268,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-vpc-id',
       expect.objectContaining({
-        value: "tap-networking-stack-vpc-id",
+        value: 'tap-networking-stack-vpc-id',
         description: 'VPC ID',
       })
     );
@@ -277,7 +277,10 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-public-subnet-ids',
       expect.objectContaining({
-        value: ["tap-networking-stack-public-subnet-1-id", "tap-networking-stack-public-subnet-2-id"],
+        value: [
+          'tap-networking-stack-public-subnet-1-id',
+          'tap-networking-stack-public-subnet-2-id',
+        ],
         description: 'Public subnet IDs',
       })
     );
@@ -286,7 +289,10 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-private-subnet-ids',
       expect.objectContaining({
-        value: ["tap-networking-stack-private-subnet-1-id", "tap-networking-stack-private-subnet-2-id"],
+        value: [
+          'tap-networking-stack-private-subnet-1-id',
+          'tap-networking-stack-private-subnet-2-id',
+        ],
         description: 'Private subnet IDs',
       })
     );
@@ -295,7 +301,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-internet-gateway-id',
       expect.objectContaining({
-        value: "tap-networking-stack-igw-id",
+        value: 'tap-networking-stack-igw-id',
         description: 'Internet Gateway ID',
       })
     );
@@ -304,7 +310,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-nat-gateway-id',
       expect.objectContaining({
-        value: "tap-networking-stack-nat-id",
+        value: 'tap-networking-stack-nat-id',
         description: 'NAT Gateway ID',
       })
     );
@@ -313,7 +319,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-ec2-instance-id',
       expect.objectContaining({
-        value: "tap-compute-stack-instance-id",
+        value: 'tap-compute-stack-instance-id',
         description: 'EC2 instance ID',
       })
     );
@@ -322,7 +328,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-ec2-public-ip',
       expect.objectContaining({
-        value: "54.123.45.67",
+        value: '54.123.45.67',
         description: 'EC2 instance public IP address',
       })
     );
@@ -331,7 +337,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-ec2-private-ip',
       expect.objectContaining({
-        value: "10.0.1.10",
+        value: '10.0.1.10',
         description: 'EC2 instance private IP address',
       })
     );
@@ -340,7 +346,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-s3-bucket-name',
       expect.objectContaining({
-        value: "tap-storage-stack-bucket-name",
+        value: 'tap-storage-stack-bucket-name',
         description: 'S3 bucket name for application data',
       })
     );
@@ -349,7 +355,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-s3-bucket-arn',
       expect.objectContaining({
-        value: "arn:aws:s3:::tap-storage-stack-bucket-name",
+        value: 'arn:aws:s3:::tap-storage-stack-bucket-name',
         description: 'S3 bucket ARN',
       })
     );
@@ -358,7 +364,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-ec2-security-group-id',
       expect.objectContaining({
-        value: "tap-security-stack-sg-id",
+        value: 'tap-security-stack-sg-id',
         description: 'EC2 Security Group ID',
       })
     );
@@ -367,15 +373,15 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'tap-ec2-iam-role-arn',
       expect.objectContaining({
-        value: "arn:aws:iam::123456789012:role/tap-compute-stack-role",
+        value: 'arn:aws:iam::123456789012:role/tap-compute-stack-role',
         description: 'EC2 IAM Role ARN',
       })
     );
   });
 
-  test("should handle custom environment suffix in all modules", () => {
+  test('should handle custom environment suffix in all modules', () => {
     const app = new App();
-    new TapStack(app, "TestStackCustomEnv", {
+    new TapStack(app, 'TestStackCustomEnv', {
       environmentSuffix: 'staging',
     });
 
@@ -390,7 +396,7 @@ describe("TapStack Unit Tests", () => {
     // Check all modules receive correct projectName
     expect(NetworkingModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-networking-stack",
+      'tap-networking-stack',
       expect.objectContaining({
         projectName: 'tap-staging',
       })
@@ -398,7 +404,7 @@ describe("TapStack Unit Tests", () => {
 
     expect(SecurityModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-security-stack",
+      'tap-security-stack',
       expect.objectContaining({
         projectName: 'tap-staging',
       })
@@ -406,7 +412,7 @@ describe("TapStack Unit Tests", () => {
 
     expect(StorageModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-storage-stack",
+      'tap-storage-stack',
       expect.objectContaining({
         projectName: 'tap-staging',
       })
@@ -414,16 +420,16 @@ describe("TapStack Unit Tests", () => {
 
     expect(ComputeModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-compute-stack",
+      'tap-compute-stack',
       expect.objectContaining({
         projectName: 'tap-staging',
       })
     );
   });
 
-  test("should create stack with all components integrated", () => {
+  test('should create stack with all components integrated', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestStackIntegration");
+    const stack = new TapStack(app, 'TestStackIntegration');
 
     // Verify all main components are created
     expect(AwsProvider).toHaveBeenCalledTimes(1);
@@ -438,9 +444,9 @@ describe("TapStack Unit Tests", () => {
     expect(stack).toBeDefined();
   });
 
-  test("should use AWS_REGION_OVERRIDE regardless of props", () => {
+  test('should use AWS_REGION_OVERRIDE regardless of props', () => {
     const app = new App();
-    new TapStack(app, "TestStackRegionOverride", {
+    new TapStack(app, 'TestStackRegionOverride', {
       awsRegion: 'eu-west-1', // This should be ignored due to AWS_REGION_OVERRIDE
     });
 
@@ -453,9 +459,9 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should handle empty props", () => {
+  test('should handle empty props', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestStackEmptyProps", {});
+    const stack = new TapStack(app, 'TestStackEmptyProps', {});
 
     expect(stack).toBeDefined();
     expect(AwsProvider).toHaveBeenCalledWith(
@@ -468,47 +474,47 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should verify module dependencies are correctly wired", () => {
+  test('should verify module dependencies are correctly wired', () => {
     const app = new App();
-    new TapStack(app, "TestStackDependencies");
+    new TapStack(app, 'TestStackDependencies');
 
     // Verify SecurityModule receives VPC ID from NetworkingModule
     expect(SecurityModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-security-stack",
+      'tap-security-stack',
       expect.objectContaining({
-        vpcId: "tap-networking-stack-vpc-id",
+        vpcId: 'tap-networking-stack-vpc-id',
       })
     );
 
     // Verify ComputeModule receives dependencies from other modules
     expect(ComputeModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-compute-stack",
+      'tap-compute-stack',
       expect.objectContaining({
-        subnetId: "tap-networking-stack-public-subnet-1-id",
-        securityGroupIds: ["tap-security-stack-sg-id"],
-        s3BucketArn: "arn:aws:s3:::tap-storage-stack-bucket-name",
+        subnetId: 'tap-networking-stack-public-subnet-1-id',
+        securityGroupIds: ['tap-security-stack-sg-id'],
+        s3BucketArn: 'arn:aws:s3:::tap-storage-stack-bucket-name',
       })
     );
   });
 
-  test("should verify addOverride is called for S3 backend locking", () => {
+  test('should verify addOverride is called for S3 backend locking', () => {
     const app = new App();
-    const stack = new TapStack(app, "TestStackOverride");
+    const stack = new TapStack(app, 'TestStackOverride');
 
     // Mock the addOverride method to verify it's called
     const addOverrideSpy = jest.spyOn(stack, 'addOverride');
 
     // Create a new stack to trigger the addOverride call
-    new TapStack(app, "TestStackOverride2");
+    new TapStack(app, 'TestStackOverride2');
 
     // Note: We can't easily test addOverride directly since it's called in constructor
     // But we can verify the stack is created successfully
     expect(stack).toBeDefined();
   });
 
-  test("should handle all props combinations", () => {
+  test('should handle all props combinations', () => {
     const app = new App();
     const customTags = {
       tags: {
@@ -517,7 +523,7 @@ describe("TapStack Unit Tests", () => {
       },
     };
 
-    new TapStack(app, "TestStackAllProps", {
+    new TapStack(app, 'TestStackAllProps', {
       environmentSuffix: 'test',
       stateBucket: 'test-bucket',
       stateBucketRegion: 'us-west-2',
@@ -546,9 +552,352 @@ describe("TapStack Unit Tests", () => {
 
     expect(NetworkingModule).toHaveBeenCalledWith(
       expect.anything(),
-      "tap-networking-stack",
+      'tap-networking-stack',
       expect.objectContaining({
         projectName: 'tap-test',
+      })
+    );
+  });
+
+  test('should handle undefined optional props with defaults', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackUndefinedProps', {
+      // Explicitly pass undefined for optional props
+      environmentSuffix: undefined,
+      stateBucket: undefined,
+      stateBucketRegion: undefined,
+      awsRegion: undefined,
+      defaultTags: undefined,
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1', // AWS_REGION_OVERRIDE
+        defaultTags: [],
+      })
+    );
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: 'iac-rlhf-tf-states', // default
+        key: 'dev/TestStackUndefinedProps.tfstate', // default environmentSuffix
+        region: 'us-east-1', // default stateBucketRegion
+        encrypt: true,
+      })
+    );
+  });
+
+  test('should handle partial props configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackPartialProps', {
+      environmentSuffix: 'staging',
+      // Leave other props undefined
+    });
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: 'iac-rlhf-tf-states', // default
+        key: 'staging/TestStackPartialProps.tfstate',
+        region: 'us-east-1', // default
+        encrypt: true,
+      })
+    );
+
+    expect(NetworkingModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-networking-stack',
+      expect.objectContaining({
+        projectName: 'tap-staging',
+      })
+    );
+  });
+
+  test('should handle stateBucketRegion override', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackStateRegion', {
+      stateBucketRegion: 'eu-west-1',
+    });
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: 'iac-rlhf-tf-states',
+        key: 'dev/TestStackStateRegion.tfstate',
+        region: 'eu-west-1',
+        encrypt: true,
+      })
+    );
+  });
+
+  test('should handle defaultTags as empty object', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackEmptyTags', {
+      defaultTags: { tags: {} },
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1',
+        defaultTags: [{ tags: {} }],
+      })
+    );
+  });
+
+  test('should handle complex defaultTags structure', () => {
+    const app = new App();
+    const complexTags = {
+      tags: {
+        Environment: 'production',
+        Team: 'backend',
+        Application: 'tap-app',
+        CostCenter: 'engineering',
+        Owner: 'platform-team',
+      },
+    };
+
+    new TapStack(app, 'TestStackComplexTags', {
+      defaultTags: complexTags,
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1',
+        defaultTags: [complexTags],
+      })
+    );
+  });
+
+  test('should create stack with minimal required props', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestStackMinimal');
+
+    expect(stack).toBeDefined();
+    expect(AwsProvider).toHaveBeenCalledTimes(1);
+    expect(S3Backend).toHaveBeenCalledTimes(1);
+    expect(NetworkingModule).toHaveBeenCalledTimes(1);
+    expect(SecurityModule).toHaveBeenCalledTimes(1);
+    expect(StorageModule).toHaveBeenCalledTimes(1);
+    expect(ComputeModule).toHaveBeenCalledTimes(1);
+  });
+
+  test('should handle awsRegion prop even though overridden', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackAwsRegion', {
+      awsRegion: 'ap-southeast-1', // This will be overridden by AWS_REGION_OVERRIDE
+    });
+
+    // Verify that AWS_REGION_OVERRIDE takes precedence
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1', // Always overridden
+      })
+    );
+  });
+
+  test('should verify TerraformOutput descriptions are correct', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackOutputsDesc');
+
+    // Verify each output has the correct description
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-vpc-id',
+      expect.objectContaining({
+        description: 'VPC ID',
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-ec2-instance-id',
+      expect.objectContaining({
+        description: 'EC2 instance ID',
+      })
+    );
+
+    expect(TerraformOutput).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-s3-bucket-name',
+      expect.objectContaining({
+        description: 'S3 bucket name for application data',
+      })
+    );
+  });
+
+  test('should handle environment suffix with special characters', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackSpecialChars', {
+      environmentSuffix: 'test-123_special.env',
+    });
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        key: 'test-123_special.env/TestStackSpecialChars.tfstate',
+      })
+    );
+
+    expect(NetworkingModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-networking-stack',
+      expect.objectContaining({
+        projectName: 'tap-test-123_special.env',
+      })
+    );
+  });
+
+  test('should create unique stack IDs for multiple stacks', () => {
+    const app = new App();
+
+    new TapStack(app, 'TestStack1');
+    new TapStack(app, 'TestStack2');
+
+    // Verify S3Backend is called with different keys
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        key: 'dev/TestStack1.tfstate',
+      })
+    );
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        key: 'dev/TestStack2.tfstate',
+      })
+    );
+  });
+
+  test('should handle stateBucket with special characters', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackBucketSpecial', {
+      stateBucket: 'my-custom.bucket_name-123',
+    });
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bucket: 'my-custom.bucket_name-123',
+      })
+    );
+  });
+
+  test('should verify all modules receive correct projectName format', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackProjectName', {
+      environmentSuffix: 'production',
+    });
+
+    const expectedProjectName = 'tap-production';
+
+    expect(NetworkingModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-networking-stack',
+      expect.objectContaining({
+        projectName: expectedProjectName,
+      })
+    );
+
+    expect(SecurityModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-security-stack',
+      expect.objectContaining({
+        projectName: expectedProjectName,
+      })
+    );
+
+    expect(StorageModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-storage-stack',
+      expect.objectContaining({
+        projectName: expectedProjectName,
+      })
+    );
+
+    expect(ComputeModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-compute-stack',
+      expect.objectContaining({
+        projectName: expectedProjectName,
+      })
+    );
+  });
+
+  test('should handle empty environment suffix', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackEmptyEnv', {
+      environmentSuffix: '',
+    });
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        key: 'dev/TestStackEmptyEnv.tfstate', // Empty string defaults to 'dev'
+      })
+    );
+
+    expect(NetworkingModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'tap-networking-stack',
+      expect.objectContaining({
+        projectName: 'tap-dev', // Empty string defaults to 'dev'
+      })
+    );
+  });
+
+  test('should verify S3 backend encryption is always enabled', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackEncryption');
+
+    expect(S3Backend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        encrypt: true, // Should always be true
+      })
+    );
+  });
+
+  test('should handle null props gracefully', () => {
+    const app = new App();
+    // @ts-ignore - Testing with null props
+    new TapStack(app, 'TestStackNullProps', null);
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1',
+        defaultTags: [],
+      })
+    );
+  });
+
+  test('should handle props with null values', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackNullValues', {
+      environmentSuffix: null as any,
+      stateBucket: null as any,
+      stateBucketRegion: null as any,
+      awsRegion: null as any,
+      defaultTags: null as any,
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-1',
+        defaultTags: [],
       })
     );
   });
