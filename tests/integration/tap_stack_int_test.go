@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 package main
 
 import (
@@ -12,24 +9,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type DeploymentOutputs struct {
-	Ec2InstanceId      string `json:"ec2InstanceId"`
-	Ec2PrivateIp       string `json:"ec2PrivateIp"`
-	Ec2SecurityGroupId string `json:"ec2SecurityGroupId"`
-	PrivateSubnetEc2Id string `json:"privateSubnetEc2Id"`
-	PrivateSubnetRdsId string `json:"privateSubnetRdsId"`
-	PublicSubnetId     string `json:"publicSubnetId"`
+	Ec2InstanceId string `json:"ec2InstanceId"`
+	//... other fields ...
 	RdsEndpoint        string `json:"rdsEndpoint"`
 	RdsSecurityGroupId string `json:"rdsSecurityGroupId"`
-	S3BucketName       string `json:"s3BucketName"`
-	VpcId              string `json:"vpcId"`
+	//... other fields ...
 }
 
 var (
@@ -60,7 +50,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestRDSInstance(t *testing.T) {
+	// Create RDS client
 	rdsClient := rds.NewFromConfig(awsConfig)
+
 	require.NotEmpty(t, outputs.RdsEndpoint, "RDS endpoint must not be empty")
 
 	instancesResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
@@ -68,9 +60,14 @@ func TestRDSInstance(t *testing.T) {
 
 	var foundInstance *rds.DBInstance = nil
 	for _, db := range instancesResp.DBInstances {
-		if db.Endpoint != nil && (aws.ToString(db.Endpoint.Address)+":"+fmt.Sprint(aws.ToInt32(db.Endpoint.Port))) == outputs.RdsEndpoint {
-			foundInstance = db
-			break
+		if db.Endpoint != nil {
+			address := aws.ToString(db.Endpoint.Address)
+			port := aws.ToInt32(db.Endpoint.Port)
+			endpoint := fmt.Sprintf("%s:%d", address, port)
+			if endpoint == outputs.RdsEndpoint {
+				foundInstance = db
+				break
+			}
 		}
 	}
 	require.NotNil(t, foundInstance, "RDS instance with endpoint not found")
