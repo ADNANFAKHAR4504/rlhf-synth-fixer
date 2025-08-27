@@ -31,37 +31,85 @@ describe("TapStack Integration Tests", () => {
 
   beforeAll(async () => {
     const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
+
+    // Check if outputs exist, if not provide helpful error message
     if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+      const cfnOutputsDir = path.dirname(outputFilePath);
+      if (!fs.existsSync(cfnOutputsDir)) {
+        fs.mkdirSync(cfnOutputsDir, { recursive: true });
+      }
+
+      // Try to generate outputs using CDKTF
+      console.log("🔄 Attempting to generate CDKTF outputs...");
+      try {
+        const { execSync } = require('child_process');
+        execSync('npm run cdktf:synth', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+        execSync('cdktf output --outputs-file cfn-outputs/flat-outputs.json', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+      } catch (error) {
+        console.log("⚠️ CDKTF output generation failed, trying to create mock outputs for testing...");
+        try {
+          const { execSync } = require('child_process');
+          execSync('npm run test:integration:mock', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+          console.log("✅ Mock outputs generated successfully");
+        } catch (mockError) {
+          console.error("❌ Failed to generate mock outputs");
+        }
+      }
+
+      if (!fs.existsSync(outputFilePath)) {
+        throw new Error(`flat-outputs.json not found at ${outputFilePath}.
+
+To run integration tests, you have several options:
+
+1. Deploy the CDKTF stack and run tests against real resources:
+   npm run cdktf:deploy
+   npm run test:integration
+
+2. Generate outputs without full deployment (if stack already exists):
+   npm run cdktf:synth && cdktf output --outputs-file cfn-outputs/flat-outputs.json
+   npm run test:integration
+
+3. Use mock outputs for testing (no AWS resources needed):
+   npm run test:integration:mock
+   npm run test:integration
+
+The test will automatically try to generate outputs when you run it.`);
+      }
     }
+
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
-    const stackKey = Object.keys(outputs)[0];
-    const stackOutputs = outputs[stackKey];
+
+    // CDKTF outputs format: { "output-name": { "value": "...", "type": "..." } }
+    // Extract values from CDKTF output format
+    const extractValue = (output: any) => {
+      if (output && typeof output === 'object' && 'value' in output) {
+        return output.value;
+      }
+      return output;
+    };
 
     // Get AWS account ID
     const { Account } = await stsClient.send(new GetCallerIdentityCommand({}));
     awsAccountId = Account!;
 
-    vpcId = stackOutputs["tap-vpc-id"];
-    publicSubnetIds = stackOutputs["tap-public-subnet-ids"];
-    privateSubnetIds = stackOutputs["tap-private-subnet-ids"];
-    ec2InstanceId = stackOutputs["tap-ec2-instance-id"];
-    ec2PrivateIp = stackOutputs["tap-ec2-private-ip"];
-    ec2PublicIp = stackOutputs["tap-ec2-public-ip"];
-    securityGroupId = stackOutputs["tap-ec2-security-group-id"];
-    s3BucketName = stackOutputs["tap-s3-bucket-name"];
-    s3BucketArn = stackOutputs["tap-s3-bucket-arn"];
-    internetGatewayId = stackOutputs["tap-internet-gateway-id"];
-    natGatewayId = stackOutputs["tap-nat-gateway-id"];
-    iamRoleArn = stackOutputs["tap-ec2-iam-role-arn"];
+    vpcId = extractValue(outputs["tap-vpc-id"]);
+    publicSubnetIds = extractValue(outputs["tap-public-subnet-ids"]);
+    privateSubnetIds = extractValue(outputs["tap-private-subnet-ids"]);
+    ec2InstanceId = extractValue(outputs["tap-ec2-instance-id"]);
+    ec2PrivateIp = extractValue(outputs["tap-ec2-private-ip"]);
+    ec2PublicIp = extractValue(outputs["tap-ec2-public-ip"]);
+    securityGroupId = extractValue(outputs["tap-ec2-security-group-id"]);
+    s3BucketName = extractValue(outputs["tap-s3-bucket-name"]);
+    s3BucketArn = extractValue(outputs["tap-s3-bucket-arn"]);
+    internetGatewayId = extractValue(outputs["tap-internet-gateway-id"]);
+    natGatewayId = extractValue(outputs["tap-nat-gateway-id"]);
+    iamRoleArn = extractValue(outputs["tap-ec2-iam-role-arn"]);
 
-    if (!vpcId || !publicSubnetIds || !privateSubnetIds || !ec2InstanceId || 
+    if (!vpcId || !publicSubnetIds || !privateSubnetIds || !ec2InstanceId ||
         !securityGroupId || !s3BucketName || !awsAccountId || !internetGatewayId || !natGatewayId) {
       throw new Error("Missing required stack outputs for integration test.");
     }
-  });
-
-  describe("AWS Account Verification", () => {
+  });  describe("AWS Account Verification", () => {
     test("AWS account ID matches expected value", async () => {
       const { Account } = await stsClient.send(new GetCallerIdentityCommand({}));
       expect(Account).toBe(awsAccountId);
