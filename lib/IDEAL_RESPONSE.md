@@ -92,8 +92,6 @@ import java.util.Map;
  */
 public class WebAppStack {
 
-  // ...existing code...
-
   private final WebAppStackConfig config;
   private final Vpc vpc;
   private final Subnet publicSubnet1;
@@ -468,24 +466,27 @@ public class WebAppStack {
 
 ### Usage Instructions
 
+
 1. Set required environment variables:
+
 ```bash
 export AWS_REGION=us-west-2
 export ENVIRONMENT_SUFFIX=prod
 ```
 
 2. Deploy the stack by calling:
-```java
- // Initialize configuration
-    WebAppStack stack =
-        new WebAppStack("webapp-migration", ComponentResourceOptions.builder().build());
 
-    // Export important outputs
-    ctx.export("ec2InstanceId", stack.getWebInstance().id());
-    ctx.export("ec2PublicIp", stack.getWebInstance().publicIp());
-    ctx.export("s3BucketName", stack.getDataBucket().bucket());
-    ctx.export("dynamoTableName", stack.getDataTable().name());
-    ctx.export("securityGroupId", stack.getWebSecurityGroup().id());
+```java
+// Initialize configuration
+WebAppStack stack =
+  new WebAppStack("webapp-migration", ComponentResourceOptions.builder().build());
+
+// Export important outputs
+ctx.export("ec2InstanceId", stack.getWebInstance().id());
+ctx.export("ec2PublicIp", stack.getWebInstance().publicIp());
+ctx.export("s3BucketName", stack.getDataBucket().bucket());
+ctx.export("dynamoTableName", stack.getDataTable().name());
+ctx.export("securityGroupId", stack.getWebSecurityGroup().id());
 ```
 
 The solution follows AWS best practices, uses dynamic references, includes proper error handling, and creates a secure, scalable environment suitable for production use.

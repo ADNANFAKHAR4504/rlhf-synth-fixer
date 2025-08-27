@@ -384,7 +384,19 @@ public class WebAppStack {
     return dataTable;
   }
 
-  public WebAppStackConfig getConfig() {
-    return config;
-  }
+    public WebAppStackConfig getConfig() {
+        return config;
+    }
+
+    public Vpc getVpc() {
+        return vpc;
+    }
+
+    public Subnet getPublicSubnet1() {
+        return publicSubnet1;
+    }
+
+    public Subnet getPublicSubnet2() {
+        return publicSubnet2;
+    }
 }
