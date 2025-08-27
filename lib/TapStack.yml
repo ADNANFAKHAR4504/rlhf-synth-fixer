@@ -77,6 +77,11 @@ Mappings:
       AZ1: 'us-east-1a'
       AZ2: 'us-east-1b'
       AZ3: 'us-east-1c'
+    us-west-1:
+      AMI: 'ami-0827b6c5b977c020e'  # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+      AZ1: 'us-west-1a'
+      AZ2: 'us-west-1c'
+      AZ3: 'us-west-1a'
     us-west-2:
       AMI: 'ami-0c2d3e23602d8ba5d'  # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
       AZ1: 'us-west-2a'
