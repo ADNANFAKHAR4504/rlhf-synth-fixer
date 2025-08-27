@@ -407,20 +407,38 @@ func main() {
 			return err
 		}
 
-		s3Bucket, err := s3.NewBucket(ctx, "hipaa-bucket", &s3.BucketArgs{
+		// Use BucketV2 + BucketVersioningV2 + BucketServerSideEncryptionConfigurationV2
+
+		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-bucket", &s3.BucketV2Args{
 			Bucket: pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
-			Versioning: &s3.BucketVersioningArgs{
-				Enabled: pulumi.Bool(true),
-			},
-			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationArgs{
-				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationApplyServerSideEncryptionByDefaultArgs{
-					SseAlgorithm: pulumi.String("AES256"),
-				},
-			},
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
 				"Compliance":  pulumi.String("HIPAA"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = s3.NewBucketVersioningV2(ctx, "bucket-versioning", &s3.BucketVersioningV2Args{
+			Bucket: s3Bucket.Bucket,
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: s3Bucket.Bucket,
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+				},
 			},
 		})
 		if err != nil {
@@ -440,7 +458,7 @@ func main() {
 
 		ec2Policy, err := iam.NewPolicy(ctx, "ec2-policy", &iam.PolicyArgs{
 			Description: pulumi.String("Least privilege policy for EC2 instances"),
-			Policy: s3Bucket.Arn.ApplyT(func(bucketArn string) string {
+			Policy: s3Bucket.Bucket.ApplyT(func(bucket string) string {
 				return fmt.Sprintf(`{
 					"Version": "2012-10-17",
 					"Statement": [
@@ -463,7 +481,7 @@ func main() {
 							"Resource": "%s/*"
 						}
 					]
-				}`, bucketArn)
+				}`, bucket)
 			}).(pulumi.StringOutput),
 		})
 		if err != nil {
@@ -532,7 +550,6 @@ systemctl start amazon-cloudwatch-agent
 
 		asg, err := autoscaling.NewGroup(ctx, "web-asg", &autoscaling.GroupArgs{
 			VpcZoneIdentifiers: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
-			TargetGroupArns:    pulumi.StringArray{},
 			HealthCheckType:    pulumi.String("EC2"),
 			MinSize:            pulumi.Int(1),
 			MaxSize:            pulumi.Int(3),
