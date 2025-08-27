@@ -676,7 +676,7 @@ func NewTapStack(scope constructs.Construct, id string) cdktf.TerraformStack {
 			},
 		})
 
-		// API Gateway (REST) with HTTPS-only enforcement via resource policy
+		// API Gateway (REST) with HTTPS-only enforcement via resource policy.
 		restApi := apigatewayrestapi.NewApiGatewayRestApi(
 			stack,
 			jsii.String(fmt.Sprintf("rest-api-%s", region)),
