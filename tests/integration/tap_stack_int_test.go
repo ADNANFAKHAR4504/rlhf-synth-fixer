@@ -57,14 +57,14 @@ func TestMain(m *testing.M) {
 
 // InfrastructureOutputs represents the expected outputs from the Pulumi stack
 type InfrastructureOutputs struct {
-	VpcID              string   `json:"vpc_id"`
-	PrivateSubnetIDs   []string `json:"private_subnet_ids"`
-	PublicSubnetIDs    []string `json:"public_subnet_ids"`
-	KMSKeyID           string   `json:"kms_key_id"`
-	KMSKeyARN          string   `json:"kms_key_arn"`
-	CloudTrailLogsBucket string `json:"cloudtrail_logs_bucket"`
-	AppDataBucket      string   `json:"app_data_bucket"`
-	IAMRoles           struct {
+	VpcID                string   `json:"vpc_id"`
+	PrivateSubnetIDs     []string `json:"private_subnet_ids"`
+	PublicSubnetIDs      []string `json:"public_subnet_ids"`
+	KMSKeyID             string   `json:"kms_key_id"`
+	KMSKeyARN            string   `json:"kms_key_arn"`
+	CloudTrailLogsBucket string   `json:"cloudtrail_logs_bucket"`
+	AppDataBucket        string   `json:"app_data_bucket"`
+	IAMRoles             struct {
 		Developer string `json:"developer"`
 	} `json:"iam_roles"`
 	VPCEndpoints struct {
@@ -78,28 +78,28 @@ type InfrastructureOutputs struct {
 // LoadOutputs loads the deployment outputs from the outputs file
 func LoadOutputs(t *testing.T) *InfrastructureOutputs {
 	outputsFile := "../cfn-outputs/all-outputs.json"
-	
+
 	// Check if the file exists
 	if _, err := os.Stat(outputsFile); os.IsNotExist(err) {
 		t.Skip("Skipping integration test - no outputs file found (infrastructure not deployed)")
 	}
-	
+
 	// Read and parse the outputs file
 	data, err := os.ReadFile(outputsFile)
 	if err != nil {
 		t.Fatalf("Failed to read outputs file: %v", err)
 	}
-	
+
 	var outputs InfrastructureOutputs
 	if err := json.Unmarshal(data, &outputs); err != nil {
 		t.Fatalf("Failed to parse outputs file: %v", err)
 	}
-	
+
 	// Check if outputs are empty
 	if outputs.VpcID == "" {
 		t.Skip("Skipping integration test - outputs file is empty (infrastructure not deployed)")
 	}
-	
+
 	return &outputs
 }
 
@@ -118,11 +118,11 @@ func TestInfrastructureOutputsValidation(t *testing.T) {
 	t.Run("should have valid subnet IDs", func(t *testing.T) {
 		assert.Len(t, outputs.PrivateSubnetIDs, 2, "Should have 2 private subnets")
 		assert.Len(t, outputs.PublicSubnetIDs, 2, "Should have 2 public subnets")
-		
+
 		for _, subnetID := range outputs.PrivateSubnetIDs {
 			assert.True(t, strings.HasPrefix(subnetID, "subnet-"), "Subnet ID should start with 'subnet-'")
 		}
-		
+
 		for _, subnetID := range outputs.PublicSubnetIDs {
 			assert.True(t, strings.HasPrefix(subnetID, "subnet-"), "Subnet ID should start with 'subnet-'")
 		}
@@ -152,7 +152,7 @@ func TestInfrastructureOutputsValidation(t *testing.T) {
 		assert.NotEmpty(t, outputs.VPCEndpoints.KMS)
 		assert.NotEmpty(t, outputs.VPCEndpoints.CloudTrail)
 		assert.NotEmpty(t, outputs.VPCEndpoints.Logs)
-		
+
 		assert.True(t, strings.HasPrefix(outputs.VPCEndpoints.S3, "vpce-"), "S3 VPC endpoint ID should start with 'vpce-'")
 		assert.True(t, strings.HasPrefix(outputs.VPCEndpoints.KMS, "vpce-"), "KMS VPC endpoint ID should start with 'vpce-'")
 		assert.True(t, strings.HasPrefix(outputs.VPCEndpoints.CloudTrail, "vpce-"), "CloudTrail VPC endpoint ID should start with 'vpce-'")
@@ -177,18 +177,18 @@ func TestLiveVPCCreation(t *testing.T) {
 		vpc := result.Vpcs[0]
 		assert.Equal(t, outputs.VpcID, *vpc.VpcId)
 		assert.Equal(t, "10.0.0.0/16", *vpc.CidrBlock)
-		
+
 		// Check DNS hostnames
 		dnsHostnames, err := ec2Client.DescribeVpcAttribute(context.TODO(), &ec2.DescribeVpcAttributeInput{
-			VpcId:    vpc.VpcId,
+			VpcId:     vpc.VpcId,
 			Attribute: "enableDnsHostnames",
 		})
 		require.NoError(t, err)
 		assert.True(t, *dnsHostnames.EnableDnsHostnames.Value)
-		
+
 		// Check DNS support
 		dnsSupport, err := ec2Client.DescribeVpcAttribute(context.TODO(), &ec2.DescribeVpcAttributeInput{
-			VpcId:    vpc.VpcId,
+			VpcId:     vpc.VpcId,
 			Attribute: "enableDnsSupport",
 		})
 		require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestLiveVPCCreation(t *testing.T) {
 
 	t.Run("should verify subnets exist and have correct configuration", func(t *testing.T) {
 		allSubnetIDs := append(outputs.PrivateSubnetIDs, outputs.PublicSubnetIDs...)
-		
+
 		result, err := ec2Client.DescribeSubnets(context.TODO(), &ec2.DescribeSubnetsInput{
 			SubnetIds: allSubnetIDs,
 		})
@@ -330,7 +330,7 @@ func TestLiveKMSKey(t *testing.T) {
 		assert.Equal(t, "ENCRYPT_DECRYPT", string(key.KeyUsage))
 		// Note: EnableKeyRotation and MultiRegion are not available in KeyMetadata
 		// These would need to be checked via separate API calls if needed
-		
+
 		// Note: KMS key tags are not available in KeyMetadata
 		// Tags would need to be checked via ListResourceTags API if needed
 	})
@@ -508,7 +508,7 @@ func TestLiveCloudWatchLogs(t *testing.T) {
 
 	t.Run("should verify CloudTrail log group exists", func(t *testing.T) {
 		logGroupName := "/aws/cloudtrail/securecorp-dev"
-		
+
 		result, err := cloudwatchClient.DescribeLogGroups(context.TODO(), &cloudwatchlogs.DescribeLogGroupsInput{
 			LogGroupNamePrefix: aws.String(logGroupName),
 		})
@@ -527,7 +527,7 @@ func TestLiveCloudWatchLogs(t *testing.T) {
 
 	t.Run("should verify application log group exists", func(t *testing.T) {
 		logGroupName := "/aws/application/securecorp-dev"
-		
+
 		result, err := cloudwatchClient.DescribeLogGroups(context.TODO(), &cloudwatchlogs.DescribeLogGroupsInput{
 			LogGroupNamePrefix: aws.String(logGroupName),
 		})

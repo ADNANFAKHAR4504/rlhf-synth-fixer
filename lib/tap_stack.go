@@ -45,13 +45,13 @@ func main() {
 
 		// Create KMS key
 		kmsKey, err := kms.NewKey(ctx, "main", &kms.KeyArgs{
-			Description:            pulumi.Sprintf("KMS key for %s %s resources", projectName, environment),
-			DeletionWindowInDays:   pulumi.Int(7),
-			EnableKeyRotation:      pulumi.Bool(true),
-			CustomerMasterKeySpec:  pulumi.String("SYMMETRIC_DEFAULT"),
-			KeyUsage:               pulumi.String("ENCRYPT_DECRYPT"),
-			MultiRegion:            pulumi.Bool(true),
-			Tags:                   commonTags,
+			Description:           pulumi.Sprintf("KMS key for %s %s resources", projectName, environment),
+			DeletionWindowInDays:  pulumi.Int(7),
+			EnableKeyRotation:     pulumi.Bool(true),
+			CustomerMasterKeySpec: pulumi.String("SYMMETRIC_DEFAULT"),
+			KeyUsage:              pulumi.String("ENCRYPT_DECRYPT"),
+			MultiRegion:           pulumi.Bool(true),
+			Tags:                  commonTags,
 		})
 		if err != nil {
 			return err
@@ -59,8 +59,8 @@ func main() {
 
 		// Create KMS alias
 		_, err = kms.NewAlias(ctx, "main", &kms.AliasArgs{
-			Name:         pulumi.Sprintf("alias/%s-%s-key", projectName, environment),
-			TargetKeyId:  kmsKey.KeyId,
+			Name:        pulumi.Sprintf("alias/%s-%s-key", projectName, environment),
+			TargetKeyId: kmsKey.KeyId,
 		})
 		if err != nil {
 			return err
@@ -68,10 +68,10 @@ func main() {
 
 		// Create VPC
 		vpc, err := ec2.NewVpc(ctx, "main", &ec2.VpcArgs{
-			CidrBlock:           pulumi.String(vpcCidr),
-			EnableDnsHostnames:  pulumi.Bool(true),
-			EnableDnsSupport:    pulumi.Bool(true),
-			Tags:                commonTags,
+			CidrBlock:          pulumi.String(vpcCidr),
+			EnableDnsHostnames: pulumi.Bool(true),
+			EnableDnsSupport:   pulumi.Bool(true),
+			Tags:               commonTags,
 		})
 		if err != nil {
 			return err
@@ -166,8 +166,8 @@ func main() {
 				VpcId: vpc.ID(),
 				Routes: ec2.RouteTableRouteArray{
 					&ec2.RouteTableRouteArgs{
-						CidrBlock:     pulumi.String("0.0.0.0/0"),
-						NatGatewayId:  natGateways[i].ID(),
+						CidrBlock:    pulumi.String("0.0.0.0/0"),
+						NatGatewayId: natGateways[i].ID(),
 					},
 				},
 				Tags: commonTags,
@@ -204,19 +204,19 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String(vpcCidr)},
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String(vpcCidr)},
 					Description: pulumi.String("HTTPS from VPC"),
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					FromPort:   pulumi.Int(0),
-					ToPort:     pulumi.Int(0),
-					Protocol:   pulumi.String("-1"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(0),
+					ToPort:      pulumi.Int(0),
+					Protocol:    pulumi.String("-1"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("All outbound traffic"),
 				},
 			},
@@ -232,33 +232,33 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String(vpcCidr)},
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String(vpcCidr)},
 					Description: pulumi.String("HTTPS from VPC"),
 				},
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String(vpcCidr)},
+					FromPort:    pulumi.Int(80),
+					ToPort:      pulumi.Int(80),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String(vpcCidr)},
 					Description: pulumi.String("HTTP from VPC"),
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("HTTPS to internet"),
 				},
 				&ec2.SecurityGroupEgressArgs{
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(80),
+					ToPort:      pulumi.Int(80),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("HTTP to internet"),
 				},
 			},
@@ -270,50 +270,50 @@ func main() {
 
 		// Create VPC endpoints
 		s3Endpoint, err := ec2.NewVpcEndpoint(ctx, "s3", &ec2.VpcEndpointArgs{
-			VpcId:            vpc.ID(),
-			ServiceName:       pulumi.Sprintf("com.amazonaws.%s.s3", awsRegion),
-			VpcEndpointType:   pulumi.String("Gateway"),
-			RouteTableIds:     pulumi.StringArray{publicRouteTable.ID()},
-			Tags:              commonTags,
+			VpcId:           vpc.ID(),
+			ServiceName:     pulumi.Sprintf("com.amazonaws.%s.s3", awsRegion),
+			VpcEndpointType: pulumi.String("Gateway"),
+			RouteTableIds:   pulumi.StringArray{publicRouteTable.ID()},
+			Tags:            commonTags,
 		})
 		if err != nil {
 			return err
 		}
 
 		kmsEndpoint, err := ec2.NewVpcEndpoint(ctx, "kms", &ec2.VpcEndpointArgs{
-			VpcId:              vpc.ID(),
-			ServiceName:         pulumi.Sprintf("com.amazonaws.%s.kms", awsRegion),
-			VpcEndpointType:     pulumi.String("Interface"),
-			SubnetIds:           pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-			SecurityGroupIds:    pulumi.StringArray{vpcEndpointsSg.ID()},
-			PrivateDnsEnabled:   pulumi.Bool(true),
-			Tags:                commonTags,
+			VpcId:             vpc.ID(),
+			ServiceName:       pulumi.Sprintf("com.amazonaws.%s.kms", awsRegion),
+			VpcEndpointType:   pulumi.String("Interface"),
+			SubnetIds:         pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
+			SecurityGroupIds:  pulumi.StringArray{vpcEndpointsSg.ID()},
+			PrivateDnsEnabled: pulumi.Bool(true),
+			Tags:              commonTags,
 		})
 		if err != nil {
 			return err
 		}
 
 		cloudtrailEndpoint, err := ec2.NewVpcEndpoint(ctx, "cloudtrail", &ec2.VpcEndpointArgs{
-			VpcId:              vpc.ID(),
-			ServiceName:         pulumi.Sprintf("com.amazonaws.%s.cloudtrail", awsRegion),
-			VpcEndpointType:     pulumi.String("Interface"),
-			SubnetIds:           pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-			SecurityGroupIds:    pulumi.StringArray{vpcEndpointsSg.ID()},
-			PrivateDnsEnabled:   pulumi.Bool(true),
-			Tags:                commonTags,
+			VpcId:             vpc.ID(),
+			ServiceName:       pulumi.Sprintf("com.amazonaws.%s.cloudtrail", awsRegion),
+			VpcEndpointType:   pulumi.String("Interface"),
+			SubnetIds:         pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
+			SecurityGroupIds:  pulumi.StringArray{vpcEndpointsSg.ID()},
+			PrivateDnsEnabled: pulumi.Bool(true),
+			Tags:              commonTags,
 		})
 		if err != nil {
 			return err
 		}
 
 		logsEndpoint, err := ec2.NewVpcEndpoint(ctx, "logs", &ec2.VpcEndpointArgs{
-			VpcId:              vpc.ID(),
-			ServiceName:         pulumi.Sprintf("com.amazonaws.%s.logs", awsRegion),
-			VpcEndpointType:     pulumi.String("Interface"),
-			SubnetIds:           pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-			SecurityGroupIds:    pulumi.StringArray{vpcEndpointsSg.ID()},
-			PrivateDnsEnabled:   pulumi.Bool(true),
-			Tags:                commonTags,
+			VpcId:             vpc.ID(),
+			ServiceName:       pulumi.Sprintf("com.amazonaws.%s.logs", awsRegion),
+			VpcEndpointType:   pulumi.String("Interface"),
+			SubnetIds:         pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
+			SecurityGroupIds:  pulumi.StringArray{vpcEndpointsSg.ID()},
+			PrivateDnsEnabled: pulumi.Bool(true),
+			Tags:              commonTags,
 		})
 		if err != nil {
 			return err
