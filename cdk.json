@@ -1,5 +1,5 @@
 {
-  "app": "java -cp build/libs/app.jar app.Main",
+  "app": "./gradlew run",
   "watch": {
     "include": [
       "**"
