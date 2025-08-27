@@ -1,3 +1,4 @@
+
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
@@ -10,7 +11,7 @@ class TapStackArgs:
                  environment: str,
                  project: str, 
                  owner: str,
-                 region: str,
+                 region: str = "us-west-2", 
                  environment_suffix: Optional[str] = None, 
                  tags: Optional[dict] = None):
         self.environment = environment
@@ -70,8 +71,11 @@ class TapStack(pulumi.ComponentResource):
             },
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
-        # Get availability zones
-        availability_zones = aws.get_availability_zones(state="available")
+        # Get availability zones - MUST pass the provider to get correct region's AZs
+        availability_zones = aws.get_availability_zones(
+            state="available",
+            opts=pulumi.InvokeOptions(provider=self.aws_provider)
+        )
         az_names = availability_zones.names
 
         self.public_subnets = []
@@ -261,9 +265,12 @@ class TapStack(pulumi.ComponentResource):
     
     def _create_compute(self):
         """Create EC2 instances and load balancer"""
-        ami = aws.ec2.get_ami(most_recent=True,
+        ami = aws.ec2.get_ami(
+            most_recent=True,
             owners=["amazon"],
-            filters=[{"name":"name","values":["amzn2-ami-hvm-*-x86_64-gp2"]}])
+            filters=[{"name":"name","values":["amzn2-ami-hvm-*-x86_64-gp2"]}],
+            opts=pulumi.InvokeOptions(provider=self.aws_provider)
+        )
 
         user_data = """#!/bin/bash
 yum update -y
@@ -361,8 +368,8 @@ systemctl enable nginx
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
-        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-qb",
-            name=f"{self.args.environment}-{self.args.project}-qb")
+        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-db",
+            name=f"{self.args.environment}-{self.args.project}-db-{self.args.owner}")
 
         self.db_instance = aws.rds.Instance(
             f"{self.args.environment}-{self.args.project}-{self.args.owner}-db",
@@ -378,7 +385,7 @@ systemctl enable nginx
             backup_window="03:00-04:00",
             maintenance_window="sun:04:00-sun:05:00",
             username="postgres",
-            password=self.db_password.id.apply(lambda id: f"{{resolve:secretsmanager:{id}:SecretString:password::}}"),  # Using direct password instead of secret reference
+            password=self.db_password.id.apply(lambda id: f"{{resolve:secretsmanager:{id}:SecretString:password::}}"),
             monitoring_interval=60,
             monitoring_role_arn=self.rds_monitoring_role.arn,
             performance_insights_enabled=True,
@@ -390,8 +397,6 @@ systemctl enable nginx
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
 
-# This is the correct way to instantiate the stack
-# The stack should be created at module level, not inside an if block
 config = pulumi.Config()
 aws_config = pulumi.Config("aws")
 
