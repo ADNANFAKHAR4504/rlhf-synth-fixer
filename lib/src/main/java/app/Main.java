@@ -128,6 +128,19 @@ class TapStack extends Stack {
                                                 "kms:DescribeKey"
                                         ))
                                         .resources(Arrays.asList("*"))
+                                        .build(),
+                                PolicyStatement.Builder.create()
+                                        .sid("AllowCloudTrailService")
+                                        .effect(Effect.ALLOW)
+                                        .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                                        .actions(Arrays.asList(
+                                                "kms:Encrypt",
+                                                "kms:Decrypt",
+                                                "kms:ReEncrypt*",
+                                                "kms:GenerateDataKey*",
+                                                "kms:DescribeKey"
+                                        ))
+                                        .resources(Arrays.asList("*"))
                                         .build()
                         ))
                         .build())
@@ -209,7 +222,7 @@ class TapStack extends Stack {
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
-        return Bucket.Builder.create(this, "SecureS3Bucket" + uniqueId)
+        Bucket secureS3Bucket = Bucket.Builder.create(this, "SecureS3Bucket" + uniqueId)
                 .bucketName("secure-infrastructure-bucket-" + uniqueId + "-" + timestamp)
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(s3KmsKey)
@@ -237,6 +250,34 @@ class TapStack extends Stack {
                 ))
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+        
+        // Add bucket policy to allow CloudTrail access
+        secureS3Bucket.addToResourcePolicy(
+                PolicyStatement.Builder.create()
+                        .sid("AWSCloudTrailAclCheck")
+                        .effect(Effect.ALLOW)
+                        .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                        .actions(Arrays.asList("s3:GetBucketAcl"))
+                        .resources(Arrays.asList(secureS3Bucket.getBucketArn()))
+                        .build()
+        );
+        
+        secureS3Bucket.addToResourcePolicy(
+                PolicyStatement.Builder.create()
+                        .sid("AWSCloudTrailWrite")
+                        .effect(Effect.ALLOW)
+                        .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                        .actions(Arrays.asList("s3:PutObject"))
+                        .resources(Arrays.asList(secureS3Bucket.getBucketArn() + "/cloudtrail-logs/*"))
+                        .conditions(Map.of(
+                                "StringEquals", Map.of(
+                                        "s3:x-amz-acl", "bucket-owner-full-control"
+                                )
+                        ))
+                        .build()
+        );
+        
+        return secureS3Bucket;
     }
     
     private void createCloudTrail(Bucket s3Bucket, Key kmsKey) {
