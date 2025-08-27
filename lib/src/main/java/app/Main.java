@@ -140,6 +140,13 @@ class NetworkStack extends Stack {
 
         Tags.of(vpc).add("Owner", "platform");   // adjust as needed
         Tags.of(vpc).add("CostCenter", "devx");  // adjust as needed
+        
+        // VPC output
+        new CfnOutput(this, "VpcId", CfnOutputProps.builder()
+            .value(vpc.getVpcId())
+            .description("VPC ID")
+            .exportName("VpcId-" + envSuffix)
+            .build());
     }
 
     public Vpc getVpc() {
@@ -281,25 +288,19 @@ class WebTierStack extends Stack {
         asg.attachToApplicationTargetGroup(tg);
 
         // Useful outputs
-        new CfnOutput(this, "AlbDns" + envSuffix, CfnOutputProps.builder()
+        new CfnOutput(this, "AlbDns", CfnOutputProps.builder()
             .value(alb.getLoadBalancerDnsName())
             .description("DNS name of the Application Load Balancer")
             .exportName("AlbDns-" + envSuffix)
             .build());
             
-        new CfnOutput(this, "AlbUrl" + envSuffix, CfnOutputProps.builder()
+        new CfnOutput(this, "AlbUrl", CfnOutputProps.builder()
             .value("http://" + alb.getLoadBalancerDnsName())
             .description("URL to access the web application")
             .exportName("AlbUrl-" + envSuffix)
             .build());
             
-        new CfnOutput(this, "VpcId" + envSuffix, CfnOutputProps.builder()
-            .value(vpc.getVpcId())
-            .description("VPC ID")
-            .exportName("VpcId-" + envSuffix)
-            .build());
-            
-        new CfnOutput(this, "AsgName" + envSuffix, CfnOutputProps.builder()
+        new CfnOutput(this, "AsgName", CfnOutputProps.builder()
             .value(asg.getAutoScalingGroupName())
             .description("Auto Scaling Group Name")
             .exportName("AsgName-" + envSuffix)
